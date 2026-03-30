@@ -58,13 +58,35 @@ def _pin_jwt_secret(monkeypatch):
 
 @pytest.fixture()
 def watchlist_client() -> TestClient:
-    """Fresh in-memory state per test — prevents cross-test leakage."""
+    """Fresh in-memory state per test — prevents cross-test leakage.
+
+    Injects a real PaperTradingBroker into api.watchlist.app_state so the
+    /prices endpoint has live (paper) prices without any mocks.
+    """
+    import api.watchlist as _wl
     from api.watchlist import _reset_watchlists, router
+    from brokers.paper_trading import PaperTradingBroker
 
     _reset_watchlists()
+
+    # Wire a real paper broker as the price source
+    broker = PaperTradingBroker()
+
+    class _State:
+        pass
+
+    state = _State()
+    state.broker = broker  # type: ignore[attr-defined]
+    state.price_engine = None  # type: ignore[attr-defined]
+    _wl.set_state(state)
+
     app = FastAPI()
     app.include_router(router)
-    return TestClient(app, raise_server_exceptions=False)
+    client = TestClient(app, raise_server_exceptions=False)
+    yield client
+
+    # Teardown: clear injected state
+    _wl.set_state(None)
 
 
 @pytest.fixture()

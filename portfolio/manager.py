@@ -27,7 +27,7 @@ class Portfolio:
 
     @property
     def total_exposure(self) -> float:
-        return sum(self.assets.values())
+        return round(sum(self.assets.values()), 10)
 
     @property
     def asset_count(self) -> int:

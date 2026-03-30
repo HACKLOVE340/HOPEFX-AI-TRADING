@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-03-30T08:47:18.470700+00:00",
+  "run_at": "2026-03-30T09:50:10.098192+00:00",
   "years": 3,
   "oos_frac": 0.4,
   "target_n": 600,
@@ -17,7 +17,7 @@
       "max_drawdown": 0.0574,
       "accuracy": 0.5812,
       "f1": 0.7352,
-      "auc": 0.4847,
+      "auc": 0.4832,
       "oos_bars": 277,
       "train_bars": 416,
       "feature_count": 193
@@ -33,7 +33,7 @@
       "max_drawdown": 0.1148,
       "accuracy": 0.5024,
       "f1": 0.5744,
-      "auc": 0.5186,
+      "auc": 0.5179,
       "oos_bars": 414,
       "train_bars": 622,
       "feature_count": 193

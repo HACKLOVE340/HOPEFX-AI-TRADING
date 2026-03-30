@@ -703,14 +703,24 @@ class RiskManager:
     def validate_trade(
         self,
         symbol: str,
-        quantity: float,
+        quantity: float = 0.0,
         direction: str = "buy",
+        *,
+        size: Optional[float] = None,
+        side: Optional[str] = None,
     ) -> "tuple[bool, str]":
         """Return (allowed, reason) for a proposed trade.
+
+        Accepts both ``quantity``/``direction`` and ``size``/``side`` kwargs
+        for backwards compatibility with callers using either convention.
 
         Checks halt state, drawdown limits, and open-position cap.
         Does not perform full sizing — use assess() for that.
         """
+        # Normalise aliases
+        qty = size if size is not None else quantity
+        _ = side or direction  # direction unused in checks but accepted
+
         if self._halt:
             return False, f"halted:{self._halt_reason}"
         if self._state.daily_drawdown >= self._config.max_daily_loss_pct:
@@ -719,8 +729,12 @@ class RiskManager:
             return False, f"drawdown:{self._state.current_drawdown*100:.2f}%"
         if self._state.open_positions >= self._config.max_open_positions:
             return False, f"max_positions:{self._config.max_open_positions}"
-        if quantity <= 0:
+        if qty <= 0:
             return False, "quantity_zero"
+        # Hard cap: reject if size exceeds max_position_size_pct of equity
+        max_qty = self._config.max_position_size_pct * self._state.peak_equity
+        if max_qty > 0 and qty > max_qty:
+            return False, f"size_exceeds_limit:{qty:.2f}>{max_qty:.2f}"
         return True, "approved"
 
     def check_drawdown(self) -> "DrawdownCheckResult":
@@ -992,6 +1006,15 @@ class RiskManager:
         self._halt_reason    = reason
         logger.critical("RiskManager: TRADING HALTED — reason=%s", reason)
         self._persist_halt_state()
+        # Fire the app-level kill switch so all subsystems see the halt.
+        try:
+            import app as _app  # late import to avoid circular dependency
+            ks = getattr(_app, "kill_switch", None)
+            if ks is not None and callable(getattr(ks, "activate", None)):
+                if not ks.is_active():
+                    ks.activate(reason=f"risk_manager:{reason}")
+        except Exception as _exc:  # pragma: no cover
+            logger.debug("RiskManager: could not fire app kill_switch: %s", _exc)
 
     def resume_trading(self) -> None:
         """Manual resume — requires explicit operator action."""
@@ -1758,14 +1781,22 @@ class RiskManager:
     def validate_trade(  # type: ignore[override]
         self,
         symbol: str,  # noqa: ARG002
-        quantity: float,
+        quantity: float = 0.0,
         direction: str = "buy",  # noqa: ARG002
+        *,
+        size: Optional[float] = None,
+        side: Optional[str] = None,  # noqa: ARG002
     ) -> "tuple[bool, str]":
         """Return (allowed, reason) for a proposed trade.
+
+        Accepts both ``quantity``/``direction`` and ``size``/``side`` kwargs
+        for backwards compatibility.
 
         Checks halt state, open-position count (including _open_positions_list),
         size limit, and daily loss limit.
         """
+        qty = size if size is not None else quantity
+
         if self._halt or self._trading_halted:
             return False, f"halted:{self._halt_reason}"
 
@@ -1775,8 +1806,8 @@ class RiskManager:
 
         equity = self._state.account_equity
         max_size = equity * self._config.max_position_size_pct
-        if quantity > max_size:
-            return False, f"size_too_large:{quantity:.2f}>{max_size:.2f}"
+        if qty > max_size:
+            return False, f"size_too_large:{qty:.2f}>{max_size:.2f}"
 
         daily_loss_pct = (
             abs(self._state.daily_pnl) / equity if equity > 0 else 0.0
@@ -1784,7 +1815,7 @@ class RiskManager:
         if self._state.daily_pnl < 0 and daily_loss_pct > self._config.max_daily_loss_pct:
             return False, f"daily_loss_limit:{daily_loss_pct*100:.2f}%"
 
-        if quantity <= 0:
+        if qty <= 0:
             return False, "quantity_zero"
         return True, "approved"
 

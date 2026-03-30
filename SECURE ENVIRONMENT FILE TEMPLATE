@@ -1,0 +1,78 @@
+# HOPEFX-AI-TRADING — Secure Environment File Template
+# Copy this file to .env and fill in real values.
+# NEVER commit .env to version control.
+# Generate secrets with: openssl rand -hex 32
+
+# ── Application ───────────────────────────────────────────────────────────────
+APP_ENV=production
+DEBUG=false
+LOG_LEVEL=INFO
+
+# ── Database ──────────────────────────────────────────────────────────────────
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=hopefx
+DB_USER=hopefx
+DB_PASSWORD=
+
+# ── Redis ─────────────────────────────────────────────────────────────────────
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# ── Security ──────────────────────────────────────────────────────────────────
+# Generate: openssl rand -hex 32
+SECURITY_ENCRYPTION_KEY=
+SECURITY_SALT=
+SECURITY_JWT_SECRET=
+
+# ── Broker ────────────────────────────────────────────────────────────────────
+BROKER_DEFAULT=paper
+
+# Interactive Brokers (IBKR) — primary supported live broker
+IBKR_HOST=127.0.0.1
+IBKR_PORT=7497
+IBKR_CLIENT_ID=1
+IBKR_ACCOUNT=
+
+# ── Real-time price feed ──────────────────────────────────────────────────────
+WS_PRICE_FEED_URL=
+REST_PRICE_FEED_URL=
+
+# ── Risk ──────────────────────────────────────────────────────────────────────
+RISK_MAX_DAILY_LOSS_PCT=2.0
+RISK_MAX_POSITION_SIZE_PCT=5.0
+RISK_MAX_DRAWDOWN_PCT=10.0
+RISK_KILL_SWITCH_ENABLED=true
+RISK_CVAR_DAILY_LIMIT=0.02
+
+# ── Order rate limiting ───────────────────────────────────────────────────────
+ORDER_RATE_LIMIT=10
+ORDER_RATE_WINDOW=60
+
+# ── ML ────────────────────────────────────────────────────────────────────────
+ML_MODEL_PATH=./models
+ML_RETRAIN_INTERVAL_HOURS=24
+
+# ── Email notifications (SMTP) ────────────────────────────────────────────────
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM=alerts@yourdomain.com
+SMTP_TO=admin@yourdomain.com
+
+# ── Telegram notifications ────────────────────────────────────────────────────
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+
+# ── Discord notifications ─────────────────────────────────────────────────────
+DISCORD_WEBHOOK_URL=
+
+# ── Stripe ────────────────────────────────────────────────────────────────────
+STRIPE_SECRET_KEY=
+STRIPE_PUBLISHABLE_KEY=
+STRIPE_WEBHOOK_SECRET=
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+VITE_WS_URL=
