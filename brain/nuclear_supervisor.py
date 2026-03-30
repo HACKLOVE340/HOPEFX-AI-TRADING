@@ -189,6 +189,8 @@ class NuclearHopeFXSupervisor:
     ) -> None:
         self.nuclear_level: int = 0          # 0=normal 1=pause 2=hedge 3=nuclear
         self.trading_paused: bool = False
+        self._monitoring_only: bool = False  # True when in nuclear monitoring-only state
+        self._monitoring_task_running: bool = False
         self._cooldown_seconds = cooldown_seconds
         self._auto_resume_seconds = auto_resume_seconds
         self._last_trigger_ts: float = 0.0
@@ -517,24 +519,35 @@ class NuclearHopeFXSupervisor:
 
     async def trigger_full_nuclear_mode(self) -> None:
         """
-        Full nuclear response:
-          1. Activate system-wide kill switch (liquidate all + halt)
-          2. Set risk orchestrator max risk to 0
-          3. Send critical alert
+        Full nuclear response — monitoring-only mode.
+
+        The process stays alive so the supervisor can continue watching for
+        de-escalation and send status updates.  Trading is blocked via:
+          1. Kill switch activation (blocks all order paths in the engine)
+          2. RiskOrchestrator max_risk → 0 (secondary block)
+
+        The engine loop keeps running; it will see kill_switch.is_active()
+        and skip order execution on every tick.  When severity drops and
+        manual_resume() is called, the kill switch is deactivated and trading
+        resumes without a process restart.
         """
         self.trading_paused = True
+        self._monitoring_only = True   # flag: process alive, trading blocked
 
+        # 1. Activate kill switch — blocks all order paths (fail-safe)
         ks = _get_kill_switch()
         if ks is not None:
             try:
-                # KillSwitch.activate() is synchronous
                 ks.activate("RL nuclear supervisor: nuclear event detected")
-                logger.critical("☢️ KillSwitch activated")
+                logger.critical("☢️ KillSwitch activated — process stays alive in monitoring mode")
             except Exception as exc:
                 logger.error("kill_switch.activate failed: %s", exc)
         else:
-            logger.critical("☢️ NUCLEAR MODE — kill_switch unavailable, manual intervention required")
+            logger.critical(
+                "☢️ NUCLEAR MODE — kill_switch unavailable, manual intervention required"
+            )
 
+        # 2. Zero out risk budget (belt-and-suspenders)
         ro = _get_risk_orchestrator()
         if ro is not None:
             try:
@@ -542,21 +555,67 @@ class NuclearHopeFXSupervisor:
             except Exception as exc:
                 logger.error("risk_orchestrator.set_max_risk(0) failed: %s", exc)
 
+        # 3. Alert
         notif = _get_notifications()
         if notif is not None:
             try:
                 await notif.send_critical_alert(
                     "☢️ RL-TRIGGERED NUCLEAR MODE — ALL TRADING HALTED\n"
                     f"Nuclear level: {self.nuclear_level} | "
-                    f"Paused: {self.trading_paused}"
+                    "Process alive in monitoring-only state.\n"
+                    "Call manual_resume() or POST /nuclear/resume to restore trading."
                 )
             except Exception as exc:
                 logger.error("Notification send failed: %s", exc)
 
         logger.critical(
-            "☢️ NUCLEAR MODE ACTIVE | nuclear_level=%d trading_paused=%s",
+            "☢️ NUCLEAR MODE ACTIVE | nuclear_level=%d trading_paused=%s "
+            "monitoring_only=True — process alive, orders blocked",
             self.nuclear_level, self.trading_paused,
         )
+
+        # 4. Start background monitoring loop if not already running
+        if not getattr(self, "_monitoring_task_running", False):
+            asyncio.create_task(
+                self._nuclear_monitoring_loop(),
+                name="nuclear_monitoring_loop",
+            )
+
+    async def _nuclear_monitoring_loop(self) -> None:
+        """
+        Background loop that runs while in nuclear/monitoring-only mode.
+
+        Emits a status heartbeat every 60 s so operators know the process
+        is alive.  Exits when nuclear_level drops back to 0 (manual_resume
+        or auto-resume).
+        """
+        self._monitoring_task_running = True
+        heartbeat_interval = 60  # seconds
+        logger.info("Nuclear monitoring loop started")
+        try:
+            while self._monitoring_only and self.nuclear_level > 0:
+                await asyncio.sleep(heartbeat_interval)
+                ks = _get_kill_switch()
+                ks_active = ks.is_active() if ks else False
+                logger.critical(
+                    "☢️ NUCLEAR MONITORING | nuclear_level=%d paused=%s "
+                    "kill_switch=%s — awaiting manual_resume()",
+                    self.nuclear_level, self.trading_paused, ks_active,
+                )
+                notif = _get_notifications()
+                if notif is not None:
+                    try:
+                        await notif.send_warning(
+                            f"☢️ HOPEFX nuclear monitoring active | "
+                            f"level={self.nuclear_level} | "
+                            f"kill_switch={ks_active} | "
+                            "awaiting manual resume"
+                        )
+                    except Exception:
+                        pass
+        finally:
+            self._monitoring_task_running = False
+            logger.info("Nuclear monitoring loop exited (nuclear_level=%d)", self.nuclear_level)
 
     async def trigger_hedge_mode(self) -> None:
         """
@@ -588,12 +647,42 @@ class NuclearHopeFXSupervisor:
 
     # ── Manual controls ───────────────────────────────────────────────────────
 
-    async def manual_resume(self) -> None:
-        """Manually resume trading and reset nuclear level."""
+    async def manual_resume(self, deactivation_token: Optional[str] = None) -> None:
+        """
+        Manually resume trading and reset nuclear level.
+
+        Deactivates the kill switch (requires token if one is configured),
+        restores the risk budget, closes hedges, and exits monitoring-only mode.
+
+        Parameters
+        ----------
+        deactivation_token : str, optional
+            Token required by KillSwitch.deactivate().  Pass the value of
+            HOPEFX_KILL_SWITCH_TOKEN.  If None, deactivation is attempted
+            without a token (works when no token is configured).
+        """
         self.nuclear_level = 0
         self.trading_paused = False
+        self._monitoring_only = False
         self._pause_since_ts = 0.0
         self._last_trigger_ts = 0.0
+
+        # Deactivate kill switch so the engine can place orders again
+        ks = _get_kill_switch()
+        if ks is not None and ks.is_active():
+            try:
+                ks.deactivate(token=deactivation_token)
+                logger.info("KillSwitch deactivated by nuclear supervisor manual_resume")
+            except PermissionError as exc:
+                logger.error(
+                    "KillSwitch deactivation refused (%s) — "
+                    "provide HOPEFX_KILL_SWITCH_TOKEN to resume trading",
+                    exc,
+                )
+                # Don't proceed with resume if kill switch can't be cleared
+                return
+            except Exception as exc:
+                logger.error("KillSwitch deactivation failed: %s", exc)
 
         ro = _get_risk_orchestrator()
         if ro is not None:
@@ -603,14 +692,29 @@ class NuclearHopeFXSupervisor:
             except Exception as exc:
                 logger.error("risk_orchestrator resume failed: %s", exc)
 
+        notif = _get_notifications()
+        if notif is not None:
+            try:
+                await notif.send_info(
+                    "✅ HOPEFX nuclear mode cleared — trading resumed by operator"
+                )
+            except Exception:
+                pass
+
         logger.info("NuclearSupervisor: manual resume — trading restored")
 
     def get_status(self) -> Dict[str, Any]:
         """Return current supervisor state for monitoring."""
+        ks = _get_kill_switch()
         return {
             "nuclear_level": self.nuclear_level,
             "trading_paused": self.trading_paused,
+            "monitoring_only": self._monitoring_only,
+            "monitoring_loop_running": self._monitoring_task_running,
+            "kill_switch_active": ks.is_active() if ks else None,
+            "kill_switch_reason": ks.reason if ks else None,
             "rl_agent_loaded": self.rl_agent is not None,
+            "vecnorm_loaded": self._vec_normalize is not None,
             "model_path": str(self._model_path),
             "cooldown_remaining": max(
                 0.0,
