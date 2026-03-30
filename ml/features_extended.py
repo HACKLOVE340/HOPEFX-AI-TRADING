@@ -1083,7 +1083,8 @@ def add_data_layer_features(
                 ofi = _l2_features["micro_obi"]
         except Exception as _l2_exc:
             logger.debug("L2 order book features unavailable: %s", _l2_exc)
-    tick_count      = 0.0
+    # tick_count from microstructure snapshot (normalised to [0, 1] range)
+    tick_count = min(features.get("micro_tick_count", 0.0) / 500.0, 1.0)
 
     # Derived microstructure
     spread_z20   = features.get("micro_spread_z",          0.0)
