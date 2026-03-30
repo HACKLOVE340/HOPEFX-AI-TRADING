@@ -519,9 +519,11 @@ class StrategyManager:
                 continue
 
             for strategy in self.strategies.values():
-                if not strategy.enabled:
+                if not self._strategy_enabled(strategy):
                     continue
-                if strategy.status not in (StrategyStatus.RUNNING, StrategyStatus.IDLE):
+                if self._strategy_status(strategy) not in (
+                    StrategyStatus.RUNNING, StrategyStatus.IDLE
+                ):
                     continue
 
                 # Subscription tier gate
@@ -572,16 +574,44 @@ class StrategyManager:
         if s:
             s.update_performance(trade_result)
 
+    @staticmethod
+    def _strategy_enabled(s: Any) -> bool:
+        """Return the enabled flag for a strategy, defaulting to True if absent."""
+        return bool(getattr(s, "enabled", True))
+
+    @staticmethod
+    def _strategy_status(s: Any) -> StrategyStatus:
+        """Return the StrategyStatus for a strategy, defaulting to IDLE if absent."""
+        status = getattr(s, "status", StrategyStatus.IDLE)
+        if not isinstance(status, StrategyStatus):
+            # Handle raw string values stored by legacy code
+            try:
+                return StrategyStatus(str(status))
+            except ValueError:
+                return StrategyStatus.IDLE
+        return status
+
+    @staticmethod
+    def _strategy_metrics(s: Any) -> Dict:
+        """Return performance_metrics dict, defaulting to empty dict if absent."""
+        metrics = getattr(s, "performance_metrics", None)
+        return metrics if isinstance(metrics, dict) else {}
+
     @property
     def performance_summary(self) -> Dict:
         """Aggregate performance across all registered strategies."""
         total = len(self.strategies)
-        active = sum(1 for s in self.strategies.values() if s.status == StrategyStatus.RUNNING)
+        active = sum(
+            1 for s in self.strategies.values()
+            if self._strategy_status(s) == StrategyStatus.RUNNING
+        )
         total_pnl = sum(
-            s.performance_metrics.get("total_pnl", 0.0) for s in self.strategies.values()
+            self._strategy_metrics(s).get("total_pnl", 0.0)
+            for s in self.strategies.values()
         )
         total_signals = sum(
-            s.performance_metrics.get("signals_generated", 0) for s in self.strategies.values()
+            self._strategy_metrics(s).get("signals_generated", 0)
+            for s in self.strategies.values()
         )
         return {
             "total_strategies": total,
@@ -590,11 +620,11 @@ class StrategyManager:
             "total_signals": total_signals,
             "strategies": {
                 n: {
-                    "status": s.status.value,
-                    "enabled": s.enabled,
-                    "signals_generated": s.performance_metrics.get("signals_generated", 0),
-                    "win_rate": s.performance_metrics.get("win_rate", 0.0),
-                    "total_pnl": s.performance_metrics.get("total_pnl", 0.0),
+                    "status": self._strategy_status(s).value,
+                    "enabled": self._strategy_enabled(s),
+                    "signals_generated": self._strategy_metrics(s).get("signals_generated", 0),
+                    "win_rate": self._strategy_metrics(s).get("win_rate", 0.0),
+                    "total_pnl": self._strategy_metrics(s).get("total_pnl", 0.0),
                 }
                 for n, s in self.strategies.items()
             },
@@ -612,10 +642,10 @@ class StrategyManager:
             accessible = _plan_satisfies(user_plan, required)
             result.append({
                 "name": name,
-                "status": s.status.value,
-                "enabled": s.enabled,
+                "status": self._strategy_status(s).value,
+                "enabled": self._strategy_enabled(s),
                 "required_plan": required,
                 "accessible": accessible,
-                "performance": s.performance_metrics,
+                "performance": self._strategy_metrics(s),
             })
         return result
