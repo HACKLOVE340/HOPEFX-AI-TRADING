@@ -597,16 +597,27 @@ async def _main() -> None:
 
     logger.info("trader_full starting | env=%s | symbols=%s", cfg.app_env, cfg.symbols)
 
-    # Build broker
+    # Build execution broker.
+    # OANDAStream handles account queries, order placement, and position
+    # management via the OANDA v20 REST API.  It is NEVER used for price
+    # streaming — live ticks come from NuclearStreamer (LiveDataPipeline).
     if cfg.app_env == "live":
-        from brokers.oanda import OANDAConnector
+        from brokers.oanda_stream import OANDAStream
 
-        broker = OANDAConnector(
+        broker = OANDAStream(
             api_key=cfg.oanda_api_key,
             account_id=cfg.oanda_account_id,
+            instruments=[s.replace("/", "_") for s in cfg.symbols],
             practice=False,
         )
-        broker.connect()
+        await broker.__aenter__()
+        connected = await broker.connect()
+        if not connected:
+            logger.critical(
+                "OANDA execution broker connection failed — aborting live startup. "
+                "Check OANDA_API_KEY and OANDA_ACCOUNT_ID."
+            )
+            return
     else:
         from brokers.paper_trading import PaperTradingBroker
 
@@ -672,6 +683,14 @@ async def _main() -> None:
 
     await harness.run()
     await ks.stop()
+
+    # Close the execution broker session cleanly.
+    if hasattr(broker, "__aexit__"):
+        try:
+            await broker.__aexit__(None, None, None)
+        except Exception as _exc:
+            logger.debug("Broker close error: %s", _exc)
+
     logger.info("trader_full shutdown complete")
 
 
