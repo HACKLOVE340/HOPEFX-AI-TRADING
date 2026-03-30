@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // ── Pages ─────────────────────────────────────────────────────────────────────
 import LandingPage          from './pages/LandingPage';
 import Dashboard            from './pages/Dashboard';
+import TradingDashboard     from './pages/TradingDashboard';
 import Marketplace          from './pages/Marketplace';
 import Affiliate            from './pages/Affiliate';
 import CryptoCheckout       from './pages/CryptoCheckout';
@@ -246,7 +247,8 @@ const AppShell: React.FC = () => {
       <main style={s.main}>
         <Routes>
           {/* Core */}
-          <Route path="/dashboard"    element={wrap(<AuthGuard><Dashboard /></AuthGuard>)} />
+          <Route path="/dashboard"    element={wrap(<AuthGuard><TradingDashboard /></AuthGuard>)} />
+          <Route path="/dashboard/legacy" element={wrap(<AuthGuard><Dashboard /></AuthGuard>)} />
           <Route path="/settings"     element={wrap(<AuthGuard><Settings /></AuthGuard>)} />
           <Route path="/marketplace"  element={wrap(<Marketplace />)} />
           <Route path="/affiliate"    element={wrap(<Affiliate />)} />

@@ -32,6 +32,7 @@ import type {
 
 // Re-export types for backward compat
 export type { User, PriceTick, Position, Signal, AccountMetrics, WsStatus };
+export type { UserRole } from '../types';
 
 // ─── Auth slice ───────────────────────────────────────────────────────────────
 
