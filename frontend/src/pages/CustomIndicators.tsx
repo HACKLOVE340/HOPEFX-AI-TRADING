@@ -151,7 +151,7 @@ const CustomIndicators: React.FC = () => {
           <div style={s.cardTitle}>Preview — {symbol}</div>
           {preview.length > 0
             ? <PreviewChart data={preview} color={color} />
-            : <div style={s.placeholder}>Click "Preview" to see the indicator plotted on synthetic {symbol} data.</div>
+            : <div style={s.placeholder}>Click "Preview" to see the indicator plotted on live {symbol} data.</div>
           }
           {preview.length > 0 && (
             <div style={{ fontSize:12, color:'#64748b', marginTop:8 }}>
