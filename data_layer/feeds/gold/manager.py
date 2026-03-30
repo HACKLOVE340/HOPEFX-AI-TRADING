@@ -208,7 +208,16 @@ class GoldFeedManager:
     # ── Consensus ─────────────────────────────────────────────────────────────
 
     async def _update_consensus(self) -> None:
-        """Recompute weighted consensus tick from all live feeds."""
+        """
+        Recompute weighted consensus tick from all live feeds.
+
+        Consensus algorithm:
+          1. Collect all non-rejected, valid ticks
+          2. Compute confidence-weighted mean mid price
+          3. Reject outliers > DQE_CROSS_SOURCE_MAX_DIFF from weighted mean
+          4. Recompute with outliers removed
+          5. Use best-source bid/ask spread centred on consensus mid
+        """
         live = {
             src: tick for src, tick in self._latest.items()
             if tick.quality not in (TickQuality.REJECTED,)
@@ -221,13 +230,14 @@ class GoldFeedManager:
         if consensus_mid <= 0:
             return
 
-        # Use the best source's bid/ask spread, adjusted to consensus mid
+        # Use the best source's bid/ask spread, centred on consensus mid.
+        # Priority: GoldAPI (has real bid/ask) > others (synthesised spread).
         best_src = dqe.best_source()
         if best_src and best_src in live:
             ref = live[best_src]
             half_spread = ref.spread / 2.0
         else:
-            # Fallback: typical gold spread ~$0.30
+            # Fallback: typical gold spread ~$0.30 (0.015% of $2000)
             half_spread = max(consensus_mid * 0.00015, 0.10)
 
         import uuid
@@ -246,9 +256,15 @@ class GoldFeedManager:
         self._last_consensus_at = time.time()
 
         if self._prom_consensus_price:
-            self._prom_consensus_price.set(consensus_mid)
+            try:
+                self._prom_consensus_price.set(consensus_mid)
+            except Exception:
+                pass
         if self._prom_active_sources:
-            self._prom_active_sources.set(len(live))
+            try:
+                self._prom_active_sources.set(len(live))
+            except Exception:
+                pass
 
     # ── Redis pub/sub ─────────────────────────────────────────────────────────
 
