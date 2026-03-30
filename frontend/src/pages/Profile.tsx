@@ -9,6 +9,20 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { api } from '../hooks/useApi';
 
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>;
+    const detail = (e['response'] as Record<string, unknown> | undefined)?.['data'];
+    if (detail && typeof detail === 'object') {
+      const d = detail as Record<string, unknown>;
+      if (typeof d['detail'] === 'string') return d['detail'];
+      if (typeof d['message'] === 'string') return d['message'];
+    }
+    if (typeof e['message'] === 'string') return e['message'];
+  }
+  return fallback;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ProfileData {
@@ -113,9 +127,10 @@ const EditModal: React.FC<{
   profile: ProfileData;
   onSave: (data: Partial<ProfileData>) => void;
   onClose: () => void;
-}> = ({ profile, onSave, onClose }) => {
-  const [bio, setBio]         = useState(profile.bio);
-  const [website, setWebsite] = useState(profile.website || '');
+  saveErr: string | null;
+}> = ({ profile, onSave, onClose, saveErr }) => {
+  const [bio, setBio]          = useState(profile.bio);
+  const [website, setWebsite]  = useState(profile.website || '');
   const [avatarUrl, setAvatar] = useState(profile.avatar_url || '');
 
   return (
@@ -125,6 +140,9 @@ const EditModal: React.FC<{
           <span style={{ fontWeight: 700, fontSize: 16 }}>Edit Profile</span>
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>
+        {saveErr && (
+          <div style={s.modalError}>{saveErr}</div>
+        )}
         <label style={s.fieldLabel}>Bio</label>
         <textarea
           style={s.textarea}
@@ -155,12 +173,14 @@ const Profile: React.FC = () => {
   const traderId = window.location.hash.slice(1) || 'me';
   const isOwnProfile = traderId === 'me';
 
-  const [profile, setProfile]   = useState<ProfileData | null>(null);
-  const [signals, setSignals]   = useState<Signal[]>([]);
-  const [loading, setLoading]   = useState(true);
+  const [profile, setProfile]     = useState<ProfileData | null>(null);
+  const [signals, setSignals]     = useState<Signal[]>([]);
+  const [loading, setLoading]     = useState(true);
   const [following, setFollowing] = useState(false);
-  const [editing, setEditing]   = useState(false);
-  const [tab, setTab]           = useState<'signals' | 'stats'>('signals');
+  const [followErr, setFollowErr] = useState<string | null>(null);
+  const [saveErr, setSaveErr]     = useState<string | null>(null);
+  const [editing, setEditing]     = useState(false);
+  const [tab, setTab]             = useState<'signals' | 'stats'>('signals');
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -183,6 +203,7 @@ const Profile: React.FC = () => {
 
   const handleFollow = async () => {
     if (!profile) return;
+    setFollowErr(null);
     try {
       if (following) {
         await api.delete(`/profiles/${profile.trader_id}/follow`);
@@ -194,15 +215,21 @@ const Profile: React.FC = () => {
         ...p,
         total_followers: p.total_followers + (following ? -1 : 1),
       } : p);
-    } catch { /* ignore */ }
+    } catch (err) {
+      setFollowErr(extractErrorMessage(err, 'Failed to update follow status. Please try again.'));
+    }
   };
 
   const handleSave = async (updates: Partial<ProfileData>) => {
+    setSaveErr(null);
     try {
       const res = await api.put('/profiles/me', updates);
       setProfile(res.data);
-    } catch { /* ignore */ }
-    setEditing(false);
+      setEditing(false);
+    } catch (err) {
+      setSaveErr(extractErrorMessage(err, 'Failed to save profile. Please try again.'));
+      // Keep modal open so user can retry
+    }
   };
 
   if (loading) return <div style={s.loading}>Loading profile…</div>;
@@ -216,7 +243,12 @@ const Profile: React.FC = () => {
   return (
     <div style={s.page}>
       {editing && (
-        <EditModal profile={profile} onSave={handleSave} onClose={() => setEditing(false)} />
+        <EditModal
+          profile={profile}
+          onSave={handleSave}
+          onClose={() => { setEditing(false); setSaveErr(null); }}
+          saveErr={saveErr}
+        />
       )}
 
       {/* ── Header ── */}
@@ -250,6 +282,9 @@ const Profile: React.FC = () => {
                   {following ? 'Following' : 'Follow'}
                 </button>
                 <button style={s.copyBtn}>Copy Trade</button>
+                {followErr && (
+                  <div style={s.inlineError}>{followErr}</div>
+                )}
               </>
             )}
           </div>
@@ -476,6 +511,14 @@ const s: Record<string, React.CSSProperties> = {
   cancelBtn: {
     flex: 1, background: '#334155', border: 'none', borderRadius: 8,
     color: '#94a3b8', padding: '10px', fontSize: 14, cursor: 'pointer',
+  },
+  inlineError: {
+    background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6,
+    padding: '6px 10px', fontSize: 12, color: '#f87171', marginTop: 4,
+  },
+  modalError: {
+    background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6,
+    padding: '8px 12px', fontSize: 13, color: '#f87171', marginBottom: 12,
   },
 };
 
