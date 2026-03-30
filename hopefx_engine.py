@@ -386,24 +386,54 @@ class HopeFXEngine:
         )
 
         # ── Execute if signal is strong enough ────────────────────────────────
-        # Block execution if kill switch or risk orchestrator has halted trading
+        # Block execution if kill switch or risk orchestrator has halted trading.
+        # Fail-safe: any import/runtime error defaults to blocking the order so
+        # a broken kill-switch never silently allows trading to continue.
         trading_blocked = False
         try:
             from kill_switch import kill_switch as _ks
             if _ks.is_active():
-                logger.warning("Kill switch active — order blocked for %s", sym_key)
+                logger.warning(
+                    "Kill switch active (reason=%s) — order blocked for %s",
+                    _ks.reason, sym_key,
+                )
                 trading_blocked = True
-        except Exception:
-            pass
+        except ImportError as _ks_err:
+            # kill_switch module missing — block as a safety measure
+            logger.error(
+                "kill_switch import failed (%s) — blocking order for %s (fail-safe)",
+                _ks_err, sym_key,
+            )
+            trading_blocked = True
+        except Exception as _ks_err:
+            logger.error(
+                "kill_switch check raised %s — blocking order for %s (fail-safe)",
+                _ks_err, sym_key,
+            )
+            trading_blocked = True
 
         if not trading_blocked:
             try:
                 from risk.orchestrator import risk_orchestrator as _ro
                 if not _ro.is_trading_allowed():
-                    logger.warning("RiskOrchestrator: trading halted — order blocked for %s", sym_key)
+                    logger.warning(
+                        "RiskOrchestrator: trading halted (max_risk=%.2f) — "
+                        "order blocked for %s",
+                        _ro.get_max_risk(), sym_key,
+                    )
                     trading_blocked = True
-            except Exception:
-                pass
+            except ImportError as _ro_err:
+                logger.error(
+                    "risk.orchestrator import failed (%s) — blocking order for %s (fail-safe)",
+                    _ro_err, sym_key,
+                )
+                trading_blocked = True
+            except Exception as _ro_err:
+                logger.error(
+                    "RiskOrchestrator check raised %s — blocking order for %s (fail-safe)",
+                    _ro_err, sym_key,
+                )
+                trading_blocked = True
 
         min_conf = float(_optional("MIN_SIGNAL_CONFIDENCE", "0.35"))
         if (
@@ -496,8 +526,15 @@ class HopeFXEngine:
         # Live execution
         try:
             if hasattr(self._broker, "place_order"):
-                result = self._broker.place_order(
+                _order_coro = self._broker.place_order(
                     symbol=symbol, side=side, lots=lots,
+                )
+                # Brokers may be sync or async — handle both
+                import inspect as _inspect
+                result = (
+                    await _order_coro
+                    if _inspect.isawaitable(_order_coro)
+                    else _order_coro
                 )
                 fill_price = float(result.get("fill_price", price)) if result else price
                 self._trade_logger.log_fill(
