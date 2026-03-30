@@ -153,8 +153,8 @@ def apply_persisted_risk_settings() -> None:
                     )
             except Exception as mig_exc:
                 logger.warning("Risk settings migration failed (non-fatal): %s", mig_exc)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("apply_persisted_risk_settings: config_store unavailable, skipping migration: %s", exc)
 
     persisted = _get_risk_settings()
     if not persisted:
@@ -616,16 +616,16 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
         se = get_signal_engine_status()
         module_status["signal_engine"] = se.get("ml_available", False)
         module_status["strategies"] = True
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("dashboard-data signal engine status failed: %s", exc)
 
     # Paper trading gate fill count
     try:
         from research.pipeline.paper_trading_gate import get_gate
         gate = get_gate()
         trading_stats["paper_fill_count"] = gate.fill_count
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("dashboard-data paper trading gate stats failed: %s", exc)
 
     return {
         "system_health": {"status": "ok", "uptime": time.time() - _start_time},
