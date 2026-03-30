@@ -112,9 +112,13 @@ class MarketDataOrchestrator:
         self._norm:         NormalizationPipeline           = normalization_pipeline
         self._replay:       MarketReplayEngine              = market_replay_engine
 
-        self._started   = False
-        self._start_ts  = 0.0
+        self._started    = False
+        self._start_ts   = 0.0
         self._tick_count = 0
+
+        # Tick subscriber callbacks: name → Callable[[GoldTick], None]
+        # Registered via subscribe_ticks(); called on every accepted tick.
+        self._tick_callbacks: Dict[str, Any] = {}
 
         # Prometheus
         self._prom_uptime    = None
@@ -221,6 +225,19 @@ class MarketDataOrchestrator:
             logger.info("MarketDataOrchestrator: MacroStoreBridge started")
         except Exception as exc:
             logger.warning("MarketDataOrchestrator: macro bridge error: %s", exc)
+
+        # 7. Ensure macro CSV fallback is loaded so features are never zero
+        #    at startup even without a FRED key or network access.
+        try:
+            from ml.macro_store import macro_store as _ms
+            if len(_ms) == 0:
+                self._macro_bridge._load_csv_fallback()
+                logger.info(
+                    "MarketDataOrchestrator: macro CSV fallback loaded (%d series)",
+                    len(_ms),
+                )
+        except Exception as exc:
+            logger.debug("MarketDataOrchestrator: macro CSV fallback error: %s", exc)
 
         self._started  = True
         self._start_ts = time.time()
@@ -392,6 +409,13 @@ class MarketDataOrchestrator:
                 self._prom_tick_rate.inc()
             except Exception as _exc:
                 logger.debug('Suppressed exception: %s', _exc)
+
+        # Fire registered tick callbacks (non-blocking)
+        for _name, _cb in list(self._tick_callbacks.items()):
+            try:
+                _cb(tick)
+            except Exception as _exc:
+                logger.debug("Orchestrator: tick callback %s error: %s", _name, _exc)
 
     # ── ML feature aggregation ────────────────────────────────────────────────
 
@@ -638,6 +662,72 @@ class MarketDataOrchestrator:
         except Exception as exc:
             logger.debug("Orchestrator.get_ohlcv_from_ticks error: %s", exc)
             return None
+
+    # ── Tick subscription ─────────────────────────────────────────────────────
+
+    def subscribe_ticks(self, name: str, callback: Any) -> None:
+        """
+        Register a callback to be called on every accepted tick.
+
+        Parameters
+        ----------
+        name     : Unique subscriber name (used for deregistration).
+        callback : Callable[[GoldTick], None].  Must not block — use
+                   asyncio.create_task() inside the callback for async work.
+
+        Example
+        -------
+        def on_tick(tick: GoldTick) -> None:
+            print(tick.mid)
+
+        orchestrator.subscribe_ticks("my_handler", on_tick)
+        """
+        if not callable(callback):
+            raise TypeError(f"subscribe_ticks: callback must be callable, got {type(callback)}")
+        self._tick_callbacks[name] = callback
+        logger.debug("Orchestrator: tick subscriber registered: %s", name)
+
+    def unsubscribe_ticks(self, name: str) -> None:
+        """Remove a previously registered tick callback."""
+        removed = self._tick_callbacks.pop(name, None)
+        if removed is None:
+            logger.debug("Orchestrator: unsubscribe_ticks: unknown subscriber %s", name)
+        else:
+            logger.debug("Orchestrator: tick subscriber removed: %s", name)
+
+    # ── OHLCV window helper ───────────────────────────────────────────────────
+
+    def get_ohlcv_window(
+        self,
+        symbol: str = "XAU_USD",
+        bars: int = 200,
+        timeframe: str = "H1",
+    ) -> Optional["pd.DataFrame"]:
+        """
+        Return up to ``bars`` OHLCV bars, trying OHLCVStore first then
+        falling back to tick-based reconstruction from Redis.
+
+        This is the preferred method for the live inference loop — it
+        abstracts the two OHLCV sources behind a single call.
+
+        Returns None when insufficient data is available.
+        """
+        # Try OHLCVStore (broker feed) first
+        df = self.get_ohlcv(symbol=symbol, bars=bars, timeframe=timeframe)
+        if df is not None and len(df) >= 10:
+            return df
+
+        # Fall back to tick-based reconstruction
+        tf_map = {
+            "M1": 1, "M5": 5, "M15": 15, "M30": 30,
+            "H1": 60, "H4": 240, "D1": 1440,
+        }
+        tf_minutes = tf_map.get(timeframe.upper(), 60)
+        return self.get_ohlcv_from_ticks(
+            symbol=symbol,
+            timeframe_minutes=tf_minutes,
+            max_ticks=bars * 60,
+        )
 
     # ── Health ────────────────────────────────────────────────────────────────
 
