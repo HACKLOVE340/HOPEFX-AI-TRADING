@@ -112,6 +112,24 @@ class PositionSizingResult:
     def lot_size(self) -> float:
         return self.quantity
 
+    # Extended API: .approved and .recommended_size for downstream consumers
+    @property
+    def approved(self) -> bool:
+        """True when the sizing produced a non-zero quantity."""
+        return self.quantity > 0
+
+    @property
+    def recommended_size(self) -> float:
+        """Alias for quantity — the recommended position size in units."""
+        return self.quantity
+
+    @property
+    def reason(self) -> str:
+        """Human-readable reason for the sizing decision."""
+        if self.quantity <= 0:
+            return "position_size_zero"
+        return "approved"
+
 
 @dataclass
 class RiskAssessment:
@@ -526,33 +544,79 @@ class RiskManager:
         """True when trading has been halted via _halt_trading()."""
         return self._halt
 
+    # ── Direct state attribute proxies (used by tests and monitoring) ─────────
+
+    @property
+    def peak_equity(self) -> float:
+        return self._state.peak_equity
+
+    @peak_equity.setter
+    def peak_equity(self, value: float) -> None:
+        self._state.peak_equity = float(value)
+
+    @property
+    def daily_starting_equity(self) -> float:
+        return self._state.day_open_equity
+
+    @daily_starting_equity.setter
+    def daily_starting_equity(self, value: float) -> None:
+        self._state.day_open_equity = float(value)
+
     def calculate_position_size(
         self,
         symbol: str,
         entry_price: float,
-        account_balance: float,
+        account_balance: Optional[float] = None,
+        account_equity: Optional[float] = None,
         direction: str = "long",
         confidence: float = 0.7,
         probability: float = 0.55,
+        signal_strength: float = 0.7,
+        stop_loss_price: Optional[float] = None,
+        take_profit_price: Optional[float] = None,
+        volatility: float = 0.0,
+        **kwargs,
     ) -> "PositionSizingResult":
-        """Convenience wrapper around size_order() for callers that supply
-        raw parameters rather than a signal object."""
+        """
+        Convenience wrapper around size_order() for callers that supply
+        raw parameters rather than a signal object.
+
+        Accepts both the legacy (account_balance) and extended
+        (account_equity, signal_strength, stop_loss_price, take_profit_price,
+        volatility) signatures so that all callers are satisfied.
+
+        Returns a PositionSizingResult with an additional .approved property
+        and .recommended_size alias for downstream consumers.
+        """
+        equity = float(
+            account_equity or account_balance or self._state.account_equity or _ACCOUNT_EQUITY
+        )
+        # Use signal_strength as confidence when confidence is at default
+        effective_confidence = max(confidence, signal_strength)
 
         class _Signal:
             pass
 
         sig = _Signal()
-        sig.symbol = symbol          # type: ignore[attr-defined]
-        sig.direction = direction    # type: ignore[attr-defined]
-        sig.confidence = confidence  # type: ignore[attr-defined]
-        sig.probability = probability  # type: ignore[attr-defined]
-        sig.data_quality = 1.0       # type: ignore[attr-defined]
-        sig.features = {}            # type: ignore[attr-defined]
+        sig.symbol = symbol                          # type: ignore[attr-defined]
+        sig.direction = direction                    # type: ignore[attr-defined]
+        sig.confidence = effective_confidence        # type: ignore[attr-defined]
+        sig.probability = probability                # type: ignore[attr-defined]
+        sig.data_quality = 1.0                       # type: ignore[attr-defined]
+        sig.features = {}                            # type: ignore[attr-defined]
+
         # Temporarily update equity so sizing reflects the supplied balance.
         prev_equity = self._state.account_equity
-        self._state.account_equity = account_balance
+        self._state.account_equity = equity
         result = self.size_order(sig)
         self._state.account_equity = prev_equity
+
+        # Patch stop/take-profit if supplied
+        if stop_loss_price is not None:
+            result.stop_loss_usd = float(stop_loss_price)
+        if take_profit_price is not None:
+            result.take_profit_usd = float(take_profit_price)
+
         return result
 
     def validate_trade(
@@ -607,6 +671,18 @@ class RiskManager:
 
     def update_equity(self, equity: float) -> None:
         self._state.update_equity(equity)
+        # Auto-halt when drawdown limits are breached.
+        if not self._halt:
+            dd = self._state.current_drawdown
+            daily_dd = self._state.daily_drawdown
+            if dd >= self._config.max_drawdown_pct:
+                self._halt_trading(
+                    f"auto_halt:drawdown={dd*100:.2f}%>={self._config.max_drawdown_pct*100:.1f}%"
+                )
+            elif daily_dd >= self._config.max_daily_loss_pct:
+                self._halt_trading(
+                    f"auto_halt:daily_loss={daily_dd*100:.2f}%>={self._config.max_daily_loss_pct*100:.1f}%"
+                )
 
     # ── Scaling factors ───────────────────────────────────────────────────────
 
