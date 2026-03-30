@@ -257,10 +257,16 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
     except Exception:
         components["online_learner"] = False
 
-    # Data feed engine
+    # Data feed — NuclearStreamer (primary) or RealTimePriceEngine (fallback)
     try:
-        df_engine = getattr(app_state, "data_engine", None)
-        components["data_feed"] = df_engine is not None and getattr(df_engine, "is_running", False)
+        nuclear = getattr(app_state, "nuclear_streamer", None)
+        if nuclear is not None:
+            components["data_feed"] = nuclear.status().get("is_running", False)
+        else:
+            df_engine = getattr(app_state, "price_engine", None) or getattr(app_state, "data_engine", None)
+            components["data_feed"] = df_engine is not None and (
+                getattr(df_engine, "active", False) or getattr(df_engine, "is_running", False)
+            )
     except Exception:
         components["data_feed"] = False
 
