@@ -134,11 +134,12 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> "pd.DataFrame":
     Priority:
     1. Live price engine (app_state.price_engine) — most recent bars
     2. CSV files in data/ directory — XAU_USD_H1.csv etc.
-    3. Paper broker get_market_data() — simulated but realistic prices
-    4. Flat stub (last resort — signals model fallback, not garbage 1.0)
+    3. Paper broker get_market_data() — paper account OHLCV history
 
     Returns a DataFrame with columns [open, high, low, close, volume]
     and a DatetimeIndex, length >= lookback where possible.
+    Returns an empty DataFrame when no source has data — callers must
+    check len(df) >= minimum_bars before proceeding.
     """
     import pathlib
 
@@ -196,34 +197,15 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> "pd.DataFrame":
     except Exception as exc:
         logger.debug("Paper broker OHLCV load failed: %s", exc)
 
-    # 4. Flat stub — use last known price so at least entry_price is real
-    try:
-        from app import app_state  # noqa: PLC0415
-
-        broker = getattr(app_state, "broker", None)
-        last_price = 1.0
-        if broker and hasattr(broker, "market_prices"):
-            sym_key = symbol.upper().replace("_", "").replace("/", "")
-            last_price = broker.market_prices.get(sym_key, 1.0)
-    except Exception:
-        last_price = 1.0
-
-    idx = pd.date_range(
-        end=pd.Timestamp.utcnow().floor("h"),
-        periods=lookback,
-        freq="h",
-        tz="UTC",
+    # No OHLCV data available from any source — return empty DataFrame.
+    # Callers must check len(df) >= minimum_bars before proceeding.
+    logger.warning(
+        "_load_ohlcv_for_symbol: no OHLCV data available for %s "
+        "(checked price_engine, CSV files, paper broker). "
+        "Ensure the data layer is running or place a CSV in data/%s_H1.csv.",
+        symbol, symbol.upper().replace("/", "_").replace("-", "_"),
     )
-    return pd.DataFrame(
-        {
-            "open": last_price,
-            "high": last_price * 1.001,
-            "low": last_price * 0.999,
-            "close": last_price,
-            "volume": 1000.0,
-        },
-        index=idx,
-    )
+    return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
 
 
 def _compute_atr_sl_tp(
@@ -411,7 +393,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
     2. ml/evaluation_results.json              — written by evaluation pipeline
     3. ml/saved_models/metrics.json            — legacy metrics file
     4. Live InferenceEngine predict_count / fallback_count ratio
-    5. Baseline stub with a note to run training
+    5. Zeros with a note directing the user to run training (model not yet trained)
 
     Requires: authenticated user (any role).
     """
@@ -498,7 +480,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
             except Exception as exc:
                 logger.debug("Could not parse eval file %s: %s", p, exc)
 
-    # ── Live engine counters as last resort before stub ───────────────────────
+    # ── Live engine counters as last resort ───────────────────────────────────
     try:
         from ml.inference_engine import get_inference_engine
         eng = get_inference_engine()
@@ -522,7 +504,8 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
     except Exception:
         pass
 
-    # ── Stub: model not yet trained ───────────────────────────────────────────
+    # No evaluation data and no live engine counters — model not yet trained.
+    # Return zeros with a clear note; the UI should prompt the user to train.
     return AccuracyResponse(
         model_id="xgb_macro",
         accuracy=0.0,
@@ -585,7 +568,7 @@ async def predict(
 
     if predictor is not None:
         try:
-            # Load real OHLCV data (CSV → paper broker → stub fallback)
+            # Load real OHLCV data (CSV → paper broker → empty if unavailable)
             ohlcv = _load_ohlcv_for_symbol(symbol_upper, body.lookback)
 
             # InferenceEngine path (full pipeline)
