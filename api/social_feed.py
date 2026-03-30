@@ -243,8 +243,8 @@ async def feed_status(user: TokenPayload = Depends(get_current_user)):
         profile = mgr.get_profile(user.sub)
         if profile:
             follower_count = getattr(profile, "total_followers", 0)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("feed_status: failed to fetch follower count for %s: %s", user.sub, exc)
 
     return {
         "opted_in": opted_in,
