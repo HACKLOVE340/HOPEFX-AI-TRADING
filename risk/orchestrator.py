@@ -40,9 +40,12 @@ Usage
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -114,11 +117,17 @@ class RiskOrchestrator:
         Injected lazily if not provided at construction.
     """
 
+    # Default path for hedge-state persistence (env-overridable)
+    _DEFAULT_STATE_FILE = Path(
+        os.environ.get("RISK_ORCHESTRATOR_STATE_FILE", "risk_orchestrator_state.json")
+    )
+
     def __init__(
         self,
         default_max_risk: float = 1.0,
         hedge_units: float = 1_000.0,
         broker: Optional[Any] = None,
+        state_file: Optional[Any] = None,
     ) -> None:
         self._max_risk: float = float(default_max_risk)
         self._hedge_units = hedge_units
@@ -128,11 +137,78 @@ class RiskOrchestrator:
         self._trading_allowed: bool = True
         self._lock = asyncio.Lock()
         self._history: List[Dict[str, Any]] = []   # last 200 risk events
+        self._state_file: Path = (
+            Path(state_file) if state_file is not None else self._DEFAULT_STATE_FILE
+        )
+
+        # Restore hedge positions from the previous process so we know which
+        # hedges are already open and don't double-open them on restart.
+        self._restore_state()
 
         logger.info(
-            "RiskOrchestrator initialised | max_risk=%.2f hedge_units=%.0f",
-            self._max_risk, self._hedge_units,
+            "RiskOrchestrator initialised | max_risk=%.2f hedge_units=%.0f state_file=%s",
+            self._max_risk, self._hedge_units, self._state_file,
         )
+
+    # ── State persistence ─────────────────────────────────────────────────────
+
+    def _persist_state(self) -> None:
+        """Write hedge positions and max_risk to disk for restart recovery."""
+        try:
+            state = {
+                "max_risk": self._max_risk,
+                "trading_allowed": self._trading_allowed,
+                "hedge_active": self._hedge_active,
+                "hedge_positions": [
+                    {
+                        "symbol": p.symbol,
+                        "units": p.units,
+                        "direction": p.direction,
+                        "opened_at": p.opened_at,
+                        "order_id": p.order_id,
+                    }
+                    for p in self._hedge_positions
+                ],
+            }
+            self._state_file.write_text(json.dumps(state, indent=2))
+            logger.debug("RiskOrchestrator state persisted to %s", self._state_file)
+        except OSError as exc:
+            logger.warning("RiskOrchestrator: could not persist state: %s", exc)
+
+    def _restore_state(self) -> None:
+        """Restore hedge positions and max_risk from disk on startup."""
+        if not self._state_file.exists():
+            return
+        try:
+            data = json.loads(self._state_file.read_text())
+            self._max_risk = float(data.get("max_risk", self._max_risk))
+            self._trading_allowed = bool(data.get("trading_allowed", True))
+            self._hedge_active = bool(data.get("hedge_active", False))
+            self._hedge_positions = [
+                HedgePosition(
+                    symbol=p["symbol"],
+                    units=float(p["units"]),
+                    direction=p["direction"],
+                    opened_at=float(p.get("opened_at", time.time())),
+                    order_id=p.get("order_id"),
+                )
+                for p in data.get("hedge_positions", [])
+            ]
+            logger.info(
+                "RiskOrchestrator state restored | max_risk=%.2f hedge_active=%s "
+                "hedge_positions=%d",
+                self._max_risk, self._hedge_active, len(self._hedge_positions),
+            )
+        except Exception as exc:
+            logger.warning("RiskOrchestrator: could not restore state: %s", exc)
+
+    def _clear_state(self) -> None:
+        """Remove the state file after hedge positions are fully closed."""
+        try:
+            if self._state_file.exists():
+                self._state_file.unlink()
+        except OSError as exc:
+            logger.warning("RiskOrchestrator: could not clear state file: %s", exc)
 
     # ── Broker injection ──────────────────────────────────────────────────────
 
@@ -195,6 +271,8 @@ class RiskOrchestrator:
                     _ORCH_RISK_EVENTS_TOTAL.labels(event_type="set_max_risk").inc()
                 except Exception as _pe:
                     logger.debug("Prometheus orchestrator metric failed: %s", _pe)
+
+            self._persist_state()
 
             # Propagate to RiskManager if available
             await self._propagate_to_risk_manager(fraction)
@@ -274,6 +352,8 @@ class RiskOrchestrator:
                 except Exception as _pe:
                     logger.debug("Prometheus hedge metric failed: %s", _pe)
 
+            self._persist_state()
+
     async def deactivate_hedge_mode(self) -> None:
         """Close all open hedge positions and restore normal mode."""
         async with self._lock:
@@ -314,6 +394,8 @@ class RiskOrchestrator:
                     _ORCH_RISK_EVENTS_TOTAL.labels(event_type="hedge_deactivate").inc()
                 except Exception as _pe:
                     logger.debug("Prometheus hedge deactivate metric failed: %s", _pe)
+
+            self._clear_state()
 
     # ── Exposure query ────────────────────────────────────────────────────────
 
