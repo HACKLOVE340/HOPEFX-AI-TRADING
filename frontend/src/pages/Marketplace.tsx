@@ -129,7 +129,8 @@ const StrategyDetail: React.FC<{
   onSubscribe: (s: Strategy) => void;
   subscribed: boolean;
   purchaseError: string | null;
-}> = ({ strategy, reviews, onClose, onSubscribe, subscribed, purchaseError }) => {
+  reviewsErr: string | null;
+}> = ({ strategy, reviews, onClose, onSubscribe, subscribed, purchaseError, reviewsErr }) => {
   const p = strategy.performance;
   return (
     <div style={styles.overlay} onClick={onClose}>
@@ -182,6 +183,7 @@ const StrategyDetail: React.FC<{
           <div style={styles.purchaseError}>{purchaseError}</div>
         )}
 
+        {reviewsErr && <div style={{ ...styles.purchaseError, marginTop: 12 }}>{reviewsErr}</div>}
         {reviews.length > 0 && (
           <div style={{ marginTop: 28 }}>
             <h3 style={styles.reviewsTitle}>Reviews</h3>
@@ -208,12 +210,14 @@ const StrategyDetail: React.FC<{
 
 const Marketplace: React.FC = () => {
   const currentUser = useStore(selectUser);
-  const [strategies, setStrategies] = useState<Strategy[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('all');
-  const [sortBy, setSortBy] = useState<SortOption>('popular');
-  const [selected, setSelected] = useState<Strategy | null>(null);
+  const [strategies, setStrategies]   = useState<Strategy[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [loadErr, setLoadErr]         = useState<string | null>(null);
+  const [reviewsErr, setReviewsErr]   = useState<string | null>(null);
+  const [search, setSearch]           = useState('');
+  const [category, setCategory]       = useState('all');
+  const [sortBy, setSortBy]           = useState<SortOption>('popular');
+  const [selected, setSelected]       = useState<Strategy | null>(null);
   const [selectedReviews, setSelectedReviews] = useState<Review[]>([]);
   const [subscribed, setSubscribed] = useState<Set<string>>(new Set());
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -229,8 +233,9 @@ const Marketplace: React.FC = () => {
         { params }
       );
       setStrategies(res.data.strategies ?? []);
-    } catch (_) {
+    } catch (err) {
       setStrategies([]);
+      setLoadErr(extractErrorMessage(err, 'Failed to load strategies. Check your connection.'));
     } finally {
       setLoading(false);
     }
@@ -246,11 +251,13 @@ const Marketplace: React.FC = () => {
 
   const handleSelect = async (s: Strategy) => {
     setSelected(s);
+    setReviewsErr(null);
     try {
       const res = await api.get<{ strategy: Strategy; reviews: Review[] }>(`/monetization/marketplace/strategies/${s.strategy_id}`);
       setSelectedReviews(res.data.reviews ?? []);
-    } catch (_) {
+    } catch (err) {
       setSelectedReviews([]);
+      setReviewsErr(extractErrorMessage(err, 'Failed to load reviews.'));
     }
   };
 
@@ -326,9 +333,10 @@ const Marketplace: React.FC = () => {
       </div>
 
       {/* Grid */}
+      {loadErr && <div style={styles.errorBox}>{loadErr}</div>}
       {loading ? (
         <p style={{ color: '#64748b', padding: '40px 0' }}>Loading strategies…</p>
-      ) : visible.length === 0 ? (
+      ) : !loadErr && visible.length === 0 ? (
         <p style={{ color: '#64748b', padding: '40px 0' }}>No strategies match your filters.</p>
       ) : (
         <div style={styles.grid}>
@@ -343,10 +351,11 @@ const Marketplace: React.FC = () => {
         <StrategyDetail
           strategy={selected}
           reviews={selectedReviews}
-          onClose={() => { setSelected(null); setPurchaseError(null); }}
+          onClose={() => { setSelected(null); setPurchaseError(null); setReviewsErr(null); }}
           onSubscribe={handleSubscribe}
           subscribed={subscribed.has(selected.strategy_id)}
           purchaseError={purchaseError}
+          reviewsErr={reviewsErr}
         />
       )}
     </div>
@@ -437,6 +446,10 @@ const styles: Record<string, React.CSSProperties> = {
   purchaseError: {
     background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6,
     padding: '8px 12px', marginTop: 10, fontSize: 13, color: '#f87171',
+  },
+  errorBox: {
+    background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8,
+    padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#f87171',
   },
   reviewsTitle: { fontSize: 16, fontWeight: 600, color: '#e2e8f0', marginBottom: 12 },
   reviewCard: {
