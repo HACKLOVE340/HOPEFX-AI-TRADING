@@ -172,32 +172,8 @@ const Profile: React.FC = () => {
       const sigRes = await api.get(`/profiles/${res.data.trader_id}/signals`);
       setSignals(sigRes.data.signals || []);
     } catch {
-      // Demo fallback
-      setProfile({
-        trader_id: traderId,
-        username: 'HopeFX Trader',
-        bio: 'Algorithmic trader specialising in XAU/USD. 3+ years live trading.',
-        avatar_url: null,
-        website: 'https://hopefx.io',
-        verified: true,
-        is_public: true,
-        total_followers: 142,
-        total_following: 38,
-        total_trades: 847,
-        win_rate: 58.3,
-        total_pnl: 24680,
-        avg_win: 312,
-        avg_loss: 198,
-        sharpe_ratio: 1.42,
-        created_at: '2024-01-15T00:00:00Z',
-      });
-      setSignals([
-        { signal_id: 's1', symbol: 'XAU/USD', direction: 'BUY',  confidence: 82, pnl: 142.5,  copies: 7,  created_at: new Date().toISOString() },
-        { signal_id: 's2', symbol: 'EUR/USD', direction: 'SELL', confidence: 74, pnl: -38.2,  copies: 3,  created_at: new Date().toISOString() },
-        { signal_id: 's3', symbol: 'XAU/USD', direction: 'BUY',  confidence: 91, pnl: 287.0,  copies: 12, created_at: new Date().toISOString() },
-        { signal_id: 's4', symbol: 'GBP/USD', direction: 'SELL', confidence: 68, pnl: 55.0,   copies: 2,  created_at: new Date().toISOString() },
-        { signal_id: 's5', symbol: 'XAU/USD', direction: 'SELL', confidence: 77, pnl: -22.0,  copies: 5,  created_at: new Date().toISOString() },
-      ]);
+      setProfile(null);
+      setSignals([]);
     } finally {
       setLoading(false);
     }
