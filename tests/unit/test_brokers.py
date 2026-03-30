@@ -117,12 +117,20 @@ class TestPaperTradingBroker:
 
         assert result
 
-    def test_calculate_pnl_profit(self, paper_broker):
-        """Test P&L calculation for profitable trade."""
-        # Set initial market price
-        paper_broker.market_prices["EUR_USD"] = 1.1000
+    def test_calculate_pnl_profit(self, paper_broker, monkeypatch):
+        """Test P&L calculation for a profitable trade, net of transaction costs.
 
-        # Buy at 1.1000
+        Uses zero-slippage so fill prices are deterministic, then verifies
+        that the net P&L (gross move minus open+close commissions) is positive.
+        """
+        monkeypatch.setenv("PAPER_SLIPPAGE_MODEL", "zero")
+        # Re-create slippage model with zero slippage for this test
+        from brokers.paper_trading import SlippageModel
+        paper_broker._slippage = SlippageModel("zero")
+
+        paper_broker.market_prices["EUR_USD"] = 1.1000
+        balance_before_open = paper_broker.balance
+
         paper_broker.place_order(
             symbol="EUR_USD",
             order_type=OrderType.MARKET,
@@ -131,21 +139,41 @@ class TestPaperTradingBroker:
             price=1.1000,
         )
 
-        # Update market price to higher value and close position
-        paper_broker.market_prices["EUR_USD"] = 1.1010
-        initial_balance = paper_broker.balance
+        # With zero slippage, fill = mid = 1.1000.
+        # Opening commission = (10000 / 100000) * 3.5 = $0.35
+        open_commission = (10000 / 100_000) * paper_broker._commission_per_lot
+
+        # Move price up by 20 pips — gross P&L = 10000 * 0.0020 = $20
+        paper_broker.market_prices["EUR_USD"] = 1.1020
+        balance_before_close = paper_broker.balance
         result = paper_broker.close_position("EUR_USD")
 
-        # Should have made profit
-        assert result
-        assert paper_broker.balance > initial_balance  # Balance should increase
+        close_commission = (10000 / 100_000) * paper_broker._commission_per_lot
+        gross_pnl = 10000 * (1.1020 - 1.1000)   # $20
+        net_pnl = gross_pnl - close_commission
 
-    def test_calculate_pnl_loss(self, paper_broker):
-        """Test P&L calculation for losing trade."""
-        # Set initial market price
+        assert result
+        # Balance after close = balance_before_close + gross_pnl - close_commission
+        assert paper_broker.balance == pytest.approx(
+            balance_before_close + net_pnl, abs=1e-4
+        ), (
+            f"Expected balance {balance_before_close + net_pnl:.4f}, "
+            f"got {paper_broker.balance:.4f}"
+        )
+        # Net P&L must be positive (20 pip move >> commission)
+        assert paper_broker.balance > balance_before_close
+
+    def test_calculate_pnl_loss(self, paper_broker, monkeypatch):
+        """Test P&L calculation for a losing trade, net of transaction costs.
+
+        Uses zero-slippage so fill prices are deterministic.
+        """
+        monkeypatch.setenv("PAPER_SLIPPAGE_MODEL", "zero")
+        from brokers.paper_trading import SlippageModel
+        paper_broker._slippage = SlippageModel("zero")
+
         paper_broker.market_prices["EUR_USD"] = 1.1000
 
-        # Buy at 1.1000
         paper_broker.place_order(
             symbol="EUR_USD",
             order_type=OrderType.MARKET,
@@ -154,14 +182,21 @@ class TestPaperTradingBroker:
             price=1.1000,
         )
 
-        # Update market price to lower value and close position
-        paper_broker.market_prices["EUR_USD"] = 1.0990
-        initial_balance = paper_broker.balance
+        # Move price down by 20 pips — gross P&L = -$20
+        paper_broker.market_prices["EUR_USD"] = 1.0980
+        balance_before_close = paper_broker.balance
         result = paper_broker.close_position("EUR_USD")
 
-        # Should have lost money
+        close_commission = (10000 / 100_000) * paper_broker._commission_per_lot
+        gross_pnl = 10000 * (1.0980 - 1.1000)   # -$20
+        net_pnl = gross_pnl - close_commission
+
         assert result
-        assert paper_broker.balance < initial_balance  # Balance should decrease
+        assert paper_broker.balance == pytest.approx(
+            balance_before_close + net_pnl, abs=1e-4
+        )
+        # Net P&L must be negative
+        assert paper_broker.balance < balance_before_close
 
     def test_get_account_info(self, paper_broker):
         """Test getting account information."""

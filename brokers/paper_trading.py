@@ -209,6 +209,10 @@ class PaperTradingBroker(BrokerConnector):
         self._slippage = SlippageModel(
             model=config.get("slippage_model", slippage_model)
         )
+        # Commission per standard lot (100 000 units).  Charged on open AND close.
+        # Default 0.0 so existing callers that don't pass commission_per_lot are unaffected.
+        self._commission_per_lot: float = float(config.get("commission_per_lot", 0.0))
+        self._standard_lot_units: float = 100_000.0  # 1 standard lot = 100 000 units
 
         self.orders: Dict[str, Order] = {}
         self.positions: Dict[str, Position] = {}
@@ -332,6 +336,9 @@ class PaperTradingBroker(BrokerConnector):
             order.filled_quantity = quantity
             order.average_price = fill_price
 
+            # Deduct opening commission
+            commission = self._deduct_commission(quantity)
+
             # Update position at the slippage-adjusted fill price
             self._update_position(symbol, side, quantity, fill_price)
 
@@ -339,9 +346,9 @@ class PaperTradingBroker(BrokerConnector):
             self._snapshot_equity()
 
             logger.info(
-                "Market order filled: %s %s %s mid=%.5f fill=%.5f slip=%.5f",
+                "Market order filled: %s %s %s mid=%.5f fill=%.5f slip=%.5f commission=%.4f",
                 side.value, quantity, symbol,
-                current_price, fill_price, fill_price - current_price,
+                current_price, fill_price, fill_price - current_price, commission,
             )
         else:
             # For limit/stop orders, just mark as open
@@ -352,6 +359,25 @@ class PaperTradingBroker(BrokerConnector):
 
         self.orders[order_id] = order
         return order
+
+    def _deduct_commission(self, quantity: float) -> float:
+        """
+        Deduct commission for a fill and return the commission amount charged.
+
+        Commission is proportional to lot size:
+            commission = (quantity / standard_lot) * commission_per_lot
+        """
+        if self._commission_per_lot <= 0:
+            return 0.0
+        commission = (quantity / self._standard_lot_units) * self._commission_per_lot
+        self.balance -= commission
+        self.equity = self.balance
+        logger.debug(
+            "Commission charged: $%.4f (qty=%.0f lots=%.4f rate=%.2f/lot)",
+            commission, quantity, quantity / self._standard_lot_units,
+            self._commission_per_lot,
+        )
+        return commission
 
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an order"""
@@ -424,25 +450,28 @@ class PaperTradingBroker(BrokerConnector):
             quantity=position.quantity,
         )
 
-        # Calculate P&L at slippage-adjusted exit price
+        # Calculate gross P&L at slippage-adjusted exit price
         if position.side == "LONG":
-            pnl = (exit_price - position.entry_price) * position.quantity
+            gross_pnl = (exit_price - position.entry_price) * position.quantity
         else:
-            pnl = (position.entry_price - exit_price) * position.quantity
+            gross_pnl = (position.entry_price - exit_price) * position.quantity
 
-        # Update balance
-        self.balance += pnl
+        # Apply gross P&L then deduct closing commission
+        self.balance += gross_pnl
         self.equity = self.balance
+        close_commission = self._deduct_commission(position.quantity)
+        net_pnl = gross_pnl - close_commission
 
-        # Persist closed trade to DB
-        self._persist_trade(position, exit_price, pnl)
+        # Persist closed trade to DB (record net P&L)
+        self._persist_trade(position, exit_price, net_pnl)
 
         # Remove position
         del self.positions[symbol]
 
         logger.info(
-            f"Position closed: {symbol}, P&L: ${pnl:.2f}, "
-            f"New balance: ${self.balance:.2f}",
+            "Position closed: %s gross_pnl=$%.2f commission=$%.4f net_pnl=$%.2f "
+            "balance=$%.2f",
+            symbol, gross_pnl, close_commission, net_pnl, self.balance,
         )
 
         return True
