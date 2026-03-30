@@ -227,7 +227,43 @@ _local_bus = _LocalBus()
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _make_redis() -> aioredis.Redis:
-    """Create a Redis client from REDIS_URL (default: redis://localhost:6379/0)."""
+    """
+    Create a Redis client — Sentinel-aware.
+
+    If REDIS_SENTINEL_HOSTS is set, connects via Sentinel for HA.
+    Falls back to REDIS_URL for single-node / dev environments.
+    """
+    sentinel_hosts_str = os.environ.get("REDIS_SENTINEL_HOSTS", "").strip()
+    password = os.environ.get("REDIS_PASSWORD", "") or None
+    master_name = os.environ.get("REDIS_SENTINEL_MASTER", "hopefx-master")
+
+    if sentinel_hosts_str:
+        try:
+            from redis.asyncio.sentinel import Sentinel as _Sentinel
+
+            hosts = []
+            for entry in sentinel_hosts_str.split(","):
+                entry = entry.strip()
+                if ":" in entry:
+                    h, p = entry.rsplit(":", 1)
+                    hosts.append((h.strip(), int(p.strip())))
+                else:
+                    hosts.append((entry, 26379))
+
+            sentinel = _Sentinel(
+                hosts,
+                sentinel_kwargs={"password": password, "socket_timeout": 2.0},
+                password=password,
+                socket_timeout=5,
+                decode_responses=True,
+            )
+            logger.info("EventBus: using Redis Sentinel (master=%s)", master_name)
+            return sentinel.master_for(master_name)
+        except Exception as exc:
+            logger.warning(
+                "EventBus: Sentinel init failed (%s) — falling back to REDIS_URL", exc
+            )
+
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     return aioredis.from_url(url, decode_responses=True, socket_timeout=5)
 
