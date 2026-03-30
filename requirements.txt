@@ -39,6 +39,7 @@ pandas>=2.1.0
 numpy>=1.26.0
 requests>=2.31.0
 aiohttp>=3.9.0
+vaderSentiment>=3.3.2
 openai>=1.0.0
 chromadb>=0.4.0
 # stable-baselines3 2.3+ supports gymnasium 1.x (API-stable since gym 0.26).
