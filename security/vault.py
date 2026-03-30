@@ -62,13 +62,13 @@ class HSMVault:
 
         hsm_type='software'  — PBKDF2 from *password*, or random key saved to disk.
         hsm_type='yubikey'   — YubiKey HSM via yubihsm library.
-        hsm_type='cloudhsm'  — raises NotImplementedError until vendor SDK is wired.
+        hsm_type='cloudhsm'  — AWS KMS or Azure Key Vault (set CLOUD_HSM_PROVIDER).
 
         Raises
         ------
-        ValueError          : Unknown hsm_type.
-        NotImplementedError : cloudhsm path not yet implemented.
-        RuntimeError        : Key derivation or persistence failed.
+        ValueError   : Unknown hsm_type.
+        RuntimeError : Key derivation or persistence failed, or required env
+                       vars / SDKs are missing for the selected provider.
         """
         if self.hsm_type == "software":
             if password:
@@ -81,7 +81,6 @@ class HSMVault:
             self._master_key = self._derive_key_yubikey(hardware_token)
 
         elif self.hsm_type == "cloudhsm":
-            # _derive_key_cloud raises NotImplementedError — _initialized stays False
             self._master_key = self._derive_key_cloud(hardware_token)
 
         else:
@@ -139,20 +138,177 @@ class HSMVault:
         except ImportError:
             raise RuntimeError("YubiKey HSM library not installed")
 
-    def _derive_key_cloud(self, credential: str) -> bytes:
-        """Cloud HSM key derivation (AWS CloudHSM / Azure Dedicated HSM).
+    def _derive_key_cloud(self, credential: Optional[str]) -> bytes:
+        """Cloud HSM key derivation — AWS KMS or Azure Key Vault.
 
-        This path requires the vendor SDK to be installed and configured.
-        Raises NotImplementedError rather than returning None silently — a
-        None master key would cause every subsequent encrypt/decrypt call to
-        fail with a cryptic AttributeError instead of a clear configuration
-        error.
+        Provider is selected by environment variable CLOUD_HSM_PROVIDER:
+            'aws'   — AWS KMS GenerateDataKey (requires boto3 + IAM role or
+                      AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION)
+            'azure' — Azure Key Vault unwrapKey (requires azure-keyvault-keys +
+                      AZURE_CLIENT_ID / AZURE_CLIENT_SECRET / AZURE_TENANT_ID)
+
+        Required environment variables per provider
+        -------------------------------------------
+        AWS:
+            CLOUD_HSM_PROVIDER=aws
+            AWS_KMS_KEY_ID       — KMS CMK ARN or alias (e.g. alias/hopefx-vault)
+            AWS_REGION           — e.g. us-east-1
+            AWS_ACCESS_KEY_ID    — (or use IAM instance role)
+            AWS_SECRET_ACCESS_KEY
+
+        Azure:
+            CLOUD_HSM_PROVIDER=azure
+            AZURE_KEY_VAULT_URL  — e.g. https://hopefx-vault.vault.azure.net/
+            AZURE_KEY_NAME       — name of the RSA/EC key in Key Vault
+            AZURE_CLIENT_ID
+            AZURE_CLIENT_SECRET
+            AZURE_TENANT_ID
+
+        The *credential* parameter is accepted for API compatibility but
+        provider selection and authentication are driven by env vars so that
+        secrets are never passed as function arguments.
+
+        Raises
+        ------
+        RuntimeError  : SDK not installed, env vars missing, or API call fails.
         """
-        raise NotImplementedError(
-            "Cloud HSM integration is not yet configured. "
-            "Install the vendor SDK and implement this method before using "
-            "hsm_type='cloudhsm'."
+        provider = os.getenv("CLOUD_HSM_PROVIDER", "").lower().strip()
+
+        if provider == "aws":
+            return self._derive_key_aws_kms()
+        elif provider == "azure":
+            return self._derive_key_azure_keyvault()
+        else:
+            raise RuntimeError(
+                "CLOUD_HSM_PROVIDER is not set or unrecognised. "
+                "Set it to 'aws' or 'azure' and configure the required env vars "
+                "before using hsm_type='cloudhsm'."
+            )
+
+    def _derive_key_aws_kms(self) -> bytes:
+        """Generate a 256-bit data key via AWS KMS GenerateDataKey.
+
+        Uses the plaintext data key directly as the vault master key.
+        The encrypted copy is stored alongside the vault for key recovery
+        (decrypt via KMS Decrypt API).
+        """
+        try:
+            import boto3  # type: ignore[import]
+        except ImportError:
+            raise RuntimeError(
+                "boto3 is required for AWS KMS integration. "
+                "Install it with: pip install boto3"
+            )
+
+        key_id = os.getenv("AWS_KMS_KEY_ID")
+        region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
+
+        if not key_id:
+            raise RuntimeError(
+                "AWS_KMS_KEY_ID environment variable is not set. "
+                "Provide the KMS CMK ARN or alias (e.g. alias/hopefx-vault)."
+            )
+
+        try:
+            client = boto3.client("kms", region_name=region)
+            response = client.generate_data_key(
+                KeyId=key_id,
+                KeySpec="AES_256",
+            )
+        except Exception as exc:
+            raise RuntimeError(f"AWS KMS GenerateDataKey failed: {exc}") from exc
+
+        plaintext_key: bytes = response["Plaintext"]   # 32 bytes AES-256
+        encrypted_key: bytes = response["CiphertextBlob"]
+
+        # Persist the encrypted copy for disaster recovery (KMS Decrypt to recover)
+        enc_path = os.path.join(self.key_store_path, "master.key.kms")
+        try:
+            with open(enc_path, "wb") as f:
+                f.write(encrypted_key)
+            os.chmod(enc_path, 0o600)
+            logger.info("AWS KMS encrypted key blob saved to %s", enc_path)
+        except OSError as exc:
+            logger.warning("Could not persist KMS encrypted key blob: %s", exc)
+
+        logger.info("Master key derived via AWS KMS (key_id=%s, region=%s)", key_id, region)
+        return plaintext_key
+
+    def _derive_key_azure_keyvault(self) -> bytes:
+        """Unwrap a locally-generated AES-256 key using Azure Key Vault.
+
+        Generates a random 32-byte key, wraps it with the Key Vault RSA key
+        (RSA-OAEP), stores the wrapped copy for recovery, and returns the
+        plaintext key as the vault master key.
+        """
+        try:
+            from azure.keyvault.keys.crypto import (  # type: ignore[import]
+                CryptographyClient,
+                KeyWrapAlgorithm,
+            )
+            from azure.keyvault.keys import KeyClient  # type: ignore[import]
+            from azure.identity import ClientSecretCredential  # type: ignore[import]
+        except ImportError:
+            raise RuntimeError(
+                "azure-keyvault-keys and azure-identity are required for Azure Key Vault "
+                "integration. Install with: pip install azure-keyvault-keys azure-identity"
+            )
+
+        vault_url  = os.getenv("AZURE_KEY_VAULT_URL")
+        key_name   = os.getenv("AZURE_KEY_NAME")
+        client_id  = os.getenv("AZURE_CLIENT_ID")
+        client_sec = os.getenv("AZURE_CLIENT_SECRET")
+        tenant_id  = os.getenv("AZURE_TENANT_ID")
+
+        missing = [
+            name for name, val in [
+                ("AZURE_KEY_VAULT_URL", vault_url),
+                ("AZURE_KEY_NAME", key_name),
+                ("AZURE_CLIENT_ID", client_id),
+                ("AZURE_CLIENT_SECRET", client_sec),
+                ("AZURE_TENANT_ID", tenant_id),
+            ] if not val
+        ]
+        if missing:
+            raise RuntimeError(
+                f"Azure Key Vault env vars not set: {', '.join(missing)}. "
+                "Configure them before using hsm_type='cloudhsm' with CLOUD_HSM_PROVIDER=azure."
+            )
+
+        try:
+            credential = ClientSecretCredential(
+                tenant_id=tenant_id,
+                client_id=client_id,
+                client_secret=client_sec,
+            )
+            key_client = KeyClient(vault_url=vault_url, credential=credential)
+            key = key_client.get_key(key_name)
+
+            crypto_client = CryptographyClient(key, credential=credential)
+
+            # Generate a random 256-bit master key and wrap it with the Key Vault key
+            plaintext_key = secrets.token_bytes(32)
+            wrap_result = crypto_client.wrap_key(
+                KeyWrapAlgorithm.rsa_oaep, plaintext_key
+            )
+            wrapped_key: bytes = wrap_result.encrypted_key
+        except Exception as exc:
+            raise RuntimeError(f"Azure Key Vault wrap_key failed: {exc}") from exc
+
+        # Persist the wrapped copy for disaster recovery (unwrap via Key Vault)
+        wrapped_path = os.path.join(self.key_store_path, "master.key.azure")
+        try:
+            with open(wrapped_path, "wb") as f:
+                f.write(wrapped_key)
+            os.chmod(wrapped_path, 0o600)
+            logger.info("Azure Key Vault wrapped key saved to %s", wrapped_path)
+        except OSError as exc:
+            logger.warning("Could not persist Azure wrapped key: %s", exc)
+
+        logger.info(
+            "Master key derived via Azure Key Vault (vault=%s, key=%s)", vault_url, key_name
         )
+        return plaintext_key
 
     def _save_master_key(self) -> None:
         """Persist the master key to disk for disaster recovery.
