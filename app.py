@@ -452,6 +452,24 @@ async def startup_event():
                 "Sharpe circuit breaker failed to start (non-fatal): %s", _scb_exc
             )
 
+        # ── Start NuclearStreamer price bridge ────────────────────────────────
+        # Subscribes to Finnhub / Twelve Data / Polygon WebSocket streams and
+        # writes validated ticks into the broker price table.
+        # Activates when any of FINNHUB_API_KEY / TWELVE_API_KEY / POLYGON_API_KEY
+        # is set.  OANDA is never used as a price source.
+        try:
+            _bridge_task = asyncio.create_task(
+                _nuclear_price_bridge(app_state),
+                name="nuclear_price_bridge",
+            )
+            if hasattr(app_state, "background_tasks"):
+                app_state.background_tasks.append(_bridge_task)
+            logger.info("nuclear_price_bridge task started")
+        except Exception as _bridge_exc:
+            logger.warning(
+                "nuclear_price_bridge failed to start (non-fatal): %s", _bridge_exc
+            )
+
         app_state.initialized = True
         log_activity("API server ready")
         logger.info("=" * 70)
