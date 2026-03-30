@@ -121,6 +121,58 @@ async def _telegram(token: str, chat_id: str, text: str) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Drawdown monitor
+# ─────────────────────────────────────────────────────────────────────────────
+
+class DrawdownMonitor:
+    """Track peak-to-trough drawdown for a running equity series.
+
+    Usage::
+
+        dm = DrawdownMonitor(initial_balance=100_000)
+        dd_frac = dm.update(current_equity)   # returns drawdown fraction 0..1
+
+    Attributes
+    ----------
+    daily_drawdown : float
+        Drawdown fraction relative to the *initial* balance supplied at
+        construction (proxy for daily drawdown when reset each session).
+    """
+
+    def __init__(self, initial_balance: float) -> None:
+        self._peak: float = initial_balance
+        self._initial: float = initial_balance
+
+    def update(self, equity: float) -> float:
+        """Update peak and return current drawdown fraction (0.0 = no drawdown)."""
+        self._last_equity = equity
+        if equity > self._peak:
+            self._peak = equity
+        if self._peak <= 0:
+            return 0.0
+        return max(0.0, (self._peak - equity) / self._peak)
+
+    @property
+    def daily_drawdown(self) -> float:
+        """Drawdown fraction relative to the initial balance.
+
+        Tracks how far the *current* equity has fallen from the initial
+        balance, regardless of any intra-session peaks above that baseline.
+        """
+        # _last_equity is updated by update(); fall back to _peak when not set.
+        current = getattr(self, "_last_equity", self._peak)
+        if self._initial <= 0:
+            return 0.0
+        return max(0.0, (self._initial - current) / self._initial)
+
+    # Allow external code to reset the daily baseline
+    def reset_daily(self, balance: float) -> None:
+        """Reset the daily baseline to *balance* (call at session start)."""
+        self._initial = balance
+        self._peak = max(self._peak, balance)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Daily reporter
 # ─────────────────────────────────────────────────────────────────────────────
 
