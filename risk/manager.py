@@ -195,6 +195,7 @@ class TradeAssessment:
     reason:     str = ""
     drawdown:   float = 0.0
     daily_dd:   float = 0.0
+    messages:   List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -330,6 +331,17 @@ class RiskManager:
         self._sizing_history: List[Dict] = []
         self._halt:           bool  = False
         self._halt_reason:    str   = ""
+
+        # CVaR pre-trade gate
+        # Stores recent per-trade return fractions (pnl / equity at entry).
+        # Limit to 500 observations — enough for stable 95th-percentile CVaR.
+        self._returns_history: deque = deque(maxlen=500)
+        # Daily CVaR limit as a fraction of equity (0 = disabled).
+        self._cvar_daily_limit: float = float(
+            os.getenv("RISK_CVAR_DAILY_LIMIT", "0.0")
+        )
+        # Expose _trading_halted as an alias so tests can set it directly.
+        self._trading_halted: bool = False
 
         # Restore persisted halt state so a restart after a halt does not
         # silently resume trading.
@@ -807,15 +819,17 @@ class RiskManager:
     # ── Halt ──────────────────────────────────────────────────────────────────
 
     def _halt_trading(self, reason: str) -> None:
-        self._halt        = True
-        self._halt_reason = reason
+        self._halt           = True
+        self._trading_halted = True
+        self._halt_reason    = reason
         logger.critical("RiskManager: TRADING HALTED — reason=%s", reason)
         self._persist_halt_state()
 
     def resume_trading(self) -> None:
         """Manual resume — requires explicit operator action."""
-        self._halt        = False
-        self._halt_reason = ""
+        self._halt           = False
+        self._trading_halted = False
+        self._halt_reason    = ""
         self._clear_halt_state()
         logger.warning("RiskManager: trading RESUMED by operator")
 
@@ -925,6 +939,18 @@ class RiskManager:
                 daily_dd=daily_dd,
             )
 
+        # CVaR pre-trade gate
+        cvar_ok, cvar_msg = self.check_cvar_pre_trade()
+        if not cvar_ok:
+            return TradeAssessment(
+                can_trade=False,
+                level=RiskLevel.HIGH,
+                reason="cvar_limit_exceeded",
+                drawdown=dd,
+                daily_dd=daily_dd,
+                messages=[cvar_msg],
+            )
+
         level = RiskLevel.LOW
         if dd > self._config.max_drawdown_pct * 0.75:
             level = RiskLevel.MEDIUM
@@ -937,6 +963,7 @@ class RiskManager:
             reason="approved",
             drawdown=dd,
             daily_dd=daily_dd,
+            messages=[cvar_msg],
         )
 
     def check_position_size(
@@ -1232,6 +1259,57 @@ class RiskManager:
             return RiskCheckResult(passed=True, message="check_skipped")
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
+
+    # ── CVaR pre-trade gate ───────────────────────────────────────────────────
+
+    def _compute_cvar(self, confidence: float = 0.95) -> float:
+        """Compute Conditional Value-at-Risk (CVaR / Expected Shortfall).
+
+        Returns the mean of the worst (1-confidence) fraction of returns as a
+        positive number (i.e. the expected loss magnitude).
+        """
+        if len(self._returns_history) < 2:
+            return 0.0
+        arr = np.array(list(self._returns_history), dtype=float)
+        cutoff = np.percentile(arr, (1.0 - confidence) * 100)
+        tail = arr[arr <= cutoff]
+        if len(tail) == 0:
+            return 0.0
+        return float(abs(np.mean(tail)))
+
+    def check_cvar_pre_trade(self, confidence: float = 0.95) -> tuple:
+        """Pre-trade CVaR gate.  Returns (allowed: bool, reason: str).
+
+        Rules
+        -----
+        - If trading is halted, block immediately.
+        - If _cvar_daily_limit == 0, gate is disabled → always pass.
+        - Fewer than 10 observations → insufficient history → pass.
+        - CVaR > _cvar_daily_limit → block.
+        """
+        # Check halt flag (supports both _halt and _trading_halted)
+        if self._halt or getattr(self, "_trading_halted", False):
+            reason = self._halt_reason or getattr(self, "_halt_reason", "halted")
+            return (False, f"trading halted: {reason}")
+
+        if self._cvar_daily_limit <= 0.0:
+            return (True, "CVaR gate disabled")
+
+        if len(self._returns_history) < 10:
+            return (True, f"Insufficient history ({len(self._returns_history)} obs) for CVaR")
+
+        cvar = self._compute_cvar(confidence=confidence)
+        if cvar > self._cvar_daily_limit:
+            return (
+                False,
+                f"Pre-trade CVaR check failed: CVaR={cvar:.4f} exceeds limit {self._cvar_daily_limit:.4f}",
+            )
+        return (True, f"CVaR={cvar:.4f} within limit {self._cvar_daily_limit:.4f}")
+
+    def record_return(self, pnl: float, equity_at_entry: float) -> None:
+        """Record a completed trade return for CVaR tracking."""
+        if equity_at_entry > 0:
+            self._returns_history.append(pnl / equity_at_entry)
 
     def check_risk_limits(self) -> tuple:
         """Check all active risk limits and return (passed: bool, reason: str).
