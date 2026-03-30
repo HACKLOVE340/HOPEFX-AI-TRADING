@@ -175,3 +175,7 @@ export function MacroCalendar() {
     </Panel>
   );
 }
+
+// ── Guarded export (ErrorBoundary + Suspense) ─────────────────────────────────
+import { withPanelGuard } from '../ui/withPanelGuard';
+export const MacroCalendarGuarded = withPanelGuard(MacroCalendar, 'Macro Calendar', 4);

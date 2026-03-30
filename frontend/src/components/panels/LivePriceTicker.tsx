@@ -226,3 +226,7 @@ export function LivePriceTicker() {
     </div>
   );
 }
+
+// ── Guarded export (ErrorBoundary + Suspense) ─────────────────────────────────
+import { withPanelGuard } from '../ui/withPanelGuard';
+export const LivePriceTickerGuarded = withPanelGuard(LivePriceTicker, 'Price Ticker', 2);

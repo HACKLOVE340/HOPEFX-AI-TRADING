@@ -207,3 +207,7 @@ export function LiveSignalFeed() {
     </Panel>
   );
 }
+
+// ── Guarded export (ErrorBoundary + Suspense) ─────────────────────────────────
+import { withPanelGuard } from '../ui/withPanelGuard';
+export const LiveSignalFeedGuarded = withPanelGuard(LiveSignalFeed, 'Signal Feed', 5);

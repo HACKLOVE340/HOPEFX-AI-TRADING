@@ -212,3 +212,7 @@ export function OrderBookDepth() {
     </Panel>
   );
 }
+
+// ── Guarded export (ErrorBoundary + Suspense) ─────────────────────────────────
+import { withPanelGuard } from '../ui/withPanelGuard';
+export const OrderBookDepthGuarded = withPanelGuard(OrderBookDepth, 'Order Book', 8);
