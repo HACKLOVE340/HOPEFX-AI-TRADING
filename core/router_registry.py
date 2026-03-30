@@ -129,6 +129,22 @@ def register_routers(
     elif graphql_available and not feature_flags.GRAPHQL_API:
         logger.debug("GRAPHQL_API disabled — set FEATURE_GRAPHQL_API=true to enable")
 
+    # ── TCA (Transaction Cost Analysis) ──────────────────────────────────────
+    try:
+        from api.tca import router as tca_router
+        app.include_router(tca_router)
+        logger.info("TCA router registered (/tca)")
+    except Exception as _tca_err:
+        logger.warning("TCA router not registered: %s", _tca_err)
+
+    # ── Security fixes (LLM auto-heal queue + GitHub PR pipeline) ─────────────
+    try:
+        from api.security.fixes import router as fixes_router
+        app.include_router(fixes_router)
+        logger.info("Security fixes router registered (/api/security/fixes)")
+    except Exception as _fixes_err:
+        logger.warning("Security fixes router not registered: %s", _fixes_err)
+
     # ── Live WebSocket ────────────────────────────────────────────────────────
     try:
         from api.ws_live import router as ws_live_router
