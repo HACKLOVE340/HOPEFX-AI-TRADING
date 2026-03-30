@@ -61,87 +61,92 @@ _SIGNAL_WINDOW = int(os.getenv("SIGNAL_QUALITY_WINDOW", "100"))
 # ── Prometheus metrics (optional — degrades gracefully if not installed) ──────
 
 def _init_prometheus():
-    """Initialise Prometheus counters/gauges/histograms.
-
-    Returns a namespace object with all metrics, or a no-op stub when the
-    prometheus_client package is not installed.
     """
+    Initialise Prometheus counters/gauges/histograms with dedup guard.
+
+    Returns a metrics namespace, or a no-op stub when prometheus_client
+    is not installed or metrics are already registered (hot-reload safe).
+    """
+    class _Noop:
+        class _C:
+            def labels(self, **_kw): return self
+            def inc(self, *a, **kw): pass
+            def observe(self, *a, **kw): pass
+            def set(self, *a, **kw): pass
+        def __getattr__(self, _name): return self._C()
+
     try:
-        from prometheus_client import Counter, Gauge, Histogram, REGISTRY  # noqa: F401
+        from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+
+        def _counter(name, doc, labels=None):
+            try:
+                return Counter(name, doc, labels or [])
+            except ValueError:
+                return REGISTRY._names_to_collectors.get(name)
+
+        def _histogram(name, doc, labels=None, buckets=None):
+            kw = {"labelnames": labels or []}
+            if buckets:
+                kw["buckets"] = buckets
+            try:
+                return Histogram(name, doc, **kw)
+            except ValueError:
+                return REGISTRY._names_to_collectors.get(name)
+
+        def _gauge(name, doc, labels=None):
+            try:
+                return Gauge(name, doc, labels or [])
+            except ValueError:
+                return REGISTRY._names_to_collectors.get(name)
 
         class _Metrics:
-            predict_total = Counter(
+            predict_total      = _counter(
                 "hopefx_inference_predict_total",
-                "Total number of inference predictions",
+                "Total inference predictions",
                 ["symbol", "direction"],
             )
-            predict_latency = Histogram(
+            predict_latency    = _histogram(
                 "hopefx_inference_predict_latency_seconds",
                 "Inference prediction latency in seconds",
                 ["symbol"],
                 buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
             )
-            fallback_total = Counter(
+            fallback_total     = _counter(
                 "hopefx_inference_fallback_total",
-                "Total number of fallback (non-model) predictions",
+                "Fallback (non-model) predictions",
                 ["symbol", "reason"],
             )
-            confidence_gauge = Gauge(
+            confidence_gauge   = _gauge(
                 "hopefx_inference_last_confidence",
                 "Last prediction confidence score",
                 ["symbol"],
             )
-            data_quality_gauge = Gauge(
+            data_quality_gauge = _gauge(
                 "hopefx_inference_data_quality",
                 "Last orchestrator data quality score",
                 ["symbol"],
             )
-            model_version_info = Gauge(
+            model_version_info = _gauge(
                 "hopefx_inference_model_version_info",
                 "Active model version (label only)",
                 ["model_id"],
             )
-            rollback_total = Counter(
+            rollback_total     = _counter(
                 "hopefx_inference_rollback_total",
-                "Number of times the engine rolled back to a previous model",
+                "Model rollback count",
                 ["reason"],
             )
 
         return _Metrics()
 
     except ImportError:
-        logger.warning(
-            "prometheus_client is not installed — inference metrics will not be exported. "
+        logger.debug(
+            "prometheus_client not installed — inference metrics disabled. "
             "Install with: pip install prometheus-client"
         )
-        class _Noop:
-            class _C:
-                def labels(self, **_kw):
-                    return self
-                def inc(self, *a, **kw): pass
-                def observe(self, *a, **kw): pass
-                def set(self, *a, **kw): pass
-            def __getattr__(self, _name):
-                return self._C()
-
         return _Noop()
-
     except Exception as exc:
-        logger.warning(
-            "Prometheus metrics registration failed (%s) — inference metrics will not "
-            "be exported. This may indicate a duplicate metric name or registry conflict.",
-            exc,
-        )
-        class _Noop:
-            class _C:
-                def labels(self, **_kw):
-                    return self
-                def inc(self, *a, **kw): pass
-                def observe(self, *a, **kw): pass
-                def set(self, *a, **kw): pass
-            def __getattr__(self, _name):
-                return self._C()
-
+        logger.debug("Prometheus init error (inference_engine): %s", exc)
         return _Noop()
 
 
