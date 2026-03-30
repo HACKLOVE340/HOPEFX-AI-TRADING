@@ -68,3 +68,15 @@ export function confidenceLabel(confidence: number): string {
   if (confidence >= 0.55) return 'Medium';
   return 'Low';
 }
+
+export function formatCompact(value: number): string {
+  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (Math.abs(value) >= 1_000)     return `${(value / 1_000).toFixed(1)}K`;
+  return value.toFixed(2);
+}
+
+export function formatDuration(hours: number): string {
+  if (hours < 1)  return `${Math.round(hours * 60)}m`;
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
+}
