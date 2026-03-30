@@ -602,6 +602,12 @@ class RiskManager:
         """Mutable list proxy for open positions (tests append to rm.open_positions)."""
         return self._open_positions_list
 
+    @open_positions.setter
+    def open_positions(self, value: List[Any]) -> None:
+        """Replace the open-positions list (used by tests to set up state)."""
+        self._open_positions_list = list(value)
+        self._state.open_positions = len(self._open_positions_list)
+
     # ── Direct state attribute proxies (used by tests and monitoring) ─────────
 
     @property
@@ -1160,8 +1166,18 @@ class RiskManager:
         Returns TradeAssessment with can_trade, level, reason, drawdown fields.
         """
         equity = float(account_info.get("equity") or account_info.get("balance") or 0.0)
-        if equity > 0:
-            self.update_equity(equity)
+
+        # Negative or zero equity is an immediate hard block.
+        if equity <= 0:
+            return TradeAssessment(
+                can_trade=False,
+                level=RiskLevel.CRITICAL,
+                reason=f"invalid_equity:{equity}",
+                drawdown=1.0,
+                daily_dd=1.0,
+            )
+
+        self.update_equity(equity)
 
         dd = self._state.current_drawdown
         daily_dd = self._state.daily_drawdown
@@ -1625,6 +1641,257 @@ class RiskManager:
             "total_pnl":        round(self._state.total_pnl, 2),
             "open_positions":   self._state.open_positions,
             "var_95":           round(self.value_at_risk(), 2),
+            "halt":             self._halt,
+            "halt_reason":      self._halt_reason,
+        }
+
+    # ── Extended API (used by test_risk_notification_extended.py) ─────────────
+
+    # ── Balance / equity proxies ──────────────────────────────────────────────
+
+    @property
+    def current_balance(self) -> float:
+        """Current account equity (alias used by legacy callers)."""
+        return self._state.account_equity
+
+    @current_balance.setter
+    def current_balance(self, value: float) -> None:
+        self._state.account_equity = float(value)
+
+    @property
+    def peak_balance(self) -> float:
+        """All-time peak equity (alias used by legacy callers)."""
+        return self._state.peak_equity
+
+    @peak_balance.setter
+    def peak_balance(self, value: float) -> None:
+        self._state.peak_equity = float(value)
+        if self._dd_tracker is not None:
+            self._dd_tracker._total_hwm = float(value)
+
+    @property
+    def daily_pnl(self) -> float:
+        return self._state.daily_pnl
+
+    @daily_pnl.setter
+    def daily_pnl(self, value: float) -> None:
+        self._state.daily_pnl = float(value)
+
+    @property
+    def daily_trades(self) -> int:
+        return getattr(self, "_daily_trades", 0)
+
+    @daily_trades.setter
+    def daily_trades(self, value: int) -> None:
+        self._daily_trades = int(value)
+
+    # ── Position registry ─────────────────────────────────────────────────────
+
+    def register_position(self, position: Dict[str, Any]) -> None:
+        """Register an open position in the internal list."""
+        self._open_positions_list.append(position)
+        self._state.open_positions = len(self._open_positions_list)
+
+    def close_position(self, position_id: str, pnl: float = 0.0) -> None:
+        """Remove a position by id and record its P&L."""
+        self._open_positions_list = [
+            p for p in self._open_positions_list
+            if p.get("id") != position_id
+        ]
+        self._state.open_positions = len(self._open_positions_list)
+        self._state.daily_pnl  += pnl
+        self._state.total_pnl  += pnl
+        self._state.account_equity += pnl
+        if self._state.account_equity > self._state.peak_equity:
+            self._state.peak_equity = self._state.account_equity
+        if self._dd_tracker is not None:
+            self._dd_tracker.update(equity=self._state.account_equity)
+
+    # ── Extended validate_trade ───────────────────────────────────────────────
+
+    def validate_trade(  # type: ignore[override]
+        self,
+        symbol: str,  # noqa: ARG002
+        quantity: float,
+        direction: str = "buy",  # noqa: ARG002
+    ) -> "tuple[bool, str]":
+        """Return (allowed, reason) for a proposed trade.
+
+        Checks halt state, open-position count (including _open_positions_list),
+        size limit, and daily loss limit.
+        """
+        if self._halt or self._trading_halted:
+            return False, f"halted:{self._halt_reason}"
+
+        n_open = len(self._open_positions_list) + self._state.open_positions
+        if n_open >= self._config.max_open_positions:
+            return False, f"max_positions:{self._config.max_open_positions}"
+
+        equity = self._state.account_equity
+        max_size = equity * self._config.max_position_size_pct
+        if quantity > max_size:
+            return False, f"size_too_large:{quantity:.2f}>{max_size:.2f}"
+
+        daily_loss_pct = (
+            abs(self._state.daily_pnl) / equity if equity > 0 else 0.0
+        )
+        if self._state.daily_pnl < 0 and daily_loss_pct > self._config.max_daily_loss_pct:
+            return False, f"daily_loss_limit:{daily_loss_pct*100:.2f}%"
+
+        if quantity <= 0:
+            return False, "quantity_zero"
+        return True, "approved"
+
+    # ── Extended check_risk_limits (returns violations list) ─────────────────
+
+    def check_risk_limits(self) -> "tuple[bool, List[str]]":  # type: ignore[override]
+        """Return (within_limits: bool, violations: List[str]).
+
+        Evaluates drawdown, daily loss, open-position count, and halt state.
+        """
+        violations: List[str] = []
+        cfg   = self._config
+        state = self._state
+
+        if self._halt or self._trading_halted:
+            violations.append(f"trading halted: {self._halt_reason}")
+
+        # Drawdown check — use current_balance vs peak_balance for legacy callers
+        peak    = self._state.peak_equity
+        current = self._state.account_equity
+        dd_pct  = (peak - current) / peak if peak > 0 else 0.0
+        if dd_pct > cfg.max_drawdown_pct:
+            violations.append(
+                f"drawdown {dd_pct*100:.2f}% exceeds limit {cfg.max_drawdown_pct*100:.1f}%"
+            )
+
+        daily_loss_pct = (
+            abs(state.daily_pnl) / state.account_equity
+            if state.account_equity > 0 else 0.0
+        )
+        if state.daily_pnl < 0 and daily_loss_pct > cfg.max_daily_loss_pct:
+            violations.append(
+                f"daily loss {daily_loss_pct*100:.2f}% exceeds limit "
+                f"{cfg.max_daily_loss_pct*100:.1f}%"
+            )
+
+        n_open = len(self._open_positions_list) + state.open_positions
+        if n_open >= cfg.max_open_positions:
+            violations.append(f"open positions {n_open} at limit {cfg.max_open_positions}")
+
+        return (len(violations) == 0, violations)
+
+    # ── can_open_position (extended — human-readable reasons) ─────────────────
+
+    def can_open_position(self, size: float) -> "tuple[bool, str]":  # type: ignore[override]
+        """Return (True, 'approved') or (False, human-readable reason)."""
+        if self._halt or self._trading_halted:
+            return False, f"halted:{self._halt_reason}"
+
+        n_open = len(self._open_positions_list) + self._state.open_positions
+        if n_open >= self._config.max_open_positions:
+            return False, f"Max open positions ({self._config.max_open_positions}) reached"
+
+        equity = self._state.account_equity
+        max_size = equity * self._config.max_position_size_pct
+        if size > max_size:
+            return False, f"Size {size:.2f} exceeds maximum {max_size:.2f}"
+
+        daily_loss_pct = (
+            abs(self._state.daily_pnl) / equity if equity > 0 else 0.0
+        )
+        if self._state.daily_pnl < 0 and daily_loss_pct > self._config.max_daily_loss_pct:
+            return False, f"Daily loss limit {self._config.max_daily_loss_pct*100:.1f}% reached"
+
+        peak    = self._state.peak_equity
+        current = self._state.account_equity
+        dd_pct  = (peak - current) / peak if peak > 0 else 0.0
+        if dd_pct >= self._config.max_drawdown_pct:
+            return False, f"Max drawdown {self._config.max_drawdown_pct*100:.1f}% reached"
+
+        return True, "approved"
+
+    # ── Stop-loss / take-profit calculators ───────────────────────────────────
+
+    def calculate_stop_loss(
+        self,
+        entry_price: float,
+        direction: str,
+        percent: Optional[float] = None,
+    ) -> float:
+        """Return stop-loss price for a given entry and direction.
+
+        Uses config.default_stop_loss_pct when percent is not supplied.
+        """
+        pct = percent if percent is not None else self._config.default_stop_loss_pct
+        factor = pct / 100.0
+        if direction.upper() in ("BUY", "LONG"):
+            return entry_price * (1.0 - factor)
+        return entry_price * (1.0 + factor)
+
+    def calculate_take_profit(
+        self,
+        entry_price: float,
+        direction: str,
+        percent: Optional[float] = None,
+    ) -> float:
+        """Return take-profit price for a given entry and direction.
+
+        Uses config.default_take_profit_pct when percent is not supplied.
+        """
+        pct = percent if percent is not None else self._config.default_take_profit_pct
+        factor = pct / 100.0
+        if direction.upper() in ("BUY", "LONG"):
+            return entry_price * (1.0 + factor)
+        return entry_price * (1.0 - factor)
+
+    # ── Daily P&L management ──────────────────────────────────────────────────
+
+    def reset_daily_pnl(self) -> None:
+        """Reset daily P&L and trade counter to zero."""
+        self._state.daily_pnl = 0.0
+        self._daily_trades    = 0
+
+    def reset_daily_stats(self) -> None:
+        """Alias for reset_daily_pnl."""
+        self.reset_daily_pnl()
+
+    def update_daily_pnl(self, pnl: float) -> None:
+        """Add pnl to the daily running total."""
+        self._state.daily_pnl += float(pnl)
+
+    # ── Reporting ─────────────────────────────────────────────────────────────
+
+    def get_risk_metrics(self) -> Dict[str, Any]:
+        """Return a dict of current risk metrics for monitoring/reporting."""
+        peak    = self._state.peak_equity
+        current = self._state.account_equity
+        dd_pct  = (peak - current) / peak if peak > 0 else 0.0
+        return {
+            "current_balance":  round(current, 2),
+            "peak_balance":     round(peak, 2),
+            "daily_pnl":        round(self._state.daily_pnl, 2),
+            "current_drawdown": round(dd_pct, 6),
+            "max_drawdown_pct": self._config.max_drawdown_pct,
+            "open_positions":   len(self._open_positions_list) + self._state.open_positions,
+            "halt":             self._halt,
+        }
+
+    def get_status(self) -> Dict[str, Any]:
+        """Return a full status dict including config and current state."""
+        return {
+            "config": {
+                "max_position_size_pct": self._config.max_position_size_pct,
+                "max_daily_loss_pct":    self._config.max_daily_loss_pct,
+                "max_drawdown_pct":      self._config.max_drawdown_pct,
+                "max_open_positions":    self._config.max_open_positions,
+                "kelly_fraction":        self._config.kelly_fraction,
+            },
+            "current_balance":  round(self._state.account_equity, 2),
+            "peak_balance":     round(self._state.peak_equity, 2),
+            "daily_pnl":        round(self._state.daily_pnl, 2),
+            "current_drawdown": round(self.current_drawdown, 6),
+            "open_positions":   len(self._open_positions_list) + self._state.open_positions,
             "halt":             self._halt,
             "halt_reason":      self._halt_reason,
         }

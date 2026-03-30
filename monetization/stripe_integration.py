@@ -198,6 +198,11 @@ class StripeIntegration:
         self.test_mode = test_mode
         self._stripe_sdk_available = self._check_stripe_sdk()
 
+        # In-memory stores for test_mode (and as a local cache in production).
+        self._customers: Dict[str, Any] = {}
+        self._payment_intents: Dict[str, Any] = {}
+        self._subscriptions: Dict[str, Any] = {}
+
         if not test_mode and self._stripe_sdk_available and self.api_key:
             self._configure_stripe()
         elif not test_mode and not self.api_key:
@@ -427,6 +432,23 @@ class StripeIntegration:
         Returns:
             StripeSubscription object
         """
+        if self.test_mode:
+            import uuid as _uuid
+            from datetime import timedelta
+            now = datetime.utcnow()
+            sub = StripeSubscription(
+                subscription_id=f"sub_test_{_uuid.uuid4().hex[:12]}",
+                customer_id=customer_id,
+                tier=tier,
+                billing_cycle=billing_cycle,
+                status="active",
+                current_period_start=now,
+                current_period_end=now + timedelta(days=30),
+            )
+            self._subscriptions[sub.subscription_id] = sub
+            logger.info(f"[test_mode] Created subscription: {sub.subscription_id}")
+            return sub
+
         try:
             price_id = self.PRICE_IDS.get((tier, billing_cycle))
 
@@ -470,6 +492,15 @@ class StripeIntegration:
         Returns:
             True if successful
         """
+        if self.test_mode:
+            sub = self._subscriptions.get(subscription_id)
+            if sub is not None:
+                sub.cancel_at_period_end = at_period_end
+                if not at_period_end:
+                    sub.status = "canceled"
+            logger.info(f"[test_mode] Cancelled subscription: {subscription_id}")
+            return True
+
         try:
             import stripe
 
@@ -594,6 +625,20 @@ class StripeIntegration:
         Returns:
             Refund result
         """
+        if self.test_mode:
+            import uuid as _uuid
+            intent = self._payment_intents.get(payment_intent_id)
+            refund_amount = float(amount) if amount else (
+                float(intent.amount) if intent else 0.0
+            )
+            result = {
+                "refund_id": f"re_test_{_uuid.uuid4().hex[:12]}",
+                "status": "succeeded",
+                "amount": refund_amount,
+            }
+            logger.info(f"[test_mode] Refunded payment: {payment_intent_id}")
+            return result
+
         try:
             import stripe
 
