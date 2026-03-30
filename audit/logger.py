@@ -40,5 +40,5 @@ class AuditLogger:
 
 # Usage example:
 # audit_logger = AuditLogger()
-# audit_logger.log_action('HACKLOVE340', 'LOGIN', 'User logged in successfully')
-# audit_logger.track_compliance('HACKLOVE340', 'DATA_PRIVACY', 'COMPLIANT')
+# audit_logger.log_action('user_123', 'LOGIN', 'User logged in successfully')
+# audit_logger.track_compliance('user_123', 'DATA_PRIVACY', 'COMPLIANT')

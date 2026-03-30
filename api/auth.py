@@ -37,7 +37,7 @@ try:
 except Exception as _router_import_err:  # pragma: no cover
     from fastapi import APIRouter as _APIRouter
     router = _APIRouter(prefix="/api/auth", tags=["Authentication"])
-    logger.warning("auth.router unavailable, using empty stub: %s", _router_import_err)
+    logger.warning("auth.router unavailable, using empty fallback router: %s", _router_import_err)
 
 # Role hierarchy: higher index = more privileged
 _ROLE_RANK: dict = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}

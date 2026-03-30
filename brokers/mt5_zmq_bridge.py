@@ -15,7 +15,7 @@ Python side (this file)
   - PULL socket  ← receives fill confirmations and tick data from MT5 EA
   - PUB  socket  → publishes live signals to any subscriber (optional)
 
-MT5 side (see mql5/HopeFX_ZMQ_EA.mq5 stub)
+MT5 side (see mql5/HopeFX_ZMQ_EA.mq5)
   - PULL socket  ← receives commands from Python
   - PUSH socket  → sends fills/ticks back to Python
 

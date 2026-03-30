@@ -81,7 +81,7 @@ async def generate_strategy(
     """
     Generate a trading strategy from a plain-English prompt.
     Uses brain.llm_agent.LLMAgent if OPENAI_API_KEY is set;
-    returns a stub response otherwise so the UI works without credentials.
+    returns a degraded response otherwise so the UI works without credentials.
     Requires: role >= 'admin' (LLM calls cost money per invocation).
     """
     openai_key = os.getenv("OPENAI_API_KEY", "")
