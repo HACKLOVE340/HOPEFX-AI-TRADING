@@ -162,11 +162,13 @@ const Step3PropFirm: React.FC<{ state: WizardState; setState: (s: WizardState) =
 // ── Step 4: Backtest ──────────────────────────────────────────────────────────
 
 const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) => void }> = ({ state, setState }) => {
-  const [running, setRunning] = useState(false);
-  const [result, setResult]   = useState<{ return_pct: number; trades: number; win_rate: number } | null>(null);
+  const [running, setRunning]       = useState(false);
+  const [result, setResult]         = useState<{ return_pct: number; trades: number; win_rate: number } | null>(null);
+  const [backtestErr, setBacktestErr] = useState<string | null>(null);
 
   const runBacktest = async () => {
     setRunning(true);
+    setBacktestErr(null);
     try {
       const res = await api.post<{ total_return?: number; total_trades?: number; win_rate?: number; metrics?: { total_return?: number; total_trades?: number; win_rate?: number } }>('/backtesting/run',
         { symbol: 'XAUUSD', strategy: 'ml_ensemble', period_days: 30 }
@@ -178,17 +180,20 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
         win_rate:   data.win_rate ?? data.metrics?.win_rate ?? 0,
       });
       setState({ ...state, backtestDone: true });
-    } catch {
-      setResult({ return_pct: 1.2, trades: 14, win_rate: 57.1 });
-      setState({ ...state, backtestDone: true });
+    } catch (err: unknown) {
+      setBacktestErr(err instanceof Error ? err.message : 'Backtest failed. Ensure the backtesting API is running.');
+    } finally {
+      setRunning(false);
     }
-    setRunning(false);
   };
 
   return (
     <div>
       <h2 style={s.stepTitle}>Run your first backtest</h2>
       <p style={s.stepSub}>Test the ML ensemble strategy on 30 days of XAUUSD data.</p>
+      {backtestErr && (
+        <div style={s.errorBox}>{backtestErr}</div>
+      )}
       {!result ? (
         <button onClick={runBacktest} disabled={running} style={{ ...s.primaryBtn, opacity: running ? 0.6 : 1 }}>
           {running ? '⟳ Running backtest…' : '▶ Run Backtest (XAUUSD, 30 days)'}
@@ -220,18 +225,26 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
 
 const Step5Paper: React.FC<{ state: WizardState; setState: (s: WizardState) => void }> = ({ state, setState }) => {
   const [starting, setStarting] = useState(false);
+  const [paperErr, setPaperErr] = useState<string | null>(null);
 
   const startPaper = async () => {
     setStarting(true);
-    try { await api.post('/trading/paper/start'); } catch { /* ignore */ }
-    setState({ ...state, paperStarted: true });
-    setStarting(false);
+    setPaperErr(null);
+    try {
+      await api.post('/trading/paper/start');
+      setState({ ...state, paperStarted: true });
+    } catch (err: unknown) {
+      setPaperErr(err instanceof Error ? err.message : 'Failed to start paper trading. Ensure the trading API is running.');
+    } finally {
+      setStarting(false);
+    }
   };
 
   return (
     <div>
       <h2 style={s.stepTitle}>Start paper trading</h2>
       <p style={s.stepSub}>HOPEFX will begin generating AI signals and placing simulated orders. No real money at risk.</p>
+      {paperErr && <div style={s.errorBox}>{paperErr}</div>}
       {!state.paperStarted ? (
         <button onClick={startPaper} disabled={starting}
           style={{ ...s.primaryBtn, background: '#059669', opacity: starting ? 0.6 : 1 }}>
@@ -331,6 +344,7 @@ const s: Record<string, React.CSSProperties> = {
   code:       { background: '#1e293b', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: 12 },
   primaryBtn: { width: '100%', background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 15, fontWeight: 700, cursor: 'pointer', padding: '14px 0' },
   resultBox:  { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: 16 },
+  errorBox:   { background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#f87171', marginBottom: 12 },
   skipBtn:    { background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 13, padding: '4px 8px' },
   navBtn:     { background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '8px 12px' },
   nextBtn:    { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '10px 24px' },
