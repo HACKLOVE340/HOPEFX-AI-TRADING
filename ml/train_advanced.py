@@ -883,9 +883,9 @@ def oos_eval_advanced(
     meta = {
         "model_file": "advanced_oos.pkl",
         "trained_at": datetime.now(timezone.utc).isoformat(),
-        # ci_mode=True means the model was trained with HOPEFX_CI=1 (n_estimators=20
-        # stub).  The live deployment gate in api/trading.py reads this field and
-        # blocks live orders until a full production retrain is done with HOPEFX_CI=0.
+        # ci_mode=True means the model was trained with HOPEFX_CI=1 (n_estimators=20,
+        # fast CI build).  The live deployment gate in api/trading.py reads this field
+        # and blocks live orders until a full production retrain is done with HOPEFX_CI=0.
         "ci_mode": _CI,
         "oos_accuracy": round(acc, 4),
         "oos_accuracy_se": round(acc_se, 4),
