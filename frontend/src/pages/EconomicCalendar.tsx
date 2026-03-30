@@ -5,33 +5,40 @@
  * - Countdown timers
  * - Impact ratings (red/amber/green)
  * - Auto-pause trading toggle
+ * - MacroCalendar panel (data-layer events with gold impact scores)
  *
- * Wires to: GET /api/calendar/upcoming
- *           GET /api/calendar/auto-pause
- *           POST /api/calendar/auto-pause
+ * Wires to:
+ *   GET  /api/calendar/upcoming        — CalendarEvent[]
+ *   GET  /api/calendar/high-impact     — CalendarEvent[]
+ *   GET  /api/calendar/auto-pause      — AutoPauseConfig
+ *   POST /api/calendar/auto-pause      — AutoPauseConfig
+ *   GET  /api/data-layer/macro         — MacroResponse (via useMacro hook)
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../hooks/useApi';
+import { calendarApi } from '../hooks/useApi';
+import { useMacro } from '../hooks/useOrchestratorData';
+import { MacroCalendar } from '../components/panels/MacroCalendar';
+import { PanelSkeleton } from '../components/ui/Skeleton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface CalendarEvent {
-  title: string;
-  event_type: string;
-  importance: 'low' | 'medium' | 'high' | 'critical';
+  title:          string;
+  event_type:     string;
+  importance:     'low' | 'medium' | 'high' | 'critical';
   scheduled_time: string;
-  country: string;
-  currency: string | null;
-  forecast: number | null;
-  previous: number | null;
-  actual: number | null;
-  minutes_until: number;
+  country:        string;
+  currency:       string | null;
+  forecast:       number | null;
+  previous:       number | null;
+  actual:         number | null;
+  minutes_until:  number;
   is_high_impact: boolean;
 }
 
 interface AutoPauseConfig {
-  enabled: boolean;
+  enabled:        boolean;
   minutes_before: number;
   min_importance: string;
 }
@@ -75,123 +82,6 @@ function formatTime(iso: string): string {
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
-
-const EconomicCalendar: React.FC = () => {
-  const [events, setEvents]           = useState<CalendarEvent[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [filter, setFilter]           = useState<'all' | 'high'>('all');
-  const [autoPause, setAutoPause]     = useState<AutoPauseConfig>({ enabled: false, minutes_before: 30, min_importance: 'high' });
-  const [savingPause, setSavingPause] = useState(false);
-  const [, setTick]                   = useState(0);
-
-  const fetchEvents = useCallback(async () => {
-    try {
-      const url = filter === 'high' ? '/api/calendar/high-impact' : '/api/calendar/upcoming?hours=168';
-      const res = await api.get<CalendarEvent[]>(url);
-      setEvents(res.data);
-    } catch { /* silent */ }
-    setLoading(false);
-  }, [filter]);
-
-  const fetchAutoPause = useCallback(async () => {
-    try {
-      const res = await api.get<AutoPauseConfig>('/calendar/auto-pause');
-      setAutoPause(res.data);
-    } catch { /* silent */ }
-  }, []);
-
-  useEffect(() => { fetchEvents(); }, [fetchEvents]);
-  useEffect(() => { fetchAutoPause(); }, [fetchAutoPause]);
-
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const handleToggleAutoPause = async () => {
-    setSavingPause(true);
-    const next = { ...autoPause, enabled: !autoPause.enabled };
-    try {
-      const res = await api.post<AutoPauseConfig>('/calendar/auto-pause', next);
-      setAutoPause(res.data);
-    } catch { /* silent */ }
-    setSavingPause(false);
-  };
-
-  // Group events by date
-  const grouped = events.reduce<Record<string, CalendarEvent[]>>((acc, ev) => {
-    const date = formatDate(ev.scheduled_time);
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(ev);
-    return acc;
-  }, {});
-
-  return (
-    <div style={s.page}>
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Economic Calendar</h1>
-          <p style={s.subtitle}>Upcoming market-moving events. Red = high impact on gold/USD.</p>
-        </div>
-
-        {/* Auto-pause toggle */}
-        <div style={s.autoPauseCard}>
-          <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 4 }}>Auto-pause trading</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button
-              onClick={handleToggleAutoPause}
-              disabled={savingPause}
-              style={{
-                ...s.toggleBtn,
-                background: autoPause.enabled ? '#166534' : '#334155',
-                color: autoPause.enabled ? '#4ade80' : '#94a3b8',
-              }}
-            >
-              {autoPause.enabled ? '⏸ ON' : '▶ OFF'}
-            </button>
-            <span style={{ fontSize: 12, color: '#64748b' }}>
-              {autoPause.enabled
-                ? `Pauses ${autoPause.minutes_before}min before ${autoPause.min_importance}+ events`
-                : 'Enable to auto-pause before high-impact events'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter tabs */}
-      <div style={s.tabs}>
-        {(['all', 'high'] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            style={{ ...s.tab, ...(filter === f ? s.tabActive : {}) }}
-          >
-            {f === 'all' ? 'All Events (7 days)' : '🔴 High Impact Only'}
-          </button>
-        ))}
-      </div>
-
-      {/* Events */}
-      {loading ? (
-        <div style={s.empty}>Loading calendar…</div>
-      ) : events.length === 0 ? (
-        <div style={s.empty}>No events found.</div>
-      ) : (
-        Object.entries(grouped).map(([date, dayEvents]) => (
-          <div key={date} style={s.dayGroup}>
-            <div style={s.dayHeader}>{date}</div>
-            {dayEvents.map((ev, i) => (
-              <EventRow key={i} event={ev} />
-            ))}
-          </div>
-        ))
-      )}
-    </div>
-  );
-};
 
 // ── Event Row ─────────────────────────────────────────────────────────────────
 
@@ -249,10 +139,162 @@ const EventRow: React.FC<{ event: CalendarEvent }> = ({ event: ev }) => {
   );
 };
 
+// ── Main component ────────────────────────────────────────────────────────────
+
+type Tab = 'calendar' | 'macro';
+
+const EconomicCalendar: React.FC = () => {
+  const [tab, setTab]             = useState<Tab>('calendar');
+  const [events, setEvents]       = useState<CalendarEvent[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [filter, setFilter]       = useState<'all' | 'high'>('all');
+  const [autoPause, setAutoPause] = useState<AutoPauseConfig>({ enabled: false, minutes_before: 30, min_importance: 'high' });
+  const [savingPause, setSavingPause] = useState(false);
+  const [, setTick]               = useState(0);
+
+  // Data-layer macro events (via TanStack Query + Zustand)
+  useMacro();
+
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = filter === 'high'
+        ? await calendarApi.highImpact()
+        : await calendarApi.upcoming(168);
+      const raw = res.data as CalendarEvent[] | { events?: CalendarEvent[] };
+      setEvents(Array.isArray(raw) ? raw : (raw.events ?? []));
+    } catch { /* silent — show empty state */ }
+    setLoading(false);
+  }, [filter]);
+
+  const fetchAutoPause = useCallback(async () => {
+    try {
+      // Fixed: was missing /api/ prefix
+      const res = await calendarApi.autoPause();
+      setAutoPause(res.data);
+    } catch { /* silent — auto-pause may not be configured */ }
+  }, []);
+
+  useEffect(() => { fetchEvents(); }, [fetchEvents]);
+  useEffect(() => { fetchAutoPause(); }, [fetchAutoPause]);
+
+  // Refresh countdown every 30s
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleToggleAutoPause = async () => {
+    setSavingPause(true);
+    const next = { ...autoPause, enabled: !autoPause.enabled };
+    try {
+      // Fixed: was missing /api/ prefix
+      const res = await calendarApi.setAutoPause(next);
+      setAutoPause(res.data);
+    } catch { /* silent */ }
+    setSavingPause(false);
+  };
+
+  // Group events by date
+  const grouped = events.reduce<Record<string, CalendarEvent[]>>((acc, ev) => {
+    const date = formatDate(ev.scheduled_time);
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(ev);
+    return acc;
+  }, {});
+
+  return (
+    <div style={s.page}>
+      {/* Header */}
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Economic Calendar</h1>
+          <p style={s.subtitle}>Upcoming market-moving events. Red = high impact on gold/USD.</p>
+        </div>
+
+        {/* Auto-pause toggle */}
+        <div style={s.autoPauseCard}>
+          <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 4 }}>Auto-pause trading</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              onClick={handleToggleAutoPause}
+              disabled={savingPause}
+              style={{
+                ...s.toggleBtn,
+                background: autoPause.enabled ? '#166534' : '#334155',
+                color:      autoPause.enabled ? '#4ade80' : '#94a3b8',
+                opacity:    savingPause ? 0.6 : 1,
+              }}
+            >
+              {autoPause.enabled ? '⏸ ON' : '▶ OFF'}
+            </button>
+            <span style={{ fontSize: 12, color: '#64748b' }}>
+              {autoPause.enabled
+                ? `Pauses ${autoPause.minutes_before}min before ${autoPause.min_importance}+ events`
+                : 'Enable to auto-pause before high-impact events'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Tab bar */}
+      <div style={s.tabs}>
+        {(['calendar', 'macro'] as Tab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}
+          >
+            {t === 'calendar' ? '📅 Calendar' : '📊 Macro Data Layer'}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Calendar tab ──────────────────────────────────────────────────── */}
+      {tab === 'calendar' && (
+        <>
+          {/* Filter tabs */}
+          <div style={{ ...s.tabs, marginBottom: 16 }}>
+            {(['all', 'high'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                style={{ ...s.tab, ...(filter === f ? s.tabActive : {}) }}
+              >
+                {f === 'all' ? 'All Events (7 days)' : '🔴 High Impact Only'}
+              </button>
+            ))}
+          </div>
+
+          {loading ? (
+            <PanelSkeleton rows={5} />
+          ) : events.length === 0 ? (
+            <div style={s.empty}>No events found.</div>
+          ) : (
+            Object.entries(grouped).map(([date, dayEvents]) => (
+              <div key={date} style={s.dayGroup}>
+                <div style={s.dayHeader}>{date}</div>
+                {dayEvents.map((ev, i) => <EventRow key={i} event={ev} />)}
+              </div>
+            ))
+          )}
+        </>
+      )}
+
+      {/* ── Macro data layer tab ───────────────────────────────────────────── */}
+      {tab === 'macro' && (
+        <div style={{ maxWidth: 700 }}>
+          <MacroCalendar />
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page:          { padding: 24, maxWidth: 900, margin: '0 auto' },
+  page:          { padding: 24, maxWidth: 960, margin: '0 auto' },
   header:        { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 16 },
   title:         { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
   subtitle:      { fontSize: 14, color: '#64748b', margin: 0 },
