@@ -347,6 +347,81 @@ class NormalizationPipeline:
         }
         return self.normalize_bar(bar, prev_close=prev_close)
 
+    def normalize_ticks_batch(
+        self, ticks: List[GoldTick]
+    ) -> List[GoldTick]:
+        """
+        Normalise a batch of GoldTicks in one call.
+
+        Applies normalize_tick() to each tick. Ticks that fail validation
+        (e.g. inverted spread after normalisation) are marked REJECTED and
+        included in the output — callers must filter on tick.quality.
+
+        Parameters
+        ----------
+        ticks : List of raw GoldTick objects from any feed adapter
+
+        Returns
+        -------
+        List of normalised GoldTick objects in the same order as input.
+        """
+        return [self.normalize_tick(t) for t in ticks]
+
+    def tick_to_ohlcv(
+        self,
+        ticks: List[GoldTick],
+        timeframe_minutes: int = 60,
+    ) -> pd.DataFrame:
+        """
+        Aggregate a list of GoldTicks into an OHLCV DataFrame.
+
+        Uses mid price as the price series. Volume is proxied from
+        spread × 1000 (consistent with MicrostructureEngine).
+
+        Parameters
+        ----------
+        ticks             : List of validated GoldTick objects
+        timeframe_minutes : Bar size in minutes (default 60 = H1)
+
+        Returns
+        -------
+        Normalised OHLCV DataFrame with UTC DatetimeIndex.
+        Empty DataFrame if ticks is empty or all ticks are invalid.
+        """
+        if not ticks:
+            return pd.DataFrame()
+
+        valid = [t for t in ticks if t.is_valid()]
+        if not valid:
+            return pd.DataFrame()
+
+        records = [
+            {
+                "timestamp": t.timestamp,
+                "open":      t.mid,
+                "high":      t.mid,
+                "low":       t.mid,
+                "close":     t.mid,
+                "volume":    max(t.spread * 1000.0, 1.0),
+            }
+            for t in valid
+        ]
+        df = pd.DataFrame(records)
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+        df = df.set_index("timestamp").sort_index()
+
+        freq = f"{timeframe_minutes}min"
+        ohlcv = df["close"].resample(freq).agg(
+            open  = "first",
+            high  = "max",
+            low   = "min",
+            close = "last",
+        )
+        ohlcv["volume"] = df["volume"].resample(freq).sum()
+        ohlcv = ohlcv.dropna(subset=["open", "close"])
+
+        return self.normalize_ohlcv(ohlcv)
+
     def detect_gaps(
         self,
         df: pd.DataFrame,
