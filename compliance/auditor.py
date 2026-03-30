@@ -282,21 +282,51 @@ class TradeReporting:
         return False
 
     async def _submit_to_regulator(self, trade: Dict):
-        """Submit to regulatory reporting system"""
-        # CFTC: SWAP Data Repository
-        # SEC: CAT (Consolidated Audit Trail)
+        """
+        Submit trade to the appropriate regulatory endpoint.
 
-        print(f"📋 Submitting trade to regulator: {trade.get('id')}")
-        # Implement actual API call to regulator
+        Routes to CFTC SDR, SEC CAT, or MiFID II depending on
+        REGULATORY_JURISDICTION env var. Uses RegulatoryReporter which
+        handles retries, dead-letter queue, and audit trail.
+        """
+        from compliance.regulatory_reporter import get_regulatory_reporter
 
-        # Log submission
+        reporter = get_regulatory_reporter()
+        record   = await reporter.submit(trade)
+
+        # Write submission outcome to immutable audit log
         self.audit_log.append(
             AuditLevel.COMPLIANCE,
             "REGULATORY",
             "system",
-            "REPORT_SUBMITTED",
-            {"trade_id": trade.get("id"), "regulator": "CFTC"},
+            "REPORT_SUBMITTED" if record.status == "submitted" else record.status.upper(),
+            {
+                "trade_id":     trade.get("id"),
+                "report_id":    record.report_id,
+                "jurisdiction": record.jurisdiction,
+                "endpoint":     record.endpoint,
+                "status":       record.status,
+                "attempts":     record.attempts,
+                "error":        record.last_error,
+            },
         )
+
+        if record.status == "submitted":
+            logger.info(
+                "Regulatory report submitted: trade_id=%s report_id=%s jurisdiction=%s",
+                trade.get("id"), record.report_id, record.jurisdiction,
+            )
+        elif record.status == "suppressed":
+            logger.debug(
+                "Regulatory report suppressed: trade_id=%s reason=%s",
+                trade.get("id"), record.endpoint,
+            )
+        else:
+            logger.error(
+                "Regulatory report FAILED: trade_id=%s report_id=%s "
+                "enqueued to DLQ for retry",
+                trade.get("id"), record.report_id,
+            )
 
     def generate_daily_report(self) -> Dict:
         """Generate end-of-day compliance report"""
