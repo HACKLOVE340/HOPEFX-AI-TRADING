@@ -987,11 +987,18 @@ class DeepLearningModel:
         # Return (original value)
         y_return = y.reshape(-1, 1)
 
+        # Return uncertainty: rolling std of returns as a proxy for aleatoric uncertainty.
+        # A window of 20 bars captures short-term volatility regime; edges use expanding window.
+        y_series = pd.Series(y)
+        y_uncertainty = (
+            y_series.rolling(window=20, min_periods=1).std().fillna(0.0).to_numpy().reshape(-1, 1)
+        )
+
         return {
             "direction": y_direction,
             "volatility": y_volatility,
             "return": y_return,
-            "return_uncertainty": np.zeros_like(y_return),  # Placeholder
+            "return_uncertainty": y_uncertainty,
         }
 
     def predict(self, X: np.ndarray, mc_samples: Optional[int] = None) -> Prediction:
@@ -1719,12 +1726,16 @@ class EnhancedMLPredictor:
                 batch_size=trial.suggest_categorical("batch_size", [16, 32, 64]),
             )
 
-            # Build and train model
-            DeepLearningModel(config)
+            # Train on 80% of data, validate on remaining 20%
+            split = int(len(X) * 0.8)
+            X_tr, X_val = X.iloc[:split], X.iloc[split:]
+            y_tr, y_val = y.iloc[:split], y.iloc[split:]
 
-            # Quick training for evaluation
-            # Would use cross-validation here
-            return 0.5  # Placeholder
+            candidate = DeepLearningModel(config)
+            candidate.train(X_tr, y_tr, epochs=5)  # short run for HPO
+            metrics = candidate.evaluate(X_val, y_val)
+            # Maximise directional accuracy as the HPO objective
+            return float(metrics.get("directional_accuracy", 0.0))
 
         study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=n_trials)
