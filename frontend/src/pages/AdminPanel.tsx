@@ -52,12 +52,12 @@ const timeAgo = (iso: string) => {
   return `${Math.floor(h / 24)}d ago`;
 };
 
-const statusColor = (s: string) => ({
+const statusColor = (st: string) => ({
   active:   '#4ade80',
   banned:   '#f87171',
   pending:  '#facc15',
   inactive: '#64748b',
-}[s] ?? '#94a3b8');
+}[st] ?? '#94a3b8');
 
 const tierColor = (t: string) => ({
   free:         '#64748b',
@@ -65,25 +65,38 @@ const tierColor = (t: string) => ({
   enterprise:   '#a78bfa',
 }[t] ?? '#94a3b8');
 
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>;
+    const detail = (e['response'] as Record<string, unknown> | undefined)?.['data'];
+    if (detail && typeof detail === 'object') {
+      const d = detail as Record<string, unknown>;
+      if (typeof d['detail'] === 'string') return d['detail'];
+      if (typeof d['message'] === 'string') return d['message'];
+    }
+    if (typeof e['message'] === 'string') return e['message'];
+  }
+  return fallback;
+}
+
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 
 const UsersTab: React.FC = () => {
   const [users,   setUsers]   = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [msg,     setMsg]     = useState('');
+  const [actionErr, setActionErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadErr(null);
     try {
       const res = await api.get('/admin/users');
       setUsers(res.data.users || []);
-    } catch {
-      setUsers([
-        { user_id: 'user-001', username: 'trader_001', email: 'trader1@example.com', status: 'active',  tier: 'professional', total_trades: 47,  created_at: new Date().toISOString(), last_login: new Date().toISOString() },
-        { user_id: 'user-002', username: 'trader_002', email: 'trader2@example.com', status: 'active',  tier: 'free',         total_trades: 94,  created_at: new Date().toISOString(), last_login: new Date().toISOString() },
-        { user_id: 'user-003', username: 'trader_003', email: 'trader3@example.com', status: 'active',  tier: 'enterprise',   total_trades: 141, created_at: new Date().toISOString(), last_login: new Date().toISOString() },
-        { user_id: 'user-004', username: 'trader_004', email: 'trader4@example.com', status: 'banned',  tier: 'free',         total_trades: 0,   created_at: new Date().toISOString(), last_login: new Date().toISOString() },
-      ]);
+    } catch (err) {
+      setUsers([]);
+      setLoadErr(extractErrorMessage(err, 'Failed to load users. Ensure the admin API is running.'));
     } finally {
       setLoading(false);
     }
@@ -92,16 +105,23 @@ const UsersTab: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const action = async (userId: string, act: string) => {
+    setActionErr(null);
+    setMsg('');
     try {
       if (act === 'ban')   await api.post(`/admin/users/${userId}/ban`);
       if (act === 'unban') await api.post(`/admin/users/${userId}/unban`);
-      if (act === 'reset') { await api.post(`/admin/users/${userId}/reset-password`); setMsg('Password reset email queued.'); }
+      if (act === 'reset') {
+        await api.post(`/admin/users/${userId}/reset-password`);
+        setMsg('Password reset email queued.');
+      }
       if (act === 'impersonate') {
         const res = await api.post(`/admin/users/${userId}/impersonate`);
         setMsg(`Impersonation token: ${res.data.impersonation_token} (expires in 5 min)`);
       }
       await load();
-    } catch { /* ignore */ }
+    } catch (err) {
+      setActionErr(extractErrorMessage(err, `Action "${act}" failed. Check permissions and try again.`));
+    }
   };
 
   return (
@@ -112,7 +132,18 @@ const UsersTab: React.FC = () => {
           <button style={s.closeBtn} onClick={() => setMsg('')}>✕</button>
         </div>
       )}
-      {loading ? <div style={s.dim}>Loading users…</div> : (
+      {actionErr && (
+        <div style={s.errorBanner}>
+          {actionErr}
+          <button style={s.closeBtn} onClick={() => setActionErr(null)}>✕</button>
+        </div>
+      )}
+      {loading && <div style={s.dim}>Loading users…</div>}
+      {!loading && loadErr && <div style={{ ...s.dim, color: '#f87171' }}>{loadErr}</div>}
+      {!loading && !loadErr && users.length === 0 && (
+        <div style={s.dim}>No users found.</div>
+      )}
+      {!loading && !loadErr && users.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
           <table style={s.table}>
             <thead>
@@ -162,14 +193,17 @@ const UsersTab: React.FC = () => {
 // ─── Audit Log Tab ────────────────────────────────────────────────────────────
 
 const AuditTab: React.FC = () => {
-  const [events,  setEvents]  = useState<AuditEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter,  setFilter]  = useState('');
-  const [page,    setPage]    = useState(1);
-  const [total,   setTotal]   = useState(0);
+  const [events,    setEvents]    = useState<AuditEvent[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [loadErr,   setLoadErr]   = useState<string | null>(null);
+  const [exportErr, setExportErr] = useState<string | null>(null);
+  const [filter,    setFilter]    = useState('');
+  const [page,      setPage]      = useState(1);
+  const [total,     setTotal]     = useState(0);
 
   const load = useCallback(async (p = 1, f = filter) => {
     setLoading(true);
+    setLoadErr(null);
     try {
       const params: Record<string, string | number> = { page: p, limit: 20 };
       if (f) params.event_type = f;
@@ -177,15 +211,10 @@ const AuditTab: React.FC = () => {
       setEvents(res.data.events || []);
       setTotal(res.data.total || 0);
       setPage(p);
-    } catch {
-      setEvents([
-        { event_id: '1', user_id: 'system',   event_type: 'startup',          detail: 'Application started',                ip_address: '',            created_at: new Date().toISOString() },
-        { event_id: '2', user_id: 'user-001', event_type: 'login',            detail: 'Login from 192.168.1.1',             ip_address: '192.168.1.1', created_at: new Date().toISOString() },
-        { event_id: '3', user_id: 'user-002', event_type: 'trade.placed',     detail: 'BUY 0.1 XAU/USD @ 2350.00',         ip_address: '10.0.0.1',    created_at: new Date().toISOString() },
-        { event_id: '4', user_id: 'admin',    event_type: 'user.banned',      detail: 'user-004 banned for ToS violation',  ip_address: '127.0.0.1',   created_at: new Date().toISOString() },
-        { event_id: '5', user_id: 'user-003', event_type: 'login.failed',     detail: 'Invalid password attempt',           ip_address: '203.0.113.1', created_at: new Date().toISOString() },
-      ]);
-      setTotal(5);
+    } catch (err) {
+      setEvents([]);
+      setTotal(0);
+      setLoadErr(extractErrorMessage(err, 'Failed to load audit log. Ensure the admin API is running.'));
     } finally {
       setLoading(false);
     }
@@ -194,13 +223,16 @@ const AuditTab: React.FC = () => {
   useEffect(() => { load(1, filter); }, [filter]);
 
   const exportCsv = async () => {
+    setExportErr(null);
     try {
       const res = await api.get('/admin/audit-log/export', { responseType: 'blob' });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url; a.download = 'audit_log.csv'; a.click();
       URL.revokeObjectURL(url);
-    } catch { /* ignore */ }
+    } catch (err) {
+      setExportErr(extractErrorMessage(err, 'CSV export failed. Try again or contact support.'));
+    }
   };
 
   const eventColor = (type: string) =>
@@ -220,9 +252,18 @@ const AuditTab: React.FC = () => {
         />
         <button style={s.exportBtn} onClick={exportCsv}>Export CSV</button>
       </div>
-      {loading ? <div style={s.dim}>Loading audit log…</div> : (
+      {exportErr && (
+        <div style={{ ...s.errorBanner, marginBottom: 12 }}>
+          {exportErr}
+          <button style={s.closeBtn} onClick={() => setExportErr(null)}>✕</button>
+        </div>
+      )}
+      {loading && <div style={s.dim}>Loading audit log…</div>}
+      {!loading && loadErr && <div style={{ ...s.dim, color: '#f87171' }}>{loadErr}</div>}
+      {!loading && !loadErr && (
         <>
           <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>{total} events total</div>
+          {events.length === 0 && <div style={s.dim}>No events match this filter.</div>}
           {events.map((e) => (
             <div key={e.event_id} style={s.auditRow}>
               <div style={{ ...s.auditDot, background: eventColor(e.event_type) }} />
@@ -255,17 +296,21 @@ const AuditTab: React.FC = () => {
 // ─── Feature Flags Tab ────────────────────────────────────────────────────────
 
 const FlagsTab: React.FC = () => {
-  const [flags,   setFlags]   = useState<FeatureFlag[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search,  setSearch]  = useState('');
+  const [flags,     setFlags]     = useState<FeatureFlag[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [loadErr,   setLoadErr]   = useState<string | null>(null);
+  const [toggleErr, setToggleErr] = useState<string | null>(null);
+  const [search,    setSearch]    = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadErr(null);
     try {
       const res = await api.get('/admin/feature-flags');
       setFlags(res.data.flags || []);
-    } catch {
+    } catch (err) {
       setFlags([]);
+      setLoadErr(extractErrorMessage(err, 'Failed to load feature flags. Ensure the admin API is running.'));
     } finally {
       setLoading(false);
     }
@@ -274,19 +319,22 @@ const FlagsTab: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const toggle = async (flag: FeatureFlag) => {
+    setToggleErr(null);
     try {
       const action = flag.enabled ? 'disable' : 'enable';
       await api.post(`/admin/feature-flags/${flag.name}/${action}`);
       setFlags((prev) => prev.map((f) => f.name === flag.name ? { ...f, enabled: !f.enabled } : f));
-    } catch { /* ignore */ }
+    } catch (err) {
+      setToggleErr(extractErrorMessage(err, `Failed to toggle flag "${flag.name}". Check permissions.`));
+    }
   };
 
-  const statusColor = (s: string) => ({
+  const flagStatusColor = (st: string) => ({
     stable:       '#4ade80',
     beta:         '#facc15',
     experimental: '#f97316',
     disabled:     '#f87171',
-  }[s] ?? '#94a3b8');
+  }[st] ?? '#94a3b8');
 
   const filtered = flags.filter((f) =>
     !search || f.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -301,38 +349,46 @@ const FlagsTab: React.FC = () => {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      {loading ? <div style={s.dim}>Loading flags…</div> :
-       flags.length === 0 ? <div style={s.dim}>Feature flags unavailable. Ensure admin API is running.</div> :
-        filtered.map((flag) => (
-          <div key={flag.name} style={s.flagRow}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontWeight: 600, fontSize: 13, fontFamily: 'monospace' }}>{flag.name}</span>
-                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, border: `1px solid ${statusColor(flag.status)}`, color: statusColor(flag.status) }}>
-                  {flag.status}
-                </span>
-              </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{flag.description}</div>
-              <div style={{ fontSize: 11, color: '#475569', marginTop: 2, fontFamily: 'monospace' }}>{flag.env_var}</div>
+      {toggleErr && (
+        <div style={{ ...s.errorBanner, marginBottom: 12 }}>
+          {toggleErr}
+          <button style={s.closeBtn} onClick={() => setToggleErr(null)}>✕</button>
+        </div>
+      )}
+      {loading && <div style={s.dim}>Loading flags…</div>}
+      {!loading && loadErr && <div style={{ ...s.dim, color: '#f87171' }}>{loadErr}</div>}
+      {!loading && !loadErr && flags.length === 0 && (
+        <div style={s.dim}>No feature flags found. Ensure the admin API is running.</div>
+      )}
+      {!loading && !loadErr && filtered.map((flag) => (
+        <div key={flag.name} style={s.flagRow}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontWeight: 600, fontSize: 13, fontFamily: 'monospace' }}>{flag.name}</span>
+              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 3, border: `1px solid ${flagStatusColor(flag.status)}`, color: flagStatusColor(flag.status) }}>
+                {flag.status}
+              </span>
             </div>
-            {/* Toggle switch */}
-            <div
-              style={{
-                width: 44, height: 24, borderRadius: 12, cursor: 'pointer', flexShrink: 0,
-                background: flag.enabled ? '#4ade80' : '#334155',
-                position: 'relative', transition: 'background 0.2s',
-              }}
-              onClick={() => toggle(flag)}
-            >
-              <div style={{
-                position: 'absolute', top: 3, width: 18, height: 18, borderRadius: '50%',
-                background: '#fff', transition: 'left 0.2s',
-                left: flag.enabled ? 23 : 3,
-              }} />
-            </div>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{flag.description}</div>
+            <div style={{ fontSize: 11, color: '#475569', marginTop: 2, fontFamily: 'monospace' }}>{flag.env_var}</div>
           </div>
-        ))
-      }
+          {/* Toggle switch */}
+          <div
+            style={{
+              width: 44, height: 24, borderRadius: 12, cursor: 'pointer', flexShrink: 0,
+              background: flag.enabled ? '#4ade80' : '#334155',
+              position: 'relative', transition: 'background 0.2s',
+            }}
+            onClick={() => toggle(flag)}
+          >
+            <div style={{
+              position: 'absolute', top: 3, width: 18, height: 18, borderRadius: '50%',
+              background: '#fff', transition: 'left 0.2s',
+              left: flag.enabled ? 23 : 3,
+            }} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
@@ -435,6 +491,12 @@ const s: Record<string, React.CSSProperties> = {
   infoBanner: {
     background: 'rgba(96,165,250,0.1)', border: '1px solid #60a5fa', borderRadius: 8,
     padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#60a5fa',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    wordBreak: 'break-all',
+  },
+  errorBanner: {
+    background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8,
+    padding: '10px 14px', fontSize: 13, color: '#f87171',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     wordBreak: 'break-all',
   },
