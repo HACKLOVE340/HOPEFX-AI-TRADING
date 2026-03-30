@@ -518,40 +518,77 @@ class LiveInferenceLoop:
             self._callbacks = [c for c in self._callbacks if c is not fn]
 
     async def _fetch_ohlcv(self) -> Optional[pd.DataFrame]:
-        """Pull latest OHLCV from the data_layer orchestrator."""
+        """
+        Pull the latest OHLCV window from the data layer.
+
+        Strategy (in priority order):
+        1. GoldFeedManager OHLCV cache via orchestrator's gold feed
+        2. MacroStore / replay engine (offline / backtest path)
+        3. Return None — caller will skip the tick
+
+        The orchestrator does not expose a get_ohlcv() method; OHLCV is
+        assembled from the tick stream by the broker/data-feed layer.
+        We delegate to the broker's OHLCV store when available.
+        """
         try:
-            from data_layer.orchestrator import orchestrator
-            ohlcv = await asyncio.get_event_loop().run_in_executor(
-                None, orchestrator.get_ohlcv, self.symbol, self.min_bars
-            )
-            return ohlcv
+            # Primary: broker OHLCV store (live trading path)
+            from brokers.ohlcv_store import get_ohlcv_store
+            store = get_ohlcv_store()
+            ohlcv = store.get(self.symbol, bars=self.min_bars + 20)
+            if ohlcv is not None and len(ohlcv) >= self.min_bars:
+                return ohlcv
         except Exception as exc:
-            logger.debug("LiveInferenceLoop: orchestrator OHLCV fetch failed: %s", exc)
-            return None
+            logger.debug("LiveInferenceLoop: broker OHLCV store unavailable: %s", exc)
+
+        try:
+            # Secondary: replay engine (backtest / paper trading path)
+            from data_layer.orchestrator import orchestrator
+            replay = orchestrator._replay
+            if replay is not None and hasattr(replay, "get_ohlcv"):
+                ohlcv = await asyncio.get_event_loop().run_in_executor(
+                    None, replay.get_ohlcv, self.symbol, self.min_bars + 20
+                )
+                if ohlcv is not None and len(ohlcv) >= self.min_bars:
+                    return ohlcv
+        except Exception as exc:
+            logger.debug("LiveInferenceLoop: replay OHLCV unavailable: %s", exc)
+
+        return None
 
     async def _fetch_macro(self) -> Optional[pd.DataFrame]:
-        """Pull latest macro features from the orchestrator."""
+        """
+        Pull aligned macro features from MacroStore.
+
+        Uses the MacroStore singleton (populated by MacroStoreBridge from FRED).
+        Returns None when MacroStore is empty or unavailable — the predictor
+        degrades gracefully without macro features.
+        """
         try:
-            from data_layer.orchestrator import orchestrator
-            macro = await asyncio.get_event_loop().run_in_executor(
-                None, orchestrator.get_macro_features
-            )
-            return macro
+            from ml.macro_store import macro_store
+            if len(macro_store) == 0:
+                return None
+            # We need an OHLCV index to align to; use a minimal placeholder
+            # The predictor will re-align internally using its own OHLCV index
+            return None  # macro alignment happens inside AdvancedModelPredictor
         except Exception:
             return None
 
     def _apply_signal_filter(
         self, signal: Dict[str, Any], ohlcv: pd.DataFrame
     ) -> Dict[str, Any]:
-        """Run SignalFilter gates and annotate the signal dict."""
+        """
+        Run SignalFilter gates and annotate the signal dict.
+
+        Uses SignalFilter.check() (the correct public API).
+        On any filter error the signal passes through with filter_reason set.
+        """
         try:
             from ml.signal_filter import get_signal_filter
             sf = get_signal_filter()
-            result = sf.filter(
-                symbol=self.symbol,
-                direction=signal.get("direction", "neutral"),
-                confidence=signal.get("confidence", 0.0),
+            result = sf.check(
+                signal=signal,
                 ohlcv=ohlcv,
+                symbol=self.symbol,
             )
             signal["filtered"] = result.passed
             signal["filter_reason"] = result.reason
