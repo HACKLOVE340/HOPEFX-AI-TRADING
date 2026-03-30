@@ -208,6 +208,16 @@ except Exception as _dl_router_err:
         "Data layer router failed to register: %s", _dl_router_err
     )
 
+# KYC/AML endpoints (Sumsub/Onfido + sanctions screening)
+try:
+    from api.kyc import router as _kyc_router
+    app.include_router(_kyc_router, prefix="/api")
+except Exception as _kyc_router_err:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "KYC router failed to register: %s", _kyc_router_err
+    )
+
 # Prometheus /metrics endpoint + background sync to MetricsRegistry
 try:
     from prometheus_monitoring import setup_prometheus_monitoring
@@ -381,6 +391,22 @@ async def startup_event():
             logger.warning(
                 "Data layer orchestrator failed to start (non-fatal): %s", _dl_exc
             )
+
+        # ── Initialise KYC/AML gateway ────────────────────────────────────────
+        # Wires KYCGateway with the ComplianceManager so KYC decisions are
+        # persisted to DB and the audit log is maintained.
+        try:
+            from compliance.kyc_provider import init_kyc_gateway
+            _cm = getattr(app_state, "compliance_manager", None)
+            if _cm is not None:
+                init_kyc_gateway(_cm)
+                logger.info("KYCGateway initialised with ComplianceManager")
+            else:
+                from compliance.kyc_provider import get_kyc_gateway
+                get_kyc_gateway()  # initialise with no-DB fallback
+                logger.warning("KYCGateway initialised without ComplianceManager (no DB)")
+        except Exception as _kyc_exc:
+            logger.warning("KYCGateway init failed (non-fatal): %s", _kyc_exc)
 
         # ── Start L2 order book feed ──────────────────────────────────────────
         # Provides real-time Level 2 depth data for microstructure ML features.
