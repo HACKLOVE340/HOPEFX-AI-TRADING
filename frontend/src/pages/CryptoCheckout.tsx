@@ -132,7 +132,8 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
   const [copied, setCopied] = useState(false);
   const [confirmations, setConfirmations] = useState(0);
   const [pollingTimer, setPollingTimer] = useState<ReturnType<typeof setInterval> | null>(null);
-  const [liveRates, setLiveRates] = useState<Record<CryptoOption, number>>(DEFAULT_RATES);
+  const [liveRates, setLiveRates]   = useState<Record<CryptoOption, number>>(DEFAULT_RATES);
+  const [ratesErr, setRatesErr]     = useState<string | null>(null);
   // Flutterwave — shown as primary option for West/Central Africa
   const [showFlutterwave, setShowFlutterwave] = useState(false);
   const [flwLoading, setFlwLoading] = useState(false);
@@ -149,12 +150,18 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
           USDT: data.USDT ?? data.usdt ?? DEFAULT_RATES.USDT,
         });
       })
-      .catch(() => { /* keep DEFAULT_RATES */ });
+      .catch(() => {
+        // DEFAULT_RATES has BTC/ETH = 0 which would show $0 amounts.
+        // Warn the user so they know the displayed crypto amounts are unavailable.
+        setRatesErr('Live crypto rates unavailable. Crypto amounts cannot be calculated until rates load.');
+      });
 
+    // Flutterwave availability is a non-critical feature flag — silent on failure
     api.get<{ enabled: boolean }>('/billing/payments/flutterwave/status')
       .then(r => setFlwEnabled(r.data.enabled))
       .catch(() => {});
-    // Use a free IP geo API to detect Africa
+
+    // Geo detection is a non-critical UX hint — silent on failure
     fetch('https://ipapi.co/json/')
       .then(r => r.json())
       .then((d: { continent_code?: string }) => {
@@ -255,6 +262,9 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
       <div style={styles.page}>
         <h1 style={styles.heading}>Crypto Checkout</h1>
         <p style={styles.subheading}>Pay with Bitcoin, Ethereum, or USDT — no card required.</p>
+        {ratesErr && (
+          <div style={styles.ratesWarning}>{ratesErr}</div>
+        )}
 
         <section style={styles.section}>
           <h2 style={styles.sectionTitle}>1. Choose a plan</h2>
@@ -469,6 +479,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   heading: { fontSize: 28, fontWeight: 700, marginBottom: 6, color: '#f8fafc' },
   subheading: { color: '#64748b', marginBottom: 32, fontSize: 15 },
+  ratesWarning: { background: 'rgba(251,191,36,0.1)', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#fbbf24', marginBottom: 20 },
   section: { marginBottom: 32 },
   sectionTitle: { fontSize: 16, fontWeight: 600, color: '#94a3b8', marginBottom: 14, textTransform: 'uppercase', letterSpacing: 0.5 },
   planGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 },
