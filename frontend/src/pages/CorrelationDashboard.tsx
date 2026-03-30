@@ -41,31 +41,12 @@ const CorrelationDashboard: React.FC = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const [corrRes, cotRes] = await Promise.all([
-        api.get(`/correlation?window=${window}`),
-        api.get('/cot/gold'),
-      ]);
-      setCorr(corrRes.data);
-      setCot(cotRes.data);
-    } catch {
-      // Demo fallback
-      const syms = ['XAU/USD','EUR/USD','DXY','SPX','US10Y','VIX'];
-      const demoMatrix: Record<string, Record<string, number>> = {};
-      const vals = [[1,-0.42,-0.68,0.31,-0.55,0.72],[-0.42,1,0.61,0.48,-0.22,-0.38],
-        [-0.68,0.61,1,0.29,0.41,-0.51],[0.31,0.48,0.29,1,-0.18,-0.82],
-        [-0.55,-0.22,0.41,-0.18,1,-0.29],[0.72,-0.38,-0.51,-0.82,-0.29,1]];
-      syms.forEach((s, i) => { demoMatrix[s] = {}; syms.forEach((t, j) => { demoMatrix[s][t] = vals[i][j]; }); });
-      setCorr({ symbols: syms, matrix: demoMatrix, window,
-        insights: ['XAU/USD and VIX are positively correlated (+0.72) — gold rallies during fear',
-          'XAU/USD and DXY are negatively correlated (-0.68) — dollar weakness = gold strength',
-          'SPX and VIX are negatively correlated (-0.82) — classic fear gauge'],
-        updated_at: new Date().toISOString() });
-      setCot({ report_date:'2024-03-19', net_speculator_long:148320, long_positions:212450,
-        short_positions:64130, sentiment:'BULLISH', sentiment_strength:'STRONG',
-        note:'Speculator sentiment: BULLISH (net long +148K contracts). Large net-long positions historically precede gold rallies.',
-        weekly_change:12400, source:'CFTC (demo)' });
-    }
+    const [corrRes, cotRes] = await Promise.allSettled([
+      api.get(`/correlation?window=${window}`),
+      api.get('/cot/gold'),
+    ]);
+    setCorr(corrRes.status === 'fulfilled' ? corrRes.value.data : null);
+    setCot(cotRes.status === 'fulfilled' ? cotRes.value.data : null);
     setLoading(false);
   }, [window]);
 
@@ -86,7 +67,9 @@ const CorrelationDashboard: React.FC = () => {
         </div>
       </div>
 
-      {loading ? <div style={s.dim}>Loading…</div> : (
+      {loading ? <div style={s.dim}>Loading…</div> : (!corr && !cot) ? (
+        <div style={s.dim}>Correlation data unavailable. Ensure the data layer is running.</div>
+      ) : (
         <div style={s.grid}>
           {/* Correlation matrix */}
           {corr && (
