@@ -125,12 +125,12 @@ export const leaderboardApi = {
 // ── Performance ───────────────────────────────────────────────────────────────
 
 export const performanceApi = {
-  summary:    ()  => api.get('/performance/summary'),
-  equity:     ()  => api.get('/performance/equity-curve'),
-  trades:     ()  => api.get('/performance/trades'),
-  weekly:     ()  => api.get('/performance/weekly-report'),
-  // alias used by lib/api.ts
-  equityCurve: () => api.get('/performance/equity-curve'),
+  summary:     ()  => api.get('/performance/public'),
+  equity:      ()  => api.get('/performance/equity-curve'),
+  equityCurve: ()  => api.get('/performance/equity-curve'),
+  trades:      ()  => api.get('/trading/trades'),
+  weekly:      ()  => api.get('/performance/weekly-report/latest'),
+  weeklyList:  ()  => api.get('/performance/weekly-report/list'),
 };
 
 // ── Data layer (orchestrator) ─────────────────────────────────────────────────
@@ -149,7 +149,34 @@ export const dataLayerApi = {
 // ── Signals ───────────────────────────────────────────────────────────────────
 
 export const signalsApi = {
-  active:  ()              => api.get('/signals/active'),
-  history: (limit = 50)    => api.get('/signals/history', { params: { limit } }),
-  list:    ()              => api.get('/signals'),
+  active:    ()                   => api.get('/signals/active'),
+  latest:    ()                   => api.get('/signals/latest'),
+  history:   (limit = 50)         => api.get('/signals/history', { params: { limit } }),
+  summary:   ()                   => api.get('/signals/summary'),
+  analytics: ()                   => api.get('/signals/analytics'),
+  generate:  (payload: object)    => api.post('/signals/generate', payload),
+  setAlert:  (payload: object)    => api.post('/signals/alerts', payload),
+};
+
+// ── ML extended ───────────────────────────────────────────────────────────────
+
+export const mlExtendedApi = {
+  health:        ()                   => api.get('/ml/health'),
+  retrain:       (payload?: object)   => api.post('/ml/retrain', payload ?? {}),
+  filterStats:   ()                   => api.get('/ml/signal-filter/stats'),
+  rlStatus:      ()                   => api.get('/ml/rl/status'),
+  rlTrain:       (payload: object)    => api.post('/ml/rl/train', payload),
+  walkForward:   (payload: object)    => api.post('/ml/rl/walk-forward', payload),
+  explain:       (symbol: string)     => api.get(`/explain/${symbol}`),
+};
+
+// ── Calendar ──────────────────────────────────────────────────────────────────
+
+export const calendarApi = {
+  upcoming:   (hours = 168)  => api.get('/calendar/upcoming', { params: { hours } }),
+  today:      ()             => api.get('/calendar/today'),
+  highImpact: ()             => api.get('/calendar/high-impact'),
+  autoPause:  ()             => api.get('/calendar/auto-pause'),
+  setAutoPause: (cfg: object) => api.post('/calendar/auto-pause', cfg),
+  fomc:       ()             => api.get('/calendar/fomc'),
 };

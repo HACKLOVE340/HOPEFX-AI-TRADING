@@ -16,9 +16,6 @@ vi.mock('../hooks/useWebSocket', () => ({
   useWebSocket: vi.fn(() => ({ send: vi.fn() })),
 }));
 
-vi.mock('../hooks/usePriceSimulator', () => ({
-  usePriceSimulator: vi.fn(),
-}));
 
 vi.mock('../hooks/useApi', () => ({
   tradingApi: {
