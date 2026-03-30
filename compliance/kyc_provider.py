@@ -10,7 +10,7 @@ Providers
 ---------
 Sumsub   — identity verification + liveness + document check
 Onfido   — document + biometric verification
-Mock     — for testing/dev (auto-approves after configurable delay)
+Mock     — for testing/dev only (auto-approves; blocked in APP_ENV=production)
 
 Sanctions screening
 -------------------
@@ -22,7 +22,7 @@ Architecture
 KYCProvider (abstract base)
   ├── SumsubProvider
   ├── OnfidoProvider
-  └── MockKYCProvider
+  └── MockKYCProvider  (non-production only)
 
 SanctionsScreener
   ├── RefinitivScreener
@@ -36,7 +36,7 @@ KYCGateway — facade that wires provider + screener + ComplianceManager.
 
 Configuration (env vars)
 ------------------------
-KYC_PROVIDER          — "sumsub" | "onfido" | "mock" (default: "mock")
+KYC_PROVIDER          — "sumsub" | "onfido" (default: "sumsub")
 SUMSUB_APP_TOKEN      — Sumsub application token
 SUMSUB_SECRET_KEY     — Sumsub HMAC secret
 SUMSUB_BASE_URL       — default: https://api.sumsub.com
@@ -64,7 +64,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-KYC_PROVIDER: str = os.getenv("KYC_PROVIDER", "mock")
+KYC_PROVIDER: str = os.getenv("KYC_PROVIDER", "sumsub")
 
 
 # ── Data structures ───────────────────────────────────────────────────────────
@@ -575,15 +575,32 @@ class KYCGateway:
 
     @staticmethod
     def _build_provider() -> KYCProvider:
-        name = KYC_PROVIDER.lower()
+        name = KYC_PROVIDER.lower().strip()
         if name == "sumsub":
             return SumsubProvider()
         elif name == "onfido":
             return OnfidoProvider()
-        else:
-            if name not in ("mock", ""):
-                logger.warning("Unknown KYC_PROVIDER=%s — using mock", name)
+        elif name == "mock":
+            # Allowed only in non-production environments.
+            _app_env = os.getenv("APP_ENV", "production").lower()
+            if _app_env == "production":
+                raise RuntimeError(
+                    "KYC_PROVIDER=mock is not permitted in production (APP_ENV=production). "
+                    "Set KYC_PROVIDER=sumsub or KYC_PROVIDER=onfido and configure the "
+                    "corresponding API credentials."
+                )
+            logger.warning(
+                "KYC_PROVIDER=mock — auto-approving all applicants. "
+                "This is only acceptable in non-production environments."
+            )
             return MockKYCProvider()
+        else:
+            raise RuntimeError(
+                f"Unknown KYC_PROVIDER={KYC_PROVIDER!r}. "
+                "Valid values: 'sumsub', 'onfido'. "
+                "Set the KYC_PROVIDER environment variable and configure the "
+                "corresponding API credentials (SUMSUB_APP_TOKEN / ONFIDO_API_TOKEN)."
+            )
 
     async def create_applicant(
         self, user_id: str, metadata: Dict[str, Any]
