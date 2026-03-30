@@ -41,7 +41,10 @@ api.interceptors.request.use((config) => {
       const token = parsed?.state?.token;
       if (token) config.headers.Authorization = `Bearer ${token}`;
     }
-  } catch { /* silent */ }
+  } catch (err: unknown) {
+    // Corrupted localStorage entry — request proceeds without auth token
+    console.warn('[chart-api] Failed to read auth token from localStorage:', err);
+  }
   return config;
 });
 
