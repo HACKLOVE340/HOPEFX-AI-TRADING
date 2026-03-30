@@ -90,8 +90,8 @@ def _check_kill_switch() -> None:
 #      treated as gate NOT passed (fail-closed).
 #
 #   2. CI model guard — if the meta file records that the model was trained
-#      with HOPEFX_CI=1 (n_estimators=20 stub), live orders are blocked until
-#      the model is retrained with HOPEFX_CI=0 on full data.
+#      with HOPEFX_CI=1 (n_estimators=20, fast CI build), live orders are
+#      blocked until the model is retrained with HOPEFX_CI=0 on full data.
 #
 # Both gates are bypassed when BROKER_TYPE=paper (paper trading is always
 # allowed) or APP_ENV=test so the test suite is not affected.
@@ -152,8 +152,8 @@ def _check_live_deployment_gates() -> None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
                 "Live trading blocked — model was trained with HOPEFX_CI=1 "
-                "(n_estimators=20 stub). Retrain with HOPEFX_CI=0 on full "
-                "50-year data before deploying to live."
+                "(n_estimators=20, fast CI build). Retrain with HOPEFX_CI=0 "
+                "on full 50-year data before deploying to live."
             ),
         )
 
