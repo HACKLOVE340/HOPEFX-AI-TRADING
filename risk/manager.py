@@ -1233,6 +1233,46 @@ class RiskManager:
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
+    def check_risk_limits(self) -> tuple:
+        """Check all active risk limits and return (passed: bool, reason: str).
+
+        Evaluates drawdown, daily loss, open-position count, and kill-switch
+        state.  Returns (True, "ok") when all limits are within bounds.
+        """
+        cfg = self._config
+        state = self._state
+
+        if self._halt:
+            return (False, f"trading halted: {self._halt_reason}")
+
+        if state.current_drawdown > cfg.max_drawdown_pct:
+            return (
+                False,
+                f"drawdown {state.current_drawdown*100:.2f}% exceeds limit "
+                f"{cfg.max_drawdown_pct*100:.1f}%",
+            )
+
+        daily_loss_pct = (
+            abs(state.daily_pnl) / state.account_equity
+            if state.account_equity > 0
+            else 0.0
+        )
+        if state.daily_pnl < 0 and daily_loss_pct > cfg.daily_loss_limit_pct:
+            return (
+                False,
+                f"daily loss {daily_loss_pct*100:.2f}% exceeds limit "
+                f"{cfg.daily_loss_limit_pct*100:.1f}%",
+            )
+
+        max_pos = getattr(cfg, "max_open_positions", _MAX_OPEN_POSITIONS)
+        if state.open_positions >= max_pos:
+            return (
+                False,
+                f"open positions {state.open_positions} at limit {max_pos}",
+            )
+
+        return (True, "ok")
+
     def metrics(self) -> Dict[str, Any]:
         return {
             "account_equity":   round(self._state.account_equity, 2),
