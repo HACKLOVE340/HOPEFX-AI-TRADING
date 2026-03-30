@@ -1,0 +1,46 @@
+# k8s/kill-switch-rbac.yaml
+# RBAC for kill switch ConfigMap access.
+#
+# The hopefx-api ServiceAccount needs permission to read and patch the
+# hopefx-kill-switch ConfigMap so the K8s fallback propagation path works.
+#
+# Scope: namespace-scoped (hopefx namespace only). No cluster-wide permissions.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hopefx-api
+  namespace: hopefx
+  labels:
+    app.kubernetes.io/part-of: hopefx-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kill-switch-configmap-rw
+  namespace: hopefx
+  labels:
+    app.kubernetes.io/part-of: hopefx-platform
+    app.kubernetes.io/component: kill-switch
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["hopefx-kill-switch"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hopefx-api-kill-switch-configmap
+  namespace: hopefx
+  labels:
+    app.kubernetes.io/part-of: hopefx-platform
+    app.kubernetes.io/component: kill-switch
+subjects:
+  - kind: ServiceAccount
+    name: hopefx-api
+    namespace: hopefx
+roleRef:
+  kind: Role
+  name: kill-switch-configmap-rw
+  apiGroup: rbac.authorization.k8s.io

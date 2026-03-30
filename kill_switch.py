@@ -113,6 +113,8 @@ class KillSwitch:
         self._task: Optional[asyncio.Task] = None
         # Background task that subscribes to Redis CH_BREACH for cross-pod propagation
         self._redis_sub_task: Optional[asyncio.Task] = None
+        # Background task that watches K8s ConfigMap — fallback when Redis is unreachable
+        self._k8s_watch_task: Optional[asyncio.Task] = None
 
         # Restore persisted state from the previous process before checking
         # the env-var, so that a restart after an activation does not silently
@@ -236,6 +238,13 @@ class KillSwitch:
             self._redis_breach_listener(), name="kill_switch_redis_sub"
         )
 
+        # Start K8s ConfigMap watcher as fallback when Redis is unreachable.
+        # When Redis pub/sub is down, the ConfigMap write+watch path ensures
+        # all pods in the cluster see the kill switch activation.
+        self._k8s_watch_task = asyncio.create_task(
+            self._k8s_configmap_watcher(), name="kill_switch_k8s_watch"
+        )
+
         self._task = asyncio.create_task(self._poll_loop(), name="kill_switch_poll")
         logger.info(
             "Kill switch started (flag file: %s, poll interval: %.1fs)",
@@ -246,7 +255,7 @@ class KillSwitch:
     async def stop(self) -> None:
         """Stop background polling and Redis subscription."""
         self._running = False
-        for task in (self._task, self._redis_sub_task):
+        for task in (self._task, self._redis_sub_task, self._k8s_watch_task):
             if task and not task.done():
                 task.cancel()
                 try:
@@ -534,27 +543,33 @@ class KillSwitch:
             )
 
         # ── Step 3: Fallback — legacy in-process event bus ────────────────────
-        if self._event_bus is None:
-            return
-        try:
-            from core.event_bus import DomainEvent  # noqa: PLC0415
-
-            event = DomainEvent.create(
-                "KILL_SWITCH",
-                "kill_switch",
-                payload,
-                priority=0,
-            )
+        if self._event_bus is not None:
             try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(self._event_bus.publish(event))
-            except RuntimeError:
-                import inspect as _inspect
-                result = self._event_bus.publish(event)
-                if _inspect.iscoroutine(result):
-                    result.close()
-        except Exception as exc:
-            logger.warning("Could not publish kill-switch event (fallback): %s", exc)
+                from core.event_bus import DomainEvent  # noqa: PLC0415
+
+                event = DomainEvent.create(
+                    "KILL_SWITCH",
+                    "kill_switch",
+                    payload,
+                    priority=0,
+                )
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self._event_bus.publish(event))
+                except RuntimeError:
+                    import inspect as _inspect
+                    result = self._event_bus.publish(event)
+                    if _inspect.iscoroutine(result):
+                        result.close()
+            except Exception as exc:
+                logger.warning("Could not publish kill-switch event (fallback): %s", exc)
+
+        # ── Step 4: K8s ConfigMap write — ensures cross-pod propagation ───────
+        # When Redis is down, all pods watch the ConfigMap and will activate
+        # their local kill switch when they see kill_switch_active=true.
+        # This is the last-resort guarantee that no pod keeps trading after
+        # a drawdown breach even if Redis is completely unavailable.
+        self._write_k8s_configmap(reason)
 
     async def _redis_breach_listener(self) -> None:
         """
@@ -601,6 +616,154 @@ class KillSwitch:
             pass
         except Exception as exc:
             logger.error("Kill switch: Redis breach listener exited unexpectedly: %s", exc)
+
+    # ── K8s ConfigMap fallback ────────────────────────────────────────────────
+
+    async def _k8s_configmap_watcher(self) -> None:
+        """
+        Watch a Kubernetes ConfigMap for kill switch state.
+
+        This is the fallback cross-pod propagation path used when Redis
+        pub/sub is unreachable. It polls the ConfigMap every
+        K8S_KS_POLL_INTERVAL_S seconds and activates the kill switch if
+        the ConfigMap contains ``kill_switch_active: "true"``.
+
+        Write path (called from _publish_event when Redis is down):
+            _write_k8s_configmap(reason) — patches the ConfigMap via the
+            Kubernetes API so all pods in the cluster see the activation.
+
+        Read path (this method):
+            Polls the ConfigMap and calls _activate_internal() when the
+            kill switch flag is set.
+
+        Configuration (env vars)
+        ------------------------
+        K8S_KS_NAMESPACE       — namespace of the ConfigMap (default: hopefx)
+        K8S_KS_CONFIGMAP_NAME  — ConfigMap name (default: hopefx-kill-switch)
+        K8S_KS_POLL_INTERVAL_S — poll interval in seconds (default: 5)
+        KUBERNETES_SERVICE_HOST — set automatically inside a pod; absence
+                                  means we are running outside K8s (skip watcher)
+        """
+        namespace = os.getenv("K8S_KS_NAMESPACE", "hopefx")
+        cm_name = os.getenv("K8S_KS_CONFIGMAP_NAME", "hopefx-kill-switch")
+        poll_interval = float(os.getenv("K8S_KS_POLL_INTERVAL_S", "5"))
+
+        # Only run inside a Kubernetes pod
+        if not os.getenv("KUBERNETES_SERVICE_HOST"):
+            logger.debug(
+                "Kill switch K8s watcher: not running inside a pod "
+                "(KUBERNETES_SERVICE_HOST not set) — skipping"
+            )
+            return
+
+        try:
+            from kubernetes_asyncio import client as k8s_client, config as k8s_config
+            await k8s_config.load_incluster_config()
+            v1 = k8s_client.CoreV1Api()
+        except ImportError:
+            logger.warning(
+                "Kill switch K8s watcher: kubernetes-asyncio not installed — "
+                "install kubernetes-asyncio for ConfigMap fallback"
+            )
+            return
+        except Exception as exc:
+            logger.warning(
+                "Kill switch K8s watcher: failed to load in-cluster config (%s) — "
+                "ConfigMap fallback disabled",
+                exc,
+            )
+            return
+
+        logger.info(
+            "Kill switch K8s ConfigMap watcher started "
+            "(namespace=%s, configmap=%s, interval=%.0fs)",
+            namespace, cm_name, poll_interval,
+        )
+
+        while self._running:
+            try:
+                cm = await v1.read_namespaced_config_map(cm_name, namespace)
+                data = cm.data or {}
+                active_flag = data.get("kill_switch_active", "false").lower()
+                reason = data.get("kill_switch_reason", "k8s configmap activation")
+
+                if active_flag == "true" and not self._active:
+                    logger.critical(
+                        "Kill switch K8s watcher: ConfigMap flag set — activating. "
+                        "Reason: %s", reason,
+                    )
+                    self._activate_internal(f"[k8s-configmap] {reason}")
+
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                logger.debug(
+                    "Kill switch K8s watcher: poll error (%s) — will retry in %.0fs",
+                    exc, poll_interval,
+                )
+
+            await asyncio.sleep(poll_interval)
+
+    def _write_k8s_configmap(self, reason: str) -> None:
+        """
+        Patch the K8s ConfigMap to signal kill switch activation to all pods.
+
+        Called synchronously from _publish_event() when Redis is unavailable.
+        Uses a fire-and-forget asyncio task if a loop is running, otherwise
+        runs synchronously via the kubernetes (sync) client.
+
+        This is the write side of the ConfigMap fallback. The read side is
+        _k8s_configmap_watcher() running on every pod.
+        """
+        namespace = os.getenv("K8S_KS_NAMESPACE", "hopefx")
+        cm_name = os.getenv("K8S_KS_CONFIGMAP_NAME", "hopefx-kill-switch")
+
+        if not os.getenv("KUBERNETES_SERVICE_HOST"):
+            return  # not in a pod — skip silently
+
+        patch_body = {
+            "data": {
+                "kill_switch_active": "true",
+                "kill_switch_reason": reason,
+                "kill_switch_timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        }
+
+        async def _async_patch() -> None:
+            try:
+                from kubernetes_asyncio import client as k8s_client, config as k8s_config
+                await k8s_config.load_incluster_config()
+                v1 = k8s_client.CoreV1Api()
+                await v1.patch_namespaced_config_map(cm_name, namespace, patch_body)
+                logger.info(
+                    "Kill switch: K8s ConfigMap '%s/%s' patched (reason=%s)",
+                    namespace, cm_name, reason,
+                )
+            except Exception as exc:
+                logger.error(
+                    "Kill switch: K8s ConfigMap patch failed (%s) — "
+                    "pods without Redis will not see this activation",
+                    exc,
+                )
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_async_patch(), name="kill_switch_k8s_patch")
+        except RuntimeError:
+            # No running loop — use sync kubernetes client
+            try:
+                from kubernetes import client as k8s_sync, config as k8s_sync_config
+                k8s_sync_config.load_incluster_config()
+                v1 = k8s_sync.CoreV1Api()
+                v1.patch_namespaced_config_map(cm_name, namespace, patch_body)
+                logger.info(
+                    "Kill switch: K8s ConfigMap '%s/%s' patched (sync, reason=%s)",
+                    namespace, cm_name, reason,
+                )
+            except Exception as exc:
+                logger.error(
+                    "Kill switch: K8s ConfigMap sync patch failed: %s", exc
+                )
 
     def set_event_bus(self, event_bus) -> None:
         """

@@ -34,6 +34,10 @@ spec:
         prometheus.io/port: "8000"
         prometheus.io/path: "/metrics"
     spec:
+      # ── ServiceAccount — required for K8s ConfigMap kill switch fallback ────
+      # Grants get/patch on hopefx-kill-switch ConfigMap (see kill-switch-rbac.yaml).
+      serviceAccountName: hopefx-api
+
       # ── Security context (pod level) ────────────────────────────────────────
       securityContext:
         runAsNonRoot: true
