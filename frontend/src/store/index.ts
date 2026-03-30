@@ -1,135 +1,133 @@
 /**
+ * store/index.ts
  * Global Zustand store — single source of truth for all real-time state.
  *
  * Slices:
- *   auth      – JWT token, user profile, role
- *   prices    – live bid/ask/mid per symbol
- *   positions – open positions
- *   signals   – latest ML signals
- *   account   – balance, equity, margin
- *   ws        – WebSocket connection status
+ *   auth          – JWT token, user profile, role
+ *   prices        – live bid/ask/mid per symbol + tick history
+ *   positions     – open positions
+ *   signals       – latest ML signals (capped at 50)
+ *   account       – balance, equity, margin, risk metrics
+ *   orchestrator  – health, quality, microstructure, sentiment, macro
+ *   ws            – WebSocket connection status
  */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import type {
+  User,
+  PriceTick,
+  Position,
+  Signal,
+  AccountMetrics,
+  WsStatus,
+  OrchestratorHealth,
+  QualityReport,
+  MicrostructureSnapshot,
+  SentimentResponse,
+  MacroResponse,
+  EquityPoint,
+  PerformanceSummary,
+} from '../types';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// Re-export types for backward compat
+export type { User, PriceTick, Position, Signal, AccountMetrics, WsStatus };
 
-export type UserRole = 'user' | 'trader' | 'admin' | 'superadmin';
-
-export interface User {
-  id: string;
-  email: string;
-  username: string;
-  role: UserRole;
-}
-
-export interface PriceTick {
-  symbol: string;
-  bid: number;
-  ask: number;
-  mid: number;
-  spread: number;
-  timestamp: number; // unix ms
-  change_pct: number;
-}
-
-export interface Position {
-  id: string;
-  symbol: string;
-  side: 'long' | 'short';
-  size: number;
-  entry_price: number;
-  current_price: number;
-  unrealized_pnl: number;
-  realized_pnl: number;
-  opened_at: string;
-}
-
-export interface Signal {
-  id: string;
-  symbol: string;
-  direction: 'long' | 'short' | 'neutral';
-  confidence: number;       // 0–1
-  model: string;
-  entry_price: number;
-  stop_loss: number;
-  take_profit: number;
-  generated_at: string;
-  status: 'active' | 'triggered' | 'expired';
-}
-
-export interface AccountMetrics {
-  balance: number;
-  equity: number;
-  margin_used: number;
-  margin_free: number;
-  margin_level: number;
-  daily_pnl: number;
-  daily_pnl_pct: number;
-  total_pnl: number;
-  win_rate: number;
-  sharpe_ratio: number;
-  max_drawdown: number;
-  open_trades: number;
-}
-
-export type WsStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
-
-// ─── Store shape ──────────────────────────────────────────────────────────────
+// ─── Auth slice ───────────────────────────────────────────────────────────────
 
 interface AuthSlice {
-  token: string | null;
-  user: User | null;
+  token:           string | null;
+  user:            User | null;
   isAuthenticated: boolean;
-  setAuth: (token: string, user: User) => void;
-  clearAuth: () => void;
+  setAuth:         (token: string, user: User) => void;
+  clearAuth:       () => void;
 }
+
+// ─── Price slice ──────────────────────────────────────────────────────────────
 
 interface PriceSlice {
-  prices: Record<string, PriceTick>;
-  priceHistory: Record<string, PriceTick[]>; // last 200 ticks per symbol
-  setPrice: (tick: PriceTick) => void;
+  prices:       Record<string, PriceTick>;
+  priceHistory: Record<string, PriceTick[]>;
+  setPrice:     (tick: PriceTick) => void;
 }
 
+// ─── Position slice ───────────────────────────────────────────────────────────
+
 interface PositionSlice {
-  positions: Position[];
-  setPositions: (positions: Position[]) => void;
+  positions:      Position[];
+  setPositions:   (positions: Position[]) => void;
   upsertPosition: (position: Position) => void;
   removePosition: (id: string) => void;
 }
 
+// ─── Signal slice ─────────────────────────────────────────────────────────────
+
 interface SignalSlice {
-  signals: Signal[];
+  signals:    Signal[];
   setSignals: (signals: Signal[]) => void;
-  addSignal: (signal: Signal) => void;
+  addSignal:  (signal: Signal) => void;
 }
 
+// ─── Account slice ────────────────────────────────────────────────────────────
+
 interface AccountSlice {
-  account: AccountMetrics | null;
+  account:    AccountMetrics | null;
   setAccount: (metrics: AccountMetrics) => void;
 }
 
-interface WsSlice {
-  wsStatus: WsStatus;
-  lastHeartbeat: number | null;
-  setWsStatus: (status: WsStatus) => void;
-  setHeartbeat: (ts: number) => void;
+// ─── Orchestrator slice ───────────────────────────────────────────────────────
+
+interface OrchestratorSlice {
+  orchestratorHealth:    OrchestratorHealth | null;
+  qualityReport:         QualityReport | null;
+  microstructure:        MicrostructureSnapshot | null;
+  sentiment:             SentimentResponse | null;
+  macro:                 MacroResponse | null;
+  equityCurve:           EquityPoint[];
+  performanceSummary:    PerformanceSummary | null;
+  setOrchestratorHealth: (h: OrchestratorHealth) => void;
+  setQualityReport:      (r: QualityReport) => void;
+  setMicrostructure:     (s: MicrostructureSnapshot) => void;
+  setSentiment:          (s: SentimentResponse) => void;
+  setMacro:              (m: MacroResponse) => void;
+  setEquityCurve:        (curve: EquityPoint[]) => void;
+  setPerformanceSummary: (s: PerformanceSummary) => void;
 }
 
-type AppStore = AuthSlice & PriceSlice & PositionSlice & SignalSlice & AccountSlice & WsSlice;
+// ─── WebSocket slice ──────────────────────────────────────────────────────────
+
+interface WsSlice {
+  wsStatus:      WsStatus;
+  lastHeartbeat: number | null;
+  setWsStatus:   (status: WsStatus) => void;
+  setHeartbeat:  (ts: number) => void;
+}
+
+// ─── Combined store type ──────────────────────────────────────────────────────
+
+export type AppStore =
+  AuthSlice &
+  PriceSlice &
+  PositionSlice &
+  SignalSlice &
+  AccountSlice &
+  OrchestratorSlice &
+  WsSlice;
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const MAX_TICK_HISTORY = 300;
+const MAX_SIGNALS      = 50;
 
 // ─── Store implementation ─────────────────────────────────────────────────────
-
-const MAX_HISTORY = 200;
 
 export const useStore = create<AppStore>()(
   devtools(
     persist(
       (set) => ({
         // ── Auth ──────────────────────────────────────────────────────────────
-        token: null,
-        user: null,
+        token:           null,
+        user:            null,
         isAuthenticated: false,
 
         setAuth: (token, user) =>
@@ -139,16 +137,16 @@ export const useStore = create<AppStore>()(
           set({ token: null, user: null, isAuthenticated: false }, false, 'auth/clearAuth'),
 
         // ── Prices ────────────────────────────────────────────────────────────
-        prices: {},
+        prices:       {},
         priceHistory: {},
 
         setPrice: (tick) =>
           set(
             (state) => {
               const history = state.priceHistory[tick.symbol] ?? [];
-              const updated = [...history, tick].slice(-MAX_HISTORY);
+              const updated = [...history, tick].slice(-MAX_TICK_HISTORY);
               return {
-                prices: { ...state.prices, [tick.symbol]: tick },
+                prices:       { ...state.prices, [tick.symbol]: tick },
                 priceHistory: { ...state.priceHistory, [tick.symbol]: updated },
               };
             },
@@ -192,7 +190,7 @@ export const useStore = create<AppStore>()(
         addSignal: (signal) =>
           set(
             (state) => ({
-              signals: [signal, ...state.signals].slice(0, 50),
+              signals: [signal, ...state.signals].slice(0, MAX_SIGNALS),
             }),
             false,
             'signals/add',
@@ -204,8 +202,38 @@ export const useStore = create<AppStore>()(
         setAccount: (account) =>
           set({ account }, false, 'account/setAccount'),
 
+        // ── Orchestrator ──────────────────────────────────────────────────────
+        orchestratorHealth: null,
+        qualityReport:      null,
+        microstructure:     null,
+        sentiment:          null,
+        macro:              null,
+        equityCurve:        [],
+        performanceSummary: null,
+
+        setOrchestratorHealth: (orchestratorHealth) =>
+          set({ orchestratorHealth }, false, 'orchestrator/health'),
+
+        setQualityReport: (qualityReport) =>
+          set({ qualityReport }, false, 'orchestrator/quality'),
+
+        setMicrostructure: (microstructure) =>
+          set({ microstructure }, false, 'orchestrator/microstructure'),
+
+        setSentiment: (sentiment) =>
+          set({ sentiment }, false, 'orchestrator/sentiment'),
+
+        setMacro: (macro) =>
+          set({ macro }, false, 'orchestrator/macro'),
+
+        setEquityCurve: (equityCurve) =>
+          set({ equityCurve }, false, 'performance/equityCurve'),
+
+        setPerformanceSummary: (performanceSummary) =>
+          set({ performanceSummary }, false, 'performance/summary'),
+
         // ── WebSocket ─────────────────────────────────────────────────────────
-        wsStatus: 'disconnected',
+        wsStatus:      'disconnected',
         lastHeartbeat: null,
 
         setWsStatus: (wsStatus) =>
@@ -216,10 +244,9 @@ export const useStore = create<AppStore>()(
       }),
       {
         name: 'hopefx-store',
-        // Only persist auth — everything else is live data
         partialize: (state) => ({
-          token: state.token,
-          user: state.user,
+          token:           state.token,
+          user:            state.user,
           isAuthenticated: state.isAuthenticated,
         }),
       },
@@ -228,14 +255,24 @@ export const useStore = create<AppStore>()(
   ),
 );
 
-// ─── Selectors (memoised) ─────────────────────────────────────────────────────
+// ─── Selectors ────────────────────────────────────────────────────────────────
 
-export const selectToken          = (s: AppStore) => s.token;
-export const selectUser           = (s: AppStore) => s.user;
-export const selectIsAuth         = (s: AppStore) => s.isAuthenticated;
-export const selectPrice          = (symbol: string) => (s: AppStore) => s.prices[symbol];
-export const selectPriceHistory   = (symbol: string) => (s: AppStore) => s.priceHistory[symbol] ?? [];
-export const selectPositions      = (s: AppStore) => s.positions;
-export const selectSignals        = (s: AppStore) => s.signals;
-export const selectAccount        = (s: AppStore) => s.account;
-export const selectWsStatus       = (s: AppStore) => s.wsStatus;
+export const selectToken              = (s: AppStore) => s.token;
+export const selectUser               = (s: AppStore) => s.user;
+export const selectIsAuth             = (s: AppStore) => s.isAuthenticated;
+export const selectPrice              = (symbol: string) => (s: AppStore) => s.prices[symbol];
+export const selectPriceHistory       = (symbol: string) => (s: AppStore) => s.priceHistory[symbol] ?? [];
+export const selectPositions          = (s: AppStore) => s.positions;
+export const selectSignals            = (s: AppStore) => s.signals;
+export const selectAccount            = (s: AppStore) => s.account;
+export const selectWsStatus           = (s: AppStore) => s.wsStatus;
+export const selectOrchestratorHealth = (s: AppStore) => s.orchestratorHealth;
+export const selectQualityReport      = (s: AppStore) => s.qualityReport;
+export const selectMicrostructure     = (s: AppStore) => s.microstructure;
+export const selectSentiment          = (s: AppStore) => s.sentiment;
+export const selectMacro              = (s: AppStore) => s.macro;
+export const selectEquityCurve        = (s: AppStore) => s.equityCurve;
+export const selectPerformanceSummary = (s: AppStore) => s.performanceSummary;
+export const selectKillSwitch         = (s: AppStore) => s.account?.kill_switch ?? false;
+export const selectDataQualityScore   = (s: AppStore) =>
+  s.orchestratorHealth?.quality_score ?? null;

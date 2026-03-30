@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@layer base {
+  :root {
+    --bg:            #080c14;
+    --surface:       #0d1421;
+    --raised:        #111827;
+    --border:        #1e2d3d;
+    --text:          #e2e8f0;
+    --text-muted:    #64748b;
+    --accent:        #00d4ff;
+    --bull:          #00e676;
+    --bear:          #ff1744;
+  }
+
+  * {
+    @apply border-terminal-border;
+  }
+
+  body {
+    @apply bg-terminal-bg text-slate-200 font-sans antialiased;
+    font-feature-settings: 'tnum' 1, 'ss01' 1;
+  }
+
+  /* Monospace numbers everywhere in trading UI */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+}
+
+@layer components {
+  /* Panel base */
+  .panel {
+    @apply bg-terminal-surface border border-terminal-border rounded-lg overflow-hidden;
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between px-4 py-2.5 border-b border-terminal-border;
+  }
+
+  .panel-title {
+    @apply text-xs font-semibold uppercase tracking-widest text-slate-400;
+  }
+
+  /* Metric value */
+  .metric-value {
+    @apply font-mono tabular-nums text-slate-100;
+  }
+
+  /* Status dot */
+  .status-dot {
+    @apply w-1.5 h-1.5 rounded-full;
+  }
+
+  /* Neon text */
+  .text-neon-blue  { color: #00d4ff; }
+  .text-neon-green { color: #00ff88; }
+  .text-neon-amber { color: #ffb800; }
+  .text-neon-red   { color: #ff3b5c; }
+
+  /* P&L colors */
+  .text-bull { color: #00e676; }
+  .text-bear { color: #ff1744; }
+
+  /* Confidence bar */
+  .conf-bar {
+    @apply h-1 rounded-full bg-terminal-border overflow-hidden;
+  }
+
+  .conf-bar-fill {
+    @apply h-full rounded-full transition-all duration-500;
+  }
+
+  /* Scrollbar */
+  .scrollbar-terminal {
+    scrollbar-width: thin;
+    scrollbar-color: #1e2d3d #080c14;
+  }
+
+  .scrollbar-terminal::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .scrollbar-terminal::-webkit-scrollbar-track {
+    background: #080c14;
+  }
+
+  .scrollbar-terminal::-webkit-scrollbar-thumb {
+    background: #1e2d3d;
+    border-radius: 2px;
+  }
+
+  .scrollbar-terminal::-webkit-scrollbar-thumb:hover {
+    background: #2d4a6b;
+  }
+
+  /* Glow effects */
+  .glow-bull { box-shadow: 0 0 8px rgba(0, 230, 118, 0.3); }
+  .glow-bear { box-shadow: 0 0 8px rgba(255, 23, 68, 0.3); }
+  .glow-blue { box-shadow: 0 0 8px rgba(0, 212, 255, 0.3); }
+
+  /* Kill switch */
+  .kill-switch-active {
+    @apply bg-red-950 border-red-800 animate-pulse;
+  }
+
+  /* Ticker flash */
+  .flash-bull {
+    animation: flashBull 0.4s ease-out;
+  }
+
+  .flash-bear {
+    animation: flashBear 0.4s ease-out;
+  }
+}
+
+@layer utilities {
+  .text-2xs {
+    font-size: 0.625rem;
+    line-height: 0.875rem;
+  }
+
+  .bg-grid-terminal {
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+}
+
+@keyframes flashBull {
+  0%   { background-color: rgba(0, 230, 118, 0.25); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flashBear {
+  0%   { background-color: rgba(255, 23, 68, 0.25); }
+  100% { background-color: transparent; }
+}
+
+@keyframes scanline {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
