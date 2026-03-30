@@ -398,6 +398,92 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         logger.info("RegimeConditionalModel loaded from %s", path)
         return obj
 
+    # ── Orchestrator-wired prediction ─────────────────────────────────────────
+
+    def predict_with_orchestrator(
+        self,
+        X: pd.DataFrame,
+        min_data_quality: float = 0.40,
+    ) -> Dict:
+        """
+        Predict with live orchestrator data quality and sentiment gating.
+
+        Reads from data_layer.orchestrator:
+          - tick.confidence  → data quality gate (rejects if below min_data_quality)
+          - get_ml_features() → news_sentiment_score, macro_impact_score
+
+        Sentiment nudge: high absolute sentiment (|s| > 0.5) reduces confidence
+        by up to 20% to reflect model uncertainty in high-news environments.
+
+        Returns
+        -------
+        dict with keys:
+          predictions      : np.ndarray of class labels
+          probabilities    : np.ndarray of class-1 probabilities
+          data_quality     : float — orchestrator tick confidence
+          sentiment_score  : float — news sentiment from orchestrator
+          macro_impact     : float — macro impact score from orchestrator
+          quality_gate_passed : bool — False if data quality too low
+          sentiment_scale  : float — multiplier applied to confidence
+        """
+        # ── Pull orchestrator context ─────────────────────────────────────────
+        data_quality = 1.0
+        sentiment_score = 0.0
+        macro_impact = 0.0
+
+        try:
+            from data_layer.orchestrator import orchestrator
+            tick = orchestrator.get_latest_tick()
+            if tick is not None:
+                data_quality = float(tick.confidence)
+            features = orchestrator.get_ml_features()
+            sentiment_score = float(features.get("news_sentiment_score", 0.0))
+            macro_impact = float(features.get("macro_impact_score", 0.0))
+        except Exception as exc:
+            logger.debug("predict_with_orchestrator: orchestrator unavailable: %s", exc)
+
+        # ── Data quality gate ─────────────────────────────────────────────────
+        if data_quality < min_data_quality:
+            logger.warning(
+                "predict_with_orchestrator: data quality %.3f < %.3f — returning neutral",
+                data_quality, min_data_quality,
+            )
+            neutral_proba = np.full((len(X), 2), 0.5)
+            return {
+                "predictions": np.zeros(len(X), dtype=int),
+                "probabilities": neutral_proba[:, 1],
+                "data_quality": data_quality,
+                "sentiment_score": sentiment_score,
+                "macro_impact": macro_impact,
+                "quality_gate_passed": False,
+                "sentiment_scale": 1.0,
+            }
+
+        # ── Base prediction ───────────────────────────────────────────────────
+        proba = self.predict_proba(X)
+        preds = (proba[:, 1] >= 0.5).astype(int)
+
+        # ── Sentiment scaling (soft — reduces confidence, never flips signal) ─
+        # High absolute sentiment → model is less reliable (news-driven move).
+        sentiment_scale = max(0.80, 1.0 - abs(sentiment_score) * 0.40)
+        # Scale probabilities toward 0.5 by sentiment_scale
+        scaled_proba = 0.5 + (proba[:, 1] - 0.5) * sentiment_scale
+
+        logger.debug(
+            "predict_with_orchestrator: quality=%.3f sentiment=%.3f impact=%.3f scale=%.3f",
+            data_quality, sentiment_score, macro_impact, sentiment_scale,
+        )
+
+        return {
+            "predictions": preds,
+            "probabilities": scaled_proba,
+            "data_quality": data_quality,
+            "sentiment_score": sentiment_score,
+            "macro_impact": macro_impact,
+            "quality_gate_passed": True,
+            "sentiment_scale": sentiment_scale,
+        }
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Walk-forward evaluation with regime-conditional model
