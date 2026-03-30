@@ -148,22 +148,28 @@ async def macro_snapshot():
         except Exception as store_exc:
             logger.warning("MacroStore fallback failed: %s", store_exc)
 
-    # 3. Static neutral baseline — always succeeds, clearly labelled
+    # 3. No-data response — all values null so callers know data is absent.
+    # Do NOT substitute hardcoded numbers here; stale guesses would silently
+    # corrupt ML features and regime scoring.  Consumers must handle null.
     logger.info(
-        "Returning static macro fallback. Set FRED_API_KEY in .env for live data."
+        "Returning null macro fallback. Set FRED_API_KEY in .env for live data."
     )
     return {
-        "dxy": 104.2,
-        "yield_10y": 4.35,
-        "yield_2y": 4.82,
-        "yield_spread": -0.47,
-        "cpi_latest": 314.2,
-        "cpi_yoy_pct": 2.8,
-        "macro_regime_score": 52,
-        "macro_stance": "neutral",
+        "dxy": None,
+        "yield_10y": None,
+        "yield_2y": None,
+        "yield_spread": None,
+        "cpi_latest": None,
+        "cpi_yoy_pct": None,
+        "macro_regime_score": None,
+        "macro_stance": "unavailable",
         "refreshed_at": datetime.now(timezone.utc).isoformat(),
-        "source": "static_fallback",
-        "note": "Live FRED data unavailable. Set FRED_API_KEY in .env for real values.",
+        "source": "no_data",
+        "note": (
+            "FRED data unavailable and no cached values exist. "
+            "Set FRED_API_KEY in .env to enable live macro data. "
+            "All fields are null — do not use for trading decisions."
+        ),
     }
 
 
