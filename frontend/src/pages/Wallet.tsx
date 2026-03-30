@@ -21,15 +21,6 @@ interface Transaction {
   method: string;
 }
 
-// ── Fallback data ─────────────────────────────────────────────────────────────
-
-const FALLBACK_TXS: Transaction[] = [
-  { id: 1, type: 'deposit',      amount:  10000,   status: 'completed', date: '2024-01-15', method: 'Bank Transfer'    },
-  { id: 2, type: 'subscription', amount:    -99,   status: 'completed', date: '2024-01-14', method: 'Pro Plan'         },
-  { id: 3, type: 'copy_fee',     amount:  -234.50, status: 'completed', date: '2024-01-13', method: 'Performance Fee'  },
-  { id: 4, type: 'withdrawal',   amount:  -5000,   status: 'pending',   date: '2024-01-12', method: 'Crypto'           },
-];
-
 const TYPE_ICON: Record<string, string> = {
   deposit:      '↓',
   withdrawal:   '↑',
@@ -56,8 +47,11 @@ const STATUS_COLOR: Record<string, string> = {
 
 const Wallet: React.FC = () => {
   const [tab, setTab]                   = useState<'overview' | 'transactions' | 'subscriptions' | 'payment-methods'>('overview');
-  const [transactions, setTxs]          = useState<Transaction[]>(FALLBACK_TXS);
-  const [balance, setBalance]           = useState(24765.50);
+  const [transactions, setTxs]          = useState<Transaction[]>([]);
+  const [txLoading, setTxLoading]       = useState(true);
+  const [balance, setBalance]           = useState(0);
+  const [frozen, setFrozen]             = useState(0);
+  const [pending, setPending]           = useState(0);
   const [showDeposit, setShowDeposit]   = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [amount, setAmount]             = useState('');
@@ -65,12 +59,17 @@ const Wallet: React.FC = () => {
   const [msg, setMsg]                   = useState('');
 
   useEffect(() => {
-    api.get<{ balance: number }>('/payments/balance')
-      .then((r) => { if (r.data?.balance) setBalance(r.data.balance); })
+    api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance')
+      .then((r) => {
+        setBalance(r.data?.balance ?? 0);
+        setFrozen(r.data?.frozen ?? 0);
+        setPending(r.data?.pending ?? 0);
+      })
       .catch(() => {});
-    api.get<Transaction[]>('/payments/transactions')
-      .then((r) => { if (r.data?.length) setTxs(r.data); })
-      .catch(() => {});
+    api.get<{ transactions: Transaction[] }>('/billing/transactions')
+      .then((r) => { setTxs(r.data?.transactions ?? []); })
+      .catch(() => { setTxs([]); })
+      .finally(() => setTxLoading(false));
   }, []);
 
   const handleDeposit = async () => {
@@ -113,7 +112,7 @@ const Wallet: React.FC = () => {
           <div style={s.balanceLabel}>Available Balance</div>
           <div style={s.balanceValue}>${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
           <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-            Frozen: $0.00 · Pending: $500.00
+            Frozen: ${frozen.toLocaleString('en-US', { minimumFractionDigits: 2 })} · Pending: ${pending.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -176,6 +175,10 @@ const Wallet: React.FC = () => {
       {/* Transactions */}
       {tab === 'transactions' && (
         <div style={s.txList}>
+          {txLoading && <p style={{ color: '#64748b', padding: '20px 0' }}>Loading transactions…</p>}
+          {!txLoading && transactions.length === 0 && (
+            <p style={{ color: '#64748b', padding: '20px 0' }}>No transactions yet.</p>
+          )}
           {transactions.map((tx) => (
             <div key={tx.id} style={s.txRow}>
               <div style={{
