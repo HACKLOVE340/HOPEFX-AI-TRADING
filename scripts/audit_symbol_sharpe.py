@@ -273,40 +273,20 @@ def _load_predictions_csv(csv_dir: Path, symbol: str) -> Optional[np.ndarray]:
     return None
 
 
-def _synthetic_distribution(symbol: str, n: int = 500) -> np.ndarray:
+def _implied_win_rate_from_sharpe(symbol: str) -> Optional[float]:
     """
-    Generate a synthetic signal distribution for a symbol.
+    Back-calculate the win-rate implied by a known implausible Sharpe ratio.
 
-    Uses the known implausible Sharpe to back-calculate what win-rate would
-    be needed, then generates a distribution consistent with that win-rate.
-    This lets us test whether the distribution is statistically plausible.
+    Used only for logging/reporting — not for generating synthetic data.
+    Returns None when the symbol has no known implausible Sharpe.
     """
-    rng = np.random.default_rng(hash(symbol) % (2**31))
-
-    if symbol in KNOWN_IMPLAUSIBLE:
-        # Back-calculate win-rate from Sharpe
-        # Sharpe = sqrt(N) * (2w-1) / sqrt(4w(1-w))
-        # For Sharpe=12.48, N=250: (2w-1)/sqrt(4w(1-w)) = 12.48/sqrt(250) ≈ 0.789
-        # Solving numerically: w ≈ 0.87
-        target_sharpe = KNOWN_IMPLAUSIBLE[symbol]
-        # Approximate win-rate
-        ratio = target_sharpe / math.sqrt(250)
-        # ratio = (2w-1)/sqrt(4w(1-w)) → solve for w
-        # Let x = 2w-1, then w = (x+1)/2, 1-w = (1-x)/2
-        # ratio = x / sqrt(1-x^2) → ratio^2 = x^2/(1-x^2) → x^2(1+ratio^2) = ratio^2
-        # x = ratio / sqrt(1+ratio^2)
-        x = ratio / math.sqrt(1 + ratio**2)
-        win_rate = (x + 1) / 2
-        win_rate = min(0.99, max(0.51, win_rate))
-        logger.info(
-            "%s: implied win-rate from Sharpe %.2f = %.1f%%",
-            symbol, target_sharpe, win_rate * 100,
-        )
-        # Generate probabilities clustered near win_rate
-        probs = rng.beta(win_rate * 10, (1 - win_rate) * 10, n)
-    else:
-        # XAUUSD reference: 66% win-rate (known from advanced_oos.pkl)
-        probs = rng.beta(6.6, 3.4, n)
+    if symbol not in KNOWN_IMPLAUSIBLE:
+        return None
+    target_sharpe = KNOWN_IMPLAUSIBLE[symbol]
+    ratio = target_sharpe / math.sqrt(250)
+    x = ratio / math.sqrt(1 + ratio**2)
+    win_rate = (x + 1) / 2
+    return min(0.99, max(0.51, win_rate))
 
     return probs
 
@@ -361,12 +341,12 @@ def audit_symbol(
     )
 
     # Look-ahead bias detection (on comparison returns)
-    # Convert probabilities to synthetic returns: r = 2*(p > 0.5) - 1 + noise
-    rng = np.random.default_rng(42)
-    synthetic_returns = (2 * (comparison_dist > 0.5).astype(float) - 1) * (
+    # Convert probabilities to signed returns: r = sign(p - 0.5) * 2 * |p - 0.5|
+    # No noise added — the signal is in the probabilities themselves.
+    signed_returns = (2 * (comparison_dist > 0.5).astype(float) - 1) * (
         comparison_dist - 0.5
-    ) * 2 + rng.normal(0, 0.01, len(comparison_dist))
-    result["lookahead_checks"] = detect_lookahead_bias(synthetic_returns)
+    ) * 2
+    result["lookahead_checks"] = detect_lookahead_bias(signed_returns)
 
     # Sharpe plausibility
     sharpe_bound = sharpe_upper_bound(n_trades, win_rate)
@@ -457,11 +437,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     logger.info("Symbols: %s", args.symbols)
     logger.info("=" * 60)
 
-    # Load or generate XAUUSD reference distribution
+    # Load XAUUSD reference distribution — required; no synthetic fallback
     xauusd_dist = _load_predictions_csv(csv_dir, "XAUUSD")
     if xauusd_dist is None:
-        logger.info("No XAUUSD predictions CSV found — using synthetic reference")
-        xauusd_dist = _synthetic_distribution("XAUUSD", n=500)
+        logger.error(
+            "No XAUUSD predictions CSV found in %s. "
+            "Run the ML pipeline to generate ml/evaluation/XAUUSD_predictions.csv "
+            "before running this audit.",
+            csv_dir,
+        )
+        sys.exit(1)
 
     audit_results = []
     any_failed = False
@@ -469,15 +454,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     for symbol in args.symbols:
         logger.info("\n── Auditing %s ──", symbol)
 
-        # Load or generate comparison distribution
+        # Load comparison distribution — skip symbol if CSV not found
         cmp_dist = _load_predictions_csv(csv_dir, symbol)
         if cmp_dist is None:
-            logger.info(
-                "%s: no predictions CSV found — using synthetic distribution "
-                "(based on known Sharpe if available)",
-                symbol,
+            implied_wr = _implied_win_rate_from_sharpe(symbol)
+            wr_note = (
+                f" (implied win-rate from known Sharpe: {implied_wr:.1%})"
+                if implied_wr is not None else ""
             )
-            cmp_dist = _synthetic_distribution(symbol, n=500)
+            logger.warning(
+                "%s: no predictions CSV found in %s%s — skipping. "
+                "Run the ML pipeline to generate evaluation CSVs.",
+                symbol, csv_dir, wr_note,
+            )
+            continue
 
         known_sharpe = KNOWN_IMPLAUSIBLE.get(symbol)
 
