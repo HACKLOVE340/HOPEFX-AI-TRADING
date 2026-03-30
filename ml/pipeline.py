@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -406,6 +407,11 @@ class XGBoostPredictor:
     - scale_pos_weight handles class imbalance
     """
 
+    # Production defaults — tuned for financial time-series.
+    # CI_FAST=1 reduces n_estimators to 50 so the full test suite finishes
+    # within the 120s pytest timeout without sacrificing code-path coverage.
+    _CI_FAST: bool = os.environ.get("CI_FAST", "").lower() in ("1", "true", "yes")
+
     DEFAULT_PARAMS: Dict[str, Any] = {
         "objective": "binary:logistic",
         "eval_metric": "auc",
@@ -425,7 +431,12 @@ class XGBoostPredictor:
     def __init__(self, params: Optional[Dict[str, Any]] = None) -> None:
         if not _XGB:
             raise ImportError("xgboost not installed.")
-        self._params = {**self.DEFAULT_PARAMS, **(params or {})}
+        base = dict(self.DEFAULT_PARAMS)
+        if self._CI_FAST:
+            base["n_estimators"] = int(
+                os.environ.get("CI_XGB_N_ESTIMATORS", "50")
+            )
+        self._params = {**base, **(params or {})}
         self._model: Optional[xgb.XGBClassifier] = None
         self._scaler: Optional["StandardScaler"] = None
         self._feature_names: List[str] = []

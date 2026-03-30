@@ -18,3 +18,8 @@ _src_dir = os.path.join(_repo_root, "src")
 for _p in (_repo_root, _src_dir):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+# Reduce XGBoost n_estimators from 300→50 during test runs so the full suite
+# completes within the 120s pytest timeout.  Production training is unaffected
+# because this env var is only set when pytest is running.
+os.environ.setdefault("CI_FAST", "1")
