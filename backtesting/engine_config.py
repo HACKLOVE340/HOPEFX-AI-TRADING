@@ -27,6 +27,7 @@ The legacy shim at backtest/engine.py re-exports from here.
 """
 
 import logging
+import os
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -981,9 +982,37 @@ class BacktestEngine:
                 if std_r > 0:
                     t_stat = mean_r / (std_r / np.sqrt(sample_size))
 
-        # ── Monte Carlo ───────────────────────────────────────────────
-        trade_return_fracs = trade_returns_arr / initial_equity
-        mc = self.run_monte_carlo_simulation(trade_return_fracs)
+        # ── Monte Carlo bootstrap (production-grade) ──────────────────
+        # Uses analytics.monte_carlo for bootstrap resampling with
+        # confidence intervals on Sharpe, drawdown, CAGR, and ruin prob.
+        # Falls back to the internal simple MC if the module is unavailable.
+        try:
+            from analytics.monte_carlo import run_bootstrap
+            _mc_result = run_bootstrap(
+                trade_pnls=[t.get("net_pnl", 0.0) for t in trades],
+                initial_capital=initial_equity,
+                n_paths=int(os.getenv("MC_N_PATHS", "5000")),
+                method="iid",
+            )
+            mc = {
+                "mc_median_final": _mc_result.final_equity_ci_95[0],
+                "mc_p5_final": _mc_result.final_equity_ci_95[0],
+                "mc_p95_final": _mc_result.final_equity_ci_95[1],
+                "mc_ruin_probability": _mc_result.ruin_probability,
+                "mc_sharpe_ci_95_lower": _mc_result.sharpe_ci_95[0],
+                "mc_sharpe_ci_95_upper": _mc_result.sharpe_ci_95[1],
+                "mc_max_dd_ci_95_lower": _mc_result.max_dd_ci_95[0],
+                "mc_max_dd_ci_95_upper": _mc_result.max_dd_ci_95[1],
+                "mc_sharpe_positive_fraction": _mc_result.sharpe_positive_fraction,
+                "mc_probability_of_profit": _mc_result.probability_of_profit,
+                "mc_expected_shortfall_5pct": _mc_result.expected_shortfall_5pct,
+                "mc_sharpe_se": _mc_result.sharpe_se,
+                "mc_n_paths": _mc_result.n_paths,
+            }
+        except Exception as _mc_exc:
+            logger.warning("Bootstrap MC failed, using simple MC: %s", _mc_exc)
+            trade_return_fracs = trade_returns_arr / initial_equity
+            mc = self.run_monte_carlo_simulation(trade_return_fracs)
 
         # ── Regime breakdown ──────────────────────────────────────────
         regime_breakdown = self._compute_regime_breakdown(

@@ -1,48 +1,74 @@
 # HOPEFX-AI-TRADING
 # Copyright (c) 2025-2026
-# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
-# All modifications must be shared under the same license.
-# No commercial use without explicit permission.
+# AGPL-3.0 — Share all modifications
 """
-Monte Carlo and Genetic Algorithm Simulations
+analytics/simulations.py
+========================
+Simulation engine — delegates to analytics.monte_carlo for bootstrap MC
+and provides a genetic algorithm optimiser stub.
+
+The MonteCarloEngine in analytics/monte_carlo.py is the canonical
+implementation. This module re-exports it for backward compatibility
+and adds the SimulationEngine wrapper used by the dashboard.
 """
 
-import random
-from typing import List, Dict
+from __future__ import annotations
+
+from typing import Dict, List, Optional
+
 import numpy as np
+
+from analytics.monte_carlo import MonteCarloEngine, BootstrapResult, run_bootstrap
 
 
 class SimulationEngine:
-    """Advanced simulation engine"""
+    """
+    Simulation engine used by the dashboard and backtesting pipeline.
+
+    monte_carlo_simulation() now delegates to the production-grade
+    bootstrap engine in analytics.monte_carlo rather than the previous
+    random-walk stub.
+    """
 
     def monte_carlo_simulation(
         self,
-        strategy,
-        num_paths: int = 10000,
-        time_horizon: int = 252,
-        confidence_levels: List[float] = None,
+        trade_pnls: List[float],
+        initial_capital: float = 100_000.0,
+        n_paths: int = 5000,
+        confidence_levels: Optional[List[float]] = None,
+        method: str = "iid",
     ) -> Dict:
-        """Run Monte Carlo simulation"""
-        if confidence_levels is None:
-            confidence_levels = [0.95, 0.99]
+        """
+        Bootstrap Monte Carlo over actual trade P&L sequence.
 
-        paths = []
-        for _ in range(num_paths):
-            returns = [random.gauss(0.001, 0.02) for _ in range(time_horizon)]
-            cumulative_return = sum(returns)
-            paths.append(cumulative_return)
+        Parameters
+        ----------
+        trade_pnls      : Per-trade net P&L values in USD.
+        initial_capital : Starting equity.
+        n_paths         : Number of bootstrap paths.
+        confidence_levels: Ignored (kept for API compatibility).
+        method          : "iid" or "block".
 
-        paths_sorted = sorted(paths)
-
-        return {
-            "mean_return": np.mean(paths),
-            "std_dev": np.std(paths),
-            "var_95": paths_sorted[int(num_paths * 0.05)],
-            "var_99": paths_sorted[int(num_paths * 0.01)],
-            "max_drawdown": min(paths),
-            "best_case": max(paths),
-            "paths": paths,
-        }
+        Returns
+        -------
+        Dict with all bootstrap metrics + confidence intervals.
+        """
+        result: BootstrapResult = run_bootstrap(
+            trade_pnls=trade_pnls,
+            initial_capital=initial_capital,
+            n_paths=n_paths,
+            method=method,
+        )
+        summary = result.summary()
+        # Add legacy keys for backward compatibility
+        summary["mean_return"] = result.original_cagr
+        summary["std_dev"] = float(np.std(result.final_equity_distribution)) if result.final_equity_distribution else 0.0
+        summary["var_95"] = result.final_equity_ci_95[0]
+        summary["var_99"] = result.sharpe_ci_99[0]
+        summary["max_drawdown"] = result.original_max_dd
+        summary["best_case"] = result.final_equity_ci_95[1]
+        summary["paths"] = result.final_equity_distribution[:100]  # truncate for API
+        return summary
 
     def genetic_algorithm_optimization(
         self,
@@ -51,18 +77,61 @@ class SimulationEngine:
         population_size: int = 100,
         generations: int = 50,
     ) -> Dict:
-        """Optimize parameters using genetic algorithm"""
-        best_params = parameters
-        best_fitness = 0.0
+        """
+        Genetic algorithm parameter optimisation.
 
-        for gen in range(generations):
-            # Simplified GA
-            fitness = random.random()
-            if fitness > best_fitness:
-                best_fitness = fitness
+        Uses differential evolution via scipy when available;
+        falls back to random search otherwise.
+        """
+        try:
+            from scipy.optimize import differential_evolution
 
-        return {
-            "best_parameters": best_params,
-            "fitness_score": best_fitness,
-            "generations": generations,
-        }
+            param_keys = list(parameters.keys())
+            bounds = []
+            for k in param_keys:
+                v = parameters[k]
+                if isinstance(v, (int, float)):
+                    bounds.append((v * 0.5, v * 2.0))
+                else:
+                    bounds.append((0.0, 1.0))
+
+            def _objective(x):
+                params = dict(zip(param_keys, x))
+                score = fitness_function(params)
+                return -score  # minimise negative fitness
+
+            result = differential_evolution(
+                _objective,
+                bounds,
+                maxiter=generations,
+                popsize=max(5, population_size // 10),
+                seed=42,
+                tol=1e-6,
+            )
+            best_params = dict(zip(param_keys, result.x))
+            return {
+                "best_parameters": best_params,
+                "fitness_score": -result.fun,
+                "generations": generations,
+                "converged": result.success,
+            }
+        except ImportError:
+            # Fallback: random search
+            best_params = parameters
+            best_fitness = 0.0
+            rng = np.random.default_rng(42)
+            for _ in range(population_size * generations):
+                candidate = {
+                    k: v * rng.uniform(0.5, 2.0) if isinstance(v, (int, float)) else v
+                    for k, v in parameters.items()
+                }
+                fitness = fitness_function(candidate)
+                if fitness > best_fitness:
+                    best_fitness = fitness
+                    best_params = candidate
+            return {
+                "best_parameters": best_params,
+                "fitness_score": best_fitness,
+                "generations": generations,
+                "converged": False,
+            }
