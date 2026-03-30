@@ -173,3 +173,64 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
             cache_connected=cache_connected,
             api_configs=len(app_state.config.api_configs) if app_state.config else 0,
         )
+
+    @app.get("/ready", tags=["System"], include_in_schema=False)
+    async def readiness_probe():
+        """
+        Kubernetes readiness probe — faster than /health.
+
+        Returns 200 only when the application has finished initialising and
+        is ready to serve traffic.  The Helm readinessProbe (successThreshold=2)
+        requires two consecutive 200s before adding the pod to the Service.
+
+        Checks (in order of cost):
+          1. app_state.initialized flag set by startup_event()
+          2. Database reachable (SELECT 1)
+          3. HOPEFXBrain lockdown not active (pod should not receive traffic
+             while a nuclear lockdown is in effect)
+
+        Returns 503 on any failure so Kubernetes removes the pod from rotation.
+        """
+        from fastapi.responses import JSONResponse as _JSONResponse
+
+        # 1. Startup complete?
+        if not getattr(app_state, "initialized", False):
+            return _JSONResponse(
+                status_code=503,
+                content={"ready": False, "reason": "initializing"},
+            )
+
+        # 2. Database reachable?
+        if app_state.db_engine:
+            try:
+                from sqlalchemy import text as _text
+                with app_state.db_engine.connect() as _conn:
+                    _conn.execute(_text("SELECT 1"))
+            except Exception as _dbe:
+                logger.warning("Readiness: DB probe failed: %s", _dbe)
+                return _JSONResponse(
+                    status_code=503,
+                    content={"ready": False, "reason": "database_unavailable"},
+                )
+
+        # 3. Lockdown active? Remove pod from LB during nuclear response.
+        try:
+            import redis as _redis_sync
+            _r = _redis_sync.from_url(
+                os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                socket_connect_timeout=1,
+                socket_timeout=1,
+            )
+            lockdown = _r.get("lockdown:active")
+            _r.close()
+            if lockdown and lockdown.decode() == "true":
+                logger.warning("Readiness: lockdown active — pod not ready")
+                return _JSONResponse(
+                    status_code=503,
+                    content={"ready": False, "reason": "lockdown_active"},
+                )
+        except Exception:
+            # Redis unavailable is non-fatal for readiness — don't block traffic
+            pass
+
+        return {"ready": True}
