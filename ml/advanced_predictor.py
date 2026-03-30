@@ -125,10 +125,14 @@ class _SGDAdapter:
                 warm_start=True,
                 random_state=42,
             )
-            # Prime with two dummy samples so partial_fit knows the classes
-            dummy_X = np.zeros((2, self._n))
-            dummy_y = np.array([0, 1])
-            self._clf.partial_fit(dummy_X, dummy_y, classes=[0, 1])
+            # SGDClassifier.partial_fit() requires all classes to be declared
+            # on the first call. These zero-vector primers carry no signal —
+            # they exist solely to register classes=[0, 1] before real data
+            # arrives via update(). The model is not used for inference until
+            # at least _MIN_SAMPLES real updates have been applied.
+            _primer_X = np.zeros((2, self._n))
+            _primer_y = np.array([0, 1])
+            self._clf.partial_fit(_primer_X, _primer_y, classes=[0, 1])
             logger.debug("SGD adapter initialised with %d features", self._n)
         except Exception as exc:
             logger.warning("SGD adapter init failed: %s", exc)
