@@ -116,14 +116,25 @@ class CircuitState:
 
         Returns None if fewer than MIN_TRADES trades are in the window.
         Uses the standard trade-level Sharpe: mean(pnl) / std(pnl) × annualise_factor.
+
+        Zero-std case: if all trades have identical P&L (std == 0), return a
+        large positive value when mean > 0 (perfect win streak) or a large
+        negative value when mean < 0 (perfect loss streak). This ensures a
+        consistent all-loss window correctly trips the circuit breaker.
         """
         if len(self.pnl_window) < MIN_TRADES:
             return None
         arr = np.array(self.pnl_window)
+        mean = arr.mean()
         std = arr.std()
         if std == 0:
-            return None
-        return float(arr.mean() / std * ANNUALISE_FACTOR)
+            # All trades identical — sign of mean determines direction
+            if mean > 0:
+                return float(ANNUALISE_FACTOR * 1e6)   # perfect wins
+            elif mean < 0:
+                return float(-ANNUALISE_FACTOR * 1e6)  # perfect losses
+            return 0.0
+        return float(mean / std * ANNUALISE_FACTOR)
 
 
 class SharpeCircuitBreaker:

@@ -141,7 +141,7 @@ jobs:
           ruff check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
           ruff format --check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
 
-      - name: Run tests with coverage
+      - name: Run tests with coverage (full suite, 70% baseline)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -150,9 +150,80 @@ jobs:
             -m "not slow" \
             --cov=. \
             --cov-report=xml \
+            --cov-report=term-missing \
             --cov-fail-under=70 \
             -v \
             --asyncio-mode=auto
+
+      - name: Coverage gate — risk/ (90% required)
+        env:
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest tests/ \
+            -m "not slow" \
+            --cov=risk \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-fail-under=90 \
+            --asyncio-mode=auto \
+            -q
+
+      - name: Coverage gate — execution/ (90% required)
+        env:
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest tests/ \
+            -m "not slow" \
+            --cov=execution \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-fail-under=90 \
+            --asyncio-mode=auto \
+            -q
+
+      - name: Coverage gate — kill_switch.py (90% required)
+        env:
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest tests/ \
+            -m "not slow" \
+            --cov=kill_switch \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-fail-under=90 \
+            --asyncio-mode=auto \
+            -q
+
+      - name: Coverage gate — brokers/ (90% required)
+        env:
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest tests/ \
+            -m "not slow" \
+            --cov=brokers \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-fail-under=90 \
+            --asyncio-mode=auto \
+            -q
+
+      - name: Coverage gate — compliance/ (90% required)
+        env:
+          DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest tests/ \
+            -m "not slow" \
+            --cov=compliance \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-fail-under=90 \
+            --asyncio-mode=auto \
+            -q
 
       - name: Security scan (bandit)
         run: |
