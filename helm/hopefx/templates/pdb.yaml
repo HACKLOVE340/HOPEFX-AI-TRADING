@@ -1,3 +1,7 @@
+# PodDisruptionBudget — keeps at least 80% of pods alive during voluntary
+# disruptions (node drains, rolling upgrades, cluster maintenance).
+# With 5 replicas: at most 1 pod evicted at a time.
+# With 1 replica: minAvailable=1 means no voluntary eviction is allowed.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -5,8 +9,23 @@ metadata:
   labels:
     {{- include "hopefx.labels" . | nindent 4 }}
 spec:
+  # 80% of desired replicas must remain available at all times.
+  minAvailable: "80%"
+  selector:
+    matchLabels:
+      {{- include "hopefx.selectorLabels" . | nindent 6 }}
+---
+# Trading engine PDB — always exactly 1 replica running; never allow
+# voluntary eviction while a live trading session is active.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "hopefx.fullname" . }}-trading
+  labels:
+    {{- include "hopefx.labels" . | nindent 4 }}
+spec:
   minAvailable: 1
   selector:
     matchLabels:
       {{- include "hopefx.selectorLabels" . | nindent 6 }}
-      component: api
+      component: trading
