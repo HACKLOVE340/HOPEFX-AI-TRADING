@@ -80,23 +80,45 @@ class GoldFeedBase(ABC):
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, Histogram
+            from prometheus_client import Counter, Gauge, Histogram, REGISTRY
             src = self.name.value
-            self._prom_ticks = Counter(
+
+            def _counter(name, doc, labels=None):
+                try:
+                    return Counter(name, doc, labels or [])
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            def _histogram(name, doc, labels=None, buckets=None):
+                kwargs = {"labelnames": labels or []}
+                if buckets:
+                    kwargs["buckets"] = buckets
+                try:
+                    return Histogram(name, doc, **kwargs)
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            def _gauge(name, doc, labels=None):
+                try:
+                    return Gauge(name, doc, labels or [])
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            self._prom_ticks = _counter(
                 f"hopefx_feed_{src}_ticks_total",
                 f"Total ticks fetched from {src}",
             )
-            self._prom_errors = Counter(
+            self._prom_errors = _counter(
                 f"hopefx_feed_{src}_errors_total",
                 f"Total errors from {src}",
                 ["reason"],
             )
-            self._prom_latency = Histogram(
+            self._prom_latency = _histogram(
                 f"hopefx_feed_{src}_fetch_latency_ms",
                 f"Fetch latency for {src} in ms",
                 buckets=[10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
             )
-            self._prom_cb_state = Gauge(
+            self._prom_cb_state = _gauge(
                 f"hopefx_feed_{src}_circuit_open",
                 f"1 if circuit breaker is open for {src}",
             )
