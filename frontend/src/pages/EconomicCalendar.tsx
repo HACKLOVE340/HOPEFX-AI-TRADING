@@ -144,35 +144,43 @@ const EventRow: React.FC<{ event: CalendarEvent }> = ({ event: ev }) => {
 type Tab = 'calendar' | 'macro';
 
 const EconomicCalendar: React.FC = () => {
-  const [tab, setTab]             = useState<Tab>('calendar');
-  const [events, setEvents]       = useState<CalendarEvent[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [filter, setFilter]       = useState<'all' | 'high'>('all');
-  const [autoPause, setAutoPause] = useState<AutoPauseConfig>({ enabled: false, minutes_before: 30, min_importance: 'high' });
+  const [tab, setTab]               = useState<Tab>('calendar');
+  const [events, setEvents]         = useState<CalendarEvent[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [fetchErr, setFetchErr]     = useState<string | null>(null);
+  const [filter, setFilter]         = useState<'all' | 'high'>('all');
+  const [autoPause, setAutoPause]   = useState<AutoPauseConfig>({ enabled: false, minutes_before: 30, min_importance: 'high' });
+  const [pauseErr, setPauseErr]     = useState<string | null>(null);
   const [savingPause, setSavingPause] = useState(false);
-  const [, setTick]               = useState(0);
+  const [, setTick]                 = useState(0);
 
   // Data-layer macro events (via TanStack Query + Zustand)
   useMacro();
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
+    setFetchErr(null);
     try {
       const res = filter === 'high'
         ? await calendarApi.highImpact()
         : await calendarApi.upcoming(168);
       const raw = res.data as CalendarEvent[] | { events?: CalendarEvent[] };
       setEvents(Array.isArray(raw) ? raw : (raw.events ?? []));
-    } catch { /* silent — show empty state */ }
-    setLoading(false);
+    } catch (err: unknown) {
+      setEvents([]);
+      setFetchErr(err instanceof Error ? err.message : 'Failed to load calendar events.');
+    } finally {
+      setLoading(false);
+    }
   }, [filter]);
 
   const fetchAutoPause = useCallback(async () => {
     try {
-      // Fixed: was missing /api/ prefix
       const res = await calendarApi.autoPause();
       setAutoPause(res.data);
-    } catch { /* silent — auto-pause may not be configured */ }
+    } catch {
+      // Auto-pause config is optional — silently default to disabled
+    }
   }, []);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
@@ -186,13 +194,16 @@ const EconomicCalendar: React.FC = () => {
 
   const handleToggleAutoPause = async () => {
     setSavingPause(true);
+    setPauseErr(null);
     const next = { ...autoPause, enabled: !autoPause.enabled };
     try {
-      // Fixed: was missing /api/ prefix
       const res = await calendarApi.setAutoPause(next);
       setAutoPause(res.data);
-    } catch { /* silent */ }
-    setSavingPause(false);
+    } catch (err: unknown) {
+      setPauseErr(err instanceof Error ? err.message : 'Failed to update auto-pause setting.');
+    } finally {
+      setSavingPause(false);
+    }
   };
 
   // Group events by date
@@ -234,6 +245,9 @@ const EconomicCalendar: React.FC = () => {
                 : 'Enable to auto-pause before high-impact events'}
             </span>
           </div>
+          {pauseErr && (
+            <div style={{ fontSize: 12, color: '#f87171', marginTop: 6 }}>{pauseErr}</div>
+          )}
         </div>
       </div>
 
@@ -268,6 +282,8 @@ const EconomicCalendar: React.FC = () => {
 
           {loading ? (
             <PanelSkeleton rows={5} />
+          ) : fetchErr ? (
+            <div style={s.errorBox}>{fetchErr}</div>
           ) : events.length === 0 ? (
             <div style={s.empty}>No events found.</div>
           ) : (
@@ -314,6 +330,7 @@ const s: Record<string, React.CSSProperties> = {
   dataValue:     { fontSize: 14, fontWeight: 600, color: '#f1f5f9', marginTop: 2 },
   currencyBadge: { background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#94a3b8', fontSize: 11, padding: '1px 6px' },
   empty:         { textAlign: 'center', color: '#475569', padding: 40 },
+  errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '10px 14px', color: '#f87171', fontSize: 14, marginBottom: 16 },
 };
 
 export default EconomicCalendar;
