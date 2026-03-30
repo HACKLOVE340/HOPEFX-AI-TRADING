@@ -38,8 +38,9 @@ Usage
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import joblib
 import numpy as np
@@ -53,12 +54,58 @@ from sklearn.preprocessing import StandardScaler
 
 try:
     import xgboost as xgb
-
     _XGB_AVAILABLE = True
 except ImportError:
     _XGB_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+
+# ── Prometheus metrics (optional) ────────────────────────────────────────────
+
+def _init_prometheus():
+    try:
+        from prometheus_client import Counter, Gauge, Histogram
+        class _M:
+            predict_total = Counter(
+                "hopefx_regime_conditional_predict_total",
+                "Total RegimeConditionalModel predictions",
+                ["symbol", "regime"],
+            )
+            predict_latency = Histogram(
+                "hopefx_regime_conditional_latency_seconds",
+                "RegimeConditionalModel prediction latency",
+                ["symbol"],
+                buckets=[0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0],
+            )
+            quality_gate_blocked = Counter(
+                "hopefx_regime_conditional_quality_blocked_total",
+                "Predictions blocked by data quality gate",
+                ["symbol"],
+            )
+            sentiment_scale_gauge = Gauge(
+                "hopefx_regime_conditional_sentiment_scale",
+                "Sentiment scaling factor applied to last prediction",
+                ["symbol"],
+            )
+            regime_distribution = Gauge(
+                "hopefx_regime_conditional_regime_fraction",
+                "Fraction of recent bars in each regime",
+                ["regime"],
+            )
+        return _M()
+    except Exception:
+        class _Noop:
+            class _C:
+                def labels(self, **_kw): return self
+                def inc(self, *a, **kw): pass
+                def observe(self, *a, **kw): pass
+                def set(self, *a, **kw): pass
+            def __getattr__(self, _): return self._C()
+        return _Noop()
+
+
+_PROM = _init_prometheus()
 
 # Regime label constants
 REGIME_MEAN_REVERTING = 0
@@ -124,6 +171,111 @@ def detect_regime_labels(
         counts.get(REGIME_MIXED, 0),
     )
     return labels
+
+
+def add_regime_features(
+    X: pd.DataFrame,
+    hurst_window: int = 40,
+    adx_window: int = 14,
+) -> pd.DataFrame:
+    """
+    Compute and append ``regime_hurst`` and ``regime_trend_str`` columns.
+
+    These columns are required by ``detect_regime_labels()`` and
+    ``RegimeConditionalModel``.  Call this before fitting or predicting
+    when the feature matrix does not already contain them.
+
+    Parameters
+    ----------
+    X            : Feature DataFrame with at least a ``close`` column.
+                   ``high`` and ``low`` are used for ADX if present.
+    hurst_window : Rolling window for Hurst exponent estimation (R/S method).
+    adx_window   : Smoothing window for ADX computation.
+
+    Returns
+    -------
+    X with two new columns appended (in-place copy):
+      regime_hurst      : float [0, 1] — Hurst exponent (>0.55 = trending)
+      regime_trend_str  : float [0, 1] — normalised ADX (>0.25 = trending)
+    """
+    X = X.copy()
+
+    if "close" not in X.columns:
+        logger.warning("add_regime_features: 'close' column missing — regime features set to 0.5")
+        X["regime_hurst"]     = 0.5
+        X["regime_trend_str"] = 0.25
+        return X
+
+    close = X["close"].astype(float)
+
+    # ── Hurst exponent (rolling R/S) ──────────────────────────────────────────
+    def _hurst_rs(prices: np.ndarray) -> float:
+        """Estimate Hurst exponent via R/S analysis on a price window."""
+        n = len(prices)
+        if n < 10:
+            return 0.5
+        lags = range(2, min(n // 2, 12))
+        rs_vals = []
+        for lag in lags:
+            sub = prices[:lag]
+            mean = np.mean(sub)
+            dev = np.cumsum(sub - mean)
+            r = np.max(dev) - np.min(dev)
+            s = np.std(sub, ddof=1)
+            if s > 0:
+                rs_vals.append(np.log(r / s))
+        if len(rs_vals) < 2:
+            return 0.5
+        log_lags = np.log(list(lags[:len(rs_vals)]))
+        return float(np.clip(np.polyfit(log_lags, rs_vals, 1)[0], 0.0, 1.0))
+
+    X["regime_hurst"] = (
+        close.rolling(hurst_window)
+             .apply(_hurst_rs, raw=True)
+             .shift(1)          # no lookahead
+    )
+
+    # ── ADX (normalised to [0, 1]) ────────────────────────────────────────────
+    if all(c in X.columns for c in ["high", "low"]):
+        high  = X["high"].astype(float)
+        low   = X["low"].astype(float)
+        tr    = pd.concat([
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low  - close.shift(1)).abs(),
+        ], axis=1).max(axis=1)
+        plus_dm  = (high - high.shift(1)).clip(lower=0)
+        minus_dm = (low.shift(1) - low).clip(lower=0)
+        tr_s     = tr.rolling(adx_window).mean()
+        plus_di  = 100 * plus_dm.rolling(adx_window).mean()  / (tr_s + 1e-9)
+        minus_di = 100 * minus_dm.rolling(adx_window).mean() / (tr_s + 1e-9)
+        dx       = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
+        X["regime_trend_str"] = (dx.rolling(adx_window).mean() / 100.0).shift(1)
+    else:
+        # Fallback: use rolling slope of close as trend proxy
+        def _slope(x: np.ndarray) -> float:
+            if len(x) < 3:
+                return 0.0
+            coef = np.polyfit(np.arange(len(x)), x, 1)[0]
+            return float(np.clip(abs(coef) / (np.std(x) + 1e-9), 0.0, 1.0))
+
+        X["regime_trend_str"] = (
+            close.rolling(adx_window)
+                 .apply(_slope, raw=True)
+                 .shift(1)
+        )
+
+    # Fill NaN from rolling windows with neutral values
+    X["regime_hurst"]     = X["regime_hurst"].fillna(0.5)
+    X["regime_trend_str"] = X["regime_trend_str"].fillna(0.25)
+
+    logger.debug(
+        "add_regime_features: hurst mean=%.3f  adx mean=%.3f  n=%d",
+        X["regime_hurst"].mean(),
+        X["regime_trend_str"].mean(),
+        len(X),
+    )
+    return X
 
 
 def _build_model(regime: int, n_samples: int) -> Pipeline:
@@ -398,6 +550,215 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         logger.info("RegimeConditionalModel loaded from %s", path)
         return obj
 
+    def predict_live(
+        self,
+        ohlcv: pd.DataFrame,
+        symbol: str = "XAU_USD",
+        min_data_quality: float = 0.40,
+        extra_features: Optional[pd.DataFrame] = None,
+    ) -> Dict[str, Any]:
+        """
+        Full end-to-end live prediction wired to the orchestrator.
+
+        Pipeline
+        --------
+        1. Add regime features (Hurst + ADX) to the OHLCV-derived feature matrix
+        2. Inject orchestrator ML features (microstructure, sentiment, macro)
+        3. Data quality gate — reject if tick confidence < min_data_quality
+        4. Regime-conditional predict_proba (routes each bar to its sub-model)
+        5. Sentiment scaling — reduce confidence in high-news environments
+        6. Prometheus instrumentation
+        7. Return structured result dict
+
+        Parameters
+        ----------
+        ohlcv            : H1 OHLCV DataFrame (at least 50 bars recommended)
+        symbol           : Instrument symbol for logging and Prometheus labels
+        min_data_quality : Minimum orchestrator tick confidence to proceed
+        extra_features   : Optional pre-built feature DataFrame.  When None,
+                           regime features are computed from ``ohlcv`` directly.
+
+        Returns
+        -------
+        dict with keys:
+          direction          : "long" | "short" | "neutral"
+          probability        : float [0, 1] — P(up) for last bar
+          regime             : str — detected regime for last bar
+          data_quality       : float — orchestrator tick confidence
+          sentiment_score    : float — news sentiment from orchestrator
+          macro_impact       : float — macro calendar impact score
+          sentiment_scale    : float — multiplier applied to probability
+          quality_gate_passed: bool
+          model_used         : str — "regime_specific" | "global_fallback"
+          latency_ms         : float
+        """
+        if not self._is_fitted:
+            raise RuntimeError("Call fit() before predict_live()")
+
+        t0 = time.perf_counter()
+
+        # ── Step 1: Build feature matrix ──────────────────────────────────────
+        if extra_features is not None:
+            X = extra_features.copy()
+        else:
+            # Minimal feature set from OHLCV
+            X = ohlcv[["open", "high", "low", "close", "volume"]].copy() \
+                if all(c in ohlcv.columns for c in ["open", "high", "low", "close", "volume"]) \
+                else ohlcv.copy()
+
+        # Ensure regime columns are present
+        if self.hurst_col not in X.columns or self.adx_col not in X.columns:
+            X = add_regime_features(X)
+
+        # ── Step 2: Orchestrator feature injection ────────────────────────────
+        data_quality   = 1.0
+        sentiment_score = 0.0
+        macro_impact    = 0.0
+
+        try:
+            from data_layer.orchestrator import orchestrator
+            tick = orchestrator.get_latest_tick()
+            if tick is not None:
+                data_quality = float(tick.confidence)
+            feats = orchestrator.get_ml_features()
+            sentiment_score = float(feats.get("news_sentiment_score",   0.0))
+            macro_impact    = float(feats.get("macro_impact_score_now", 0.0))
+
+            # Inject orchestrator features as extra columns
+            for key, val in feats.items():
+                col = f"orch_{key}"
+                if col not in X.columns:
+                    X[col] = float(val)
+        except Exception as exc:
+            logger.debug("predict_live: orchestrator unavailable: %s", exc)
+
+        # ── Step 3: Data quality gate ─────────────────────────────────────────
+        if data_quality < min_data_quality:
+            _PROM.quality_gate_blocked.labels(symbol=symbol).inc()
+            logger.warning(
+                "RegimeConditionalModel.predict_live: data quality %.3f < %.3f — neutral",
+                data_quality, min_data_quality,
+            )
+            return {
+                "direction":           "neutral",
+                "probability":         0.5,
+                "regime":              "unknown",
+                "data_quality":        data_quality,
+                "sentiment_score":     sentiment_score,
+                "macro_impact":        macro_impact,
+                "sentiment_scale":     1.0,
+                "quality_gate_passed": False,
+                "model_used":          "none",
+                "latency_ms":          round((time.perf_counter() - t0) * 1000, 2),
+            }
+
+        # ── Step 4: Align feature columns to training schema ──────────────────
+        if self._feature_names:
+            for col in self._feature_names:
+                if col not in X.columns:
+                    X[col] = 0.0
+            # Only keep columns the model was trained on
+            X_aligned = X[[c for c in self._feature_names if c in X.columns]]
+            # Fill any remaining missing columns
+            for col in self._feature_names:
+                if col not in X_aligned.columns:
+                    X_aligned[col] = 0.0
+            X_aligned = X_aligned[self._feature_names]
+        else:
+            X_aligned = X
+
+        X_aligned = X_aligned.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+        # ── Step 5: Regime-conditional prediction ─────────────────────────────
+        last_row = X_aligned.iloc[[-1]]
+        labels   = detect_regime_labels(last_row, self.hurst_col, self.adx_col)
+        regime_id = int(labels.iloc[0])
+        regime_name = REGIME_NAMES.get(regime_id, "unknown")
+
+        model = self._regime_models.get(regime_id, self._global_model)
+        model_used = "regime_specific" if regime_id in self._regime_models else "global_fallback"
+
+        try:
+            proba = model.predict_proba(last_row)
+            prob_up = float(proba[0, 1]) if proba.shape[1] > 1 else float(proba[0, 0])
+        except Exception as exc:
+            logger.warning("predict_live: model.predict_proba failed: %s", exc)
+            prob_up = 0.5
+
+        # ── Step 6: Sentiment scaling ─────────────────────────────────────────
+        # High absolute sentiment → model less reliable (news-driven move)
+        sentiment_scale = max(0.80, 1.0 - abs(sentiment_score) * 0.40)
+        scaled_prob = 0.5 + (prob_up - 0.5) * sentiment_scale
+        scaled_prob = float(np.clip(scaled_prob, 0.01, 0.99))
+
+        # ── Step 7: Direction ─────────────────────────────────────────────────
+        if scaled_prob >= 0.58:
+            direction = "long"
+        elif scaled_prob <= 0.42:
+            direction = "short"
+        else:
+            direction = "neutral"
+
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+
+        # ── Prometheus ────────────────────────────────────────────────────────
+        _PROM.predict_total.labels(symbol=symbol, regime=regime_name).inc()
+        _PROM.predict_latency.labels(symbol=symbol).observe(latency_ms / 1000.0)
+        _PROM.sentiment_scale_gauge.labels(symbol=symbol).set(sentiment_scale)
+
+        logger.debug(
+            "RegimeConditionalModel.predict_live: %s dir=%s prob=%.3f "
+            "regime=%s quality=%.3f sentiment=%.3f scale=%.3f latency=%.1fms",
+            symbol, direction, scaled_prob, regime_name,
+            data_quality, sentiment_score, sentiment_scale, latency_ms,
+        )
+
+        return {
+            "direction":           direction,
+            "probability":         round(scaled_prob, 4),
+            "regime":              regime_name,
+            "data_quality":        round(data_quality, 4),
+            "sentiment_score":     round(sentiment_score, 4),
+            "macro_impact":        round(macro_impact, 4),
+            "sentiment_scale":     round(sentiment_scale, 4),
+            "quality_gate_passed": True,
+            "model_used":          model_used,
+            "latency_ms":          latency_ms,
+        }
+
+    # ── Prometheus-instrumented predict_proba ─────────────────────────────────
+
+    def predict_proba_instrumented(
+        self,
+        X: pd.DataFrame,
+        symbol: str = "XAU_USD",
+    ) -> np.ndarray:
+        """
+        predict_proba() with Prometheus latency and regime distribution tracking.
+
+        Emits:
+          hopefx_regime_conditional_predict_total{symbol, regime}
+          hopefx_regime_conditional_latency_seconds{symbol}
+          hopefx_regime_conditional_regime_fraction{regime}
+        """
+        t0 = time.perf_counter()
+        proba = self.predict_proba(X)
+        latency = time.perf_counter() - t0
+
+        _PROM.predict_latency.labels(symbol=symbol).observe(latency)
+
+        # Regime distribution for the batch
+        labels = detect_regime_labels(X, self.hurst_col, self.adx_col)
+        total = max(len(labels), 1)
+        for regime_id, regime_name in REGIME_NAMES.items():
+            frac = float((labels == regime_id).sum()) / total
+            _PROM.regime_distribution.labels(regime=regime_name).set(frac)
+            _PROM.predict_total.labels(symbol=symbol, regime=regime_name).inc(
+                amount=int((labels == regime_id).sum())
+            )
+
+        return proba
+
     # ── Orchestrator-wired prediction ─────────────────────────────────────────
 
     def predict_with_orchestrator(
@@ -566,3 +927,49 @@ def walk_forward_regime_eval(
         "p_value": round(float(p_value), 4),
         "significant": bool(p_value < 0.05 and float(np.mean(accs)) > 0.55),
     }
+
+
+# ── Module-level singleton ────────────────────────────────────────────────────
+
+_rcm_singleton: Optional[RegimeConditionalModel] = None
+_rcm_path: Optional[str] = None
+
+
+def get_regime_conditional_model(
+    model_path: Optional[str] = None,
+) -> Optional[RegimeConditionalModel]:
+    """
+    Return the module-level RegimeConditionalModel singleton.
+
+    Loads from ``model_path`` (or the default saved location) on first call.
+    Returns None when no saved model exists — callers must handle this and
+    fall back to the global InferenceEngine.
+
+    Parameters
+    ----------
+    model_path : Path to a joblib file saved by RegimeConditionalModel.save().
+                 Defaults to ``ml/saved_models/regime_conditional.joblib``.
+    """
+    global _rcm_singleton, _rcm_path
+
+    default_path = model_path or "ml/saved_models/regime_conditional.joblib"
+
+    # Return cached singleton if path unchanged
+    if _rcm_singleton is not None and _rcm_path == default_path:
+        return _rcm_singleton
+
+    if not Path(default_path).exists():
+        logger.debug(
+            "get_regime_conditional_model: no saved model at %s — returning None",
+            default_path,
+        )
+        return None
+
+    try:
+        _rcm_singleton = RegimeConditionalModel.load(default_path)
+        _rcm_path = default_path
+        logger.info("get_regime_conditional_model: loaded from %s", default_path)
+        return _rcm_singleton
+    except Exception as exc:
+        logger.error("get_regime_conditional_model: load failed: %s", exc)
+        return None
