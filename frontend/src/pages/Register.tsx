@@ -67,8 +67,9 @@ const Register: React.FC = () => {
       // 2. Auto-assign free tier + track referral
       try {
         await authApi.activateFreeTier(username.trim(), refCode || undefined);
-      } catch (_) {
-        // Non-fatal — tier activation can be retried
+      } catch (tierErr: unknown) {
+        // Non-fatal — tier activation can be retried on next login
+        console.warn('[Register] Free tier activation failed (non-fatal):', tierErr);
       }
 
       // 3. Auto-login
@@ -77,8 +78,9 @@ const Register: React.FC = () => {
         setAuth(loginRes.data.access_token, loginRes.data.user);
         navigate('/dashboard', { replace: true });
         return;
-      } catch (_) {
-        // Login failed after register — show success and redirect to login
+      } catch (loginErr: unknown) {
+        // Login failed after successful registration — fall through to success message
+        console.warn('[Register] Auto-login after registration failed:', loginErr);
       }
 
       setSuccess(
