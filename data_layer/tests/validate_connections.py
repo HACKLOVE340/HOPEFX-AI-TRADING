@@ -208,9 +208,14 @@ def check_microstructure() -> ValidationResult:
             snap = engine.on_tick(tick)
 
         features = engine.get_ml_features()
-        assert len(features) == 16, f"Expected 16 features, got {len(features)}"
+        # 17 features: 16 original + micro_tick_count added for dl_tick_count wiring
+        assert len(features) >= 17, f"Expected >= 17 features, got {len(features)}"
         assert "micro_ofi" in features
         assert "micro_cumulative_delta" in features
+        assert "micro_tick_count" in features, "micro_tick_count missing from get_ml_features()"
+        # Verify _zero_features() also includes micro_tick_count
+        zero = engine._zero_features()
+        assert "micro_tick_count" in zero, "micro_tick_count missing from _zero_features()"
         return ValidationResult("MicrostructureEngine", True, f"{len(features)} features computed")
     except Exception as exc:
         return ValidationResult("MicrostructureEngine", False, str(exc))
@@ -628,6 +633,353 @@ def check_dqe_mahalanobis() -> ValidationResult:
 
 # ── Runner ────────────────────────────────────────────────────────────────────
 
+def check_prometheus_no_duplicate_registration() -> ValidationResult:
+    """All Prometheus metrics must survive two instantiations without ValueError."""
+    try:
+        from data_layer.cache.redis_store import DataLayerRedisStore
+        from data_layer.quality.engine import DataQualityEngine
+        from data_layer.feeds.gold.manager import GoldFeedManager
+        from data_layer.sentiment.engine import NewsSentimentEngine
+        from data_layer.calendar.engine import MacroCalendarEngine
+        from data_layer.feeds.macro.store_bridge import MacroStoreBridge
+        from data_layer.orchestrator import MarketDataOrchestrator
+
+        # Second instantiation must not raise
+        DataLayerRedisStore()
+        DataQualityEngine()
+        GoldFeedManager()
+        NewsSentimentEngine()
+        MacroCalendarEngine()
+        MacroStoreBridge()
+        MarketDataOrchestrator()
+        return ValidationResult(
+            "Prometheus duplicate-registration guard",
+            True,
+            "All 7 components survive second instantiation",
+        )
+    except Exception as exc:
+        return ValidationResult(
+            "Prometheus duplicate-registration guard",
+            False,
+            str(exc),
+        )
+
+
+def check_normalization_batch() -> ValidationResult:
+    """NormalizationPipeline.normalize_ticks_batch() and tick_to_ohlcv() work correctly."""
+    try:
+        import uuid
+        from data_layer.normalization.pipeline import normalization_pipeline
+        from data_layer.types import GoldTick, FeedSource
+
+        ticks = [
+            GoldTick(
+                symbol="XAU_USD",
+                timestamp=datetime.now(timezone.utc),
+                bid=1999.5 + i * 0.1,
+                ask=2000.5 + i * 0.1,
+                mid=2000.0 + i * 0.1,
+                source=FeedSource.GOLDAPI,
+                lineage_id=str(uuid.uuid4()),
+            )
+            for i in range(10)
+        ]
+        batch = normalization_pipeline.normalize_ticks_batch(ticks)
+        assert len(batch) == 10, f"Expected 10 ticks, got {len(batch)}"
+
+        df = normalization_pipeline.tick_to_ohlcv(ticks, timeframe_minutes=60)
+        assert not df.empty, "tick_to_ohlcv returned empty DataFrame"
+        assert "close" in df.columns, "tick_to_ohlcv missing 'close' column"
+        assert "volume" in df.columns, "tick_to_ohlcv missing 'volume' column"
+        return ValidationResult(
+            "NormalizationPipeline batch + tick_to_ohlcv",
+            True,
+            f"batch={len(batch)} ticks, ohlcv={len(df)} bars",
+        )
+    except Exception as exc:
+        return ValidationResult(
+            "NormalizationPipeline batch + tick_to_ohlcv",
+            False,
+            str(exc),
+        )
+
+
+def check_dukascopy_timeframe_aliases() -> ValidationResult:
+    """_parse_timeframe() must resolve all standard broker/ISO aliases."""
+    try:
+        from data_layer.replay.dukascopy import _parse_timeframe
+
+        cases = [
+            ("H1", 60), ("1h", 60), ("60", 60), (60, 60),
+            ("M5", 5),  ("5m", 5),  ("5",  5),
+            ("D1", 1440), ("1d", 1440),
+            ("H4", 240), ("4h", 240),
+            ("M15", 15), ("15m", 15),
+            ("M30", 30), ("30m", 30),
+        ]
+        for inp, expected in cases:
+            result = _parse_timeframe(inp)
+            assert result == expected, (
+                f"_parse_timeframe({inp!r}) = {result}, expected {expected}"
+            )
+
+        # Invalid alias must raise ValueError
+        raised = False
+        try:
+            _parse_timeframe("W1")
+        except ValueError:
+            raised = True
+        assert raised, "_parse_timeframe('W1') should raise ValueError"
+
+        return ValidationResult(
+            "DukascopyFetcher timeframe aliases",
+            True,
+            f"{len(cases)} aliases resolved, invalid alias raises ValueError",
+        )
+    except Exception as exc:
+        return ValidationResult(
+            "DukascopyFetcher timeframe aliases",
+            False,
+            str(exc),
+        )
+
+
+def check_replay_engine_timeframe_param() -> ValidationResult:
+    """MarketReplayEngine.build_ohlcv_dataframe accepts both timeframe and timeframe_minutes."""
+    try:
+        import inspect
+        from data_layer.replay.engine import MarketReplayEngine
+
+        sig = inspect.signature(MarketReplayEngine.build_ohlcv_dataframe)
+        params = list(sig.parameters.keys())
+        assert "timeframe_minutes" in params, "timeframe_minutes param missing"
+        assert "timeframe" in params, "timeframe param missing"
+        return ValidationResult(
+            "MarketReplayEngine timeframe params",
+            True,
+            "both timeframe and timeframe_minutes accepted",
+        )
+    except Exception as exc:
+        return ValidationResult(
+            "MarketReplayEngine timeframe params",
+            False,
+            str(exc),
+        )
+
+
+def check_macro_calendar_causal_blackout() -> ValidationResult:
+    """MacroCalendarEngine._is_blackout_at() must be causal (accepts arbitrary datetime)."""
+    try:
+        from data_layer.calendar.engine import MacroCalendarEngine
+
+        engine = MacroCalendarEngine()
+        # _is_blackout_at must exist and accept a datetime
+        assert hasattr(engine, "_is_blackout_at"), "_is_blackout_at method missing"
+        result = engine._is_blackout_at(datetime.now(timezone.utc))
+        assert isinstance(result, bool), "_is_blackout_at must return bool"
+
+        # get_ml_features with as_of must not use live datetime.now()
+        import inspect
+        src = inspect.getsource(engine.get_ml_features)
+        assert "_is_blackout_at" in src, (
+            "get_ml_features must call _is_blackout_at(now) not is_blackout_window()"
+        )
+        return ValidationResult(
+            "MacroCalendarEngine causal blackout",
+            True,
+            "_is_blackout_at exists and get_ml_features uses it",
+        )
+    except Exception as exc:
+        return ValidationResult(
+            "MacroCalendarEngine causal blackout",
+            False,
+            str(exc),
+        )
+
+
+def check_sentiment_redis_cold_start() -> ValidationResult:
+    """NewsSentimentEngine.get_ml_features() must attempt Redis read on cold start."""
+    try:
+        import inspect
+        from data_layer.sentiment.engine import NewsSentimentEngine
+
+        src = inspect.getsource(NewsSentimentEngine.get_ml_features)
+        assert "hopefx:dl:sentiment" in src, (
+            "get_ml_features must read from hopefx:dl:sentiment on cold start"
+        )
+        # Verify both cache keys are written
+        cache_src = inspect.getsource(NewsSentimentEngine._cache_to_redis)
+        assert "hopefx:dl:sentiment" in cache_src, "primary cache key missing"
+        assert "hopefx:news:sentiment" in cache_src, "legacy cache key missing"
+        return ValidationResult(
+            "NewsSentimentEngine Redis cold-start read",
+            True,
+            "cold-start Redis read + dual-key cache write verified",
+        )
+    except Exception as exc:
+        return ValidationResult(
+            "NewsSentimentEngine Redis cold-start read",
+            False,
+            str(exc),
+        )
+
+
+def check_orchestrator_get_ohlcv_from_ticks() -> ValidationResult:
+    """orchestrator.get_ohlcv_from_ticks() must exist and return None when no ticks."""
+    try:
+        from data_layer.orchestrator import orchestrator
+
+        assert hasattr(orchestrator, "get_ohlcv_from_ticks"), (
+            "get_ohlcv_from_ticks method missing from orchestrator"
+        )
+        result = orchestrator.get_ohlcv_from_ticks()
+        assert result is None, (
+            f"Expected None with empty Redis tick history, got {type(result)}"
+        )
+        return ValidationResult(
+            "Orchestrator.get_ohlcv_from_ticks",
+            True,
+            "method exists, returns None with empty tick history",
+        )
+    except Exception as exc:
+        return ValidationResult(
+            "Orchestrator.get_ohlcv_from_ticks",
+            False,
+            str(exc),
+        )
+
+
+def check_orchestrator_health_keys() -> ValidationResult:
+    """orchestrator.health() must include all required monitoring keys."""
+    try:
+        from data_layer.orchestrator import orchestrator
+
+        h = orchestrator.health()
+        required = {
+            "started", "uptime_s", "tick_count", "redis", "lineage",
+            "dqe", "dqe_latency", "micro", "micro_health",
+            "sentiment", "calendar", "macro", "replay",
+        }
+        missing = required - set(h.keys())
+        assert not missing, f"health() missing keys: {missing}"
+        return ValidationResult(
+            "Orchestrator health keys",
+            True,
+            f"{len(h)} keys present, all {len(required)} required keys found",
+        )
+    except Exception as exc:
+        return ValidationResult(
+            "Orchestrator health keys",
+            False,
+            str(exc),
+        )
+
+
+def check_data_layer_features_injection() -> ValidationResult:
+    """add_data_layer_features() must inject >= 26 dl_* columns with no NaN/inf."""
+    try:
+        import numpy as np
+        import pandas as pd
+        from ml.features_extended import add_data_layer_features
+
+        idx = pd.date_range("2025-01-01", periods=5, freq="1h", tz="UTC")
+        df = pd.DataFrame({
+            "open":   np.full(5, 2000.0),
+            "high":   np.full(5, 2010.0),
+            "low":    np.full(5, 1990.0),
+            "close":  np.full(5, 2005.0),
+            "volume": np.full(5, 500.0),
+        }, index=idx)
+
+        result = add_data_layer_features(df)
+        dl_cols = [c for c in result.columns if c.startswith("dl_")]
+        assert len(dl_cols) >= 26, f"Expected >= 26 dl_* columns, got {len(dl_cols)}"
+
+        nan_count = result[dl_cols].isna().sum().sum()
+        assert nan_count == 0, f"{nan_count} NaN values in dl_* columns"
+
+        inf_count = result[dl_cols].isin([float("inf"), float("-inf")]).sum().sum()
+        assert inf_count == 0, f"{inf_count} inf values in dl_* columns"
+
+        assert "dl_tick_count" in dl_cols, "dl_tick_count missing"
+        assert "dl_is_blackout" in dl_cols, "dl_is_blackout missing"
+        assert "dl_macro_yield_curve" in dl_cols, "dl_macro_yield_curve missing"
+
+        return ValidationResult(
+            "add_data_layer_features injection",
+            True,
+            f"{len(dl_cols)} dl_* columns, 0 NaN, 0 inf",
+        )
+    except Exception as exc:
+        return ValidationResult(
+            "add_data_layer_features injection",
+            False,
+            str(exc),
+        )
+
+
+def check_macro_store_bridge_retry_config() -> ValidationResult:
+    """MacroStoreBridge must have startup retry config and _load_csv_fallback."""
+    try:
+        from data_layer.feeds.macro.store_bridge import (
+            MacroStoreBridge,
+            _STARTUP_MAX_RETRIES,
+            _STARTUP_RETRY_DELAY,
+        )
+        import inspect
+
+        assert _STARTUP_MAX_RETRIES >= 1, "STARTUP_MAX_RETRIES must be >= 1"
+        assert _STARTUP_RETRY_DELAY > 0, "STARTUP_RETRY_DELAY must be > 0"
+
+        bridge = MacroStoreBridge()
+        assert hasattr(bridge, "_load_csv_fallback"), "_load_csv_fallback method missing"
+
+        src = inspect.getsource(MacroStoreBridge.start)
+        assert "_STARTUP_MAX_RETRIES" in src, "start() must use _STARTUP_MAX_RETRIES"
+        assert "_load_csv_fallback" in src, "start() must call _load_csv_fallback on exhaustion"
+
+        return ValidationResult(
+            "MacroStoreBridge startup retry",
+            True,
+            f"retries={_STARTUP_MAX_RETRIES}, delay={_STARTUP_RETRY_DELAY}s, "
+            "_load_csv_fallback present",
+        )
+    except Exception as exc:
+        return ValidationResult(
+            "MacroStoreBridge startup retry",
+            False,
+            str(exc),
+        )
+
+
+def check_redis_store_prometheus() -> ValidationResult:
+    """DataLayerRedisStore must initialise all 6 Prometheus metrics."""
+    try:
+        from data_layer.cache.redis_store import DataLayerRedisStore
+
+        store = DataLayerRedisStore()
+        required_attrs = [
+            "_prom_hits", "_prom_misses", "_prom_writes",
+            "_prom_errors", "_prom_hit_rate", "_prom_mem_mb",
+        ]
+        for attr in required_attrs:
+            assert hasattr(store, attr), f"DataLayerRedisStore missing {attr}"
+            val = getattr(store, attr)
+            assert val is not None, f"{attr} is None — Prometheus init failed"
+
+        return ValidationResult(
+            "DataLayerRedisStore Prometheus metrics",
+            True,
+            f"all {len(required_attrs)} metrics initialised",
+        )
+    except Exception as exc:
+        return ValidationResult(
+            "DataLayerRedisStore Prometheus metrics",
+            False,
+            str(exc),
+        )
+
+
 async def run_all(verbose: bool = False) -> Tuple[int, int]:
     print(_head("HOPEFX Data Layer — Connection Validation"))
     print(f"  Timestamp: {datetime.now(timezone.utc).isoformat()}")
@@ -661,6 +1013,18 @@ async def run_all(verbose: bool = False) -> Tuple[int, int]:
         check_risk_wiring,
         check_execution_wiring,
         check_live_inference_wiring,
+        # ── New production hardening checks ──────────────────────────────────
+        check_prometheus_no_duplicate_registration,
+        check_normalization_batch,
+        check_dukascopy_timeframe_aliases,
+        check_replay_engine_timeframe_param,
+        check_macro_calendar_causal_blackout,
+        check_sentiment_redis_cold_start,
+        check_orchestrator_get_ohlcv_from_ticks,
+        check_orchestrator_health_keys,
+        check_data_layer_features_injection,
+        check_macro_store_bridge_retry_config,
+        check_redis_store_prometheus,
     ]
 
     print(_head("Synchronous checks"))
