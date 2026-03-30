@@ -415,7 +415,7 @@ class RLAgent:
         if vec is None:
             return 0, 0.0
 
-        # append dummy position state (flat, no pnl, 0 steps)
+        # Append position state: [position=0 (flat), unrealised_pnl=0, steps_held=0]
         obs = np.concatenate([vec, np.zeros(3, dtype=np.float32)])
         action, _states = self._model.predict(obs, deterministic=True)
 
