@@ -296,12 +296,13 @@ class LifeSupervisor:
                 await _start_brain(_fastapi_app)
                 logger.info("HOPEFXBrain 24/7 security engine started")
             except ImportError:
-                # connect_to_life may run without the FastAPI app (CLI mode).
-                # Create a minimal stub app so the brain still runs its monitor loop.
+                # connect_to_life may run without the full FastAPI app (CLI mode).
+                # Create a minimal FastAPI instance so the brain can mount its router
+                # and run its 24/7 monitor loop without the full HTTP server.
                 from fastapi import FastAPI as _FastAPI
-                _stub_app = _FastAPI()
-                await _start_brain(_stub_app)
-                logger.info("HOPEFXBrain started with stub FastAPI app (CLI mode)")
+                _minimal_app = _FastAPI(title="HOPEFXBrain-CLI")
+                await _start_brain(_minimal_app)
+                logger.info("HOPEFXBrain started in CLI mode (minimal FastAPI instance)")
         except Exception as _brain_exc:
             logger.warning("HOPEFXBrain failed to start (non-fatal): %s", _brain_exc)
 
