@@ -1,0 +1,43 @@
+# k8s/kill-switch-configmap.yaml
+# Kill switch ConfigMap — cross-pod propagation fallback when Redis is unreachable.
+#
+# Architecture
+# ------------
+# Primary path:  Redis pub/sub (CH_BREACH) — low latency, all pods notified instantly.
+# Fallback path: This ConfigMap — polled every K8S_KS_POLL_INTERVAL_S seconds (default 5s).
+#
+# When a drawdown breach fires on any pod:
+#   1. Pod attempts Redis pub/sub publish (fast path).
+#   2. If Redis is unreachable, pod patches this ConfigMap via the K8s API.
+#   3. All other pods poll this ConfigMap and activate their local kill switch.
+#
+# This guarantees that even a complete Redis outage during a drawdown event
+# cannot leave any pod trading. Worst-case propagation delay = poll interval (5s).
+#
+# RBAC
+# ----
+# The app ServiceAccount needs get/patch on ConfigMaps in the hopefx namespace.
+# See kill-switch-rbac.yaml for the required Role and RoleBinding.
+#
+# Reset procedure
+# ---------------
+# After a kill switch event is resolved, reset the ConfigMap manually:
+#   kubectl patch configmap hopefx-kill-switch -n hopefx \
+#     --patch '{"data":{"kill_switch_active":"false","kill_switch_reason":"","kill_switch_timestamp":""}}'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hopefx-kill-switch
+  namespace: hopefx
+  labels:
+    app.kubernetes.io/part-of: hopefx-platform
+    app.kubernetes.io/component: kill-switch
+  annotations:
+    description: "Kill switch state for cross-pod propagation fallback"
+data:
+  # kill_switch_active: set to "true" by any pod that detects a breach
+  # when Redis is unavailable. All pods poll this and halt trading.
+  kill_switch_active: "false"
+  kill_switch_reason: ""
+  kill_switch_timestamp: ""

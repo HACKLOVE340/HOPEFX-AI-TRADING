@@ -17,6 +17,8 @@ psycopg2-binary>=2.9.0
 
 # ── Caching ───────────────────────────────────────────────────────────────────
 redis>=5.0.0
+kubernetes-asyncio>=29.0.0   # K8s ConfigMap fallback for kill switch cross-pod propagation
+kubernetes>=29.0.0            # sync K8s client (used when no event loop is running)
 
 # ── Auth & security (pinned exactly — CVE surface is non-negotiable) ──────────
 # To upgrade: audit CVE list, run full test suite, update checksums.
