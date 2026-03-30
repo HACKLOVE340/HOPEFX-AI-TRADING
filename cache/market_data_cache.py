@@ -196,7 +196,10 @@ class _InMemoryStore:
             }
 
     def close(self) -> None:
-        pass
+        """Release all in-memory data and expiry metadata."""
+        with self._lock:
+            self._data.clear()
+            self._expiry.clear()
 
 
 class MarketDataCache:
