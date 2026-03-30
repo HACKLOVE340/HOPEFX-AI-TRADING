@@ -346,8 +346,16 @@ class DataQualityEngine:
 
         Returns (consensus_mid, consensus_confidence, per_source_weights).
 
+        Algorithm (two-pass outlier removal):
+          Pass 1: confidence-weighted mean across all valid sources.
+          Outlier gate: sources deviating > CROSS_SOURCE_MAX_DIFF from the
+            pass-1 mean are *excluded* from pass 2 (not just penalised) and
+            their confidence is decremented.
+          Pass 2: recompute consensus using only inlier sources.
+          If all sources are outliers (single-source or extreme divergence),
+            fall back to the highest-confidence single source.
+
         Weighting: source_confidence × (1 / latency_p95) × (1 / spread)
-        Sources deviating > CROSS_SOURCE_MAX_DIFF from consensus are penalised.
         """
         if not ticks:
             return 0.0, 0.0, {}
@@ -370,27 +378,47 @@ class DataQualityEngine:
         total_w = sum(weights.values()) or 1.0
         norm_w  = {s: w / total_w for s, w in weights.items()}
 
-        # First-pass consensus
-        consensus = sum(t.mid * norm_w[s] for s, t in valid.items())
+        # Pass 1: unfiltered consensus
+        consensus_p1 = sum(t.mid * norm_w[s] for s, t in valid.items())
 
-        # Penalise outliers
+        # Identify and exclude outliers (hard exclusion, not just weight penalty)
+        inliers: Dict[FeedSource, GoldTick] = {}
         for src, t in valid.items():
-            diff_pct = abs(t.mid - consensus) / max(consensus, 1.0)
+            diff_pct = abs(t.mid - consensus_p1) / max(consensus_p1, 1.0)
             if diff_pct > CROSS_SOURCE_MAX_DIFF:
                 self._sources[src].update_confidence(-0.02)
-                weights[src] *= 0.5
-                logger.debug(
-                    "DQE cross-source outlier source=%s diff_pct=%.4f",
-                    src.value, diff_pct,
+                logger.warning(
+                    "DQE cross-source outlier EXCLUDED source=%s "
+                    "mid=%.4f consensus_p1=%.4f diff_pct=%.4f",
+                    src.value, t.mid, consensus_p1, diff_pct,
                 )
+                if self._prom_rejected:
+                    try:
+                        self._prom_rejected.labels(
+                            source=src.value, reason="cross_source_outlier"
+                        ).inc()
+                    except Exception:
+                        pass
+            else:
+                inliers[src] = t
 
-        # Recompute with penalised weights
-        total_w = sum(weights.values()) or 1.0
-        norm_w  = {s: w / total_w for s, w in weights.items()}
-        consensus = sum(t.mid * norm_w[s] for s, t in valid.items())
+        # Fall back to best single source if all are outliers
+        if not inliers:
+            best = max(valid.items(), key=lambda kv: self._sources[kv[0]].confidence)
+            inliers = {best[0]: best[1]}
+            logger.warning(
+                "DQE: all sources are outliers — using best single source %s",
+                best[0].value,
+            )
+
+        # Pass 2: consensus over inliers only
+        inlier_weights = {s: weights[s] for s in inliers}
+        total_w2 = sum(inlier_weights.values()) or 1.0
+        norm_w2  = {s: w / total_w2 for s, w in inlier_weights.items()}
+        consensus = sum(t.mid * norm_w2[s] for s, t in inliers.items())
 
         conf = sum(
-            self._sources[s].confidence * norm_w[s] for s in valid
+            self._sources[s].confidence * norm_w2[s] for s in inliers
         )
 
         if self._prom_consensus:
@@ -399,7 +427,7 @@ class DataQualityEngine:
             except Exception as _exc:
                 logger.debug('Suppressed exception: %s', _exc)
 
-        return consensus, conf, norm_w
+        return consensus, conf, norm_w2
 
     def get_source_health(self) -> Dict[str, dict]:
         out = {}
