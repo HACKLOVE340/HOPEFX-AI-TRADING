@@ -60,7 +60,10 @@ function loadLocalPrefs(): Partial<SafePrefs> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw) as Partial<SafePrefs>;
-  } catch (_) {}
+  } catch {
+    // Corrupted localStorage entry — discard and return empty (safe default)
+    localStorage.removeItem(STORAGE_KEY);
+  }
   return {};
 }
 
@@ -219,7 +222,7 @@ const Settings: React.FC = () => {
     try {
       await api.post('/notifications/test', { channel, settings });
       setTestStatus((prev) => ({ ...prev, [channel]: 'ok' }));
-    } catch (_) {
+    } catch {
       setTestStatus((prev) => ({ ...prev, [channel]: 'fail' }));
     }
     setTimeout(() => setTestStatus((prev) => ({ ...prev, [channel]: 'idle' })), 4000);
