@@ -206,10 +206,11 @@ class InferenceEngine:
             from ml.macro_store import macro_store
 
             if len(macro_store) == 0:
-                # Try data_layer bridge first (FRED live data)
+                # Check bridge via orchestrator (single entry point — never import
+                # data_layer sub-modules directly from outside data_layer/).
                 try:
-                    from data_layer.feeds.macro.store_bridge import macro_store_bridge
-                    if not macro_store_bridge.is_loaded:
+                    from data_layer.orchestrator import orchestrator
+                    if not orchestrator._macro_bridge.is_loaded:
                         logger.debug("MacroStoreBridge not yet loaded — using CSV defaults")
                 except Exception as _exc:
                     logger.debug('Suppressed exception: %s', _exc)
@@ -720,7 +721,10 @@ class InferenceEngine:
             import hashlib
             import json
             import uuid
-            from data_layer.lineage.store import lineage_store
+            # Access lineage store via orchestrator — single entry point rule.
+            # Never import data_layer.lineage.store directly from outside data_layer/.
+            from data_layer.orchestrator import orchestrator
+            lineage_store = orchestrator._lineage
 
             # Compute features hash for audit trail
             features_hash = ""

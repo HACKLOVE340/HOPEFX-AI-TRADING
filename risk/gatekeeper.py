@@ -549,10 +549,14 @@ class Gatekeeper:
 # Wired to the orchestrator singleton so all market-data checks use the
 # authoritative data layer rather than stale signal attributes.
 def _make_gatekeeper() -> Gatekeeper:
+    # Access lineage store via orchestrator — single entry point rule.
+    # Never import data_layer.lineage.store directly from outside data_layer/.
     try:
         from data_layer.orchestrator import orchestrator
-        from data_layer.lineage.store import lineage_store
-        return Gatekeeper(orchestrator=orchestrator, lineage_store=lineage_store)
+        return Gatekeeper(
+            orchestrator  = orchestrator,
+            lineage_store = orchestrator._lineage,
+        )
     except Exception:
         return Gatekeeper()
 
