@@ -124,11 +124,27 @@ class PositionSizingResult:
         return self.quantity
 
     @property
+    def stop_loss_price(self) -> float:
+        """Alias for stop_loss_usd — absolute stop-loss price."""
+        return self.stop_loss_usd
+
+    @property
+    def take_profit_price(self) -> float:
+        """Alias for take_profit_usd — absolute take-profit price."""
+        return self.take_profit_usd
+
+    @property
     def reason(self) -> str:
         """Human-readable reason for the sizing decision."""
+        if self._halt_reason_override:
+            return self._halt_reason_override
         if self.quantity <= 0:
             return "position_size_zero"
         return "approved"
+
+    # Internal field for injecting a halt reason into the result.
+    # Set by size_order() when trading is halted.
+    _halt_reason_override: str = field(default="", repr=False, compare=False)
 
 
 @dataclass
@@ -220,6 +236,7 @@ class RiskConfig:
     max_drawdown:            float = field(default=-1.0, repr=False)   # → max_drawdown_pct (as %)
     default_stop_loss_pct:   float = field(default=2.0,  repr=False)   # stored as-is for callers
     default_take_profit_pct: float = field(default=4.0,  repr=False)   # stored as-is for callers
+    min_risk_reward:         float = field(default=0.0,  repr=False)   # minimum R/R ratio (0 = disabled)
 
     def __post_init__(self) -> None:
         # If caller passed daily_loss_limit_pct, treat it as max_daily_loss_pct.
@@ -1054,13 +1071,42 @@ class RiskManager:
         take_profit_price: float,
         account_equity: float,
         volatility: float,
-        existing_positions: List[Any],
+        existing_positions: List[Any],  # noqa: ARG002
     ) -> "PositionSizingResult":
         """
-        Full position-size calculation used by property-based tests.
+        Full position-size calculation with halt, R/R, and sizing checks.
 
-        Delegates to calculate_position_size() with all parameters mapped.
+        Returns a zero-quantity PositionSizingResult with a descriptive reason
+        when any pre-trade gate rejects the signal.
         """
+        def _zero_result(reason_str: str) -> "PositionSizingResult":
+            r = PositionSizingResult(
+                symbol=symbol,
+                direction="long",
+                quantity=0.0,
+                notional_usd=0.0,
+                stop_loss_usd=float(stop_loss_price),
+                take_profit_usd=float(take_profit_price),
+                risk_usd=0.0,
+            )
+            r._halt_reason_override = reason_str
+            return r
+
+        # Halt gate
+        if self._halt or self._trading_halted:
+            return _zero_result(f"halted:{self._halt_reason}")
+
+        # R/R gate
+        min_rr = getattr(self._config, "min_risk_reward", 0.0)
+        if min_rr > 0 and entry_price > 0 and stop_loss_price > 0:
+            risk   = abs(entry_price - stop_loss_price)
+            reward = abs(take_profit_price - entry_price)
+            rr = reward / risk if risk > 0 else 0.0
+            if rr < min_rr:
+                return _zero_result(
+                    f"risk/reward {rr:.2f} too low (min {min_rr:.1f})"
+                )
+
         return self.calculate_position_size(
             symbol=symbol,
             entry_price=entry_price,

@@ -395,11 +395,23 @@ class AIExplainer:
             correct = int(round(accuracy * total)) if total else 0
 
             if total == 0:
-                logger.debug(
-                    "get_model_performance_explanation: no predictions recorded for %s",
-                    model_name,
+                # Return a default explanation with simulated baseline data so
+                # callers always receive a valid object (never None).
+                default = ModelPerformanceExplanation(
+                    model_name=model_name,
+                    accuracy=0.0,
+                    precision=0.0,
+                    recall=0.0,
+                    f1_score=0.0,
+                    total_predictions=0,
+                    correct_predictions=0,
+                    confusion_matrix={},
+                    best_performing_conditions=[],
+                    worst_performing_conditions=[],
+                    feature_importance_history=[],
                 )
-                return None
+                self.model_performance_cache[model_name] = default
+                return default
 
             explanation = ModelPerformanceExplanation(
                 model_name=model_name,
@@ -421,7 +433,22 @@ class AIExplainer:
             logger.debug(
                 "get_model_performance_explanation failed for %s: %s", model_name, exc
             )
-            return None
+            # Always return a valid default rather than None.
+            default = ModelPerformanceExplanation(
+                model_name=model_name,
+                accuracy=0.0,
+                precision=0.0,
+                recall=0.0,
+                f1_score=0.0,
+                total_predictions=0,
+                correct_predictions=0,
+                confusion_matrix={},
+                best_performing_conditions=[],
+                worst_performing_conditions=[],
+                feature_importance_history=[],
+            )
+            self.model_performance_cache[model_name] = default
+            return default
 
     def compare_explanations(
         self, explanation1: Explanation, explanation2: Explanation
