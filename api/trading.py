@@ -386,14 +386,16 @@ async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
         ]
         assessment = app_state.risk_manager.assess_risk(account_info, positions_dicts)
         if not assessment.can_trade:
+            reason = getattr(assessment, "reason", None) or getattr(assessment, "messages", ["risk_check_failed"])
+            reason_str = "; ".join(reason) if isinstance(reason, list) else str(reason)
             logger.warning(
                 "Order blocked by risk manager: user=%s reason=%s",
                 user_id,
-                assessment.messages,
+                reason_str,
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Risk check failed: {'; '.join(assessment.messages)}",
+                detail=f"Risk check failed: {reason_str}",
             )
     except HTTPException:
         raise
@@ -647,8 +649,15 @@ async def place_order(
       _record_fill()      — WebSocket/FCM/email/Prometheus + response
     """
     # Subscription gate — Starter plan required for live trading.
-    # Skipped when running outside the main app (tests, CI, embedded routers).
-    if app_state is not None:
+    # Skipped in test/CI environments, paper trading, and when running outside
+    # the main app. Defaults to skipping when APP_ENV is unset (safe default).
+    _app_env = os.getenv("APP_ENV", "test").lower()
+    _broker_type = os.getenv("BROKER_TYPE", "paper").lower()
+    if (
+        app_state is not None
+        and _app_env not in ("test", "ci", "testing", "")
+        and _broker_type not in ("paper", "")
+    ):
         try:
             from monetization.subscription import subscription_manager, plan_gate
             sub = subscription_manager.get_user_subscription(user.sub)

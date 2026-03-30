@@ -50,18 +50,16 @@ class StrategyType(Enum):
     ARBITRAGE = "arbitrage"
 
 
-class StrategyStatus(Enum):
-    """Lifecycle state of a registered strategy.
-
-    Values match strategies.base.StrategyStatus so that comparisons between
-    strategies registered via the manager and those created directly from
-    BaseStrategy are consistent.
-    """
-    IDLE = "IDLE"
-    RUNNING = "RUNNING"
-    PAUSED = "PAUSED"
-    STOPPED = "STOPPED"
-    ERROR = "ERROR"
+try:
+    from strategies.base import StrategyStatus
+except ImportError:
+    class StrategyStatus(Enum):  # type: ignore[no-redef]
+        """Fallback when strategies.base is unavailable."""
+        IDLE = "IDLE"
+        RUNNING = "RUNNING"
+        PAUSED = "PAUSED"
+        STOPPED = "STOPPED"
+        ERROR = "ERROR"
 
 
 # Minimum subscription tier required per strategy name.
