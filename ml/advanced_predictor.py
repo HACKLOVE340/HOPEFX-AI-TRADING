@@ -673,3 +673,229 @@ def get_predictor() -> AdvancedPredictor:
             if _predictor is None:
                 _predictor = AdvancedPredictor()
     return _predictor
+
+
+# ── Hybrid Ensemble: XGBoost + LSTM + RL ─────────────────────────────────────
+
+class HybridEnsemblePredictor:
+    """
+    Three-model ensemble: XGBoost (tabular) + LSTM (sequential) + RL agent.
+
+    Blend weights are learned via a meta-learner (Ridge regression) trained
+    on out-of-sample predictions from each component.  When a component is
+    unavailable (e.g. torch not installed, RL model not trained), its weight
+    is redistributed to the remaining components.
+
+    Architecture
+    ------------
+    XGBoost  — calibrated probability from tabular features (176+)
+    LSTM     — sequential probability from 60-bar feature sequences
+    RL       — action confidence from a trained SB3 PPO/SAC agent
+    Meta     — Ridge blender trained on component OOS predictions
+
+    Thread-safe singleton via get_hybrid_predictor().
+    """
+
+    def __init__(
+        self,
+        xgb_weight: float = 0.50,
+        lstm_weight: float = 0.30,
+        rl_weight: float = 0.20,
+        seq_len: int = 60,
+        meta_blend: bool = True,
+    ) -> None:
+        self._xgb_weight = xgb_weight
+        self._lstm_weight = lstm_weight
+        self._rl_weight = rl_weight
+        self._seq_len = seq_len
+        self._meta_blend = meta_blend
+
+        # Component availability flags
+        self._has_xgb: bool = True
+        self._has_lstm: bool = False
+        self._has_rl: bool = False
+
+        # Meta-blender (Ridge on component probabilities)
+        self._meta: Optional[Any] = None
+        self._meta_trained: bool = False
+
+        self._lock = threading.Lock()
+        self._predict_count: int = 0
+
+        self._check_components()
+
+    def _check_components(self) -> None:
+        """Probe which components are available without loading models."""
+        try:
+            import xgboost  # noqa: F401
+            self._has_xgb = True
+        except ImportError:
+            self._has_xgb = False
+            logger.warning("HybridEnsemble: xgboost not available")
+
+        try:
+            import torch  # noqa: F401
+            self._has_lstm = True
+        except ImportError:
+            self._has_lstm = False
+            logger.debug("HybridEnsemble: torch not available — LSTM disabled")
+
+        try:
+            import stable_baselines3  # noqa: F401
+            self._has_rl = True
+        except ImportError:
+            self._has_rl = False
+            logger.debug("HybridEnsemble: stable_baselines3 not available — RL disabled")
+
+    def _effective_weights(self) -> tuple:
+        """Redistribute weights for unavailable components."""
+        w_xgb = self._xgb_weight if self._has_xgb else 0.0
+        w_lstm = self._lstm_weight if self._has_lstm else 0.0
+        w_rl = self._rl_weight if self._has_rl else 0.0
+        total = w_xgb + w_lstm + w_rl
+        if total == 0.0:
+            return 1.0, 0.0, 0.0
+        return w_xgb / total, w_lstm / total, w_rl / total
+
+    def _xgb_predict(self, X: np.ndarray) -> float:
+        """XGBoost probability via AdvancedPredictor base model."""
+        try:
+            pred = get_predictor()
+            if pred._model is None:
+                pred._load()
+            if pred._model is None:
+                return 0.5
+            X_df = pd.DataFrame(X, columns=pred._feature_names or [f"f{i}" for i in range(X.shape[1])])
+            X_df = pred._align_features(X_df)
+            X_df = X_df.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+            proba = pred._model.predict_proba(X_df)
+            return float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
+        except Exception as exc:
+            logger.debug("HybridEnsemble XGB predict failed: %s", exc)
+            return 0.5
+
+    def _lstm_predict(self, X_seq: np.ndarray) -> float:
+        """LSTM probability via DeepPredictor (requires torch)."""
+        if not self._has_lstm:
+            return 0.5
+        try:
+            from research.pipeline.models_deep import DeepPredictor
+            from ml.saved_models import _LSTM_MODEL_PATH  # type: ignore[import]
+            import torch  # noqa: F401
+            model_path = Path(__file__).parent / "saved_models" / "lstm_predictor.pt"
+            if not model_path.exists():
+                return 0.5
+            dp = DeepPredictor.load(model_path)
+            proba = dp.predict(X_seq.reshape(1, self._seq_len, -1))
+            return float(np.clip(proba[0], 0.0, 1.0))
+        except Exception as exc:
+            logger.debug("HybridEnsemble LSTM predict failed: %s", exc)
+            return 0.5
+
+    def _rl_predict(self, obs: np.ndarray) -> float:
+        """RL agent action confidence (maps discrete action to probability)."""
+        if not self._has_rl:
+            return 0.5
+        try:
+            from ml.rl_agent import get_rl_agent
+            agent = get_rl_agent()
+            if agent is None:
+                return 0.5
+            action, _states = agent.predict(obs, deterministic=True)
+            # Action space: 0=short, 1=hold, 2=long → map to probability
+            action_map = {0: 0.2, 1: 0.5, 2: 0.8}
+            return float(action_map.get(int(action), 0.5))
+        except Exception as exc:
+            logger.debug("HybridEnsemble RL predict failed: %s", exc)
+            return 0.5
+
+    def predict_proba(
+        self,
+        X: np.ndarray,
+        X_seq: Optional[np.ndarray] = None,
+    ) -> float:
+        """
+        Return blended probability P(up) from all available components.
+
+        Parameters
+        ----------
+        X     : (1, n_features) tabular feature row for XGBoost
+        X_seq : (1, seq_len, n_features) sequence for LSTM — optional
+        """
+        with self._lock:
+            self._predict_count += 1
+
+        w_xgb, w_lstm, w_rl = self._effective_weights()
+
+        p_xgb = self._xgb_predict(X) if w_xgb > 0 else 0.5
+        p_lstm = self._lstm_predict(X_seq if X_seq is not None else X) if w_lstm > 0 else 0.5
+        p_rl = self._rl_predict(X.flatten()) if w_rl > 0 else 0.5
+
+        if self._meta_blend and self._meta_trained and self._meta is not None:
+            # Meta-blender: Ridge on [p_xgb, p_lstm, p_rl]
+            try:
+                meta_input = np.array([[p_xgb, p_lstm, p_rl]])
+                blended = float(self._meta.predict(meta_input)[0])
+                return float(np.clip(blended, 0.0, 1.0))
+            except Exception:
+                pass
+
+        # Weighted average fallback
+        blended = w_xgb * p_xgb + w_lstm * p_lstm + w_rl * p_rl
+        return float(np.clip(blended, 0.0, 1.0))
+
+    def fit_meta(
+        self,
+        p_xgb: np.ndarray,
+        p_lstm: np.ndarray,
+        p_rl: np.ndarray,
+        y: np.ndarray,
+    ) -> None:
+        """
+        Train the Ridge meta-blender on OOS component predictions.
+
+        Call this after generating OOS predictions from each component
+        on a held-out validation set.
+        """
+        from sklearn.linear_model import Ridge
+        from sklearn.preprocessing import StandardScaler
+
+        X_meta = np.column_stack([p_xgb, p_lstm, p_rl])
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X_meta)
+
+        meta = Ridge(alpha=1.0)
+        meta.fit(X_scaled, y.astype(float))
+
+        with self._lock:
+            self._meta = meta
+            self._meta_trained = True
+        logger.info(
+            "HybridEnsemble meta-blender trained on %d samples", len(y)
+        )
+
+    @property
+    def component_status(self) -> Dict[str, Any]:
+        w_xgb, w_lstm, w_rl = self._effective_weights()
+        return {
+            "xgb_available": self._has_xgb,
+            "lstm_available": self._has_lstm,
+            "rl_available": self._has_rl,
+            "effective_weights": {"xgb": round(w_xgb, 3), "lstm": round(w_lstm, 3), "rl": round(w_rl, 3)},
+            "meta_trained": self._meta_trained,
+            "predict_count": self._predict_count,
+        }
+
+
+_hybrid_predictor: Optional[HybridEnsemblePredictor] = None
+_hybrid_lock = threading.Lock()
+
+
+def get_hybrid_predictor() -> HybridEnsemblePredictor:
+    """Return the module-level HybridEnsemblePredictor singleton (thread-safe)."""
+    global _hybrid_predictor
+    if _hybrid_predictor is None:
+        with _hybrid_lock:
+            if _hybrid_predictor is None:
+                _hybrid_predictor = HybridEnsemblePredictor()
+    return _hybrid_predictor

@@ -55,7 +55,9 @@ def _load_module(name: str, path: pathlib.Path):
     return mod
 
 
-# Register a minimal 'api' package stub so submodule dotted names resolve
+# Register a minimal 'api' package stub so submodule dotted names resolve.
+# If the real 'api' package is already in sys.modules (full test suite run),
+# we reuse it so that patch("api.auth._decode_token") works in later tests.
 if "api" not in sys.modules:
     import types
 
@@ -64,8 +66,11 @@ if "api" not in sys.modules:
     _api_pkg.__package__ = "api"
     sys.modules["api"] = _api_pkg
 
-# Load auth first (trading imports from it)
+# Load auth first (trading imports from it).
+# Always set the loaded module as an attribute on the api package so that
+# patch("api.auth._decode_token") resolves correctly in subsequent tests.
 auth_module = _load_module("api.auth", _API_DIR / "auth.py")
+sys.modules["api"].auth = auth_module  # type: ignore[attr-defined]
 trading_module = _load_module("api.trading", _API_DIR / "trading.py")
 
 from api.auth import _ROLE_RANK, validate_order_symbol, validate_order_quantity  # noqa: E402
@@ -153,6 +158,9 @@ def app(mock_broker, mock_brain, tmp_path):
     fresh_ks = KillSwitch(flag_file=tmp_path / "ks_auth_test.flag")
     trading_module._set_kill_switch(fresh_ks)
 
+    # Reset in-memory rate-limit cache so prior test requests don't cause 429s.
+    trading_module._reset_order_rl_cache()
+
     application = FastAPI()
     application.include_router(router)
 
@@ -160,6 +168,7 @@ def app(mock_broker, mock_brain, tmp_path):
 
     # Restore to None so other test modules get a clean slate.
     trading_module._set_kill_switch(None)
+    trading_module._reset_order_rl_cache()
 
 
 @pytest.fixture()
