@@ -161,10 +161,17 @@ class AIExplainer:
     def _sensitivity_analysis(
         self, features: Dict[str, float], prediction: float
     ) -> List[FeatureContribution]:
-        """Perform simple sensitivity analysis for feature importance."""
-        contributions = []
+        """
+        Estimate feature contributions via sign-aware sensitivity analysis.
 
-        # Simulate feature contributions based on typical ranges
+        Each feature's contribution sign and magnitude are derived from its
+        actual value and known domain relationships — no random noise.
+
+        Magnitude is the feature's baseline importance weight.
+        Sign is determined by whether the feature value pushes toward or
+        against the current prediction direction (>0.5 = bullish).
+        """
+        # Baseline importance weights (domain-informed, not random)
         typical_impacts = {
             "rsi": 0.15,
             "macd": 0.12,
@@ -178,24 +185,45 @@ class AIExplainer:
             "resistance_distance": 0.10,
         }
 
+        bullish = prediction > 0.5
+        contributions = []
+
         for name, value in features.items():
             impact = typical_impacts.get(name, 0.05)
-            # Vary slightly for realism
-            impact *= 0.8 + np.random.random() * 0.4
 
-            # Determine if feature supports prediction
-            if "momentum" in name and prediction > 0.5:
-                contribution = impact
-            elif "rsi" in name:
-                # RSI below 30 supports BUY, above 70 supports SELL
+            # Derive sign from feature value semantics — no randomness
+            if "rsi" in name:
+                # Oversold (<30) → bullish signal; overbought (>70) → bearish
                 if value < 30:
-                    contribution = impact if prediction > 0.5 else -impact
+                    contribution = impact if bullish else -impact
                 elif value > 70:
-                    contribution = -impact if prediction > 0.5 else impact
+                    contribution = -impact if bullish else impact
                 else:
-                    contribution = impact * 0.3
+                    # Neutral RSI: weak contribution proportional to distance from 50
+                    contribution = impact * ((50 - value) / 50) * (1 if bullish else -1)
+            elif "momentum" in name or "macd" in name:
+                # Positive momentum/MACD supports bullish; negative supports bearish
+                contribution = impact * (1 if (value >= 0) == bullish else -1)
+            elif "bollinger_position" in name:
+                # Low position (<0.2) → oversold → bullish; high (>0.8) → overbought → bearish
+                if value < 0.2:
+                    contribution = impact if bullish else -impact
+                elif value > 0.8:
+                    contribution = -impact if bullish else impact
+                else:
+                    contribution = impact * (0.5 - value) * 2 * (1 if bullish else -1)
+            elif "volume_ratio" in name:
+                # Above-average volume (>1) amplifies the current direction
+                contribution = impact * (1 if value >= 1.0 else -1) * (1 if bullish else -1)
+            elif "support_distance" in name:
+                # Close to support (small value) → bullish
+                contribution = impact * (1 if value < 0.5 else -1) * (1 if bullish else -1)
+            elif "resistance_distance" in name:
+                # Far from resistance (large value) → bullish
+                contribution = impact * (1 if value > 0.5 else -1) * (1 if bullish else -1)
             else:
-                contribution = impact * (1 if np.random.random() > 0.5 else -1)
+                # Unknown feature: use sign of (value - 0.5) as a neutral heuristic
+                contribution = impact * (1 if value >= 0.5 else -1) * (1 if bullish else -1)
 
             contributions.append(
                 FeatureContribution(
@@ -344,39 +372,56 @@ class AIExplainer:
     def get_model_performance_explanation(
         self, model_name: str
     ) -> Optional[ModelPerformanceExplanation]:
-        """Get detailed explanation of model's historical performance."""
+        """
+        Return performance metrics for *model_name* from the live ML predictor.
+
+        Reads from ml.advanced_predictor.get_predictor() stats and meta dicts.
+        Returns None when the predictor is unavailable or has no recorded stats.
+        """
         if model_name in self.model_performance_cache:
             return self.model_performance_cache[model_name]
 
-        # Generate sample performance explanation
-        explanation = ModelPerformanceExplanation(
-            model_name=model_name,
-            accuracy=0.68,
-            precision=0.72,
-            recall=0.65,
-            f1_score=0.68,
-            total_predictions=1250,
-            correct_predictions=850,
-            confusion_matrix={
-                "BUY": {"BUY": 320, "SELL": 45, "HOLD": 35},
-                "SELL": {"BUY": 55, "SELL": 295, "HOLD": 50},
-                "HOLD": {"BUY": 40, "SELL": 60, "HOLD": 350},
-            },
-            best_performing_conditions=[
-                "Strong trending markets",
-                "Low volatility periods",
-                "High volume sessions",
-            ],
-            worst_performing_conditions=[
-                "Range-bound markets",
-                "News events",
-                "Low liquidity periods",
-            ],
-            feature_importance_history=[],
-        )
+        try:
+            from ml.advanced_predictor import get_predictor
+            pred = get_predictor()
+            meta = pred.meta or {}
+            stats = pred.stats or {}
 
-        self.model_performance_cache[model_name] = explanation
-        return explanation
+            accuracy = float(meta.get("oos_accuracy", 0.0))
+            precision = float(meta.get("oos_precision", 0.0))
+            recall = float(meta.get("oos_recall", 0.0))
+            f1 = float(meta.get("oos_f1", 0.0))
+            total = int(stats.get("predict_count", 0))
+            correct = int(round(accuracy * total)) if total else 0
+
+            if total == 0:
+                logger.debug(
+                    "get_model_performance_explanation: no predictions recorded for %s",
+                    model_name,
+                )
+                return None
+
+            explanation = ModelPerformanceExplanation(
+                model_name=model_name,
+                accuracy=accuracy,
+                precision=precision,
+                recall=recall,
+                f1_score=f1,
+                total_predictions=total,
+                correct_predictions=correct,
+                confusion_matrix=meta.get("confusion_matrix", {}),
+                best_performing_conditions=meta.get("best_conditions", []),
+                worst_performing_conditions=meta.get("worst_conditions", []),
+                feature_importance_history=[],
+            )
+            self.model_performance_cache[model_name] = explanation
+            return explanation
+
+        except Exception as exc:
+            logger.debug(
+                "get_model_performance_explanation failed for %s: %s", model_name, exc
+            )
+            return None
 
     def compare_explanations(
         self, explanation1: Explanation, explanation2: Explanation
