@@ -265,17 +265,7 @@ const FlagsTab: React.FC = () => {
       const res = await api.get('/admin/feature-flags');
       setFlags(res.data.flags || []);
     } catch {
-      // Demo fallback
-      setFlags([
-        { name: 'PAPER_TRADING',    enabled: true,  status: 'stable',       description: 'Paper-trading broker simulator.',         env_var: 'FEATURE_PAPER_TRADING' },
-        { name: 'LIVE_TRADING',     enabled: false, status: 'stable',       description: 'Live order execution via broker APIs.',   env_var: 'FEATURE_LIVE_TRADING' },
-        { name: 'ML_PREDICTIONS',   enabled: true,  status: 'beta',         description: 'ML model signal generation.',             env_var: 'FEATURE_ML_PREDICTIONS' },
-        { name: 'SOCIAL_TRADING',   enabled: true,  status: 'stable',       description: 'Copy trading and social feed.',           env_var: 'FEATURE_SOCIAL_TRADING' },
-        { name: 'BACKTESTING',      enabled: true,  status: 'stable',       description: 'Strategy backtesting engine.',            env_var: 'FEATURE_BACKTESTING' },
-        { name: 'NOCODE_BUILDER',   enabled: true,  status: 'beta',         description: 'No-code strategy builder.',               env_var: 'FEATURE_NOCODE_BUILDER' },
-        { name: 'REPLAY_ENGINE',    enabled: false, status: 'experimental', description: 'Historical market replay.',               env_var: 'FEATURE_REPLAY_ENGINE' },
-        { name: 'ORDER_FLOW',       enabled: true,  status: 'stable',       description: 'Order flow analysis dashboard.',          env_var: 'FEATURE_ORDER_FLOW' },
-      ]);
+      setFlags([]);
     } finally {
       setLoading(false);
     }
@@ -311,7 +301,8 @@ const FlagsTab: React.FC = () => {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      {loading ? <div style={s.dim}>Loading flags…</div> : (
+      {loading ? <div style={s.dim}>Loading flags…</div> :
+       flags.length === 0 ? <div style={s.dim}>Feature flags unavailable. Ensure admin API is running.</div> :
         filtered.map((flag) => (
           <div key={flag.name} style={s.flagRow}>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -341,7 +332,7 @@ const FlagsTab: React.FC = () => {
             </div>
           </div>
         ))
-      )}
+      }
     </div>
   );
 };
