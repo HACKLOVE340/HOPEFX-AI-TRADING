@@ -84,8 +84,8 @@ except ImportError:
     zmq = None  # type: ignore
     _ZMQ_AVAILABLE = False
     logger.warning(
-        "pyzmq not installed — MT5ZmqBridge will run in simulation mode. "
-        "Install: pip install pyzmq"
+        "pyzmq not installed — MT5ZmqBridge will enter DEGRADED state and "
+        "reject all order submissions. Install: pip install pyzmq"
     )
 
 # ── config ────────────────────────────────────────────────────────────────────
@@ -421,15 +421,10 @@ class MT5ZmqBridge:
     ) -> FillResult:
         """Send a command and block until a response arrives or timeout."""
         if self._status == BridgeStatus.DEGRADED:
-            # Simulation mode: return a synthetic fill
-            logger.debug("Bridge in simulation mode — synthetic fill for %s", payload)
-            return FillResult(
-                command_id=cmd_id,
-                ticket=int(time.time()),
-                symbol=symbol,
-                side=side,
-                lots=lots,
-                fill_price=0.0,
+            raise RuntimeError(
+                "MT5ZmqBridge is in DEGRADED state (ZMQ unavailable). "
+                "Cannot send orders — install pyzmq and ensure the MT5 EA is running. "
+                f"Order details: symbol={symbol} side={side} lots={lots}"
             )
 
         if self._status != BridgeStatus.CONNECTED:
