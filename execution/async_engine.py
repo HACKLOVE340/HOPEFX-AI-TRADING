@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 from enum import Enum, auto
 from typing import Any, Callable, Dict, List, Optional, Set
 
+import uuid
+
 import aiohttp
 import numpy as np
 
@@ -148,9 +150,9 @@ class AsyncExecutionEngine:
         if self._shutdown:
             raise RuntimeError("Engine is shutting down")
 
-        # Generate ID if not provided
+        # Generate a collision-resistant ID if not provided
         if not order.id:
-            order.id = f"ord_{int(time.time() * 1000)}_{np.random.randint(10000)}"
+            order.id = f"ord_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
 
         async with self.order_locks[order.id]:
             self.orders[order.id] = order
@@ -342,7 +344,12 @@ class AsyncExecutionEngine:
                     raise Exception(f"Submit failed: {error}")
 
     async def _simulate_fill(self, order: Order):
-        """Realistic fill simulation for paper trading"""
+        """Fill simulation for paper trading only — never called in live mode."""
+        if not self.paper_mode:
+            raise RuntimeError(
+                "_simulate_fill called in live mode. "
+                "Live orders must be routed through the real broker API."
+            )
         await asyncio.sleep(0.01)  # 10ms simulated latency
 
         async with self.price_lock:
@@ -405,7 +412,12 @@ class AsyncExecutionEngine:
             await self._apply_fill(order, fill)
 
     async def _delayed_fill_simulation(self, order: Order):
-        """Simulate fill that happens later (limit orders)"""
+        """Delayed fill simulation for paper trading only — never called in live mode."""
+        if not self.paper_mode:
+            raise RuntimeError(
+                "_delayed_fill_simulation called in live mode. "
+                "Live orders must be routed through the real broker API."
+            )
         await asyncio.sleep(np.random.exponential(5))  # Mean 5s delay
 
         if order.status != OrderStatus.SUBMITTED:
