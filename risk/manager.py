@@ -33,6 +33,7 @@ Position sizing formula
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import signal as _signal
@@ -41,6 +42,7 @@ import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -224,23 +226,36 @@ class RiskManager:
 
     def __init__(
         self,
+        config: Optional[RiskConfig] = None,
         orchestrator=None,
         lineage_store=None,
-        config: Optional[RiskConfig] = None,
+        initial_balance: Optional[float] = None,
+        halt_state_file: Optional[Any] = None,
     ) -> None:
         self._orch    = orchestrator
         self._lineage = lineage_store
         self._config  = config or RiskConfig()
+        self._halt_state_file: Optional[Path] = (
+            Path(halt_state_file) if halt_state_file is not None else None
+        )
+
+        # initial_balance overrides the env-var default when supplied directly
+        equity = float(initial_balance) if initial_balance is not None else _ACCOUNT_EQUITY
+
         self._state   = RiskState(
-            account_equity  = _ACCOUNT_EQUITY,
-            peak_equity     = _ACCOUNT_EQUITY,
-            day_open_equity = _ACCOUNT_EQUITY,
+            account_equity  = equity,
+            peak_equity     = equity,
+            day_open_equity = equity,
             trade_day       = datetime.now(timezone.utc).day,
         )
         self._pnl_history:    deque = deque(maxlen=_VAR_WINDOW)
         self._sizing_history: List[Dict] = []
         self._halt:           bool  = False
         self._halt_reason:    str   = ""
+
+        # Restore persisted halt state so a restart after a halt does not
+        # silently resume trading.
+        self._restore_halt_state()
         self._install_signal_handlers()
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -539,17 +554,58 @@ class RiskManager:
                 logger.debug("RiskManager.get_macro_impact_score error: %s", exc)
         return 0.0
 
+    # ── Halt-state persistence ────────────────────────────────────────────────
+
+    def _persist_halt_state(self) -> None:
+        """Write halt state to disk so restarts do not silently resume trading."""
+        if self._halt_state_file is None:
+            return
+        try:
+            self._halt_state_file.write_text(
+                json.dumps({"halt": self._halt, "reason": self._halt_reason}, indent=2)
+            )
+        except OSError as exc:
+            logger.warning("RiskManager: could not persist halt state: %s", exc)
+
+    def _restore_halt_state(self) -> None:
+        """Re-apply halt state from disk on startup."""
+        if self._halt_state_file is None or not self._halt_state_file.exists():
+            return
+        try:
+            data = json.loads(self._halt_state_file.read_text())
+            if data.get("halt"):
+                self._halt        = True
+                self._halt_reason = data.get("reason", "restored from halt_state_file")
+                logger.critical(
+                    "RiskManager: halt restored from %s — reason=%s",
+                    self._halt_state_file, self._halt_reason,
+                )
+        except Exception as exc:
+            logger.warning("RiskManager: could not restore halt state: %s", exc)
+
+    def _clear_halt_state(self) -> None:
+        """Remove the halt-state file after a successful resume."""
+        if self._halt_state_file is None:
+            return
+        try:
+            if self._halt_state_file.exists():
+                self._halt_state_file.unlink()
+        except OSError as exc:
+            logger.warning("RiskManager: could not clear halt state file: %s", exc)
+
     # ── Halt ──────────────────────────────────────────────────────────────────
 
     def _halt_trading(self, reason: str) -> None:
         self._halt        = True
         self._halt_reason = reason
         logger.critical("RiskManager: TRADING HALTED — reason=%s", reason)
+        self._persist_halt_state()
 
     def resume_trading(self) -> None:
         """Manual resume — requires explicit operator action."""
         self._halt        = False
         self._halt_reason = ""
+        self._clear_halt_state()
         logger.warning("RiskManager: trading RESUMED by operator")
 
     # ── VaR ───────────────────────────────────────────────────────────────────
@@ -622,7 +678,7 @@ def _make_risk_manager() -> RiskManager:
         from data_layer.orchestrator import orchestrator
         return RiskManager(orchestrator=orchestrator)
     except Exception:
-        return RiskManager()
+        return RiskManager()  # no orchestrator in test/minimal environments
 
 
 risk_manager = _make_risk_manager()
