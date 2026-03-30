@@ -322,6 +322,22 @@ export const apiClient = {
     return res.data;
   },
 
+  // ── Risk metrics ──────────────────────────────────────────────────────────
+
+  async getRiskMetrics(): Promise<import('../types').RiskMetrics> {
+    const res = await _axios.get<import('../types').RiskMetrics>('/api/risk/metrics');
+    return res.data;
+  },
+
+  // ── Sentiment ──────────────────────────────────────────────────────────────
+
+  async getSentiment(symbol = 'XAUUSD'): Promise<import('../types').SentimentData> {
+    const res = await _axios.get<import('../types').SentimentData>('/api/sentiment/latest', {
+      params: { symbol },
+    });
+    return res.data;
+  },
+
   // ── Raw access ─────────────────────────────────────────────────────────────
 
   get<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
@@ -337,3 +353,6 @@ export const apiClient = {
     return _axios.delete<T>(url, config);
   },
 };
+
+// ── Risk metrics ───────────────────────────────────────────────────────────────
+// (appended to existing apiClient export)
