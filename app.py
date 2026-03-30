@@ -284,7 +284,7 @@ from core.middleware import setup_cors, setup_security_headers, setup_metrics_mi
 
 
 # Background task implementations extracted to core/background_tasks.py
-from core.background_tasks import oanda_price_poller as _oanda_price_poller  # noqa: E402
+from core.background_tasks import nuclear_price_bridge as _nuclear_price_bridge  # noqa: E402
 from core.background_tasks import price_stream_loop as _price_stream_loop  # noqa: E402
 
 
