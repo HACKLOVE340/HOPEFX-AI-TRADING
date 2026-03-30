@@ -131,6 +131,7 @@ _ACTION_NAMES = {
 
 # Default RL model path (relative to project root)
 _DEFAULT_MODEL_PATH = "ml/rl_models/nuclear_decision_ppo.zip"
+_DEFAULT_VECNORM_PATH = "ml/rl_models/nuclear_decision_vecnorm.pkl"
 
 
 class NuclearHopeFXSupervisor:
@@ -156,6 +157,7 @@ class NuclearHopeFXSupervisor:
         self,
         model_path: Optional[str | Path] = None,
         wordmap_path: Optional[str | Path] = None,
+        vecnorm_path: Optional[str | Path] = None,
         cooldown_seconds: int = 60,
         auto_resume_seconds: int = 300,
     ) -> None:
@@ -169,16 +171,19 @@ class NuclearHopeFXSupervisor:
         # WORDMAP scorer
         self.scorer = NuclearWordMapScorer(wordmap_path=wordmap_path)
 
-        # RL agent
+        # RL agent + VecNormalize wrapper
         self._model_path = Path(model_path or _DEFAULT_MODEL_PATH)
+        self._vecnorm_path = Path(vecnorm_path or _DEFAULT_VECNORM_PATH)
         self.rl_agent = self._load_rl_agent()
+        self._vec_normalize = self._load_vec_normalize()
 
         # Event history for audit trail (last 100 events)
         self._event_history: list[Dict[str, Any]] = []
 
         logger.info(
-            "NuclearHopeFXSupervisor ready | rl_agent=%s model=%s",
+            "NuclearHopeFXSupervisor ready | rl_agent=%s vecnorm=%s model=%s",
             "loaded" if self.rl_agent is not None else "fallback",
+            "loaded" if self._vec_normalize is not None else "none",
             self._model_path,
         )
 
@@ -206,9 +211,64 @@ class NuclearHopeFXSupervisor:
             logger.warning("RL agent load failed (%s) — falling back to rule-based", exc)
             return None
 
+    def _load_vec_normalize(self) -> Optional[Any]:
+        """
+        Load the VecNormalize statistics saved alongside the PPO model.
+
+        The normalizer is applied to every observation before passing it to
+        the RL agent so that inference matches the training distribution.
+        Returns None if the file is absent or stable-baselines3 is not installed.
+        """
+        if not _SB3_AVAILABLE:
+            return None
+        if not self._vecnorm_path.exists():
+            logger.debug(
+                "VecNormalize stats not found at %s — observations will not be normalised",
+                self._vecnorm_path,
+            )
+            return None
+        try:
+            from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
+            import gymnasium as gym
+
+            # Reconstruct a dummy env with the same obs shape (7-dim Box)
+            def _make_env():
+                return gym.make("CartPole-v1")  # placeholder — only shape matters
+
+            # Load the saved normalizer statistics (no env needed for inference)
+            vn = VecNormalize.load(str(self._vecnorm_path), venv=None)  # type: ignore[arg-type]
+            vn.training = False          # freeze running stats
+            vn.norm_reward = False       # we only normalise observations
+            logger.info("VecNormalize stats loaded from %s", self._vecnorm_path)
+            return vn
+        except Exception as exc:
+            logger.warning(
+                "VecNormalize load failed (%s) — observations will not be normalised", exc
+            )
+            return None
+
+    def _normalize_obs(self, obs: np.ndarray) -> np.ndarray:
+        """
+        Apply VecNormalize to a single observation vector.
+
+        VecNormalize expects shape (n_envs, obs_dim); we add/remove the
+        batch dimension around the call.
+        """
+        if self._vec_normalize is None:
+            return obs
+        try:
+            # VecNormalize.normalize_obs expects (n_envs, obs_dim)
+            batched = obs.reshape(1, -1)
+            normalised = self._vec_normalize.normalize_obs(batched)
+            return normalised.reshape(-1).astype(np.float32)
+        except Exception as exc:
+            logger.debug("VecNormalize.normalize_obs failed (%s) — using raw obs", exc)
+            return obs
+
     def reload_rl_agent(self) -> bool:
-        """Hot-reload the RL model from disk. Returns True on success."""
+        """Hot-reload the RL model and VecNormalize stats from disk."""
         self.rl_agent = self._load_rl_agent()
+        self._vec_normalize = self._load_vec_normalize()
         return self.rl_agent is not None
 
     # ── Observation builder ───────────────────────────────────────────────────
@@ -274,6 +334,7 @@ class NuclearHopeFXSupervisor:
 
         if self.rl_agent is not None:
             obs = self._build_rl_observation(severity, vol, sentiment, meta, current_exposure)
+            obs = self._normalize_obs(obs)   # apply VecNormalize if available
             raw_action, _ = self.rl_agent.predict(obs, deterministic=True)
             rl_action = int(raw_action)
 
