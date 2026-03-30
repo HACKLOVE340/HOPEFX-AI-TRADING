@@ -259,8 +259,8 @@ def _seed_from_broker() -> None:
                 cfg["price"] = float(live)
                 _open_prices[sym] = float(live)
         _prices_seeded = True
-    except Exception:
-        pass  # app_state not ready yet — will retry next tick
+    except Exception as exc:
+        logger.debug("_seed_prices_from_broker: app_state not ready yet, will retry next tick: %s", exc)
 
 
 def _get_live_price(symbol: str) -> Optional[float]:
@@ -292,8 +292,8 @@ def _get_live_price(symbol: str) -> Optional[float]:
         live = market_prices.get(broker_key)
         if live and live > 0:
             return float(live)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("_get_live_price(%s): price lookup failed: %s", symbol, exc)
     return None
 
 
@@ -423,8 +423,8 @@ def _compute_atr_sl_tp(
             )
             if len(tr) >= 14:
                 atr = float(_np.mean(tr[-14:]))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("_compute_sl_tp: signal engine ATR calc failed, trying CSV fallback: %s", exc)
 
     # ── 2. CSV fallback ───────────────────────────────────────────────────────
     if atr is None:
@@ -450,8 +450,8 @@ def _compute_atr_sl_tp(
                         ),
                     )
                     atr = float(_np.mean(tr[-14:]))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("_compute_sl_tp: CSV ATR calc failed, using percentage fallback: %s", exc)
 
     # ── 3. Percentage fallback ────────────────────────────────────────────────
     if atr is None or atr <= 0:
@@ -594,8 +594,8 @@ async def _price_broadcaster() -> None:
         # If EventBus connects successfully it takes over; on failure we fall
         # through to the direct-poll path below.
         await _eventbus_tick_broadcaster()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("_price_broadcaster: EventBus tick broadcaster failed, falling back to direct poll: %s", exc)
     # EventBus unavailable — poll broker directly (real prices only, no GBM)
     await _price_broadcaster_live_only()
 
@@ -624,8 +624,8 @@ async def _heartbeat_broadcaster() -> None:
             if ws:
                 try:
                     await ws.close(code=1001, reason="heartbeat timeout")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("_heartbeat_broadcaster: error closing stale connection %s: %s", cid, exc)
             _manager.disconnect(cid)
 
 
