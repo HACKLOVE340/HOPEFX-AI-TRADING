@@ -442,6 +442,34 @@ async def startup_event():
             if hasattr(app_state, "background_tasks"):
                 app_state.background_tasks.append(_l2_task)
             logger.info("L2 order book feed starting for symbols: %s", _l2_symbols)
+
+            # Wire L2 depth into MicrostructureEngine via orchestrator.
+            # Runs a background loop that pushes real bid/ask depth into the
+            # engine every L2_SNAPSHOT_INTERVAL seconds so depth_imbalance
+            # and related ML features reflect real order book state.
+            async def _l2_depth_bridge() -> None:
+                import asyncio as _asyncio
+                _interval = float(os.getenv("L2_SNAPSHOT_INTERVAL", "1.0"))
+                while True:
+                    try:
+                        from data_layer.orchestrator import orchestrator as _dl_orch
+                        for _sym in [s.strip() for s in _l2_symbols]:
+                            _snap = _l2_feed.get_snapshot(_sym)
+                            if _snap is not None:
+                                _dl_orch._micro.inject_l2_depth(
+                                    symbol    = _sym,
+                                    bid_depth = _snap.bid_depth,
+                                    ask_depth = _snap.ask_depth,
+                                )
+                    except Exception as _exc:
+                        logger.debug("L2 depth bridge error: %s", _exc)
+                    await _asyncio.sleep(_interval)
+
+            _l2_bridge_task = asyncio.create_task(
+                _l2_depth_bridge(), name="l2_depth_bridge"
+            )
+            if hasattr(app_state, "background_tasks"):
+                app_state.background_tasks.append(_l2_bridge_task)
         except Exception as _l2_exc:
             logger.warning("L2 order book feed failed to start (non-fatal): %s", _l2_exc)
 
