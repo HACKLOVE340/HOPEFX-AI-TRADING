@@ -231,6 +231,40 @@ def temp_dir():
 
 
 @pytest.fixture
+def mock_strategy():
+    """
+    Factory fixture returning a callable that produces concrete BaseStrategy
+    instances for unit tests.
+
+    Usage::
+
+        def test_something(mock_strategy):
+            strategy = mock_strategy()          # default name "MockStrategy"
+            strategy2 = mock_strategy("Foo")    # custom name
+    """
+    from strategies.base import BaseStrategy, StrategyConfig
+
+    def _factory(name: str = "MockStrategy", symbol: str = "EUR_USD"):
+        config = StrategyConfig(
+            name=name,
+            symbol=symbol,
+            timeframe="1H",
+            parameters={},
+        )
+
+        class _MockStrategy(BaseStrategy):
+            def analyze(self, market_data):
+                return {}
+
+            def generate_signal(self, analysis):
+                return None
+
+        return _MockStrategy(config=config)
+
+    return _factory
+
+
+@pytest.fixture
 def sample_market_data():
     """Multi-asset OHLCV dict for portfolio tests."""
     import pandas as pd

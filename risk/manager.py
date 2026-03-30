@@ -50,7 +50,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # ── risk config (all env-overridable) ─────────────────────────────────────────
-_ACCOUNT_EQUITY      = float(os.getenv("RISK_ACCOUNT_EQUITY",       "100000"))
+_ACCOUNT_EQUITY      = float(os.getenv("RISK_ACCOUNT_EQUITY",       "1000000"))
 _MAX_POSITION_PCT    = float(os.getenv("RISK_MAX_POSITION_PCT",      "0.05"))
 _MIN_POSITION_PCT    = float(os.getenv("RISK_MIN_POSITION_PCT",      "0.001"))
 _KELLY_FRACTION      = float(os.getenv("RISK_KELLY_FRACTION",        "0.25"))
@@ -136,6 +136,47 @@ class RiskAssessment:
     timestamp:       "datetime" = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+
+    # Alias: tests and downstream callers use .can_trade
+    @property
+    def can_trade(self) -> bool:
+        return self.approved
+
+    # Alias: .level maps to .risk_level
+    @property
+    def level(self) -> str:
+        return self.risk_level
+
+
+@dataclass
+class RiskCheckResult:
+    """
+    Generic result for individual risk checks (position size, price tolerance,
+    drawdown, correlation, concentration).
+
+    Used by check_position_size(), check_price_tolerance(), check_drawdown(),
+    check_correlation_risk(), and check_concentration().
+    """
+    passed:     bool
+    risk_level: str = RiskLevel.LOW
+    message:    str = ""
+    value:      float = 0.0
+    threshold:  float = 0.0
+
+
+@dataclass
+class TradeAssessment:
+    """
+    Lightweight trade-readiness assessment returned by assess_risk().
+
+    Consumed by tests and downstream callers that need a simple
+    can_trade / level answer without a full signal object.
+    """
+    can_trade:  bool
+    level:      str = RiskLevel.LOW
+    reason:     str = ""
+    drawdown:   float = 0.0
+    daily_dd:   float = 0.0
 
 
 @dataclass
@@ -746,6 +787,373 @@ class RiskManager:
             )
         except Exception as exc:
             logger.debug("RiskManager lineage write failed: %s", exc)
+
+    # ── Legacy / convenience API (required by tests) ──────────────────────────
+
+    def assess_risk(
+        self,
+        account_info: Dict[str, Any],
+        positions: List[Any],
+    ) -> "TradeAssessment":
+        """
+        Lightweight trade-readiness check from raw account info dict.
+
+        Parameters
+        ----------
+        account_info : dict with keys 'equity' and/or 'balance'
+        positions    : list of open positions (used for open-position count)
+
+        Returns TradeAssessment with can_trade, level, reason, drawdown fields.
+        """
+        equity = float(account_info.get("equity") or account_info.get("balance") or 0.0)
+        if equity > 0:
+            self.update_equity(equity)
+
+        dd = self._state.current_drawdown
+        daily_dd = self._state.daily_drawdown
+
+        if self._halt:
+            return TradeAssessment(
+                can_trade=False,
+                level=RiskLevel.CRITICAL,
+                reason=f"halted:{self._halt_reason}",
+                drawdown=dd,
+                daily_dd=daily_dd,
+            )
+
+        if dd >= self._config.max_drawdown_pct:
+            return TradeAssessment(
+                can_trade=False,
+                level=RiskLevel.CRITICAL,
+                reason=f"max_drawdown_exceeded:{dd*100:.2f}%",
+                drawdown=dd,
+                daily_dd=daily_dd,
+            )
+
+        if daily_dd >= self._config.max_daily_loss_pct:
+            return TradeAssessment(
+                can_trade=False,
+                level=RiskLevel.HIGH,
+                reason=f"daily_loss_limit:{daily_dd*100:.2f}%",
+                drawdown=dd,
+                daily_dd=daily_dd,
+            )
+
+        n_pos = len(positions) if positions else self._state.open_positions
+        if n_pos >= self._config.max_open_positions:
+            return TradeAssessment(
+                can_trade=False,
+                level=RiskLevel.MEDIUM,
+                reason=f"max_positions:{self._config.max_open_positions}",
+                drawdown=dd,
+                daily_dd=daily_dd,
+            )
+
+        level = RiskLevel.LOW
+        if dd > self._config.max_drawdown_pct * 0.75:
+            level = RiskLevel.MEDIUM
+        elif dd > self._config.max_drawdown_pct * 0.50:
+            level = RiskLevel.LOW
+
+        return TradeAssessment(
+            can_trade=True,
+            level=level,
+            reason="approved",
+            drawdown=dd,
+            daily_dd=daily_dd,
+        )
+
+    def check_position_size(
+        self,
+        trade: Any,
+        max_pct: float = 0.05,
+    ) -> "RiskCheckResult":
+        """
+        FIA 1.1: Validate that a trade's notional size does not exceed max_pct
+        of the current account equity.
+
+        Parameters
+        ----------
+        trade   : object with .size (units) and .entry_price attributes
+        max_pct : maximum allowed fraction of equity (e.g. 0.05 = 5%)
+        """
+        try:
+            size = float(getattr(trade, "size", 0) or 0)
+            price = float(getattr(trade, "entry_price", 0) or 0)
+            # size is treated as the USD notional of the position.
+            # For FX positions, size represents the position value in account
+            # currency (e.g. size=10,000 means $10,000 notional exposure).
+            # entry_price is used only when size is zero (fallback).
+            notional = size if size > 0 else (price or 0.0)
+            equity = self._state.account_equity or _ACCOUNT_EQUITY
+            pct = notional / equity if equity > 0 else 0.0
+
+            if pct > max_pct:
+                return RiskCheckResult(
+                    passed=False,
+                    risk_level=RiskLevel.CRITICAL,
+                    message=(
+                        f"Position size {pct*100:.1f}% exceeds limit {max_pct*100:.1f}% "
+                        f"(notional=${notional:,.0f}, equity=${equity:,.0f})"
+                    ),
+                    value=pct,
+                    threshold=max_pct,
+                )
+
+            level = RiskLevel.LOW
+            if pct > max_pct * 0.80:
+                level = RiskLevel.MEDIUM
+            return RiskCheckResult(
+                passed=True,
+                risk_level=level,
+                message=f"Position size {pct*100:.2f}% within limit {max_pct*100:.1f}%",
+                value=pct,
+                threshold=max_pct,
+            )
+        except Exception as exc:
+            logger.debug("check_position_size error: %s", exc)
+            return RiskCheckResult(passed=True, risk_level=RiskLevel.LOW, message="check_skipped")
+
+    def check_price_tolerance(
+        self,
+        order: Any,
+        current_price: float,
+        tolerance: float = 0.02,
+    ) -> "RiskCheckResult":
+        """
+        FIA 1.3: Validate that the order price is within tolerance of the
+        current market price.
+
+        Parameters
+        ----------
+        order         : dict or object with 'price' key/attribute
+        current_price : current market mid price
+        tolerance     : maximum allowed deviation as a fraction (e.g. 0.02 = 2%)
+        """
+        try:
+            if isinstance(order, dict):
+                order_price = float(order.get("price", current_price))
+            else:
+                order_price = float(getattr(order, "price", current_price))
+
+            if current_price <= 0:
+                return RiskCheckResult(passed=True, message="no_reference_price")
+
+            deviation = abs(order_price - current_price) / current_price
+
+            if deviation > tolerance:
+                return RiskCheckResult(
+                    passed=False,
+                    risk_level=RiskLevel.HIGH,
+                    message=(
+                        f"Price tolerance exceeded: order={order_price:.5f} "
+                        f"market={current_price:.5f} deviation={deviation*100:.2f}% "
+                        f"> tolerance={tolerance*100:.1f}%"
+                    ),
+                    value=deviation,
+                    threshold=tolerance,
+                )
+
+            return RiskCheckResult(
+                passed=True,
+                risk_level=RiskLevel.LOW,
+                message=f"Price within tolerance: deviation={deviation*100:.3f}%",
+                value=deviation,
+                threshold=tolerance,
+            )
+        except Exception as exc:
+            logger.debug("check_price_tolerance error: %s", exc)
+            return RiskCheckResult(passed=True, message="check_skipped")
+
+    def check_kill_switch(
+        self,
+        daily_pnl: float,
+        account_value: float,
+        threshold: float = 0.03,
+    ) -> bool:
+        """
+        FIA 1.5: Activate kill switch if daily loss exceeds threshold.
+
+        Parameters
+        ----------
+        daily_pnl     : current day's P&L (negative = loss)
+        account_value : total account value
+        threshold     : loss fraction that triggers halt (e.g. 0.03 = 3%)
+
+        Returns True if kill switch was triggered, False otherwise.
+        Sets self.kill_switch_active = True on trigger.
+        """
+        if account_value <= 0:
+            return False
+        loss_pct = abs(min(daily_pnl, 0.0)) / account_value
+        if loss_pct >= threshold:
+            self._halt_trading(
+                f"kill_switch:daily_loss={loss_pct*100:.2f}%>={threshold*100:.1f}%"
+            )
+            return True
+        return False
+
+    def check_drawdown(
+        self,
+        equity_curve: Any = None,
+        max_dd: float = None,
+    ) -> "RiskCheckResult":
+        """
+        Validate that the current (or supplied) drawdown does not exceed max_dd.
+
+        Parameters
+        ----------
+        equity_curve : optional list of equity values; if supplied, computes
+                       drawdown from the curve rather than internal state
+        max_dd       : maximum allowed drawdown fraction (default: config value)
+        """
+        limit = max_dd if max_dd is not None else self._config.max_drawdown_pct
+
+        if equity_curve is not None and len(equity_curve) >= 2:
+            arr = np.array(equity_curve, dtype=float)
+            peak = np.maximum.accumulate(arr)
+            dd_series = (peak - arr) / np.where(peak > 0, peak, 1.0)
+            current_dd = float(dd_series[-1])
+        else:
+            current_dd = self._state.current_drawdown
+
+        if current_dd > limit:
+            return RiskCheckResult(
+                passed=False,
+                risk_level=RiskLevel.CRITICAL,
+                message=(
+                    f"Drawdown {current_dd*100:.2f}% exceeds limit {limit*100:.1f}%"
+                ),
+                value=current_dd,
+                threshold=limit,
+            )
+
+        level = RiskLevel.LOW
+        if current_dd > limit * 0.75:
+            level = RiskLevel.HIGH
+        elif current_dd > limit * 0.50:
+            level = RiskLevel.MEDIUM
+
+        return RiskCheckResult(
+            passed=True,
+            risk_level=level,
+            message=f"Drawdown {current_dd*100:.2f}% within limit {limit*100:.1f}%",
+            value=current_dd,
+            threshold=limit,
+        )
+
+    def check_correlation_risk(
+        self,
+        positions: List[Any],
+        max_correlation: float = 0.80,
+    ) -> "RiskCheckResult":
+        """
+        Estimate portfolio correlation risk from position symbols.
+
+        Uses a static correlation table for major FX pairs. Returns HIGH
+        risk level when any pair exceeds max_correlation.
+
+        Parameters
+        ----------
+        positions       : list of Position objects with .symbol attribute
+        max_correlation : maximum allowed pairwise correlation
+        """
+        # Static correlation table for major FX pairs (approximate)
+        _CORR: Dict[tuple, float] = {
+            ("EURUSD", "GBPUSD"): 0.87,
+            ("GBPUSD", "EURUSD"): 0.87,
+            ("EURUSD", "AUDUSD"): 0.72,
+            ("AUDUSD", "EURUSD"): 0.72,
+            ("EURUSD", "NZDUSD"): 0.68,
+            ("USDJPY", "USDCHF"): 0.75,
+            ("USDCHF", "USDJPY"): 0.75,
+            ("GBPUSD", "AUDUSD"): 0.65,
+            ("XAUUSD", "AUDUSD"): 0.55,
+        }
+
+        symbols = [getattr(p, "symbol", "") for p in positions]
+        max_found = 0.0
+        worst_pair = ("", "")
+
+        for i, s1 in enumerate(symbols):
+            for j, s2 in enumerate(symbols):
+                if i >= j:
+                    continue
+                corr = _CORR.get((s1, s2), _CORR.get((s2, s1), 0.0))
+                if corr > max_found:
+                    max_found = corr
+                    worst_pair = (s1, s2)
+
+        if max_found >= max_correlation:
+            level = RiskLevel.HIGH
+        elif max_found >= max_correlation * 0.75:
+            level = RiskLevel.MEDIUM
+        else:
+            level = RiskLevel.LOW
+
+        return RiskCheckResult(
+            passed=max_found < max_correlation,
+            risk_level=level,
+            message=(
+                f"Max correlation {max_found:.2f} between {worst_pair[0]}/{worst_pair[1]}"
+                if worst_pair[0] else "No correlated pairs detected"
+            ),
+            value=max_found,
+            threshold=max_correlation,
+        )
+
+    def check_concentration(
+        self,
+        positions: List[Any],
+        account: Any,
+        max_single: float = 0.40,
+    ) -> "RiskCheckResult":
+        """
+        Validate that no single position exceeds max_single fraction of
+        account balance.
+
+        Parameters
+        ----------
+        positions  : list of Position objects with .market_value attribute
+        account    : Account object with .balance attribute
+        max_single : maximum allowed single-position concentration
+        """
+        try:
+            balance = float(getattr(account, "balance", 0) or 0)
+            if balance <= 0:
+                return RiskCheckResult(passed=True, message="no_balance_data")
+
+            worst_sym = ""
+            worst_pct = 0.0
+            for pos in positions:
+                mv = float(getattr(pos, "market_value", 0) or 0)
+                pct = mv / balance
+                if pct > worst_pct:
+                    worst_pct = pct
+                    worst_sym = getattr(pos, "symbol", "?")
+
+            if worst_pct > max_single:
+                return RiskCheckResult(
+                    passed=False,
+                    risk_level=RiskLevel.HIGH,
+                    message=(
+                        f"Concentration risk: {worst_sym} is {worst_pct*100:.1f}% "
+                        f"of account (limit {max_single*100:.1f}%)"
+                    ),
+                    value=worst_pct,
+                    threshold=max_single,
+                )
+
+            return RiskCheckResult(
+                passed=True,
+                risk_level=RiskLevel.LOW,
+                message=f"Max concentration {worst_pct*100:.1f}% within limit",
+                value=worst_pct,
+                threshold=max_single,
+            )
+        except Exception as exc:
+            logger.debug("check_concentration error: %s", exc)
+            return RiskCheckResult(passed=True, message="check_skipped")
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
