@@ -938,9 +938,26 @@ def add_data_layer_features(
     cum_delta       = features.get("micro_cumulative_delta", 0.0)
     vol_delta       = features.get("micro_volume_delta",     0.0)
     vwap            = features.get("micro_vwap_dev",         0.0)
-    bid_depth       = 0.0   # populated when L2 data available
-    ask_depth       = 0.0
+    # ── L2 order book features (populated from OrderBookFeed when available) ──
+    bid_depth       = features.get("micro_bid_depth",        0.0)
+    ask_depth       = features.get("micro_ask_depth",        0.0)
     depth_imbalance = features.get("micro_depth_imbalance",  0.0)
+    # Supplement with live L2 feed if orchestrator didn't provide depth data
+    if bid_depth == 0.0 and ask_depth == 0.0:
+        try:
+            from market_data.order_book import get_order_book_feed
+            _l2_feed = get_order_book_feed()
+            # Derive symbol from DataFrame index or use default
+            _symbol = getattr(df, "_hopefx_symbol", "XAU_USD")
+            _l2_features = _l2_feed.get_ml_features(_symbol)
+            bid_depth       = _l2_features.get("micro_bid_depth",       0.0)
+            ask_depth       = _l2_features.get("micro_ask_depth",       0.0)
+            depth_imbalance = _l2_features.get("micro_depth_imbalance", depth_imbalance)
+            # Also update OFI and pressure from L2 if available
+            if _l2_features.get("micro_obi", 0.0) != 0.0:
+                ofi = _l2_features["micro_obi"]
+        except Exception as _l2_exc:
+            logger.debug("L2 order book features unavailable: %s", _l2_exc)
     tick_count      = 0.0
 
     # Derived microstructure
