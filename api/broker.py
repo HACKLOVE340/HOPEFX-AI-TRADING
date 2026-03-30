@@ -261,10 +261,14 @@ async def broker_status():
     Return the current broker type, connection state, account balance, and
     data feed engine status.
 
-    Reads from the live app_state broker and price_engine instances.
+    Reads from the live app_state broker, nuclear_streamer, and price_engine.
     For paper trading this returns the simulated balance.
     For OANDA it calls get_account_info() to retrieve the live balance.
-    The data_feed section reports RealTimePriceEngine connectivity.
+
+    data_feed section reports:
+      - NuclearStreamer status when streaming keys are configured (primary)
+      - RealTimePriceEngine REST status as fallback
+    OANDA is never used as a price source.
     """
     from datetime import datetime, timezone
 
@@ -345,37 +349,67 @@ async def broker_status():
                 broker_section["error"] = broker_error
 
         # ── Data feed / price engine section ──────────────────────────────────
+        # NuclearStreamer is the primary live tick source (WebSocket).
+        # RealTimePriceEngine is the REST polling fallback.
+        # OANDA is never used as a price source.
+        nuclear = getattr(app_state, "nuclear_streamer", None)
         price_engine = getattr(app_state, "price_engine", None)
-        if price_engine is not None and hasattr(price_engine, "get_status"):
+
+        if nuclear is not None:
+            # Primary: NuclearStreamer WebSocket status
+            ns_status = nuclear.status()
+            # REST fallback status (may be None if not initialised)
+            rest_status: dict = {}
+            if price_engine is not None and hasattr(price_engine, "get_status"):
+                try:
+                    rest_status = price_engine.get_status()
+                except Exception:
+                    rest_status = {}
+            data_feed: dict = {
+                "active": ns_status.get("is_running", False),
+                "source": "NuclearStreamer",
+                "symbol": ns_status.get("symbol"),
+                "last_price": ns_status.get("last_price"),
+                "subscriber_count": ns_status.get("subscriber_count", 0),
+                "anomaly_counts": ns_status.get("anomaly_counts", {}),
+                "circuit_breakers": ns_status.get("circuit_breakers", {}),
+                "rest_fallback": {
+                    "active": rest_status.get("active", False),
+                    "primary_active": rest_status.get("primary_active", False),
+                    "fallback_active": rest_status.get("fallback_active", False),
+                } if rest_status else {"active": False},
+            }
+        elif price_engine is not None and hasattr(price_engine, "get_status"):
+            # Fallback only: RealTimePriceEngine REST polling
             try:
                 feed_raw = price_engine.get_status()
-                data_feed: dict = {
+                data_feed = {
                     "active": feed_raw.get("active", False),
+                    "source": "RealTimePriceEngine",
                     "primary_active": feed_raw.get("primary_active", False),
                     "fallback_active": feed_raw.get("fallback_active", False),
                     "websocket_connected": feed_raw.get("websocket_connected", False),
                     "rest_available": feed_raw.get("rest_available", False),
                     "symbols": feed_raw.get("symbols", []),
-                    "source": "RealTimePriceEngine",
+                    "note": "NuclearStreamer not active — no streaming API keys set",
                 }
             except Exception as exc:
                 data_feed = {"active": False, "error": str(exc), "source": "RealTimePriceEngine"}
         elif price_engine is not None:
-            # Engine exists but no get_status() — check active attribute
             data_feed = {
                 "active": getattr(price_engine, "active", False),
                 "source": type(price_engine).__name__,
                 "symbols": getattr(price_engine, "symbols", []),
             }
         else:
-            # No price engine — check if broker has a built-in feed
             has_feed = hasattr(broker, "market_prices") if broker else False
             data_feed = {
                 "active": has_feed,
                 "source": "broker_internal" if has_feed else "none",
-                "note": "RealTimePriceEngine not initialised; broker provides prices directly"
-                if has_feed
-                else "No data feed available",
+                "note": (
+                    "No streaming keys set and no price engine initialised. "
+                    "Set FINNHUB_API_KEY, TWELVE_API_KEY, or POLYGON_API_KEY."
+                ),
             }
 
         # ── Signal engine status ──────────────────────────────────────────────
