@@ -433,8 +433,15 @@ class NuclearAIChartEngine:
         vol_factor = meta.get("vol_factor", 1.0)
         sentiment_factor = meta.get("sentiment_factor", 0.0)
 
-        # Determine RL action from nuclear_level
-        rl_action = min(nuclear_level, 3)
+        # Determine RL action — prefer action string over nuclear_level
+        # so inject_news_event() produces the correct label even without a live supervisor
+        _action_to_rl = {
+            "normal":            0,
+            "pause_new_entries": 1,
+            "hedge_mode":        2,
+            "nuclear_mode":      3,
+        }
+        rl_action = _action_to_rl.get(action, min(nuclear_level, 3))
         rl_action_label = RL_ACTION_LABELS.get(rl_action, "NORMAL")
 
         # Build human-readable explanation — use explainability engine if available
