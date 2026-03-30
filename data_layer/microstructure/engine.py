@@ -234,6 +234,9 @@ class MicrostructureEngine:
                 "micro_kyles_lambda":        round(float(kyles_lambda), 8),
                 "micro_delta_divergence":    round(delta_divergence, 4),
                 "micro_absorption":          round(absorption, 4),
+                # Tick count — used by features_extended.py for normalised
+                # activity feature (dl_tick_count = tick_count / 500)
+                "micro_tick_count":          float(self._tick_count),
             }
 
     def reset_session(self) -> None:
@@ -452,6 +455,9 @@ class MicrostructureEngine:
             "micro_kyles_lambda":     0.0,
             "micro_delta_divergence": 0.0,
             "micro_absorption":       0.0,
+            # Always include tick_count even in zero state so downstream
+            # consumers (features_extended.py dl_tick_count) never KeyError
+            "micro_tick_count":       float(self._tick_count),
         }
 
 
