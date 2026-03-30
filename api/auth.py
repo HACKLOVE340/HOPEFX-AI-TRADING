@@ -13,7 +13,6 @@ Read-only endpoints use get_current_user.
 Token generation is handled externally (login endpoint / mobile auth).
 """
 
-import functools
 import logging
 import os
 from typing import Optional
@@ -41,7 +40,10 @@ except Exception as _router_import_err:  # pragma: no cover
     logger.warning("auth.router unavailable, using empty stub: %s", _router_import_err)
 
 # Role hierarchy: higher index = more privileged
-_ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
+_ROLE_RANK: dict = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
+# Stable per-role dependency callables — same object identity on every call,
+# required for FastAPI dependency_overrides to work correctly in tests.
+_ROLE_DEPS: dict = {}
 
 ALLOWED_SYMBOLS = frozenset(
     os.getenv(
@@ -141,20 +143,20 @@ def get_current_user(
     return _decode_token(credentials.credentials)
 
 
-@functools.lru_cache(maxsize=None)
 def require_role(minimum_role: str):
     """
     Dependency factory: require caller to hold at least `minimum_role`.
 
-    Cached via lru_cache so the same role string always returns the *same*
-    callable object — this is required for FastAPI's dependency_overrides to
-    work correctly in tests (dict key identity must match).
+    Returns a stable callable per role string (cached in _ROLE_DEPS) so that
+    FastAPI's dependency_overrides dict-key lookup works correctly in tests.
 
     Usage:
         @router.post("/order")
         async def place_order(user: TokenPayload = Depends(require_role("trader"))):
             ...
     """
+    if minimum_role in _ROLE_DEPS:
+        return _ROLE_DEPS[minimum_role]
 
     def _check(user: TokenPayload = Depends(get_current_user)) -> TokenPayload:
         caller_rank = _ROLE_RANK.get(user.role, -1)
@@ -166,6 +168,7 @@ def require_role(minimum_role: str):
             )
         return user
 
+    _ROLE_DEPS[minimum_role] = _check
     return _check
 
 
