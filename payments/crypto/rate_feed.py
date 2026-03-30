@@ -56,6 +56,17 @@ _STABLECOIN_RATES: Dict[str, float] = {
     "USDC": 1.0,
 }
 
+# Conservative fallback rates used ONLY in non-production when all live feeds
+# fail and the cache is empty.  These are intentionally stale estimates — never
+# used for actual payment calculations in production (APP_ENV=production raises
+# instead).  Values are updated periodically via git; not relied on for pricing.
+_FALLBACK_RATES: Dict[str, float] = {
+    "BTC": 60_000.0,
+    "ETH": 3_000.0,
+    "USDT": 1.0,
+    "USDC": 1.0,
+}
+
 
 async def _fetch_coingecko() -> Dict[str, float]:
     """Fetch USD prices from CoinGecko /simple/price."""
@@ -157,12 +168,13 @@ async def get_rates(force_refresh: bool = False) -> Dict[str, float]:
                 "rates are available. Cannot safely price volatile coins for payment. "
                 "Check network connectivity and CRYPTO_RATE_TTL_SECONDS configuration."
             )
-        # Non-production: return stablecoins only so tests can proceed
+        # Non-production: return conservative fallback rates so tests can proceed.
+        # These are stale estimates — never used for payment pricing in production.
         logger.error(
-            "All rate feeds failed and cache is empty — returning stablecoin rates only "
-            "(non-production). Volatile coin rates unavailable."
+            "All rate feeds failed and cache is empty — returning fallback rates "
+            "(non-production). Do not use for payment calculations."
         )
-        return dict(_STABLECOIN_RATES)
+        return dict(_FALLBACK_RATES)
 
 
 def coin_per_usd_sync(coin: str, usd_amount: float) -> Optional[float]:
