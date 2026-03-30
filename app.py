@@ -188,6 +188,16 @@ _ks_router = create_kill_switch_router(kill_switch)
 if _ks_router is not None:
     app.include_router(_ks_router)
 
+# Nuclear supervisor + kill switch control endpoints
+try:
+    from api.nuclear import router as _nuclear_router
+    app.include_router(_nuclear_router, prefix="/nuclear", tags=["nuclear"])
+except Exception as _nuclear_err:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "Nuclear router failed to register: %s", _nuclear_err
+    )
+
 # Data layer REST endpoints
 try:
     from api.data_layer import router as _dl_router
