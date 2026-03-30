@@ -28,7 +28,7 @@ PositionSize = PositionSizingResult
 
 
 class PositionSizeMethod:
-    """Stub enum — sizing method is determined by RiskConfig."""
+    """Backwards-compat sizing method constants. Sizing logic lives in RiskConfig."""
 
     FIXED = "fixed"
     PERCENT_EQUITY = "percent_equity"
