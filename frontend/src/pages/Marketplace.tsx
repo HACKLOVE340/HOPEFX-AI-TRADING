@@ -40,6 +40,20 @@ const CATEGORIES = ['all', 'trend_following', 'mean_reversion', 'smart_money', '
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>;
+    const detail = (e['response'] as Record<string, unknown> | undefined)?.['data'];
+    if (detail && typeof detail === 'object') {
+      const d = detail as Record<string, unknown>;
+      if (typeof d['detail'] === 'string') return d['detail'];
+      if (typeof d['message'] === 'string') return d['message'];
+    }
+    if (typeof e['message'] === 'string') return e['message'];
+  }
+  return fallback;
+}
+
 const fmt = (n: number, d = 1) => n.toFixed(d);
 
 const Stars: React.FC<{ rating: number; size?: number }> = ({ rating, size = 14 }) => {
@@ -114,7 +128,8 @@ const StrategyDetail: React.FC<{
   onClose: () => void;
   onSubscribe: (s: Strategy) => void;
   subscribed: boolean;
-}> = ({ strategy, reviews, onClose, onSubscribe, subscribed }) => {
+  purchaseError: string | null;
+}> = ({ strategy, reviews, onClose, onSubscribe, subscribed, purchaseError }) => {
   const p = strategy.performance;
   return (
     <div style={styles.overlay} onClick={onClose}>
@@ -163,6 +178,9 @@ const StrategyDetail: React.FC<{
         >
           {subscribed ? '✅ Subscribed' : strategy.price === 0 ? 'Add to my strategies' : `Subscribe — $${strategy.price}/${strategy.license_type === 'one_time' ? 'one-time' : 'mo'}`}
         </button>
+        {purchaseError && (
+          <div style={styles.purchaseError}>{purchaseError}</div>
+        )}
 
         {reviews.length > 0 && (
           <div style={{ marginTop: 28 }}>
@@ -198,6 +216,7 @@ const Marketplace: React.FC = () => {
   const [selected, setSelected] = useState<Strategy | null>(null);
   const [selectedReviews, setSelectedReviews] = useState<Review[]>([]);
   const [subscribed, setSubscribed] = useState<Set<string>>(new Set());
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [stats, setStats] = useState<{ total_strategies: number; total_subscribers: number } | null>(null);
 
   const loadStrategies = useCallback(async () => {
@@ -236,13 +255,16 @@ const Marketplace: React.FC = () => {
   };
 
   const handleSubscribe = async (s: Strategy) => {
+    setPurchaseError(null);
     try {
       await api.post('/monetization/marketplace/purchase', {
         buyer_id: currentUser?.id ?? '',
         strategy_id: s.strategy_id,
       });
-    } catch (_) {}
-    setSubscribed(prev => new Set([...prev, s.strategy_id]));
+      setSubscribed(prev => new Set([...prev, s.strategy_id]));
+    } catch (err) {
+      setPurchaseError(extractErrorMessage(err, 'Purchase failed. Check your payment method and try again.'));
+    }
   };
 
   // Client-side filter for instant search feedback
@@ -321,9 +343,10 @@ const Marketplace: React.FC = () => {
         <StrategyDetail
           strategy={selected}
           reviews={selectedReviews}
-          onClose={() => setSelected(null)}
+          onClose={() => { setSelected(null); setPurchaseError(null); }}
           onSubscribe={handleSubscribe}
           subscribed={subscribed.has(selected.strategy_id)}
+          purchaseError={purchaseError}
         />
       )}
     </div>
@@ -410,6 +433,10 @@ const styles: Record<string, React.CSSProperties> = {
   subscribeBtn: {
     width: '100%', padding: '14px', background: '#3b82f6', color: '#fff',
     border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer',
+  },
+  purchaseError: {
+    background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6,
+    padding: '8px 12px', marginTop: 10, fontSize: 13, color: '#f87171',
   },
   reviewsTitle: { fontSize: 16, fontWeight: 600, color: '#e2e8f0', marginBottom: 12 },
   reviewCard: {
