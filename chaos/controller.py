@@ -233,23 +233,34 @@ class ChaosController:
     async def _scenario_clock_skew_detection(self) -> ScenarioResult:
         """
         Skew tick timestamps +120s into the future.
-        Validates: causal timestamp guard in NormalizationPipeline.
+        Validates: causal timestamp guard in NormalizationPipeline rejects
+        future-dated ticks and the DQE rejected count increases.
         """
         t0 = time.monotonic()
+        rejected_before = self._get_dqe_rejected_count()
+
         self._inj.inject(FaultType.CLOCK_SKEW, duration_s=5.0,
                          magnitude=120.0, direction_sign=1)
-        await asyncio.sleep(3.0)
+        await asyncio.sleep(4.0)
         self._inj.clear(FaultType.CLOCK_SKEW)
+
+        rejected_after = self._get_dqe_rejected_count()
         duration = time.monotonic() - t0
 
-        # Clock skew of 120s should trigger the normalization pipeline's
-        # future-timestamp guard (rejects ticks > 5s in the future)
+        # The normalization pipeline rejects ticks with timestamps > 5s in
+        # the future. A 120s skew must produce at least one rejection.
+        skew_detected = rejected_after > rejected_before
+
         return ScenarioResult(
             scenario   = "clock_skew_detection",
-            passed     = True,  # Fault injected and cleared cleanly
+            passed     = skew_detected,
             duration_s = duration,
             sla_s      = 10.0,
-            detail     = "clock skew injected and cleared — verify norm pipeline logs",
+            detail     = (
+                f"future-timestamp rejections delta={rejected_after - rejected_before}"
+                if skew_detected
+                else "causal guard did not reject skewed ticks — check NormalizationPipeline"
+            ),
         )
 
     async def _scenario_feed_drop_recovery(self) -> ScenarioResult:
