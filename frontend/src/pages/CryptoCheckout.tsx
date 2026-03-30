@@ -38,18 +38,11 @@ const CRYPTO_META: Record<CryptoOption, { name: string; color: string; icon: str
   USDT: { name: 'Tether',   color: '#26a17b', icon: '₮', networks: ['TRC20', 'ERC20', 'BEP20'] },
 };
 
-// Approximate rates — in production fetch from /api/crypto/rates
-const MOCK_RATES: Record<CryptoOption, number> = {
-  BTC:  0.000016,   // 1 USD ≈ 0.000016 BTC  (~$62,500/BTC)
-  ETH:  0.00033,    // 1 USD ≈ 0.00033 ETH   (~$3,000/ETH)
+// Default rates used only for display before live rates load
+const DEFAULT_RATES: Record<CryptoOption, number> = {
+  BTC:  0,
+  ETH:  0,
   USDT: 1.0,
-};
-
-// Mock deposit addresses (backend generates real ones)
-const MOCK_ADDRESSES: Record<CryptoOption, string> = {
-  BTC:  'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-  ETH:  '0x742d35Cc6634C0532925a3b8D4C9C3A5e2b4f8d1',
-  USDT: 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -133,17 +126,30 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
   const [usdtNetwork, setUsdtNetwork] = useState<USDTNetwork>('TRC20');
   const [depositInfo, setDepositInfo] = useState<DepositAddress | null>(null);
   const [loadingAddress, setLoadingAddress] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirmations, setConfirmations] = useState(0);
   const [pollingTimer, setPollingTimer] = useState<ReturnType<typeof setInterval> | null>(null);
+  const [liveRates, setLiveRates] = useState<Record<CryptoOption, number>>(DEFAULT_RATES);
   // Flutterwave — shown as primary option for West/Central Africa
   const [showFlutterwave, setShowFlutterwave] = useState(false);
   const [flwLoading, setFlwLoading] = useState(false);
   const [flwEnabled, setFlwEnabled] = useState(false);
 
-  // Detect region via IP geolocation to decide whether to show Flutterwave
+  // Fetch live crypto rates and Flutterwave status on mount
   useEffect(() => {
-    api.get<{ enabled: boolean }>('/payments/flutterwave/status')
+    api.get<Record<string, number>>('/payments/crypto/rates')
+      .then(r => {
+        const data = r.data as Record<string, number>;
+        setLiveRates({
+          BTC:  data.BTC  ?? data.btc  ?? DEFAULT_RATES.BTC,
+          ETH:  data.ETH  ?? data.eth  ?? DEFAULT_RATES.ETH,
+          USDT: data.USDT ?? data.usdt ?? DEFAULT_RATES.USDT,
+        });
+      })
+      .catch(() => { /* keep DEFAULT_RATES */ });
+
+    api.get<{ enabled: boolean }>('/billing/payments/flutterwave/status')
       .then(r => setFlwEnabled(r.data.enabled))
       .catch(() => {});
     // Use a free IP geo API to detect Africa
@@ -160,6 +166,7 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
 
   const fetchDepositAddress = useCallback(async () => {
     setLoadingAddress(true);
+    setAddressError(null);
     try {
       const network = selectedCrypto === 'USDT' ? usdtNetwork : undefined;
       const res = await api.post<DepositAddress>('/payments/crypto/address', {
@@ -170,20 +177,11 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
         user_id: 'demo_user',
       });
       setDepositInfo(res.data);
-    } catch (_) {
-      // Fallback mock when backend unavailable
-      const rate = MOCK_RATES[selectedCrypto];
-      const amount = selectedPlan.price_usd * rate;
-      const address = MOCK_ADDRESSES[selectedCrypto];
-      setDepositInfo({
-        address,
-        qr_code: address,
-        network: selectedCrypto === 'USDT' ? usdtNetwork : selectedCrypto.toLowerCase(),
-        min_deposit: amount,
-        confirmations_required: selectedCrypto === 'BTC' ? 3 : 12,
-        amount_crypto: amount,
-        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-      });
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })
+        ?.response?.data?.detail;
+      setAddressError(detail ?? 'Failed to generate deposit address. Please try again.');
+      setDepositInfo(null);
     } finally {
       setLoadingAddress(false);
     }
@@ -208,8 +206,19 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
 
   const handleProceed = async () => {
     await fetchDepositAddress();
-    setStep('address');
+    // Only advance if address was successfully generated (no error set)
+    setStep((prev) => {
+      // addressError is set inside fetchDepositAddress; check depositInfo instead
+      return prev; // will be updated by the effect below
+    });
   };
+
+  // Advance to address step once depositInfo is populated
+  useEffect(() => {
+    if (depositInfo && step === 'select') {
+      setStep('address');
+    }
+  }, [depositInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleConfirmSent = () => {
     setStep('confirming');
@@ -316,14 +325,21 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
           <div>
             <span style={styles.summaryPlan}>{selectedPlan.name}</span>
             <span style={styles.summaryPrice}> — ${selectedPlan.price_usd}/mo</span>
-            <span style={styles.summaryCrypto}>
-              {' '}≈ {fmtCrypto(selectedPlan.price_usd * MOCK_RATES[selectedCrypto], selectedCrypto)}
-            </span>
+            {liveRates[selectedCrypto] > 0 && (
+              <span style={styles.summaryCrypto}>
+                {' '}≈ {fmtCrypto(selectedPlan.price_usd * liveRates[selectedCrypto], selectedCrypto)}
+              </span>
+            )}
           </div>
-          <button onClick={handleProceed} style={styles.proceedBtn}>
+          <button onClick={handleProceed} disabled={loadingAddress} style={{ ...styles.proceedBtn, opacity: loadingAddress ? 0.7 : 1 }}>
             {loadingAddress ? 'Generating address…' : `Pay with ${meta.name} →`}
           </button>
         </div>
+        {addressError && (
+          <div style={{ color: '#f87171', fontSize: 13, marginTop: 8, padding: '8px 12px', background: '#450a0a', borderRadius: 6 }}>
+            {addressError}
+          </div>
+        )}
       </div>
     );
   }
