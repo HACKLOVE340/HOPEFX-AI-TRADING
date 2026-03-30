@@ -72,7 +72,14 @@ import { useWebSocket } from './hooks/useWebSocket';
 
 // ─── React Query client ───────────────────────────────────────────────────────
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+  defaultOptions: {
+    queries: {
+      staleTime:            30_000,
+      retry:                2,
+      retryDelay:           (attempt) => Math.min(1_000 * 2 ** attempt, 10_000),
+      refetchOnWindowFocus: false,
+    },
+  },
 });
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────
