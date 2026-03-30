@@ -382,6 +382,23 @@ async def startup_event():
                 "Data layer orchestrator failed to start (non-fatal): %s", _dl_exc
             )
 
+        # ── Start L2 order book feed ──────────────────────────────────────────
+        # Provides real-time Level 2 depth data for microstructure ML features.
+        # Provider selected by L2_PROVIDER env var (oanda | ibkr | mock).
+        try:
+            from market_data.order_book import get_order_book_feed
+            _l2_symbols = os.getenv("L2_SYMBOLS", "XAU_USD,EUR_USD").split(",")
+            _l2_feed = get_order_book_feed()
+            _l2_task = asyncio.create_task(
+                _l2_feed.start([s.strip() for s in _l2_symbols]),
+                name="l2_order_book_feed",
+            )
+            if hasattr(app_state, "background_tasks"):
+                app_state.background_tasks.append(_l2_task)
+            logger.info("L2 order book feed starting for symbols: %s", _l2_symbols)
+        except Exception as _l2_exc:
+            logger.warning("L2 order book feed failed to start (non-fatal): %s", _l2_exc)
+
         # ── Start Sharpe circuit breaker ──────────────────────────────────────
         # Monitors rolling live Sharpe per model version and gates models out
         # of production when Sharpe drops below threshold for N consecutive windows.
