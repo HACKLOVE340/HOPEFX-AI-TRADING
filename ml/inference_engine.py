@@ -58,6 +58,74 @@ _MTF_FUSION_ENABLED = os.getenv("FEATURE_MTF_FUSION", "true").lower() == "true"
 # Rolling window size for non-neutral rate tracking
 _SIGNAL_WINDOW = int(os.getenv("SIGNAL_QUALITY_WINDOW", "100"))
 
+# ── Prometheus metrics (optional — degrades gracefully if not installed) ──────
+
+def _init_prometheus():
+    """Initialise Prometheus counters/gauges/histograms.
+
+    Returns a namespace object with all metrics, or a no-op stub when the
+    prometheus_client package is not installed.
+    """
+    try:
+        from prometheus_client import Counter, Gauge, Histogram, REGISTRY  # noqa: F401
+
+        class _Metrics:
+            predict_total = Counter(
+                "hopefx_inference_predict_total",
+                "Total number of inference predictions",
+                ["symbol", "direction"],
+            )
+            predict_latency = Histogram(
+                "hopefx_inference_predict_latency_seconds",
+                "Inference prediction latency in seconds",
+                ["symbol"],
+                buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
+            )
+            fallback_total = Counter(
+                "hopefx_inference_fallback_total",
+                "Total number of fallback (non-model) predictions",
+                ["symbol", "reason"],
+            )
+            confidence_gauge = Gauge(
+                "hopefx_inference_last_confidence",
+                "Last prediction confidence score",
+                ["symbol"],
+            )
+            data_quality_gauge = Gauge(
+                "hopefx_inference_data_quality",
+                "Last orchestrator data quality score",
+                ["symbol"],
+            )
+            model_version_info = Gauge(
+                "hopefx_inference_model_version_info",
+                "Active model version (label only)",
+                ["model_id"],
+            )
+            rollback_total = Counter(
+                "hopefx_inference_rollback_total",
+                "Number of times the engine rolled back to a previous model",
+                ["reason"],
+            )
+
+        return _Metrics()
+
+    except Exception:
+        # prometheus_client not installed or already registered — use no-op stub.
+        class _Noop:
+            class _C:
+                def labels(self, **_kw):
+                    return self
+                def inc(self, *a, **kw): pass
+                def observe(self, *a, **kw): pass
+                def set(self, *a, **kw): pass
+            def __getattr__(self, _name):
+                return self._C()
+
+        return _Noop()
+
+
+_PROM = _init_prometheus()
+
 
 class InferenceEngine:
     """
@@ -84,6 +152,10 @@ class InferenceEngine:
         # Data layer nudge tracking
         self._last_sentiment_score: float = 0.0
         self._last_macro_impact: float = 0.0
+        # Rollback support — stores path to previous model for emergency revert
+        self._active_model_path: Optional[Path] = None
+        self._previous_model_path: Optional[Path] = None
+        self._rollback_count: int = 0
 
     # ── Lazy loaders ──────────────────────────────────────────────────────────
 
@@ -324,6 +396,7 @@ class InferenceEngine:
         """
         t0 = time.perf_counter()
         self._predict_count += 1
+        sym_label = symbol or "unknown"
 
         last_close = float(ohlcv["close"].iloc[-1]) if "close" in ohlcv.columns else 0.0
         base_result = {
@@ -342,6 +415,7 @@ class InferenceEngine:
 
         if len(ohlcv) < _MIN_BARS:
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
+            _PROM.fallback_total.labels(symbol=sym_label, reason="insufficient_bars").inc()
             return base_result
 
         # Step 1: MacroStore (now auto-populated from FRED via MacroStoreBridge)
@@ -357,6 +431,7 @@ class InferenceEngine:
         if X is None:
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             self._fallback_count += 1
+            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_build_failed").inc()
             return base_result
 
         # Step 4: Model prediction
@@ -442,6 +517,16 @@ class InferenceEngine:
                 data_quality = tick.confidence
         except Exception:
             pass
+
+        # ── Prometheus instrumentation ────────────────────────────────────────
+        _PROM.predict_total.labels(symbol=sym_label, direction=direction).inc()
+        _PROM.predict_latency.labels(symbol=sym_label).observe(latency_ms / 1000.0)
+        _PROM.confidence_gauge.labels(symbol=sym_label).set(float(confidence))
+        _PROM.data_quality_gauge.labels(symbol=sym_label).set(data_quality)
+        if model_version and model_version != "fallback":
+            _PROM.model_version_info.labels(model_id=model_version).set(1)
+        if model_version == "fallback":
+            _PROM.fallback_total.labels(symbol=sym_label, reason="model_fallback").inc()
 
         return {
             "direction":       direction,
@@ -791,8 +876,81 @@ class InferenceEngine:
             "threshold_long": _THRESHOLD_LONG,
             "threshold_short": _THRESHOLD_SHORT,
             "signal_filter": signal_filter_stats,
+            "rollback_count": self._rollback_count,
+            "active_model_path": str(self._active_model_path) if self._active_model_path else None,
             "checked_at": datetime.now(timezone.utc).isoformat(),
         }
+
+    # ── Model reload / rollback ───────────────────────────────────────────────
+
+    def reload_model(self, model_path: Optional[Path] = None) -> bool:
+        """
+        Hot-reload the predictor from disk without restarting the process.
+
+        Saves the current model path as the rollback target before loading
+        the new one.  If loading fails the engine stays on the current model.
+
+        Parameters
+        ----------
+        model_path : Path to the new model file.  Defaults to the standard
+                     advanced_oos.pkl location.
+
+        Returns True on success, False on failure.
+        """
+        target = model_path or (_SAVED / "advanced_oos.pkl")
+        if not target.exists():
+            logger.error("reload_model: path does not exist: %s", target)
+            return False
+
+        # Preserve current model as rollback target
+        if self._predictor is not None:
+            try:
+                self._previous_model_path = (
+                    Path(self._predictor._model_path)
+                    if hasattr(self._predictor, "_model_path")
+                    else self._active_model_path
+                )
+            except Exception:
+                pass
+
+        try:
+            from ml.live_inference import AdvancedModelPredictor
+            new_predictor = AdvancedModelPredictor(model_path=str(target))
+            if not new_predictor.is_available:
+                logger.error("reload_model: new predictor not available after load")
+                return False
+            self._predictor = new_predictor
+            self._active_model_path = target
+            self._meta_cache = None  # invalidate meta cache
+            logger.info("reload_model: loaded %s", target)
+            _PROM.model_version_info.labels(model_id=str(target.stem)).set(1)
+            return True
+        except Exception as exc:
+            logger.error("reload_model: failed to load %s: %s", target, exc)
+            return False
+
+    def rollback_model(self) -> bool:
+        """
+        Revert to the previously loaded model.
+
+        Used when a newly deployed model degrades signal quality or accuracy.
+        Returns True on success, False when no previous model is available.
+        """
+        if self._previous_model_path is None:
+            logger.warning("rollback_model: no previous model to roll back to")
+            return False
+
+        logger.warning(
+            "rollback_model: reverting from %s to %s",
+            self._active_model_path,
+            self._previous_model_path,
+        )
+        success = self.reload_model(self._previous_model_path)
+        if success:
+            self._rollback_count += 1
+            _PROM.rollback_total.labels(reason="manual_rollback").inc()
+            logger.warning("rollback_model: rollback complete (count=%d)", self._rollback_count)
+        return success
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
