@@ -44,7 +44,10 @@ const TwoFactorSetup: React.FC = () => {
   useEffect(() => {
     api.get<{ enabled: boolean }>('/2fa/status')
       .then((r) => set2FAEnabled(r.data.enabled ?? false))
-      .catch(() => {});
+      .catch((err: unknown) => {
+        // Non-fatal on mount — 2FA defaults to disabled if status cannot be fetched
+        console.warn('[TwoFactorSetup] Failed to fetch 2FA status:', err);
+      });
   }, []);
 
   const handleSetup = async () => {
