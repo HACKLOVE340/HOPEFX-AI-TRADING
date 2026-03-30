@@ -1,4 +1,4 @@
-import logging
+from __future__ import annotations
 # HOPEFX-AI-TRADING
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
@@ -10,7 +10,7 @@ HOPEFX Online Learning Pipeline
 Continuously adapts to market regime changes without catastrophic forgetting
 """
 
-from __future__ import annotations
+import logging
 
 try:
     import torch
