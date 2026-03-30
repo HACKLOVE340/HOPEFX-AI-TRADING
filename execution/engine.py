@@ -380,6 +380,51 @@ class ExecutionEngine:
             self._total_blocks += 1
             return self._blocked_report(request, gate_result, t0)
 
+        # ── 4a. Algo order routing (TWAP/VWAP/Iceberg for large orders) ──────
+        # Large orders are routed through the algo layer to minimise impact.
+        # The algo manager returns None for small orders (plain market order).
+        try:
+            from execution.algo_orders import get_algo_manager
+            _algo_mgr = get_algo_manager()
+            # Wire broker submit function if not already set
+            if _algo_mgr._broker_submit is None and self._broker_manager is not None:
+                async def _broker_fn(**kwargs):
+                    from execution.engine import ExecutionRequest as _ER
+                    _req = _ER(
+                        symbol=kwargs["symbol"],
+                        side=kwargs["side"],
+                        quantity=kwargs["quantity"],
+                        order_type=kwargs.get("order_type", "MARKET"),
+                        strategy_id=kwargs.get("metadata", {}).get("strategy_id", "algo"),
+                        metadata=kwargs.get("metadata", {}),
+                    )
+                    _rep = await self._submit_to_broker(_req, time.monotonic())
+                    return {
+                        "success": _rep.success,
+                        "fill_price": _rep.average_price,
+                        "filled_quantity": _rep.filled_quantity,
+                    }
+                _algo_mgr.set_broker_submit_fn(_broker_fn)
+
+            algo_id = await _algo_mgr.submit_auto(
+                symbol=request.symbol,
+                side=request.side,
+                total_quantity=request.quantity,
+                strategy_id=request.strategy_id,
+            )
+            if algo_id is not None:
+                # Order handed off to algo layer — return immediately with PENDING
+                latency_ms = (time.monotonic() - t0) * 1000.0
+                return ExecutionReport(
+                    request_id=request.request_id,
+                    status=ExecutionStatus.SUBMITTED,
+                    latency_ms=latency_ms,
+                    message=f"[ALGO] Order routed to algo layer (id={algo_id})",
+                    metadata={"algo_id": algo_id},
+                )
+        except Exception as _algo_exc:
+            logger.debug("Algo order routing check failed: %s", _algo_exc)
+
         # ── 4b. Sharpe circuit breaker check ─────────────────────────────────
         # Gate the model out if its rolling live Sharpe has degraded below threshold.
         model_version = request.metadata.get("model_version") or request.strategy_id
