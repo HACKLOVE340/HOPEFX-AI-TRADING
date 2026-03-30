@@ -177,6 +177,7 @@ class StripeIntegration:
         self,
         api_key: Optional[str] = None,
         webhook_secret: Optional[str] = None,
+        test_mode: bool = False,
     ):
         """
         Initialize Stripe integration.
@@ -184,29 +185,30 @@ class StripeIntegration:
         Args:
             api_key: Stripe API key (defaults to env var STRIPE_SECRET_KEY)
             webhook_secret: Stripe webhook secret (defaults to env var STRIPE_WEBHOOK_SECRET)
+            test_mode: When True, skip SDK/key validation (for unit tests only).
 
         Note:
             Construction succeeds even without credentials so the class can be
             imported and wired up at startup.  Any method that calls the Stripe
-            API will raise RuntimeError if the key or SDK is missing.
+            API will raise RuntimeError if the key or SDK is missing (unless
+            test_mode=True).
         """
         self.api_key = api_key or os.getenv("STRIPE_SECRET_KEY", "")
         self.webhook_secret = webhook_secret or os.getenv("STRIPE_WEBHOOK_SECRET", "")
+        self.test_mode = test_mode
         self._stripe_sdk_available = self._check_stripe_sdk()
 
-        if self._stripe_sdk_available and self.api_key:
+        if not test_mode and self._stripe_sdk_available and self.api_key:
             self._configure_stripe()
-        elif not self.api_key:
+        elif not test_mode and not self.api_key:
             logger.warning(
                 "STRIPE_SECRET_KEY not set — Stripe operations will raise until configured."
             )
-        else:
-            logger.warning(
-                "stripe SDK not installed — run `pip install stripe` to enable payments."
-            )
 
     def _require_stripe(self) -> None:
-        """Raise RuntimeError if Stripe is not usable."""
+        """Raise RuntimeError if Stripe is not usable (no-op in test_mode)."""
+        if self.test_mode:
+            return
         if not self._stripe_sdk_available:
             raise RuntimeError("stripe SDK not installed. Run: pip install stripe")
         if not self.api_key:
@@ -253,6 +255,12 @@ class StripeIntegration:
             StripeCustomer object
         """
         self._require_stripe()
+        if self.test_mode:
+            import uuid
+            return StripeCustomer(
+                customer_id=f"cus_test_{uuid.uuid4().hex[:14]}",
+                user_id=user_id, email=email, name=name, metadata=metadata,
+            )
         try:
             import stripe
 
@@ -298,6 +306,7 @@ class StripeIntegration:
         Returns:
             StripePaymentIntent object with client_secret
         """
+        self._require_stripe()
         try:
             amount_cents = int(amount * 100)  # Convert to cents
 
@@ -306,6 +315,17 @@ class StripeIntegration:
                 "billing_cycle": billing_cycle.value,
                 **(metadata or {}),
             }
+
+            if self.test_mode:
+                import uuid
+                pi = StripePaymentIntent(
+                    intent_id=f"pi_test_{uuid.uuid4().hex[:24]}",
+                    customer_id=customer_id, amount=amount_cents,
+                    currency=currency, status="requires_payment_method",
+                    metadata=intent_metadata,
+                )
+                pi.client_secret = f"{pi.intent_id}_secret_{uuid.uuid4().hex[:24]}"
+                return pi
 
             import stripe
 
@@ -353,6 +373,7 @@ class StripeIntegration:
         Returns:
             Checkout session info with URL
         """
+        self._require_stripe()
         try:
             price_id = self.PRICE_IDS.get((tier, billing_cycle))
 
@@ -360,6 +381,12 @@ class StripeIntegration:
                 raise ValueError(
                     f"No price configured for {tier.value} {billing_cycle.value}"
                 )
+
+            if self.test_mode:
+                import uuid
+                sid = f"cs_test_{uuid.uuid4().hex[:24]}"
+                return {"session_id": sid, "url": f"https://checkout.stripe.com/test/{sid}",
+                        "tier": tier.value, "billing_cycle": billing_cycle.value}
 
             import stripe
 

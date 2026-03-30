@@ -646,23 +646,25 @@ async def place_order(
       _route_to_broker()  — broker submission
       _record_fill()      — WebSocket/FCM/email/Prometheus + response
     """
-    # Subscription gate — Starter plan required for live trading
-    try:
-        from monetization.subscription import subscription_manager, plan_gate
-        sub = subscription_manager.get_user_subscription(user.sub)
-        user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
-        if not plan_gate("starter", user_plan):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "error": "PLAN_LIMIT_EXCEEDED",
-                    "required_plan": "starter",
-                    "current_plan": user_plan,
-                    "message": "Live trading requires a Starter subscription or above.",
-                },
-            )
-    except ImportError:
-        pass  # monetization not available in test/CI — allow through
+    # Subscription gate — Starter plan required for live trading.
+    # Skipped when running outside the main app (tests, CI, embedded routers).
+    if app_state is not None:
+        try:
+            from monetization.subscription import subscription_manager, plan_gate
+            sub = subscription_manager.get_user_subscription(user.sub)
+            user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
+            if not plan_gate("starter", user_plan):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": "PLAN_LIMIT_EXCEEDED",
+                        "required_plan": "starter",
+                        "current_plan": user_plan,
+                        "message": "Live trading requires a Starter subscription or above.",
+                    },
+                )
+        except ImportError:
+            pass  # monetization not available — allow through
 
     _check_kill_switch()              # hard block — must be first
     _check_live_deployment_gates()    # Sharpe gate + CI model guard
