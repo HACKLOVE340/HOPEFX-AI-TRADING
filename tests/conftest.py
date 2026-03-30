@@ -157,6 +157,30 @@ def generate_ohlcv_from_close(closes: list) -> list:
 os.environ.setdefault("HOPEFX_CI", "1")
 
 
+# ── Kill switch isolation ─────────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True)
+def _reset_kill_switch():
+    """
+    Reset the module-level KillSwitch singleton before every test.
+
+    Without this, a test that activates the kill switch pollutes all
+    subsequent tests that import the same singleton.
+    """
+    try:
+        from kill_switch import kill_switch as _ks
+        _ks.reset_for_testing()
+    except Exception:
+        pass
+    yield
+    # Also reset after the test in case it activated the switch
+    try:
+        from kill_switch import kill_switch as _ks
+        _ks.reset_for_testing()
+    except Exception:
+        pass
+
+
 # ── Additional fixtures required by root-level tests ─────────────────────────
 
 
