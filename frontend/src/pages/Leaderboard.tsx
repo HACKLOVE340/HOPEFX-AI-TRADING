@@ -16,24 +16,19 @@ interface Trader {
   prize: string;
 }
 
-const FALLBACK: Trader[] = [
-  { rank: 1, name: 'GoldMaster',  return: 156.4, sharpe: 2.8, followers: 3420, prize: '$10,000' },
-  { rank: 2, name: 'XAUWhale',    return: 142.8, sharpe: 2.5, followers: 2890, prize: '$5,000'  },
-  { rank: 3, name: 'BullionKing', return: 138.2, sharpe: 2.3, followers: 2156, prize: '$2,500'  },
-  { rank: 4, name: 'GoldRush',    return: 125.6, sharpe: 2.1, followers: 1890, prize: '$1,000'  },
-  { rank: 5, name: 'PreciousAI',  return: 118.3, sharpe: 2.0, followers: 1654, prize: '$500'    },
-];
-
 const MEDAL_COLORS = ['#eab308', '#94a3b8', '#b45309'];
 
 const Leaderboard: React.FC = () => {
   const [period, setPeriod]   = useState<'monthly' | 'quarterly' | 'all'>('monthly');
-  const [traders, setTraders] = useState<Trader[]>(FALLBACK);
+  const [traders, setTraders] = useState<Trader[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     api.get<Trader[]>(`/social/leaderboard?period=${period}`)
-      .then((r) => { if (r.data?.length) setTraders(r.data); })
-      .catch(() => {});
+      .then((r) => { setTraders(Array.isArray(r.data) ? r.data : []); })
+      .catch(() => { setTraders([]); })
+      .finally(() => setLoading(false));
   }, [period]);
 
   const top3 = traders.slice(0, 3);
@@ -56,44 +51,49 @@ const Leaderboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Podium — top 3 */}
-      <div style={s.podium}>
-        {/* 2nd place (left) */}
-        <PodiumCard trader={top3[1]} medalColor={MEDAL_COLORS[1]} order={1} />
-        {/* 1st place (center, taller) */}
-        <PodiumCard trader={top3[0]} medalColor={MEDAL_COLORS[0]} order={0} tall />
-        {/* 3rd place (right) */}
-        <PodiumCard trader={top3[2]} medalColor={MEDAL_COLORS[2]} order={2} />
-      </div>
+      {loading ? (
+        <p style={{ color: '#64748b', padding: '40px 0' }}>Loading leaderboard…</p>
+      ) : traders.length === 0 ? (
+        <p style={{ color: '#64748b', padding: '40px 0' }}>No traders on the leaderboard yet.</p>
+      ) : (
+        <>
+          {/* Podium — top 3 */}
+          <div style={s.podium}>
+            <PodiumCard trader={top3[1]} medalColor={MEDAL_COLORS[1]} order={1} />
+            <PodiumCard trader={top3[0]} medalColor={MEDAL_COLORS[0]} order={0} tall />
+            <PodiumCard trader={top3[2]} medalColor={MEDAL_COLORS[2]} order={2} />
+          </div>
 
-      {/* Full table */}
-      <div style={s.tableCard}>
-        <table style={s.table}>
-          <thead>
-            <tr>
-              {['Rank', 'Trader', 'Return', 'Sharpe', 'Followers', 'Prize'].map((h) => (
-                <th key={h} style={s.th}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {traders.map((trader) => (
-              <tr key={trader.rank} style={s.tr}>
-                <td style={s.td}>
-                  {trader.rank <= 3
-                    ? <span style={{ color: MEDAL_COLORS[trader.rank - 1], fontSize: 18 }}>🏅</span>
-                    : <span style={{ color: '#475569' }}>#{trader.rank}</span>}
-                </td>
-                <td style={{ ...s.td, fontWeight: 600, color: '#f1f5f9' }}>{trader.name}</td>
-                <td style={{ ...s.td, color: '#4ade80', fontWeight: 600 }}>+{trader.return}%</td>
-                <td style={s.td}>{trader.sharpe}</td>
-                <td style={s.td}>{trader.followers.toLocaleString()}</td>
-                <td style={{ ...s.td, color: '#fbbf24', fontWeight: 600 }}>{trader.prize}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          {/* Full table */}
+          <div style={s.tableCard}>
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  {['Rank', 'Trader', 'Return', 'Sharpe', 'Followers', 'Prize'].map((h) => (
+                    <th key={h} style={s.th}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {traders.map((trader) => (
+                  <tr key={trader.rank} style={s.tr}>
+                    <td style={s.td}>
+                      {trader.rank <= 3
+                        ? <span style={{ color: MEDAL_COLORS[trader.rank - 1], fontSize: 18 }}>🏅</span>
+                        : <span style={{ color: '#475569' }}>#{trader.rank}</span>}
+                    </td>
+                    <td style={{ ...s.td, fontWeight: 600, color: '#f1f5f9' }}>{trader.name}</td>
+                    <td style={{ ...s.td, color: '#4ade80', fontWeight: 600 }}>+{trader.return}%</td>
+                    <td style={s.td}>{trader.sharpe}</td>
+                    <td style={s.td}>{trader.followers.toLocaleString()}</td>
+                    <td style={{ ...s.td, color: '#fbbf24', fontWeight: 600 }}>{trader.prize}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 };
