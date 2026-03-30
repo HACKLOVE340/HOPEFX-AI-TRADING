@@ -264,10 +264,22 @@ class TestDeepEnsembleSignalEngine:
 
 # ── DeepPredictor architecture validation ─────────────────────────────────────
 
+try:
+    import torch as _torch  # noqa: F401
+    _TORCH_AVAILABLE = True
+except ImportError:
+    _TORCH_AVAILABLE = False
+
+_skip_no_torch = pytest.mark.skipif(
+    not _TORCH_AVAILABLE,
+    reason="PyTorch not installed — DeepPredictor requires torch",
+)
+
 
 class TestDeepPredictorArchitectures:
     """Verify DeepPredictor accepts valid architectures and rejects invalid ones."""
 
+    @_skip_no_torch
     def test_valid_architectures_accepted(self):
         from research.pipeline.models_deep import DeepPredictor
 
@@ -278,15 +290,17 @@ class TestDeepPredictorArchitectures:
     def test_invalid_architecture_raises(self):
         from research.pipeline.models_deep import DeepPredictor
 
-        with pytest.raises((ValueError, KeyError, Exception)):
+        with pytest.raises((ValueError, KeyError, RuntimeError, Exception)):
             DeepPredictor(architecture="invalid_arch", n_features=6, seq_len=20)
 
+    @_skip_no_torch
     def test_n_features_stored(self):
         from research.pipeline.models_deep import DeepPredictor
 
         dp = DeepPredictor(architecture="lstm", n_features=10, seq_len=30)
         assert dp.n_features == 10
 
+    @_skip_no_torch
     def test_seq_len_stored(self):
         from research.pipeline.models_deep import DeepPredictor
 
