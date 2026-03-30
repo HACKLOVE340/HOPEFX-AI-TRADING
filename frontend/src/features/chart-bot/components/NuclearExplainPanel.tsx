@@ -12,6 +12,7 @@ import React, { memo } from 'react';
 import { useNuclearStore } from '../store/nuclear-store';
 import { severityColor, actionColor } from '../types/nuclear';
 import type { NuclearState, NuclearRiskData, NuclearEvent } from '../types/nuclear';
+import NuclearDecisionTrace from './NuclearDecisionTrace';
 
 // ─── SHAP-style feature bar ───────────────────────────────────────────────────
 
@@ -231,6 +232,7 @@ const NuclearExplainPanel = memo(() => {
             <RLDecisionCard nuclear={nuclear} />
             <CategoryScores nuclear={nuclear} />
             <MatchedTerms nuclear={nuclear} />
+            <NuclearDecisionTrace />
           </>
         ) : (
           <div style={s.emptyState}>

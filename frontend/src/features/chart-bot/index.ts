@@ -23,6 +23,8 @@ export { default as NuclearGeopoliticalBanner } from './components/NuclearGeopol
 export { default as NuclearAlertOverlay }       from './components/NuclearAlertOverlay';
 export { default as NuclearExplainPanel }       from './components/NuclearExplainPanel';
 export { default as NuclearEquityPanel }        from './components/NuclearEquityPanel';
+export { default as NuclearMobileView }         from './components/NuclearMobileView';
+export { default as NuclearDecisionTrace }      from './components/NuclearDecisionTrace';
 
 // Nuclear store + hook
 export { useNuclearStore }   from './store/nuclear-store';

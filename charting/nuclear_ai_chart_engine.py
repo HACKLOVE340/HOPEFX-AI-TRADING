@@ -153,6 +153,15 @@ def _get_wordmap_scorer():
         return None
 
 
+def _get_explainer():
+    try:
+        from charting.nuclear_explainability import get_explainer
+        return get_explainer()
+    except Exception as exc:
+        logger.debug("NuclearExplainabilityEngine unavailable: %s", exc)
+        return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # NuclearChartState builder
 # ─────────────────────────────────────────────────────────────────────────────
@@ -190,6 +199,7 @@ class NuclearAIChartEngine:
         self._data_orch = None
         self._nuclear_sup = None
         self._risk_orch = None
+        self._explainer = None
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -207,6 +217,7 @@ class NuclearAIChartEngine:
         self._data_orch = _get_data_orchestrator()
         self._nuclear_sup = _get_nuclear_supervisor()
         self._risk_orch = _get_risk_orchestrator()
+        self._explainer = _get_explainer()
         logger.info(
             "NuclearAIChartEngine started | data=%s nuclear=%s risk=%s wordmap=%s",
             self._data_orch is not None,
@@ -426,19 +437,41 @@ class NuclearAIChartEngine:
         rl_action = min(nuclear_level, 3)
         rl_action_label = RL_ACTION_LABELS.get(rl_action, "NORMAL")
 
-        # Build human-readable explanation
+        # Build human-readable explanation — use explainability engine if available
         explanation = self._build_explanation(
             severity, action, rl_action_label, matched_terms,
             category_scores, confidence, vol_factor, sentiment_factor,
             trading_paused, rl_loaded,
         )
 
+        # Enrich with structured explainability engine output
+        explain_detail: Dict = {}
+        if self._explainer is None:
+            self._explainer = _get_explainer()
+        if self._explainer is not None:
+            try:
+                explain_detail = self._explainer.explain_to_dict(
+                    severity=severity,
+                    action=action,
+                    rl_action=rl_action,
+                    rl_loaded=rl_loaded,
+                    meta=meta,
+                    risk_data=self._last_risk,
+                    price=self._last_price,
+                )
+                # Use the richer summary as the explanation
+                if explain_detail.get("summary"):
+                    explanation = explain_detail["summary"]
+            except Exception as exc:
+                logger.debug("Explainability engine error: %s", exc)
+
         # Historical analog
-        analog = None
-        for thresh in sorted(_HISTORICAL_ANALOGS.keys(), reverse=True):
-            if severity >= thresh:
-                analog = _HISTORICAL_ANALOGS[thresh]
-                break
+        analog = explain_detail.get("historical_analog")
+        if analog is None:
+            for thresh in sorted(_HISTORICAL_ANALOGS.keys(), reverse=True):
+                if severity >= thresh:
+                    analog = _HISTORICAL_ANALOGS[thresh]
+                    break
 
         alert_active = severity >= NUCLEAR_ALERT_SEVERITY or trading_paused
 
@@ -461,6 +494,12 @@ class NuclearAIChartEngine:
             "historical_analog": analog,
             "cooldown_remaining": (sup_status or {}).get("cooldown_remaining", 0.0),
             "event_count": (sup_status or {}).get("event_history_count", 0),
+            # Structured explainability (SHAP-style) — populated when engine available
+            "feature_scores": explain_detail.get("feature_scores", []),
+            "decision_trace": explain_detail.get("decision_trace", []),
+            "risk_narrative": explain_detail.get("risk_narrative", ""),
+            "action_advice":  explain_detail.get("action_advice", ""),
+            "confidence_breakdown": explain_detail.get("confidence_breakdown", {}),
         }
 
     def _build_explanation(

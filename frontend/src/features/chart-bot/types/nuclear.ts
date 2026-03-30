@@ -4,6 +4,9 @@
  * with geopolitical risk, RL decision, and nuclear alert structures.
  */
 
+import type { OHLCVBar } from '../types';
+export type { OHLCVBar };
+
 // ─── Nuclear Severity ─────────────────────────────────────────────────────────
 
 export type NuclearAction =
@@ -179,16 +182,7 @@ export type NuclearWsMessage =
   | { type: 'nuclear_history'; events: NuclearEvent[]; ts: number }
   | { type: 'error'; message: string };
 
-// ─── Re-export OHLCVBar for convenience ──────────────────────────────────────
-
-export interface OHLCVBar {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
+// OHLCVBar is imported at the top of this file and re-exported there.
 
 // ─── Nuclear color helpers ────────────────────────────────────────────────────
 
