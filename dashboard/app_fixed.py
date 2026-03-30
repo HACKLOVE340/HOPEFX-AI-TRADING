@@ -3,25 +3,39 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-import logging
-import random
-import pandas as pd
-import matplotlib.pyplot as plt
-import io
-import base64
+"""
+dashboard/app_fixed.py
+======================
+Lightweight FastAPI dashboard exposing real ML and trade data.
 
-# Set up logging
+Routes
+------
+GET /healthcheck   — liveness probe
+GET /data          — cumulative PnL equity curve from real trade history
+GET /chart         — PNG equity curve chart from real trade history
+"""
+
+from __future__ import annotations
+
+import base64
+import io
+import logging
+import os
+from typing import Any, Dict, List
+
+import matplotlib.pyplot as plt
+import pandas as pd
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# CORS middleware — restrict to known origins; never use ["*"] with credentials
-import os as _os  # noqa: E402
-
-_raw_origins = _os.getenv(
+# ── CORS ──────────────────────────────────────────────────────────────────────
+_raw_origins = os.getenv(
     "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000"
 )
 _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
@@ -34,45 +48,88 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+# ── App state (injected at startup by the main app) ───────────────────────────
+app_state = None
+
+
+def set_state(state) -> None:
+    global app_state
+    app_state = state
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _equity_curve() -> List[Dict[str, Any]]:
+    """
+    Build an equity curve from real closed trade history.
+
+    Returns a list of {x: trade_index, y: cumulative_pnl} dicts.
+    Returns [] when no trade history is available.
+    """
+    try:
+        broker = getattr(app_state, "broker", None) if app_state else None
+        if broker is None:
+            return []
+        trades = broker.get_trade_history(limit=500) or []
+        if not trades:
+            return []
+        cum = 0.0
+        points: List[Dict[str, Any]] = []
+        for i, t in enumerate(trades):
+            cum += float(t.get("pnl", 0))
+            points.append({"x": i, "y": round(cum, 2)})
+        return points
+    except Exception as exc:
+        logger.debug("equity_curve fetch failed: %s", exc)
+        return []
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/healthcheck")
 def read_healthcheck():
-    logging.info("Health check endpoint called")
+    logger.info("Health check endpoint called")
     return {"status": "healthy"}
 
 
 @app.get("/data")
 def read_data():
+    """Return cumulative PnL equity curve from real trade history."""
     try:
-        # Simulate data retrieval (replace with real data retrieval logic)
-        data = pd.DataFrame(
-            {"x": range(10), "y": [random.randint(0, 10) for _ in range(10)]}
-        )
-        logging.info("Data retrieved successfully")
-        return data.to_dict(orient="records")
-    except Exception as e:
-        logging.error(f"Error retrieving data: {e}")
+        points = _equity_curve()
+        logger.info("Dashboard /data: %d equity curve points", len(points))
+        return points
+    except Exception as exc:
+        logger.error("Error retrieving data: %s", exc)
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @app.get("/chart", response_class=HTMLResponse)
 def get_chart():
+    """Render equity curve chart from real trade history as an inline PNG."""
     try:
-        data = pd.DataFrame(
-            {"x": range(10), "y": [random.randint(0, 10) for _ in range(10)]}
-        )
-        plt.figure()
-        plt.plot(data["x"], data["y"], marker="o")
-        plt.title("Random Chart")
-        plt.xlabel("X-axis")
-        plt.ylabel("Y-axis")
-        plt.grid()
+        points = _equity_curve()
+        if not points:
+            return HTMLResponse(
+                content="<p>No trade history available.</p>",
+                status_code=200,
+            )
+
+        data = pd.DataFrame(points)
+        fig, ax = plt.subplots()
+        ax.plot(data["x"], data["y"], marker="o", markersize=3)
+        ax.set_title("Equity Curve")
+        ax.set_xlabel("Trade #")
+        ax.set_ylabel("Cumulative PnL (USD)")
+        ax.grid(True)
+
         buf = io.BytesIO()
-        plt.savefig(buf, format="png")
+        fig.savefig(buf, format="png")
+        plt.close(fig)
         buf.seek(0)
-        img_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-        logging.info("Chart generated successfully")
-        return f"<img src='data:image/png;base64,{img_base64}'/>"
-    except Exception as e:
-        logging.error(f"Error generating chart: {e}")
+        img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        logger.info("Dashboard /chart: rendered %d-point equity curve", len(points))
+        return f"<img src='data:image/png;base64,{img_b64}' alt='Equity Curve'/>"
+    except Exception as exc:
+        logger.error("Error generating chart: %s", exc)
         raise HTTPException(status_code=500, detail="Internal Server Error")
