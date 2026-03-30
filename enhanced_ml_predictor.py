@@ -1508,10 +1508,22 @@ class EnsemblePredictor:
                 except Exception as e:
                     logger.error(f"Online update failed for {name}: {e}")
 
-        # Periodically re-optimize weights
-        if len(self.performance_history[list(self.models.keys())[0]]) % 50 == 0:
-            # Would re-run weight optimization on recent validation data
-            pass
+        # Periodically re-optimize weights using the most recent validation window
+        first_key = list(self.models.keys())[0]
+        if len(self.performance_history[first_key]) % 50 == 0:
+            # Build per-model accuracy scores from the last 20 entries in history
+            recent_scores: Dict[str, float] = {
+                name: float(np.mean(list(self.performance_history[name])[-20:]))
+                for name in self.models
+                if self.performance_history.get(name)
+            }
+            if recent_scores:
+                self._optimize_weights(X_features, y_aligned, val_scores=recent_scores)
+                logger.info(
+                    "Periodic weight re-optimisation complete (n=%d): %s",
+                    len(self.performance_history[first_key]),
+                    {k: f"{v:.4f}" for k, v in self.weights.items()},
+                )
 
 
 # =============================================================================
