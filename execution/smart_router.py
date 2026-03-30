@@ -42,7 +42,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from execution.algo_orders import AlgoOrderManager, get_algo_manager
+
 logger = logging.getLogger(__name__)
+
+# ── algo delegation thresholds (env-overridable) ──────────────────────────────
+# Orders at or above ALGO_LARGE_ORDER_THRESHOLD lots are routed through
+# AlgoOrderManager (TWAP/VWAP/Iceberg) instead of a plain market order.
+# These mirror the thresholds in AlgoOrderManager so both sides agree.
+_ALGO_LARGE_THRESHOLD  = float(os.getenv("ALGO_LARGE_ORDER_THRESHOLD", "10.0"))
+_ALGO_ICEBERG_THRESHOLD = float(os.getenv("ALGO_ICEBERG_THRESHOLD",    "50.0"))
 
 # ── routing weights (env-overridable) ─────────────────────────────────────────
 _W_LATENCY     = float(os.getenv("ROUTER_W_LATENCY",     "0.25"))
@@ -177,13 +186,24 @@ class SmartRouter:
         fill = await router.route_and_execute(order_request)
     """
 
-    def __init__(self, lineage_store=None) -> None:
+    def __init__(
+        self,
+        lineage_store=None,
+        algo_manager: Optional[AlgoOrderManager] = None,
+    ) -> None:
         self._lineage:  Any                    = lineage_store
         self._brokers:  Dict[str, Any]         = {}   # broker_id → broker instance
         self._states:   Dict[str, BrokerState] = {}
         self._decisions: List[RoutingDecision] = []
         self._total_routed: int = 0
         self._total_filled: int = 0
+
+        # AlgoOrderManager handles large orders (TWAP/VWAP/Iceberg).
+        # If not injected, use the module-level singleton.
+        self._algo: AlgoOrderManager = algo_manager or get_algo_manager()
+        # Wire the broker submission function into the algo manager so child
+        # orders flow through the same broker selection logic.
+        self._algo.set_broker_submit_fn(self._submit_child_order)
 
     def add_broker(self, broker_id: str, broker_instance: Any) -> None:
         """Register a broker. Broker must implement place_order(order_dict)."""
@@ -224,11 +244,19 @@ class SmartRouter:
         direction       = order_request.get("direction", "long")
 
         # ── Pre-routing gates ──────────────────────────────────────────────
-        gate_result = self._pre_route_gate(
-            spread_bps, sentiment_score, impact_score, direction, ofi
-        )
-        if gate_result is not None:
-            return {"status": "rejected", "reason": gate_result, "broker": "none"}
+        # Unwind orders bypass sentiment/impact gates — they are unconditional.
+        is_unwind = bool(order_request.get("is_unwind", False))
+        if not is_unwind:
+            gate_result = self._pre_route_gate(
+                spread_bps, sentiment_score, impact_score, direction, ofi
+            )
+            if gate_result is not None:
+                return {"status": "rejected", "reason": gate_result, "broker": "none"}
+
+        # ── Large-order delegation to AlgoOrderManager ────────────────────
+        quantity = float(order_request.get("quantity", 0.0))
+        if not is_unwind and quantity >= _ALGO_LARGE_THRESHOLD:
+            return await self._route_via_algo(order_request, quantity, direction)
 
         # ── Score and rank brokers ─────────────────────────────────────────
         ranked = self._rank_brokers(direction, ofi, sentiment_score)
@@ -253,6 +281,145 @@ class SmartRouter:
 
         # ── Execute with fallback chain ────────────────────────────────────
         return await self._execute_with_fallback(order_request, ranked, decision)
+
+    # ── Algo order delegation ─────────────────────────────────────────────────
+
+    async def _route_via_algo(
+        self,
+        order_request: Dict,
+        quantity: float,
+        direction: str,
+    ) -> Dict:
+        """
+        Delegate a large order to AlgoOrderManager (TWAP/VWAP/Iceberg).
+
+        The algo manager slices the order into child orders and submits each
+        via _submit_child_order(), which flows through the normal broker
+        selection and fallback logic.
+
+        Returns a synthetic fill dict aggregating all child fills once the
+        algo completes. For very large orders this is async — the caller
+        receives a status="algo_submitted" response immediately and fills
+        are reported back via the broker_submit_fn callback.
+        """
+        symbol     = order_request.get("symbol", "")
+        side       = direction.upper()
+        signal_id  = order_request.get("signal_id", "")
+        strategy_id = f"signal:{signal_id}"
+
+        logger.info(
+            "SmartRouter: delegating %.2f lots %s %s to AlgoOrderManager",
+            quantity, side, symbol,
+        )
+
+        # Store the original order context so child fills can reference it
+        self._pending_algo_orders = getattr(self, "_pending_algo_orders", {})
+
+        algo_id = await self._algo.submit_auto(
+            symbol=symbol,
+            side=side,
+            total_quantity=quantity,
+            strategy_id=strategy_id,
+        )
+
+        if algo_id is None:
+            # submit_auto returned None — quantity fell below threshold
+            # (shouldn't happen here, but handle gracefully)
+            logger.warning(
+                "AlgoOrderManager.submit_auto returned None for qty=%.2f — "
+                "falling through to market order",
+                quantity,
+            )
+            ranked = self._rank_brokers(direction, 0.0, 0.0)
+            if not ranked:
+                return {"status": "rejected", "reason": "no_brokers_available", "broker": "none"}
+            decision = RoutingDecision(
+                decision_id=str(uuid.uuid4()),
+                order_id=order_request.get("order_id", ""),
+                selected_broker=ranked[0][0],
+                fallback_chain=[b for b, _ in ranked[1:]],
+                scores={b: round(s, 4) for b, s in ranked},
+                ofi=0.0, sentiment_score=0.0, impact_score=0.0,
+                spread_bps=0.0, reason="algo_fallback_market",
+            )
+            return await self._execute_with_fallback(order_request, ranked, decision)
+
+        self._total_routed += 1
+        self._pending_algo_orders[algo_id] = order_request
+
+        return {
+            "status":    "algo_submitted",
+            "algo_id":   algo_id,
+            "quantity":  quantity,
+            "symbol":    symbol,
+            "direction": direction,
+            "broker":    "algo_manager",
+            "reason":    f"large_order_delegated:qty={quantity:.2f}",
+        }
+
+    async def _submit_child_order(self, child_order_dict: Dict) -> Dict:
+        """
+        Broker submission function wired into AlgoOrderManager.
+
+        Called by each algo (TWAP/VWAP/Iceberg) for every child order slice.
+        Routes through the normal broker selection and fallback chain.
+        """
+        symbol    = child_order_dict.get("symbol", "")
+        side      = child_order_dict.get("side", "BUY").lower()
+        direction = "long" if side == "buy" else "short"
+        quantity  = float(child_order_dict.get("quantity", 0.0))
+
+        # Build a minimal order_request compatible with _execute_with_fallback
+        order_request = {
+            "order_id":   child_order_dict.get("child_id", str(uuid.uuid4())),
+            "signal_id":  child_order_dict.get("algo_id", ""),
+            "symbol":     symbol,
+            "direction":  direction,
+            "quantity":   quantity,
+            "order_type": "MARKET",
+            "mid_price":  float(child_order_dict.get("mid_price", 0.0)),
+            "bid":        float(child_order_dict.get("bid", 0.0)),
+            "ask":        float(child_order_dict.get("ask", 0.0)),
+            "spread":     float(child_order_dict.get("spread", 0.0)),
+            "confidence": 1.0,
+            "sentiment":  0.0,
+            "impact":     0.0,
+            "features":   {},
+            "lineage_id": child_order_dict.get("algo_id", ""),
+            "is_child_order": True,
+        }
+
+        ranked = self._rank_brokers(direction, 0.0, 0.0)
+        if not ranked:
+            return {"status": "rejected", "reason": "no_brokers_available", "broker": "none"}
+
+        decision = RoutingDecision(
+            decision_id     = str(uuid.uuid4()),
+            order_id        = order_request["order_id"],
+            selected_broker = ranked[0][0],
+            fallback_chain  = [b for b, _ in ranked[1:]],
+            scores          = {b: round(s, 4) for b, s in ranked},
+            ofi             = 0.0,
+            sentiment_score = 0.0,
+            impact_score    = 0.0,
+            spread_bps      = 0.0,
+            reason          = f"child_order:algo={child_order_dict.get('algo_id','')}",
+        )
+        self._decisions.append(decision)
+
+        result = await self._execute_with_fallback(order_request, ranked, decision)
+
+        # Update slippage model with child fill data
+        if result.get("status") == "filled":
+            broker_id = result.get("broker", "")
+            if broker_id in self._states:
+                latency_ms   = float(result.get("latency_ms", 100.0))
+                fill_price   = float(result.get("fill_price", order_request["mid_price"]))
+                expected     = order_request["ask"] if direction == "long" else order_request["bid"]
+                slippage_bps = abs(fill_price - expected) / max(expected, 1e-9) * 10_000
+                self._states[broker_id].record_fill(latency_ms, slippage_bps)
+
+        return result
 
     # ── Pre-routing gates ─────────────────────────────────────────────────────
 
@@ -407,10 +574,13 @@ class SmartRouter:
         return ",".join(reasons) if reasons else "best_composite_score"
 
     def metrics(self) -> Dict[str, Any]:
+        active_algos = self._algo.get_all_active()
         return {
             "total_routed": self._total_routed,
             "total_filled": self._total_filled,
             "fill_rate":    self._total_filled / max(self._total_routed, 1),
+            "algo_active_orders": len(active_algos),
+            "algo_orders": active_algos,
             "brokers": {
                 bid: {
                     "ema_latency_ms":   round(s.ema_latency_ms, 2),
