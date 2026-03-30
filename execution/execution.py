@@ -125,10 +125,9 @@ class ExecutionSystem:
         await self._orchestrator.start()
         logger.info("Step 1/9: MarketDataOrchestrator started ✓")
 
-        # ── Step 2: Wire lineage store ─────────────────────────────────────
-        logger.info("Step 2/9: Wiring DataLineageStore...")
-        from data_layer.lineage.store import lineage_store
-        self._lineage = lineage_store
+        # ── Step 2: Wire lineage store via orchestrator (single entry point) ─
+        logger.info("Step 2/9: Wiring DataLineageStore via orchestrator...")
+        self._lineage = self._orchestrator._lineage
         logger.info("Step 2/9: DataLineageStore wired ✓")
 
         # ── Step 3: Instantiate RiskManager ───────────────────────────────

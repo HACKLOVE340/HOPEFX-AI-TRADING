@@ -420,10 +420,20 @@ class MarketDataOrchestrator:
     # ── ML feature aggregation ────────────────────────────────────────────────
 
     def get_ml_features(
-        self, as_of: Optional[datetime] = None
+        self,
+        as_of: Optional[datetime] = None,
+        symbol: str = "XAU_USD",
     ) -> Dict[str, float]:
         """
         Return all 26+ ML features from the data layer.
+
+        Parameters
+        ----------
+        as_of  : Causal cutoff — only use data available at this time.
+                 Passed to sentiment and calendar sub-components.
+                 Microstructure features are always computed from past ticks.
+        symbol : Instrument symbol (default "XAU_USD"). Currently only
+                 XAU_USD is supported; parameter accepted for API compatibility.
 
         Causal guarantee: as_of parameter is passed to every sub-component
         that supports it (sentiment, calendar). Microstructure features are
