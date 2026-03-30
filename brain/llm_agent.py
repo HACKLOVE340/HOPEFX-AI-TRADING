@@ -735,24 +735,53 @@ class LLMAgent:
 
 
 def create_agent(
-    oanda_stream=None,
+    candle_source=None,
     api_key: Optional[str] = None,
     model: str = "gpt-4o",
+    # Backwards-compat alias — remove after all call sites are updated.
+    oanda_stream=None,
     **kwargs,
 ) -> LLMAgent:
     """
-    Create an LLMAgent wired to an OANDAStream for live candle data.
+    Create an LLMAgent with an optional historical candle source.
 
-        agent = create_agent(oanda_stream=stream)
+    Parameters
+    ----------
+    candle_source : Any object with a ``get_candles(symbol, timeframe, count)``
+                    coroutine.  Typically an ``OANDAStream`` execution broker
+                    used for historical warm-up data only.
+                    Live price ticks come from ``data_feed.NuclearStreamer``.
+    api_key       : OpenAI API key (falls back to OPENAI_API_KEY env var).
+    model         : OpenAI model name (default: gpt-4o).
+    oanda_stream  : Deprecated alias for ``candle_source``.
+
+    Example
+    -------
+        from brokers.oanda_stream import OANDAStream
+        broker = OANDAStream(api_key=..., account_id=..., instruments=["XAU_USD"])
+        await broker.__aenter__()
+        await broker.connect()
+
+        agent = create_agent(candle_source=broker)
         result = await agent.generate_strategy(
             "Create a mean-reversion strategy on XAUUSD using Bollinger Bands"
         )
     """
-    fetcher = None
-    if oanda_stream is not None:
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
 
+    # Resolve deprecated alias.
+    if candle_source is None and oanda_stream is not None:
+        _log.warning(
+            "create_agent: 'oanda_stream' parameter is deprecated — "
+            "use 'candle_source' instead."
+        )
+        candle_source = oanda_stream
+
+    fetcher = None
+    if candle_source is not None:
         async def fetcher(symbol: str, timeframe: str, count: int) -> List[Dict]:
-            return await oanda_stream.get_candles(symbol, timeframe, count)
+            return await candle_source.get_candles(symbol, timeframe, count)
 
     return LLMAgent(
         api_key=api_key,
