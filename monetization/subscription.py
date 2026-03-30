@@ -858,25 +858,37 @@ def require_plan(minimum_plan: str):
     The user's current plan is read from their active subscription record.
     Falls back to "free" when no subscription exists.
     """
-    from functools import wraps
+    from functools import wraps  # noqa: F401 (kept for potential future use)
+    try:
+        from fastapi import Request
+    except ImportError:
+        Request = object  # type: ignore[assignment,misc]
 
-    async def _dependency(user=None):
+    async def _dependency(request: "Request", user=None):  # type: ignore[name-defined]
         # Import here to avoid circular imports
         try:
             from api.auth import get_current_user, TokenPayload
-            from fastapi import Depends as _Depends
+            from fastapi.security import HTTPBearer as _HTTPBearer
+            from fastapi.security.http import HTTPAuthorizationCredentials as _Creds
         except ImportError:
             # auth module not available (e.g. unit tests) — allow through
             return user
 
-        # Resolve the current user if not already injected
+        # Resolve the current user from the Bearer token when not already injected
         if user is None:
             try:
-                from fastapi import Request
-                # In real FastAPI context, user comes from Depends(get_current_user)
-                pass
+                auth_header = request.headers.get("Authorization", "")
+                if auth_header.lower().startswith("bearer "):
+                    token = auth_header[7:].strip()
+                    creds = _Creds(scheme="bearer", credentials=token)
+                    user = get_current_user(credentials=creds)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                # Propagate HTTP exceptions (401/403) from token validation;
+                # swallow only unexpected errors and fall through to plan check.
+                from fastapi import HTTPException as _HTTPExc
+                if isinstance(_exc, _HTTPExc):
+                    raise
+                logger.debug("Could not resolve user from request: %s", _exc)
 
         # Get user's current plan from subscription manager
         user_id = getattr(user, "sub", "") if user else ""
