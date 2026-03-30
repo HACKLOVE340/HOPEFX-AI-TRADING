@@ -417,14 +417,20 @@ class TestEngineKillSwitchHooks:
     def test_validate_startup_environment_short_jwt_warns(self):
         """Short JWT secret is flagged as an error."""
         import os
-        os.environ["APP_ENV"] = "test"
-        os.environ["SECURITY_JWT_SECRET"] = "short"
-        from hopefx_engine import validate_startup_environment
-        issues = validate_startup_environment()
-        error_issues = [i for i in issues if i.startswith("ERROR:")]
-        assert any("SECURITY_JWT_SECRET" in i for i in error_issues)
-        # Restore
-        os.environ["SECURITY_JWT_SECRET"] = "test-only-jwt-secret-key-minimum-32-chars!!"
+        original = os.environ.get("SECURITY_JWT_SECRET")
+        try:
+            os.environ["APP_ENV"] = "test"
+            os.environ["SECURITY_JWT_SECRET"] = "short"
+            from hopefx_engine import validate_startup_environment
+            issues = validate_startup_environment()
+            error_issues = [i for i in issues if i.startswith("ERROR:")]
+            assert any("SECURITY_JWT_SECRET" in i for i in error_issues)
+        finally:
+            # Always restore a valid secret regardless of test outcome
+            os.environ["SECURITY_JWT_SECRET"] = (
+                original if original and len(original) >= 32
+                else "test-only-jwt-secret-key-minimum-32-chars!!"
+            )
 
     def test_validate_startup_environment_oanda_missing_key(self):
         """BROKER=oanda without OANDA_API_KEY is flagged."""
