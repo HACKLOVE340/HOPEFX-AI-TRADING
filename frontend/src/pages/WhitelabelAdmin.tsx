@@ -252,21 +252,7 @@ const WhitelabelAdmin: React.FC = () => {
       const res = await api.get('/whitelabel/tenants');
       setTenants(res.data.tenants || []);
     } catch {
-      // Demo fallback
-      setTenants([
-        {
-          tenant_id: 'demo-1', name: 'PropFirm Alpha', owner_email: 'admin@propfirmalpha.com',
-          status: 'active', features: ['trading', 'risk_management', 'analytics'],
-          theme: { primary_color: '#f59e0b', logo_url: '', company_name: 'PropFirm Alpha' },
-          custom_domain: null, created_at: new Date().toISOString(), expires_at: null, has_api_key: true,
-        },
-        {
-          tenant_id: 'demo-2', name: 'FX Academy', owner_email: 'admin@fxacademy.io',
-          status: 'trial', features: ['trading', 'backtesting'],
-          theme: { primary_color: '#8b5cf6', logo_url: '', company_name: 'FX Academy' },
-          custom_domain: null, created_at: new Date().toISOString(), expires_at: null, has_api_key: false,
-        },
-      ]);
+      setTenants([]);
     } finally {
       setLoading(false);
     }
