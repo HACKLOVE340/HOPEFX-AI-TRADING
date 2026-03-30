@@ -22,6 +22,8 @@ What it does
 6. Sends a Telegram daily summary at midnight UTC.
 7. Handles SIGINT / SIGTERM with a clean checkpoint-and-shutdown.
 8. Writes a JSON checkpoint on every clean stop for post-restart recovery.
+9. Starts HOPEFXBrain (security/global_fortress.py) as a 24/7 background
+   task — scans routes, traces attacks, auto-heals code, triggers lockdown.
 
 Architecture
 ------------
@@ -232,6 +234,24 @@ class LifeSupervisor:
         if self._chart_engine is not None:
             asyncio.create_task(self._chart_engine.start(), name="nuclear-chart-engine")
             logger.info("NuclearAIChartEngine tick loop started")
+
+        # Start HOPEFXBrain — 24/7 security engine (global_fortress)
+        try:
+            from security.global_fortress import start_brain as _start_brain
+            # app reference: import the FastAPI app so the brain can mount its router
+            try:
+                from app import app as _fastapi_app
+                await _start_brain(_fastapi_app)
+                logger.info("HOPEFXBrain 24/7 security engine started")
+            except ImportError:
+                # connect_to_life may run without the FastAPI app (CLI mode).
+                # Create a minimal stub app so the brain still runs its monitor loop.
+                from fastapi import FastAPI as _FastAPI
+                _stub_app = _FastAPI()
+                await _start_brain(_stub_app)
+                logger.info("HOPEFXBrain started with stub FastAPI app (CLI mode)")
+        except Exception as _brain_exc:
+            logger.warning("HOPEFXBrain failed to start (non-fatal): %s", _brain_exc)
 
         # Send startup Telegram notification
         nuclear_status = (
