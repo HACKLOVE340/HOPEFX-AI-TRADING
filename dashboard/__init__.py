@@ -6,8 +6,9 @@
 """
 Phase 17: Web Dashboard UI Module
 
-Provides the backend API and components for the web dashboard interface.
-This module powers the React/Vue frontend with real-time data.
+DashboardService delegates each _get_* method to real data sources when
+wired (app_state/broker/orchestrator), falling back to empty structures
+when not wired — same pattern as MobileAPI.
 """
 
 from typing import Dict, List, Optional, Any
@@ -20,8 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 class DashboardWidgetType(Enum):
-    """Dashboard widget types"""
-
     PORTFOLIO_SUMMARY = "portfolio_summary"
     POSITION_LIST = "position_list"
     TRADE_HISTORY = "trade_history"
@@ -36,21 +35,17 @@ class DashboardWidgetType(Enum):
 
 @dataclass
 class DashboardWidget:
-    """Dashboard widget configuration"""
-
     widget_id: str
     widget_type: DashboardWidgetType
     title: str
-    position: Dict[str, int]  # {row, col, width, height}
+    position: Dict[str, int]
     settings: Dict[str, Any] = field(default_factory=dict)
-    refresh_interval: int = 5  # seconds
+    refresh_interval: int = 5
     enabled: bool = True
 
 
 @dataclass
 class DashboardLayout:
-    """Dashboard layout configuration"""
-
     layout_id: str
     name: str
     widgets: List[DashboardWidget]
@@ -60,304 +55,306 @@ class DashboardLayout:
 
 class DashboardService:
     """
-    Web Dashboard Service
+    Web Dashboard Service.
 
-    Provides data and configuration for the web dashboard interface.
+    Wire real data by passing:
+      app_state   — object with .broker (get_account_info, get_positions,
+                    get_trade_history, get_risk_metrics, get_order_book)
+      orchestrator — MarketDataOrchestrator for live ticks, sentiment, quality
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
-        """Initialize dashboard service."""
+    def __init__(
+        self,
+        config: Optional[Dict[str, Any]] = None,
+        app_state: Any = None,
+        orchestrator: Any = None,
+    ):
         self.config = config or {}
+        self._app_state = app_state
+        self._orchestrator = orchestrator
         self.layouts: Dict[str, DashboardLayout] = {}
         self.active_layout_id: Optional[str] = None
-
-        # Initialize default layout
         self._create_default_layout()
-
         logger.info("Dashboard service initialized")
 
-    def _create_default_layout(self):
-        """Create default dashboard layout."""
+    # ── Layout management ─────────────────────────────────────────────────────
+
+    def _create_default_layout(self) -> None:
         default_widgets = [
-            DashboardWidget(
-                widget_id="portfolio_summary_1",
-                widget_type=DashboardWidgetType.PORTFOLIO_SUMMARY,
-                title="Portfolio Overview",
-                position={"row": 0, "col": 0, "width": 4, "height": 2},
-            ),
-            DashboardWidget(
-                widget_id="positions_1",
-                widget_type=DashboardWidgetType.POSITION_LIST,
-                title="Open Positions",
-                position={"row": 0, "col": 4, "width": 4, "height": 2},
-            ),
-            DashboardWidget(
-                widget_id="performance_1",
-                widget_type=DashboardWidgetType.PERFORMANCE_CHART,
-                title="Performance",
-                position={"row": 0, "col": 8, "width": 4, "height": 2},
-            ),
-            DashboardWidget(
-                widget_id="strategy_1",
-                widget_type=DashboardWidgetType.STRATEGY_STATUS,
-                title="Active Strategies",
-                position={"row": 2, "col": 0, "width": 6, "height": 2},
-            ),
-            DashboardWidget(
-                widget_id="risk_1",
-                widget_type=DashboardWidgetType.RISK_METRICS,
-                title="Risk Metrics",
-                position={"row": 2, "col": 6, "width": 6, "height": 2},
-            ),
+            DashboardWidget("portfolio_summary_1", DashboardWidgetType.PORTFOLIO_SUMMARY,
+                            "Portfolio Overview", {"row": 0, "col": 0, "width": 4, "height": 2}),
+            DashboardWidget("positions_1", DashboardWidgetType.POSITION_LIST,
+                            "Open Positions", {"row": 0, "col": 4, "width": 4, "height": 2}),
+            DashboardWidget("performance_1", DashboardWidgetType.PERFORMANCE_CHART,
+                            "Performance", {"row": 0, "col": 8, "width": 4, "height": 2}),
+            DashboardWidget("strategy_1", DashboardWidgetType.STRATEGY_STATUS,
+                            "Active Strategies", {"row": 2, "col": 0, "width": 6, "height": 2}),
+            DashboardWidget("risk_1", DashboardWidgetType.RISK_METRICS,
+                            "Risk Metrics", {"row": 2, "col": 6, "width": 6, "height": 2}),
         ]
-
-        default_layout = DashboardLayout(
-            layout_id="default",
-            name="Default Trading Dashboard",
-            widgets=default_widgets,
-            is_default=True,
-        )
-
-        self.layouts["default"] = default_layout
+        layout = DashboardLayout("default", "Default Trading Dashboard", default_widgets, is_default=True)
+        self.layouts["default"] = layout
         self.active_layout_id = "default"
 
     def get_layout(self, layout_id: str) -> Optional[DashboardLayout]:
-        """Get a dashboard layout by ID."""
         return self.layouts.get(layout_id)
 
     def get_active_layout(self) -> Optional[DashboardLayout]:
-        """Get the currently active layout."""
         if self.active_layout_id:
             return self.layouts.get(self.active_layout_id)
         return None
 
-    def create_layout(
-        self, name: str, widgets: List[DashboardWidget]
-    ) -> DashboardLayout:
-        """Create a new dashboard layout."""
+    def create_layout(self, name: str, widgets: List[DashboardWidget]) -> DashboardLayout:
         layout_id = f"layout_{len(self.layouts) + 1}"
         layout = DashboardLayout(layout_id=layout_id, name=name, widgets=widgets)
         self.layouts[layout_id] = layout
-        logger.info(f"Created dashboard layout: {name}")
+        logger.info("Created dashboard layout: %s", name)
         return layout
 
     def set_active_layout(self, layout_id: str) -> bool:
-        """Set the active dashboard layout."""
         if layout_id in self.layouts:
             self.active_layout_id = layout_id
-            logger.info(f"Active layout set to: {layout_id}")
             return True
         return False
 
-    def get_widget_data(self, widget_type: DashboardWidgetType) -> Dict[str, Any]:
-        """Get data for a specific widget type."""
-        data_handlers = {
-            DashboardWidgetType.PORTFOLIO_SUMMARY: self._get_portfolio_summary,
-            DashboardWidgetType.POSITION_LIST: self._get_positions,
-            DashboardWidgetType.PERFORMANCE_CHART: self._get_performance_data,
-            DashboardWidgetType.STRATEGY_STATUS: self._get_strategy_status,
-            DashboardWidgetType.RISK_METRICS: self._get_risk_metrics,
-            DashboardWidgetType.MARKET_OVERVIEW: self._get_market_overview,
-            DashboardWidgetType.ALERTS: self._get_alerts,
-            DashboardWidgetType.NEWS_FEED: self._get_news_feed,
-            DashboardWidgetType.TRADE_HISTORY: self._get_trade_history,
-            DashboardWidgetType.ORDER_BOOK: self._get_order_book,
-        }
+    # ── Widget dispatch ───────────────────────────────────────────────────────
 
-        handler = data_handlers.get(widget_type)
-        if handler:
-            return handler()
-        return {}
+    def get_widget_data(self, widget_type: DashboardWidgetType) -> Dict[str, Any]:
+        handlers = {
+            DashboardWidgetType.PORTFOLIO_SUMMARY: self._get_portfolio_summary,
+            DashboardWidgetType.POSITION_LIST:     self._get_positions,
+            DashboardWidgetType.PERFORMANCE_CHART: self._get_performance_data,
+            DashboardWidgetType.STRATEGY_STATUS:   self._get_strategy_status,
+            DashboardWidgetType.RISK_METRICS:      self._get_risk_metrics,
+            DashboardWidgetType.MARKET_OVERVIEW:   self._get_market_overview,
+            DashboardWidgetType.ALERTS:            self._get_alerts,
+            DashboardWidgetType.NEWS_FEED:         self._get_news_feed,
+            DashboardWidgetType.TRADE_HISTORY:     self._get_trade_history,
+            DashboardWidgetType.ORDER_BOOK:        self._get_order_book,
+        }
+        handler = handlers.get(widget_type)
+        return handler() if handler else {}
+
+    # ── Internal helpers ──────────────────────────────────────────────────────
+
+    def _broker(self) -> Any:
+        return getattr(self._app_state, "broker", None) if self._app_state else None
+
+    def _safe_broker(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        broker = self._broker()
+        if broker is None:
+            return None
+        fn = getattr(broker, method, None)
+        if fn is None:
+            return None
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:
+            logger.warning("DashboardService broker.%s: %s", method, exc)
+            return None
+
+    def _safe_orch(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        if self._orchestrator is None:
+            return None
+        fn = getattr(self._orchestrator, method, None)
+        if fn is None:
+            return None
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:
+            logger.warning("DashboardService orchestrator.%s: %s", method, exc)
+            return None
+
+    @staticmethod
+    def _to_dict(obj: Any) -> Optional[Dict[str, Any]]:
+        if obj is None:
+            return None
+        if hasattr(obj, "__dict__"):
+            return obj.__dict__
+        if isinstance(obj, dict):
+            return obj
+        return None
+
+    # ── Data providers ────────────────────────────────────────────────────────
 
     def _get_portfolio_summary(self) -> Dict[str, Any]:
-        """Get portfolio summary data."""
+        info = self._to_dict(self._safe_broker("get_account_info"))
+        if info:
+            balance = float(info.get("balance") or info.get("equity") or 0.0)
+            equity = float(info.get("equity") or balance)
+            margin_used = float(info.get("margin_used") or 0.0)
+            return {
+                "total_balance": equity,
+                "available_balance": equity - margin_used,
+                "margin_used": margin_used,
+                "unrealized_pnl": float(info.get("unrealized_pnl") or 0.0),
+                "daily_pnl": float(info.get("daily_pnl") or 0.0),
+                "daily_pnl_percent": float(info.get("daily_pnl_pct") or 0.0),
+                "open_positions": int(info.get("open_positions") or 0),
+                "pending_orders": int(info.get("pending_orders") or 0),
+                "data_source": "broker",
+            }
         return {
-            "total_balance": 100000.00,
-            "available_balance": 75000.00,
-            "margin_used": 25000.00,
-            "unrealized_pnl": 1250.50,
-            "daily_pnl": 450.25,
-            "daily_pnl_percent": 0.45,
-            "open_positions": 3,
-            "pending_orders": 2,
+            "total_balance": 0.0, "available_balance": 0.0, "margin_used": 0.0,
+            "unrealized_pnl": 0.0, "daily_pnl": 0.0, "daily_pnl_percent": 0.0,
+            "open_positions": 0, "pending_orders": 0, "data_source": "none",
         }
 
     def _get_positions(self) -> Dict[str, Any]:
-        """Get open positions data."""
-        return {
-            "positions": [
-                {
-                    "id": "pos_1",
-                    "symbol": "XAUUSD",
-                    "side": "BUY",
-                    "size": 0.5,
-                    "entry_price": 1950.00,
-                    "current_price": 1955.00,
-                    "pnl": 250.00,
-                    "pnl_percent": 0.26,
-                },
-                {
-                    "id": "pos_2",
-                    "symbol": "EURUSD",
-                    "side": "SELL",
-                    "size": 1.0,
-                    "entry_price": 1.0850,
-                    "current_price": 1.0845,
-                    "pnl": 50.00,
-                    "pnl_percent": 0.05,
-                },
-            ]
-        }
+        raw = self._safe_broker("get_positions")
+        if raw is not None:
+            positions = [self._to_dict(p) for p in raw if self._to_dict(p) is not None]
+            return {"positions": positions, "data_source": "broker"}
+        return {"positions": [], "data_source": "none"}
 
     def _get_performance_data(self) -> Dict[str, Any]:
-        """Get performance chart data."""
+        trades_raw = self._safe_broker("get_trade_history") or []
+        equity_curve = []
+        running = 0.0
+        for t in trades_raw:
+            d = self._to_dict(t)
+            if d:
+                pnl = float(d.get("pnl") or d.get("profit") or 0.0)
+                running += pnl
+                closed_at = d.get("closed_at") or d.get("close_time") or ""
+                equity_curve.append({"date": str(closed_at)[:10], "equity": running})
+
+        metrics: Dict[str, Any] = {}
+        risk_raw = self._to_dict(self._safe_broker("get_risk_metrics"))
+        if risk_raw:
+            metrics = {
+                "total_return": risk_raw.get("total_return", 0.0),
+                "sharpe_ratio": risk_raw.get("sharpe_ratio", 0.0),
+                "max_drawdown": risk_raw.get("max_drawdown", 0.0),
+                "win_rate": risk_raw.get("win_rate", 0.0),
+            }
+
         return {
-            "equity_curve": [
-                {"date": "2024-01-01", "equity": 100000},
-                {"date": "2024-01-02", "equity": 100250},
-                {"date": "2024-01-03", "equity": 100150},
-                {"date": "2024-01-04", "equity": 100500},
-                {"date": "2024-01-05", "equity": 101000},
-            ],
-            "metrics": {
-                "total_return": 1.0,
-                "sharpe_ratio": 1.5,
-                "max_drawdown": -2.5,
-                "win_rate": 65.0,
-            },
+            "equity_curve": equity_curve,
+            "metrics": metrics,
+            "data_source": "broker" if trades_raw else "none",
         }
 
     def _get_strategy_status(self) -> Dict[str, Any]:
-        """Get strategy status data."""
-        return {
-            "strategies": [
-                {
-                    "name": "MA_Crossover",
-                    "status": "RUNNING",
-                    "signals": 15,
-                    "win_rate": 68.5,
-                    "pnl": 1500.00,
-                },
-                {
-                    "name": "RSI_Strategy",
-                    "status": "RUNNING",
-                    "signals": 8,
-                    "win_rate": 62.0,
-                    "pnl": 800.00,
-                },
-            ]
-        }
+        strategies_raw = None
+        if self._app_state is not None:
+            strategies_raw = getattr(self._app_state, "strategies", None)
+            if strategies_raw is None:
+                fn = getattr(self._app_state, "get_strategy_status", None)
+                if fn:
+                    try:
+                        strategies_raw = fn()
+                    except Exception as exc:
+                        logger.warning("DashboardService get_strategy_status: %s", exc)
+        if strategies_raw:
+            items = strategies_raw if isinstance(strategies_raw, list) else [strategies_raw]
+            strategies = [self._to_dict(s) for s in items if self._to_dict(s) is not None]
+            return {"strategies": strategies, "data_source": "app_state"}
+        return {"strategies": [], "data_source": "none"}
 
     def _get_risk_metrics(self) -> Dict[str, Any]:
-        """Get risk metrics data."""
+        raw = self._to_dict(self._safe_broker("get_risk_metrics"))
+        if raw:
+            return {**raw, "data_source": "broker"}
+
+        quality = self._to_dict(self._safe_orch("get_quality_report"))
+        if quality:
+            return {
+                "var_95": quality.get("var_95", 0.0),
+                "expected_shortfall": quality.get("expected_shortfall", 0.0),
+                "sharpe_ratio": quality.get("sharpe_ratio", 0.0),
+                "sortino_ratio": quality.get("sortino_ratio", 0.0),
+                "max_drawdown": quality.get("max_drawdown", 0.0),
+                "current_drawdown": quality.get("current_drawdown", 0.0),
+                "risk_utilization": quality.get("risk_utilization", 0.0),
+                "data_source": "orchestrator",
+            }
+
         return {
-            "var_95": -2500.00,
-            "expected_shortfall": -3500.00,
-            "sharpe_ratio": 1.5,
-            "sortino_ratio": 2.1,
-            "max_drawdown": -5.2,
-            "current_drawdown": -1.5,
-            "risk_utilization": 45.0,
+            "var_95": 0.0, "expected_shortfall": 0.0, "sharpe_ratio": 0.0,
+            "sortino_ratio": 0.0, "max_drawdown": 0.0, "current_drawdown": 0.0,
+            "risk_utilization": 0.0, "data_source": "none",
         }
 
     def _get_market_overview(self) -> Dict[str, Any]:
-        """Get market overview data. Prices are fetched via /api/trading/market-price/{symbol}."""
-        return {
-            "markets": [
-                {
-                    "symbol": "XAUUSD",
-                    "price": None,
-                    "change": None,
-                    "source": "/api/trading/market-price/XAUUSD",
-                },
-                {
-                    "symbol": "EURUSD",
-                    "price": None,
-                    "change": None,
-                    "source": "/api/trading/market-price/EURUSD",
-                },
-                {
-                    "symbol": "BTCUSD",
-                    "price": None,
-                    "change": None,
-                    "source": "/api/trading/market-price/BTCUSD",
-                },
-            ],
-            "note": "Live prices are served via /api/trading/market-price/{symbol} (yfinance)",
-        }
+        symbols = ["XAUUSD", "EURUSD", "BTCUSD"]
+        markets = []
+
+        tick = self._safe_orch("get_latest_tick")
+        gold_price: Optional[float] = None
+        if tick is not None:
+            gold_price = float(
+                getattr(tick, "mid", None) or getattr(tick, "price", None) or 0.0
+            ) or None
+
+        for sym in symbols:
+            price: Optional[float] = None
+            source = "none"
+            if sym == "XAUUSD" and gold_price is not None:
+                price = gold_price
+                source = "orchestrator"
+            else:
+                raw_quote = self._to_dict(self._safe_broker("get_quote", sym))
+                if raw_quote:
+                    price = float(raw_quote.get("mid") or raw_quote.get("last") or 0.0) or None
+                    source = "broker" if price else "none"
+            markets.append({"symbol": sym, "price": price, "change": None, "data_source": source})
+
+        return {"markets": markets}
 
     def _get_alerts(self) -> Dict[str, Any]:
-        """Get alerts data."""
-        return {
-            "alerts": [
-                {
-                    "id": 1,
-                    "type": "INFO",
-                    "message": "Strategy started",
-                    "time": "10:30",
-                },
-                {
-                    "id": 2,
-                    "type": "WARNING",
-                    "message": "High volatility detected",
-                    "time": "11:15",
-                },
-            ]
-        }
+        alerts_raw = None
+        if self._app_state is not None:
+            fn = getattr(self._app_state, "get_alerts", None)
+            if fn:
+                try:
+                    alerts_raw = fn()
+                except Exception as exc:
+                    logger.warning("DashboardService get_alerts: %s", exc)
+        if alerts_raw:
+            items = alerts_raw if isinstance(alerts_raw, list) else [alerts_raw]
+            alerts = [self._to_dict(a) for a in items if self._to_dict(a) is not None]
+            return {"alerts": alerts, "data_source": "app_state"}
+        return {"alerts": [], "data_source": "none"}
 
     def _get_news_feed(self) -> Dict[str, Any]:
-        """Get news feed data."""
-        return {
-            "news": [
-                {
-                    "title": "Fed announces rate decision",
-                    "source": "Reuters",
-                    "time": "12:00",
-                },
-                {
-                    "title": "Gold prices surge on dollar weakness",
-                    "source": "Bloomberg",
-                    "time": "11:30",
-                },
-            ]
-        }
+        sentiment_engine = None
+        if self._orchestrator is not None:
+            sentiment_engine = getattr(self._orchestrator, "_sentiment", None)
+
+        if sentiment_engine is not None:
+            fn = getattr(sentiment_engine, "get_recent_articles", None)
+            if fn:
+                try:
+                    articles = fn() or []
+                    news = []
+                    for a in articles[:10]:
+                        d = self._to_dict(a)
+                        if d:
+                            news.append({
+                                "title": d.get("title", ""),
+                                "source": d.get("source", ""),
+                                "time": str(d.get("published_at", ""))[:16],
+                                "sentiment": d.get("sentiment_score", 0.0),
+                            })
+                    return {"news": news, "data_source": "orchestrator"}
+                except Exception as exc:
+                    logger.warning("DashboardService get_news_feed: %s", exc)
+
+        return {"news": [], "data_source": "none"}
 
     def _get_trade_history(self) -> Dict[str, Any]:
-        """Get trade history data."""
-        return {
-            "trades": [
-                {
-                    "id": 1,
-                    "symbol": "XAUUSD",
-                    "side": "BUY",
-                    "pnl": 150.00,
-                    "time": "09:30",
-                },
-                {
-                    "id": 2,
-                    "symbol": "EURUSD",
-                    "side": "SELL",
-                    "pnl": -50.00,
-                    "time": "10:15",
-                },
-            ]
-        }
+        trades_raw = self._safe_broker("get_trade_history") or []
+        trades = [self._to_dict(t) for t in trades_raw if self._to_dict(t) is not None]
+        return {"trades": trades, "data_source": "broker" if trades else "none"}
 
     def _get_order_book(self) -> Dict[str, Any]:
-        """Get order book data."""
-        return {
-            "bids": [
-                {"price": 1954.50, "size": 10.5},
-                {"price": 1954.00, "size": 25.0},
-            ],
-            "asks": [
-                {"price": 1955.50, "size": 8.0},
-                {"price": 1956.00, "size": 15.5},
-            ],
-        }
+        raw = self._to_dict(self._safe_broker("get_order_book", "XAUUSD"))
+        if raw:
+            return {**raw, "data_source": "broker"}
+        return {"bids": [], "asks": [], "data_source": "none"}
 
 
-# Module exports
 __all__ = [
     "DashboardService",
     "DashboardWidget",
