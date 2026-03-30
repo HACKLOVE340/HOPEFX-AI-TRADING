@@ -3,21 +3,36 @@
  * store/tradingStore.ts
  * =====================
  * Zustand store for live trading state.
- * Prices, positions, orders, and signals are updated via WebSocket.
+ * Handles prices, microstructure, positions, orders, signals, risk, sentiment.
+ * All data flows from WebSocket (primary) with REST fallback.
  */
 
 import { create } from 'zustand';
 import { apiClient } from '../services/apiClient';
 import { wsClient } from '../services/wsClient';
-import { Account, Order, Position, Quote, Signal, Trade } from '../types';
+import {
+  Account, Order, Position, Quote, Signal, Trade,
+  Microstructure, RiskMetrics, SentimentData, WSConnectionStatus,
+} from '../types';
 
 interface TradingState {
+  // Market data
   account: Account | null;
   quotes: Record<string, Quote>;
   positions: Position[];
   orders: Order[];
   trades: Trade[];
   signals: Signal[];
+
+  // Extended data from orchestrator
+  microstructure: Record<string, Microstructure>;
+  riskMetrics: RiskMetrics | null;
+  sentiment: SentimentData | null;
+
+  // Connection
+  wsStatus: WSConnectionStatus;
+
+  // UI state
   isLoading: boolean;
   error: string | null;
 
@@ -27,6 +42,8 @@ interface TradingState {
   fetchOrders: () => Promise<void>;
   fetchTrades: (limit?: number) => Promise<void>;
   fetchSignals: (symbol?: string) => Promise<void>;
+  fetchRiskMetrics: () => Promise<void>;
+  fetchSentiment: (symbol?: string) => Promise<void>;
   placeOrder: (order: {
     symbol: string;
     side: 'buy' | 'sell';
@@ -38,9 +55,12 @@ interface TradingState {
   }) => Promise<Order>;
   cancelOrder: (orderId: string) => Promise<void>;
   closePosition: (positionId: string) => Promise<void>;
+  approveSignal: (signalId: string) => void;
   subscribeToLive: () => () => void;
   clearError: () => void;
 }
+
+const normalizeSymbol = (s: string) => s.replace('/', '').replace('-', '').toUpperCase();
 
 export const useTradingStore = create<TradingState>((set, get) => ({
   account: null,
@@ -49,6 +69,10 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   orders: [],
   trades: [],
   signals: [],
+  microstructure: {},
+  riskMetrics: null,
+  sentiment: null,
+  wsStatus: 'disconnected',
   isLoading: false,
   error: null,
 
@@ -97,11 +121,28 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     }
   },
 
+  fetchRiskMetrics: async () => {
+    try {
+      const riskMetrics = await apiClient.getRiskMetrics();
+      set({ riskMetrics });
+    } catch (e) {
+      set({ error: 'Failed to fetch risk metrics' });
+    }
+  },
+
+  fetchSentiment: async (symbol = 'XAUUSD') => {
+    try {
+      const sentiment = await apiClient.getSentiment(symbol);
+      set({ sentiment });
+    } catch (e) {
+      set({ error: 'Failed to fetch sentiment' });
+    }
+  },
+
   placeOrder: async (order) => {
     set({ isLoading: true, error: null });
     try {
       const placed = await apiClient.placeOrder(order);
-      // Optimistically add to orders list
       set((state) => ({ orders: [placed, ...state.orders] }));
       return placed;
     } catch (e: unknown) {
@@ -139,12 +180,23 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     }
   },
 
-  subscribeToLive: () => {
-    // ── Price ticks ────────────────────────────────────────────────────────
-    // Backend sends { type: "price_tick", data: { symbol: "XAU/USD", bid, ask, ... } }
-    // Mobile store keys quotes by no-slash symbol (XAUUSD) for consistency.
-    const normalizeSymbol = (s: string) => s.replace('/', '');
+  approveSignal: (signalId) => {
+    set((state) => ({
+      signals: state.signals.map((s) =>
+        s.id === signalId
+          ? { ...s, approved: true, approved_at: new Date().toISOString() }
+          : s
+      ),
+    }));
+  },
 
+  subscribeToLive: () => {
+    // ── WS connection status ───────────────────────────────────────────────
+    const unsubStatus = wsClient.onStatus((wsStatus) => {
+      set({ wsStatus });
+    });
+
+    // ── Price ticks ────────────────────────────────────────────────────────
     const normalizeTick = (raw: Record<string, unknown>): Quote => {
       const bid = Number(raw.bid ?? 0);
       const ask = Number(raw.ask ?? 0);
@@ -156,11 +208,15 @@ export const useTradingStore = create<TradingState>((set, get) => ({
         ask,
         mid,
         spread: Number(raw.spread ?? ask - bid),
-        // timestamp may be ms epoch (number) or ISO string
+        spread_pct: Number(raw.spread_pct ?? 0),
         timestamp: typeof raw.timestamp === 'number'
           ? new Date(raw.timestamp).toISOString()
           : String(raw.timestamp ?? new Date().toISOString()),
         change_pct: Number(raw.change_pct ?? 0),
+        change_abs: Number(raw.change_abs ?? 0),
+        session_high: raw.session_high ? Number(raw.session_high) : undefined,
+        session_low:  raw.session_low  ? Number(raw.session_low)  : undefined,
+        volume: raw.volume ? Number(raw.volume) : undefined,
       };
     };
 
@@ -171,11 +227,48 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       }
     });
 
-    // Legacy alias — some deployments may still send price_update
+    // Legacy alias
     const unsubPriceUpdate = wsClient.on<Quote>('price_update', (quote) => {
       if (quote?.symbol) {
-        set((state) => ({ quotes: { ...state.quotes, [quote.symbol]: quote } }));
+        const sym = normalizeSymbol(quote.symbol);
+        set((state) => ({ quotes: { ...state.quotes, [sym]: { ...quote, symbol: sym } } }));
       }
+    });
+
+    // ── Microstructure ─────────────────────────────────────────────────────
+    const unsubMicro = wsClient.on<Microstructure>('microstructure_update', (data) => {
+      if (data?.symbol) {
+        const sym = normalizeSymbol(data.symbol);
+        set((state) => ({
+          microstructure: { ...state.microstructure, [sym]: { ...data, symbol: sym } },
+        }));
+      }
+    });
+
+    // ── Risk updates ───────────────────────────────────────────────────────
+    const unsubRisk = wsClient.on<RiskMetrics>('risk_update', (data) => {
+      if (data) set({ riskMetrics: data });
+    });
+
+    const unsubKillSwitch = wsClient.on<{ reason: string; triggered_at: string }>(
+      'kill_switch_trigger',
+      (data) => {
+        set((state) => ({
+          riskMetrics: state.riskMetrics
+            ? {
+                ...state.riskMetrics,
+                kill_switch_active: true,
+                kill_switch_reason: data?.reason,
+                kill_switch_triggered_at: data?.triggered_at,
+              }
+            : null,
+        }));
+      }
+    );
+
+    // ── Sentiment ──────────────────────────────────────────────────────────
+    const unsubSentiment = wsClient.on<SentimentData>('sentiment_update', (data) => {
+      if (data) set({ sentiment: data });
     });
 
     // ── Position updates ───────────────────────────────────────────────────
@@ -189,7 +282,6 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       }
     });
 
-    // Position closed — remove from list
     const unsubPosClose = wsClient.on<{ id: string }>('position_close', ({ id }) => {
       set((state) => ({ positions: state.positions.filter((p) => p.id !== id) }));
     });
@@ -206,10 +298,14 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       }
     });
 
-    // Return combined unsubscribe
     return () => {
+      unsubStatus();
       unsubPriceTick();
       unsubPriceUpdate();
+      unsubMicro();
+      unsubRisk();
+      unsubKillSwitch();
+      unsubSentiment();
       unsubPos();
       unsubPosClose();
       unsubAccount();
