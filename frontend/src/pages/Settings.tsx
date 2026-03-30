@@ -192,9 +192,10 @@ const Settings: React.FC = () => {
         // Cache only non-sensitive prefs for faster initial render next time
         cacheLocalPrefs(merged);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         // API unavailable — keep non-sensitive prefs already in state;
         // credential fields remain blank (safe default)
+        console.warn('[Settings] Failed to load notification settings from API:', err);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -222,7 +223,8 @@ const Settings: React.FC = () => {
     try {
       await api.post('/notifications/test', { channel, settings });
       setTestStatus((prev) => ({ ...prev, [channel]: 'ok' }));
-    } catch {
+    } catch (err: unknown) {
+      console.warn('[Settings] Test notification failed for channel "%s":', channel, err);
       setTestStatus((prev) => ({ ...prev, [channel]: 'fail' }));
     }
     setTimeout(() => setTestStatus((prev) => ({ ...prev, [channel]: 'idle' })), 4000);
