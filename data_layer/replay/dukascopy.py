@@ -45,6 +45,45 @@ _TICK_STRUCT  = struct.Struct(">IIIff")   # big-endian: uint32, uint32, uint32, 
 _TICK_SIZE    = _TICK_STRUCT.size         # 20 bytes
 _PRICE_FACTOR = 100_000.0                 # Dukascopy stores price × 100000
 
+# Timeframe string → minutes mapping.
+# Accepts broker-style strings (H1, M5, D1), ISO-style (1h, 5m, 1d),
+# and plain integers as strings ("60", "5").
+_TF_ALIASES: dict = {
+    # Minutes
+    "M1": 1,   "1m": 1,   "1min": 1,   "1": 1,
+    "M5": 5,   "5m": 5,   "5min": 5,   "5": 5,
+    "M15": 15, "15m": 15, "15min": 15, "15": 15,
+    "M30": 30, "30m": 30, "30min": 30, "30": 30,
+    # Hours
+    "H1": 60,  "1h": 60,  "1H": 60,   "60": 60,  "60min": 60,
+    "H4": 240, "4h": 240, "4H": 240,  "240": 240,
+    # Daily
+    "D1": 1440, "1d": 1440, "1D": 1440, "daily": 1440, "1440": 1440,
+}
+
+
+def _parse_timeframe(tf) -> int:
+    """
+    Convert a timeframe specifier to minutes.
+
+    Accepts:
+      - int  → returned as-is
+      - str  → looked up in _TF_ALIASES, then tried as plain int
+    Raises ValueError for unrecognised strings.
+    """
+    if isinstance(tf, int):
+        return tf
+    s = str(tf).strip()
+    if s in _TF_ALIASES:
+        return _TF_ALIASES[s]
+    try:
+        return int(s)
+    except ValueError:
+        raise ValueError(
+            f"DukascopyFetcher: unrecognised timeframe '{tf}'. "
+            f"Use minutes (int) or one of: {sorted(_TF_ALIASES)}"
+        )
+
 
 class DukascopyFetcher:
     """
@@ -251,19 +290,25 @@ class DukascopyFetcher:
         symbol: str,
         start: datetime,
         end: datetime,
-        timeframe_minutes: int = 60,
+        timeframe_minutes=60,
     ) -> pd.DataFrame:
         """
         Fetch and aggregate tick data into OHLCV bars.
 
+        Parameters
+        ----------
+        timeframe_minutes : int or str — bar size. Accepts integers (minutes)
+            or broker-style strings: "H1", "M5", "D1", "1h", "5m", etc.
+
         Returns DataFrame with columns: open, high, low, close, volume
         and UTC DatetimeIndex (bar open time).
         """
-        ticks = await self.fetch_ticks(symbol, start, end)
+        tf_min = _parse_timeframe(timeframe_minutes)
+        ticks  = await self.fetch_ticks(symbol, start, end)
         if ticks.empty:
             return pd.DataFrame()
 
-        freq = f"{timeframe_minutes}min"
+        freq = f"{tf_min}min"
         mid  = ticks["mid"] if "mid" in ticks.columns else (ticks["bid"] + ticks["ask"]) / 2
 
         ohlcv = mid.resample(freq).agg(
