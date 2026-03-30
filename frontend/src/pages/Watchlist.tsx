@@ -22,6 +22,9 @@ interface WatchlistItem {
   mid: number;
   change_pct: number;
   timestamp: number;
+  /** Ordered mid-price ticks used to render the sparkline. Populated by the
+   *  /watchlist/prices endpoint; empty array when not yet available. */
+  history: number[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -37,20 +40,35 @@ function formatPrice(symbol: string, price: number): string {
   return price.toFixed(5);
 }
 
-// Tiny sparkline using SVG
-const Sparkline: React.FC<{ change_pct: number }> = ({ change_pct }) => {
-  const up    = change_pct >= 0;
+/**
+ * Sparkline rendered from the item's real price history ticks.
+ * Falls back to a flat line when fewer than 2 points are available.
+ */
+const Sparkline: React.FC<{ history: number[] }> = ({ history }) => {
+  if (history.length < 2) {
+    // Not enough data — render a neutral flat line
+    return (
+      <svg width={60} height={32} style={{ display: 'block' }}>
+        <line x1={0} y1={16} x2={60} y2={16} stroke="#475569" strokeWidth={1.5} />
+      </svg>
+    );
+  }
+
+  const last  = history[history.length - 1];
+  const first = history[0];
+  const up    = last >= first;
   const color = up ? '#4ade80' : '#f87171';
-  const points = Array.from({ length: 10 }, (_, i) => {
-    const trend = (change_pct / 10) * i;
-    const noise = (Math.random() - 0.5) * 0.5;
-    return 20 - (trend + noise) * 2;
-  });
-  const min        = Math.min(...points);
-  const max        = Math.max(...points);
-  const range      = max - min || 1;
-  const normalized = points.map((p) => ((p - min) / range) * 28 + 2);
-  const path       = normalized.map((y, i) => `${i === 0 ? 'M' : 'L'}${(i / 9) * 60},${y}`).join(' ');
+
+  const min   = Math.min(...history);
+  const max   = Math.max(...history);
+  const range = max - min || 1;
+
+  const normalized = history.map((p) => ((p - min) / range) * 28 + 2);
+  const n          = normalized.length - 1;
+  const path       = normalized
+    .map((y, i) => `${i === 0 ? 'M' : 'L'}${(i / n) * 60},${30 - y}`)
+    .join(' ');
+
   return (
     <svg width={60} height={32} style={{ display: 'block' }}>
       <path d={path} fill="none" stroke={color} strokeWidth={1.5} />
@@ -58,34 +76,32 @@ const Sparkline: React.FC<{ change_pct: number }> = ({ change_pct }) => {
   );
 };
 
-// ── Fallback demo data shown while API loads ──────────────────────────────────
-
-const DEMO_ITEMS: WatchlistItem[] = [
-  { symbol: 'XAUUSD', bid: 2340.10, ask: 2340.40, mid: 2340.25, change_pct:  0.42, timestamp: Date.now() },
-  { symbol: 'EURUSD', bid: 1.08490, ask: 1.08510, mid: 1.08500, change_pct: -0.18, timestamp: Date.now() },
-  { symbol: 'GBPUSD', bid: 1.26980, ask: 1.27010, mid: 1.26995, change_pct:  0.11, timestamp: Date.now() },
-  { symbol: 'USDJPY', bid: 149.480, ask: 149.510, mid: 149.495, change_pct: -0.05, timestamp: Date.now() },
-  { symbol: 'BTCUSD', bid: 66980.0, ask: 67020.0, mid: 67000.0, change_pct:  1.23, timestamp: Date.now() },
-];
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const WatchlistPage: React.FC = () => {
   const navigate    = useNavigate();
   const storePrices = useStore((s) => s.prices);
 
-  const [items,     setItems]     = useState<WatchlistItem[]>(DEMO_ITEMS);
+  const [items,     setItems]     = useState<WatchlistItem[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [addSymbol, setAddSymbol] = useState('');
   const [adding,    setAdding]    = useState(false);
   const [error,     setError]     = useState('');
 
+  /** Normalise an API item: guarantee `history` is always a number[]. */
+  const normalise = (item: Omit<WatchlistItem, 'history'> & { history?: number[] }): WatchlistItem => ({
+    ...item,
+    history: item.history ?? [],
+  });
+
   const fetchWatchlist = useCallback(async () => {
     try {
-      const res = await api.get<{ items: WatchlistItem[] }>('/watchlist');
-      if (res.data.items?.length) setItems(res.data.items);
+      const res = await api.get<{ items: Array<Omit<WatchlistItem, 'history'> & { history?: number[] }> }>('/watchlist');
+      if (res.data.items?.length) {
+        setItems(res.data.items.map(normalise));
+      }
     } catch {
-      // API unavailable — keep demo data
+      // API unavailable — show empty list; no fake data
     } finally {
       setLoading(false);
     }
@@ -95,16 +111,18 @@ const WatchlistPage: React.FC = () => {
     fetchWatchlist();
     const id = setInterval(async () => {
       try {
-        const res = await api.get<WatchlistItem[]>('/watchlist/prices');
-        if (Array.isArray(res.data) && res.data.length > 0) setItems(res.data);
-      } catch { /* keep existing */ }
+        const res = await api.get<Array<Omit<WatchlistItem, 'history'> & { history?: number[] }>>('/watchlist/prices');
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          setItems(res.data.map(normalise));
+        }
+      } catch { /* keep existing prices */ }
     }, 5000);
     return () => clearInterval(id);
   }, [fetchWatchlist]);
 
-  // Overlay live store prices for real-time feel
+  // Overlay live store prices for real-time feel.
+  // Store uses 'XAU/USD' format; watchlist uses 'XAUUSD' — normalise both ways.
   const enrichedItems: WatchlistItem[] = items.map((item) => {
-    // Store uses 'XAU/USD' format; watchlist uses 'XAUUSD' — map both ways
     const slashKey = item.symbol
       .replace('XAUUSD', 'XAU/USD')
       .replace('EURUSD', 'EUR/USD')
@@ -113,7 +131,17 @@ const WatchlistPage: React.FC = () => {
       .replace('BTCUSD', 'BTC/USD');
     const tick = storePrices[slashKey] ?? storePrices[item.symbol];
     if (!tick) return item;
-    return { ...item, bid: tick.bid, ask: tick.ask, mid: tick.mid, change_pct: tick.change_pct, timestamp: tick.timestamp };
+    // Append the new mid to history so the sparkline reflects real ticks
+    const updatedHistory = [...item.history, tick.mid].slice(-60);
+    return {
+      ...item,
+      bid: tick.bid,
+      ask: tick.ask,
+      mid: tick.mid,
+      change_pct: tick.change_pct,
+      timestamp: tick.timestamp,
+      history: updatedHistory,
+    };
   });
 
   const handleAdd = async () => {
@@ -184,7 +212,7 @@ const WatchlistPage: React.FC = () => {
                 {item.change_pct >= 0 ? '+' : ''}{item.change_pct.toFixed(2)}%
               </span>
               <span style={{ width: 70, display: 'flex', justifyContent: 'center' }}>
-                <Sparkline change_pct={item.change_pct} />
+                <Sparkline history={item.history} />
               </span>
               <span style={{ width: 40, textAlign: 'right' }}>
                 <button onClick={(e) => { e.stopPropagation(); handleRemove(item.symbol); }} style={s.removeBtn} title="Remove">×</button>
