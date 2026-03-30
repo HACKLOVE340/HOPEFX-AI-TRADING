@@ -197,8 +197,8 @@ class MarketIngest:
                 if self._exchange:
                     try:
                         await self._exchange.close()
-                    except Exception:  # noqa: BLE001
-                        pass
+                    except Exception as close_exc:  # noqa: BLE001
+                        logger.debug("MarketIngest: error closing stale exchange on reconnect: %s", close_exc)
 
     # ── REST fallback loop ────────────────────────────────────────────────────
 

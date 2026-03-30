@@ -545,8 +545,10 @@ def create_streaming_router(service: StreamingService):
                 import asyncio
 
                 await asyncio.sleep(0.01)
-        except (WebSocketDisconnect, Exception):
-            pass
+        except WebSocketDisconnect:
+            pass  # normal client disconnect
+        except Exception as exc:
+            logger.debug("websocket_stream(%s): connection error: %s", symbol, exc)
         finally:
             service.unsubscribe(symbol, on_event)
 
