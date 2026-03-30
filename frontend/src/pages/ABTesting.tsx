@@ -46,26 +46,47 @@ const MetricRow: React.FC<{ label: string; a: string; b: string; winner: string;
   </div>
 );
 
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>;
+    const detail = (e['response'] as Record<string, unknown> | undefined)?.['data'];
+    if (detail && typeof detail === 'object') {
+      const d = detail as Record<string, unknown>;
+      if (typeof d['detail'] === 'string') return d['detail'];
+      if (typeof d['message'] === 'string') return d['message'];
+    }
+    if (typeof e['message'] === 'string') return e['message'];
+  }
+  return fallback;
+}
+
 const ABTesting: React.FC = () => {
-  const [tests, setTests]     = useState<ABResult[]>([]);
-  const [stratA, setStratA]   = useState('MovingAverageCrossover');
-  const [stratB, setStratB]   = useState('RSIStrategy');
-  const [symbol, setSymbol]   = useState('XAU/USD');
-  const [days, setDays]       = useState('30');
-  const [running, setRunning] = useState(false);
+  const [tests, setTests]       = useState<ABResult[]>([]);
+  const [stratA, setStratA]     = useState('MovingAverageCrossover');
+  const [stratB, setStratB]     = useState('RSIStrategy');
+  const [symbol, setSymbol]     = useState('XAU/USD');
+  const [days, setDays]         = useState('30');
+  const [running, setRunning]   = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [loadErr, setLoadErr]   = useState<string | null>(null);
   const [selected, setSelected] = useState<ABResult | null>(null);
 
   const load = useCallback(async () => {
+    setLoadErr(null);
     try {
       const res = await api.get('/ab-test');
       setTests(res.data.tests || []);
-    } catch { setTests([]); }
+    } catch (err) {
+      setTests([]);
+      setLoadErr(extractErrorMessage(err, 'Failed to load test history. Ensure the API is running.'));
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const run = async () => {
     setRunning(true);
+    setRunError(null);
     try {
       const res = await api.post('/ab-test/start', {
         strategy_a: stratA, strategy_b: stratB,
@@ -73,8 +94,11 @@ const ABTesting: React.FC = () => {
       });
       setTests(prev => [res.data, ...prev]);
       setSelected(res.data);
-    } catch { /* ignore */ }
-    setRunning(false);
+    } catch (err) {
+      setRunError(extractErrorMessage(err, 'Failed to start A/B test. Check strategy names and try again.'));
+    } finally {
+      setRunning(false);
+    }
   };
 
   const sel = selected || tests[0];
@@ -109,6 +133,9 @@ const ABTesting: React.FC = () => {
           <button style={{ ...s.btn, marginTop:16, opacity: running ? 0.6 : 1 }} onClick={run} disabled={running}>
             {running ? 'Running…' : 'Run A/B Test'}
           </button>
+          {runError && (
+            <div style={s.errorBox}>{runError}</div>
+          )}
         </div>
 
         {/* Results */}
@@ -145,7 +172,12 @@ const ABTesting: React.FC = () => {
       </div>
 
       {/* History */}
-      {tests.length > 1 && (
+      {loadErr && (
+        <div style={{ ...s.card }}>
+          <div style={s.errorBox}>{loadErr}</div>
+        </div>
+      )}
+      {!loadErr && tests.length > 1 && (
         <div style={s.card}>
           <div style={s.cardTitle}>Test History</div>
           {tests.map(t => (
@@ -176,6 +208,10 @@ const s: Record<string, React.CSSProperties> = {
   btn: { width:'100%', background:'#3b82f6', border:'none', borderRadius:8, color:'#fff', padding:'10px', fontSize:14, cursor:'pointer', fontWeight:600 },
   winnerBanner: { background:'rgba(74,222,128,0.08)', border:'1px solid', borderRadius:8, padding:'14px 16px', marginBottom:12 },
   histRow: { display:'flex', gap:16, alignItems:'center', padding:'10px 12px', borderRadius:6, cursor:'pointer', flexWrap:'wrap' },
+  errorBox: {
+    background:'rgba(248,113,113,0.1)', border:'1px solid #f87171', borderRadius:6,
+    padding:'8px 12px', marginTop:12, fontSize:13, color:'#f87171',
+  },
 };
 
 export default ABTesting;
