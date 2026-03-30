@@ -27,7 +27,8 @@ class FeedSource(str, Enum):
     METALS_API     = "metals_api"
     METALS_DEV     = "metals_dev"
     COMMODITY_API  = "commodity_api"
-    SYNTHETIC      = "synthetic"   # computed mid from multiple sources
+    AGGREGATED     = "aggregated"  # computed mid price from multiple real sources
+    SYNTHETIC      = AGGREGATED    # backwards-compat alias — use AGGREGATED
     REPLAY         = "replay"      # historical replay engine
 
 
@@ -114,7 +115,7 @@ class OHLCVBar:
     close:      float
     volume:     float
     tick_count: int         = 0
-    source:     FeedSource  = FeedSource.SYNTHETIC
+    source:     FeedSource  = FeedSource.AGGREGATED
     lineage_id: str         = field(default_factory=lambda: str(uuid.uuid4()))
 
 

@@ -238,7 +238,7 @@ class GoldFeedManager:
             bid        = round(consensus_mid - half_spread, 4),
             ask        = round(consensus_mid + half_spread, 4),
             mid        = round(consensus_mid, 4),
-            source     = FeedSource.SYNTHETIC,
+            source     = FeedSource.AGGREGATED,
             confidence = round(confidence, 4),
             spread     = round(half_spread * 2, 4),
             lineage_id = str(uuid.uuid4()),
