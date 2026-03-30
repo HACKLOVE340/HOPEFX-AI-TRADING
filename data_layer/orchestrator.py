@@ -433,6 +433,44 @@ class MarketDataOrchestrator:
 
         return True
 
+    def get_ohlcv(
+        self,
+        symbol: str = "XAU_USD",
+        bars: int = 150,
+        timeframe: str = "H1",
+    ) -> Optional["pd.DataFrame"]:
+        """
+        Return the last ``bars`` closed OHLCV bars as a DataFrame.
+
+        Delegates to the OHLCVStore (Redis + ring buffer).  Returns None
+        when fewer than ``bars`` are available — callers must handle this.
+        """
+        try:
+            from brokers.ohlcv_store import get_ohlcv_store
+            return get_ohlcv_store(timeframe=timeframe).get(symbol, bars=bars)
+        except Exception as exc:
+            logger.debug("Orchestrator.get_ohlcv: %s", exc)
+            return None
+
+    def get_macro_features(self) -> Optional["pd.DataFrame"]:
+        """
+        Return the MacroStore as a DataFrame aligned to the current time.
+
+        Used by the live inference loop to pass macro context to the predictor.
+        Returns None when MacroStore is empty or unavailable.
+        """
+        try:
+            from ml.macro_store import macro_store
+            if len(macro_store) == 0:
+                macro_store.load_defaults()
+            if len(macro_store) == 0:
+                return None
+            # Return the raw macro DataFrame (predictor aligns it internally)
+            return macro_store._data if hasattr(macro_store, "_data") else None
+        except Exception as exc:
+            logger.debug("Orchestrator.get_macro_features: %s", exc)
+            return None
+
     def get_quality_report(self, symbol: str = "XAU_USD") -> Optional[QualityReport]:
         """Return the latest data quality report."""
         try:
