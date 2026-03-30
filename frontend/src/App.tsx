@@ -162,6 +162,55 @@ const WsDot: React.FC = () => {
   );
 };
 
+// ── No-live-feed banner — shown when WS is not connected ──────────────────────
+const NoLiveFeedBanner: React.FC = () => {
+  const status = useStore(selectWsStatus);
+  const [dismissed, setDismissed] = React.useState(false);
+
+  // Reset dismissed state when WS reconnects
+  React.useEffect(() => {
+    if (status === 'connected') setDismissed(false);
+  }, [status]);
+
+  if (status === 'connected' || dismissed) return null;
+
+  const label =
+    status === 'connecting' ? 'Connecting to live feed…' :
+    status === 'error'      ? 'Live feed error — using REST fallback' :
+                              'No live feed — using REST fallback (prices may be delayed)';
+
+  const bg = status === 'connecting' ? '#78350f' : '#450a0a';
+  const border = status === 'connecting' ? '#92400e' : '#7f1d1d';
+  const color  = status === 'connecting' ? '#fbbf24' : '#f87171';
+
+  return (
+    <div
+      role="alert"
+      aria-live="polite"
+      style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+        background: bg, borderBottom: `1px solid ${border}`,
+        color, fontSize: 12, fontWeight: 600,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        padding: '6px 16px',
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+      {label}
+      <button
+        onClick={() => setDismissed(true)}
+        aria-label="Dismiss"
+        style={{
+          marginLeft: 'auto', background: 'transparent', border: 'none',
+          color, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px',
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+};
+
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 const Sidebar: React.FC<{ collapsed: boolean; onToggle: () => void }> = ({ collapsed, onToggle }) => {
   const location  = useLocation();
@@ -245,6 +294,7 @@ const AppShell: React.FC = () => {
 
   return (
     <div style={s.shell}>
+      <NoLiveFeedBanner />
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
       <main style={s.main}>
         <Routes>
