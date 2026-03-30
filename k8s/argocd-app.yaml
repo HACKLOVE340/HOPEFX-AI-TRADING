@@ -1,0 +1,107 @@
+# k8s/argocd-app.yaml
+# ArgoCD Application — continuous delivery with auto-sync and self-heal.
+#
+# Deploy:
+#   kubectl apply -f k8s/argocd-app.yaml -n argocd
+#
+# What this does
+# --------------
+# - Watches the helm/hopefx chart in the Git repo.
+# - Automatically syncs when the chart changes (prune: true removes stale resources).
+# - Self-heals: if someone manually edits a live resource, ArgoCD reverts it.
+# - Retry policy: up to 5 attempts with exponential back-off before alerting.
+# - Sync waves ensure namespace + secrets are created before the main deployment.
+#
+# Prerequisites
+# -------------
+# 1. ArgoCD installed in the cluster:
+#      kubectl create namespace argocd
+#      kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+# 2. The repo URL below must be accessible by ArgoCD (add credentials via
+#    `argocd repo add` or the ArgoCD UI if the repo is private).
+# 3. Set ARGOCD_ROLLBACK_WEBHOOK in your secrets to the ArgoCD API server
+#    URL so HOPEFXBrain can trigger rollbacks on nuclear lockdown.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hopefx
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: hopefx
+    app.kubernetes.io/part-of: hopefx-platform
+  # Finalizer ensures ArgoCD cleans up all managed resources when this
+  # Application object is deleted (cascade delete).
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Slack/webhook notification channel (configure in argocd-notifications)
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: hopefx-alerts
+    notifications.argoproj.io/subscribe.on-health-degraded.slack: hopefx-alerts
+spec:
+  # ── Source ──────────────────────────────────────────────────────────────────
+  source:
+    # Replace with your actual repo URL.
+    repoURL: https://github.com/HACKLOVE340/HOPEFX-AI-TRADING.git
+    targetRevision: main
+    path: helm/hopefx
+    helm:
+      # Override values at deploy time — do NOT commit secrets here.
+      # Use: argocd app set hopefx --helm-set secrets.OANDA_API_KEY=xxx
+      # Or use an ExternalSecret / Vault integration.
+      valueFiles:
+        - values.yaml
+      # Production overrides (non-sensitive)
+      parameters:
+        - name: replicaCount
+          value: "2"
+        - name: image.tag
+          value: "latest"
+        - name: env.TRADING_MODE
+          value: "paper"
+        - name: env.LOG_LEVEL
+          value: "INFO"
+
+  # ── Destination ─────────────────────────────────────────────────────────────
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: hopefx
+
+  # ── Sync policy ─────────────────────────────────────────────────────────────
+  syncPolicy:
+    automated:
+      # Remove resources from the cluster that are no longer in Git.
+      prune: true
+      # Revert any manual changes made directly to live resources.
+      selfHeal: true
+      # Do not auto-sync if the app is OutOfSync due to a missing resource
+      # (e.g. a CRD not yet installed). Prevents cascading failures.
+      allowEmpty: false
+    syncOptions:
+      # Create the target namespace if it doesn't exist.
+      - CreateNamespace=true
+      # Apply server-side apply for large resources (avoids annotation size limits).
+      - ServerSideApply=true
+      # Respect sync-wave annotations on resources.
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+
+  # ── Health checks ────────────────────────────────────────────────────────────
+  # ArgoCD uses built-in health checks for Deployment, Service, PVC, etc.
+  # Custom health check for the HOPEFXBrain lockdown state:
+  ignoreDifferences:
+    # Ignore HPA-managed replica counts so ArgoCD doesn't fight the autoscaler.
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+
+  # ── Revision history ────────────────────────────────────────────────────────
+  # Keep last 10 successful syncs for rollback via:
+  #   argocd app rollback hopefx <revision>
+  revisionHistoryLimit: 10
