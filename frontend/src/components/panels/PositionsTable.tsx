@@ -235,7 +235,7 @@ function PositionRow({
   const pnlPct =
     pos.entry_price > 0
       ? ((pos.current_price - pos.entry_price) / pos.entry_price) * 100 *
-        (pos.side === 'long' || pos.side === 'buy' ? 1 : -1)
+        (pos.side === 'long' ? 1 : -1)
       : 0;
 
   return (
