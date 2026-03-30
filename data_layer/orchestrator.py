@@ -123,17 +123,30 @@ class MarketDataOrchestrator:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge
-            self._prom_uptime = Gauge(
+            from prometheus_client import Counter, Gauge, REGISTRY
+
+            def _gauge(name: str, doc: str):
+                try:
+                    return Gauge(name, doc)
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            def _counter(name: str, doc: str):
+                try:
+                    return Counter(name, doc)
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            self._prom_uptime    = _gauge(
                 "hopefx_orchestrator_uptime_s",
                 "Orchestrator uptime in seconds",
             )
-            self._prom_tick_rate = Counter(
+            self._prom_tick_rate = _counter(
                 "hopefx_orchestrator_ticks_total",
                 "Total ticks processed by orchestrator",
             )
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("MarketDataOrchestrator: Prometheus init skipped: %s", _exc)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -327,11 +340,11 @@ class MarketDataOrchestrator:
     def _on_tick(self, tick: GoldTick) -> None:
         """Side-effects on every tick: microstructure, cache, lineage."""
         # Microstructure
-        self._micro.on_tick(tick)
+        snap = self._micro.on_tick(tick)
 
-        # Redis cache
+        # Redis cache — tick
         if self._redis_store._r:
-            self._redis_store.set_tick(tick.symbol, {
+            tick_dict = {
                 "symbol":     tick.symbol,
                 "timestamp":  tick.timestamp.isoformat(),
                 "bid":        tick.bid,
@@ -343,14 +356,35 @@ class MarketDataOrchestrator:
                 "spread":     tick.spread,
                 "lineage_id": tick.lineage_id,
                 "epoch":      tick.timestamp.timestamp(),
-            })
+            }
+            self._redis_store.set_tick(tick.symbol, tick_dict)
 
-        # Lineage
+            # Cache microstructure snapshot
+            if snap:
+                try:
+                    self._redis_store.set_microstructure(tick.symbol, {
+                        "spread":              snap.spread,
+                        "spread_pct":          snap.spread_pct,
+                        "volume_delta":        snap.volume_delta,
+                        "cumulative_delta":    snap.cumulative_delta,
+                        "buy_pressure":        snap.buy_pressure,
+                        "sell_pressure":       snap.sell_pressure,
+                        "order_flow_imbalance": snap.order_flow_imbalance,
+                        "trade_pressure":      snap.trade_pressure,
+                        "depth_imbalance":     snap.depth_imbalance,
+                        "vwap":                snap.vwap,
+                        "tick_count":          snap.tick_count,
+                        "timestamp":           snap.timestamp.isoformat(),
+                    })
+                except Exception as _exc:
+                    logger.debug("Orchestrator: micro cache error: %s", _exc)
+
+        # Lineage — only accepted ticks
         if tick.quality != TickQuality.REJECTED:
             try:
                 self._lineage.record_tick(tick)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Orchestrator: lineage record_tick error: %s", _exc)
 
         self._tick_count += 1
         if self._prom_tick_rate:
@@ -509,10 +543,100 @@ class MarketDataOrchestrator:
             return None
 
     def get_quality_report(self, symbol: str = "XAU_USD") -> Optional[QualityReport]:
-        """Return the latest data quality report."""
+        """
+        Return the latest data quality report.
+
+        Also caches the report to Redis (TTL 30s) and writes it to the
+        lineage store for audit purposes.
+        """
         try:
-            return self._dqe.generate_report(symbol)
-        except Exception:
+            report = self._dqe.generate_report(symbol)
+            if report is None:
+                return None
+
+            report_dict = {
+                "timestamp":                    report.timestamp.isoformat(),
+                "symbol":                       report.symbol,
+                "ticks_received":               report.ticks_received,
+                "ticks_accepted":               report.ticks_accepted,
+                "ticks_rejected":               report.ticks_rejected,
+                "stale_count":                  report.stale_count,
+                "jump_count":                   report.jump_count,
+                "anomaly_count":                report.anomaly_count,
+                "active_sources":               report.active_sources,
+                "primary_source":               report.primary_source,
+                "consensus_price":              report.consensus_price,
+                "price_spread_across_sources":  report.price_spread_across_sources,
+            }
+
+            # Cache to Redis
+            if self._redis_store._r:
+                try:
+                    self._redis_store.set_quality_report(symbol, report_dict)
+                except Exception as _exc:
+                    logger.debug("Orchestrator: quality report Redis cache error: %s", _exc)
+
+            # Write to lineage store
+            try:
+                self._lineage.record_quality(report_dict)
+            except Exception as _exc:
+                logger.debug("Orchestrator: quality report lineage error: %s", _exc)
+
+            return report
+        except Exception as exc:
+            logger.debug("Orchestrator.get_quality_report error: %s", exc)
+            return None
+
+    def get_ohlcv_from_ticks(
+        self,
+        symbol: str = "XAU_USD",
+        timeframe_minutes: int = 60,
+        max_ticks: int = 5000,
+    ) -> Optional["pd.DataFrame"]:
+        """
+        Build an OHLCV DataFrame from the tick history in Redis.
+
+        Fetches up to max_ticks recent ticks from the Redis sorted set,
+        converts them to GoldTick objects, and aggregates into OHLCV bars
+        via NormalizationPipeline.tick_to_ohlcv().
+
+        Returns None when fewer than 2 ticks are available.
+        """
+        try:
+            raw_ticks = self._redis_store.get_tick_history(symbol, limit=max_ticks)
+            if len(raw_ticks) < 2:
+                return None
+
+            from datetime import datetime, timezone
+            from data_layer.types import FeedSource, TickQuality
+
+            ticks = []
+            for r in raw_ticks:
+                try:
+                    raw_source = r.get("source")
+                    if not raw_source:
+                        continue
+                    ticks.append(GoldTick(
+                        symbol     = r["symbol"],
+                        timestamp  = datetime.fromisoformat(r["timestamp"]),
+                        bid        = float(r["bid"]),
+                        ask        = float(r["ask"]),
+                        mid        = float(r["mid"]),
+                        source     = FeedSource(raw_source),
+                        quality    = TickQuality(r.get("quality", "good")),
+                        confidence = float(r.get("confidence", 1.0)),
+                        spread     = float(r.get("spread", 0.0)),
+                        lineage_id = r.get("lineage_id", ""),
+                    ))
+                except Exception:
+                    continue
+
+            if len(ticks) < 2:
+                return None
+
+            return self._norm.tick_to_ohlcv(ticks, timeframe_minutes=timeframe_minutes)
+        except Exception as exc:
+            logger.debug("Orchestrator.get_ohlcv_from_ticks error: %s", exc)
             return None
 
     # ── Health ────────────────────────────────────────────────────────────────
@@ -528,11 +652,27 @@ class MarketDataOrchestrator:
         if self._gold_feed:
             h["gold_feed"] = self._gold_feed.health()
         h["dqe"]       = self._dqe.get_source_health()
-        h["micro"]     = self._micro.get_snapshot().__dict__ if self._micro.get_snapshot() else {}
+        h["dqe_latency"] = self._dqe.latency_report()
+        snap = self._micro.get_snapshot()
+        h["micro"]     = snap.__dict__ if snap else {}
+        h["micro_health"] = self._micro.health()
         h["sentiment"] = self._sentiment.health()
         h["calendar"]  = self._calendar.health()
         h["macro"]     = self._macro_bridge.health()
         h["replay"]    = self._replay.health()
+
+        # Cache full health snapshot to Redis (TTL 10s) for monitoring
+        if self._redis_store._r:
+            try:
+                import json
+                self._redis_store._safe_set(
+                    "hopefx:dl:orchestrator_health",
+                    json.dumps(h, default=str),
+                    10,
+                )
+            except Exception as _exc:
+                logger.debug("Orchestrator: health Redis cache error: %s", _exc)
+
         return h
 
 
