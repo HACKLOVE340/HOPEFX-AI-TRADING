@@ -1104,43 +1104,70 @@ def add_data_layer_features(
     high_count_24h    = features.get("macro_high_event_count_24h",   0.0)
     is_blackout       = features.get("macro_is_blackout",            0.0)
 
+    # ── Tick quality / confidence ─────────────────────────────────────────────
+    tick_confidence  = features.get("tick_confidence",   1.0)
+    tick_spread_pct  = features.get("tick_spread_pct",   0.0)
+    tick_src_count   = features.get("tick_source_count", 1.0)
+
+    # ── FRED macro features (injected by MacroStoreBridge) ────────────────────
+    macro_dxy        = features.get("macro_dxy",    0.0)
+    macro_us10y      = features.get("macro_us10y",  0.0)
+    macro_us2y       = features.get("macro_us2y",   0.0)
+    macro_vix        = features.get("macro_vix",    0.0)
+    macro_cpi        = features.get("macro_cpi",    0.0)
+    macro_pce        = features.get("macro_pce",    0.0)
+    macro_yield_curve = macro_us10y - macro_us2y   # 10y-2y spread
+
     # ── Broadcast scalars to full DataFrame length ────────────────────────────
     # For live inference: all rows get the same current value (latest snapshot)
     # For backtesting with as_of: caller should iterate and call per-bar
-    d["dl_spread"]             = spread
-    d["dl_spread_pct"]         = spread_pct
-    d["dl_ofi"]                = ofi
-    d["dl_trade_pressure"]     = trade_pressure
-    d["dl_buy_pressure"]       = buy_pressure
-    d["dl_sell_pressure"]      = sell_pressure
-    d["dl_cumulative_delta"]   = cum_delta
-    d["dl_volume_delta"]       = vol_delta
-    d["dl_vwap"]               = vwap
-    d["dl_bid_depth"]          = bid_depth
-    d["dl_ask_depth"]          = ask_depth
-    d["dl_depth_imbalance"]    = depth_imbalance
-    d["dl_tick_count"]         = tick_count
-    d["dl_spread_z20"]         = spread_z20
-    d["dl_ofi_ema5"]           = ofi_ema5
-    d["dl_pressure_divergence"]= pressure_div
-    d["dl_news_sentiment"]     = news_sentiment
-    d["dl_news_momentum"]      = news_momentum
-    d["dl_news_count_1h"]      = news_count_1h
-    d["dl_news_bullish_ratio"] = news_bull_ratio
-    d["dl_macro_impact"]       = macro_impact
-    d["dl_hours_to_next_high"] = hours_to_next
+    d["dl_spread"]              = spread
+    d["dl_spread_pct"]          = spread_pct
+    d["dl_ofi"]                 = ofi
+    d["dl_trade_pressure"]      = trade_pressure
+    d["dl_buy_pressure"]        = buy_pressure
+    d["dl_sell_pressure"]       = sell_pressure
+    d["dl_cumulative_delta"]    = cum_delta
+    d["dl_volume_delta"]        = vol_delta
+    d["dl_vwap"]                = vwap
+    d["dl_bid_depth"]           = bid_depth
+    d["dl_ask_depth"]           = ask_depth
+    d["dl_depth_imbalance"]     = depth_imbalance
+    d["dl_tick_count"]          = tick_count
+    d["dl_spread_z20"]          = spread_z20
+    d["dl_ofi_ema5"]            = ofi_ema5
+    d["dl_pressure_divergence"] = pressure_div
+    d["dl_news_sentiment"]      = news_sentiment
+    d["dl_news_momentum"]       = news_momentum
+    d["dl_news_count_1h"]       = news_count_1h
+    d["dl_news_bullish_ratio"]  = news_bull_ratio
+    d["dl_macro_impact"]        = macro_impact
+    d["dl_hours_to_next_high"]  = hours_to_next
     d["dl_hours_since_last_high"] = hours_since_last
-    d["dl_macro_surprise"]     = macro_surprise
+    d["dl_macro_surprise"]      = macro_surprise
     d["dl_high_event_count_24h"] = high_count_24h
-    d["dl_is_blackout"]        = is_blackout
+    d["dl_is_blackout"]         = is_blackout
+    # Tick quality
+    d["dl_tick_confidence"]     = tick_confidence
+    d["dl_tick_spread_pct"]     = tick_spread_pct
+    d["dl_tick_source_count"]   = tick_src_count
+    # FRED macro
+    d["dl_macro_dxy"]           = macro_dxy
+    d["dl_macro_us10y"]         = macro_us10y
+    d["dl_macro_us2y"]          = macro_us2y
+    d["dl_macro_vix"]           = macro_vix
+    d["dl_macro_cpi"]           = macro_cpi
+    d["dl_macro_pce"]           = macro_pce
+    d["dl_macro_yield_curve"]   = macro_yield_curve
 
     # Ensure no NaN/inf leaks
     dl_cols = [c for c in d.columns if c.startswith("dl_")]
     d[dl_cols] = d[dl_cols].replace([float("inf"), float("-inf")], 0.0).fillna(0.0)
 
     logger.debug(
-        "add_data_layer_features: injected %d features, ofi=%.3f sent=%.3f impact=%.3f",
-        len(dl_cols), ofi, news_sentiment, macro_impact,
+        "add_data_layer_features: injected %d features, "
+        "ofi=%.3f sent=%.3f impact=%.3f tick_conf=%.2f",
+        len(dl_cols), ofi, news_sentiment, macro_impact, tick_confidence,
     )
     return d
 

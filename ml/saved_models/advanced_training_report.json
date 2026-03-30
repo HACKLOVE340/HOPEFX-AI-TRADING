@@ -10,32 +10,32 @@
   "cv_sample_count": 323,
   "oos_sample_count": 0,
   "feature_count": 193,
-  "trained_at": "2026-03-30T13:35:56.156302+00:00",
+  "trained_at": "2026-03-30T14:23:27.765404+00:00",
   "walkforward": {
     "folds": [
       {
         "fold": 1,
         "train_size": 108,
         "test_size": 107,
-        "accuracy": 0.5514,
-        "f1": 0.6923,
-        "auc": 0.439
+        "accuracy": 0.5327,
+        "f1": 0.6575,
+        "auc": 0.4639
       },
       {
         "fold": 2,
         "train_size": 215,
         "test_size": 107,
-        "accuracy": 0.6075,
-        "f1": 0.6866,
-        "auc": 0.6019
+        "accuracy": 0.5888,
+        "f1": 0.6857,
+        "auc": 0.6056
       }
     ],
-    "mean_accuracy": 0.5795,
+    "mean_accuracy": 0.5607,
     "std_accuracy": 0.0281,
-    "mean_f1": 0.6895,
-    "mean_auc": 0.5204,
-    "t_stat": 2.8324,
-    "p_value": 0.2161,
+    "mean_f1": 0.6716,
+    "mean_auc": 0.5348,
+    "t_stat": 2.1658,
+    "p_value": 0.2754,
     "significant": false
   },
   "final": {
@@ -43,7 +43,7 @@
     "test_size": 65,
     "accuracy": 0.6615,
     "f1": 0.7885,
-    "auc": 0.529,
+    "auc": 0.5455,
     "feature_count": 193,
     "features": [
       "pa_body_ratio",
@@ -243,25 +243,25 @@
   },
   "oos": {},
   "top_features": {
-    "zscore_20": 0.056462,
-    "of_buy_pressure": 0.043136,
-    "dist_to_swing_high": 0.041968,
-    "of_delta": 0.040799,
-    "dist_to_swing_low": 0.040278,
-    "regime_momentum": 0.039488,
-    "rvol_60": 0.038264,
-    "of_buy_vol": 0.03461,
-    "ri_tenkan_kijun_diff": 0.03423,
-    "inst_absorption_z": 0.033191,
-    "vol_of_vol": 0.032668,
-    "inst_vwap20_accel": 0.030347,
-    "ri_macd_hist_z20": 0.027985,
-    "inst_dist_vah": 0.027253,
-    "dist_ma_10": 0.026257,
-    "frac_lyapunov_10": 0.02624,
-    "frac_hfd_20": 0.026205,
-    "inst_buy_pressure_10": 0.024278,
-    "of_vol_surge": 0.023154,
-    "of_absorption_z20": 0.022303
+    "zscore_20": 0.057958,
+    "of_buy_pressure": 0.044458,
+    "dist_to_swing_high": 0.042492,
+    "of_delta": 0.041322,
+    "regime_momentum": 0.040533,
+    "rvol_60": 0.039461,
+    "inst_absorption_z": 0.03407,
+    "inst_buy_pressure_20": 0.0337,
+    "vol_of_vol": 0.033251,
+    "of_buy_vol": 0.032724,
+    "mom_accel_10_60": 0.032123,
+    "of_absorption_z20": 0.031856,
+    "ri_tenkan_kijun_diff": 0.030728,
+    "of_sell_vol": 0.030058,
+    "inst_vwap20_accel": 0.02945,
+    "ri_macd_hist_z20": 0.028767,
+    "dist_ma_10": 0.027071,
+    "frac_hfd_20": 0.026874,
+    "dist_to_swing_low": 0.026513,
+    "frac_lyapunov_10": 0.025285
   }
 }
