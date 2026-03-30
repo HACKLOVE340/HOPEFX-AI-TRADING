@@ -1,21 +1,30 @@
 // HOPEFX-AI-TRADING — AGPL-3.0
-import React, { useEffect, useState } from 'react';
+/**
+ * screens/settings/SettingsScreen.tsx
+ * =====================================
+ * Full settings screen: biometrics, notifications, connection,
+ * account info, and danger zone.
+ */
+
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Switch,
-  TouchableOpacity, Alert,
+  TouchableOpacity, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useAuthStore } from '../../store/authStore';
-import { apiClient } from '../../services/apiClient';
-import { pushNotifications } from '../../services/pushNotifications';
-import { Card } from '../../components/Card';
-import { COLORS, SPACING, RADIUS } from '../../utils/theme';
-import { NotificationPrefs, SettingsStackParamList } from '../../types';
+import * as Haptics from 'expo-haptics';
 
-type SettingsNav = NativeStackNavigationProp<SettingsStackParamList>;
+import { useAuthStore }    from '../../store/authStore';
+import { useTradingStore } from '../../store/tradingStore';
+import { apiClient }       from '../../services/apiClient';
+import { biometricAuth }   from '../../services/biometricAuth';
+import { wsClient }        from '../../services/wsClient';
+import { Card }            from '../../components/Card';
+import { ConnectionStatus } from '../../components/ConnectionStatus';
+
+import { COLORS, SPACING, RADIUS, TEXT, SHADOW } from '../../utils/theme';
+import { NotificationPrefs } from '../../types';
 
 const DEFAULT_PREFS: NotificationPrefs = {
   signals: true,
@@ -23,176 +32,337 @@ const DEFAULT_PREFS: NotificationPrefs = {
   price_alerts: true,
   daily_summary: true,
   risk_warnings: true,
+  kill_switch: true,
+  news_impact: false,
 };
 
 export function SettingsScreen() {
-  const navigation = useNavigation<SettingsNav>();
-  const { user, logout } = useAuthStore();
-  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
-  const [saving, setSaving] = useState(false);
+  const { user, logout, biometricAvailable, biometricEnabled,
+          enableBiometric, disableBiometric } = useAuthStore();
+  const { wsStatus, account } = useTradingStore();
+
+  const [prefs, setPrefs]           = useState<NotificationPrefs>(DEFAULT_PREFS);
+  const [saving, setSaving]         = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
+  const [capability, setCapability] = useState<Awaited<ReturnType<typeof biometricAuth.getCapability>> | null>(null);
 
   useEffect(() => {
-    apiClient.getNotificationPrefs()
-      .then(setPrefs)
-      .catch(() => { /* use defaults */ });
+    apiClient.getNotificationPrefs().then(setPrefs).catch(() => {});
+    biometricAuth.getCapability().then(setCapability);
   }, []);
 
   const togglePref = async (key: keyof NotificationPrefs) => {
     const updated = { ...prefs, [key]: !prefs[key] };
     setPrefs(updated);
     setSaving(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await apiClient.updateNotificationPrefs({ [key]: updated[key] });
     } catch {
-      setPrefs(prefs); // revert on failure
+      setPrefs(prefs);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: logout },
-    ]);
+  const handleBiometricToggle = async () => {
+    setBiometricLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (biometricEnabled) {
+      await disableBiometric();
+    } else {
+      const result = await enableBiometric();
+      if (!result.success) {
+        Alert.alert('Biometric Setup Failed', result.error ?? 'Unknown error');
+      }
+    }
+    setBiometricLoading(false);
   };
 
-  const handleTestNotification = async () => {
-    await pushNotifications.scheduleLocalNotification(
-      'HopeFX Test',
-      'Push notifications are working correctly.',
-      { type: 'test' }
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            logout();
+          },
+        },
+      ]
     );
   };
 
+  const biometricTypeName = capability?.primaryType === 'facial' ? 'Face ID' :
+                            capability?.primaryType === 'iris'    ? 'Iris Scan' : 'Fingerprint';
+
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.pageTitle}>Settings</Text>
 
-        {/* Profile */}
-        <Card style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user?.username?.[0]?.toUpperCase() ?? 'T'}
-            </Text>
-          </View>
-          <View>
-            <Text style={styles.profileName}>{user?.username ?? 'Trader'}</Text>
-            <Text style={styles.profileEmail}>{user?.email ?? ''}</Text>
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleText}>{user?.role?.toUpperCase() ?? 'USER'}</Text>
+        {/* ── Account ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>ACCOUNT</Text>
+          <Card style={styles.card}>
+            <View style={styles.accountRow}>
+              <View style={styles.avatarRing}>
+                <Text style={styles.avatarText}>
+                  {(user?.username ?? 'T')[0].toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.accountInfo}>
+                <Text style={styles.accountName}>{user?.username ?? '—'}</Text>
+                <Text style={styles.accountEmail}>{user?.email ?? '—'}</Text>
+                <View style={styles.accountBadges}>
+                  <View style={[styles.badge, { backgroundColor: COLORS.accentGlow, borderColor: COLORS.borderAccent }]}>
+                    <Text style={[styles.badgeText, { color: COLORS.accent }]}>
+                      {user?.role?.toUpperCase() ?? 'USER'}
+                    </Text>
+                  </View>
+                  {account?.account_type && (
+                    <View style={[styles.badge, {
+                      backgroundColor: account.account_type === 'live' ? COLORS.profitDim : COLORS.infoDim,
+                      borderColor: account.account_type === 'live' ? COLORS.profit + '44' : COLORS.info + '44',
+                    }]}>
+                      <Text style={[styles.badgeText, {
+                        color: account.account_type === 'live' ? COLORS.profit : COLORS.info,
+                      }]}>
+                        {account.account_type.toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
             </View>
-          </View>
-        </Card>
+          </Card>
+        </View>
 
-        {/* Notifications */}
-        <Text style={styles.sectionTitle}>Push Notifications</Text>
-        <Card style={styles.prefsCard}>
-          {(Object.keys(DEFAULT_PREFS) as (keyof NotificationPrefs)[]).map((key) => (
-            <View key={key} style={styles.prefRow}>
-              <Text style={styles.prefLabel}>{PREF_LABELS[key]}</Text>
-              <Switch
-                value={prefs[key]}
-                onValueChange={() => togglePref(key)}
-                trackColor={{ false: COLORS.border, true: COLORS.accent }}
-                thumbColor={COLORS.white}
-                disabled={saving}
-              />
-            </View>
-          ))}
-        </Card>
+        {/* ── Connection ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>CONNECTION</Text>
+          <Card style={styles.card}>
+            <SettingRow
+              icon="wifi"
+              label="WebSocket Status"
+              right={<ConnectionStatus status={wsStatus} reconnectAttempts={wsClient.reconnectAttempts} />}
+            />
+            <Divider />
+            <SettingRow
+              icon="server-outline"
+              label="API Endpoint"
+              value="api.hopefx.io"
+            />
+            <Divider />
+            <SettingRow
+              icon="flash-outline"
+              label="Latency Mode"
+              value="Low latency"
+            />
+          </Card>
+        </View>
 
-        <TouchableOpacity style={styles.testBtn} onPress={handleTestNotification}>
-          <Ionicons name="notifications-outline" size={16} color={COLORS.accent} />
-          <Text style={styles.testBtnText}>Send Test Notification</Text>
-        </TouchableOpacity>
+        {/* ── Security ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>SECURITY</Text>
+          <Card style={styles.card}>
+            {biometricAvailable ? (
+              <>
+                <SettingRow
+                  icon={capability?.primaryType === 'facial' ? 'scan-outline' : 'finger-print'}
+                  label={`${biometricTypeName} Login`}
+                  sublabel={biometricEnabled ? 'Tap to disable' : 'Tap to enable fast sign-in'}
+                  right={
+                    biometricLoading ? (
+                      <ActivityIndicator size="small" color={COLORS.accent} />
+                    ) : (
+                      <Switch
+                        value={biometricEnabled}
+                        onValueChange={handleBiometricToggle}
+                        trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                        thumbColor={biometricEnabled ? COLORS.white : COLORS.textMuted}
+                      />
+                    )
+                  }
+                />
+                <Divider />
+              </>
+            ) : null}
+            <SettingRow
+              icon="shield-checkmark-outline"
+              label="Two-Factor Auth"
+              value={user?.two_factor_enabled ? 'Enabled' : 'Disabled'}
+              valueColor={user?.two_factor_enabled ? COLORS.profit : COLORS.warning}
+            />
+            <Divider />
+            <SettingRow
+              icon="key-outline"
+              label="Session Encryption"
+              value="AES-256"
+              valueColor={COLORS.profit}
+            />
+          </Card>
+        </View>
 
-        {/* Quick links */}
-        <Text style={styles.sectionTitle}>More</Text>
-        <Card style={styles.accountCard}>
-          <NavRow
-            icon="notifications-outline"
-            label="Notification Preferences"
-            onPress={() => navigation.navigate('Notifications')}
-          />
-          <NavRow
-            icon="alarm-outline"
-            label="Price Alerts"
-            onPress={() => navigation.navigate('Alerts')}
-          />
-        </Card>
+        {/* ── Notifications ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
+          <Card style={styles.card}>
+            {(Object.keys(DEFAULT_PREFS) as (keyof NotificationPrefs)[]).map((key, idx, arr) => (
+              <React.Fragment key={key}>
+                <SettingRow
+                  icon={notifIcon(key)}
+                  label={notifLabel(key)}
+                  sublabel={notifSublabel(key)}
+                  right={
+                    <Switch
+                      value={prefs[key]}
+                      onValueChange={() => togglePref(key)}
+                      trackColor={{ false: COLORS.border, true: COLORS.accent }}
+                      thumbColor={prefs[key] ? COLORS.white : COLORS.textMuted}
+                      disabled={saving}
+                    />
+                  }
+                />
+                {idx < arr.length - 1 && <Divider />}
+              </React.Fragment>
+            ))}
+          </Card>
+        </View>
 
-        {/* Account */}
-        <Text style={styles.sectionTitle}>Account</Text>
-        <Card style={styles.accountCard}>
-          <SettingRow icon="shield-checkmark-outline" label="KYC Status" value={user?.kyc_verified ? 'Verified ✅' : 'Pending'} />
-          <SettingRow icon="lock-closed-outline" label="Two-Factor Auth" value={user?.two_factor_enabled ? 'Enabled' : 'Disabled'} />
-          <SettingRow icon="document-text-outline" label="App Version" value="1.0.0" />
-        </Card>
+        {/* ── App info ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>APP</Text>
+          <Card style={styles.card}>
+            <SettingRow icon="information-circle-outline" label="Version" value="2.0.0" />
+            <Divider />
+            <SettingRow icon="document-text-outline" label="License" value="AGPL-3.0" />
+            <Divider />
+            <SettingRow icon="code-slash-outline" label="Build" value="Production" valueColor={COLORS.profit} />
+          </Card>
+        </View>
 
-        {/* Sign out */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color={COLORS.sell} />
-          <Text style={styles.logoutText}>Sign Out</Text>
-        </TouchableOpacity>
+        {/* ── Danger zone ── */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: COLORS.danger }]}>DANGER ZONE</Text>
+          <Card style={[styles.card, styles.dangerCard]}>
+            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
+              <Ionicons name="log-out-outline" size={20} color={COLORS.loss} />
+              <Text style={styles.logoutText}>Sign Out</Text>
+            </TouchableOpacity>
+          </Card>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function SettingRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SettingRow({
+  icon, label, sublabel, value, valueColor, right,
+}: {
+  icon: string;
+  label: string;
+  sublabel?: string;
+  value?: string;
+  valueColor?: string;
+  right?: React.ReactNode;
+}) {
   return (
     <View style={rowStyles.row}>
-      <Ionicons name={icon as any} size={18} color={COLORS.textMuted} />
-      <Text style={rowStyles.label}>{label}</Text>
-      <Text style={rowStyles.value}>{value}</Text>
+      <View style={rowStyles.iconWrap}>
+        <Ionicons name={icon as any} size={18} color={COLORS.accent} />
+      </View>
+      <View style={rowStyles.labelWrap}>
+        <Text style={rowStyles.label}>{label}</Text>
+        {sublabel && <Text style={rowStyles.sublabel}>{sublabel}</Text>}
+      </View>
+      {right ?? (value ? (
+        <Text style={[rowStyles.value, valueColor ? { color: valueColor } : {}]}>{value}</Text>
+      ) : null)}
     </View>
   );
 }
 
-function NavRow({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={rowStyles.row} onPress={onPress}>
-      <Ionicons name={icon as any} size={18} color={COLORS.textMuted} />
-      <Text style={[rowStyles.label, { color: COLORS.text }]}>{label}</Text>
-      <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-    </TouchableOpacity>
-  );
+function Divider() {
+  return <View style={{ height: 1, backgroundColor: COLORS.border, marginVertical: 2 }} />;
 }
 
-const PREF_LABELS: Record<keyof NotificationPrefs, string> = {
-  signals: 'AI Trading Signals',
-  trade_fills: 'Order Fills',
-  price_alerts: 'Price Alerts',
-  daily_summary: 'Daily P&L Summary',
-  risk_warnings: 'Risk Warnings',
-};
-
 const rowStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  label: { flex: 1, color: COLORS.text, fontSize: 14 },
-  value: { color: COLORS.textMuted, fontSize: 13 },
+  row:       { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.sm, gap: SPACING.sm },
+  iconWrap:  { width: 32, height: 32, borderRadius: RADIUS.sm, backgroundColor: COLORS.accentGlow, alignItems: 'center', justifyContent: 'center' },
+  labelWrap: { flex: 1 },
+  label:     { ...TEXT.body, color: COLORS.text },
+  sublabel:  { ...TEXT.caption, color: COLORS.textMuted, marginTop: 2 },
+  value:     { ...TEXT.bodySM, color: COLORS.textSecondary },
 });
 
+function notifIcon(key: keyof NotificationPrefs): string {
+  const map: Record<keyof NotificationPrefs, string> = {
+    signals:      'pulse-outline',
+    trade_fills:  'checkmark-circle-outline',
+    price_alerts: 'trending-up-outline',
+    daily_summary:'bar-chart-outline',
+    risk_warnings:'warning-outline',
+    kill_switch:  'stop-circle-outline',
+    news_impact:  'newspaper-outline',
+  };
+  return map[key] ?? 'notifications-outline';
+}
+
+function notifLabel(key: keyof NotificationPrefs): string {
+  const map: Record<keyof NotificationPrefs, string> = {
+    signals:      'AI Signals',
+    trade_fills:  'Trade Fills',
+    price_alerts: 'Price Alerts',
+    daily_summary:'Daily Summary',
+    risk_warnings:'Risk Warnings',
+    kill_switch:  'Kill Switch Alerts',
+    news_impact:  'High-Impact News',
+  };
+  return map[key] ?? key;
+}
+
+function notifSublabel(key: keyof NotificationPrefs): string {
+  const map: Record<keyof NotificationPrefs, string> = {
+    signals:      'New AI-generated trading signals',
+    trade_fills:  'Order execution confirmations',
+    price_alerts: 'Custom price level alerts',
+    daily_summary:'End-of-day P&L summary',
+    risk_warnings:'Risk limit breach warnings',
+    kill_switch:  'Emergency trading halt notifications',
+    news_impact:  'High-impact macro news events',
+  };
+  return map[key] ?? '';
+}
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: SPACING.md, gap: SPACING.md, paddingBottom: SPACING.xl },
-  pageTitle: { color: COLORS.text, fontSize: 24, fontWeight: '800' },
-  profileCard: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.accent, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: COLORS.white, fontSize: 24, fontWeight: '800' },
-  profileName: { color: COLORS.text, fontSize: 18, fontWeight: '700' },
-  profileEmail: { color: COLORS.textMuted, fontSize: 13, marginTop: 2 },
-  roleBadge: { backgroundColor: COLORS.accent + '33', paddingHorizontal: SPACING.sm, paddingVertical: 2, borderRadius: RADIUS.sm, alignSelf: 'flex-start', marginTop: SPACING.xs },
-  roleText: { color: COLORS.accent, fontSize: 11, fontWeight: '700' },
-  sectionTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
-  prefsCard: { gap: SPACING.xs },
-  prefRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  prefLabel: { color: COLORS.text, fontSize: 14, flex: 1 },
-  testBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, padding: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.accent },
-  testBtnText: { color: COLORS.accent, fontSize: 14, fontWeight: '600' },
-  accountCard: { gap: 0 },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm, padding: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.sell, marginTop: SPACING.md },
-  logoutText: { color: COLORS.sell, fontSize: 16, fontWeight: '700' },
+  safe:         { flex: 1, backgroundColor: COLORS.background },
+  content:      { padding: SPACING.md, gap: SPACING.md, paddingBottom: SPACING.xxl },
+  pageTitle:    { ...TEXT.h1, color: COLORS.text },
+  section:      { gap: SPACING.sm },
+  sectionLabel: { ...TEXT.label, color: COLORS.textMuted, paddingHorizontal: SPACING.xs },
+  card:         { gap: 0 },
+  accountRow:   { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  avatarRing:   {
+    width: 52, height: 52, borderRadius: 26,
+    borderWidth: 2, borderColor: COLORS.accent,
+    backgroundColor: COLORS.accentGlow,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avatarText:   { ...TEXT.h2, color: COLORS.accent },
+  accountInfo:  { flex: 1, gap: 4 },
+  accountName:  { ...TEXT.h4, color: COLORS.text },
+  accountEmail: { ...TEXT.bodySM, color: COLORS.textMuted },
+  accountBadges:{ flexDirection: 'row', gap: SPACING.xs, marginTop: 4 },
+  badge:        { paddingHorizontal: SPACING.sm, paddingVertical: 2, borderRadius: RADIUS.sm, borderWidth: 1 },
+  badgeText:    { ...TEXT.captionSM, fontWeight: '700' },
+  dangerCard:   { borderColor: COLORS.danger + '33' },
+  logoutBtn:    { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.sm },
+  logoutText:   { ...TEXT.body, color: COLORS.loss, fontWeight: '600' },
 });
