@@ -246,7 +246,10 @@ const Marketplace: React.FC = () => {
   useEffect(() => {
     api.get<{ total_strategies: number; total_subscribers: number }>('/monetization/marketplace/stats')
       .then(r => setStats(r.data))
-      .catch(() => setStats(null));
+      .catch((err: unknown) => {
+        console.warn('[Marketplace] Failed to load marketplace stats:', err);
+        setStats(null);
+      });
   }, []);
 
   const handleSelect = async (s: Strategy) => {
