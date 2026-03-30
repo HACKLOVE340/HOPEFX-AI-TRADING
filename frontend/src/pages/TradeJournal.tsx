@@ -85,6 +85,7 @@ const TradeJournal: React.FC = () => {
   const [editing, setEditing]     = useState<string | null>(null);
   const [editForm, setEditForm]   = useState<Partial<JournalEntry>>({});
   const [saving, setSaving]       = useState(false);
+  const [saveErr, setSaveErr]     = useState<string | null>(null);
   const [filterTag, setFilterTag] = useState('');
 
   const fetchAll = useCallback(async () => {
@@ -110,12 +111,16 @@ const TradeJournal: React.FC = () => {
   const saveEdit = async () => {
     if (!editing) return;
     setSaving(true);
+    setSaveErr(null);
     try {
       await api.patch(`/journal/trades/${editing}`, editForm);
       setEditing(null);
       await fetchAll();
-    } catch { /* silent */ }
-    setSaving(false);
+    } catch (err: unknown) {
+      setSaveErr(err instanceof Error ? err.message : 'Failed to save journal entry. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleTag = (tag: string) => {
@@ -234,6 +239,9 @@ const TradeJournal: React.FC = () => {
                       placeholder="What rule did you break?" style={{ ...s.input, marginTop: 6 }} />
                   )}
 
+                  {saveErr && (
+                    <div style={s.saveErrBox}>{saveErr}</div>
+                  )}
                   <button onClick={saveEdit} disabled={saving} style={s.saveBtn}>
                     {saving ? 'Saving…' : 'Save'}
                   </button>
@@ -338,6 +346,7 @@ const s: Record<string, React.CSSProperties> = {
   tagPickerBtn:    { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
   tagPickerBtnActive: { background: '#1e3a5f', borderColor: '#3b82f6', color: '#60a5fa' },
   saveBtn:         { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '8px 20px', marginTop: 8 },
+  saveErrBox:      { background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#f87171', marginTop: 8 },
   statsGrid:       { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 24 },
   statCard:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px' },
   sectionTitle:    { fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '20px 0 10px' },
