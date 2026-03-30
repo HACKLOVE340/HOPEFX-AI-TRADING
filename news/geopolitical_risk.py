@@ -474,75 +474,165 @@ class GeopoliticalRiskProvider:
 
     def _fetch_events_from_source(self) -> List[GeopoliticalEvent]:
         """
-        Fetch events from World Monitor or similar sources.
+        Fetch live events from the World Monitor API.
 
-        In production, this would make API calls to World Monitor.
-        For now, we create representative events based on typical global situations.
+        Calls the World Monitor GeoJSON endpoint for each configured data layer
+        and maps each feature to a GeopoliticalEvent.  The endpoint returns
+        FeatureCollection GeoJSON; each feature carries at minimum:
+            properties.title       — event headline
+            properties.description — detail text (may be empty)
+            properties.date        — ISO-8601 timestamp
+            properties.severity    — string severity label
+            properties.countries   — comma-separated country list (optional)
+            geometry.coordinates   — [lon, lat] (optional)
 
-        World Monitor data layers from URL:
-        - conflicts: Active conflict zones
-        - hotspots: Intelligence hotspots with news correlation
-        - sanctions: Economic sanctions regimes
-        - weather: Severe weather alerts
-        - outages: Infrastructure outages
-        - natural: Natural disasters
+        Configuration keys (passed via __init__ config dict):
+            api_endpoint  : base URL, default "https://worldmonitor.app"
+            api_key       : Bearer token (env var WORLDMONITOR_API_KEY)
+            time_range    : lookback window, default "7d"
+            request_timeout: HTTP timeout in seconds, default 15
+
+        Raises RuntimeError in APP_ENV=production when the API is unreachable
+        and no cached events are available.
         """
-        events = []
+        import os as _os
 
-        # Example: Create events that would typically come from World Monitor
-        # In production, replace with actual API integration
+        api_key = self.config.get("api_key") or _os.getenv("WORLDMONITOR_API_KEY", "")
+        timeout = int(self.config.get("request_timeout", 15))
+        _is_production = _os.getenv("APP_ENV", "production").lower() == "production"
 
-        # These are placeholder events that demonstrate the data structure
-        # World Monitor's open-source nature means you can integrate directly
-        # See: https://github.com/koala73/worldmonitor
+        headers: Dict[str, str] = {"Accept": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
 
-        sample_events = [
-            {
-                "type": GeopoliticalEventType.CONFLICT,
-                "severity": RiskSeverity.HIGH,
-                "title": "Active Conflict Zone - Eastern Europe",
-                "description": "Ongoing military operations affecting regional stability",
-                "region": "Eastern Europe",
-                "countries": ["Ukraine", "Russia"],
-                "coordinates": (48.3794, 31.1656),
-            },
-            {
-                "type": GeopoliticalEventType.HOTSPOT,
-                "severity": RiskSeverity.HIGH,
-                "title": "Middle East Tensions - Gulf Region",
-                "description": "Elevated military activity and shipping disruptions",
-                "region": "Middle East",
-                "countries": ["Iran", "Israel", "Yemen"],
-                "coordinates": (27.5142, 53.3573),
-            },
-            {
-                "type": GeopoliticalEventType.SANCTIONS,
-                "severity": RiskSeverity.MEDIUM,
-                "title": "Economic Sanctions Update",
-                "description": "New trade restrictions affecting global commodities",
-                "region": "Global",
-                "countries": ["Russia", "Iran"],
-                "coordinates": None,
-            },
-        ]
+        events: List[GeopoliticalEvent] = []
+        fetch_errors: List[str] = []
 
-        for event_data in sample_events:
-            event = GeopoliticalEvent(
-                event_type=event_data["type"],
-                severity=event_data["severity"],
-                title=event_data["title"],
-                description=event_data["description"],
-                region=event_data["region"],
-                countries=event_data["countries"],
-                coordinates=event_data.get("coordinates"),
-                timestamp=datetime.now(timezone.utc),
-                source="worldmonitor",
-                confidence=0.85,
+        for layer in self.data_layers:
+            url = (
+                f"{self.base_url}/api/v1/events"
+                f"?layer={layer}&range={self.time_range}&format=geojson"
             )
-            events.append(event)
+            try:
+                resp = requests.get(url, headers=headers, timeout=timeout)
+                resp.raise_for_status()
+                data = resp.json()
+                layer_events = self._parse_geojson_features(
+                    data.get("features", []), layer
+                )
+                events.extend(layer_events)
+                logger.debug(
+                    "World Monitor layer=%s returned %d features", layer, len(layer_events)
+                )
+            except requests.exceptions.HTTPError as exc:
+                msg = f"layer={layer} HTTP {exc.response.status_code}: {exc}"
+                logger.warning("World Monitor fetch error: %s", msg)
+                fetch_errors.append(msg)
+            except requests.exceptions.RequestException as exc:
+                msg = f"layer={layer} network error: {exc}"
+                logger.warning("World Monitor fetch error: %s", msg)
+                fetch_errors.append(msg)
 
-        logger.info(f"Fetched {len(events)} geopolitical events")
+        if not events and fetch_errors:
+            cached = self._cache.get("events", [])
+            if cached:
+                logger.warning(
+                    "World Monitor unreachable (%d errors) — serving %d cached events",
+                    len(fetch_errors),
+                    len(cached),
+                )
+                return cached
+            if _is_production:
+                raise RuntimeError(
+                    f"World Monitor API unreachable and no cached events available. "
+                    f"Errors: {'; '.join(fetch_errors)}. "
+                    f"Set WORLDMONITOR_API_KEY and ensure network access to {self.base_url}."
+                )
+            logger.error(
+                "World Monitor unreachable and cache empty — returning no events. "
+                "Errors: %s",
+                "; ".join(fetch_errors),
+            )
+
+        logger.info("Fetched %d geopolitical events from World Monitor", len(events))
         return events
+
+    # ── Severity / type mapping helpers ──────────────────────────────────────
+
+    _SEVERITY_MAP: Dict[str, RiskSeverity] = {
+        "critical": RiskSeverity.CRITICAL,
+        "high":     RiskSeverity.HIGH,
+        "medium":   RiskSeverity.MEDIUM,
+        "moderate": RiskSeverity.MEDIUM,
+        "low":      RiskSeverity.LOW,
+        "info":     RiskSeverity.INFO,
+        "informational": RiskSeverity.INFO,
+    }
+
+    def _parse_geojson_features(
+        self, features: List[Dict], layer: str
+    ) -> List[GeopoliticalEvent]:
+        """Convert World Monitor GeoJSON features to GeopoliticalEvent objects."""
+        event_type = self.LAYER_MAPPING.get(layer, GeopoliticalEventType.HOTSPOT)
+        parsed: List[GeopoliticalEvent] = []
+
+        for feat in features:
+            try:
+                props = feat.get("properties") or {}
+                geom  = feat.get("geometry") or {}
+
+                title       = str(props.get("title") or props.get("name") or "Untitled event")
+                description = str(props.get("description") or props.get("summary") or "")
+                region      = str(props.get("region") or props.get("area") or "Global")
+
+                # Parse countries — may be a list or comma-separated string
+                raw_countries = props.get("countries") or props.get("country") or ""
+                if isinstance(raw_countries, list):
+                    countries = [c.strip() for c in raw_countries if c]
+                else:
+                    countries = [c.strip() for c in str(raw_countries).split(",") if c.strip()]
+
+                # Parse severity
+                raw_sev  = str(props.get("severity") or props.get("level") or "medium").lower()
+                severity = self._SEVERITY_MAP.get(raw_sev, RiskSeverity.MEDIUM)
+
+                # Parse timestamp
+                raw_ts = props.get("date") or props.get("timestamp") or props.get("updated")
+                try:
+                    ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                except (TypeError, ValueError):
+                    ts = datetime.now(timezone.utc)
+
+                # Parse coordinates [lon, lat] → (lat, lon)
+                coordinates: Optional[Tuple[float, float]] = None
+                if geom.get("type") == "Point":
+                    coords = geom.get("coordinates", [])
+                    if len(coords) >= 2:
+                        coordinates = (float(coords[1]), float(coords[0]))
+
+                # Confidence from API quality score (0–1), default 0.8
+                confidence = float(props.get("confidence") or props.get("quality") or 0.8)
+                confidence = max(0.0, min(1.0, confidence))
+
+                event = GeopoliticalEvent(
+                    event_type=event_type,
+                    severity=severity,
+                    title=title,
+                    description=description,
+                    region=region,
+                    countries=countries,
+                    coordinates=coordinates,
+                    timestamp=ts,
+                    source="worldmonitor",
+                    confidence=confidence,
+                )
+                parsed.append(event)
+            except Exception as exc:
+                logger.debug("Skipping malformed World Monitor feature: %s", exc)
+
+        return parsed
 
     def _assess_gold_impact(self, event: GeopoliticalEvent) -> GoldImpact:
         """
