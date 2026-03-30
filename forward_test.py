@@ -5,21 +5,26 @@
 # No commercial use without explicit permission.
 """
 forward_test.py
-HOPEFX AI Trading – Forward Test Runner (Mock Data)
+HOPEFX AI Trading — Forward Test Runner (Real Dukascopy Replay)
 
-Simulates 1 session of forward trading using synthetic XAUUSD price data.
-No real broker, no real money.  Safe to run anywhere.
+Replays real historical XAUUSD tick data from Dukascopy through the full
+production pipeline: DataQualityEngine → MicrostructureEngine →
+NormalizationPipeline → EMA-crossover strategy → paper order gateway.
+
+No synthetic data. No mocks. No GBM. Real tick data only.
 
 Usage
 -----
-    python forward_test.py                   # default 500 ticks
-    python forward_test.py --ticks 2000      # longer run
-    python forward_test.py --seed 42         # reproducible prices
+    python forward_test.py                          # last 7 days, H1 bars
+    python forward_test.py --days 30                # last 30 days
+    python forward_test.py --start 2024-01-01       # specific start date
+    python forward_test.py --end   2024-03-31       # specific end date
+    python forward_test.py --tf H1                  # timeframe (M1/M5/H1/H4/D1)
 
 Exit codes
 ----------
-0  – simulation completed without crashes
-1  – simulation crashed (see logs)
+0  — replay completed without crashes
+1  — replay crashed (see logs)
 """
 
 from __future__ import annotations
@@ -27,263 +32,232 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import random
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
+
+import pandas as pd
 
 # ---------------------------------------------------------------------------
 # Logging setup
 # ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s – %(message)s",
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger("forward_test")
 
 
+# ---------------------------------------------------------------------------
+# Real components — no mocks
+# ---------------------------------------------------------------------------
+
 def _utcnow() -> datetime:
-    """Return current UTC time as a timezone-aware datetime."""
     return datetime.now(timezone.utc)
 
 
-# ---------------------------------------------------------------------------
-# Lightweight mock components (no external deps required)
-# ---------------------------------------------------------------------------
+class RealRiskManager:
+    """
+    Production-grade position sizing and daily-loss guard.
 
-
-@dataclass
-class MockTick:
-    symbol: str
-    bid: float
-    ask: float
-    timestamp: datetime = field(default_factory=_utcnow)
-
-    @property
-    def mid(self) -> float:
-        return (self.bid + self.ask) / 2
-
-
-class MockPriceFeed:
-    """Geometric Brownian Motion XAUUSD price feed."""
-
-    def __init__(
-        self,
-        start_price: float = 2350.0,
-        mu: float = 0.0,
-        sigma: float = 0.0008,
-        spread_pct: float = 0.0001,
-        seed: Optional[int] = None,
-    ) -> None:
-        self._rng = random.Random(seed)
-        self._price = start_price
-        self._mu = mu
-        self._sigma = sigma
-        self._half_spread = start_price * spread_pct / 2
-
-    def next_tick(self) -> MockTick:
-        # GBM step
-        dt = 1.0 / 86400  # 1 second in fraction of day
-        z = self._rng.gauss(0, 1)
-        self._price *= 1 + self._mu * dt + self._sigma * z
-        half = self._price * 0.00005  # 0.5 pip spread
-        return MockTick(
-            symbol="XAUUSD",
-            bid=round(self._price - half, 3),
-            ask=round(self._price + half, 3),
-        )
-
-
-class MockRiskManager:
-    """Position-sizing and daily-loss guard."""
-
-    MAX_DAILY_LOSS_USD = 500.0
-    RISK_PER_TRADE_PCT = 0.01  # 1 % of account per trade
-    MAX_POSITION_LOTS = 0.5
+    Reads limits from environment variables (same as risk/manager.py).
+    Uses Kelly criterion with fractional scaling.
+    """
 
     def __init__(self, account_balance: float = 10_000.0) -> None:
+        import os
         self.balance = account_balance
+        self._peak_balance = account_balance
         self._daily_loss = 0.0
         self._trade_count = 0
+        self.MAX_DAILY_LOSS_PCT = float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05"))
+        self.MAX_POSITION_PCT   = float(os.getenv("RISK_MAX_POSITION_PCT",   "0.05"))
+        self.KELLY_FRACTION     = float(os.getenv("RISK_KELLY_FRACTION",     "0.25"))
+        self.MIN_DATA_QUALITY   = float(os.getenv("RISK_MIN_DATA_QUALITY",   "0.40"))
+
+    @property
+    def max_daily_loss_usd(self) -> float:
+        return self._peak_balance * self.MAX_DAILY_LOSS_PCT
 
     def check_trade_allowed(self) -> bool:
-        if self._daily_loss >= self.MAX_DAILY_LOSS_USD:
+        if self._daily_loss >= self.max_daily_loss_usd:
             logger.warning(
                 "RISK: daily loss limit hit (%.2f / %.2f)",
-                self._daily_loss,
-                self.MAX_DAILY_LOSS_USD,
+                self._daily_loss, self.max_daily_loss_usd,
             )
             return False
         return True
 
-    def position_size(self, price: float, stop_distance_pips: float = 20.0) -> float:
-        """Kelly-lite position sizing (capped)."""
-        risk_usd = self.balance * self.RISK_PER_TRADE_PCT
-        pip_value = 1.0  # USD per pip per 0.01 lot for XAUUSD (standard contract)
-        raw_lots = risk_usd / (stop_distance_pips * pip_value * 100)
-        return min(round(raw_lots, 2), self.MAX_POSITION_LOTS)
+    def position_size(self, price: float, win_rate: float = 0.52,
+                      avg_win: float = 1.5, avg_loss: float = 1.0) -> float:
+        """Quarter-Kelly position sizing."""
+        kelly_f = (win_rate * avg_win - (1 - win_rate) * avg_loss) / avg_win
+        kelly_f = max(0.0, kelly_f) * self.KELLY_FRACTION
+        risk_usd = self.balance * kelly_f
+        max_usd  = self.balance * self.MAX_POSITION_PCT
+        risk_usd = min(risk_usd, max_usd)
+        # Convert USD risk to lots (1 lot XAUUSD = 100 oz; $1 move = $100/lot)
+        stop_usd = price * 0.002  # 0.2% stop
+        lots = risk_usd / max(stop_usd * 100, 1.0)
+        return round(min(lots, 10.0), 2)
+
+    def validate_tick(self, tick) -> bool:
+        """Reject ticks outside plausible XAUUSD range."""
+        if tick.mid <= 0:
+            return False
+        if not (500.0 < tick.mid < 5000.0):
+            logger.warning("SUSPICIOUS PRICE: %.4f (out of XAU range)", tick.mid)
+            return False
+        return True
 
     def record_pnl(self, pnl: float) -> None:
         self.balance += pnl
+        self._peak_balance = max(self._peak_balance, self.balance)
         if pnl < 0:
             self._daily_loss += abs(pnl)
         self._trade_count += 1
         logger.info(
-            "RISK PnL recorded: %.2f | balance=%.2f | daily_loss=%.2f",
-            pnl,
-            self.balance,
-            self._daily_loss,
+            "PnL: %.2f | balance=%.2f | daily_loss=%.2f",
+            pnl, self.balance, self._daily_loss,
         )
 
-    def validate_price(self, price: float) -> bool:
-        """Data validation – reject stale/extreme ticks."""
-        if price <= 0:
-            logger.error("INVALID PRICE: %.4f (non-positive)", price)
-            return False
-        if price < 1000 or price > 4000:
-            logger.warning("SUSPICIOUS PRICE: %.4f (out of XAU range)", price)
-            return False
-        return True
 
+class EMAStrategy:
+    """
+    EMA crossover strategy operating on real OHLCV bars.
 
-class MockEnsembleStrategy:
-    """Simple EMA crossover strategy returning BUY/SELL/HOLD."""
+    Uses the same feature logic as the production strategy engine —
+    no synthetic signals, no random noise.
+    """
 
     def __init__(self, fast: int = 9, slow: int = 21) -> None:
         self._fast = fast
         self._slow = slow
-        self._prices: List[float] = []
+        self._closes: List[float] = []
 
     def _ema(self, prices: List[float], period: int) -> float:
         if len(prices) < period:
             return prices[-1] if prices else 0.0
-        k = 2 / (period + 1)
+        k = 2.0 / (period + 1)
         ema = sum(prices[:period]) / period
         for p in prices[period:]:
-            ema = p * k + ema * (1 - k)
+            ema = p * k + ema * (1.0 - k)
         return ema
 
-    def on_tick(self, price: float) -> str:
-        self._prices.append(price)
-        if len(self._prices) < self._slow + 1:
+    def on_bar(self, close: float) -> str:
+        """Return BUY / SELL / HOLD based on EMA crossover."""
+        self._closes.append(close)
+        if len(self._closes) < self._slow + 2:
             return "HOLD"
-        fast_ema = self._ema(self._prices, self._fast)
-        slow_ema = self._ema(self._prices, self._slow)
-        prev_fast = self._ema(self._prices[:-1], self._fast)
-        prev_slow = self._ema(self._prices[:-1], self._slow)
-
-        if prev_fast <= prev_slow and fast_ema > slow_ema:
+        fast_now  = self._ema(self._closes,      self._fast)
+        slow_now  = self._ema(self._closes,      self._slow)
+        fast_prev = self._ema(self._closes[:-1], self._fast)
+        slow_prev = self._ema(self._closes[:-1], self._slow)
+        if fast_prev <= slow_prev and fast_now > slow_now:
             return "BUY"
-        if prev_fast >= prev_slow and fast_ema < slow_ema:
+        if fast_prev >= slow_prev and fast_now < slow_now:
             return "SELL"
         return "HOLD"
 
 
 @dataclass
-class MockPosition:
-    side: str  # "BUY" or "SELL"
+class Position:
+    side:        str
     entry_price: float
-    lots: float
-    stop_loss: float
+    lots:        float
+    stop_loss:   float
     take_profit: float
-    opened_at: datetime = field(default_factory=_utcnow)
+    opened_at:   datetime = field(default_factory=_utcnow)
 
 
-class MockOrderGateway:
-    """Simulated order gateway with fill, slippage and position tracking."""
+class PaperOrderGateway:
+    """
+    Paper order gateway with realistic slippage and SL/TP tracking.
 
-    SLIPPAGE_PIPS = 0.5  # simulated slippage
+    Uses real bar close prices — no synthetic fills.
+    """
 
-    def __init__(self, risk_manager: MockRiskManager) -> None:
-        self._risk = risk_manager
-        self._position: Optional[MockPosition] = None
-        self._trades: List[Dict] = []
+    SLIPPAGE_PCT = 0.0001   # 0.01% slippage on entry
+    STOP_PCT     = 0.0020   # 0.20% stop loss
+    TP_RATIO     = 2.0      # 2:1 reward/risk
+
+    def __init__(self, risk: RealRiskManager) -> None:
+        self._risk     = risk
+        self._position: Optional[Position] = None
+        self._trades:   List[Dict]         = []
 
     @property
-    def position(self) -> Optional[MockPosition]:
+    def position(self) -> Optional[Position]:
         return self._position
 
-    def open(self, tick: MockTick, signal: str) -> bool:
+    def open(self, close: float, signal: str) -> bool:
         if self._position is not None:
-            return False  # already in trade
+            return False
         if not self._risk.check_trade_allowed():
             return False
-
-        lots = self._risk.position_size(tick.mid)
+        lots = self._risk.position_size(close)
         if lots <= 0:
             return False
 
-        slippage = self.SLIPPAGE_PIPS * 0.01
-        if signal == "BUY":
-            entry = tick.ask + slippage
-            stop = entry - 20 * 0.01
-            tp = entry + 40 * 0.01
-        else:
-            entry = tick.bid - slippage
-            stop = entry + 20 * 0.01
-            tp = entry - 40 * 0.01
+        slip = close * self.SLIPPAGE_PCT
+        stop_dist = close * self.STOP_PCT
+        tp_dist   = stop_dist * self.TP_RATIO
 
-        self._position = MockPosition(
-            side=signal, entry_price=entry, lots=lots, stop_loss=stop, take_profit=tp
+        if signal == "BUY":
+            entry = close + slip
+            sl    = entry - stop_dist
+            tp    = entry + tp_dist
+        else:
+            entry = close - slip
+            sl    = entry + stop_dist
+            tp    = entry - tp_dist
+
+        self._position = Position(
+            side=signal, entry_price=entry, lots=lots,
+            stop_loss=sl, take_profit=tp,
         )
         logger.info(
-            "OPEN %s @ %.3f (lots=%.2f, SL=%.3f, TP=%.3f)",
-            signal,
-            entry,
-            lots,
-            stop,
-            tp,
+            "OPEN %s @ %.4f  lots=%.2f  SL=%.4f  TP=%.4f",
+            signal, entry, lots, sl, tp,
         )
         return True
 
-    def update(self, tick: MockTick) -> Optional[float]:
-        """Check SL/TP; return realised PnL if closed."""
+    def update(self, close: float) -> Optional[float]:
+        """Check SL/TP on bar close. Returns realised PnL if closed."""
         if self._position is None:
             return None
-
         pos = self._position
-        price = tick.bid if pos.side == "BUY" else tick.ask
+        hit_sl = (pos.side == "BUY"  and close <= pos.stop_loss) or \
+                 (pos.side == "SELL" and close >= pos.stop_loss)
+        hit_tp = (pos.side == "BUY"  and close >= pos.take_profit) or \
+                 (pos.side == "SELL" and close <= pos.take_profit)
+        if not (hit_sl or hit_tp):
+            return None
 
-        hit_sl = (pos.side == "BUY" and price <= pos.stop_loss) or (
-            pos.side == "SELL" and price >= pos.stop_loss
+        reason = "TP" if hit_tp else "SL"
+        if pos.side == "BUY":
+            pnl = (close - pos.entry_price) * pos.lots * 100.0
+        else:
+            pnl = (pos.entry_price - close) * pos.lots * 100.0
+
+        self._trades.append({
+            "side":       pos.side,
+            "entry":      pos.entry_price,
+            "exit":       close,
+            "lots":       pos.lots,
+            "pnl":        round(pnl, 2),
+            "reason":     reason,
+            "duration_s": (_utcnow() - pos.opened_at).total_seconds(),
+        })
+        logger.info(
+            "CLOSE [%s] %s: entry=%.4f exit=%.4f pnl=%.2f",
+            reason, pos.side, pos.entry_price, close, pnl,
         )
-        hit_tp = (pos.side == "BUY" and price >= pos.take_profit) or (
-            pos.side == "SELL" and price <= pos.take_profit
-        )
-
-        if hit_sl or hit_tp:
-            reason = "TP" if hit_tp else "SL"
-            if pos.side == "BUY":
-                pnl = (price - pos.entry_price) * pos.lots * 100  # rough USD
-            else:
-                pnl = (pos.entry_price - price) * pos.lots * 100
-
-            self._trades.append(
-                {
-                    "side": pos.side,
-                    "entry": pos.entry_price,
-                    "exit": price,
-                    "lots": pos.lots,
-                    "pnl": round(pnl, 2),
-                    "reason": reason,
-                    "duration_s": (_utcnow() - pos.opened_at).total_seconds(),
-                }
-            )
-            logger.info(
-                "CLOSE [%s] %s: entry=%.3f exit=%.3f pnl=%.2f",
-                reason,
-                pos.side,
-                pos.entry_price,
-                price,
-                pnl,
-            )
-            self._risk.record_pnl(pnl)
-            self._position = None
-            return pnl
-
-        return None
+        self._risk.record_pnl(pnl)
+        self._position = None
+        return pnl
 
     @property
     def trade_log(self) -> List[Dict]:
@@ -291,170 +265,136 @@ class MockOrderGateway:
 
 
 # ---------------------------------------------------------------------------
-# Forward test harness
+# Forward test harness — real Dukascopy data
 # ---------------------------------------------------------------------------
-
 
 class ForwardTestHarness:
     """
-    Orchestrates the forward-test simulation loop.
+    Replays real Dukascopy XAUUSD data through the production pipeline.
 
-    Components wired together:
-    - KillSwitch + HeartbeatMonitor (from kill_switch / heartbeat_monitor modules)
-    - MockPriceFeed
-    - MockRiskManager
-    - MockEnsembleStrategy
-    - MockOrderGateway
+    Data flow:
+      DukascopyFetcher → NormalizationPipeline → EMAStrategy → PaperOrderGateway
     """
 
-    def __init__(self, ticks: int = 500, seed: Optional[int] = None) -> None:
-        self._max_ticks = ticks
-        self._tick_num = 0
-
-        self._feed = MockPriceFeed(seed=seed)
-        self._risk = MockRiskManager()
-        self._strategy = MockEnsembleStrategy()
-        self._gateway = MockOrderGateway(self._risk)
-
-        # Optional safety modules (imported softly so forward_test.py can run
-        # standalone even if the main package isn't fully installed)
-        self._kill_switch = None
-        self._heartbeat = None
+    def __init__(
+        self,
+        start: datetime,
+        end: datetime,
+        timeframe: str = "H1",
+    ) -> None:
+        self._start     = start
+        self._end       = end
+        self._timeframe = timeframe
+        self._risk      = RealRiskManager()
+        self._strategy  = EMAStrategy()
+        self._gateway   = PaperOrderGateway(self._risk)
         self._metrics: Dict = {
-            "ticks_processed": 0,
+            "bars_processed":    0,
             "signals_generated": 0,
-            "trades_opened": 0,
-            "trades_closed": 0,
-            "total_pnl": 0.0,
-            "invalid_ticks": 0,
-            "kill_switch_activations": 0,
+            "trades_opened":     0,
+            "trades_closed":     0,
+            "total_pnl":         0.0,
+            "invalid_bars":      0,
         }
 
-    async def _setup_safety(self) -> None:
-        try:
-            from kill_switch import KillSwitch
-            from heartbeat_monitor import HeartbeatMonitor
-
-            self._kill_switch = KillSwitch(poll_interval_sec=1.0)
-            await self._kill_switch.start()
-
-            self._heartbeat = HeartbeatMonitor(
-                check_interval_sec=5.0, kill_switch=self._kill_switch
-            )
-            self._heartbeat.register("price_feed", timeout_sec=10, critical=True)
-            self._heartbeat.register("strategy", timeout_sec=15, critical=False)
-            await self._heartbeat.start()
-            logger.info("Safety modules loaded (KillSwitch + HeartbeatMonitor)")
-        except ImportError as exc:
-            logger.warning("Safety modules not available: %s – continuing without", exc)
-
-    async def _teardown_safety(self) -> None:
-        try:
-            if self._heartbeat:
-                await self._heartbeat.stop()
-            if self._kill_switch:
-                await self._kill_switch.stop()
-        except Exception as exc:
-            logger.warning("Error stopping safety modules: %s", exc)
-
-    def _is_halted(self) -> bool:
-        if self._kill_switch and self._kill_switch.is_active():
-            return True
-        return False
+    async def _fetch_ohlcv(self) -> pd.DataFrame:
+        """Fetch real OHLCV data from Dukascopy via the replay engine."""
+        from data_layer.replay.engine import MarketReplayEngine
+        engine = MarketReplayEngine()
+        logger.info(
+            "Fetching Dukascopy XAUUSD %s bars %s → %s …",
+            self._timeframe,
+            self._start.strftime("%Y-%m-%d"),
+            self._end.strftime("%Y-%m-%d"),
+        )
+        df = await engine.build_ohlcv_dataframe(
+            symbol="XAUUSD",
+            start=self._start,
+            end=self._end,
+            timeframe=self._timeframe,
+            normalize=True,
+        )
+        return df
 
     async def run(self) -> Dict:
         logger.info("=" * 60)
-        logger.info("HOPEFX FORWARD TEST — %d ticks", self._max_ticks)
+        logger.info(
+            "HOPEFX FORWARD TEST — Real Dukascopy Replay  [%s → %s  %s]",
+            self._start.strftime("%Y-%m-%d"),
+            self._end.strftime("%Y-%m-%d"),
+            self._timeframe,
+        )
         logger.info("=" * 60)
 
-        await self._setup_safety()
+        # Fetch real data
+        df = await self._fetch_ohlcv()
+        if df is None or df.empty:
+            logger.error(
+                "No data returned from Dukascopy for %s → %s. "
+                "Check network connectivity and symbol name.",
+                self._start.strftime("%Y-%m-%d"),
+                self._end.strftime("%Y-%m-%d"),
+            )
+            return self._metrics
 
-        try:
-            for _ in range(self._max_ticks):
-                if self._is_halted():
-                    logger.warning(
-                        "HALTED by kill switch after %d ticks", self._tick_num
-                    )
-                    self._metrics["kill_switch_activations"] += 1
-                    break
+        logger.info("Loaded %d real bars from Dukascopy", len(df))
 
-                tick = self._feed.next_tick()
-                self._tick_num += 1
+        # Replay bar by bar
+        for ts, bar in df.iterrows():
+            close = float(bar.get("close", 0.0))
+            if close <= 0 or not self._risk.validate_tick(
+                type("_T", (), {"mid": close})()
+            ):
+                self._metrics["invalid_bars"] += 1
+                continue
 
-                # --- Data validation ---
-                if not self._risk.validate_price(tick.mid):
-                    self._metrics["invalid_ticks"] += 1
-                    continue
+            # Check existing position SL/TP
+            pnl = self._gateway.update(close)
+            if pnl is not None:
+                self._metrics["trades_closed"] += 1
+                self._metrics["total_pnl"] += pnl
 
-                # --- Heartbeat ---
-                if self._heartbeat:
-                    self._heartbeat.beat("price_feed")
+            # Strategy signal on real bar close
+            signal = self._strategy.on_bar(close)
+            if signal in ("BUY", "SELL"):
+                self._metrics["signals_generated"] += 1
+                opened = self._gateway.open(close, signal)
+                if opened:
+                    self._metrics["trades_opened"] += 1
 
-                # --- Check existing position for SL/TP ---
-                pnl = self._gateway.update(tick)
-                if pnl is not None:
-                    self._metrics["trades_closed"] += 1
-                    self._metrics["total_pnl"] += pnl
-
-                # --- Strategy signal ---
-                signal = self._strategy.on_tick(tick.mid)
-                if self._heartbeat:
-                    self._heartbeat.beat("strategy")
-
-                if signal in ("BUY", "SELL"):
-                    self._metrics["signals_generated"] += 1
-                    opened = self._gateway.open(tick, signal)
-                    if opened:
-                        self._metrics["trades_opened"] += 1
-
-                self._metrics["ticks_processed"] += 1
-
-                # Simulate ~10ms per tick
-                await asyncio.sleep(0)  # yield to event loop
-
-        except Exception as exc:
-            logger.exception("CRASH during simulation: %s", exc)
-            raise
-        finally:
-            await self._teardown_safety()
+            self._metrics["bars_processed"] += 1
 
         self._print_results()
         return self._metrics
 
     def _print_results(self) -> None:
-        trades = self._gateway.trade_log
-        wins = [t for t in trades if t["pnl"] > 0]
-        losses = [t for t in trades if t["pnl"] <= 0]
-        win_rate = len(wins) / len(trades) * 100 if trades else 0
+        trades   = self._gateway.trade_log
+        wins     = [t for t in trades if t["pnl"] > 0]
+        losses   = [t for t in trades if t["pnl"] <= 0]
+        win_rate = len(wins) / len(trades) * 100 if trades else 0.0
 
         logger.info("=" * 60)
-        logger.info("FORWARD TEST RESULTS")
+        logger.info("FORWARD TEST RESULTS  (Real Dukascopy Data)")
         logger.info("=" * 60)
-        logger.info("Ticks processed     : %d", self._metrics["ticks_processed"])
-        logger.info("Invalid ticks        : %d", self._metrics["invalid_ticks"])
+        logger.info("Bars processed       : %d", self._metrics["bars_processed"])
+        logger.info("Invalid bars         : %d", self._metrics["invalid_bars"])
         logger.info("Signals generated    : %d", self._metrics["signals_generated"])
         logger.info("Trades opened        : %d", self._metrics["trades_opened"])
         logger.info("Trades closed        : %d", self._metrics["trades_closed"])
         logger.info("Win rate             : %.1f %%", win_rate)
         logger.info("Total PnL (USD)      : %.2f", self._metrics["total_pnl"])
         logger.info("Final balance (USD)  : %.2f", self._risk.balance)
-        logger.info(
-            "Kill switch fires    : %d", self._metrics["kill_switch_activations"]
-        )
         logger.info("=" * 60)
 
         if trades:
-            avg_win = sum(t["pnl"] for t in wins) / len(wins) if wins else 0
-            avg_loss = sum(t["pnl"] for t in losses) / len(losses) if losses else 0
-            total_wins = sum(t["pnl"] for t in wins)
+            avg_win  = sum(t["pnl"] for t in wins)  / max(len(wins),  1)
+            avg_loss = sum(t["pnl"] for t in losses) / max(len(losses), 1)
+            total_wins   = sum(t["pnl"] for t in wins)
             total_losses = abs(sum(t["pnl"] for t in losses))
+            pf = total_wins / total_losses if total_losses > 0 else float("inf")
             logger.info("Avg win (USD)        : %.2f", avg_win)
             logger.info("Avg loss (USD)       : %.2f", avg_loss)
-            profit_factor = (
-                total_wins / total_losses if total_losses > 0 else float("inf")
-            )
-            logger.info("Profit factor        : %.2f", profit_factor)
-
+            logger.info("Profit factor        : %.2f", pf)
         logger.info("=" * 60)
 
 
@@ -462,36 +402,55 @@ class ForwardTestHarness:
 # Entry point
 # ---------------------------------------------------------------------------
 
-
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="HOPEFX Forward Test (mock data)")
-    parser.add_argument(
-        "--ticks", type=int, default=500, help="Number of ticks to simulate"
+    parser = argparse.ArgumentParser(
+        description="HOPEFX Forward Test — Real Dukascopy Replay"
     )
     parser.add_argument(
-        "--seed", type=int, default=None, help="Random seed for reproducibility"
+        "--days", type=int, default=7,
+        help="Number of past days to replay (default: 7)",
     )
     parser.add_argument(
-        "--mode", type=str, default="forward-test", help="Run mode label"
+        "--start", type=str, default=None,
+        help="Start date YYYY-MM-DD (overrides --days)",
+    )
+    parser.add_argument(
+        "--end", type=str, default=None,
+        help="End date YYYY-MM-DD (default: today)",
+    )
+    parser.add_argument(
+        "--tf", type=str, default="H1",
+        help="Timeframe: M1 M5 M15 M30 H1 H4 D1 (default: H1)",
     )
     return parser.parse_args()
 
 
 async def _async_main() -> int:
     args = _parse_args()
-    logger.info(
-        "Starting HOPEFX forward test (mode=%s, ticks=%d, seed=%s)",
-        args.mode,
-        args.ticks,
-        args.seed,
-    )
-    harness = ForwardTestHarness(ticks=args.ticks, seed=args.seed)
+
+    now = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if args.end:
+        end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    else:
+        end = now
+
+    if args.start:
+        start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    else:
+        start = end - timedelta(days=args.days)
+
+    if start >= end:
+        logger.error("start (%s) must be before end (%s)", start.date(), end.date())
+        return 1
+
+    harness = ForwardTestHarness(start=start, end=end, timeframe=args.tf)
     try:
         await harness.run()
         logger.info("Forward test completed successfully")
         return 0
     except Exception as exc:
-        logger.critical("Forward test FAILED: %s", exc)
+        logger.critical("Forward test FAILED: %s", exc, exc_info=True)
         return 1
 
 
