@@ -295,6 +295,19 @@ async def lifespan(_app: FastAPI):
         logger.info("✓ Live WebSocket broadcasters started (/ws/live)")
     except Exception as _ws_err:
         logger.warning("Live WS broadcasters not started: %s", _ws_err)
+
+    # Mount nuclear dashboard WebSocket + REST routes (/ws/nuclear, /api/nuclear/*)
+    try:
+        from charting.websocket_server import mount_nuclear_routes
+        from charting.nuclear_ai_chart_engine import get_chart_engine as _get_chart_engine
+
+        _nuclear_engine = _get_chart_engine()
+        mount_nuclear_routes(app, _nuclear_engine)
+        asyncio.create_task(_nuclear_engine.start(), name="nuclear-chart-engine")
+        logger.info("✓ Nuclear dashboard routes mounted (/ws/nuclear, /api/nuclear/*)")
+    except Exception as _nuclear_err:
+        logger.warning("Nuclear dashboard routes not mounted: %s", _nuclear_err)
+
     yield
     await shutdown_event()
     await kill_switch.stop()

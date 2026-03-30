@@ -65,6 +65,20 @@ from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 
+# ── Nuclear chart engine (optional — graceful degradation if unavailable) ─────
+_chart_engine = None
+
+def _get_chart_engine():
+    """Lazy-load the NuclearAIChartEngine singleton."""
+    global _chart_engine
+    if _chart_engine is None:
+        try:
+            from charting.nuclear_ai_chart_engine import get_chart_engine
+            _chart_engine = get_chart_engine()
+        except Exception as exc:
+            pass  # chart engine is optional
+    return _chart_engine
+
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -177,6 +191,11 @@ class LifeSupervisor:
             except Exception as exc:
                 logger.warning("NuclearHopeFXSupervisor unavailable: %s", exc)
 
+        # Nuclear chart engine (real-time dashboard data)
+        self._chart_engine = _get_chart_engine()
+        if self._chart_engine is not None:
+            logger.info("NuclearAIChartEngine attached to LifeSupervisor")
+
     # ── public entry point ────────────────────────────────────────────────────
 
     async def run(self) -> int:
@@ -208,6 +227,11 @@ class LifeSupervisor:
         # Wire nuclear supervisor event callback into the engine if supported
         if self._nuclear_supervisor is not None:
             self._wire_nuclear_supervisor()
+
+        # Start nuclear chart engine tick loop as a background task
+        if self._chart_engine is not None:
+            asyncio.create_task(self._chart_engine.start(), name="nuclear-chart-engine")
+            logger.info("NuclearAIChartEngine tick loop started")
 
         # Send startup Telegram notification
         nuclear_status = (
@@ -278,6 +302,17 @@ class LifeSupervisor:
             result = await self._nuclear_supervisor.on_new_event(event)
             action = result.get("action_taken", "unknown")
 
+            # Forward scored event to chart engine for real-time dashboard update
+            if self._chart_engine is not None:
+                try:
+                    self._chart_engine.inject_news_event(
+                        text=event.get("text", ""),
+                        volatility=event.get("volatility", 1.0),
+                        sentiment=event.get("sentiment", 0.0),
+                    )
+                except Exception:
+                    pass  # chart engine errors must never crash the supervisor
+
             # If nuclear mode was triggered, enforce DD stop immediately
             if action == "nuclear":
                 logger.critical(
@@ -338,6 +373,23 @@ class LifeSupervisor:
 
             # ── nuclear supervisor poll (fallback mode) ────────────────────
             await self._poll_news_events()
+
+            # ── nuclear chart engine: record equity point ──────────────────
+            if self._chart_engine is not None:
+                try:
+                    equity  = status.get("equity", self._initial_bal)
+                    balance = status.get("balance", self._initial_bal)
+                    # Annotate nuclear events on the equity curve
+                    annotation: Optional[str] = None
+                    if self._nuclear_supervisor is not None:
+                        ns = self._nuclear_supervisor.get_status()
+                        if ns.get("nuclear_level", 0) >= 2:
+                            annotation = f"NUC-L{ns['nuclear_level']}"
+                        elif ns.get("trading_paused"):
+                            annotation = "PAUSED"
+                    self._chart_engine.record_equity_point(equity, balance, annotation)
+                except Exception as _ce:
+                    pass  # chart engine errors must never crash the supervisor
 
             # ── heartbeat log ──────────────────────────────────────────────
             if time.monotonic() - heartbeat_ts >= 60:
@@ -425,6 +477,13 @@ class LifeSupervisor:
                 except (asyncio.CancelledError, Exception):
                     pass
         logger.info("Engine stopped.")
+
+        # Stop nuclear chart engine cleanly
+        if self._chart_engine is not None:
+            try:
+                await self._chart_engine.stop()
+            except Exception:
+                pass
 
         # Stop notifications manager cleanly
         try:
