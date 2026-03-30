@@ -330,7 +330,7 @@ class PipelineOrchestrator:
         drop_cols = [
             c
             for c in split_df.columns
-            if c.startswith("target") or c in ("is_synthetic", "category")
+            if c.startswith("target") or c in ("is_forward_filled", "is_synthetic", "category")
         ]
         X = split_df.drop(columns=drop_cols, errors="ignore")
         y_bin = split_df["target_bin"].values
@@ -655,7 +655,7 @@ class PipelineOrchestrator:
         drop_cols = [
             c
             for c in feat_df.columns
-            if c.startswith("target") or c in ("is_synthetic", "category")
+            if c.startswith("target") or c in ("is_forward_filled", "is_synthetic", "category")
         ]
         X_df = feat_df.drop(columns=drop_cols, errors="ignore")[self._feature_cols]
         X_sc = self.scaler.transform(X_df)

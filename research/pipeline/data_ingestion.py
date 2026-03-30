@@ -21,9 +21,9 @@ Design
 - All data is cached to Parquet under data/cache/ so repeated runs are free.
 - Rate-limit dodging: exponential back-off + jitter on every yfinance call.
 - Gap handling: missing bars are forward-filled for price, zero-filled for
-  volume, then flagged with a boolean `is_synthetic` column.
+  volume, then flagged with a boolean `is_forward_filled` column.
 - Output: clean pandas DataFrame with DatetimeIndex (UTC), columns:
-    open, high, low, close, volume, vwap, sentiment_score, is_synthetic
+    open, high, low, close, volume, vwap, sentiment_score, is_forward_filled
 """
 
 from __future__ import annotations
@@ -160,7 +160,7 @@ def _fill_gaps(df: pd.DataFrame) -> pd.DataFrame:
     price_cols = [
         c for c in ["open", "high", "low", "close", "vwap"] if c in df.columns
     ]
-    df["is_synthetic"] = df["close"].isna()
+    df["is_forward_filled"] = df["close"].isna()
     df[price_cols] = df[price_cols].ffill()
     if "volume" in df.columns:
         df["volume"] = df["volume"].fillna(0)
@@ -192,7 +192,7 @@ def fetch_daily(
     Returns
     -------
     DataFrame with DatetimeIndex (UTC), columns:
-        open, high, low, close, volume, vwap, is_synthetic
+        open, high, low, close, volume, vwap, is_forward_filled
     """
     end = end or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     cache_path = _cache_key(ticker, "1d", start, end)
