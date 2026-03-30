@@ -125,24 +125,79 @@ class DataLayerRedisStore:
             logger.debug("DataLayerRedisStore: Prometheus init skipped: %s", _exc)
 
     def _try_auto_connect(self) -> None:
-        """Attempt to connect to Redis using REDIS_URL env var."""
+        """
+        Attempt to connect to Redis.
+
+        Connection priority:
+          1. Redis Sentinel (REDIS_SENTINEL_HOSTS + REDIS_SENTINEL_MASTER)
+          2. Standard URL (REDIS_URL, default redis://localhost:6379/0)
+
+        Sentinel example .env:
+          REDIS_SENTINEL_HOSTS=sentinel1:26379,sentinel2:26379,sentinel3:26379
+          REDIS_SENTINEL_MASTER=mymaster
+          REDIS_PASSWORD=secret
+        """
         import os
+        sentinel_hosts_raw = os.getenv("REDIS_SENTINEL_HOSTS", "")
+        sentinel_master    = os.getenv("REDIS_SENTINEL_MASTER", "mymaster")
+        redis_password     = os.getenv("REDIS_PASSWORD", "") or None
+
+        # ── Sentinel path ────────────────────────────────────────────────────
+        if sentinel_hosts_raw:
+            try:
+                import redis as _redis_lib
+                from redis.sentinel import Sentinel  # type: ignore[import]
+                sentinels = []
+                for part in sentinel_hosts_raw.split(","):
+                    part = part.strip()
+                    if ":" in part:
+                        host, port_s = part.rsplit(":", 1)
+                        sentinels.append((host.strip(), int(port_s.strip())))
+                    else:
+                        sentinels.append((part, 26379))
+                sentinel = Sentinel(
+                    sentinels,
+                    socket_connect_timeout=2,
+                    socket_timeout=2,
+                    password=redis_password,
+                )
+                client = sentinel.master_for(
+                    sentinel_master,
+                    socket_timeout=2,
+                    decode_responses=False,
+                )
+                client.ping()
+                self._r = client
+                logger.info(
+                    "DataLayerRedisStore: connected via Sentinel master=%s hosts=%s",
+                    sentinel_master, sentinel_hosts_raw,
+                )
+                return
+            except Exception as exc:
+                logger.warning(
+                    "DataLayerRedisStore: Sentinel connect failed (%s) — "
+                    "falling back to REDIS_URL", exc,
+                )
+
+        # ── Standard URL path ────────────────────────────────────────────────
         url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         try:
             import redis as _redis_lib
-            client = _redis_lib.from_url(
-                url,
-                socket_connect_timeout=2,
-                socket_timeout=2,
-                decode_responses=False,
-            )
+            kwargs: dict = {
+                "socket_connect_timeout": 2,
+                "socket_timeout": 2,
+                "decode_responses": False,
+            }
+            if redis_password:
+                kwargs["password"] = redis_password
+            client = _redis_lib.from_url(url, **kwargs)
             client.ping()
             self._r = client
             logger.debug("DataLayerRedisStore: auto-connected to %s", url)
         except Exception as exc:
             logger.debug(
                 "DataLayerRedisStore: auto-connect failed (%s) — "
-                "caching disabled until orchestrator injects client", exc
+                "caching disabled until orchestrator injects client", exc,
             )
 
     def _key(self, *parts: str) -> str:
@@ -395,6 +450,25 @@ class DataLayerRedisStore:
             "connected":    self._r is not None,
             "memory_mb":    self.memory_usage_mb(),
         }
+
+    def health(self) -> Dict[str, Any]:
+        """
+        Return a health dict suitable for monitoring dashboards.
+
+        Extends stats() with ping latency, key count, and memory info.
+        """
+        import time as _time
+        t0 = _time.monotonic()
+        alive = self.ping()
+        ping_ms = round((_time.monotonic() - t0) * 1000, 2)
+        h = self.stats()
+        h.update({
+            "alive":        alive,
+            "ping_ms":      ping_ms if alive else None,
+            "key_count":    self.key_count() if alive else 0,
+            "memory_info":  self.get_memory_info() if alive else {},
+        })
+        return h
 
     def ping(self) -> bool:
         if not self._r:
