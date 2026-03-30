@@ -428,8 +428,63 @@ def create_api_app(trading_app=None) -> Optional[Any]:
 
     @app.get("/api/v1/logs/recent")
     async def get_recent_logs(lines: int = 100, user=Depends(_require_admin)):
-        """Get recent log entries. Requires: role >= 'admin'."""
-        return {"logs": [], "note": "Implement log retrieval from file or ELK"}
+        """
+        Return the last *lines* entries from the application log file.
+
+        Reads from the rotating log file written by infrastructure/logging.py.
+        Log directory and app name are resolved from environment variables:
+            LOG_DIR   — default "logs"
+            APP_NAME  — default "hopefx"
+
+        Returns raw text lines when the file is plain-text, or parsed JSON
+        objects when the file uses structured (JSON) format.  Falls back to
+        an empty list with an error message when the log file is absent.
+        """
+        import os as _os
+        import json as _json
+        from pathlib import Path as _Path
+
+        log_dir  = _os.getenv("LOG_DIR", "logs")
+        app_name = _os.getenv("APP_NAME", "hopefx")
+        log_path = _Path(log_dir) / f"{app_name}.log"
+
+        if not log_path.exists():
+            return {
+                "logs": [],
+                "source": str(log_path),
+                "error": f"Log file not found: {log_path}. "
+                         "Ensure LOG_DIR and APP_NAME env vars match the logging setup.",
+            }
+
+        try:
+            # Efficient tail: read last chunk and split lines
+            max_bytes = 512 * 1024  # read at most 512 KB from the end
+            with open(log_path, "rb") as fh:
+                fh.seek(0, 2)
+                file_size = fh.tell()
+                seek_pos = max(0, file_size - max_bytes)
+                fh.seek(seek_pos)
+                raw = fh.read().decode("utf-8", errors="replace")
+
+            all_lines = [l for l in raw.splitlines() if l.strip()]
+            tail = all_lines[-lines:] if len(all_lines) > lines else all_lines
+
+            # Attempt JSON parse (structured logging format)
+            parsed = []
+            for line in tail:
+                try:
+                    parsed.append(_json.loads(line))
+                except _json.JSONDecodeError:
+                    parsed.append({"message": line})
+
+            return {
+                "logs": parsed,
+                "source": str(log_path),
+                "total_returned": len(parsed),
+            }
+        except OSError as exc:
+            logger.warning("get_recent_logs: could not read %s: %s", log_path, exc)
+            return {"logs": [], "source": str(log_path), "error": str(exc)}
 
     # System control
     @app.post("/api/v1/system/shutdown")
