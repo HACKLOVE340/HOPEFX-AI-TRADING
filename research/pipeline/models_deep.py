@@ -425,9 +425,14 @@ class DeepPredictor:
         use_amp: bool = True,
         **model_kwargs,
     ):
-        if not TORCH_AVAILABLE:
-            raise RuntimeError("PyTorch is required for DeepPredictor")
+        # Validate architecture before any torch dependency
+        if architecture not in self.ARCHITECTURES:
+            raise ValueError(
+                f"Unknown architecture '{architecture}'. "
+                f"Valid options: {list(self.ARCHITECTURES.keys())}"
+            )
 
+        # Store all hyperparameters — torch not required for metadata
         self.architecture = architecture
         self.n_features = n_features
         self.seq_len = seq_len
@@ -439,43 +444,50 @@ class DeepPredictor:
         self.label_smoothing = label_smoothing
         self.pos_weight = pos_weight
         self.grad_clip = grad_clip
+        self._device_str = device
+        self._use_amp_requested = use_amp
+        self._model_kwargs = model_kwargs
+        self._history: dict = {"train_loss": [], "val_loss": [], "lr": []}
 
-        if device == "auto":
+        # Defer torch initialisation to _init_torch() called by fit/predict
+        self.model = None
+        self.optimizer = None
+        self.scheduler = None
+        self.criterion = None
+        self.device = None
+        self.use_amp = False
+        self._scaler = None
+
+    def _init_torch(self) -> None:
+        """Initialise PyTorch model, optimiser, and loss. Called lazily."""
+        if not TORCH_AVAILABLE:
+            raise RuntimeError("PyTorch is required for DeepPredictor")
+        if self.model is not None:
+            return  # already initialised
+
+        if self._device_str == "auto":
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
-            self.device = torch.device(device)
+            self.device = torch.device(self._device_str)
 
-        # Mixed precision only on CUDA
-        self.use_amp = use_amp and self.device.type == "cuda"
+        self.use_amp = self._use_amp_requested and self.device.type == "cuda"
         self._scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
 
-        self.model = self._build_model(n_features, seq_len, **model_kwargs).to(
-            self.device
+        self.model = self._build_model(
+            self.n_features, self.seq_len, **self._model_kwargs
+        ).to(self.device)
+        self.optimizer = optim.AdamW(
+            self.model.parameters(), lr=self.lr, weight_decay=1e-4
         )
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=1e-4)
-
-        # ReduceLROnPlateau: halve LR when val loss stalls for 5 epochs
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer,
-            mode="min",
-            factor=0.5,
-            patience=5,
-            min_lr=1e-6,
+            self.optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,
         )
-
-        # Loss function
-        if task == "binary":
+        if self.task == "binary":
             self.criterion = _LabelSmoothBCE(
-                smoothing=label_smoothing, pos_weight=pos_weight
+                smoothing=self.label_smoothing, pos_weight=self.pos_weight
             )
         else:
             self.criterion = nn.MSELoss()
-
-        self._history: dict = {
-            "train_loss": [],
-            "val_loss": [],
-            "lr": [],
-        }
 
     def _build_model(self, n_features: int, seq_len: int, **kwargs) -> "nn.Module":
         arch = self.architecture.lower()
@@ -526,6 +538,7 @@ class DeepPredictor:
         -------
         Training history dict with train_loss, val_loss, lr per epoch.
         """
+        self._init_torch()
         # Auto class weighting for imbalanced binary targets
         if class_weight and self.task == "binary" and self.pos_weight is None:
             n_pos = float(y_train.sum())
@@ -636,8 +649,7 @@ class DeepPredictor:
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Return probability array (binary) or value array (regression)."""
-        if not TORCH_AVAILABLE:
-            raise RuntimeError("PyTorch is required for DeepPredictor.predict()")
+        self._init_torch()
         self.model.eval()
         X_t = torch.tensor(X, dtype=torch.float32).to(self.device)
         preds = []
@@ -678,6 +690,7 @@ class DeepPredictor:
         return result
 
     def save(self, path: str | Path) -> None:
+        self._init_torch()
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
@@ -699,6 +712,8 @@ class DeepPredictor:
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"DeepPredictor model not found: {path}")
+        if not TORCH_AVAILABLE:
+            raise RuntimeError("PyTorch is required for DeepPredictor.load()")
         checkpoint = torch.load(path, map_location="cpu", weights_only=False)
         predictor = cls(
             architecture=checkpoint["architecture"],
@@ -709,6 +724,7 @@ class DeepPredictor:
             label_smoothing=checkpoint.get("label_smoothing", 0.05),
             pos_weight=checkpoint.get("pos_weight", None),
         )
+        predictor._init_torch()
         predictor.model.load_state_dict(checkpoint["state_dict"])
         predictor.model.eval()
         logger.info("DeepPredictor loaded ← %s", path)
@@ -716,4 +732,5 @@ class DeepPredictor:
 
     def parameter_count(self) -> int:
         """Return total number of trainable parameters."""
+        self._init_torch()
         return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
