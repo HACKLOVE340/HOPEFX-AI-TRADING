@@ -92,55 +92,47 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         if trading_app:
             asyncio.create_task(health_checker.start_monitoring())
 
-        # ── OANDA live tick stream → EventBus → WebSocket clients ────────────
-        # Reads OANDA_API_KEY + OANDA_ACCOUNT_ID from environment.
-        # If credentials are absent the stream is skipped gracefully; the
-        # WebSocket server falls back to broker-poll then no_live_feed.
-        _oanda_stream_task = None
-        _oanda_api_key = os.getenv("OANDA_API_KEY", "")
-        _oanda_account_id = os.getenv("OANDA_ACCOUNT_ID", "")
-        _oanda_practice = os.getenv("OANDA_PRACTICE", "true").lower() != "false"
-        _oanda_instruments = [
-            i.strip()
-            for i in os.getenv(
-                "OANDA_INSTRUMENTS", "XAU_USD,EUR_USD,GBP_USD,USD_JPY,USD_CHF"
-            ).split(",")
-            if i.strip()
-        ]
+        # ── NuclearStreamer — live tick stream → EventBus → WebSocket clients ──
+        # Streams XAUUSD from Finnhub / Twelve Data / Polygon concurrently.
+        # OANDA is NOT used for streaming; it is execution-only.
+        # At least one of FINNHUB_API_KEY / TWELVE_API_KEY / POLYGON_API_KEY
+        # must be set for live ticks.  If none are set the stream is skipped
+        # gracefully and the WebSocket falls back to no_live_feed.
+        _nuclear_stream_task = None
+        _has_any_stream_key = any([
+            os.getenv("FINNHUB_API_KEY"),
+            os.getenv("TWELVE_API_KEY"),
+            os.getenv("POLYGON_API_KEY"),
+        ])
 
-        if _oanda_api_key and _oanda_account_id:
+        if _has_any_stream_key:
             try:
-                from brokers.oanda_ws import OANDAStreamAdapter
+                from data_feed import NuclearStreamer
                 from core.event_bus import bus, CH_TICK
 
-                def _on_oanda_tick(tick: dict) -> None:
-                    """Forward OANDA tick to EventBus so ws_live.py broadcasts it."""
-                    try:
-                        asyncio.get_event_loop().call_soon_threadsafe(
-                            lambda: asyncio.ensure_future(bus.publish(CH_TICK, tick))
-                        )
-                    except Exception as _exc:
-                        logger.debug("OANDA tick forward error: %s", _exc)
+                class _EventBusSubscriber:
+                    """Bridge: forwards NuclearStreamer ticks onto the EventBus."""
+                    async def on_new_price(self, price: float) -> None:
+                        try:
+                            await bus.publish(CH_TICK, {"price": price, "symbol": "XAUUSD"})
+                        except Exception as _exc:
+                            logger.debug("NuclearStreamer EventBus forward error: %s", _exc)
 
-                _stream = OANDAStreamAdapter(
-                    api_key=_oanda_api_key,
-                    account_id=_oanda_account_id,
-                    instruments=_oanda_instruments,
-                    practice=_oanda_practice,
-                    on_tick=_on_oanda_tick,
-                )
-                _oanda_stream_task = asyncio.create_task(_stream.start())
+                _streamer = NuclearStreamer()
+                _streamer.subscribe(_EventBusSubscriber())
+                _nuclear_stream_task = asyncio.create_task(_streamer.run())
                 logger.info(
-                    "OANDA tick stream started — instruments=%s practice=%s",
-                    _oanda_instruments,
-                    _oanda_practice,
+                    "NuclearStreamer started — sources: finnhub=%s twelvedata=%s polygon=%s",
+                    bool(os.getenv("FINNHUB_API_KEY")),
+                    bool(os.getenv("TWELVE_API_KEY")),
+                    bool(os.getenv("POLYGON_API_KEY")),
                 )
             except Exception as _exc:
-                logger.warning("OANDA stream init failed (non-fatal): %s", _exc)
+                logger.warning("NuclearStreamer init failed (non-fatal): %s", _exc)
         else:
             logger.info(
-                "OANDA_API_KEY / OANDA_ACCOUNT_ID not set — "
-                "live tick stream disabled; WebSocket will use broker-poll fallback."
+                "No streaming API keys set (FINNHUB_API_KEY / TWELVE_API_KEY / "
+                "POLYGON_API_KEY) — live tick stream disabled."
             )
 
         # ── Weekly performance report scheduler ───────────────────────────────
@@ -168,10 +160,10 @@ def create_api_app(trading_app=None) -> Optional[Any]:
                 _scheduler.shutdown(wait=False)
             except Exception as _exc:
                 logger.debug('Suppressed exception: %s', _exc)
-        if _oanda_stream_task and not _oanda_stream_task.done():
-            _oanda_stream_task.cancel()
+        if _nuclear_stream_task and not _nuclear_stream_task.done():
+            _nuclear_stream_task.cancel()
             try:
-                await asyncio.wait_for(_oanda_stream_task, timeout=3.0)
+                await asyncio.wait_for(_nuclear_stream_task, timeout=3.0)
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
         logger.info("API server shutting down...")
