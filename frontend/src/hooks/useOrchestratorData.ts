@@ -231,6 +231,7 @@ export function usePositions() {
 }
 
 // ── Signals (every 15s — fallback when WS is down) ───────────────────────────
+// Backend returns { signals: Signal[], count: number } — unwrap here.
 
 export function useSignals() {
   const setSignals = useStore((s) => s.setSignals);
@@ -240,7 +241,9 @@ export function useSignals() {
     queryKey: ['signals', 'active'],
     queryFn:  async () => {
       const res = await signalsApi.active();
-      return res.data;
+      // Unwrap envelope: { signals: [...], count: N } or flat array
+      const raw = res.data as Signal[] | { signals: Signal[]; count: number };
+      return Array.isArray(raw) ? raw : (raw.signals ?? []);
     },
     refetchInterval: wsStatus === 'connected' ? false : 15_000,
     staleTime:       7_500,
@@ -251,6 +254,20 @@ export function useSignals() {
   }, [query.data, setSignals]);
 
   return query;
+}
+
+// ── Active signals with analytics (used by signal panels) ────────────────────
+
+export function useSignalSummary() {
+  return useQuery({
+    queryKey: ['signals', 'summary'],
+    queryFn:  async () => {
+      const res = await signalsApi.summary();
+      return res.data;
+    },
+    refetchInterval: 30_000,
+    staleTime:       15_000,
+  });
 }
 
 // ── Bootstrap all data on mount ───────────────────────────────────────────────
@@ -266,4 +283,5 @@ export function useBootstrapData() {
   useAccount();
   usePositions();
   useSignals();
+  useSignalSummary();
 }
