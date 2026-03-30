@@ -363,20 +363,8 @@ class Query:
                     )]
             except Exception as exc:
                 logger.debug("Live price fetch failed: %s", exc)
-        import random
-        random.seed(42)
-        base = 2350.0 if "XAU" in symbol else 1.085
-        return [
-            TradingData(
-                id=f"tick-{i}", symbol=symbol,
-                price=round(base + random.uniform(-5, 5), 5),
-                bid=round(base - 0.0001, 5), ask=round(base + 0.0001, 5),
-                spread=0.0002, volume=random.randint(100, 5000),
-                timestamp=datetime.utcnow().isoformat(),
-                change_pct=round(random.uniform(-0.5, 0.5), 3),
-            )
-            for i in range(min(limit, 20))
-        ]
+        # Broker unavailable — return empty; no synthetic prices
+        return []
 
     @strawberry.field(description="Open positions")
     def positions(self, info: Info) -> List[Position]:
@@ -434,24 +422,32 @@ class Query:
     @strawberry.field(description="Recent AI signals")
     def signals(self, info: Info, limit: int = 5) -> List[Signal]:
         _require_auth(info)
-        import random
-        random.seed(7)
-        return [
-            Signal(
-                signal_id=f"sig-{i}", symbol="XAU/USD",
-                direction=random.choice(["long", "short"]),
-                confidence=round(0.3 + random.random() * 0.5, 3),
-                probability=round(0.5 + random.uniform(-0.3, 0.3), 3),
-                high_confidence=random.random() > 0.6,
-                abstain=False,
-                entry_price=round(2340 + random.random() * 30, 2),
-                stop_loss=round(2320 + random.random() * 10, 2),
-                take_profit=round(2380 + random.random() * 20, 2),
-                model_version="advanced_oos_v1",
-                created_at=datetime.utcnow().isoformat(),
-            )
-            for i in range(min(limit, 10))
-        ]
+        # Pull from the live ML predictor signal history
+        try:
+            from ml.advanced_predictor import get_predictor
+            pred = get_predictor()
+            history = getattr(pred, "signal_history", None) or []
+            results: List[Signal] = []
+            for sig in history[: min(limit, len(history))]:
+                results.append(Signal(
+                    signal_id=str(sig.get("signal_id", uuid.uuid4()))[:8],
+                    symbol=str(sig.get("symbol", "XAU/USD")),
+                    direction=str(sig.get("direction", "neutral")),
+                    confidence=float(sig.get("confidence", 0.0)),
+                    probability=float(sig.get("probability", 0.5)),
+                    high_confidence=bool(sig.get("high_confidence", False)),
+                    abstain=bool(sig.get("abstain", False)),
+                    entry_price=float(sig.get("entry_price", 0.0)),
+                    stop_loss=float(sig.get("stop_loss", 0.0)),
+                    take_profit=float(sig.get("take_profit", 0.0)),
+                    model_version=str(sig.get("model_version", pred.version)),
+                    created_at=str(sig.get("created_at", datetime.utcnow().isoformat())),
+                ))
+            return results
+        except Exception as exc:
+            logger.debug("Signal history fetch failed: %s", exc)
+        # ML engine unavailable — return empty; no synthetic signals
+        return []
 
     @strawberry.field(description="Current account summary")
     def account(self, info: Info) -> AccountInfo:
@@ -494,10 +490,63 @@ class Query:
     @strawberry.field(description="Performance summary")
     def performance(self, info: Info) -> PerformanceSummary:
         _require_auth(info)
+        state = _get_broker_state()
+        if state and hasattr(state, "broker"):
+            try:
+                raw = state.broker.get_trade_history(limit=10_000)
+                trades = raw or []
+                if trades:
+                    pnls = [float(t.get("pnl", 0)) for t in trades]
+                    wins = [p for p in pnls if p > 0]
+                    losses = [p for p in pnls if p <= 0]
+                    total_pnl = sum(pnls)
+                    win_rate = len(wins) / len(pnls) * 100 if pnls else 0.0
+                    avg_win = sum(wins) / len(wins) if wins else 0.0
+                    avg_loss = sum(losses) / len(losses) if losses else 0.0
+                    gross_profit = sum(wins)
+                    gross_loss = abs(sum(losses))
+                    profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0.0
+                    durations = [float(t.get("duration_minutes", 0)) for t in trades]
+                    avg_dur = sum(durations) / len(durations) if durations else 0.0
+                    # Sharpe: mean / std of per-trade PnL (simplified)
+                    import statistics
+                    sharpe = (
+                        statistics.mean(pnls) / statistics.stdev(pnls)
+                        if len(pnls) > 1 else 0.0
+                    )
+                    # Max drawdown from cumulative PnL curve
+                    cum = 0.0
+                    peak = 0.0
+                    max_dd = 0.0
+                    for p in pnls:
+                        cum += p
+                        peak = max(peak, cum)
+                        max_dd = max(max_dd, peak - cum)
+                    # Best symbol by total PnL
+                    sym_pnl: dict = {}
+                    for t in trades:
+                        s = t.get("symbol", "XAU/USD")
+                        sym_pnl[s] = sym_pnl.get(s, 0.0) + float(t.get("pnl", 0))
+                    best_sym = max(sym_pnl, key=sym_pnl.get) if sym_pnl else "XAU/USD"
+                    return PerformanceSummary(
+                        total_trades=len(trades),
+                        win_rate=round(win_rate, 2),
+                        total_pnl=round(total_pnl, 2),
+                        sharpe_ratio=round(sharpe, 4),
+                        max_drawdown=round(max_dd, 2),
+                        profit_factor=round(profit_factor, 4),
+                        avg_win=round(avg_win, 2),
+                        avg_loss=round(avg_loss, 2),
+                        avg_duration_minutes=round(avg_dur, 1),
+                        best_symbol=best_sym,
+                    )
+            except Exception as exc:
+                logger.debug("Performance fetch failed: %s", exc)
+        # No trade history available — return zeros
         return PerformanceSummary(
-            total_trades=847, win_rate=58.3, total_pnl=24680,
-            sharpe_ratio=1.42, max_drawdown=8.3, profit_factor=1.68,
-            avg_win=42.5, avg_loss=-25.1, avg_duration_minutes=187.0,
+            total_trades=0, win_rate=0.0, total_pnl=0.0,
+            sharpe_ratio=0.0, max_drawdown=0.0, profit_factor=0.0,
+            avg_win=0.0, avg_loss=0.0, avg_duration_minutes=0.0,
             best_symbol="XAU/USD",
         )
 
@@ -687,32 +736,32 @@ class Subscription:
             return
 
         interval = max(0.5, interval_ms / 1000.0)
-        import random
-        base = 2350.0 if "XAU" in symbol else 1.085
 
         while True:
             state = _get_broker_state()
-            mid = base
+            mid: Optional[float] = None
+            spread = 0.0002 if "EUR" in symbol else 0.30
+
             if state and hasattr(state, "broker"):
                 try:
                     prices = getattr(state.broker, "prices", {})
                     tick = prices.get(symbol)
                     if tick:
-                        mid = float(tick.get("mid", tick.get("price", base)))
+                        mid = float(tick.get("mid", tick.get("price", 0))) or None
+                        spread = float(tick.get("spread", spread))
                 except Exception:
                     pass
-            else:
-                mid = base + random.uniform(-2, 2)
 
-            spread = 0.0002 if "EUR" in symbol else 0.30
-            yield PriceTick(
-                symbol=symbol,
-                bid=round(mid - spread / 2, 5),
-                ask=round(mid + spread / 2, 5),
-                mid=round(mid, 5),
-                spread=spread,
-                timestamp=datetime.utcnow().isoformat(),
-            )
+            if mid is not None:
+                yield PriceTick(
+                    symbol=symbol,
+                    bid=round(mid - spread / 2, 5),
+                    ask=round(mid + spread / 2, 5),
+                    mid=round(mid, 5),
+                    spread=spread,
+                    timestamp=datetime.utcnow().isoformat(),
+                )
+            # No live price available — skip this tick, do not emit synthetic data
             await asyncio.sleep(interval)
 
     @strawberry.subscription(description="Real-time AI signal stream")
@@ -727,32 +776,23 @@ class Subscription:
         except PermissionError:
             return
 
-        import random
         while True:
             state = _get_broker_state()
-            direction = "neutral"
-            confidence = 0.0
-            probability = 0.5
+            sig = None
 
             if state and hasattr(state, "last_signal"):
                 sig = state.last_signal
-                if sig:
-                    direction = sig.get("direction", "neutral")
-                    confidence = float(sig.get("confidence", 0))
-                    probability = float(sig.get("probability", 0.5))
-            else:
-                direction = random.choice(["long", "short", "neutral"])
-                confidence = round(random.random() * 0.8, 3)
-                probability = round(0.5 + random.uniform(-0.3, 0.3), 3)
 
-            yield SignalEvent(
-                signal_id=str(uuid.uuid4())[:8],
-                symbol=symbol,
-                direction=direction,
-                confidence=confidence,
-                probability=probability,
-                timestamp=datetime.utcnow().isoformat(),
-            )
+            if sig:
+                yield SignalEvent(
+                    signal_id=str(uuid.uuid4())[:8],
+                    symbol=symbol,
+                    direction=str(sig.get("direction", "neutral")),
+                    confidence=float(sig.get("confidence", 0.0)),
+                    probability=float(sig.get("probability", 0.5)),
+                    timestamp=datetime.utcnow().isoformat(),
+                )
+            # No live signal available — skip this tick, do not emit synthetic data
             await asyncio.sleep(5)
 
     @strawberry.subscription(description="Real-time account equity/balance updates")
