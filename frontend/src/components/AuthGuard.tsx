@@ -54,7 +54,13 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
     const userRank     = ROLE_RANK[user.role] ?? 0;
     const requiredRank = ROLE_RANK[requiredRole] ?? 0;
     if (userRank < requiredRank) {
-      return <Navigate to="/dashboard" replace />;
+      return (
+        <div role="alert" style={{ padding: '2rem', textAlign: 'center' }}>
+          <h2>Access Denied</h2>
+          <p>This page requires the <strong>{requiredRole}</strong> role.</p>
+          <p>Your current role does not have sufficient permissions.</p>
+        </div>
+      );
     }
   }
 

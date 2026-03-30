@@ -85,14 +85,45 @@ def _get_risk_settings() -> Dict[str, Any]:
     return dict(_risk_settings)
 
 
+def _load_persisted_risk_settings() -> Dict[str, Any]:
+    """Read risk settings from the legacy JSON file (_RISK_SETTINGS_FILE).
+
+    Returns an empty dict when the file is absent, unreadable, or contains
+    invalid JSON.  Tests patch ``api.admin._RISK_SETTINGS_FILE`` to control
+    which file is read.
+    """
+    try:
+        if not _RISK_SETTINGS_FILE.exists():
+            return {}
+        return json.loads(_RISK_SETTINGS_FILE.read_text())
+    except Exception as exc:
+        logger.warning("_load_persisted_risk_settings: %s", exc)
+        return {}
+
+
 def _save_risk_settings(settings: Dict[str, Any], changed_by: str = "system") -> bool:
-    """Persist risk settings to the shared config store (Redis + DB)."""
+    """Persist risk settings to the shared config store (Redis + DB).
+
+    Falls back to writing the legacy JSON file when the config store is
+    unavailable or returns False (e.g. in unit tests or offline environments).
+    """
     try:
         from core.config_store import config_store
 
-        return config_store.set(_RISK_SETTINGS_KEY, settings, changed_by=changed_by)
+        ok = config_store.set(_RISK_SETTINGS_KEY, settings, changed_by=changed_by)
+        if ok:
+            return True
+        # config_store returned False (e.g. DB unavailable) — fall through to file
+        logger.warning("_save_risk_settings: config_store.set returned False, falling back to file")
     except Exception as exc:
-        logger.error("_save_risk_settings failed: %s", exc)
+        logger.warning("_save_risk_settings: config_store unavailable (%s), falling back to file", exc)
+
+    try:
+        _RISK_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _RISK_SETTINGS_FILE.write_text(json.dumps(settings, indent=2))
+        return True
+    except Exception as file_exc:
+        logger.error("_save_risk_settings fallback failed: %s", file_exc)
         return False
 
 
