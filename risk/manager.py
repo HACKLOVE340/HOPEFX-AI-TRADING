@@ -343,6 +343,17 @@ class RiskManager:
         # Expose _trading_halted as an alias so tests can set it directly.
         self._trading_halted: bool = False
 
+        # Precise drawdown tracker (trailing HWM + daily reset)
+        try:
+            from risk.drawdown_tracker import DrawdownTracker
+            self._dd_tracker = DrawdownTracker(
+                initial_balance=equity,
+                max_total_dd_pct=self._config.max_drawdown_pct,
+                max_daily_dd_pct=self._config.max_daily_loss_pct,
+            )
+        except Exception:
+            self._dd_tracker = None
+
         # Restore persisted halt state so a restart after a halt does not
         # silently resume trading.
         self._restore_halt_state()
@@ -683,6 +694,9 @@ class RiskManager:
 
     def update_equity(self, equity: float) -> None:
         self._state.update_equity(equity)
+        # Keep precise DrawdownTracker in sync
+        if self._dd_tracker is not None:
+            self._dd_tracker.update(equity=equity)
         # Auto-halt when drawdown limits are breached.
         if not self._halt:
             dd = self._state.current_drawdown
@@ -695,6 +709,74 @@ class RiskManager:
                 self._halt_trading(
                     f"auto_halt:daily_loss={daily_dd*100:.2f}%>={self._config.max_daily_loss_pct*100:.1f}%"
                 )
+
+    @property
+    def current_drawdown(self) -> float:
+        """Current drawdown fraction from peak equity (0.0–1.0)."""
+        if self._dd_tracker is not None:
+            return self._dd_tracker.current_total_dd
+        return self._state.current_drawdown
+
+    def record_partial_fill(self, pnl: float) -> None:
+        """Record a partial fill P&L — updates daily realised P&L in DrawdownTracker."""
+        self._state.daily_pnl += pnl
+        self._state.total_pnl += pnl
+        if self._dd_tracker is not None:
+            self._dd_tracker.record_fill(pnl=pnl)
+
+    def check_modify_order(
+        self,
+        current_equity: float,
+        new_stop_loss_distance: float,
+        lots: float,
+        account_balance: float,
+        pip_value: float = 10.0,
+    ) -> tuple:
+        """Validate a modify-order request against current risk limits.
+
+        Delegates to DrawdownTracker.check_modify when available, otherwise
+        performs a simple notional-risk check.
+
+        Returns (allowed: bool, reason: str).
+        """
+        if self._dd_tracker is not None:
+            return self._dd_tracker.check_modify(
+                current_equity=current_equity,
+                new_stop_loss_distance=new_stop_loss_distance,
+                lots=lots,
+                account_balance=account_balance,
+                pip_value=pip_value,
+            )
+        # Fallback: simple notional risk check
+        risk_usd = new_stop_loss_distance * lots * pip_value
+        risk_pct = risk_usd / account_balance if account_balance > 0 else 0.0
+        if risk_pct > self._config.max_position_size_pct:
+            return (False, f"risk {risk_pct*100:.2f}% exceeds limit {self._config.max_position_size_pct*100:.1f}%")
+        return (True, "OK")
+
+    def get_drawdown_status(self) -> dict:
+        """Return a snapshot of current drawdown state as a plain dict."""
+        if self._dd_tracker is not None:
+            t = self._dd_tracker
+            total_dd = t.current_total_dd
+            daily_dd = t.current_daily_dd
+            return {
+                "total_hwm":          t.total_hwm,
+                "total_drawdown_pct": total_dd,
+                "daily_drawdown_pct": daily_dd,
+                "daily_realised_pnl": t.daily_realised_pnl,
+                "total_breach":       total_dd >= t.max_total_dd_pct,
+                "daily_breach":       daily_dd >= t.max_daily_dd_pct,
+            }
+        # Fallback from internal state
+        return {
+            "total_hwm":          self._state.peak_equity,
+            "total_drawdown_pct": self._state.current_drawdown,
+            "daily_drawdown_pct": self._state.daily_drawdown,
+            "daily_realised_pnl": self._state.daily_pnl,
+            "total_breach":       self._state.current_drawdown >= self._config.max_drawdown_pct,
+            "daily_breach":       self._state.daily_drawdown >= self._config.max_daily_loss_pct,
+        }
 
     # ── Scaling factors ───────────────────────────────────────────────────────
 
