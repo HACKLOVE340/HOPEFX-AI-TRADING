@@ -24,12 +24,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 from data_layer.feeds.macro.fred import FREDFeed, FRED_SERIES, fred_feed
 
 logger = logging.getLogger(__name__)
+
+# Startup retry config
+_STARTUP_MAX_RETRIES = int(__import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
+_STARTUP_RETRY_DELAY = float(__import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
 
 
 class MacroStoreBridge:
@@ -55,22 +60,55 @@ class MacroStoreBridge:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Gauge
-            self._prom_series_count = Gauge(
+            from prometheus_client import Gauge, REGISTRY
+
+            def _gauge(name: str, doc: str):
+                try:
+                    return Gauge(name, doc)
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            self._prom_series_count = _gauge(
                 "hopefx_macro_fred_series_loaded",
                 "Number of FRED series loaded into MacroStore",
             )
-            self._prom_last_refresh = Gauge(
+            self._prom_last_refresh = _gauge(
                 "hopefx_macro_fred_last_refresh_epoch",
                 "Unix epoch of last FRED refresh",
             )
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("MacroStoreBridge: Prometheus init skipped: %s", _exc)
 
     async def start(self) -> None:
-        """Load FRED data into MacroStore and start daily refresh."""
+        """
+        Load FRED data into MacroStore and start daily refresh.
+
+        Retries up to MACRO_BRIDGE_STARTUP_RETRIES times with exponential
+        backoff before giving up and falling back to CSV files.
+        """
         self._running = True
-        await self._load_fred_into_store()
+
+        # Attempt FRED load with retry
+        for attempt in range(1, _STARTUP_MAX_RETRIES + 1):
+            await self._load_fred_into_store()
+            if self._loaded:
+                break
+            if attempt < _STARTUP_MAX_RETRIES:
+                wait = _STARTUP_RETRY_DELAY * (2 ** (attempt - 1))
+                logger.warning(
+                    "MacroStoreBridge: FRED load attempt %d/%d failed — "
+                    "retrying in %.1fs",
+                    attempt, _STARTUP_MAX_RETRIES, wait,
+                )
+                await asyncio.sleep(wait)
+            else:
+                logger.warning(
+                    "MacroStoreBridge: all %d FRED load attempts failed — "
+                    "falling back to CSV files in data/macro/",
+                    _STARTUP_MAX_RETRIES,
+                )
+                self._load_csv_fallback()
+
         asyncio.create_task(
             self._daily_refresh_loop(), name="macro_store_bridge_refresh"
         )
@@ -82,6 +120,34 @@ class MacroStoreBridge:
             await self._fred.close()
         except Exception as exc:
             logger.debug("MacroStoreBridge.stop: FRED close error: %s", exc)
+
+    def _load_csv_fallback(self) -> None:
+        """
+        Load macro series from CSV files in data/macro/ when FRED is unavailable.
+
+        Delegates to MacroStore.load_defaults() which reads the pre-bundled
+        CSV files. This ensures the ML pipeline always has some macro context
+        even without a FRED API key or network access.
+        """
+        try:
+            from ml.macro_store import macro_store
+            macro_store.load_defaults()
+            loaded = len(macro_store._series)
+            if loaded > 0:
+                self._loaded = True
+                self._series_loaded = loaded
+                self._last_refresh = datetime.now(timezone.utc)
+                logger.info(
+                    "MacroStoreBridge: CSV fallback loaded %d series from data/macro/",
+                    loaded,
+                )
+            else:
+                logger.warning(
+                    "MacroStoreBridge: CSV fallback found no series in data/macro/ — "
+                    "macro features will be zero until FRED is available"
+                )
+        except Exception as exc:
+            logger.warning("MacroStoreBridge._load_csv_fallback error: %s", exc)
 
     async def _load_fred_into_store(self) -> None:
         """Fetch all FRED series and load into MacroStore singleton."""
