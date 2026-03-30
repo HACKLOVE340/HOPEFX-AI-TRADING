@@ -771,14 +771,13 @@ class MobileAPIServer:
 # ---------------------------------------------------------------------------
 # Module-level app / router exports
 # ---------------------------------------------------------------------------
-# Expose a lazily-initialised FastAPI ``app`` and an ``APIRouter`` so that
-# other modules can do:
+# Expose a FastAPI ``app`` and an ``APIRouter`` so that other modules can do:
 #
 #   from mobile.api_v2 import app, router
 #
-# The ``app`` is created with a placeholder JWT secret when
-# SECURITY_JWT_SECRET is not yet set (e.g. during import-time checks).
-# The real secret is resolved from the environment at request time.
+# SECURITY_JWT_SECRET (or JWT_SECRET) must be set to at least 32 characters
+# in the environment before import. _build_module_app() raises RuntimeError
+# if the secret is absent or too short — there is no fallback or placeholder.
 
 import os as _os
 from fastapi import APIRouter as _APIRouter

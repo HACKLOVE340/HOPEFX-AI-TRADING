@@ -723,11 +723,8 @@ class MobileAPIServer:
         )
 
 
-# ── Lightweight client stub (used by tests and simple consumers) ──────────────
-
-
 class MobileAPI:
-    """Lightweight mobile API client used by tests and simple consumers."""
+    """Lightweight mobile API client for tests and simple consumers."""
 
     def __init__(self, compression_enabled: bool = True, **kwargs: Any) -> None:
         self.compression_enabled = compression_enabled
