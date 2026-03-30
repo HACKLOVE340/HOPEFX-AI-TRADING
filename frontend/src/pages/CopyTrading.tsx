@@ -27,13 +27,7 @@ interface Leader {
   avg_trade_duration: string;
 }
 
-// ── Fallback data (shown while API loads) ─────────────────────────────────────
 
-const FALLBACK_LEADERS: Leader[] = [
-  { id: '1', name: 'GoldHunter Pro',  return_3m: 45.2, sharpe: 2.1, max_dd: -5.8,  followers: 1234, aum: 2500000, fee: 20, win_rate: 68, trades_per_week: 12, avg_trade_duration: '4h 30m' },
-  { id: '2', name: 'XAU Scalper',     return_3m: 32.8, sharpe: 1.9, max_dd: -3.2,  followers: 892,  aum: 1200000, fee: 15, win_rate: 72, trades_per_week: 45, avg_trade_duration: '45m' },
-  { id: '3', name: 'Macro Trend',     return_3m: 28.5, sharpe: 1.6, max_dd: -8.1,  followers: 567,  aum: 890000,  fee: 25, win_rate: 58, trades_per_week: 6,  avg_trade_duration: '3d 12h' },
-];
 
 // ── Leader card ───────────────────────────────────────────────────────────────
 
@@ -95,7 +89,8 @@ const LeaderCard: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const CopyTrading: React.FC = () => {
-  const [leaders, setLeaders]       = useState<Leader[]>(FALLBACK_LEADERS);
+  const [leaders, setLeaders]       = useState<Leader[]>([]);
+  const [loading, setLoading]       = useState(true);
   const [selected, setSelected]     = useState<string | null>(null);
   const [allocation, setAllocation] = useState(10000);
   const [sortBy, setSortBy]         = useState<'return' | 'sharpe' | 'followers'>('return');
@@ -104,8 +99,9 @@ const CopyTrading: React.FC = () => {
 
   useEffect(() => {
     api.get<Leader[]>('/social/leaderboard')
-      .then((r) => { if (r.data?.length) setLeaders(r.data); })
-      .catch(() => {});
+      .then((r) => { setLeaders(r.data ?? []); })
+      .catch(() => { setLeaders([]); })
+      .finally(() => setLoading(false));
   }, []);
 
   const sorted = [...leaders].sort((a, b) => {
@@ -148,16 +144,22 @@ const CopyTrading: React.FC = () => {
       </div>
 
       {/* Leader cards */}
-      <div style={s.grid}>
-        {sorted.map((leader) => (
-          <LeaderCard
-            key={leader.id}
-            leader={leader}
-            selected={selected === leader.id}
-            onSelect={() => setSelected(leader.id === selected ? null : leader.id)}
-          />
-        ))}
-      </div>
+      {loading ? (
+        <p style={{ color: '#64748b', padding: '40px 0' }}>Loading traders…</p>
+      ) : leaders.length === 0 ? (
+        <p style={{ color: '#64748b', padding: '40px 0' }}>No traders available yet. Check back soon.</p>
+      ) : (
+        <div style={s.grid}>
+          {sorted.map((leader) => (
+            <LeaderCard
+              key={leader.id}
+              leader={leader}
+              selected={selected === leader.id}
+              onSelect={() => setSelected(leader.id === selected ? null : leader.id)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Allocation panel */}
       {selected && selectedLeader && (
