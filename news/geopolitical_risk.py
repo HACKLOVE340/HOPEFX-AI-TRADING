@@ -447,13 +447,13 @@ class GeopoliticalRiskProvider:
         signal_map = {
             GoldImpact.STRONGLY_BULLISH: {"direction": "BUY", "strength": 1.0},
             GoldImpact.BULLISH: {"direction": "BUY", "strength": 0.7},
-            GoldImpact.NEUTRAL: {"direction": "NEUTRAL", "strength": 0.5},
+            GoldImpact.NEUTRAL: {"direction": "HOLD", "strength": 0.5},
             GoldImpact.BEARISH: {"direction": "SELL", "strength": 0.7},
             GoldImpact.STRONGLY_BEARISH: {"direction": "SELL", "strength": 1.0},
         }
 
         signal_info = signal_map.get(
-            assessment.gold_outlook, {"direction": "NEUTRAL", "strength": 0.5}
+            assessment.gold_outlook, {"direction": "HOLD", "strength": 0.5}
         )
 
         # Calculate confidence based on data quality
