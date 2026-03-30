@@ -46,17 +46,20 @@ def _get_macro_store() -> Optional[Any]:
 
 def _get_macro_store_bridge() -> Optional[Any]:
     """
-    Return the MacroStoreBridge singleton from data_layer, or None.
+    Return the MacroStoreBridge via the orchestrator — the single entry point.
 
     The bridge is the primary FRED-backed macro source.  It is started by
     init_macro_store() in startup_factories.py and populates the MacroStore
     singleton automatically.  This accessor is used here to pull the latest
     real-time snapshot values for feature augmentation at inference time.
+
+    Architecture rule: access via orchestrator._macro_bridge, never by
+    importing data_layer.feeds.macro.store_bridge directly.
     """
     try:
-        from data_layer.feeds.macro.store_bridge import macro_store_bridge
-
-        return macro_store_bridge if macro_store_bridge.is_loaded else None
+        from data_layer.orchestrator import orchestrator
+        bridge = orchestrator._macro_bridge
+        return bridge if bridge.is_loaded else None
     except Exception:
         return None
 
