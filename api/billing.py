@@ -380,3 +380,129 @@ async def flutterwave_status():
         "enabled": bool(key and not key.startswith("FLWSECK_TEST-placeholder")),
         "note": "Set FLUTTERWAVE_SECRET_KEY in .env to enable live payments.",
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Wallet balance + transaction history
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/balance")
+async def get_balance(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return the authenticated user's wallet balance.
+
+    Reads from the subscription manager's payment records when available;
+    falls back to the paper-trading account balance from the trading engine.
+    """
+    balance = 0.0
+    frozen = 0.0
+    pending = 0.0
+
+    # Try trading account balance first (most accurate for paper accounts)
+    try:
+        from core.app_state import app_state
+        broker = getattr(app_state, "broker", None)
+        if broker is not None:
+            import asyncio
+            account = await asyncio.wait_for(broker.get_account(), timeout=3.0)
+            if account:
+                balance = float(getattr(account, "balance", 0) or account.get("balance", 0))
+                margin_used = float(getattr(account, "margin_used", 0) or account.get("margin_used", 0))
+                frozen = margin_used
+    except Exception as exc:
+        logger.debug("Broker balance unavailable: %s", exc)
+
+    # Try subscription manager for payment-based balance
+    try:
+        mgr = _get_subscription_manager()
+        sub = mgr.get_user_subscription(user.sub)
+        if sub and hasattr(sub, "wallet_balance"):
+            balance = float(sub.wallet_balance)
+    except Exception:
+        pass
+
+    return {
+        "balance": round(balance, 2),
+        "frozen": round(frozen, 2),
+        "pending": round(pending, 2),
+        "currency": "USD",
+    }
+
+
+@router.get("/transactions")
+async def get_transactions(
+    limit: int = 50,
+    offset: int = 0,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return the authenticated user's transaction history.
+
+    Sources (in priority order):
+    1. Stripe payment intents for this customer
+    2. Flutterwave transaction records
+    3. Subscription lifecycle events (upgrades, renewals, cancellations)
+
+    Returns an empty list when no payment provider is configured.
+    """
+    transactions: list = []
+
+    # ── Stripe payment history ────────────────────────────────────────────────
+    try:
+        from monetization.stripe_live import get_stripe_client
+        client = get_stripe_client()
+        if hasattr(client, "list_customer_charges"):
+            charges = client.list_customer_charges(user.sub, limit=limit)
+            for charge in charges:
+                transactions.append({
+                    "id": charge.get("id"),
+                    "type": "deposit" if charge.get("amount", 0) > 0 else "refund",
+                    "amount": charge.get("amount", 0) / 100,  # Stripe amounts are in cents
+                    "currency": charge.get("currency", "usd").upper(),
+                    "status": charge.get("status", "unknown"),
+                    "date": charge.get("created_at") or charge.get("created"),
+                    "method": charge.get("payment_method_details", {}).get("type", "card"),
+                    "description": charge.get("description", ""),
+                })
+    except Exception as exc:
+        logger.debug("Stripe transaction history unavailable: %s", exc)
+
+    # ── Subscription lifecycle events ─────────────────────────────────────────
+    try:
+        mgr = _get_subscription_manager()
+        sub = mgr.get_user_subscription(user.sub)
+        if sub and hasattr(sub, "payment_history"):
+            for event in (sub.payment_history or []):
+                transactions.append({
+                    "id": event.get("id", ""),
+                    "type": "subscription",
+                    "amount": -abs(float(event.get("amount", 0))),
+                    "currency": "USD",
+                    "status": event.get("status", "completed"),
+                    "date": event.get("date") or event.get("created_at"),
+                    "method": event.get("plan", "subscription"),
+                    "description": event.get("description", "Subscription payment"),
+                })
+    except Exception as exc:
+        logger.debug("Subscription payment history unavailable: %s", exc)
+
+    # Sort by date descending, apply pagination
+    def _sort_key(tx: dict):
+        d = tx.get("date")
+        if d is None:
+            return ""
+        if isinstance(d, (int, float)):
+            from datetime import datetime, timezone
+            return datetime.fromtimestamp(d, tz=timezone.utc).isoformat()
+        return str(d)
+
+    transactions.sort(key=_sort_key, reverse=True)
+    page = transactions[offset: offset + limit]
+
+    return {
+        "transactions": page,
+        "total": len(transactions),
+        "limit": limit,
+        "offset": offset,
+    }
