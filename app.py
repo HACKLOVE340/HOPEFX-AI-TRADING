@@ -382,6 +382,23 @@ async def startup_event():
                 "Data layer orchestrator failed to start (non-fatal): %s", _dl_exc
             )
 
+        # ── Start Sharpe circuit breaker ──────────────────────────────────────
+        # Monitors rolling live Sharpe per model version and gates models out
+        # of production when Sharpe drops below threshold for N consecutive windows.
+        try:
+            from ml.sharpe_circuit_breaker import get_sharpe_cb
+            _scb_task = asyncio.create_task(
+                get_sharpe_cb().run(),
+                name="sharpe_circuit_breaker",
+            )
+            if hasattr(app_state, "background_tasks"):
+                app_state.background_tasks.append(_scb_task)
+            logger.info("Sharpe circuit breaker started")
+        except Exception as _scb_exc:
+            logger.warning(
+                "Sharpe circuit breaker failed to start (non-fatal): %s", _scb_exc
+            )
+
         app_state.initialized = True
         log_activity("API server ready")
         logger.info("=" * 70)

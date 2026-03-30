@@ -380,6 +380,23 @@ class ExecutionEngine:
             self._total_blocks += 1
             return self._blocked_report(request, gate_result, t0)
 
+        # ── 4b. Sharpe circuit breaker check ─────────────────────────────────
+        # Gate the model out if its rolling live Sharpe has degraded below threshold.
+        model_version = request.metadata.get("model_version") or request.strategy_id
+        if model_version:
+            try:
+                from ml.sharpe_circuit_breaker import get_sharpe_cb
+                if get_sharpe_cb().is_open(model_version):
+                    self._total_blocks += 1
+                    return self._blocked_report(
+                        request,
+                        f"[SHARPE_CIRCUIT_OPEN] Model '{model_version}' gated — "
+                        "rolling Sharpe below threshold",
+                        t0,
+                    )
+            except Exception as _scb_exc:
+                logger.debug("SharpeCircuitBreaker check failed: %s", _scb_exc)
+
         # ── 5. Submit to broker ───────────────────────────────────────────────
         try:
             report = await self._submit_to_broker(request, t0)
@@ -410,6 +427,17 @@ class ExecutionEngine:
             await self._persist_to_redis(request, report)
             await self._record_tca(request, report)
             await self._notify_callbacks(report)
+
+            # ── Sharpe circuit breaker: record P&L for live model gating ─────
+            # strategy_id carries the model version when set by the signal layer.
+            model_version = request.metadata.get("model_version") or request.strategy_id
+            if model_version:
+                pnl = report.metadata.get("realised_pnl", 0.0)
+                try:
+                    from ml.sharpe_circuit_breaker import get_sharpe_cb
+                    get_sharpe_cb().record_trade(pnl=pnl, model_version=model_version)
+                except Exception as _scb_exc:
+                    logger.debug("SharpeCircuitBreaker record failed: %s", _scb_exc)
 
             if report.latency_ms > self._max_latency_ms:
                 logger.warning(
