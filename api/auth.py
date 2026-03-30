@@ -147,14 +147,23 @@ def require_role(minimum_role: str):
     """
     Dependency factory: require caller to hold at least `minimum_role`.
 
-    Returns a stable callable per role string (cached in _ROLE_DEPS) so that
-    FastAPI's dependency_overrides dict-key lookup works correctly in tests.
+    Always delegates to the canonical sys.modules["api.auth"] instance so
+    that the returned callable is the same object regardless of how this
+    module was imported (direct import vs importlib.util.spec_from_file_location).
+    This ensures FastAPI dependency_overrides key-identity works in tests.
 
     Usage:
         @router.post("/order")
         async def place_order(user: TokenPayload = Depends(require_role("trader"))):
             ...
     """
+    import sys as _sys
+    _canonical = _sys.modules.get("api.auth")
+    # If a canonical instance exists and it's not us, delegate to it so the
+    # returned callable is always from the canonical module.
+    if _canonical is not None and _canonical is not _sys.modules.get(__name__):
+        return _canonical.require_role(minimum_role)
+
     if minimum_role in _ROLE_DEPS:
         return _ROLE_DEPS[minimum_role]
 
