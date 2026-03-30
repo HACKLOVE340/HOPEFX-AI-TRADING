@@ -503,6 +503,17 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
 
 
 async def init_price_engine(s: Any) -> Any:
+    """
+    Initialise the price engine and wire it to the broker price table.
+
+    Primary source: NuclearStreamer (Finnhub / Twelve Data / Polygon WebSockets).
+    Fallback:       RealTimePriceEngine REST polling (WS_PRICE_FEED_URL /
+                    REST_PRICE_FEED_URL env vars).
+
+    NuclearStreamer is started when at least one of FINNHUB_API_KEY,
+    TWELVE_API_KEY, or POLYGON_API_KEY is set.  OANDA is never used as a
+    price source.
+    """
     from brokers.paper_trading import PaperTradingBroker as _PTB
     from data.real_time_price_engine import RealTimePriceEngine
 
@@ -511,6 +522,62 @@ async def init_price_engine(s: Any) -> Any:
         for x in os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD,EURUSD,GBPUSD").split(",")
         if x.strip()
     ]
+
+    # ── Primary: NuclearStreamer WebSocket feed ────────────────────────────────
+    has_nuclear_key = any([
+        os.getenv("FINNHUB_API_KEY"),
+        os.getenv("TWELVE_API_KEY"),
+        os.getenv("POLYGON_API_KEY"),
+    ])
+
+    if has_nuclear_key:
+        try:
+            from data_feed import NuclearStreamer
+
+            # NuclearStreamer streams a single symbol (XAUUSD).  For multi-symbol
+            # support the REST fallback engine handles the remaining symbols.
+            primary_symbol = syms[0] if syms else "XAUUSD"
+            streamer = NuclearStreamer(symbol=primary_symbol)
+
+            # Bridge: write each validated tick into the broker price table so
+            # paper broker, ws_live, and signal engine all see live prices.
+            broker_ref = getattr(s, "broker", None)
+
+            class _PriceEngineBridge:
+                async def on_new_price(self, price: float) -> None:
+                    if broker_ref is not None and hasattr(broker_ref, "update_market_price"):
+                        try:
+                            broker_ref.update_market_price(primary_symbol, price)
+                        except Exception as _exc:
+                            logger.debug("update_market_price error: %s", _exc)
+
+            streamer.subscribe(_PriceEngineBridge())
+            # Store on app_state so nuclear_price_bridge and health checks can
+            # inspect it; run() is launched as a background task.
+            s.nuclear_streamer = streamer
+            asyncio.create_task(streamer.run(), name="nuclear_streamer")
+            logger.info(
+                "init_price_engine: NuclearStreamer started — symbol=%s "
+                "finnhub=%s twelvedata=%s polygon=%s",
+                primary_symbol,
+                bool(os.getenv("FINNHUB_API_KEY")),
+                bool(os.getenv("TWELVE_API_KEY")),
+                bool(os.getenv("POLYGON_API_KEY")),
+            )
+        except Exception as exc:
+            logger.warning(
+                "init_price_engine: NuclearStreamer failed to start (non-fatal): %s", exc
+            )
+    else:
+        logger.info(
+            "init_price_engine: no streaming API keys set — "
+            "NuclearStreamer disabled. Set FINNHUB_API_KEY, TWELVE_API_KEY, "
+            "or POLYGON_API_KEY for live WebSocket ticks."
+        )
+
+    # ── Fallback: RealTimePriceEngine REST polling ─────────────────────────────
+    # Handles symbols not covered by NuclearStreamer and provides the
+    # get_status() / get_last_price() interface consumed by api/broker.py.
     pe = RealTimePriceEngine(
         {
             "symbols": syms,
