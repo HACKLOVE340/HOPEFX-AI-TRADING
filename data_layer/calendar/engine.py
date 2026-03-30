@@ -296,7 +296,14 @@ class MacroCalendarEngine:
             impact     = _classify_impact(name, impact_str)
             gold_score = _gold_impact_score(name)
 
-            # Amplify score by surprise magnitude (max 2×)
+            # Amplify score by surprise magnitude (max 2×).
+            # Direction matters: for gold, a CPI beat (inflation > forecast)
+            # is bullish (positive surprise = higher gold impact), while a
+            # strong NFP beat (employment > forecast) is bearish for gold
+            # (risk-on, dollar strength). We use abs(surprise) for the
+            # magnitude amplification since the impact score represents
+            # *volatility risk* regardless of direction — the ML pipeline
+            # uses macro_surprise_last (signed) for directional signals.
             if surprise is not None:
                 gold_score = min(1.0, gold_score * (1.0 + min(abs(surprise), 1.0)))
 

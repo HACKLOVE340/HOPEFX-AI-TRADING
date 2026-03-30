@@ -35,11 +35,12 @@ The as_of parameter in get_ml_features() enforces this for backtesting.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 from collections import deque
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from data_layer.feeds.news.alpha_vantage import AlphaVantageNewsFeed
 from data_layer.feeds.news.base import NewsFeedBase
@@ -57,6 +58,11 @@ _SENTIMENT_EMA_ALPHA  = float(os.getenv("SENT_EMA_ALPHA",    "0.15"))
 _ARTICLE_WINDOW_H     = float(os.getenv("SENT_WINDOW_H",     "1.0"))
 _MAX_ARTICLE_HISTORY  = int(os.getenv("SENT_MAX_HISTORY",    "500"))
 _MIN_RELEVANCE        = float(os.getenv("SENT_MIN_RELEVANCE", "0.10"))
+# Articles older than this are not ingested into the EMA (stale news)
+_MAX_ARTICLE_AGE_H    = float(os.getenv("SENT_MAX_ARTICLE_AGE_H", "24.0"))
+# Cross-feed dedup window: articles with the same URL fingerprint within
+# this many hours are treated as duplicates regardless of source
+_DEDUP_WINDOW_H       = float(os.getenv("SENT_DEDUP_WINDOW_H", "6.0"))
 
 # Poll intervals per feed (seconds)
 _POLL_INTERVALS: Dict[NewsSource, float] = {
@@ -99,6 +105,10 @@ class NewsSentimentEngine:
         self._lock = asyncio.Lock()
         self._article_count: int = 0
         self._last_fetch_at: Dict[NewsSource, float] = {}
+        # Cross-feed deduplication: URL fingerprint → ingested_at epoch.
+        # Prevents the same article appearing in Finnhub + FMP + NewsAPI
+        # from being scored 3× and inflating the sentiment EMA.
+        self._seen_urls: Dict[str, float] = {}
 
         # Prometheus
         self._prom_sentiment  = None
@@ -202,11 +212,33 @@ class NewsSentimentEngine:
 
     # ── Article ingestion ─────────────────────────────────────────────────────
 
+    def _url_fingerprint(self, article: "NewsArticle") -> str:
+        """
+        Stable cross-feed fingerprint for deduplication.
+
+        Uses URL when available (most reliable), falls back to
+        SHA-256 of (headline[:80] + date) for articles without URLs.
+        """
+        if article.url:
+            # Normalise URL: strip query params and trailing slashes
+            url = article.url.split("?")[0].rstrip("/").lower()
+            return hashlib.sha256(url.encode()).hexdigest()[:20]
+        key = f"{article.headline[:80]}|{article.published_at.date()}"
+        return hashlib.sha256(key.encode()).hexdigest()[:20]
+
     async def _ingest_articles(
         self, articles: List[NewsArticle], src: NewsSource
     ) -> None:
         """Update EMA, cache, and lineage for a batch of scored articles."""
         now = datetime.now(timezone.utc)
+        max_age_cutoff = now - timedelta(hours=_MAX_ARTICLE_AGE_H)
+        dedup_cutoff_epoch = time.time() - _DEDUP_WINDOW_H * 3600.0
+
+        # Prune stale dedup entries to bound memory
+        self._seen_urls = {
+            fp: ts for fp, ts in self._seen_urls.items()
+            if ts > dedup_cutoff_epoch
+        }
 
         for article in articles:
             # Causal check: reject future-dated articles
@@ -217,8 +249,26 @@ class NewsSentimentEngine:
                 )
                 continue
 
+            # Age gate: ignore articles older than MAX_ARTICLE_AGE_H
+            if article.published_at < max_age_cutoff:
+                logger.debug(
+                    "NewsSentimentEngine: article too old (age=%.1fh) — skipped",
+                    (now - article.published_at).total_seconds() / 3600.0,
+                )
+                continue
+
             if article.gold_relevance < _MIN_RELEVANCE:
                 continue
+
+            # Cross-feed deduplication: same URL from multiple sources
+            fp = self._url_fingerprint(article)
+            if fp in self._seen_urls:
+                logger.debug(
+                    "NewsSentimentEngine: duplicate article skipped "
+                    "(source=%s fp=%s)", src.value, fp,
+                )
+                continue
+            self._seen_urls[fp] = time.time()
 
             self._articles.append(article)
             self._article_count += 1
