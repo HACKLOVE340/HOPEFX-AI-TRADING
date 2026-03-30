@@ -676,15 +676,37 @@ class RiskManager:
         effective_confidence = max(confidence, signal_strength)
 
         class _Signal:
-            pass
+            """Minimal signal adapter for assess() → size_order() bridge."""
 
-        sig = _Signal()
-        sig.symbol = symbol                          # type: ignore[attr-defined]
-        sig.direction = direction                    # type: ignore[attr-defined]
-        sig.confidence = effective_confidence        # type: ignore[attr-defined]
-        sig.probability = probability                # type: ignore[attr-defined]
-        sig.data_quality = 1.0                       # type: ignore[attr-defined]
-        sig.features = {}                            # type: ignore[attr-defined]
+            __slots__ = (
+                "symbol", "direction", "confidence", "probability",
+                "data_quality", "features", "tick_mid", "tick_spread",
+            )
+
+            def __init__(
+                self,
+                symbol: str,
+                direction: str,
+                confidence: float,
+                probability: float,
+                tick_mid: float = 0.0,
+                tick_spread: float = 1.0,
+            ) -> None:
+                self.symbol = symbol
+                self.direction = direction
+                self.confidence = confidence
+                self.probability = probability
+                self.data_quality = 1.0
+                self.features: dict = {}
+                self.tick_mid = tick_mid
+                self.tick_spread = tick_spread
+
+        sig = _Signal(
+            symbol=symbol,
+            direction=direction,
+            confidence=effective_confidence,
+            probability=probability,
+        )
 
         # Temporarily update equity so sizing reflects the supplied balance.
         prev_equity = self._state.account_equity
