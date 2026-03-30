@@ -211,12 +211,31 @@ class RiskConfig:
     # Alias accepted at construction time; maps to max_daily_loss_pct.
     daily_loss_limit_pct:  float = field(default=-1.0, repr=False)
 
+    # ── Legacy / extended aliases (accepted but mapped to canonical fields) ──
+    # These allow callers that use the older API surface to construct RiskConfig
+    # without breaking.  All values are normalised in __post_init__.
+    max_risk_per_trade:      float = field(default=-1.0, repr=False)   # → max_position_size_pct (as %)
+    max_position_size:       float = field(default=-1.0, repr=False)   # → max_position_size_pct (absolute USD cap)
+    max_daily_loss:          float = field(default=-1.0, repr=False)   # → max_daily_loss_pct (as %)
+    max_drawdown:            float = field(default=-1.0, repr=False)   # → max_drawdown_pct (as %)
+    default_stop_loss_pct:   float = field(default=2.0,  repr=False)   # stored as-is for callers
+    default_take_profit_pct: float = field(default=4.0,  repr=False)   # stored as-is for callers
+
     def __post_init__(self) -> None:
         # If caller passed daily_loss_limit_pct, treat it as max_daily_loss_pct.
         if self.daily_loss_limit_pct >= 0:
             self.max_daily_loss_pct = self.daily_loss_limit_pct
         # Normalise alias to match canonical field so comparisons are consistent.
         self.daily_loss_limit_pct = self.max_daily_loss_pct
+
+        # Legacy percentage aliases (values supplied as whole-number %, e.g. 2.0 = 2%)
+        if self.max_risk_per_trade >= 0:
+            self.max_position_size_pct = self.max_risk_per_trade / 100.0
+        if self.max_daily_loss >= 0:
+            self.max_daily_loss_pct = self.max_daily_loss / 100.0
+            self.daily_loss_limit_pct = self.max_daily_loss_pct
+        if self.max_drawdown >= 0:
+            self.max_drawdown_pct = self.max_drawdown / 100.0
 
 
 @dataclass
@@ -342,6 +361,12 @@ class RiskManager:
         )
         # Expose _trading_halted as an alias so tests can set it directly.
         self._trading_halted: bool = False
+
+        # Amber warning state — set when drawdown crosses 60% of limit.
+        self._amber_warned: bool = False
+
+        # Mutable open-positions list (tests append dicts to rm.open_positions).
+        self._open_positions_list: List[Any] = []
 
         # Precise drawdown tracker (trailing HWM + daily reset)
         try:
@@ -567,6 +592,16 @@ class RiskManager:
         """True when trading has been halted via _halt_trading()."""
         return self._halt
 
+    @property
+    def config(self) -> "RiskConfig":
+        """Public read-only view of the active RiskConfig (tests use rm.config.*)."""
+        return self._config
+
+    @property
+    def open_positions(self) -> List[Any]:
+        """Mutable list proxy for open positions (tests append to rm.open_positions)."""
+        return self._open_positions_list
+
     # ── Direct state attribute proxies (used by tests and monitoring) ─────────
 
     @property
@@ -716,6 +751,23 @@ class RiskManager:
         if self._dd_tracker is not None:
             return self._dd_tracker.current_total_dd
         return self._state.current_drawdown
+
+    @current_drawdown.setter
+    def current_drawdown(self, value: float) -> None:
+        """Force-set drawdown — used by tests to simulate drawdown scenarios.
+
+        Back-calculates the implied equity from peak and adjusts both the
+        RiskState and the DrawdownTracker so current_drawdown reads back the
+        supplied value.
+        """
+        peak = self._state.peak_equity
+        implied_equity = peak * (1.0 - float(value))
+        self._state.account_equity = implied_equity
+        if self._dd_tracker is not None:
+            hwm = self._dd_tracker._total_hwm
+            tracker_equity = hwm * (1.0 - float(value))
+            self._dd_tracker._last_equity = tracker_equity
+            self._dd_tracker._last_balance = tracker_equity
 
     def record_partial_fill(self, pnl: float) -> None:
         """Record a partial fill P&L — updates daily realised P&L in DrawdownTracker."""
@@ -867,7 +919,15 @@ class RiskManager:
             return
         try:
             self._halt_state_file.write_text(
-                json.dumps({"halt": self._halt, "reason": self._halt_reason}, indent=2)
+                json.dumps(
+                    {
+                        "halt":        self._halt,
+                        "halted":      self._halt,   # alias for test compatibility
+                        "reason":      self._halt_reason,
+                        "persisted_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                    indent=2,
+                )
             )
         except OSError as exc:
             logger.warning("RiskManager: could not persist halt state: %s", exc)
@@ -878,9 +938,12 @@ class RiskManager:
             return
         try:
             data = json.loads(self._halt_state_file.read_text())
-            if data.get("halt"):
-                self._halt        = True
-                self._halt_reason = data.get("reason", "restored from halt_state_file")
+            # Accept both "halt" and "halted" keys for forward/backward compat.
+            is_halted = data.get("halt") or data.get("halted")
+            if is_halted:
+                self._halt           = True
+                self._trading_halted = True
+                self._halt_reason    = data.get("reason", "restored from halt_state_file")
                 logger.critical(
                     "RiskManager: halt restored from %s — reason=%s",
                     self._halt_state_file, self._halt_reason,
@@ -900,7 +963,7 @@ class RiskManager:
 
     # ── Halt ──────────────────────────────────────────────────────────────────
 
-    def _halt_trading(self, reason: str) -> None:
+    def _halt_trading(self, reason: str, duration_hours: Optional[float] = None) -> None:  # noqa: ARG002
         self._halt           = True
         self._trading_halted = True
         self._halt_reason    = reason
@@ -914,6 +977,125 @@ class RiskManager:
         self._halt_reason    = ""
         self._clear_halt_state()
         logger.warning("RiskManager: trading RESUMED by operator")
+
+    def _resume_trading(self) -> None:
+        """Internal alias for resume_trading — used by tests and API layer."""
+        self.resume_trading()
+
+    # ── Circuit-breaker / amber-warning ───────────────────────────────────────
+
+    def _check_circuit_breakers(self, current_equity: float) -> None:
+        """
+        Evaluate drawdown against configured limits and fire amber warning or
+        halt trading as appropriate.
+
+        Amber threshold: 60% of max_drawdown_pct.
+        Halt threshold:  100% of max_drawdown_pct.
+        """
+        if self._halt:
+            return
+
+        dd = self.current_drawdown
+        limit = self._config.max_drawdown_pct
+        amber_threshold = limit * 0.60
+
+        if dd >= limit:
+            self._halt_trading(
+                f"auto_halt:drawdown={dd*100:.2f}%>={limit*100:.1f}%"
+            )
+        elif dd >= amber_threshold and not self._amber_warned:
+            self._amber_warned = True
+            logger.warning(
+                "AMBER drawdown warning: %.2f%% >= %.2f%% (60%% of %.1f%% limit)",
+                dd * 100, amber_threshold * 100, limit * 100,
+            )
+
+    # ── Kelly / sizing helpers (used by property-based tests) ─────────────────
+
+    def _compute_kelly_fraction(self, p: float, b: float) -> float:
+        """
+        Full-Kelly fraction clamped to [0, config.kelly_fraction].
+
+        f* = (p*b - (1-p)) / b
+        """
+        raw = (p * b - (1.0 - p)) / b if b > 0 else 0.0
+        return float(np.clip(raw, 0.0, self._config.kelly_fraction))
+
+    def _apply_risk_limits(self, pct: float, equity: float) -> float:  # noqa: ARG002
+        """Clamp position size fraction to [0, max_position_size_pct]."""
+        return float(np.clip(pct, 0.0, self._config.max_position_size_pct))
+
+    def _apply_correlation_penalty(
+        self,
+        symbol: str,  # noqa: ARG002
+        existing_positions: List[Any],  # noqa: ARG002
+        base_pct: float,
+    ) -> float:
+        """
+        Apply a correlation penalty that never increases base_pct.
+
+        Currently returns base_pct unchanged (no live correlation data).
+        Subclasses or future versions may reduce it based on portfolio overlap.
+        """
+        return float(np.clip(base_pct, 0.0, base_pct))
+
+    def _calculate_position_size_full(
+        self,
+        symbol: str,
+        signal_strength: float,
+        entry_price: float,
+        stop_loss_price: float,
+        take_profit_price: float,
+        account_equity: float,
+        volatility: float,
+        existing_positions: List[Any],
+    ) -> "PositionSizingResult":
+        """
+        Full position-size calculation used by property-based tests.
+
+        Delegates to calculate_position_size() with all parameters mapped.
+        """
+        return self.calculate_position_size(
+            symbol=symbol,
+            entry_price=entry_price,
+            account_equity=account_equity,
+            signal_strength=signal_strength,
+            stop_loss_price=stop_loss_price,
+            take_profit_price=take_profit_price,
+            volatility=volatility,
+        )
+
+    # ── can_open_position ─────────────────────────────────────────────────────
+
+    def can_open_position(self, size: float) -> tuple:  # noqa: ARG002
+        """
+        Quick pre-trade gate: returns (True, "approved") or (False, reason).
+
+        Checks:
+        - Trading not halted
+        - Open-position count below limit
+        - Daily loss not exceeded
+        - Drawdown not exceeded
+        """
+        if self._halt or self._trading_halted:
+            return False, f"halted:{self._halt_reason}"
+
+        n_open = len(self._open_positions_list) + self._state.open_positions
+        if n_open >= self._config.max_open_positions:
+            return False, f"max_positions:{self._config.max_open_positions}"
+
+        if self._state.daily_drawdown >= self._config.max_daily_loss_pct:
+            return False, f"daily_loss_limit:{self._state.daily_drawdown*100:.2f}%"
+
+        if self.current_drawdown >= self._config.max_drawdown_pct:
+            return False, f"drawdown_limit:{self.current_drawdown*100:.2f}%"
+
+        equity = self._state.account_equity
+        max_size = equity * self._config.max_position_size_pct
+        if size > max_size:
+            return False, f"size_too_large:{size:.2f}>{max_size:.2f}"
+
+        return True, "approved"
 
     # ── VaR ───────────────────────────────────────────────────────────────────
 

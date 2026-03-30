@@ -113,7 +113,8 @@ def test_authenticated_deactivation_resumes_trading(tmp_path):
     rm._resume_trading()
 
     assert rm._trading_halted is False
-    assert rm._halt_reason is None
+    # After resume, _halt_reason is cleared to "" (empty string, not None)
+    assert not rm._halt_reason
     assert not rm._halt_state_file.exists()
 
 
