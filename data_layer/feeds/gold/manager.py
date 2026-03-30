@@ -28,6 +28,8 @@ import asyncio
 import json
 import logging
 import time
+import uuid
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from data_layer.feeds.gold.base import CircuitState, GoldFeedBase
@@ -96,21 +98,34 @@ class GoldFeedManager:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge
-            self._prom_consensus_price = Gauge(
+            from prometheus_client import Counter, Gauge, REGISTRY
+
+            def _gauge(name: str, doc: str):
+                try:
+                    return Gauge(name, doc)
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            def _counter(name: str, doc: str):
+                try:
+                    return Counter(name, doc)
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            self._prom_consensus_price = _gauge(
                 "hopefx_gold_consensus_price_usd",
                 "Current consensus gold price in USD/oz",
             )
-            self._prom_active_sources = Gauge(
+            self._prom_active_sources = _gauge(
                 "hopefx_gold_active_sources",
                 "Number of active gold price sources",
             )
-            self._prom_tick_rate = Counter(
+            self._prom_tick_rate = _counter(
                 "hopefx_gold_ticks_total",
                 "Total validated gold ticks processed",
             )
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("GoldFeedManager: Prometheus init skipped: %s", _exc)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -240,8 +255,6 @@ class GoldFeedManager:
             # Fallback: typical gold spread ~$0.30 (0.015% of $2000)
             half_spread = max(consensus_mid * 0.00015, 0.10)
 
-        import uuid
-        from datetime import datetime, timezone
         self._consensus_tick = GoldTick(
             symbol     = "XAU_USD",
             timestamp  = datetime.now(timezone.utc),
@@ -266,6 +279,26 @@ class GoldFeedManager:
             except Exception:
                 pass
 
+        # Cache consensus tick to Redis for synchronous consumers
+        if self._redis and self._consensus_tick:
+            try:
+                payload = json.dumps({
+                    "symbol":     self._consensus_tick.symbol,
+                    "timestamp":  self._consensus_tick.timestamp.isoformat(),
+                    "bid":        self._consensus_tick.bid,
+                    "ask":        self._consensus_tick.ask,
+                    "mid":        self._consensus_tick.mid,
+                    "source":     self._consensus_tick.source.value,
+                    "quality":    self._consensus_tick.quality.value,
+                    "confidence": self._consensus_tick.confidence,
+                    "spread":     self._consensus_tick.spread,
+                    "lineage_id": self._consensus_tick.lineage_id,
+                    "epoch":      self._consensus_tick.timestamp.timestamp(),
+                })
+                self._redis.setex("hopefx:dl:tick:XAU_USD", 30, payload)
+            except Exception as exc:
+                logger.debug("GoldFeedManager consensus Redis cache error: %s", exc)
+
     # ── Redis pub/sub ─────────────────────────────────────────────────────────
 
     async def _publish_tick(self, tick: GoldTick) -> None:
@@ -283,12 +316,19 @@ class GoldFeedManager:
                 "confidence": tick.confidence,
                 "spread":     tick.spread,
                 "lineage_id": tick.lineage_id,
+                "epoch":      tick.timestamp.timestamp(),
             }
-            await asyncio.get_event_loop().run_in_executor(
+            serialised = json.dumps(payload)
+            loop = asyncio.get_event_loop()
+            # Publish to pub/sub channel for WebSocket consumers
+            await loop.run_in_executor(
                 None,
-                lambda: self._redis.publish(
-                    "hopefx:tick:XAU_USD", json.dumps(payload)
-                ),
+                lambda: self._redis.publish("hopefx:tick:XAU_USD", serialised),
+            )
+            # Also cache as latest tick (TTL 30s) for synchronous consumers
+            await loop.run_in_executor(
+                None,
+                lambda: self._redis.setex("hopefx:dl:tick:XAU_USD", 30, serialised),
             )
         except Exception as exc:
             logger.debug("GoldFeedManager Redis publish error: %s", exc)
@@ -322,7 +362,7 @@ class GoldFeedManager:
         ]
 
     def health(self) -> dict:
-        return {
+        h = {
             "running":        self._running,
             "tick_count":     self._tick_count,
             "active_sources": [s.value for s in self.active_sources()],
@@ -337,3 +377,14 @@ class GoldFeedManager:
                 for src, feed in self._feeds.items()
             },
         }
+        # Cache feed health to Redis (TTL 10s) for monitoring dashboards
+        if self._redis:
+            try:
+                self._redis.setex(
+                    "hopefx:dl:feed_health",
+                    10,
+                    json.dumps(h, default=str),
+                )
+            except Exception as exc:
+                logger.debug("GoldFeedManager health Redis cache error: %s", exc)
+        return h
