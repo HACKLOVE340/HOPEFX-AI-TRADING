@@ -1,4 +1,4 @@
-import React, { useState, Component } from 'react';
+import React, { useState, Component, Suspense } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -9,59 +9,64 @@ import {
 } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-// ── Pages ─────────────────────────────────────────────────────────────────────
-import LandingPage          from './pages/LandingPage';
-import Dashboard            from './pages/Dashboard';
-import TradingDashboard     from './pages/TradingDashboard';
-import Marketplace          from './pages/Marketplace';
-import Affiliate            from './pages/Affiliate';
-import CryptoCheckout       from './pages/CryptoCheckout';
-import Settings             from './pages/Settings';
-import StatusPage           from './pages/StatusPage';
-import Login                from './pages/Login';
-import Register             from './pages/Register';
+// ── Pages — all lazy-loaded for code splitting ────────────────────────────────
+// Public / auth pages (loaded immediately on first visit)
+const LandingPage          = React.lazy(() => import('./pages/LandingPage'));
+const Login                = React.lazy(() => import('./pages/Login'));
+const Register             = React.lazy(() => import('./pages/Register'));
+const Onboarding           = React.lazy(() => import('./pages/Onboarding'));
 
-// ── New pages (Tasks 16–47) ───────────────────────────────────────────────────
-import RiskCalculator       from './pages/RiskCalculator';
-import WalkForward          from './pages/WalkForward';
-import Profile              from './pages/Profile';
-import SocialFeed           from './pages/SocialFeed';
-import WhitelabelAdmin      from './pages/WhitelabelAdmin';
-import AdminPanel           from './pages/AdminPanel';
-import ABTesting            from './pages/ABTesting';
-import CorrelationDashboard from './pages/CorrelationDashboard';
-import CustomIndicators     from './pages/CustomIndicators';
+// Core dashboard pages
+const TradingDashboard     = React.lazy(() => import('./pages/TradingDashboard'));
+const Dashboard            = React.lazy(() => import('./pages/Dashboard'));
+const Settings             = React.lazy(() => import('./pages/Settings'));
+const StatusPage           = React.lazy(() => import('./pages/StatusPage'));
 
-// ── AI Chart Bot ──────────────────────────────────────────────────────────────
-import { ChartDashboard }   from './features/chart-bot';
+// Trading & execution
+const Trading              = React.lazy(() => import('./pages/Trading'));
+const TradeJournal         = React.lazy(() => import('./pages/TradeJournal'));
+const WatchlistPage        = React.lazy(() => import('./pages/Watchlist'));
+const PriceAlerts          = React.lazy(() => import('./pages/PriceAlerts'));
 
-// ── Nuclear Dashboard ─────────────────────────────────────────────────────────
-import NuclearDashboardPage from './pages/NuclearDashboardPage';
+// AI / ML
+const ChartDashboard       = React.lazy(() => import('./features/chart-bot').then(m => ({ default: m.ChartDashboard })));
+const NuclearDashboardPage = React.lazy(() => import('./pages/NuclearDashboardPage'));
+const AIStrategyGenerator  = React.lazy(() => import('./pages/AIStrategyGenerator'));
+const ABTesting            = React.lazy(() => import('./pages/ABTesting'));
+const WalkForward          = React.lazy(() => import('./pages/WalkForward'));
 
-// ── Ported pages (dashboard → frontend) ──────────────────────────────────────
-import Trading              from './pages/Trading';
-import TradeJournal         from './pages/TradeJournal';
-import Performance          from './pages/Performance';
-import WatchlistPage        from './pages/Watchlist';
-import PropFirmTracker      from './pages/PropFirmTracker';
-import EconomicCalendar     from './pages/EconomicCalendar';
-import PriceAlerts          from './pages/PriceAlerts';
-import CopyTrading          from './pages/CopyTrading';
-import Leaderboard          from './pages/Leaderboard';
-import AIStrategyGenerator  from './pages/AIStrategyGenerator';
-import Onboarding           from './pages/Onboarding';
-import TwoFactorSetup       from './pages/TwoFactorSetup';
-import Wallet               from './pages/Wallet';
+// Performance & analytics
+const Performance          = React.lazy(() => import('./pages/Performance'));
+const CorrelationDashboard = React.lazy(() => import('./pages/CorrelationDashboard'));
+const TCADashboard         = React.lazy(() => import('./pages/TCADashboard'));
+const CustomIndicators     = React.lazy(() => import('./pages/CustomIndicators'));
 
-// ── New pages (Audit, SubAccounts) ────────────────────────────────────────────
-import AuditLog          from './pages/AuditLog';
-import SubAccounts       from './pages/SubAccounts';
+// Risk & prop
+const PropFirmTracker      = React.lazy(() => import('./pages/PropFirmTracker'));
+const RiskCalculator       = React.lazy(() => import('./pages/RiskCalculator'));
 
-// ── Security Operations Centre ────────────────────────────────────────────────
-import SecurityDashboard from './pages/SecurityDashboard';
+// Social / community
+const CopyTrading          = React.lazy(() => import('./pages/CopyTrading'));
+const Leaderboard          = React.lazy(() => import('./pages/Leaderboard'));
+const SocialFeed           = React.lazy(() => import('./pages/SocialFeed'));
 
-// ── Transaction Cost Analysis ─────────────────────────────────────────────────
-import TCADashboard from './pages/TCADashboard';
+// Calendar
+const EconomicCalendar     = React.lazy(() => import('./pages/EconomicCalendar'));
+
+// Account / admin
+const Profile              = React.lazy(() => import('./pages/Profile'));
+const Wallet               = React.lazy(() => import('./pages/Wallet'));
+const TwoFactorSetup       = React.lazy(() => import('./pages/TwoFactorSetup'));
+const SubAccounts          = React.lazy(() => import('./pages/SubAccounts'));
+const AuditLog             = React.lazy(() => import('./pages/AuditLog'));
+const AdminPanel           = React.lazy(() => import('./pages/AdminPanel'));
+const WhitelabelAdmin      = React.lazy(() => import('./pages/WhitelabelAdmin'));
+const SecurityDashboard    = React.lazy(() => import('./pages/SecurityDashboard'));
+
+// Commerce
+const Marketplace          = React.lazy(() => import('./pages/Marketplace'));
+const Affiliate            = React.lazy(() => import('./pages/Affiliate'));
+const CryptoCheckout       = React.lazy(() => import('./pages/CryptoCheckout'));
 
 // ── Auth + Store ──────────────────────────────────────────────────────────────
 import AuthGuard from './components/AuthGuard';
@@ -81,6 +86,23 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// ─── Page-level Suspense fallback ────────────────────────────────────────────
+const PageFallback: React.FC = () => (
+  <div style={{
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    height: '100vh', background: 'var(--bg, #0f172a)',
+  }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      <div style={{
+        width: 32, height: 32, border: '3px solid #334155',
+        borderTopColor: '#3b82f6', borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+      <span style={{ fontSize: 13, color: '#475569' }}>Loading…</span>
+    </div>
+  </div>
+);
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────
 interface EBState { hasError: boolean; message: string }
@@ -297,6 +319,7 @@ const AppShell: React.FC = () => {
       <NoLiveFeedBanner />
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
       <main style={s.main}>
+        <Suspense fallback={<PageFallback />}>
         <Routes>
           {/* Core */}
           <Route path="/dashboard"    element={wrap(<AuthGuard><TradingDashboard /></AuthGuard>)} />
@@ -348,6 +371,7 @@ const AppShell: React.FC = () => {
           {/* Fallback — redirect unknown shell paths to dashboard */}
           <Route path="*"             element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        </Suspense>
       </main>
     </div>
   );
@@ -358,16 +382,18 @@ const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ErrorBoundary>
-        <Routes>
-          {/* Public full-screen pages — rendered WITHOUT the sidebar shell */}
-          <Route path="/"           element={<LandingPage />} />
-          <Route path="/landing"    element={<LandingPage />} />
-          <Route path="/login"      element={<Login />} />
-          <Route path="/register"   element={<Register />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          {/* Everything else gets the sidebar shell */}
-          <Route path="/*"          element={<AppShell />} />
-        </Routes>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            {/* Public full-screen pages — rendered WITHOUT the sidebar shell */}
+            <Route path="/"           element={<LandingPage />} />
+            <Route path="/landing"    element={<LandingPage />} />
+            <Route path="/login"      element={<Login />} />
+            <Route path="/register"   element={<Register />} />
+            <Route path="/onboarding" element={<Onboarding />} />
+            {/* Everything else gets the sidebar shell */}
+            <Route path="/*"          element={<AppShell />} />
+          </Routes>
+        </Suspense>
       </ErrorBoundary>
     </BrowserRouter>
   </QueryClientProvider>

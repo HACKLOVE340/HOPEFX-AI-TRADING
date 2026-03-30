@@ -40,37 +40,72 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
-          // Core React runtime
+          // ── Vendor: React runtime ──────────────────────────────────────────
           if (id.includes('node_modules/react/') ||
               id.includes('node_modules/react-dom/') ||
               id.includes('node_modules/react-router-dom/') ||
               id.includes('node_modules/scheduler/')) {
             return 'vendor-react';
           }
-          // TanStack Query
+          // ── Vendor: TanStack Query ─────────────────────────────────────────
           if (id.includes('@tanstack/react-query')) return 'vendor-query';
-          // Zustand
+          // ── Vendor: Zustand ────────────────────────────────────────────────
           if (id.includes('node_modules/zustand')) return 'vendor-state';
-          // Recharts (heavy — split separately)
+          // ── Vendor: Recharts + D3 (heavy) ──────────────────────────────────
           if (id.includes('node_modules/recharts') ||
               id.includes('node_modules/d3-') ||
               id.includes('node_modules/victory-')) {
             return 'vendor-recharts';
           }
-          // Lightweight charts (TradingView)
+          // ── Vendor: Lightweight Charts (TradingView) ───────────────────────
           if (id.includes('node_modules/lightweight-charts')) return 'vendor-lwcharts';
-          // Leaflet (map — only used in GlobalAttackMap)
+          // ── Vendor: Leaflet (only GlobalAttackMap) ─────────────────────────
           if (id.includes('node_modules/leaflet') ||
               id.includes('node_modules/react-leaflet')) {
             return 'vendor-leaflet';
           }
-          // Framer Motion
+          // ── Vendor: Framer Motion ──────────────────────────────────────────
           if (id.includes('node_modules/framer-motion')) return 'vendor-motion';
-          // Radix UI primitives
+          // ── Vendor: Radix UI ───────────────────────────────────────────────
           if (id.includes('node_modules/@radix-ui')) return 'vendor-radix';
-          // Panel components are lazy-loaded via dynamic import() in
-          // TradingDashboard — Rollup splits them automatically; no manual
-          // chunk needed (avoids circular dependency with vendor-recharts).
+          // ── Vendor: Axios ──────────────────────────────────────────────────
+          if (id.includes('node_modules/axios')) return 'vendor-axios';
+          // ── App: AI / Nuclear feature (large) ─────────────────────────────
+          if (id.includes('features/chart-bot') ||
+              id.includes('pages/NuclearDashboardPage')) {
+            return 'app-nuclear';
+          }
+          // ── App: Admin / security pages ────────────────────────────────────
+          if (id.includes('pages/AdminPanel') ||
+              id.includes('pages/SecurityDashboard') ||
+              id.includes('pages/AuditLog') ||
+              id.includes('pages/WhitelabelAdmin')) {
+            return 'app-admin';
+          }
+          // ── App: Analytics pages ───────────────────────────────────────────
+          if (id.includes('pages/Performance') ||
+              id.includes('pages/CorrelationDashboard') ||
+              id.includes('pages/TCADashboard') ||
+              id.includes('pages/WalkForward') ||
+              id.includes('pages/ABTesting')) {
+            return 'app-analytics';
+          }
+          // ── App: Social / community pages ──────────────────────────────────
+          if (id.includes('pages/CopyTrading') ||
+              id.includes('pages/Leaderboard') ||
+              id.includes('pages/SocialFeed') ||
+              id.includes('pages/Marketplace') ||
+              id.includes('pages/Affiliate')) {
+            return 'app-social';
+          }
+          // ── App: Account / settings pages ──────────────────────────────────
+          if (id.includes('pages/Profile') ||
+              id.includes('pages/Wallet') ||
+              id.includes('pages/SubAccounts') ||
+              id.includes('pages/TwoFactorSetup') ||
+              id.includes('pages/Settings')) {
+            return 'app-account';
+          }
         },
       },
     },
