@@ -109,14 +109,16 @@ class DataLineageStore:
 
     def __init__(self, db_path: Optional[Path] = None) -> None:
         self._db_path: Path = Path(db_path) if db_path else _DB_PATH
+        self._pg_url: str   = _DB_URL          # PostgreSQL dual-write URL
         self._queue: queue.Queue = queue.Queue(maxsize=_QUEUE_MAXSIZE)
         self._conn: Optional[sqlite3.Connection] = None
         self._worker: Optional[threading.Thread] = None
         self._pruner: Optional[threading.Thread] = None
-        self._running   = False
+        self._running    = False
         self._write_count = 0
         self._drop_count  = 0
         self._prune_count = 0
+        self._pg_export_count = 0
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -151,6 +153,29 @@ class DataLineageStore:
         )
         self._pruner.start()
 
+        # PostgreSQL dual-write: verify connection at startup if URL is set
+        if self._pg_url:
+            try:
+                import psycopg2  # type: ignore
+                conn = psycopg2.connect(self._pg_url)
+                conn.close()
+                logger.info(
+                    "DataLineageStore: PostgreSQL dual-write enabled (%s)",
+                    self._pg_url.split("@")[-1],   # log host only, not credentials
+                )
+            except ImportError:
+                logger.warning(
+                    "DataLineageStore: LINEAGE_DB_URL set but psycopg2 not installed. "
+                    "Run: pip install psycopg2-binary"
+                )
+                self._pg_url = ""
+            except Exception as exc:
+                logger.warning(
+                    "DataLineageStore: PostgreSQL connection failed (%s) — "
+                    "dual-write disabled, SQLite only", exc,
+                )
+                self._pg_url = ""
+
         logger.info("DataLineageStore started — db=%s WAL=on", self._db_path)
 
     def stop(self) -> None:
@@ -159,6 +184,18 @@ class DataLineageStore:
             self._worker.join(timeout=10.0)
         if self._conn:
             self._flush_queue()   # drain remaining records
+            # PostgreSQL export on graceful stop (if configured)
+            if self._pg_url:
+                try:
+                    n = self.export_to_postgres(self._pg_url)
+                    self._pg_export_count += n
+                    logger.info(
+                        "DataLineageStore: exported %d records to PostgreSQL on stop", n
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "DataLineageStore: PostgreSQL export on stop failed: %s", exc
+                    )
             self._conn.close()
 
     # ── Public record API ─────────────────────────────────────────────────────
@@ -568,12 +605,14 @@ class DataLineageStore:
 
     def stats(self) -> Dict[str, Any]:
         return {
-            "write_count":   self._write_count,
-            "drop_count":    self._drop_count,
-            "prune_count":   self._prune_count,
-            "queue_size":    self._queue.qsize(),
-            "db_path":       str(self._db_path),
-            "total_records": self.count(),
+            "write_count":    self._write_count,
+            "drop_count":     self._drop_count,
+            "prune_count":    self._prune_count,
+            "pg_export_count": self._pg_export_count,
+            "pg_enabled":     bool(self._pg_url),
+            "queue_size":     self._queue.qsize(),
+            "db_path":        str(self._db_path),
+            "total_records":  self.count(),
             "by_type": {
                 t: self.count(t)
                 for t in ("TICK", "NEWS", "MACRO", "SIGNAL", "QUALITY")
