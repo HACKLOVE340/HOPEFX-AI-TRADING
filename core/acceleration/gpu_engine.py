@@ -284,6 +284,7 @@ class RealTimeRiskMonitor:
 # ---------------------------------------------------------------------------
 
 import logging as _logging  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
 from typing import List as _List  # noqa: E402
 from typing import Optional as _Optional  # noqa: E402
 
@@ -311,10 +312,36 @@ class GPUConfig:
 class GPUInferenceEngine:
     """
     GPU-accelerated inference engine.
-    Uses CUDA when available; falls back to CPU numpy operations transparently.
+
+    Supports three model backends (selected automatically by what is available):
+      1. ONNX Runtime  — fastest CPU/GPU inference; loads ``model_path`` as an
+         ONNX file when ``onnxruntime`` is installed.
+      2. PyTorch       — loads ``model_path`` as a TorchScript (.pt) file when
+         ``torch`` is installed and ONNX Runtime is absent.
+      3. No model      — raises ``RuntimeError`` on ``predict()`` so callers
+         fail loudly rather than silently returning garbage.
+
+    Usage
+    -----
+        engine = GPUInferenceEngine(model_path="ml/saved_models/hopefx.onnx")
+        predictions = engine.predict(feature_array)   # shape (N, features)
+
+    The ``model_path`` argument is optional; if omitted the engine looks for
+    ``ml/saved_models/hopefx.onnx`` then ``ml/saved_models/hopefx.pt`` relative
+    to the project root.  A ``RuntimeError`` is raised at predict-time (not
+    init-time) when no model file is found, so the engine can be constructed
+    during startup before the model is trained.
     """
 
-    def __init__(self, config: _Optional[GPUConfig] = None):
+    # Default search paths relative to the project root (parent of core/).
+    _DEFAULT_ONNX = _Path(__file__).parent.parent.parent / "ml" / "saved_models" / "hopefx.onnx"
+    _DEFAULT_PT   = _Path(__file__).parent.parent.parent / "ml" / "saved_models" / "hopefx.pt"
+
+    def __init__(
+        self,
+        config: _Optional[GPUConfig] = None,
+        model_path: _Optional[str] = None,
+    ) -> None:
         self.config = config or GPUConfig()
         self.device = self.config.device
         if self.device == "cuda" and not _HAS_CUDA:
@@ -322,17 +349,130 @@ class GPUInferenceEngine:
                 "CUDA requested but not available — falling back to CPU",
             )
             self.device = "cpu"
-        _gpu_logger.info("GPUInferenceEngine initialised on device=%s", self.device)
+
+        self._ort_session = None   # onnxruntime.InferenceSession
+        self._torch_model = None   # torch.jit.ScriptModule
+        self._input_name: str = "input"
+
+        # Resolve model path
+        if model_path is not None:
+            resolved = _Path(model_path)
+        elif self._DEFAULT_ONNX.exists():
+            resolved = self._DEFAULT_ONNX
+        elif self._DEFAULT_PT.exists():
+            resolved = self._DEFAULT_PT
+        else:
+            resolved = None
+
+        if resolved is not None:
+            self._load_model(resolved)
+
+        _gpu_logger.info(
+            "GPUInferenceEngine initialised on device=%s model=%s",
+            self.device,
+            resolved or "none (will raise on predict)",
+        )
+
+    # ── model loading ─────────────────────────────────────────────────────────
+
+    def _load_model(self, path: _Path) -> None:
+        """Load an ONNX or TorchScript model from *path*."""
+        suffix = path.suffix.lower()
+        if suffix == ".onnx":
+            self._load_onnx(path)
+        elif suffix in (".pt", ".pth"):
+            self._load_torchscript(path)
+        else:
+            raise ValueError(
+                f"Unsupported model format '{suffix}'. "
+                "Provide an ONNX (.onnx) or TorchScript (.pt/.pth) file."
+            )
+
+    def _load_onnx(self, path: _Path) -> None:
+        """Load an ONNX model via onnxruntime."""
+        try:
+            import onnxruntime as _ort  # type: ignore[import]
+        except ImportError as exc:
+            raise ImportError(
+                "onnxruntime is required to load ONNX models. "
+                "Install it with: pip install onnxruntime-gpu  (or onnxruntime for CPU-only)"
+            ) from exc
+
+        providers = (
+            ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            if self.device == "cuda"
+            else ["CPUExecutionProvider"]
+        )
+        self._ort_session = _ort.InferenceSession(str(path), providers=providers)
+        self._input_name = self._ort_session.get_inputs()[0].name
+        _gpu_logger.info("ONNX model loaded from %s (providers=%s)", path, providers)
+
+    def _load_torchscript(self, path: _Path) -> None:
+        """Load a TorchScript model via torch.jit.load."""
+        if _torch is None:
+            raise ImportError(
+                "torch is required to load TorchScript models. "
+                "Install it with: pip install torch"
+            )
+        map_location = _torch.device(self.device)
+        self._torch_model = _torch.jit.load(str(path), map_location=map_location)
+        self._torch_model.eval()
+        _gpu_logger.info("TorchScript model loaded from %s (device=%s)", path, self.device)
+
+    def load_model(self, model_path: str) -> None:
+        """Load or replace the inference model at runtime."""
+        self._ort_session = None
+        self._torch_model = None
+        self._load_model(_Path(model_path))
+
+    # ── inference ─────────────────────────────────────────────────────────────
 
     def predict(self, features: _np.ndarray) -> _np.ndarray:
-        """Run inference. Returns predictions as a numpy array."""
-        if _torch is not None:
-            t = _torch.tensor(features, dtype=_torch.float32)
-            # Placeholder: identity pass-through until a real model is loaded
-            return t.numpy()
-        return features.copy()
+        """
+        Run inference on *features* and return predictions as a numpy array.
+
+        Parameters
+        ----------
+        features : np.ndarray
+            2-D array of shape ``(N, num_features)`` or 1-D array of shape
+            ``(num_features,)`` which is automatically expanded to ``(1, num_features)``.
+
+        Returns
+        -------
+        np.ndarray
+            Model output array.  Shape depends on the loaded model's output layer.
+
+        Raises
+        ------
+        RuntimeError
+            When no model has been loaded (neither ONNX nor TorchScript file
+            was found at init time and ``load_model()`` has not been called).
+        """
+        if features.ndim == 1:
+            features = features[_np.newaxis, :]
+
+        # ── ONNX Runtime path ─────────────────────────────────────────────────
+        if self._ort_session is not None:
+            inputs = {self._input_name: features.astype(_np.float32)}
+            outputs = self._ort_session.run(None, inputs)
+            return outputs[0]
+
+        # ── PyTorch path ──────────────────────────────────────────────────────
+        if self._torch_model is not None and _torch is not None:
+            t = _torch.tensor(features, dtype=_torch.float32, device=self.device)
+            with _torch.no_grad():
+                out = self._torch_model(t)
+            return out.cpu().numpy()
+
+        # ── No model loaded ───────────────────────────────────────────────────
+        raise RuntimeError(
+            "GPUInferenceEngine has no model loaded. "
+            "Call load_model(path) with an ONNX or TorchScript file before calling predict(). "
+            f"Default search paths checked: {self._DEFAULT_ONNX}, {self._DEFAULT_PT}"
+        )
 
     def batch_predict(self, feature_batches: _List[_np.ndarray]) -> _List[_np.ndarray]:
+        """Run predict() on each batch and return a list of output arrays."""
         return [self.predict(b) for b in feature_batches]
 
 
