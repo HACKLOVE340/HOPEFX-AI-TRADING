@@ -432,7 +432,11 @@ class DeepPredictor:
                 f"Valid options: {list(self.ARCHITECTURES.keys())}"
             )
 
-        # Store all hyperparameters — torch not required for metadata
+        # Torch is required — raise immediately so callers get a clear error
+        if not TORCH_AVAILABLE:
+            raise RuntimeError("PyTorch is required for DeepPredictor")
+
+        # Store all hyperparameters
         self.architecture = architecture
         self.n_features = n_features
         self.seq_len = seq_len
@@ -449,7 +453,7 @@ class DeepPredictor:
         self._model_kwargs = model_kwargs
         self._history: dict = {"train_loss": [], "val_loss": [], "lr": []}
 
-        # Defer torch initialisation to _init_torch() called by fit/predict
+        # Defer heavy torch initialisation to _init_torch() called by fit/predict
         self.model = None
         self.optimizer = None
         self.scheduler = None

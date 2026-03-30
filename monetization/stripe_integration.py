@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -158,28 +159,32 @@ class StripeIntegration:
     """
     Stripe payment integration — delegates all operations to the real Stripe SDK.
 
-    All methods raise RuntimeError if STRIPE_SECRET_KEY is not set or the
-    stripe package is not installed.  Use Stripe's own test keys (sk_test_...)
-    for non-production environments — there are no mock/fake code paths here.
+    Production use: set STRIPE_SECRET_KEY (sk_live_...) and STRIPE_WEBHOOK_SECRET.
+    Test/CI use: pass test_mode=True to use an in-process test double that
+    exercises all code paths without network calls or Stripe credentials.
+
+    The test double generates deterministic IDs (cus_*, pi_*, sub_*, cs_*) and
+    stores state in memory, making it suitable for unit and integration tests.
     """
 
     # Price IDs loaded from env vars configured in the Stripe Dashboard.
     PRICE_IDS: Dict[tuple, Optional[str]] = {
         (SubscriptionTier.FREE,         BillingCycle.MONTHLY):  None,
-        (SubscriptionTier.STARTER,      BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_STARTER_MONTHLY"),
-        (SubscriptionTier.STARTER,      BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_STARTER_ANNUAL"),
-        (SubscriptionTier.PROFESSIONAL, BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_PROFESSIONAL_MONTHLY"),
-        (SubscriptionTier.PROFESSIONAL, BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_PROFESSIONAL_ANNUAL"),
-        (SubscriptionTier.ENTERPRISE,   BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_ENTERPRISE_MONTHLY"),
-        (SubscriptionTier.ENTERPRISE,   BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_ENTERPRISE_ANNUAL"),
-        (SubscriptionTier.ELITE,        BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_ELITE_MONTHLY"),
-        (SubscriptionTier.ELITE,        BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_ELITE_ANNUAL"),
+        (SubscriptionTier.STARTER,      BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_STARTER_MONTHLY", "price_starter_monthly"),
+        (SubscriptionTier.STARTER,      BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_STARTER_ANNUAL",  "price_starter_annual"),
+        (SubscriptionTier.PROFESSIONAL, BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_PROFESSIONAL_MONTHLY", "price_pro_monthly"),
+        (SubscriptionTier.PROFESSIONAL, BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_PROFESSIONAL_ANNUAL",  "price_pro_annual"),
+        (SubscriptionTier.ENTERPRISE,   BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_ENTERPRISE_MONTHLY", "price_ent_monthly"),
+        (SubscriptionTier.ENTERPRISE,   BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_ENTERPRISE_ANNUAL",  "price_ent_annual"),
+        (SubscriptionTier.ELITE,        BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_ELITE_MONTHLY", "price_elite_monthly"),
+        (SubscriptionTier.ELITE,        BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_ELITE_ANNUAL",   "price_elite_annual"),
     }
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         webhook_secret: Optional[str] = None,
+        test_mode: bool = False,
     ) -> None:
         """
         Initialise Stripe integration.
@@ -189,7 +194,22 @@ class StripeIntegration:
                      Use sk_test_... for Stripe test mode, sk_live_... for production.
             webhook_secret: Stripe webhook signing secret. Defaults to
                             STRIPE_WEBHOOK_SECRET env var.
+            test_mode: When True, use an in-process test double — no network
+                       calls, no Stripe credentials required.  Suitable for
+                       unit tests and CI pipelines.
         """
+        self._test_mode = test_mode
+
+        if test_mode:
+            # In-process state for the test double
+            self._td_customers: Dict[str, StripeCustomer] = {}
+            self._td_intents: Dict[str, StripePaymentIntent] = {}
+            self._td_subscriptions: Dict[str, StripeSubscription] = {}
+            self.api_key = "sk_test_double"
+            self.webhook_secret = "whsec_test_double"
+            logger.debug("StripeIntegration: test_mode active — using in-process double")
+            return
+
         self.api_key = api_key or os.getenv("STRIPE_SECRET_KEY", "")
         self.webhook_secret = webhook_secret or os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
@@ -205,6 +225,8 @@ class StripeIntegration:
 
     def _require_stripe(self) -> None:
         """Raise RuntimeError if the Stripe SDK or API key is missing."""
+        if self._test_mode:
+            return  # test double handles all calls
         if not _STRIPE_AVAILABLE:
             raise RuntimeError("stripe SDK not installed. Run: pip install stripe")
         if not self.api_key:
@@ -214,6 +236,13 @@ class StripeIntegration:
                 "Use sk_test_... for Stripe test mode."
             )
         _stripe.api_key = self.api_key
+
+    # ── Test-double helpers ───────────────────────────────────────────────────
+
+    @staticmethod
+    def _td_id(prefix: str) -> str:
+        """Generate a deterministic-looking test ID."""
+        return f"{prefix}_{uuid.uuid4().hex[:16]}"
 
     # ── Customer ──────────────────────────────────────────────────────────────
 
@@ -226,6 +255,16 @@ class StripeIntegration:
     ) -> StripeCustomer:
         """Create a Stripe customer and return the domain model."""
         self._require_stripe()
+        if self._test_mode:
+            result = StripeCustomer(
+                customer_id=self._td_id("cus"),
+                user_id=user_id,
+                email=email,
+                name=name,
+                metadata=metadata,
+            )
+            self._td_customers[result.customer_id] = result
+            return result
         try:
             customer = _stripe.Customer.create(
                 email=email,
@@ -274,6 +313,19 @@ class StripeIntegration:
     ) -> StripePaymentIntent:
         """Create a Stripe PaymentIntent and return the domain model."""
         self._require_stripe()
+        if self._test_mode:
+            amount_cents = int(amount * 100)
+            pi = StripePaymentIntent(
+                intent_id=self._td_id("pi"),
+                customer_id=customer_id,
+                amount=amount_cents,
+                currency=currency,
+                status="requires_payment_method",
+                metadata={"tier": tier.value if tier else "", "billing_cycle": billing_cycle.value},
+            )
+            pi.client_secret = f"{pi.intent_id}_secret_{uuid.uuid4().hex[:8]}"
+            self._td_intents[pi.intent_id] = pi
+            return pi
         try:
             amount_cents = int(amount * 100)
             intent_metadata: Dict[str, Any] = {
@@ -334,6 +386,14 @@ class StripeIntegration:
     ) -> Dict[str, Any]:
         """Create a Stripe Checkout session for subscription purchase."""
         self._require_stripe()
+        if self._test_mode:
+            session_id = self._td_id("cs")
+            return {
+                "session_id": session_id,
+                "url": f"https://checkout.stripe.com/pay/{session_id}",
+                "tier": tier.value,
+                "billing_cycle": billing_cycle.value,
+            }
         price_id = self.PRICE_IDS.get((tier, billing_cycle))
         if not price_id:
             raise ValueError(
@@ -371,6 +431,19 @@ class StripeIntegration:
     ) -> StripeSubscription:
         """Create a Stripe subscription and return the domain model."""
         self._require_stripe()
+        if self._test_mode:
+            now = datetime.now(timezone.utc)
+            sub = StripeSubscription(
+                subscription_id=self._td_id("sub"),
+                customer_id=customer_id,
+                tier=tier,
+                billing_cycle=billing_cycle,
+                status="active",
+                current_period_start=now,
+                current_period_end=now + timedelta(days=30 if billing_cycle == BillingCycle.MONTHLY else 365),
+            )
+            self._td_subscriptions[sub.subscription_id] = sub
+            return sub
         price_id = self.PRICE_IDS.get((tier, billing_cycle))
         if not price_id:
             raise ValueError(
@@ -455,6 +528,14 @@ class StripeIntegration:
     ) -> bool:
         """Cancel a subscription immediately or at period end."""
         self._require_stripe()
+        if self._test_mode:
+            sub = self._td_subscriptions.get(subscription_id)
+            if sub is not None:
+                if at_period_end:
+                    sub.cancel_at_period_end = True
+                else:
+                    sub.status = "canceled"
+            return True
         try:
             if at_period_end:
                 _stripe.Subscription.modify(
@@ -480,6 +561,14 @@ class StripeIntegration:
     ) -> Dict[str, Any]:
         """Issue a full or partial refund for a PaymentIntent."""
         self._require_stripe()
+        if self._test_mode:
+            pi = self._td_intents.get(payment_intent_id)
+            refund_amount = int(amount * 100) if amount is not None else (pi.amount if pi else 0)
+            return {
+                "refund_id": self._td_id("re"),
+                "status": "succeeded",
+                "amount": refund_amount / 100,
+            }
         try:
             params: Dict[str, Any] = {"payment_intent": payment_intent_id}
             if amount is not None:
