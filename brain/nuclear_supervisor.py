@@ -471,13 +471,22 @@ class NuclearHopeFXSupervisor:
                 self.nuclear_level = 3
                 self._last_trigger_ts = time.monotonic()
                 await self.trigger_full_nuclear_mode()
-            return "nuclear"
+                return "nuclear"
+            else:
+                # severity >= 9 always fires even in cooldown (safety override)
+                self.nuclear_level = 3
+                self._last_trigger_ts = time.monotonic()
+                await self.trigger_full_nuclear_mode()
+                return "nuclear"
         elif severity >= 7:
             if not in_cooldown:
                 self.nuclear_level = 2
                 self._last_trigger_ts = time.monotonic()
                 await self.trigger_hedge_mode()
-            return "hedge"
+                return "hedge"
+            else:
+                logger.info("Hedge action suppressed by cooldown (severity=%d)", severity)
+                return "hedge_cooldown_suppressed"
         elif severity >= 5:
             self.nuclear_level = max(self.nuclear_level, 1)
             self.trading_paused = True
