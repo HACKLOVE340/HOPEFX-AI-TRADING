@@ -821,10 +821,13 @@ async def init_macro_store(s: Any) -> Any:
     from api.admin import log_activity
     from ml.macro_store import macro_store
 
-    # ── Primary: FRED via MacroStoreBridge ───────────────────────────────────
+    # ── Primary: FRED via MacroStoreBridge (accessed through orchestrator) ──
+    # Architecture rule: never import data_layer sub-modules directly.
+    # The orchestrator is the single entry point for all data layer components.
     fred_loaded = 0
     try:
-        from data_layer.feeds.macro.store_bridge import macro_store_bridge
+        from data_layer.orchestrator import orchestrator
+        macro_store_bridge = orchestrator._macro_bridge
 
         await macro_store_bridge.start()
         fred_loaded = macro_store_bridge._series_loaded
