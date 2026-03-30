@@ -97,8 +97,8 @@ def _db_load(user_id: str) -> Optional[List[str]]:
     finally:
         try:
             session.close()
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
 
 def _db_add(user_id: str, symbol: str) -> bool:
@@ -127,8 +127,8 @@ def _db_add(user_id: str, symbol: str) -> bool:
     finally:
         try:
             session.close()
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
 
 def _db_remove(user_id: str, symbol: str) -> bool:
@@ -161,8 +161,8 @@ def _db_remove(user_id: str, symbol: str) -> bool:
     finally:
         try:
             session.close()
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
 
 # ── Unified load / save (DB-first, memory fallback) ───────────────────────────

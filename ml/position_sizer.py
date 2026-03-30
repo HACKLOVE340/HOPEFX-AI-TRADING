@@ -220,8 +220,8 @@ class PositionSizer:
                 )
                 if len(tr) >= 14:
                     return float(np.mean(tr[-14:])) * _ATR_MULT
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
         return entry * 0.008 * _ATR_MULT  # 0.8% × multiplier fallback
 
 

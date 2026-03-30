@@ -325,8 +325,8 @@ class EX5SignalExporter:
                     )
             except RuntimeError:
                 raise
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
             time.sleep(0.5)
         raise TimeoutError(
             f"Signal {signal_path.name} not filled within {timeout_sec}s"

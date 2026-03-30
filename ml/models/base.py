@@ -141,8 +141,8 @@ class BaseMLModel(ABC):
                     np.round(predictions),
                     average="weighted",
                 )
-            except Exception:
-                pass  # Skip if not applicable
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)  # Skip if not applicable
 
         return metrics
 

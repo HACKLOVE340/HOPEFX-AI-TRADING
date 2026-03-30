@@ -328,8 +328,8 @@ class PreTradeGate:
             if _SENTRY:
                 try:
                     sentry_sdk.capture_exception(exc)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
             raise RiskManagerError(msg) from exc
 
     # ------------------------------------------------------------------

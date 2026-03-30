@@ -680,8 +680,8 @@ class MobileAPIServer:
                                     "ask": float(quote["ask"]),
                                     "timestamp": datetime.now(timezone.utc).isoformat(),
                                 }
-                            except Exception:
-                                pass
+                            except Exception as _exc:
+                                logger.debug('Suppressed exception: %s', _exc)
 
                     if quotes:
                         await websocket.send_json(quotes)

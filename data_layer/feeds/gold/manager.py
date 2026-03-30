@@ -109,8 +109,8 @@ class GoldFeedManager:
                 "hopefx_gold_ticks_total",
                 "Total validated gold ticks processed",
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 

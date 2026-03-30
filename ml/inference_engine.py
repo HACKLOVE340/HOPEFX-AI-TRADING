@@ -185,8 +185,8 @@ class InferenceEngine:
                     from data_layer.feeds.macro.store_bridge import macro_store_bridge
                     if not macro_store_bridge.is_loaded:
                         logger.debug("MacroStoreBridge not yet loaded — using CSV defaults")
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
                 macro_store.load_defaults()
             macro_df = macro_store.align_to_hourly(ohlcv)
             if macro_df is None or macro_df.empty:
@@ -515,8 +515,8 @@ class InferenceEngine:
             tick = orchestrator.get_latest_tick()
             if tick is not None:
                 data_quality = tick.confidence
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         # ── Prometheus instrumentation ────────────────────────────────────────
         _PROM.predict_total.labels(symbol=sym_label, direction=direction).inc()
@@ -685,8 +685,8 @@ class InferenceEngine:
                     feat_dict = {k: round(float(v), 4) for k, v in feat_dict.items()}
                     blob = json.dumps(feat_dict, sort_keys=True, separators=(",", ":"))
                     features_hash = hashlib.sha256(blob.encode()).hexdigest()[:16]
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
 
             lineage_store.record_signal(
                 direction     = direction,
@@ -697,8 +697,8 @@ class InferenceEngine:
                 lineage_id    = str(uuid.uuid4()),
                 symbol        = symbol,
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     # ── Metadata cache ────────────────────────────────────────────────────────
 
@@ -780,8 +780,8 @@ class InferenceEngine:
             from ml.macro_store import macro_store  # noqa: PLC0415
             macro_series = len(macro_store)
             macro_ok = macro_series > 0
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         mtf_ok = False
         if _MTF_FUSION_ENABLED:
@@ -790,8 +790,8 @@ class InferenceEngine:
                     _MTF_STORE_SINGLETON,
                 )
                 mtf_ok = _MTF_STORE_SINGLETON is not None
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         online_ok = False
         if _ONLINE_LEARNING_ENABLED:
@@ -802,8 +802,8 @@ class InferenceEngine:
                 gate = get_gate()
                 p3_ok, _ = gate.phase3_ready()
                 online_ok = p3_ok
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         # ── Feature count ─────────────────────────────────────────────────────
         feature_count = 0
@@ -811,8 +811,8 @@ class InferenceEngine:
             if predictor is not None and hasattr(predictor, "_model"):
                 n = getattr(predictor._model, "n_features_in_", 0)
                 feature_count = int(n) if n else 0
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         # ── Metadata (oos_accuracy, last_trained_at) ──────────────────────────
         meta = self._load_meta()
@@ -833,8 +833,8 @@ class InferenceEngine:
             sf = get_signal_filter()
             if hasattr(sf, "get_stats"):
                 signal_filter_stats = sf.get_stats()
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         # ── Uptime ────────────────────────────────────────────────────────────
         uptime_seconds: Optional[float] = None
@@ -910,8 +910,8 @@ class InferenceEngine:
                     if hasattr(self._predictor, "_model_path")
                     else self._active_model_path
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         try:
             from ml.live_inference import AdvancedModelPredictor

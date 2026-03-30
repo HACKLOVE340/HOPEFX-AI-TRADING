@@ -620,8 +620,8 @@ class NuclearHopeFXSupervisor:
                             f"kill_switch={ks_active} | "
                             "awaiting manual resume"
                         )
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logger.debug('Suppressed exception: %s', _exc)
         finally:
             self._monitoring_task_running = False
             logger.info("Nuclear monitoring loop exited (nuclear_level=%d)", self.nuclear_level)
@@ -707,8 +707,8 @@ class NuclearHopeFXSupervisor:
                 await notif.send_info(
                     "✅ HOPEFX nuclear mode cleared — trading resumed by operator"
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         logger.info("NuclearSupervisor: manual resume — trading restored")
 

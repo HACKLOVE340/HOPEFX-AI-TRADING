@@ -111,8 +111,8 @@ def _load_json(path: Path, default: Any) -> Any:
     if path.exists():
         try:
             return json.loads(path.read_text())
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
     return default
 
 

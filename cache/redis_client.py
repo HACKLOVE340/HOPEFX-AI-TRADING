@@ -275,8 +275,8 @@ async def get_health() -> Dict[str, Any]:
                     lambda: _sentinel_instance.discover_master(master_name),
                 )
                 info["master"] = f"{master_info[0]}:{master_info[1]}"
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         # Cluster: report cluster info
         if _connection_mode == "cluster":
@@ -284,8 +284,8 @@ async def get_health() -> Dict[str, Any]:
                 cluster_info = await client.cluster_info()
                 info["cluster_state"] = cluster_info.get("cluster_state", "unknown")
                 info["cluster_slots_ok"] = cluster_info.get("cluster_slots_ok", 0)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         return info
     except Exception as exc:

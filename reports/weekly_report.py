@@ -363,15 +363,15 @@ def _detect_data_source() -> str:
             account_id = info.get("account_id", "PENDING")
             if account_id and account_id != "PENDING" and not account_id.startswith("PENDING"):
                 return DATA_SOURCE_PAPER_OANDA
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
 
     try:
         from core.live_trading_gate import live_gate  # type: ignore[import]
         if getattr(live_gate, "is_live", False):
             return DATA_SOURCE_LIVE
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
 
     return DATA_SOURCE_PAPER_SIMULATION
 

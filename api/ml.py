@@ -246,8 +246,8 @@ def _compute_atr_sl_tp(
             )
             if len(tr) >= 14:
                 atr = float(_np.mean(tr[-14:]))
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
 
     if atr is None or atr <= 0:
         atr = entry_price * 0.01  # 1% fallback
@@ -462,8 +462,8 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                             win_rate = accuracy
                             total_signals = total
                             note = note or "Accuracy derived from live predict/fallback ratio"
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logger.debug('Suppressed exception: %s', _exc)
 
                 return AccuracyResponse(
                     model_id=model_id,
@@ -501,8 +501,8 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                 evaluated_at=datetime.now(timezone.utc).isoformat(),
                 note=f"Live ratio: {total - fallback}/{total} non-fallback predictions",
             )
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
 
     # No evaluation data and no live engine counters — model not yet trained.
     # Return zeros with a clear note; the UI should prompt the user to train.
@@ -875,8 +875,8 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
                 if pred.is_available and hasattr(pred, "_model"):
                     n = getattr(pred._model, "n_features_in_", 0)
                     feature_count = int(n) if n else 0
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         model_available = engine_health.get("model_available", False)
 
@@ -1003,8 +1003,8 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
                 "available": len(macro_store) > 0,
                 "series_count": len(macro_store),
             }
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         # MTF store status
         mtf_status: Dict[str, Any] = {"available": False, "ready": False}
@@ -1015,8 +1015,8 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
                     "available": True,
                     "ready": getattr(_MTF_STORE_SINGLETON, "is_ready", False),
                 }
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         # Saved model files inventory (pkl + json metadata)
         saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
@@ -1026,8 +1026,8 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
                 for f in saved_dir.glob(ext):
                     try:
                         model_files[f.name] = round(f.stat().st_size / 1024, 1)
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logger.debug('Suppressed exception: %s', _exc)
 
         model_available = health.get("model_available", False)
         engine_status = health.get("status", "ok" if model_available else "degraded")

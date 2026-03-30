@@ -334,8 +334,8 @@ class EventBus:
             trace_headers = inject_trace_context()
             if trace_headers:
                 message = {**message, "_trace": trace_headers}
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         payload = json.dumps(message)
         attempt = 0
@@ -410,8 +410,8 @@ class EventBus:
                             trace_carrier = msg.pop("_trace", {})
                             if trace_carrier:
                                 msg["_trace_context"] = extract_trace_context(trace_carrier)
-                        except Exception:
-                            pass
+                        except Exception as _exc:
+                            logger.debug('Suppressed exception: %s', _exc)
                         self._metrics["delivered"] += 1
                         yield msg
                     except json.JSONDecodeError as exc:

@@ -542,8 +542,8 @@ async def init_prop_enforcer(s: Any) -> Any:
         ks = getattr(s, "kill_switch", None)
         if ks is not None:
             kill_fn = lambda reason: ks.activate(reason)  # noqa: E731
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
 
     enforcer = PropEnforcer(kill_switch_fn=kill_fn)
     # Expose on app_state so brokers and signal engine can access it

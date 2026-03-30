@@ -196,8 +196,8 @@ class HeartbeatService:
                     status["balance"] = float(info.get("balance", 0))
                     status["open_positions"] = int(info.get("open_positions", 0))
                     status["broker"] = getattr(broker, "name", "broker")
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
             try:
                 rm = getattr(self._app_state, "risk_manager", None)
@@ -205,8 +205,8 @@ class HeartbeatService:
                     status["daily_pnl"] = float(getattr(rm, "daily_pnl", 0))
                     status["drawdown_pct"] = float(getattr(rm, "current_drawdown", 0)) * 100
                     status["risk_alerts"] = getattr(rm, "_halt_reason", None) and [rm._halt_reason] or []
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
             try:
                 from monitoring.trade_logger import get_trade_logger
@@ -217,8 +217,8 @@ class HeartbeatService:
                 if not status.get("daily_pnl"):
                     status["daily_pnl"] = s.get("daily_pnl", 0)
                 status["drawdown_pct"] = s.get("drawdown_pct", 0)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         status.setdefault("mode", os.getenv("TRADING_MODE", "paper"))
         return status

@@ -382,8 +382,8 @@ class LifeSupervisor:
                         volatility=event.get("volatility", 1.0),
                         sentiment=event.get("sentiment", 0.0),
                     )
-                except Exception:
-                    pass  # chart engine errors must never crash the supervisor
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)  # chart engine errors must never crash the supervisor
 
             # If nuclear mode was triggered, enforce DD stop immediately
             if action == "nuclear":
@@ -554,15 +554,15 @@ class LifeSupervisor:
         if self._chart_engine is not None:
             try:
                 await self._chart_engine.stop()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         # Stop notifications manager cleanly
         try:
             from notifications import notifications
             await notifications.stop()
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     async def _breach_shutdown(self, dd_frac: float) -> None:
         """Hard stop triggered by daily drawdown exceeding the limit."""
@@ -589,8 +589,8 @@ class LifeSupervisor:
                 nuclear_state = self._nuclear_supervisor.get_status()
                 # Remove non-serialisable last_event nested dict for simplicity
                 nuclear_state.pop("last_event", None)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
         state = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "trading_mode": self._trading_mode,

@@ -115,8 +115,8 @@ class AMLGate:
                         "amount": str(amount),
                         "aml_action": "fail_closed",
                     })
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
                 return AMLDecision(
                     allowed=False,
                     reason=(

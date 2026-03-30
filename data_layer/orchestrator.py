@@ -132,8 +132,8 @@ class MarketDataOrchestrator:
                 "hopefx_orchestrator_ticks_total",
                 "Total ticks processed by orchestrator",
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -232,8 +232,8 @@ class MarketDataOrchestrator:
             if self._prom_uptime:
                 try:
                     self._prom_uptime.set(time.time() - self._start_ts)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
             await asyncio.sleep(10.0)
 
     # ── Primary data access ───────────────────────────────────────────────────
@@ -312,15 +312,15 @@ class MarketDataOrchestrator:
         if tick.quality != TickQuality.REJECTED:
             try:
                 self._lineage.record_tick(tick)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         self._tick_count += 1
         if self._prom_tick_rate:
             try:
                 self._prom_tick_rate.inc()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
     # ── ML feature aggregation ────────────────────────────────────────────────
 

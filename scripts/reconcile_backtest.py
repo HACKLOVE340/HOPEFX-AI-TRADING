@@ -544,8 +544,8 @@ def main() -> int:
     if MONTE_CARLO_OUT.exists():
         try:
             mc_data = json.loads(MONTE_CARLO_OUT.read_text())
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     mc_data[f"reconciled_{period_label}"] = result
     mc_data["_reconciliation_status"] = (

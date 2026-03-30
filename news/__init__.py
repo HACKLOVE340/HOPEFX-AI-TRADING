@@ -233,8 +233,8 @@ def create_news_router():
                                 "previous": evt.previous,
                             }
                         )
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
             return {
                 "events": upcoming,
                 "count": len(upcoming),

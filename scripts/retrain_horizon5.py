@@ -372,8 +372,8 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
     if oos_meta_path.exists():
         try:
             existing_meta = json.loads(oos_meta_path.read_text())
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     existing_meta.update({
         "horizon": args.horizon,

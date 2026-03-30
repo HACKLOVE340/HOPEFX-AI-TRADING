@@ -109,8 +109,8 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
             if len(df) > 50:
                 logger.info("Loaded %s from cache: %d bars", ticker, len(df))
                 return df
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     try:
         import yfinance as yf
@@ -138,8 +138,8 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
         # Cache for next run
         try:
             df.to_csv(cache_path)
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
         logger.info("Downloaded %s: %d bars", ticker, len(df))
         return df
     except Exception as exc:

@@ -180,8 +180,8 @@ class MacroCalendarEngine:
                 "hopefx_macro_upcoming_high_events",
                 "Number of HIGH-impact events in next 24h",
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -215,8 +215,8 @@ class MacroCalendarEngine:
         if self._prom_impact:
             try:
                 self._prom_impact.set(impact)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
         if self._prom_event_count:
             try:
                 high_24h = sum(
@@ -224,8 +224,8 @@ class MacroCalendarEngine:
                     if e.impact == MacroImpact.HIGH
                 )
                 self._prom_event_count.set(high_24h)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
     # ── Finnhub calendar fetch ────────────────────────────────────────────────
 

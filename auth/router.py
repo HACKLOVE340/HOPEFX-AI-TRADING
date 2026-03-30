@@ -102,8 +102,8 @@ def _check_ip_rate_limit(ip: str) -> None:
         return
     except HTTPException:
         raise
-    except Exception:
-        pass  # Redis unavailable — fall through to in-memory
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)  # Redis unavailable — fall through to in-memory
 
     # In-memory fallback
     now = time.time()
@@ -320,8 +320,8 @@ async def login(body: LoginRequest, request: Request):
 
         user = tokens.get("user", {})
         send_login_alert(body.email, user.get("username", body.email), ip, device[:80])
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
 
     return tokens
 

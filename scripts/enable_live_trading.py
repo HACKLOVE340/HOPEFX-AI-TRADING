@@ -1,3 +1,4 @@
+import logging
 #!/usr/bin/env python3
 # Copyright (c) 2025-2026
 # HOPEFX-AI-TRADING
@@ -33,6 +34,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
+logger = logging.getLogger(__name__)
 
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
@@ -165,8 +167,8 @@ def _estimate_paper_trading_days() -> int:
                     first = datetime.fromisoformat(first_match.group(1))
                     last = datetime.fromisoformat(last_match.group(1))
                     return (last - first).days
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     # Fallback: check CSV modification time
     csv_path = _ROOT / "data" / "XAU_USD_H1.csv"

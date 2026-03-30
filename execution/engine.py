@@ -157,8 +157,8 @@ class EngineCircuitBreaker:
                             f"{len(self._failures)} failures in {self._window_sec}s",
                             level="critical",
                         )
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logger.debug('Suppressed exception: %s', _exc)
 
     async def record_success(self) -> None:
         async with self._lock:
@@ -332,8 +332,8 @@ class ExecutionEngine:
                                    "dl_source": tick.source.value,
                                    "dl_confidence": tick.confidence},
                     )
-        except Exception:
-            pass  # data layer unavailable — proceed without enrichment
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)  # data layer unavailable — proceed without enrichment
 
         # ── 1. Kill switch ────────────────────────────────────────────────────
         if self._kill_switch and self._kill_switch.is_active():
@@ -809,5 +809,5 @@ class ExecutionEngine:
         if _SENTRY:
             try:
                 sentry_sdk.capture_exception(exc)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
