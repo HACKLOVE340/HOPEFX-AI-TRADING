@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from datetime import datetime, timezone
@@ -197,17 +198,48 @@ class GoldFeedManager:
                 else:
                     raw_tick    = await feed.fetch_tick()
                     received_at = time.time()
-                    validated   = dqe.validate_tick(raw_tick, received_at=received_at)
 
-                    async with self._lock:
-                        self._latest[src] = validated
-                        await self._update_consensus()
+                    # Pre-DQE age gate: reject ticks with timestamps more than
+                    # 5 minutes in the past or any time in the future.
+                    # REST APIs occasionally return cached/stale prices; this
+                    # catches them before they corrupt the consensus.
+                    tick_age_s = received_at - raw_tick.timestamp.timestamp()
+                    if tick_age_s > 300.0:
+                        logger.warning(
+                            "GoldFeedManager: %s tick too old (age=%.1fs) — discarded",
+                            src.value, tick_age_s,
+                        )
+                    elif tick_age_s < -10.0:
+                        logger.warning(
+                            "GoldFeedManager: %s tick from future (age=%.1fs) — discarded",
+                            src.value, tick_age_s,
+                        )
+                    else:
+                        validated = dqe.validate_tick(raw_tick, received_at=received_at)
 
-                    if validated.quality != TickQuality.REJECTED:
-                        self._tick_count += 1
-                        if self._prom_tick_rate:
-                            self._prom_tick_rate.inc()
-                        await self._publish_tick(validated)
+                        async with self._lock:
+                            self._latest[src] = validated
+                            await self._update_consensus()
+
+                        if validated.quality != TickQuality.REJECTED:
+                            self._tick_count += 1
+                            if self._prom_tick_rate:
+                                self._prom_tick_rate.inc()
+                            await self._publish_tick(validated)
+
+                        # Reset DQE source confidence when circuit recovers
+                        # from OPEN → CLOSED so a recovered feed isn't
+                        # permanently penalised by its pre-outage error history.
+                        if feed.circuit_state == CircuitState.CLOSED:
+                            prev_state = getattr(feed, "_prev_circuit_state", None)
+                            if prev_state == CircuitState.HALF_OPEN:
+                                dqe.reset_source(src)
+                                logger.info(
+                                    "GoldFeedManager: %s circuit recovered — "
+                                    "DQE source state reset",
+                                    src.value,
+                                )
+                        feed._prev_circuit_state = feed.circuit_state
 
             except asyncio.CancelledError:
                 break
@@ -233,10 +265,16 @@ class GoldFeedManager:
           4. Recompute with outliers removed
           5. Use best-source bid/ask spread centred on consensus mid
         """
+        now_epoch = time.time()
+        # Exclude ticks that are REJECTED, STALE, or older than 2× the stale
+        # threshold — a source that stopped sending keeps its last GOOD tick in
+        # _latest indefinitely; the age gate prevents stale prices from
+        # contaminating the consensus even before DQE marks the source STALE.
+        _max_age_s = float(os.getenv("DQE_STALE_THRESHOLD_S", "30.0")) * 2.0
         live = {
             src: tick for src, tick in self._latest.items()
-            if tick.quality not in (TickQuality.REJECTED,)
-            and tick.is_valid()
+            if tick.is_valid()
+            and (now_epoch - tick.timestamp.timestamp()) <= _max_age_s
         }
         if not live:
             return
