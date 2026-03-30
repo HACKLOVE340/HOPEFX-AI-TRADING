@@ -7,6 +7,12 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../hooks/useApi';
 
+function extractApiError(err: unknown, fallback: string): string {
+  const detail = (err as { response?: { data?: { detail?: string } } })
+    ?.response?.data?.detail;
+  return detail ?? fallback;
+}
+
 interface Trader {
   rank: number;
   name: string;
@@ -22,12 +28,18 @@ const Leaderboard: React.FC = () => {
   const [period, setPeriod]   = useState<'monthly' | 'quarterly' | 'all'>('monthly');
   const [traders, setTraders] = useState<Trader[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState('');
 
   useEffect(() => {
     setLoading(true);
+    setLoadErr('');
     api.get<Trader[]>(`/social/leaderboard?period=${period}`)
       .then((r) => { setTraders(Array.isArray(r.data) ? r.data : []); })
-      .catch(() => { setTraders([]); })
+      .catch((err: unknown) => {
+        console.warn('[Leaderboard] Failed to load leaderboard:', err);
+        setLoadErr(extractApiError(err, 'Failed to load leaderboard. Please try again.'));
+        setTraders([]);
+      })
       .finally(() => setLoading(false));
   }, [period]);
 
@@ -53,6 +65,8 @@ const Leaderboard: React.FC = () => {
 
       {loading ? (
         <p style={{ color: '#64748b', padding: '40px 0' }}>Loading leaderboard…</p>
+      ) : loadErr ? (
+        <p style={{ color: '#f87171', padding: '40px 0' }}>⚠️ {loadErr}</p>
       ) : traders.length === 0 ? (
         <p style={{ color: '#64748b', padding: '40px 0' }}>No traders on the leaderboard yet.</p>
       ) : (
