@@ -480,7 +480,6 @@ class PaperExecutor:
         return results
 
 
-# Smart order router (stub for future multi-broker support)
 class SmartOrderRouter:
     """
     Multi-broker smart order router with latency tracking, cost scoring,
