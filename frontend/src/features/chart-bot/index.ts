@@ -16,6 +16,21 @@ export { default as AIChartBot }         from './components/AIChartBot';
 export { default as RiskHeatmap }        from './components/RiskHeatmap';
 export { default as SignalFeed }         from './components/SignalFeed';
 
+// ── Nuclear dashboard (new) ───────────────────────────────────────────────────
+export { default as NuclearDashboard }          from './components/NuclearDashboard';
+export { default as NuclearCandleChart }        from './components/NuclearCandleChart';
+export { default as NuclearGeopoliticalBanner } from './components/NuclearGeopoliticalBanner';
+export { default as NuclearAlertOverlay }       from './components/NuclearAlertOverlay';
+export { default as NuclearExplainPanel }       from './components/NuclearExplainPanel';
+export { default as NuclearEquityPanel }        from './components/NuclearEquityPanel';
+
+// Nuclear store + hook
+export { useNuclearStore }   from './store/nuclear-store';
+export { useNuclearWS }      from './hooks/useNuclearWS';
+
+// Nuclear types
+export type * from './types/nuclear';
+
 // Store
 export { useChartBotStore }              from './store/chart-bot-store';
 
