@@ -10,6 +10,14 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../hooks/useApi';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function extractApiError(err: unknown, fallback: string): string {
+  const detail = (err as { response?: { data?: { detail?: string } } })
+    ?.response?.data?.detail;
+  return detail ?? fallback;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Transaction {
@@ -52,6 +60,8 @@ const Wallet: React.FC = () => {
   const [balance, setBalance]           = useState(0);
   const [frozen, setFrozen]             = useState(0);
   const [pending, setPending]           = useState(0);
+  const [balanceErr, setBalanceErr]     = useState('');
+  const [txErr, setTxErr]               = useState('');
   const [showDeposit, setShowDeposit]   = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [amount, setAmount]             = useState('');
@@ -64,11 +74,19 @@ const Wallet: React.FC = () => {
         setBalance(r.data?.balance ?? 0);
         setFrozen(r.data?.frozen ?? 0);
         setPending(r.data?.pending ?? 0);
+        setBalanceErr('');
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        console.warn('[Wallet] Failed to load balance:', err);
+        setBalanceErr(extractApiError(err, 'Failed to load balance.'));
+      });
     api.get<{ transactions: Transaction[] }>('/billing/transactions')
-      .then((r) => { setTxs(r.data?.transactions ?? []); })
-      .catch(() => { setTxs([]); })
+      .then((r) => { setTxs(r.data?.transactions ?? []); setTxErr(''); })
+      .catch((err: unknown) => {
+        console.warn('[Wallet] Failed to load transactions:', err);
+        setTxErr(extractApiError(err, 'Failed to load transactions.'));
+        setTxs([]);
+      })
       .finally(() => setTxLoading(false));
   }, []);
 
@@ -105,6 +123,10 @@ const Wallet: React.FC = () => {
   return (
     <div style={s.page}>
       <h1 style={s.title}>Wallet & Payments</h1>
+
+      {balanceErr && (
+        <div style={s.errBanner}>⚠️ {balanceErr}</div>
+      )}
 
       {/* Balance card */}
       <div style={s.balanceCard}>
@@ -176,7 +198,10 @@ const Wallet: React.FC = () => {
       {tab === 'transactions' && (
         <div style={s.txList}>
           {txLoading && <p style={{ color: '#64748b', padding: '20px 0' }}>Loading transactions…</p>}
-          {!txLoading && transactions.length === 0 && (
+          {!txLoading && txErr && (
+            <p style={{ color: '#f87171', padding: '20px 0' }}>⚠️ {txErr}</p>
+          )}
+          {!txLoading && !txErr && transactions.length === 0 && (
             <p style={{ color: '#64748b', padding: '20px 0' }}>No transactions yet.</p>
           )}
           {transactions.map((tx) => (
@@ -254,6 +279,7 @@ const StatCard: React.FC<{ icon: string; label: string; value: string; color: st
 
 const s: Record<string, React.CSSProperties> = {
   page:          { padding: 24, maxWidth: 900, margin: '0 auto' },
+  errBanner:     { background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', marginBottom: 12 },
   title:         { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 20px' },
   balanceCard:   { background: 'linear-gradient(135deg, #1c1a0a 0%, #0f172a 100%)', border: '1px solid #f59e0b55', borderRadius: 12, padding: '24px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 },
   balanceLabel:  { fontSize: 13, color: '#fbbf24', fontWeight: 600, marginBottom: 4 },
