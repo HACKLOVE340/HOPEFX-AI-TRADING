@@ -4,31 +4,47 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-Stripe Payment Gateway Integration
+monetization/stripe_integration.py
+===================================
+Stripe payment gateway integration — real SDK only, no mock paths.
 
-This module provides real Stripe SDK integration for:
-- Creating payment intents
-- Handling subscriptions
-- Processing webhooks
-- Managing customers
-- Handling refunds
+Requires:
+  STRIPE_SECRET_KEY        — sk_live_... (production) or sk_test_... (Stripe test mode)
+  STRIPE_WEBHOOK_SECRET    — whsec_... from Stripe Dashboard > Webhooks
+
+Price IDs must be configured in the Stripe Dashboard and set via env vars:
+  STRIPE_PRICE_STARTER_MONTHLY, STRIPE_PRICE_STARTER_ANNUAL,
+  STRIPE_PRICE_PROFESSIONAL_MONTHLY, STRIPE_PRICE_PROFESSIONAL_ANNUAL,
+  STRIPE_PRICE_ENTERPRISE_MONTHLY, STRIPE_PRICE_ENTERPRISE_ANNUAL,
+  STRIPE_PRICE_ELITE_MONTHLY, STRIPE_PRICE_ELITE_ANNUAL
 """
+
+from __future__ import annotations
 
 import logging
 import os
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional, Dict, Any, List
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
-from .pricing import SubscriptionTier, BillingCycle
+from .pricing import BillingCycle, SubscriptionTier
 
 logger = logging.getLogger(__name__)
 
+# ── Stripe SDK availability ───────────────────────────────────────────────────
+
+try:
+    import stripe as _stripe  # type: ignore[import]
+    _STRIPE_AVAILABLE = True
+except ImportError:
+    _stripe = None  # type: ignore[assignment]
+    _STRIPE_AVAILABLE = False
+
+
+# ── Webhook event types ───────────────────────────────────────────────────────
 
 class StripeWebhookEvent(str, Enum):
-    """Stripe webhook event types"""
-
     PAYMENT_INTENT_SUCCEEDED = "payment_intent.succeeded"
     PAYMENT_INTENT_FAILED = "payment_intent.payment_failed"
     CHECKOUT_SESSION_COMPLETED = "checkout.session.completed"
@@ -39,9 +55,9 @@ class StripeWebhookEvent(str, Enum):
     INVOICE_PAYMENT_FAILED = "invoice.payment_failed"
 
 
-class StripeCustomer:
-    """Stripe customer model"""
+# ── Domain models ─────────────────────────────────────────────────────────────
 
+class StripeCustomer:
     def __init__(
         self,
         customer_id: str,
@@ -49,7 +65,7 @@ class StripeCustomer:
         email: str,
         name: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> None:
         self.customer_id = customer_id
         self.user_id = user_id
         self.email = email
@@ -58,7 +74,6 @@ class StripeCustomer:
         self.created_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
         return {
             "customer_id": self.customer_id,
             "user_id": self.user_id,
@@ -70,17 +85,15 @@ class StripeCustomer:
 
 
 class StripePaymentIntent:
-    """Stripe payment intent model"""
-
     def __init__(
         self,
         intent_id: str,
         customer_id: str,
-        amount: int,  # in cents
+        amount: int,  # cents
         currency: str,
         status: str,
         metadata: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> None:
         self.intent_id = intent_id
         self.customer_id = customer_id
         self.amount = amount
@@ -91,12 +104,11 @@ class StripePaymentIntent:
         self.client_secret: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
         return {
             "intent_id": self.intent_id,
             "customer_id": self.customer_id,
             "amount": self.amount,
-            "amount_display": self.amount / 100,  # Convert cents to dollars
+            "amount_display": self.amount / 100,
             "currency": self.currency,
             "status": self.status,
             "metadata": self.metadata,
@@ -105,8 +117,6 @@ class StripePaymentIntent:
 
 
 class StripeSubscription:
-    """Stripe subscription model"""
-
     def __init__(
         self,
         subscription_id: str,
@@ -117,7 +127,7 @@ class StripeSubscription:
         current_period_start: datetime,
         current_period_end: datetime,
         cancel_at_period_end: bool = False,
-    ):
+    ) -> None:
         self.subscription_id = subscription_id
         self.customer_id = customer_id
         self.tier = tier
@@ -129,7 +139,6 @@ class StripeSubscription:
         self.created_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
         return {
             "subscription_id": self.subscription_id,
             "customer_id": self.customer_id,
@@ -143,102 +152,70 @@ class StripeSubscription:
         }
 
 
+# ── Integration class ─────────────────────────────────────────────────────────
+
 class StripeIntegration:
     """
-    Stripe payment integration handler.
+    Stripe payment integration — delegates all operations to the real Stripe SDK.
 
-    This class provides methods for integrating with Stripe's API
-    for payment processing, subscription management, and webhook handling.
-
-    In production, this would use the actual Stripe SDK (import stripe).
-    For development/testing, it provides mock implementations.
+    All methods raise RuntimeError if STRIPE_SECRET_KEY is not set or the
+    stripe package is not installed.  Use Stripe's own test keys (sk_test_...)
+    for non-production environments — there are no mock/fake code paths here.
     """
 
-    # Stripe price IDs mapping (would be configured from Stripe Dashboard)
-    PRICE_IDS = {
-        (SubscriptionTier.FREE, BillingCycle.MONTHLY): None,  # No payment needed
-        (SubscriptionTier.STARTER, BillingCycle.MONTHLY): "price_starter_monthly",
-        (SubscriptionTier.STARTER, BillingCycle.ANNUAL): "price_starter_annual",
-        (
-            SubscriptionTier.PROFESSIONAL,
-            BillingCycle.MONTHLY,
-        ): "price_professional_monthly",
-        (
-            SubscriptionTier.PROFESSIONAL,
-            BillingCycle.ANNUAL,
-        ): "price_professional_annual",
-        (SubscriptionTier.ENTERPRISE, BillingCycle.MONTHLY): "price_enterprise_monthly",
-        (SubscriptionTier.ENTERPRISE, BillingCycle.ANNUAL): "price_enterprise_annual",
-        (SubscriptionTier.ELITE, BillingCycle.MONTHLY): "price_elite_monthly",
-        (SubscriptionTier.ELITE, BillingCycle.ANNUAL): "price_elite_annual",
+    # Price IDs loaded from env vars configured in the Stripe Dashboard.
+    PRICE_IDS: Dict[tuple, Optional[str]] = {
+        (SubscriptionTier.FREE,         BillingCycle.MONTHLY):  None,
+        (SubscriptionTier.STARTER,      BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_STARTER_MONTHLY"),
+        (SubscriptionTier.STARTER,      BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_STARTER_ANNUAL"),
+        (SubscriptionTier.PROFESSIONAL, BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_PROFESSIONAL_MONTHLY"),
+        (SubscriptionTier.PROFESSIONAL, BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_PROFESSIONAL_ANNUAL"),
+        (SubscriptionTier.ENTERPRISE,   BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_ENTERPRISE_MONTHLY"),
+        (SubscriptionTier.ENTERPRISE,   BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_ENTERPRISE_ANNUAL"),
+        (SubscriptionTier.ELITE,        BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_ELITE_MONTHLY"),
+        (SubscriptionTier.ELITE,        BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_ELITE_ANNUAL"),
     }
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         webhook_secret: Optional[str] = None,
-        test_mode: bool = False,
-    ):
+    ) -> None:
         """
-        Initialize Stripe integration.
+        Initialise Stripe integration.
 
         Args:
-            api_key: Stripe API key (defaults to env var STRIPE_SECRET_KEY)
-            webhook_secret: Stripe webhook secret (defaults to env var STRIPE_WEBHOOK_SECRET)
-            test_mode: When True, skip SDK/key validation (for unit tests only).
-
-        Note:
-            Construction succeeds even without credentials so the class can be
-            imported and wired up at startup.  Any method that calls the Stripe
-            API will raise RuntimeError if the key or SDK is missing (unless
-            test_mode=True).
+            api_key: Stripe secret key. Defaults to STRIPE_SECRET_KEY env var.
+                     Use sk_test_... for Stripe test mode, sk_live_... for production.
+            webhook_secret: Stripe webhook signing secret. Defaults to
+                            STRIPE_WEBHOOK_SECRET env var.
         """
         self.api_key = api_key or os.getenv("STRIPE_SECRET_KEY", "")
         self.webhook_secret = webhook_secret or os.getenv("STRIPE_WEBHOOK_SECRET", "")
-        self.test_mode = test_mode
-        self._stripe_sdk_available = self._check_stripe_sdk()
 
-        # In-memory stores for test_mode (and as a local cache in production).
-        self._customers: Dict[str, Any] = {}
-        self._payment_intents: Dict[str, Any] = {}
-        self._subscriptions: Dict[str, Any] = {}
-
-        if not test_mode and self._stripe_sdk_available and self.api_key:
-            self._configure_stripe()
-        elif not test_mode and not self.api_key:
+        if not _STRIPE_AVAILABLE:
+            logger.warning("stripe SDK not installed — run: pip install stripe")
+        elif not self.api_key:
             logger.warning(
                 "STRIPE_SECRET_KEY not set — Stripe operations will raise until configured."
             )
+        else:
+            _stripe.api_key = self.api_key
+            logger.info("Stripe SDK configured (key prefix: %s...)", self.api_key[:8])
 
     def _require_stripe(self) -> None:
-        """Raise RuntimeError if Stripe is not usable (no-op in test_mode)."""
-        if self.test_mode:
-            return
-        if not self._stripe_sdk_available:
+        """Raise RuntimeError if the Stripe SDK or API key is missing."""
+        if not _STRIPE_AVAILABLE:
             raise RuntimeError("stripe SDK not installed. Run: pip install stripe")
         if not self.api_key:
             raise RuntimeError(
-                "STRIPE_SECRET_KEY is not set. Configure it before calling Stripe APIs."
+                "STRIPE_SECRET_KEY is not set. "
+                "Configure it before calling Stripe APIs. "
+                "Use sk_test_... for Stripe test mode."
             )
+        _stripe.api_key = self.api_key
 
-    def _check_stripe_sdk(self) -> bool:
-        """Check if Stripe SDK is available"""
-        try:
-            import stripe  # noqa: F401
-
-            return True
-        except ImportError:
-            return False
-
-    def _configure_stripe(self) -> None:
-        """Configure Stripe SDK with API key"""
-        try:
-            import stripe
-
-            stripe.api_key = self.api_key
-            logger.info("Stripe SDK configured successfully")
-        except ImportError:
-            logger.warning("Stripe SDK not installed")
+    # ── Customer ──────────────────────────────────────────────────────────────
 
     def create_customer(
         self,
@@ -247,46 +224,44 @@ class StripeIntegration:
         name: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> StripeCustomer:
-        """
-        Create a Stripe customer.
-
-        Args:
-            user_id: Internal user ID
-            email: Customer email
-            name: Customer name
-            metadata: Additional metadata
-
-        Returns:
-            StripeCustomer object
-        """
+        """Create a Stripe customer and return the domain model."""
         self._require_stripe()
-        if self.test_mode:
-            import uuid
-            return StripeCustomer(
-                customer_id=f"cus_test_{uuid.uuid4().hex[:14]}",
-                user_id=user_id, email=email, name=name, metadata=metadata,
-            )
         try:
-            import stripe
-
-            customer = stripe.Customer.create(
+            customer = _stripe.Customer.create(
                 email=email,
                 name=name,
                 metadata={"user_id": user_id, **(metadata or {})},
             )
-            stripe_customer = StripeCustomer(
+            result = StripeCustomer(
                 customer_id=customer.id,
                 user_id=user_id,
                 email=email,
                 name=name,
                 metadata=metadata,
             )
-            logger.info(f"Created Stripe customer: {stripe_customer.customer_id}")
-            return stripe_customer
-
-        except Exception as e:
-            logger.error(f"Error creating Stripe customer: {e}")
+            logger.info("Created Stripe customer: %s", result.customer_id)
+            return result
+        except Exception as exc:
+            logger.error("Error creating Stripe customer: %s", exc)
             raise
+
+    def get_customer(self, customer_id: str) -> Optional[StripeCustomer]:
+        """Retrieve a customer from Stripe by ID."""
+        self._require_stripe()
+        try:
+            c = _stripe.Customer.retrieve(customer_id)
+            return StripeCustomer(
+                customer_id=c.id,
+                user_id=c.metadata.get("user_id", ""),
+                email=c.email or "",
+                name=c.name,
+                metadata=dict(c.metadata),
+            )
+        except Exception as exc:
+            logger.error("Error retrieving Stripe customer %s: %s", customer_id, exc)
+            return None
+
+    # ── Payment intent ────────────────────────────────────────────────────────
 
     def create_payment_intent(
         self,
@@ -297,51 +272,23 @@ class StripeIntegration:
         billing_cycle: BillingCycle = BillingCycle.MONTHLY,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> StripePaymentIntent:
-        """
-        Create a payment intent for one-time payments.
-
-        Args:
-            customer_id: Stripe customer ID
-            amount: Amount in dollars
-            currency: Currency code
-            tier: Subscription tier (for metadata)
-            billing_cycle: Billing cycle
-            metadata: Additional metadata
-
-        Returns:
-            StripePaymentIntent object with client_secret
-        """
+        """Create a Stripe PaymentIntent and return the domain model."""
         self._require_stripe()
         try:
-            amount_cents = int(amount * 100)  # Convert to cents
-
-            intent_metadata = {
-                "tier": tier.value if tier else None,
+            amount_cents = int(amount * 100)
+            intent_metadata: Dict[str, Any] = {
+                "tier": tier.value if tier else "",
                 "billing_cycle": billing_cycle.value,
                 **(metadata or {}),
             }
-
-            if self.test_mode:
-                import uuid
-                pi = StripePaymentIntent(
-                    intent_id=f"pi_test_{uuid.uuid4().hex[:24]}",
-                    customer_id=customer_id, amount=amount_cents,
-                    currency=currency, status="requires_payment_method",
-                    metadata=intent_metadata,
-                )
-                pi.client_secret = f"{pi.intent_id}_secret_{uuid.uuid4().hex[:24]}"
-                return pi
-
-            import stripe
-
-            intent = stripe.PaymentIntent.create(
+            intent = _stripe.PaymentIntent.create(
                 amount=amount_cents,
-                currency=currency,
+                currency=currency.lower(),
                 customer=customer_id,
                 metadata=intent_metadata,
                 automatic_payment_methods={"enabled": True},
             )
-            payment_intent = StripePaymentIntent(
+            pi = StripePaymentIntent(
                 intent_id=intent.id,
                 customer_id=customer_id,
                 amount=amount_cents,
@@ -349,13 +296,33 @@ class StripeIntegration:
                 status=intent.status,
                 metadata=intent_metadata,
             )
-            payment_intent.client_secret = intent.client_secret
-            logger.info(f"Created payment intent: {payment_intent.intent_id}")
-            return payment_intent
-
-        except Exception as e:
-            logger.error(f"Error creating payment intent: {e}")
+            pi.client_secret = intent.client_secret
+            logger.info("Created payment intent: %s", pi.intent_id)
+            return pi
+        except Exception as exc:
+            logger.error("Error creating payment intent: %s", exc)
             raise
+
+    def get_payment_intent(self, intent_id: str) -> Optional[StripePaymentIntent]:
+        """Retrieve a PaymentIntent from Stripe by ID."""
+        self._require_stripe()
+        try:
+            intent = _stripe.PaymentIntent.retrieve(intent_id)
+            pi = StripePaymentIntent(
+                intent_id=intent.id,
+                customer_id=intent.customer or "",
+                amount=intent.amount,
+                currency=intent.currency,
+                status=intent.status,
+                metadata=dict(intent.metadata),
+            )
+            pi.client_secret = intent.client_secret
+            return pi
+        except Exception as exc:
+            logger.error("Error retrieving payment intent %s: %s", intent_id, exc)
+            return None
+
+    # ── Checkout session ──────────────────────────────────────────────────────
 
     def create_checkout_session(
         self,
@@ -365,37 +332,17 @@ class StripeIntegration:
         success_url: str = "https://app.hopefx.ai/success",
         cancel_url: str = "https://app.hopefx.ai/cancel",
     ) -> Dict[str, Any]:
-        """
-        Create a Stripe Checkout session for subscription.
-
-        Args:
-            customer_id: Stripe customer ID
-            tier: Subscription tier
-            billing_cycle: Monthly or Annual
-            success_url: Redirect URL on success
-            cancel_url: Redirect URL on cancel
-
-        Returns:
-            Checkout session info with URL
-        """
+        """Create a Stripe Checkout session for subscription purchase."""
         self._require_stripe()
+        price_id = self.PRICE_IDS.get((tier, billing_cycle))
+        if not price_id:
+            raise ValueError(
+                f"No Stripe price ID configured for {tier.value}/{billing_cycle.value}. "
+                f"Set STRIPE_PRICE_{tier.value.upper()}_{billing_cycle.value.upper()} "
+                "in your environment."
+            )
         try:
-            price_id = self.PRICE_IDS.get((tier, billing_cycle))
-
-            if not price_id:
-                raise ValueError(
-                    f"No price configured for {tier.value} {billing_cycle.value}"
-                )
-
-            if self.test_mode:
-                import uuid
-                sid = f"cs_test_{uuid.uuid4().hex[:24]}"
-                return {"session_id": sid, "url": f"https://checkout.stripe.com/test/{sid}",
-                        "tier": tier.value, "billing_cycle": billing_cycle.value}
-
-            import stripe
-
-            session = stripe.checkout.Session.create(
+            session = _stripe.checkout.Session.create(
                 customer=customer_id,
                 payment_method_types=["card"],
                 line_items=[{"price": price_id, "quantity": 1}],
@@ -410,10 +357,11 @@ class StripeIntegration:
                 "tier": tier.value,
                 "billing_cycle": billing_cycle.value,
             }
-
-        except Exception as e:
-            logger.error(f"Error creating checkout session: {e}")
+        except Exception as exc:
+            logger.error("Error creating checkout session: %s", exc)
             raise
+
+    # ── Subscription ──────────────────────────────────────────────────────────
 
     def create_subscription(
         self,
@@ -421,276 +369,203 @@ class StripeIntegration:
         tier: SubscriptionTier,
         billing_cycle: BillingCycle = BillingCycle.MONTHLY,
     ) -> StripeSubscription:
-        """
-        Create a subscription for a customer.
-
-        Args:
-            customer_id: Stripe customer ID
-            tier: Subscription tier
-            billing_cycle: Monthly or Annual
-
-        Returns:
-            StripeSubscription object
-        """
-        if self.test_mode:
-            import uuid as _uuid
-            from datetime import timedelta
-            now = datetime.utcnow()
-            sub = StripeSubscription(
-                subscription_id=f"sub_test_{_uuid.uuid4().hex[:12]}",
-                customer_id=customer_id,
-                tier=tier,
-                billing_cycle=billing_cycle,
-                status="active",
-                current_period_start=now,
-                current_period_end=now + timedelta(days=30),
+        """Create a Stripe subscription and return the domain model."""
+        self._require_stripe()
+        price_id = self.PRICE_IDS.get((tier, billing_cycle))
+        if not price_id:
+            raise ValueError(
+                f"No Stripe price ID configured for {tier.value}/{billing_cycle.value}."
             )
-            self._subscriptions[sub.subscription_id] = sub
-            logger.info(f"[test_mode] Created subscription: {sub.subscription_id}")
-            return sub
-
         try:
-            price_id = self.PRICE_IDS.get((tier, billing_cycle))
-
-            import stripe
-
-            subscription = stripe.Subscription.create(
+            sub = _stripe.Subscription.create(
                 customer=customer_id,
                 items=[{"price": price_id}],
                 metadata={"tier": tier.value, "billing_cycle": billing_cycle.value},
             )
-            stripe_sub = StripeSubscription(
-                subscription_id=subscription.id,
+            result = StripeSubscription(
+                subscription_id=sub.id,
                 customer_id=customer_id,
                 tier=tier,
                 billing_cycle=billing_cycle,
-                status=subscription.status,
+                status=sub.status,
                 current_period_start=datetime.fromtimestamp(
-                    subscription.current_period_start
+                    sub.current_period_start, tz=timezone.utc
                 ),
                 current_period_end=datetime.fromtimestamp(
-                    subscription.current_period_end
+                    sub.current_period_end, tz=timezone.utc
                 ),
             )
-            logger.info(f"Created subscription: {stripe_sub.subscription_id}")
-            return stripe_sub
-
-        except Exception as e:
-            logger.error(f"Error creating subscription: {e}")
+            logger.info("Created subscription: %s", result.subscription_id)
+            return result
+        except Exception as exc:
+            logger.error("Error creating subscription: %s", exc)
             raise
+
+    def get_subscription(self, subscription_id: str) -> Optional[StripeSubscription]:
+        """Retrieve a subscription from Stripe by ID."""
+        self._require_stripe()
+        try:
+            sub = _stripe.Subscription.retrieve(subscription_id)
+            return StripeSubscription(
+                subscription_id=sub.id,
+                customer_id=sub.customer,
+                tier=SubscriptionTier.FREE,  # resolved by caller from sub.metadata
+                billing_cycle=BillingCycle.MONTHLY,
+                status=sub.status,
+                current_period_start=datetime.fromtimestamp(
+                    sub.current_period_start, tz=timezone.utc
+                ),
+                current_period_end=datetime.fromtimestamp(
+                    sub.current_period_end, tz=timezone.utc
+                ),
+                cancel_at_period_end=sub.cancel_at_period_end,
+            )
+        except Exception as exc:
+            logger.error("Error retrieving subscription %s: %s", subscription_id, exc)
+            return None
+
+    def list_customer_subscriptions(self, customer_id: str) -> List[StripeSubscription]:
+        """List all subscriptions for a customer from Stripe."""
+        self._require_stripe()
+        try:
+            subs = _stripe.Subscription.list(customer=customer_id, limit=100)
+            results = []
+            for sub in subs.auto_paging_iter():
+                results.append(StripeSubscription(
+                    subscription_id=sub.id,
+                    customer_id=customer_id,
+                    tier=SubscriptionTier.FREE,
+                    billing_cycle=BillingCycle.MONTHLY,
+                    status=sub.status,
+                    current_period_start=datetime.fromtimestamp(
+                        sub.current_period_start, tz=timezone.utc
+                    ),
+                    current_period_end=datetime.fromtimestamp(
+                        sub.current_period_end, tz=timezone.utc
+                    ),
+                    cancel_at_period_end=sub.cancel_at_period_end,
+                ))
+            return results
+        except Exception as exc:
+            logger.error("Error listing subscriptions for %s: %s", customer_id, exc)
+            return []
 
     def cancel_subscription(
         self, subscription_id: str, at_period_end: bool = True
     ) -> bool:
-        """
-        Cancel a subscription.
-
-        Args:
-            subscription_id: Stripe subscription ID
-            at_period_end: Whether to cancel at period end or immediately
-
-        Returns:
-            True if successful
-        """
-        if self.test_mode:
-            sub = self._subscriptions.get(subscription_id)
-            if sub is not None:
-                sub.cancel_at_period_end = at_period_end
-                if not at_period_end:
-                    sub.status = "canceled"
-            logger.info(f"[test_mode] Cancelled subscription: {subscription_id}")
-            return True
-
+        """Cancel a subscription immediately or at period end."""
+        self._require_stripe()
         try:
-            import stripe
-
             if at_period_end:
-                stripe.Subscription.modify(subscription_id, cancel_at_period_end=True)
+                _stripe.Subscription.modify(
+                    subscription_id, cancel_at_period_end=True
+                )
             else:
-                stripe.Subscription.delete(subscription_id)
-
-            logger.info(f"Cancelled subscription: {subscription_id}")
+                _stripe.Subscription.delete(subscription_id)
+            logger.info(
+                "Cancelled subscription: %s (at_period_end=%s)",
+                subscription_id, at_period_end,
+            )
             return True
-
-        except Exception as e:
-            logger.error(f"Error cancelling subscription: {e}")
+        except Exception as exc:
+            logger.error("Error cancelling subscription %s: %s", subscription_id, exc)
             return False
 
-    def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
-        """
-        Verify Stripe webhook signature.
-
-        Args:
-            payload: Raw webhook payload
-            signature: Stripe-Signature header
-
-        Returns:
-            True if signature is valid
-        """
-        if not self.webhook_secret:
-            logger.warning("STRIPE_WEBHOOK_SECRET not configured — rejecting webhook")
-            return False
-
-        try:
-            import stripe
-
-            stripe.Webhook.construct_event(payload, signature, self.webhook_secret)
-            return True
-
-        except Exception as e:
-            logger.error(f"Webhook signature verification failed: {e}")
-            return False
-
-    def handle_webhook(
-        self, event_type: str, event_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        Handle Stripe webhook event.
-
-        Args:
-            event_type: Stripe event type
-            event_data: Event payload data
-
-        Returns:
-            Processing result
-        """
-        handlers = {
-            StripeWebhookEvent.PAYMENT_INTENT_SUCCEEDED.value: self._handle_payment_success,
-            StripeWebhookEvent.PAYMENT_INTENT_FAILED.value: self._handle_payment_failed,
-            StripeWebhookEvent.CHECKOUT_SESSION_COMPLETED.value: self._handle_checkout_completed,
-            StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_CREATED.value: self._handle_subscription_created,
-            StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_UPDATED.value: self._handle_subscription_updated,
-            StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_DELETED.value: self._handle_subscription_deleted,
-            StripeWebhookEvent.INVOICE_PAID.value: self._handle_invoice_paid,
-            StripeWebhookEvent.INVOICE_PAYMENT_FAILED.value: self._handle_invoice_failed,
-        }
-
-        handler = handlers.get(event_type)
-        if handler:
-            return handler(event_data)
-        else:
-            logger.info(f"Unhandled webhook event type: {event_type}")
-            return {"status": "ignored", "event_type": event_type}
-
-    def _handle_payment_success(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle successful payment"""
-        logger.info(f"Payment succeeded: {data.get('id')}")
-        return {"status": "success", "action": "payment_confirmed"}
-
-    def _handle_payment_failed(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle failed payment"""
-        logger.warning(f"Payment failed: {data.get('id')}")
-        return {"status": "failed", "action": "payment_retry_needed"}
-
-    def _handle_checkout_completed(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle checkout session completed"""
-        logger.info(f"Checkout completed: {data.get('id')}")
-        return {"status": "success", "action": "subscription_activated"}
-
-    def _handle_subscription_created(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle subscription created"""
-        logger.info(f"Subscription created: {data.get('id')}")
-        return {"status": "success", "action": "access_granted"}
-
-    def _handle_subscription_updated(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle subscription updated"""
-        logger.info(f"Subscription updated: {data.get('id')}")
-        return {"status": "success", "action": "access_updated"}
-
-    def _handle_subscription_deleted(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle subscription deleted/canceled"""
-        logger.info(f"Subscription deleted: {data.get('id')}")
-        return {"status": "success", "action": "access_revoked"}
-
-    def _handle_invoice_paid(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle invoice paid"""
-        logger.info(f"Invoice paid: {data.get('id')}")
-        return {"status": "success", "action": "invoice_confirmed"}
-
-    def _handle_invoice_failed(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle invoice payment failed"""
-        logger.warning(f"Invoice payment failed: {data.get('id')}")
-        return {"status": "failed", "action": "payment_retry_needed"}
+    # ── Refunds ───────────────────────────────────────────────────────────────
 
     def refund_payment(
-        self, payment_intent_id: str, amount: Optional[Decimal] = None
+        self,
+        payment_intent_id: str,
+        amount: Optional[Decimal] = None,
     ) -> Dict[str, Any]:
-        """
-        Refund a payment.
-
-        Args:
-            payment_intent_id: Payment intent ID to refund
-            amount: Amount to refund (full refund if None)
-
-        Returns:
-            Refund result
-        """
-        if self.test_mode:
-            import uuid as _uuid
-            intent = self._payment_intents.get(payment_intent_id)
-            refund_amount = float(amount) if amount else (
-                float(intent.amount) if intent else 0.0
-            )
-            result = {
-                "refund_id": f"re_test_{_uuid.uuid4().hex[:12]}",
-                "status": "succeeded",
-                "amount": refund_amount,
-            }
-            logger.info(f"[test_mode] Refunded payment: {payment_intent_id}")
-            return result
-
+        """Issue a full or partial refund for a PaymentIntent."""
+        self._require_stripe()
         try:
-            import stripe
-
-            refund_params: Dict[str, Any] = {"payment_intent": payment_intent_id}
-            if amount:
-                refund_params["amount"] = int(amount * 100)
-            refund = stripe.Refund.create(**refund_params)
+            params: Dict[str, Any] = {"payment_intent": payment_intent_id}
+            if amount is not None:
+                params["amount"] = int(amount * 100)
+            refund = _stripe.Refund.create(**params)
+            logger.info(
+                "Refunded payment %s: refund_id=%s", payment_intent_id, refund.id
+            )
             return {
                 "refund_id": refund.id,
                 "status": refund.status,
                 "amount": refund.amount / 100,
             }
-
-        except Exception as e:
-            logger.error(f"Error processing refund: {e}")
+        except Exception as exc:
+            logger.error("Error processing refund for %s: %s", payment_intent_id, exc)
             raise
 
-    def get_subscription(self, subscription_id: str) -> Optional[StripeSubscription]:
-        """Retrieve a subscription from Stripe by ID."""
+    # ── Webhooks ──────────────────────────────────────────────────────────────
+
+    def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
+        """Verify the Stripe-Signature header on an incoming webhook."""
+        if not self.webhook_secret:
+            logger.warning("STRIPE_WEBHOOK_SECRET not configured — rejecting webhook")
+            return False
+        if not _STRIPE_AVAILABLE:
+            logger.error("stripe SDK not installed — cannot verify webhook")
+            return False
         try:
-            import stripe
+            _stripe.Webhook.construct_event(payload, signature, self.webhook_secret)
+            return True
+        except Exception as exc:
+            logger.error("Webhook signature verification failed: %s", exc)
+            return False
 
-            sub = stripe.Subscription.retrieve(subscription_id)
-            return StripeSubscription(
-                subscription_id=sub.id,
-                customer_id=sub.customer,
-                tier=SubscriptionTier.FREE,  # resolved by caller from metadata
-                billing_cycle=BillingCycle.MONTHLY,
-                status=sub.status,
-                current_period_start=datetime.fromtimestamp(sub.current_period_start),
-                current_period_end=datetime.fromtimestamp(sub.current_period_end),
-            )
-        except Exception as e:
-            logger.error(f"Error retrieving subscription {subscription_id}: {e}")
-            return None
+    def handle_webhook(
+        self, event_type: str, event_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Dispatch a verified Stripe webhook event to the appropriate handler."""
+        handlers = {
+            StripeWebhookEvent.PAYMENT_INTENT_SUCCEEDED.value:      self._handle_payment_success,
+            StripeWebhookEvent.PAYMENT_INTENT_FAILED.value:         self._handle_payment_failed,
+            StripeWebhookEvent.CHECKOUT_SESSION_COMPLETED.value:    self._handle_checkout_completed,
+            StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_CREATED.value: self._handle_subscription_created,
+            StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_UPDATED.value: self._handle_subscription_updated,
+            StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_DELETED.value: self._handle_subscription_deleted,
+            StripeWebhookEvent.INVOICE_PAID.value:                  self._handle_invoice_paid,
+            StripeWebhookEvent.INVOICE_PAYMENT_FAILED.value:        self._handle_invoice_failed,
+        }
+        handler = handlers.get(event_type)
+        if handler:
+            return handler(event_data)
+        logger.info("Unhandled webhook event type: %s", event_type)
+        return {"status": "ignored", "event_type": event_type}
 
-    def get_customer(self, customer_id: str) -> Optional[StripeCustomer]:
-        """Get customer by ID"""
-        return self._customers.get(customer_id)
+    def _handle_payment_success(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        logger.info("Payment succeeded: %s", data.get("id"))
+        return {"status": "success", "action": "payment_confirmed"}
 
-    def get_payment_intent(self, intent_id: str) -> Optional[StripePaymentIntent]:
-        """Get payment intent by ID"""
-        return self._payment_intents.get(intent_id)
+    def _handle_payment_failed(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        logger.warning("Payment failed: %s", data.get("id"))
+        return {"status": "failed", "action": "payment_retry_needed"}
 
-    def list_customer_subscriptions(self, customer_id: str) -> List[StripeSubscription]:
-        """List all subscriptions for a customer"""
-        return [
-            sub
-            for sub in self._subscriptions.values()
-            if sub.customer_id == customer_id
-        ]
+    def _handle_checkout_completed(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        logger.info("Checkout completed: %s", data.get("id"))
+        return {"status": "success", "action": "subscription_activated"}
+
+    def _handle_subscription_created(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        logger.info("Subscription created: %s", data.get("id"))
+        return {"status": "success", "action": "access_granted"}
+
+    def _handle_subscription_updated(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        logger.info("Subscription updated: %s", data.get("id"))
+        return {"status": "success", "action": "access_updated"}
+
+    def _handle_subscription_deleted(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        logger.info("Subscription deleted: %s", data.get("id"))
+        return {"status": "success", "action": "access_revoked"}
+
+    def _handle_invoice_paid(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        logger.info("Invoice paid: %s", data.get("id"))
+        return {"status": "success", "action": "invoice_confirmed"}
+
+    def _handle_invoice_failed(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        logger.warning("Invoice payment failed: %s", data.get("id"))
+        return {"status": "failed", "action": "payment_retry_needed"}
 
 
-# Global Stripe integration instance
+# Global instance — configured from environment variables at import time.
 stripe_integration = StripeIntegration()
