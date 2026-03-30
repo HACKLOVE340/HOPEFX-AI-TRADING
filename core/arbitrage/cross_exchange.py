@@ -10,6 +10,7 @@ Captures price discrepancies across multiple venues
 """
 
 import asyncio
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -31,8 +32,34 @@ class ArbitrageOpportunity:
     confidence: float
 
 
-class ExchangeConnector:
-    """Unified interface for multiple exchanges"""
+class ExchangeConnector(ABC):
+    """
+    Abstract base class for exchange connectors used by the arbitrage engine.
+
+    Subclass this for each exchange (OANDA, IBKR, Binance, CCXT, etc.) and
+    implement the three abstract methods.  The arbitrage engine calls these
+    methods directly — returning None silently would cause silent mis-pricing
+    and incorrect order sizing, so unimplemented methods raise NotImplementedError
+    at instantiation time via ABC enforcement.
+
+    Example
+    -------
+        class BinanceConnector(ExchangeConnector):
+            async def get_ticker(self, symbol: str) -> Dict:
+                ticker = await self.client.fetch_ticker(symbol)
+                return {"bid": ticker["bid"], "ask": ticker["ask"]}
+
+            async def place_order(self, symbol, side, size, price=None,
+                                  order_type="limit") -> Dict:
+                order = await self.client.create_order(symbol, order_type,
+                                                       side, float(size), float(price))
+                return {"filled": order["status"] == "closed",
+                        "fill_price": order.get("average")}
+
+            async def get_balance(self, asset: str) -> Decimal:
+                balance = await self.client.fetch_balance()
+                return Decimal(str(balance["free"].get(asset, 0)))
+    """
 
     def __init__(self, name: str, client, latency_ms: float, fees: Dict):
         self.name = name
@@ -42,14 +69,15 @@ class ExchangeConnector:
         self.taker_fee = fees.get("taker", Decimal("0.001"))
         self.is_connected = False
 
-    async def connect(self):
+    async def connect(self) -> None:
+        """Establish connection to the exchange. Override to add auth/handshake."""
         self.is_connected = True
 
+    @abstractmethod
     async def get_ticker(self, symbol: str) -> Dict:
-        """Get current bid/ask"""
-        # Implementation depends on exchange API
-        pass
+        """Return current bid/ask for *symbol* as ``{"bid": Decimal, "ask": Decimal}``."""
 
+    @abstractmethod
     async def place_order(
         self,
         symbol: str,
@@ -58,12 +86,11 @@ class ExchangeConnector:
         price: Optional[Decimal] = None,
         order_type: str = "limit",
     ) -> Dict:
-        """Place order and return fill info"""
-        pass
+        """Place an order and return fill info as ``{"filled": bool, "fill_price": ...}``."""
 
+    @abstractmethod
     async def get_balance(self, asset: str) -> Decimal:
-        """Get available balance"""
-        pass
+        """Return available balance for *asset* as a Decimal."""
 
 
 class ArbitrageDetector:
