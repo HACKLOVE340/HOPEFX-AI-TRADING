@@ -470,11 +470,13 @@ class DataQualityEngine:
         mids = [r[2] for r in recent if r[0] == "accept" and r[2] > 0]
         spread_across = (max(mids) - min(mids)) if len(mids) > 1 else 0.0
 
-        # Build synthetic ticks for consensus calculation
-        synth = {}
+        # Reconstruct minimal ticks from each source's last-known mid price
+        # so cross_source_consensus() can compute a consensus without requiring
+        # a live tick to be in-flight at report time.
+        last_known_ticks = {}
         for s, st in self._sources.items():
             if st.last_mid > 0 and not st.is_stale():
-                synth[s] = GoldTick(
+                last_known_ticks[s] = GoldTick(
                     symbol    = symbol,
                     timestamp = now,
                     bid       = st.last_mid * 0.9999,
@@ -482,7 +484,7 @@ class DataQualityEngine:
                     mid       = st.last_mid,
                     source    = s,
                 )
-        consensus, _, _ = self.cross_source_consensus(synth)
+        consensus, _, _ = self.cross_source_consensus(last_known_ticks)
 
         return QualityReport(
             timestamp                    = now,
