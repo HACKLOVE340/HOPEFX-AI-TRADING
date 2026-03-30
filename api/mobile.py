@@ -132,9 +132,10 @@ async def register_expo_push_token(
 
 
 # ── Notification preferences ──────────────────────────────────────────────────
-# In-memory store — swap for DB-backed store in production.
+# Persisted via api/db_store (configurations table).
+# Key: "mobile:notif_prefs:{user_id}"
 
-_notification_prefs: dict[str, dict] = {}
+_NOTIF_PREFS_KEY = "mobile:notif_prefs:{uid}"
 
 _DEFAULT_PREFS = {
     "signals": True,
@@ -143,6 +144,16 @@ _DEFAULT_PREFS = {
     "daily_summary": True,
     "risk_warnings": True,
 }
+
+
+def _load_notif_prefs(user_id: str) -> dict:
+    from api.db_store import db_get
+    return db_get(_NOTIF_PREFS_KEY.format(uid=user_id)) or _DEFAULT_PREFS.copy()
+
+
+def _save_notif_prefs(user_id: str, prefs: dict) -> None:
+    from api.db_store import db_set
+    db_set(_NOTIF_PREFS_KEY.format(uid=user_id), prefs, changed_by=user_id)
 
 
 class NotificationPrefsBody(BaseModel):
@@ -156,7 +167,7 @@ class NotificationPrefsBody(BaseModel):
 @router.get("/notification-prefs", summary="Get notification preferences")
 async def get_notification_prefs(user: TokenPayload = Depends(get_current_user)):
     """Return the authenticated user's push notification preferences."""
-    return _notification_prefs.get(user.sub, _DEFAULT_PREFS.copy())
+    return _load_notif_prefs(user.sub)
 
 
 @router.patch("/notification-prefs", summary="Update notification preferences")
@@ -165,9 +176,9 @@ async def update_notification_prefs(
     user: TokenPayload = Depends(get_current_user),
 ):
     """Partially update push notification preferences for the authenticated user."""
-    current = _notification_prefs.get(user.sub, _DEFAULT_PREFS.copy())
+    current = _load_notif_prefs(user.sub)
     updates = body.model_dump(exclude_none=True)
     current.update(updates)
-    _notification_prefs[user.sub] = current
+    _save_notif_prefs(user.sub, current)
     logger.info("Notification prefs updated: user=%s prefs=%s", user.sub, current)
     return current
