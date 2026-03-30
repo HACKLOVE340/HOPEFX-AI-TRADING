@@ -77,7 +77,12 @@ class SecureConfig:
 class LiveDataPipeline:
     """
     Wraps OANDAStreamAdapter to deliver live ticks to registered callbacks.
-    Falls back to a synthetic 1-second feed in paper mode.
+
+    Both paper and live modes connect to the OANDA streaming API:
+    - paper: practice=True  (OANDA sandbox — real market data, no real money)
+    - live:  practice=False (OANDA live account)
+
+    Requires OANDA_API_KEY and OANDA_ACCOUNT_ID in both modes.
     """
 
     def __init__(self, config: SecureConfig) -> None:
@@ -90,11 +95,11 @@ class LiveDataPipeline:
         self._callbacks.append(fn)
 
     async def start(self) -> None:
-        if self._config.app_env == "paper":
-            logger.info("LiveDataPipeline: paper mode — synthetic price feed")
-            self._running = True
-            asyncio.create_task(self._synthetic_feed())
-            return
+        if not self._config.oanda_api_key or not self._config.oanda_account_id:
+            raise EnvironmentError(
+                "LiveDataPipeline requires OANDA_API_KEY and OANDA_ACCOUNT_ID. "
+                "Set these environment variables before starting the trader."
+            )
         try:
             from brokers.oanda_ws import OANDAStreamAdapter
 
@@ -108,7 +113,9 @@ class LiveDataPipeline:
             await self._adapter.start()
             self._running = True
             logger.info(
-                "LiveDataPipeline: OANDA stream started for %s", self._config.symbols
+                "LiveDataPipeline: OANDA stream started | mode=%s symbols=%s",
+                self._config.app_env,
+                self._config.symbols,
             )
         except Exception as exc:
             logger.error("LiveDataPipeline start failed: %s", exc)
@@ -125,22 +132,6 @@ class LiveDataPipeline:
                 cb(tick)
             except Exception as exc:
                 logger.error("Tick callback error: %s", exc)
-
-    async def _synthetic_feed(self) -> None:
-        import random
-
-        price = 2050.0
-        while self._running:
-            price += random.gauss(0, 0.5)
-            tick = {
-                "type": "PRICE",
-                "instrument": self._config.symbols[0],
-                "bids": [{"price": str(round(price - 0.05, 2))}],
-                "asks": [{"price": str(round(price + 0.05, 2))}],
-                "time": datetime.now(timezone.utc).isoformat(),
-            }
-            self._dispatch(tick)
-            await asyncio.sleep(1.0)
 
 
 # ---------------------------------------------------------------------------
