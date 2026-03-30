@@ -143,15 +143,41 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
         logger.info("Downloaded %s: %d bars", ticker, len(df))
         return df
     except Exception as exc:
-        logger.warning(
-            "Could not fetch %s: %s — generating synthetic data", ticker, exc
-        )
-        return _synthetic_ohlcv(ticker, years, smoke)
+        if smoke:
+            # CI smoke-test only: synthetic GBM fallback so the pipeline
+            # completes without network access.  Results are NOT valid for
+            # strategy evaluation.
+            logger.warning(
+                "Could not fetch %s: %s — using synthetic GBM data (smoke mode only)",
+                ticker, exc,
+            )
+            return _synthetic_ohlcv_smoke(ticker)
+        # Production backtest: real data is required.  Raise so the caller
+        # records the failure rather than silently producing invalid results.
+        raise RuntimeError(
+            f"Failed to fetch real OHLCV data for {ticker}: {exc}. "
+            "Ensure yfinance is installed and network access is available. "
+            "Do not use synthetic data for production backtests."
+        ) from exc
 
 
-def _synthetic_ohlcv(ticker: str, years: int, smoke: bool) -> pd.DataFrame:
-    """Generate synthetic OHLCV for testing when yfinance is unavailable."""
-    n = 500 if smoke else years * 252
+def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
+    """
+    Generate minimal synthetic OHLCV for CI smoke-tests ONLY.
+
+    WARNING: Results produced from this data are NOT valid for strategy
+    evaluation or performance reporting.  This function is only called
+    when smoke=True and yfinance is unavailable (e.g. in CI without
+    network access).
+    """
+    import warnings
+    warnings.warn(
+        f"_synthetic_ohlcv_smoke({ticker!r}): using synthetic GBM data. "
+        "Results are not valid for strategy evaluation.",
+        UserWarning,
+        stacklevel=3,
+    )
+    n = 500
     np.random.seed(abs(hash(ticker)) % 2**31)
     base = 1800.0 if "GC" in ticker else (40000.0 if "BTC" in ticker else 2500.0)
     returns = np.random.randn(n) * 0.015
@@ -159,7 +185,7 @@ def _synthetic_ohlcv(ticker: str, years: int, smoke: bool) -> pd.DataFrame:
     idx = pd.date_range(
         end=datetime.now(timezone.utc).date(), periods=n, freq="B", tz="UTC"
     )
-    df = pd.DataFrame(
+    return pd.DataFrame(
         {
             "open": close * (1 + np.random.randn(n) * 0.002),
             "high": close * (1 + abs(np.random.randn(n)) * 0.008),
@@ -169,7 +195,6 @@ def _synthetic_ohlcv(ticker: str, years: int, smoke: bool) -> pd.DataFrame:
         },
         index=idx,
     )
-    return df
 
 
 # ─────────────────────────────────────────────────────────────────────────────
