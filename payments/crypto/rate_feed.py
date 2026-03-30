@@ -50,11 +50,10 @@ _cache_lock = asyncio.Lock()
 _cached_rates: Dict[str, float] = {}
 _cache_ts: float = 0.0
 
-# Hardcoded fallback — only used when ALL live feeds fail
-_FALLBACK_RATES: Dict[str, float] = {
-    "BTC": 67_500.0,
-    "ETH": 3_200.0,
+# USDT peg — always 1.0 by definition; not a hardcoded price estimate
+_STABLECOIN_RATES: Dict[str, float] = {
     "USDT": 1.0,
+    "USDC": 1.0,
 }
 
 
@@ -143,13 +142,27 @@ async def get_rates(force_refresh: bool = False) -> Dict[str, float]:
         except Exception as exc:
             logger.warning("Binance rate fetch failed: %s — using last known rates", exc)
 
-        # Use last known good or hardcoded fallback
+        # Use last known good cache (stale but real)
         if _cached_rates:
             logger.warning("Using stale cached crypto rates (age=%.0fs)", now - _cache_ts)
             return dict(_cached_rates)
 
-        logger.error("All rate feeds failed — using hardcoded fallback rates")
-        return dict(_FALLBACK_RATES)
+        # No live data and no cache — stablecoins are safe to return at peg,
+        # but volatile coins (BTC, ETH) must not use hardcoded prices for
+        # payment calculations. Raise so callers fail explicitly.
+        _is_production = os.getenv("APP_ENV", "production").lower() == "production"
+        if _is_production:
+            raise RuntimeError(
+                "All crypto rate feeds failed (CoinGecko + Binance) and no cached "
+                "rates are available. Cannot safely price volatile coins for payment. "
+                "Check network connectivity and CRYPTO_RATE_TTL_SECONDS configuration."
+            )
+        # Non-production: return stablecoins only so tests can proceed
+        logger.error(
+            "All rate feeds failed and cache is empty — returning stablecoin rates only "
+            "(non-production). Volatile coin rates unavailable."
+        )
+        return dict(_STABLECOIN_RATES)
 
 
 def coin_per_usd_sync(coin: str, usd_amount: float) -> Optional[float]:
@@ -157,10 +170,12 @@ def coin_per_usd_sync(coin: str, usd_amount: float) -> Optional[float]:
     Synchronous helper: convert USD to coin amount using cached rates.
 
     Returns None if no cached rate is available for the coin.
+    Stablecoins (USDT, USDC) always return at peg (1.0).
+    Volatile coins return None when the cache is empty — callers must
+    handle None and not fall back to hardcoded prices.
     """
-    rate = _cached_rates.get(coin.upper())
-    if not rate:
-        rate = _FALLBACK_RATES.get(coin.upper())
+    coin = coin.upper()
+    rate = _cached_rates.get(coin) or _STABLECOIN_RATES.get(coin)
     if not rate:
         return None
     return usd_amount / rate
