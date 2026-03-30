@@ -7,6 +7,12 @@ metadata:
     {{- include "hopefx.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  # Zero-downtime rolling deploys: bring up new pod before removing old one.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "hopefx.selectorLabels" . | nindent 6 }}
@@ -53,12 +59,29 @@ spec:
               port: http
             initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
           readinessProbe:
             httpGet:
               path: {{ .Values.probes.readiness.path }}
               port: http
             initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
             periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: 3
+            failureThreshold: 3
+            # Require two consecutive successes before marking ready —
+            # prevents flapping during startup under load.
+            successThreshold: 2
+          startupProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            # Allow up to 60 s for slow cold starts (model loading, DB migrations).
+            # Once startup succeeds, liveness/readiness take over.
+            failureThreshold: 12
+            periodSeconds: 5
+            timeoutSeconds: 5
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

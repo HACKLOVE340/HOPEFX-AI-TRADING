@@ -94,16 +94,19 @@ secrets:
   FIX_USERNAME: ""
   FIX_PASSWORD: ""
 
-# ── Liveness / readiness probes ──────────────────────────────────────────────
+# ── Liveness / readiness / startup probes ────────────────────────────────────
+# liveness  → restart pod if it stops responding
+# readiness → remove pod from LB until it passes (successThreshold: 2)
+# startup   → give slow cold-starts up to 60 s before liveness kicks in
 probes:
   liveness:
     path: /health
     initialDelaySeconds: 15
-    periodSeconds: 20
-  readiness:
-    path: /health
-    initialDelaySeconds: 10
     periodSeconds: 10
+  readiness:
+    path: /ready
+    initialDelaySeconds: 10
+    periodSeconds: 5
 
 # ── Horizontal Pod Autoscaler ────────────────────────────────────────────────
 autoscaling:
