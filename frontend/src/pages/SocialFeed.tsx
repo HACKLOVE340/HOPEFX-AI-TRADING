@@ -195,7 +195,11 @@ const FeedCard: React.FC<{
         <button style={s.actionBtn} onClick={() => onComment(item.signal_id)}>
           💬 {item.comment_count}
         </button>
-        <button style={s.copyTradeBtn}>Copy Trade</button>
+        <button style={s.copyTradeBtn} onClick={async () => {
+          try {
+            await api.post(`/social/copy/${item.trader_id}`, { signal_id: item.signal_id });
+          } catch { /* ignore — user may not be authenticated */ }
+        }}>Copy Trade</button>
       </div>
     </div>
   );
@@ -208,6 +212,7 @@ const SYMBOLS = ['All', 'XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
 const SocialFeed: React.FC = () => {
   const [items, setItems]         = useState<FeedItem[]>([]);
   const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
   const [page, setPage]           = useState(1);
   const [totalPages, setTotal]    = useState(1);
   const [filter, setFilter]       = useState('All');
@@ -216,6 +221,7 @@ const SocialFeed: React.FC = () => {
 
   const load = useCallback(async (p = 1, sym = filter) => {
     setLoading(true);
+    setError(null);
     try {
       const params: Record<string, string | number> = { page: p, limit: 10 };
       if (sym !== 'All') params.symbol = sym;
@@ -224,7 +230,8 @@ const SocialFeed: React.FC = () => {
       setTotal(res.data.pages || 1);
       setPage(p);
     } catch {
-      // Demo fallback already seeded server-side
+      setItems([]);
+      setError('Unable to load feed. Check your connection.');
     } finally {
       setLoading(false);
     }
@@ -295,7 +302,10 @@ const SocialFeed: React.FC = () => {
       <div style={s.feedGrid}>
         <div style={s.feedCol}>
           {loading && <div style={s.dim}>Loading feed…</div>}
-          {!loading && items.length === 0 && (
+          {!loading && error && (
+            <div style={{ ...s.empty, color: '#f87171' }}>{error}</div>
+          )}
+          {!loading && !error && items.length === 0 && (
             <div style={s.empty}>No signals yet for this filter.</div>
           )}
           {items.map((item) => (
