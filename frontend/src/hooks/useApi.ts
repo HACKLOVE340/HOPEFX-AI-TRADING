@@ -73,10 +73,10 @@ export const backtestApi = {
 // ── ML ────────────────────────────────────────────────────────────────────────
 
 export const mlApi = {
-  predict:  (symbol: string) => api.get(`/ml/predict/${symbol}`),
+  predict:  (symbol: string, payload?: object) => api.post(`/ml/predict/${encodeURIComponent(symbol)}`, payload ?? {}),
   accuracy: ()               => api.get('/ml/accuracy'),
   models:   ()               => api.get('/ml/models'),
-  features: (symbol: string) => api.get(`/ml/features/${symbol}`),
+  features: ()               => api.get('/ml/features'),
 };
 
 // ── Accounts / Teams ──────────────────────────────────────────────────────────
