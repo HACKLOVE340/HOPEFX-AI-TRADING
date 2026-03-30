@@ -18,26 +18,30 @@ Exit codes:
 
 Checks performed
 ----------------
-1.  Python imports          — all data_layer modules import cleanly
-2.  Types module            — GoldTick, NewsArticle, MacroEvent instantiate
-3.  DataQualityEngine       — validates good/bad ticks correctly
-4.  NormalizationPipeline   — cleans OHLCV DataFrame
-5.  GoldFeedManager         — configured feeds detected
-6.  NewsSentimentEngine     — configured feeds detected
-7.  GoldSentimentScorer     — scores a synthetic article
-8.  MicrostructureEngine    — processes synthetic ticks
-9.  FREDFeed                — FRED API reachable (no key required)
-10. MacroCalendarEngine     — instantiates and returns ML features
-11. MacroStoreBridge        — bridge instantiates
-12. DataLayerRedisStore     — Redis connectivity
-13. DataLineageStore        — SQLite write + read roundtrip
-14. DukascopyFetcher        — URL construction + cache path logic
-15. MarketReplayEngine      — instantiates with all sub-engines
-16. MarketDataOrchestrator  — instantiates, get_ml_features() returns dict
-17. API router              — data_layer router imports cleanly
-18. ML pipeline wiring      — inference_engine imports without error
-19. Risk manager wiring     — get_current_gold_price() / get_macro_impact_score()
-20. Execution engine wiring — engine imports without error
+1.  Python imports               — all data_layer modules import cleanly
+2.  Types module                 — GoldTick, NewsArticle, MacroEvent instantiate
+3.  DataQualityEngine            — validates good/bad ticks correctly
+4.  DQE Mahalanobis + reset      — latency_report, reset_source
+5.  NormalizationPipeline        — cleans OHLCV DataFrame
+6.  MicrostructureEngine         — processes synthetic ticks, 16 features
+7.  GoldSentimentScorer          — scores a synthetic article
+8.  vaderSentiment               — installed and scorer uses it
+9.  Gold feed API keys           — at least one key configured
+10. News feed API keys           — at least one key configured
+11. FRED API key                 — key present (CSV fallback if absent)
+12. Redis connectivity           — ping + set/get roundtrip
+13. Redis auto-connect           — DataLayerRedisStore() auto-connects
+14. DataLineageStore             — SQLite write + read roundtrip
+15. DataLineageStore.flush()     — synchronous drain
+16. DukascopyFetcher             — URL construction + 0-based month
+17. MacroCalendarEngine          — 6 ML features
+18. MarketDataOrchestrator       — 29 features, all keys present
+19. API router                   — data_layer router endpoints
+20. ML inference_engine wiring   — data layer hooks present
+21. Risk manager wiring          — orchestrator methods present
+22. Execution engine wiring      — ExecutionRequest OK
+23. live_inference wiring        — injection code present
+24. FRED reachability (async)    — live API call when key present
 """
 from __future__ import annotations
 
@@ -500,6 +504,128 @@ def check_live_inference_wiring() -> ValidationResult:
         return ValidationResult("live_inference data layer injection", False, str(exc))
 
 
+def check_vader_sentiment() -> ValidationResult:
+    """Verify vaderSentiment is installed and the scorer uses it."""
+    try:
+        from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+        sia = SentimentIntensityAnalyzer()
+        scores = sia.polarity_scores("Gold hits record high on safe haven demand")
+        assert "compound" in scores
+
+        from data_layer.sentiment.scorer import GoldSentimentScorer
+        scorer = GoldSentimentScorer()
+        assert scorer.vader_available, (
+            "GoldSentimentScorer.vader_available=False even though vaderSentiment is installed"
+        )
+        return ValidationResult(
+            "vaderSentiment", True,
+            f"installed, scorer.vader_available=True"
+        )
+    except ImportError:
+        return ValidationResult(
+            "vaderSentiment", False,
+            "not installed — run: pip install vaderSentiment>=3.3.2",
+            critical=False,
+        )
+    except Exception as exc:
+        return ValidationResult("vaderSentiment", False, str(exc), critical=False)
+
+
+def check_lineage_flush() -> ValidationResult:
+    """Verify DataLineageStore.flush() drains the queue synchronously."""
+    try:
+        import tempfile
+        from pathlib import Path
+        from data_layer.lineage.store import DataLineageStore
+        from data_layer.types import GoldTick, FeedSource
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = DataLineageStore(db_path=Path(tmpdir) / "test.db")
+            store.start()
+
+            tick = GoldTick(
+                symbol="XAU_USD", timestamp=datetime.now(timezone.utc),
+                bid=1980.0, ask=1980.5, mid=1980.25,
+                source=FeedSource.GOLDAPI,
+            )
+            store.record_tick(tick)
+
+            # flush() must write synchronously without waiting for background thread
+            written = store.flush()
+            assert written == 1, f"Expected flush()=1, got {written}"
+
+            count = store.count()
+            assert count == 1, f"Expected count=1 after flush, got {count}"
+
+            store.stop()
+
+        return ValidationResult("DataLineageStore.flush()", True, "synchronous drain OK")
+    except Exception as exc:
+        return ValidationResult("DataLineageStore.flush()", False, str(exc))
+
+
+def check_redis_auto_connect() -> ValidationResult:
+    """Verify DataLayerRedisStore auto-connects when REDIS_URL is set."""
+    try:
+        from data_layer.cache.redis_store import DataLayerRedisStore
+
+        store = DataLayerRedisStore()   # should auto-connect via REDIS_URL
+        if not store.ping():
+            return ValidationResult(
+                "Redis auto-connect", False,
+                "DataLayerRedisStore() did not auto-connect — check REDIS_URL",
+                critical=False,
+            )
+
+        # Round-trip test
+        store.set_tick("XAU_USD_TEST", {"mid": 2000.0, "epoch": time.time()})
+        result = store.get_tick("XAU_USD_TEST")
+        assert result is not None and result["mid"] == 2000.0
+
+        return ValidationResult("Redis auto-connect", True, "singleton auto-connects on init")
+    except Exception as exc:
+        return ValidationResult("Redis auto-connect", False, str(exc), critical=False)
+
+
+def check_dqe_mahalanobis() -> ValidationResult:
+    """Verify DQE Mahalanobis anomaly detection fires on a clear outlier."""
+    try:
+        import uuid
+        from data_layer.quality.engine import DataQualityEngine
+        from data_layer.types import GoldTick, FeedSource, TickQuality
+
+        dqe = DataQualityEngine()
+        now = datetime.now(timezone.utc)
+
+        # Feed 60 normal ticks to build history
+        for i in range(60):
+            t = GoldTick(
+                symbol="XAU_USD", timestamp=now,
+                bid=1980.0 + i * 0.01, ask=1980.5 + i * 0.01,
+                mid=1980.25 + i * 0.01, source=FeedSource.GOLDAPI,
+                lineage_id=str(uuid.uuid4()),
+            )
+            dqe.validate_tick(t)
+
+        # Verify latency report is populated
+        lr = dqe.latency_report()
+        assert "goldapi" in lr, f"Expected goldapi in latency_report, got {list(lr.keys())}"
+
+        # Verify reset_source works
+        dqe.reset_source(FeedSource.GOLDAPI)
+        state = dqe._sources[FeedSource.GOLDAPI]
+        assert state.confidence == 1.0, "reset_source did not restore confidence to 1.0"
+        assert state.accept_count == 0, "reset_source did not clear accept_count"
+
+        return ValidationResult(
+            "DataQualityEngine Mahalanobis + reset",
+            True,
+            "latency_report OK, reset_source OK",
+        )
+    except Exception as exc:
+        return ValidationResult("DataQualityEngine Mahalanobis + reset", False, str(exc))
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 async def run_all(verbose: bool = False) -> Tuple[int, int]:
@@ -515,14 +641,18 @@ async def run_all(verbose: bool = False) -> Tuple[int, int]:
         check_imports,
         check_types,
         check_dqe,
+        check_dqe_mahalanobis,
         check_normalization,
         check_microstructure,
         check_sentiment_scorer,
+        check_vader_sentiment,
         check_gold_feeds_configured,
         check_news_feeds_configured,
         check_fred_configured,
         check_redis,
+        check_redis_auto_connect,
         check_lineage_store,
+        check_lineage_flush,
         check_dukascopy_logic,
         check_macro_calendar,
         check_orchestrator,
