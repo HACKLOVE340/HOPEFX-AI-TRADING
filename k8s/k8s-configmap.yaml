@@ -15,6 +15,15 @@ data:
   REDIS_PORT: "6379"
   APP_ENV: "production"
 
+  # Redis HA mode — set ONE of the following (Cluster takes priority over Sentinel)
+  # Cluster mode (6-node, 3 primary + 3 replica):
+  # REDIS_CLUSTER_HOSTS: "redis-cluster-0.redis-cluster.hopefx.svc.cluster.local:6379,redis-cluster-1.redis-cluster.hopefx.svc.cluster.local:6379,redis-cluster-2.redis-cluster.hopefx.svc.cluster.local:6379"
+  # Sentinel mode (1 master + 2 replicas + 3 sentinels):
+  REDIS_SENTINEL_HOSTS: "redis-sentinel-1.hopefx.svc.cluster.local:26379,redis-sentinel-2.hopefx.svc.cluster.local:26379,redis-sentinel-3.hopefx.svc.cluster.local:26379"
+  REDIS_SENTINEL_MASTER: "hopefx-master"
+  # Health check interval for Redis connection (seconds)
+  REDIS_HEALTH_INTERVAL: "30"
+
   # API server
   API_HOST: "0.0.0.0"
   API_PORT: "8000"
