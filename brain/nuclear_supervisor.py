@@ -60,6 +60,32 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# ── Prometheus metrics ────────────────────────────────────────────────────────
+try:
+    from prometheus_client import Counter, Gauge, Histogram
+
+    _NUCLEAR_EVENTS_TOTAL = Counter(
+        "hopefx_nuclear_events_total",
+        "Total nuclear supervisor events processed",
+        ["action"],
+    )
+    _NUCLEAR_LEVEL_GAUGE = Gauge(
+        "hopefx_nuclear_level",
+        "Current nuclear escalation level (0=normal 1=pause 2=hedge 3=nuclear)",
+    )
+    _NUCLEAR_SEVERITY_HIST = Histogram(
+        "hopefx_nuclear_severity",
+        "Distribution of WORDMAP severity scores",
+        buckets=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    )
+    _NUCLEAR_TRADING_PAUSED = Gauge(
+        "hopefx_nuclear_trading_paused",
+        "1 when trading is paused by the nuclear supervisor, 0 otherwise",
+    )
+    _PROM_NUCLEAR_AVAILABLE = True
+except ImportError:
+    _PROM_NUCLEAR_AVAILABLE = False
+
 # ── Optional RL imports ───────────────────────────────────────────────────────
 try:
     from stable_baselines3 import PPO
@@ -377,6 +403,16 @@ class NuclearHopeFXSupervisor:
             _ACTION_NAMES.get(rl_action, "N/A") if rl_action is not None else "rule",
             action_taken, self.nuclear_level, self.trading_paused,
         )
+
+        # ── Prometheus metrics ────────────────────────────────────────────────
+        if _PROM_NUCLEAR_AVAILABLE:
+            try:
+                _NUCLEAR_EVENTS_TOTAL.labels(action=action_taken).inc()
+                _NUCLEAR_LEVEL_GAUGE.set(self.nuclear_level)
+                _NUCLEAR_SEVERITY_HIST.observe(severity)
+                _NUCLEAR_TRADING_PAUSED.set(1.0 if self.trading_paused else 0.0)
+            except Exception as _prom_exc:
+                logger.debug("Prometheus nuclear metrics update failed: %s", _prom_exc)
 
         return record
 

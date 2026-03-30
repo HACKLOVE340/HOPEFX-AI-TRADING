@@ -47,6 +47,31 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# ── Prometheus metrics ────────────────────────────────────────────────────────
+try:
+    from prometheus_client import Counter, Gauge
+
+    _ORCH_MAX_RISK_GAUGE = Gauge(
+        "hopefx_orchestrator_max_risk_fraction",
+        "Current max-risk fraction set by RiskOrchestrator [0, 1]",
+    )
+    _ORCH_HEDGE_ACTIVE_GAUGE = Gauge(
+        "hopefx_orchestrator_hedge_active",
+        "1 when hedge mode is active, 0 otherwise",
+    )
+    _ORCH_EXPOSURE_GAUGE = Gauge(
+        "hopefx_orchestrator_current_exposure",
+        "Current portfolio risk exposure fraction [0, 1]",
+    )
+    _ORCH_RISK_EVENTS_TOTAL = Counter(
+        "hopefx_orchestrator_risk_events_total",
+        "Total risk control events (set_max_risk, hedge activate/deactivate)",
+        ["event_type"],
+    )
+    _PROM_ORCH_AVAILABLE = True
+except ImportError:
+    _PROM_ORCH_AVAILABLE = False
+
 # ── Data classes ──────────────────────────────────────────────────────────────
 
 
@@ -164,6 +189,13 @@ class RiskOrchestrator:
                 old, fraction, self._trading_allowed,
             )
 
+            if _PROM_ORCH_AVAILABLE:
+                try:
+                    _ORCH_MAX_RISK_GAUGE.set(fraction)
+                    _ORCH_RISK_EVENTS_TOTAL.labels(event_type="set_max_risk").inc()
+                except Exception as _pe:
+                    logger.debug("Prometheus orchestrator metric failed: %s", _pe)
+
             # Propagate to RiskManager if available
             await self._propagate_to_risk_manager(fraction)
 
@@ -235,6 +267,13 @@ class RiskOrchestrator:
                 "order_id": order_id,
             })
 
+            if _PROM_ORCH_AVAILABLE:
+                try:
+                    _ORCH_HEDGE_ACTIVE_GAUGE.set(1.0)
+                    _ORCH_RISK_EVENTS_TOTAL.labels(event_type="hedge_activate").inc()
+                except Exception as _pe:
+                    logger.debug("Prometheus hedge metric failed: %s", _pe)
+
     async def deactivate_hedge_mode(self) -> None:
         """Close all open hedge positions and restore normal mode."""
         async with self._lock:
@@ -269,6 +308,13 @@ class RiskOrchestrator:
             self._record_event("deactivate_hedge", {"closed_symbols": closed})
             logger.info("RiskOrchestrator: hedge mode deactivated")
 
+            if _PROM_ORCH_AVAILABLE:
+                try:
+                    _ORCH_HEDGE_ACTIVE_GAUGE.set(0.0)
+                    _ORCH_RISK_EVENTS_TOTAL.labels(event_type="hedge_deactivate").inc()
+                except Exception as _pe:
+                    logger.debug("Prometheus hedge deactivate metric failed: %s", _pe)
+
     # ── Exposure query ────────────────────────────────────────────────────────
 
     async def get_current_exposure(self) -> float:
@@ -294,7 +340,13 @@ class RiskOrchestrator:
             pass
 
         # Derive from max_risk as a proxy
-        return min(1.0, 1.0 - self._max_risk + 0.1)
+        exposure = min(1.0, 1.0 - self._max_risk + 0.1)
+        if _PROM_ORCH_AVAILABLE:
+            try:
+                _ORCH_EXPOSURE_GAUGE.set(exposure)
+            except Exception:
+                pass
+        return exposure
 
     # ── Status ────────────────────────────────────────────────────────────────
 
