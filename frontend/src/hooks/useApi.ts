@@ -48,11 +48,18 @@ export const authApi = {
 // ── Trading ───────────────────────────────────────────────────────────────────
 
 export const tradingApi = {
-  positions:     ()              => api.get('/trading/positions'),
-  signals:       ()              => api.get('/trading/signals'),
-  account:       ()              => api.get('/trading/account'),
-  placeOrder:    (order: object) => api.post('/trading/orders', order),
-  closePosition: (id: string)    => api.delete(`/trading/positions/${id}`),
+  positions:      ()              => api.get('/trading/positions'),
+  signals:        ()              => api.get('/trading/signals'),
+  account:        ()              => api.get('/trading/account'),
+  ohlcv:          (symbol: string, timeframe = '1h', limit = 200) =>
+    api.get(`/trading/ohlcv/${encodeURIComponent(symbol)}`, { params: { timeframe, limit } }),
+  placeOrder:     (order: object) => api.post('/trading/orders', order),
+  closePosition:  (id: string)    => api.delete(`/trading/positions/${id}`),
+  closeAllPositions: ()           => api.delete('/trading/positions'),
+  trades:         (limit = 100)   => api.get('/trading/trades', { params: { limit } }),
+  regime:         ()              => api.get('/trading/regime'),
+  brainState:     ()              => api.get('/trading/brain-state'),
+  emergencyStop:  ()              => api.post('/trading/emergency-stop'),
 };
 
 // ── Backtesting ───────────────────────────────────────────────────────────────
