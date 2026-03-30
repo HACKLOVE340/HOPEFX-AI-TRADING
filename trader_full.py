@@ -9,7 +9,8 @@ trader_full.py
 End-to-end live trading loop for HOPEFX.
 
 Wires together:
-  LiveDataPipeline  — OANDA streaming prices via OANDAStreamAdapter
+  LiveDataPipeline  — live price ticks via NuclearStreamer (Finnhub /
+                      Twelve Data / Polygon WebSockets — broker-free)
   OrderGateway      — order placement + fill tracking via broker connector
   EnsembleStrategy  — signal generation via StrategyOrchestra
   MLPredictor       — ML signal overlay via HopeFXPredictor
@@ -20,9 +21,20 @@ Wires together:
   ForwardTestHarness — paper-trading forward-test loop
   SecureConfig      — encrypted credential loading
 
+Data / Execution separation
+----------------------------
+  LiveDataPipeline uses NuclearStreamer for ALL live price ticks.
+  OANDA / MT5 broker connectors are used for ORDER EXECUTION ONLY.
+  OANDA is never used as a price source.
+
 Run modes (APP_ENV env var):
   paper  — paper broker, no real money (default)
   live   — OANDA live account (requires OANDA_API_KEY + OANDA_ACCOUNT_ID)
+
+Streaming API keys (at least one required for live ticks):
+  FINNHUB_API_KEY   — Finnhub WebSocket
+  TWELVE_API_KEY    — Twelve Data WebSocket
+  POLYGON_API_KEY   — Polygon.io Forex WebSocket (fastest)
 """
 
 from __future__ import annotations
@@ -76,18 +88,21 @@ class SecureConfig:
 
 class LiveDataPipeline:
     """
-    Wraps OANDAStreamAdapter to deliver live ticks to registered callbacks.
+    Delivers live price ticks to registered callbacks via NuclearStreamer.
 
-    Both paper and live modes connect to the OANDA streaming API:
-    - paper: practice=True  (OANDA sandbox — real market data, no real money)
-    - live:  practice=False (OANDA live account)
+    NuclearStreamer connects to Finnhub / Twelve Data / Polygon WebSockets
+    concurrently.  OANDA is NOT used as a price source; it is execution-only.
 
-    Requires OANDA_API_KEY and OANDA_ACCOUNT_ID in both modes.
+    At least one of FINNHUB_API_KEY / TWELVE_API_KEY / POLYGON_API_KEY must
+    be set for live ticks.  If none are set, start() raises EnvironmentError.
+
+    Callbacks receive a normalised tick dict:
+        {"price": float, "symbol": str, "source": str}
     """
 
     def __init__(self, config: SecureConfig) -> None:
         self._config = config
-        self._adapter: Optional[Any] = None
+        self._streamer: Optional[Any] = None
         self._callbacks: List[Any] = []
         self._running = False
 
@@ -95,43 +110,53 @@ class LiveDataPipeline:
         self._callbacks.append(fn)
 
     async def start(self) -> None:
-        if not self._config.oanda_api_key or not self._config.oanda_account_id:
+        has_key = any([
+            os.getenv("FINNHUB_API_KEY"),
+            os.getenv("TWELVE_API_KEY"),
+            os.getenv("POLYGON_API_KEY"),
+        ])
+        if not has_key:
             raise EnvironmentError(
-                "LiveDataPipeline requires OANDA_API_KEY and OANDA_ACCOUNT_ID. "
-                "Set these environment variables before starting the trader."
+                "LiveDataPipeline requires at least one streaming API key: "
+                "FINNHUB_API_KEY, TWELVE_API_KEY, or POLYGON_API_KEY. "
+                "OANDA is for order execution only — not for price streaming."
             )
         try:
-            from brokers.oanda_ws import OANDAStreamAdapter
+            from data_feed import NuclearStreamer
 
-            self._adapter = OANDAStreamAdapter(
-                api_key=self._config.oanda_api_key,
-                account_id=self._config.oanda_account_id,
-                instruments=self._config.symbols,
-                practice=self._config.oanda_practice,
-                on_tick=self._dispatch,
-            )
-            await self._adapter.start()
+            pipeline_ref = self  # captured for inner subscriber
+
+            class _TickBridge:
+                """Subscriber that normalises NuclearStreamer ticks for callbacks."""
+                async def on_new_price(self, price: float) -> None:
+                    tick = {"price": price, "symbol": "XAUUSD", "source": "nuclear"}
+                    for cb in pipeline_ref._callbacks:
+                        try:
+                            cb(tick)
+                        except Exception as _exc:
+                            logger.error("Tick callback error: %s", _exc)
+
+            self._streamer = NuclearStreamer()
+            self._streamer.subscribe(_TickBridge())
             self._running = True
             logger.info(
-                "LiveDataPipeline: OANDA stream started | mode=%s symbols=%s",
+                "LiveDataPipeline: NuclearStreamer started | mode=%s | "
+                "finnhub=%s twelvedata=%s polygon=%s",
                 self._config.app_env,
-                self._config.symbols,
+                bool(os.getenv("FINNHUB_API_KEY")),
+                bool(os.getenv("TWELVE_API_KEY")),
+                bool(os.getenv("POLYGON_API_KEY")),
             )
+            # run() blocks until stopped — call in a task from ForwardTestHarness
+            await self._streamer.run()
         except Exception as exc:
             logger.error("LiveDataPipeline start failed: %s", exc)
             raise
 
     async def stop(self) -> None:
         self._running = False
-        if self._adapter:
-            await self._adapter.stop()
-
-    def _dispatch(self, tick: Dict) -> None:
-        for cb in self._callbacks:
-            try:
-                cb(tick)
-            except Exception as exc:
-                logger.error("Tick callback error: %s", exc)
+        if self._streamer:
+            await self._streamer.stop()
 
 
 # ---------------------------------------------------------------------------
@@ -477,7 +502,8 @@ class ForwardTestHarness:
     async def run(self) -> None:
         self._running = True
         self._pipeline.register_tick_callback(self._on_tick)
-        await self._pipeline.start()
+        # NuclearStreamer.run() blocks — start it as a background task.
+        pipeline_task = asyncio.create_task(self._pipeline.start())
         self._alerts.send("ForwardTestHarness started", "INFO")
         logger.info("ForwardTestHarness: running")
         try:
@@ -488,38 +514,49 @@ class ForwardTestHarness:
             pass
         finally:
             await self._pipeline.stop()
+            if not pipeline_task.done():
+                pipeline_task.cancel()
+                try:
+                    await asyncio.wait_for(pipeline_task, timeout=3.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
+                    pass
             self._alerts.send("ForwardTestHarness stopped", "WARNING")
 
     def stop(self) -> None:
         self._running = False
 
     def _on_tick(self, tick: Dict) -> None:
+        """
+        Process a normalised tick from NuclearStreamer.
+
+        Tick format: {"price": float, "symbol": str, "source": str}
+        """
         try:
-            bids = tick.get("bids", [{}])
-            asks = tick.get("asks", [{}])
-            bid = float(bids[0].get("price", 0)) if bids else 0.0
-            ask = float(asks[0].get("price", 0)) if asks else 0.0
-            mid = round((bid + ask) / 2, 5) if bid and ask else 0.0
-            if mid == 0.0:
+            # NuclearStreamer delivers a single validated mid price.
+            price = float(tick.get("price", 0.0))
+            symbol = tick.get("symbol", "XAUUSD")
+            if price == 0.0:
                 return
 
-            self._tick_buffer.append({"close": mid, "bid": bid, "ask": ask})
+            self._tick_buffer.append({"close": price, "bid": price, "ask": price})
             if len(self._tick_buffer) > 200:
                 self._tick_buffer.pop(0)
 
             if not self._news.is_safe_to_trade():
                 return
 
-            market_data = {"close": mid, "mid": mid, "bid": bid, "ask": ask}
+            market_data = {"close": price, "mid": price, "bid": price, "ask": price}
             signal = self._strategy.generate_signal(market_data)
 
             if signal.get("direction") == "flat":
                 return
 
+            # OANDA uses underscore format for instrument codes.
+            oanda_symbol = symbol.replace("/", "_")
             approval = self._risk.approve_trade(
-                symbol=tick.get("instrument", "XAU_USD"),
+                symbol=oanda_symbol,
                 side=signal["direction"].upper(),
-                price=mid,
+                price=price,
                 equity=self._equity,
             )
             if not approval.get("approved"):
@@ -529,14 +566,14 @@ class ForwardTestHarness:
             size = approval.get("size", 0.01)
             asyncio.create_task(
                 self._gateway.place_market_order(
-                    symbol=tick.get("instrument", "XAU_USD"),
+                    symbol=oanda_symbol,
                     side=signal["direction"].upper(),
                     quantity=size,
                 )
             )
             self._alerts.send(
                 f"Signal: {signal['direction'].upper()} {size} "
-                f"{tick.get('instrument')} @ {mid:.5f} "
+                f"{oanda_symbol} @ {price:.5f} "
                 f"(conf={signal.get('confidence', 0):.2f})"
             )
         except Exception as exc:
