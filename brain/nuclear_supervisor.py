@@ -258,13 +258,33 @@ class NuclearHopeFXSupervisor:
         try:
             from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
             import gymnasium as gym
+            from gymnasium import spaces
 
-            # Reconstruct a dummy env with the same obs shape (7-dim Box)
-            def _make_env():
-                return gym.make("CartPole-v1")  # placeholder — only shape matters
+            # Build a minimal env whose observation space exactly matches the
+            # 7-dim Box used during PPO training (see module docstring for the
+            # observation vector layout).  CartPole has a 4-dim space and would
+            # cause a shape mismatch that silently corrupts normalisation.
+            class _HopeFXDummyEnv(gym.Env):
+                """Minimal env matching the 7-dim observation space of the RL agent."""
 
-            # Load the saved normalizer statistics (no env needed for inference)
-            vn = VecNormalize.load(str(self._vecnorm_path), venv=None)  # type: ignore[arg-type]
+                observation_space = spaces.Box(
+                    low=np.array([0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32),
+                    high=np.array([1.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32),
+                    dtype=np.float32,
+                )
+                action_space = spaces.Discrete(4)  # NORMAL / PAUSE / HEDGE / NUCLEAR
+
+                def reset(self, **kwargs):
+                    return self.observation_space.sample(), {}
+
+                def step(self, action):
+                    obs = self.observation_space.sample()
+                    return obs, 0.0, False, False, {}
+
+            venv = DummyVecEnv([_HopeFXDummyEnv])
+
+            # Load the saved normalizer statistics into the correct env shape
+            vn = VecNormalize.load(str(self._vecnorm_path), venv=venv)
             vn.training = False          # freeze running stats
             vn.norm_reward = False       # we only normalise observations
             logger.info("VecNormalize stats loaded from %s", self._vecnorm_path)
