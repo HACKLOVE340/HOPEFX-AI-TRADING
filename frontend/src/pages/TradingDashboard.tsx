@@ -27,16 +27,18 @@ import { useStore } from '../store';
 import { PanelErrorBoundary } from '../components/ui/PanelErrorBoundary';
 import { PanelSkeleton, ChartSkeleton, TickerSkeleton } from '../components/ui/Skeleton';
 
-// ── Components ────────────────────────────────────────────────────────────────
-import { LivePriceTicker }     from '../components/panels/LivePriceTicker';
-import { AccountBar }          from '../components/terminal/AccountBar';
-import { EquityCurveChart }    from '../components/charts/EquityCurveChart';
-import { RiskDashboard }       from '../components/panels/RiskDashboard';
-import { SentimentGauge }      from '../components/panels/SentimentGauge';
-import { MicrostructurePanel } from '../components/panels/MicrostructurePanel';
-import { MacroCalendar }       from '../components/panels/MacroCalendar';
-import { OrderBookDepth }      from '../components/panels/OrderBookDepth';
-import { LiveSignalFeed }      from '../components/panels/LiveSignalFeed';
+// ── Eagerly loaded (above-the-fold, tiny) ─────────────────────────────────────
+import { LivePriceTicker }  from '../components/panels/LivePriceTicker';
+import { AccountBar }       from '../components/terminal/AccountBar';
+
+// ── Lazily loaded (heavy Recharts panels — split into separate chunks) ─────────
+const EquityCurveChart    = React.lazy(() => import('../components/charts/EquityCurveChart').then(m => ({ default: m.EquityCurveChart })));
+const RiskDashboard       = React.lazy(() => import('../components/panels/RiskDashboard').then(m => ({ default: m.RiskDashboard })));
+const SentimentGauge      = React.lazy(() => import('../components/panels/SentimentGauge').then(m => ({ default: m.SentimentGauge })));
+const MicrostructurePanel = React.lazy(() => import('../components/panels/MicrostructurePanel').then(m => ({ default: m.MicrostructurePanel })));
+const MacroCalendar       = React.lazy(() => import('../components/panels/MacroCalendar').then(m => ({ default: m.MacroCalendar })));
+const OrderBookDepth      = React.lazy(() => import('../components/panels/OrderBookDepth').then(m => ({ default: m.OrderBookDepth })));
+const LiveSignalFeed      = React.lazy(() => import('../components/panels/LiveSignalFeed').then(m => ({ default: m.LiveSignalFeed })));
 
 // ── Dashboard inner ───────────────────────────────────────────────────────────
 

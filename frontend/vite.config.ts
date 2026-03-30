@@ -36,13 +36,41 @@ export default defineConfig({
   build: {
     outDir: '../static',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react':  ['react', 'react-dom', 'react-router-dom'],
-          'vendor-query':  ['@tanstack/react-query'],
-          'vendor-charts': ['lightweight-charts'],
-          'vendor-state':  ['zustand'],
+        manualChunks(id: string) {
+          // Core React runtime
+          if (id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/react-router-dom/') ||
+              id.includes('node_modules/scheduler/')) {
+            return 'vendor-react';
+          }
+          // TanStack Query
+          if (id.includes('@tanstack/react-query')) return 'vendor-query';
+          // Zustand
+          if (id.includes('node_modules/zustand')) return 'vendor-state';
+          // Recharts (heavy — split separately)
+          if (id.includes('node_modules/recharts') ||
+              id.includes('node_modules/d3-') ||
+              id.includes('node_modules/victory-')) {
+            return 'vendor-recharts';
+          }
+          // Lightweight charts (TradingView)
+          if (id.includes('node_modules/lightweight-charts')) return 'vendor-lwcharts';
+          // Leaflet (map — only used in GlobalAttackMap)
+          if (id.includes('node_modules/leaflet') ||
+              id.includes('node_modules/react-leaflet')) {
+            return 'vendor-leaflet';
+          }
+          // Framer Motion
+          if (id.includes('node_modules/framer-motion')) return 'vendor-motion';
+          // Radix UI primitives
+          if (id.includes('node_modules/@radix-ui')) return 'vendor-radix';
+          // Panel components are lazy-loaded via dynamic import() in
+          // TradingDashboard — Rollup splits them automatically; no manual
+          // chunk needed (avoids circular dependency with vendor-recharts).
         },
       },
     },
