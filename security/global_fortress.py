@@ -350,8 +350,19 @@ class HOPEFXBrain:
 
     async def auto_heal(self) -> None:
         """
-        Every HEAL_INTERVAL seconds, ask the LLM to review a code snippet
-        and push the suggested fix to Redis for dashboard approval.
+        Every HEAL_INTERVAL seconds, drain the ``scan:vuln_queue`` Redis list
+        and ask the LLM to generate a fix for each vulnerable snippet found.
+
+        Vulnerability entries are pushed to ``scan:vuln_queue`` by the static
+        analysis scanner (security/code_scanner.py) or by external CI hooks.
+        Each entry is a JSON object with keys:
+            endpoint  — API route path (e.g. "/api/auth/login")
+            code      — vulnerable code snippet (str)
+            severity  — "high" | "medium" | "low"
+            rule      — scanner rule ID that triggered (e.g. "B608")
+
+        Generated fixes are pushed to ``fixes:queue`` for operator review
+        in the dashboard before any code change is made.
         """
         if time.monotonic() - self._last_heal < HEAL_INTERVAL:
             return
@@ -359,44 +370,60 @@ class HOPEFXBrain:
         logger.info("HOPEFXBrain: running auto-heal scan")
         self._last_heal = time.monotonic()
 
-        # In production, pull real code snippets from a code-scan queue.
-        # Here we use a representative example of a common vulnerability pattern.
-        vuln_snippets = [
-            {
-                "endpoint": "/api/auth/login",
-                "code": (
-                    "async def login(username: str, password: str):\n"
-                    "    user = db.execute(f'SELECT * FROM users WHERE username={username}')\n"
-                    "    return user"
-                ),
-            },
-            {
-                "endpoint": "/api/trading/order",
-                "code": (
-                    "async def place_order(symbol: str, qty: float):\n"
-                    "    # No auth check, no rate limit\n"
-                    "    return broker.place(symbol, qty)"
-                ),
-            },
-        ]
-
         redis = await _get_redis()
-        for snippet in vuln_snippets:
+
+        # Drain up to 10 vulnerability entries per cycle
+        raw_entries: List[str] = []
+        if redis:
+            raw_entries = await redis.lrange("scan:vuln_queue", 0, 9)
+            if raw_entries:
+                await redis.ltrim("scan:vuln_queue", len(raw_entries), -1)
+
+        if not raw_entries:
+            logger.debug("HOPEFXBrain: no vulnerability entries in scan:vuln_queue")
+            return
+
+        for raw in raw_entries:
+            try:
+                entry: Dict[str, Any] = json.loads(raw)
+            except json.JSONDecodeError:
+                logger.warning("HOPEFXBrain: malformed scan entry — skipping")
+                continue
+
+            endpoint = entry.get("endpoint", "unknown")
+            code = entry.get("code", "")
+            severity = entry.get("severity", "unknown")
+            rule = entry.get("rule", "unknown")
+
+            if not code:
+                logger.debug("HOPEFXBrain: empty code snippet for %s — skipping", endpoint)
+                continue
+
             try:
                 from security.llm_wrapper import call_llm
-                fix = await call_llm(LLM_FIX_PROMPT.format(code_snippet=snippet["code"]))
+
+                fix = await call_llm(LLM_FIX_PROMPT.format(code_snippet=code))
                 record = {
-                    "endpoint": snippet["endpoint"],
-                    "original": snippet["code"],
+                    "endpoint": endpoint,
+                    "original": code,
                     "fix": fix,
+                    "severity": severity,
+                    "rule": rule,
                     "ts": datetime.now(timezone.utc).isoformat(),
                     "status": "pending",  # pending | approved | declined
+                    "pr_url": None,
+                    "pr_number": None,
                 }
                 if redis:
                     await redis.rpush("fixes:queue", json.dumps(record))
-                    logger.info("HOPEFXBrain: fix queued for %s", snippet["endpoint"])
+                    logger.info(
+                        "HOPEFXBrain: fix queued endpoint=%s severity=%s rule=%s",
+                        endpoint, severity, rule,
+                    )
             except Exception as exc:
-                logger.warning("Auto-heal snippet failed: %s", exc)
+                logger.warning(
+                    "HOPEFXBrain: auto-heal failed for %s: %s", endpoint, exc
+                )
 
     # ── Flashpoint IOC sync ───────────────────────────────────────────────────
 
@@ -480,7 +507,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
 
     @router.get("/fixes")
     async def get_fixes():
-        """Return pending fix queue."""
+        """Return pending fix queue (up to 50 entries)."""
         redis = await _get_redis()
         if not redis:
             return []
@@ -489,21 +516,153 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
 
     @router.post("/fixes/approve")
     async def approve_fix(payload: dict):
-        """Mark a fix as approved (by endpoint name)."""
+        """
+        Approve an LLM-generated fix.
+
+        Triggers the GitHubPRPublisher pipeline:
+          1. Creates a branch auto-heal/{timestamp}-{slug}
+          2. Commits the patched file
+          3. Opens a GitHub PR
+          4. Updates the fix record in Redis with pr_url + pr_number
+          5. Moves the record from fixes:queue to fixes:approved
+
+        Returns the PR URL on success.
+        """
         endpoint = payload.get("endpoint", "")
+        approved_by = payload.get("approved_by", "dashboard")
         redis = await _get_redis()
+
+        # Find the matching fix record in the queue
+        fix_record: Optional[Dict[str, Any]] = None
         if redis:
-            await redis.rpush(
-                "fixes:approved",
-                json.dumps({"endpoint": endpoint, "ts": datetime.now(timezone.utc).isoformat()}),
+            raw_list = await redis.lrange("fixes:queue", 0, 99)
+            for i, raw in enumerate(raw_list):
+                try:
+                    rec = json.loads(raw)
+                    if rec.get("endpoint") == endpoint and rec.get("status") == "pending":
+                        fix_record = rec
+                        # Remove this entry from the queue
+                        await redis.lrem("fixes:queue", 1, raw)
+                        break
+                except json.JSONDecodeError:
+                    continue
+
+        if fix_record is None:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=404,
+                detail=f"No pending fix found for endpoint '{endpoint}'",
             )
-        return {"status": "approved", "endpoint": endpoint}
+
+        # Trigger GitHub PR pipeline
+        pr_result: Dict[str, Any] = {"status": "skipped"}
+        try:
+            from security.github_pr_publisher import get_pr_publisher
+
+            pr_result = await get_pr_publisher().publish(
+                endpoint=endpoint,
+                original_code=fix_record.get("original", ""),
+                fix_code=fix_record.get("fix", ""),
+                approved_by=approved_by,
+                fix_ts=fix_record.get("ts"),
+            )
+        except Exception as exc:
+            logger.error("HOPEFXBrain: PR publisher error for %s: %s", endpoint, exc)
+            pr_result = {"status": "error", "error": str(exc)}
+
+        # Persist approved record with PR metadata
+        approved_record = {
+            **fix_record,
+            "status": "approved",
+            "approved_by": approved_by,
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "pr_url": pr_result.get("pr_url"),
+            "pr_number": pr_result.get("pr_number"),
+            "pr_branch": pr_result.get("branch"),
+            "pr_status": pr_result.get("status"),
+        }
+        if redis:
+            await redis.rpush("fixes:approved", json.dumps(approved_record))
+            # Keep approved list bounded
+            await redis.ltrim("fixes:approved", -500, -1)
+
+        logger.info(
+            "HOPEFXBrain: fix approved endpoint=%s pr_status=%s pr_url=%s",
+            endpoint, pr_result.get("status"), pr_result.get("pr_url"),
+        )
+
+        return {
+            "status": "approved",
+            "endpoint": endpoint,
+            "pr_url": pr_result.get("pr_url"),
+            "pr_number": pr_result.get("pr_number"),
+            "pr_branch": pr_result.get("branch"),
+            "pr_status": pr_result.get("status"),
+            "pr_error": pr_result.get("error"),
+        }
 
     @router.post("/fixes/decline")
     async def decline_fix(payload: dict):
-        """Mark a fix as declined."""
+        """
+        Decline an LLM-generated fix.
+
+        Removes the record from fixes:queue and archives it in fixes:declined.
+        """
         endpoint = payload.get("endpoint", "")
+        declined_by = payload.get("declined_by", "dashboard")
+        redis = await _get_redis()
+
+        if redis:
+            raw_list = await redis.lrange("fixes:queue", 0, 99)
+            for raw in raw_list:
+                try:
+                    rec = json.loads(raw)
+                    if rec.get("endpoint") == endpoint and rec.get("status") == "pending":
+                        await redis.lrem("fixes:queue", 1, raw)
+                        declined_record = {
+                            **rec,
+                            "status": "declined",
+                            "declined_by": declined_by,
+                            "declined_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        await redis.rpush("fixes:declined", json.dumps(declined_record))
+                        await redis.ltrim("fixes:declined", -500, -1)
+                        break
+                except json.JSONDecodeError:
+                    continue
+
+        logger.info("HOPEFXBrain: fix declined endpoint=%s by=%s", endpoint, declined_by)
         return {"status": "declined", "endpoint": endpoint}
+
+    @router.get("/fixes/approved")
+    async def get_approved_fixes():
+        """Return recently approved fixes with PR metadata."""
+        redis = await _get_redis()
+        if not redis:
+            return []
+        raw = await redis.lrange("fixes:approved", -50, -1)
+        return [json.loads(r) for r in raw]
+
+    @router.get("/fixes/declined")
+    async def get_declined_fixes():
+        """Return recently declined fixes."""
+        redis = await _get_redis()
+        if not redis:
+            return []
+        raw = await redis.lrange("fixes:declined", -50, -1)
+        return [json.loads(r) for r in raw]
+
+    @router.get("/alerts")
+    async def get_security_alerts():
+        """Return recent critical security alerts."""
+        redis = await _get_redis()
+        if not redis:
+            return []
+        raw = await redis.lrange("alerts:critical", -50, -1)
+        try:
+            return [json.loads(r) for r in raw]
+        except Exception:
+            return []
 
     @router.get("/lockdown")
     async def lockdown_status():
