@@ -267,9 +267,12 @@ class TestInitBrokerSelection:
         mock_paper_instance.connect = AsyncMock(return_value=True)
         MockPaperClass = MagicMock(return_value=mock_paper_instance)
 
+        _INJECTED = ("api.admin", "brokers.paper_trading", "core.startup_factories")
         with MagicMock() as mock_admin:
             mock_admin.log_activity = MagicMock()
-            saved = sys.modules.copy()
+            # Snapshot only the keys we will mutate — never clear sys.modules
+            # globally as that drops all cached modules and breaks subsequent tests.
+            _saved = {k: sys.modules.get(k) for k in _INJECTED}
             sys.modules["api.admin"] = mock_admin
             sys.modules["brokers.paper_trading"] = MagicMock(
                 PaperTradingBroker=MockPaperClass
@@ -281,8 +284,12 @@ class TestInitBrokerSelection:
                 importlib.reload(sf)
                 broker = await sf.init_broker(mock_state)
             finally:
-                sys.modules.clear()
-                sys.modules.update(saved)
+                # Restore only the injected keys; leave everything else intact.
+                for k, v in _saved.items():
+                    if v is None:
+                        sys.modules.pop(k, None)
+                    else:
+                        sys.modules[k] = v
 
         assert broker is mock_paper_instance
 
@@ -300,9 +307,10 @@ class TestInitBrokerSelection:
         mock_paper_instance.connect = AsyncMock(return_value=True)
         MockPaperClass = MagicMock(return_value=mock_paper_instance)
 
+        _INJECTED = ("api.admin", "brokers.paper_trading", "core.startup_factories")
         with MagicMock() as mock_admin:
             mock_admin.log_activity = MagicMock()
-            saved = sys.modules.copy()
+            _saved = {k: sys.modules.get(k) for k in _INJECTED}
             sys.modules["api.admin"] = mock_admin
             sys.modules["brokers.paper_trading"] = MagicMock(
                 PaperTradingBroker=MockPaperClass
@@ -314,7 +322,10 @@ class TestInitBrokerSelection:
                 importlib.reload(sf)
                 broker = await sf.init_broker(mock_state)
             finally:
-                sys.modules.clear()
-                sys.modules.update(saved)
+                for k, v in _saved.items():
+                    if v is None:
+                        sys.modules.pop(k, None)
+                    else:
+                        sys.modules[k] = v
 
         assert broker is mock_paper_instance
