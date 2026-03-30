@@ -355,9 +355,17 @@ class MarketDataCache:
                 f"Could not connect to Redis at {self.host}:{self.port}"
             )
 
-    def _build_key(self, symbol: str, timeframe: Timeframe, data_type: str) -> str:
+    def _resolve_timeframe(self, timeframe) -> str:
+        """Resolve timeframe to its string value, accepting Timeframe enum or raw string."""
+        if isinstance(timeframe, Timeframe):
+            return timeframe.value
+        # Accept plain strings like "1h", "4h", etc.
+        return str(timeframe)
+
+    def _build_key(self, symbol: str, timeframe, data_type: str) -> str:
         """Build cache key"""
-        return f"market_data:{symbol}:{timeframe.value}:{data_type}"
+        tf_str = self._resolve_timeframe(timeframe)
+        return f"market_data:{symbol}:{tf_str}:{data_type}"
 
     def _build_tick_key(self, symbol: str) -> str:
         """Build tick data cache key"""
@@ -374,17 +382,32 @@ class MarketDataCache:
     def cache_ohlcv(
         self,
         symbol: str,
-        timeframe: Timeframe,
-        ohlcv_data: List[OHLCVData],
+        timeframe,  # Timeframe enum or plain string e.g. "1h"
+        ohlcv_data: List,
         ttl: Optional[int] = None,
     ) -> bool:
-        """Cache OHLCV data"""
+        """Cache OHLCV data. Accepts Timeframe enum or plain string timeframe."""
         try:
             key = self._build_key(symbol, timeframe, "ohlcv")
-            ttl = ttl or self.DEFAULT_TTL.get(timeframe, 3600)
+            tf_key = self._resolve_timeframe(timeframe)
+            # Resolve TTL: try enum lookup first, then string lookup, then default
+            if ttl is None:
+                try:
+                    tf_enum = Timeframe(tf_key)
+                    ttl = self.DEFAULT_TTL.get(tf_enum, 3600)
+                except ValueError:
+                    ttl = 3600
 
-            # Serialize data
-            data_list = [candle.to_dict() for candle in ohlcv_data]
+            # Serialize data — accept OHLCVData objects or plain dicts
+            data_list = []
+            for candle in ohlcv_data:
+                if isinstance(candle, dict):
+                    data_list.append(candle)
+                elif hasattr(candle, "to_dict"):
+                    data_list.append(candle.to_dict())
+                else:
+                    data_list.append(dict(candle))
+
             cached_data = {
                 "data": data_list,
                 "cached_at": datetime.now(timezone.utc).isoformat(),
@@ -404,7 +427,7 @@ class MarketDataCache:
                     self._local_ttl[key] = time.time() + ttl
 
             logger.debug(
-                f"Cached OHLCV for {symbol} ({timeframe.value}): {len(ohlcv_data)} candles"
+                f"Cached OHLCV for {symbol} ({tf_key}): {len(ohlcv_data)} candles"
             )
             return True
 
@@ -412,8 +435,17 @@ class MarketDataCache:
             logger.error(f"Error caching OHLCV: {e}")
             return False
 
-    def get_ohlcv(self, symbol: str, timeframe: Timeframe) -> Optional[List[OHLCVData]]:
-        """Retrieve OHLCV data from cache"""
+    def get_ohlcv(self, symbol: str, timeframe, limit: Optional[int] = None) -> Optional[List]:
+        """Retrieve OHLCV data from cache.
+
+        Args:
+            symbol: Instrument symbol.
+            timeframe: Timeframe enum or plain string (e.g. "1h").
+            limit: If set, return only the last *limit* candles.
+
+        Returns:
+            List of candle dicts (or OHLCVData objects if stored as such), or None on miss.
+        """
         try:
             key = self._build_key(symbol, timeframe, "ohlcv")
 
@@ -442,7 +474,18 @@ class MarketDataCache:
 
             if cached:
                 data = json.loads(cached)
-                return [OHLCVData.from_dict(item) for item in data["data"]]
+                raw = data.get("data", [])
+                # Return plain dicts so callers that stored dicts get dicts back;
+                # attempt OHLCVData deserialization only when the dict has the
+                # expected typed fields.
+                try:
+                    result = [OHLCVData.from_dict(item) for item in raw]
+                except Exception:
+                    result = raw  # fall back to plain dicts
+
+                if limit is not None:
+                    result = result[-limit:]
+                return result
 
             return None
 
@@ -454,13 +497,20 @@ class MarketDataCache:
 
     # Tick Data Operations
 
-    def cache_tick(self, symbol: str, tick_data: TickData, ttl: int = 300) -> bool:
-        """Cache tick data"""
+    def cache_tick(self, symbol: str, tick_data, ttl: int = 300) -> bool:
+        """Cache tick data. Accepts TickData object or plain dict."""
         try:
             key = self._build_tick_key(symbol)
 
+            if isinstance(tick_data, dict):
+                tick_dict = tick_data
+            elif hasattr(tick_data, "to_dict"):
+                tick_dict = tick_data.to_dict()
+            else:
+                tick_dict = dict(tick_data)
+
             cached_data = {
-                "data": tick_data.to_dict(),
+                "data": tick_dict,
                 "cached_at": datetime.now(timezone.utc).isoformat(),
             }
 
@@ -479,8 +529,8 @@ class MarketDataCache:
             logger.error(f"Error caching tick: {e}")
             return False
 
-    def get_tick(self, symbol: str) -> Optional[TickData]:
-        """Retrieve latest tick data"""
+    def get_tick(self, symbol: str):
+        """Retrieve latest tick data. Returns TickData if possible, else plain dict."""
         try:
             key = self._build_tick_key(symbol)
 
@@ -502,13 +552,22 @@ class MarketDataCache:
 
             if cached:
                 data = json.loads(cached)
-                return TickData.from_dict(data["data"])
+                raw = data["data"]
+                try:
+                    return TickData.from_dict(raw)
+                except Exception:
+                    return raw  # plain dict fallback
 
             return None
 
         except Exception as e:
             logger.error(f"Error retrieving tick: {e}")
             return None
+
+    # Alias used by tests and external callers
+    def get_latest_tick(self, symbol: str):
+        """Alias for get_tick — returns the most recently cached tick."""
+        return self.get_tick(symbol)
 
     # Cache Management
 
@@ -612,6 +671,21 @@ class MarketDataCache:
     @stats.setter
     def stats(self, value: CacheStatistics) -> None:
         self._stats = value
+
+    def get_stats(self) -> dict:
+        """Return cache statistics as a plain dict."""
+        with self._stats_lock:
+            s = self._stats
+            return {
+                "total_hits": s.total_hits,
+                "total_misses": s.total_misses,
+                "total_evictions": s.total_evictions,
+                "hit_rate": (
+                    s.total_hits / (s.total_hits + s.total_misses)
+                    if (s.total_hits + s.total_misses) > 0
+                    else 0.0
+                ),
+            }
 
     # ------------------------------------------------------------------
     # Batch / multi-timeframe helpers expected by tests
