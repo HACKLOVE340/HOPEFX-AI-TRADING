@@ -110,20 +110,46 @@ def _get_rl_agent() -> Optional[Any]:
     return _rl_agent
 
 
-# ── Semantic encoder (lazy load) ──────────────────────────────────────────────
+# ── Semantic encoder (lazy load, optional) ────────────────────────────────────
+# Disabled by default on CPU-only nodes to avoid pulling ~1 GB of PyTorch.
+# Enable by setting BRAIN_SEMANTIC_ENCODER=true in your environment.
+# When disabled the brain still classifies attacks via the LLM — the encoder
+# is only used for additional similarity scoring (non-critical path).
 
+_ENCODER_ENABLED: bool = os.getenv("BRAIN_SEMANTIC_ENCODER", "false").lower() == "true"
 _encoder: Optional[Any] = None
 
 
 def _get_encoder() -> Optional[Any]:
+    """
+    Lazy-load SentenceTransformer.
+
+    Skipped unless BRAIN_SEMANTIC_ENCODER=true.  On first load, logs a
+    one-time warning about the ~90 MB model download (PyTorch itself is
+    ~1 GB and must already be installed — sentence-transformers does not
+    pull it automatically when torch is absent).
+    """
     global _encoder
+    if not _ENCODER_ENABLED:
+        return None
     if _encoder is None:
         try:
             from sentence_transformers import SentenceTransformer
+            logger.info(
+                "HOPEFXBrain: loading SentenceTransformer (all-MiniLM-L6-v2, ~90 MB). "
+                "Requires PyTorch — set BRAIN_SEMANTIC_ENCODER=false on CPU-only nodes "
+                "to skip this entirely."
+            )
             _encoder = SentenceTransformer("all-MiniLM-L6-v2")
-            logger.info("HOPEFXBrain: SentenceTransformer loaded")
+            logger.info("HOPEFXBrain: SentenceTransformer ready")
+        except ImportError:
+            logger.warning(
+                "HOPEFXBrain: sentence-transformers not installed. "
+                "Install with: pip install sentence-transformers "
+                "Or set BRAIN_SEMANTIC_ENCODER=false to suppress this warning."
+            )
         except Exception as exc:
-            logger.warning("HOPEFXBrain: SentenceTransformer unavailable: %s", exc)
+            logger.warning("HOPEFXBrain: SentenceTransformer load failed: %s", exc)
     return _encoder
 
 
@@ -531,9 +557,11 @@ async def start_brain(app: FastAPI) -> HOPEFXBrain:
     app.include_router(router)
     logger.info("HOPEFXBrain: /api/security/* routes mounted")
 
-    # Pre-load heavy models in background so startup is non-blocking
+    # Pre-load RL agent in background so first prediction is not delayed
     asyncio.get_event_loop().run_in_executor(None, _get_rl_agent)
-    asyncio.get_event_loop().run_in_executor(None, _get_encoder)
+    # Encoder is opt-in (BRAIN_SEMANTIC_ENCODER=true) — only pre-load when enabled
+    if _ENCODER_ENABLED:
+        asyncio.get_event_loop().run_in_executor(None, _get_encoder)
 
     # Start the eternal loop
     asyncio.create_task(brain.monitor_24_7(), name="hopefx-brain-24-7")
