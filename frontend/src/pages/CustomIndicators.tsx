@@ -35,6 +35,20 @@ const PreviewChart: React.FC<{ data: PreviewPoint[]; color: string }> = ({ data,
   return <div ref={ref} style={{ width: '100%', height: 200 }} />;
 };
 
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>;
+    const detail = (e['response'] as Record<string, unknown> | undefined)?.['data'];
+    if (detail && typeof detail === 'object') {
+      const d = detail as Record<string, unknown>;
+      if (typeof d['detail'] === 'string') return d['detail'];
+      if (typeof d['message'] === 'string') return d['message'];
+    }
+    if (typeof e['message'] === 'string') return e['message'];
+  }
+  return fallback;
+}
+
 const CustomIndicators: React.FC = () => {
   const [formula,    setFormula]    = useState('EMA(close, 20)');
   const [name,       setName]       = useState('');
@@ -45,6 +59,7 @@ const CustomIndicators: React.FC = () => {
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState('');
   const [msg,        setMsg]        = useState('');
+  const [deleteErr,  setDeleteErr]  = useState('');
 
   const loadIndicators = useCallback(async () => {
     try {
@@ -77,10 +92,13 @@ const CustomIndicators: React.FC = () => {
   };
 
   const del = async (id: string) => {
+    setDeleteErr('');
     try {
       await api.delete(`/indicators/${id}`);
       setIndicators(prev => prev.filter(i => i.id !== id));
-    } catch { /* ignore */ }
+    } catch (err) {
+      setDeleteErr(extractErrorMessage(err, 'Failed to delete indicator. Please try again.'));
+    }
   };
 
   return (
@@ -147,6 +165,7 @@ const CustomIndicators: React.FC = () => {
       {indicators.length > 0 && (
         <div style={s.card}>
           <div style={s.cardTitle}>Saved Indicators</div>
+          {deleteErr && <div style={s.error}>{deleteErr}</div>}
           {indicators.map(ind => (
             <div key={ind.id} style={s.indRow}>
               <div style={{ width:12, height:12, borderRadius:'50%', background:ind.color, flexShrink:0 }} />
