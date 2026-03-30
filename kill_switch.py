@@ -183,6 +183,20 @@ class KillSwitch:
         """Return True when trading must be halted."""
         return self._active
 
+    def reset_for_testing(self) -> None:
+        """
+        Reset all mutable state to the clean (inactive) baseline.
+
+        **Only call this from test fixtures.**  It bypasses the token check
+        and does NOT write/delete any files — it only resets in-memory state
+        so that tests are isolated from each other.
+        """
+        self._active = False
+        self._reason = ""
+        self._activated_at = None
+        self._callbacks.clear()
+        logger.debug("KillSwitch.reset_for_testing() called")
+
     @property
     def reason(self) -> str:
         """Human-readable reason for the last activation."""
