@@ -156,18 +156,22 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
         setRatesErr('Live crypto rates unavailable. Crypto amounts cannot be calculated until rates load.');
       });
 
-    // Flutterwave availability is a non-critical feature flag — silent on failure
+    // Flutterwave availability is a non-critical feature flag
     api.get<{ enabled: boolean }>('/billing/payments/flutterwave/status')
       .then(r => setFlwEnabled(r.data.enabled))
-      .catch(() => {});
+      .catch((err: unknown) => {
+        console.warn('[CryptoCheckout] Flutterwave status check failed:', err);
+      });
 
-    // Geo detection is a non-critical UX hint — silent on failure
+    // Geo detection is a non-critical UX hint
     fetch('https://ipapi.co/json/')
       .then(r => r.json())
       .then((d: { continent_code?: string }) => {
         if (d.continent_code === 'AF') setShowFlutterwave(true);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        console.warn('[CryptoCheckout] Geo detection failed:', err);
+      });
   }, []);
 
   // Cleanup polling on unmount
