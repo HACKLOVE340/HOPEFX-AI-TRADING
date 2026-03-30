@@ -58,6 +58,10 @@ _MAX_SPREAD_USD:       float = float(os.getenv("GATEKEEPER_MAX_SPREAD_USD",  "2.
 _SENT_BLACKOUT_THRESH: float = float(os.getenv("GATEKEEPER_SENT_BLACKOUT",   "0.85"))
 _IMPACT_BLACKOUT:      float = float(os.getenv("GATEKEEPER_IMPACT_BLACKOUT", "0.75"))
 
+# Public aliases used by tests and external callers
+MAX_DAILY_TRADES:    int   = _MAX_DAILY_TRADES
+DAILY_DD_LIMIT_PCT:  float = _DAILY_DD_LIMIT
+
 
 # ── Gate result ───────────────────────────────────────────────────────────────
 
@@ -66,6 +70,45 @@ class GateResult:
     passed:   bool
     reason:   str = ""
     failures: List[Dict] = field(default_factory=list)
+
+
+# ── News calendar ─────────────────────────────────────────────────────────────
+
+class _NewsCalendar:
+    """Lightweight news-event calendar for pre-trade blackout checks.
+
+    Holds a list of high-impact event datetimes.  ``is_blackout()`` returns
+    True when any event falls within ``window_minutes`` of *now*.
+
+    The orchestrator's MacroCalendarEngine is the authoritative source in
+    production; this class is used when no orchestrator is wired (tests,
+    standalone mode).
+    """
+
+    _BLACKOUT_MINUTES: int = int(os.getenv("NEWS_BLACKOUT_MINUTES", "30"))
+
+    def __init__(self) -> None:
+        self._events: List[datetime] = []
+
+    def add_event(self, dt: datetime) -> None:
+        """Register a high-impact event datetime (timezone-aware)."""
+        self._events.append(dt)
+
+    def is_blackout(self, window_minutes: int = None) -> bool:
+        """Return True if any registered event is within *window_minutes* of now."""
+        window = window_minutes if window_minutes is not None else self._BLACKOUT_MINUTES
+        now = datetime.now(timezone.utc)
+        cutoff = timedelta(minutes=window)
+        for ev in self._events:
+            # Normalise naive datetimes to UTC
+            if ev.tzinfo is None:
+                ev = ev.replace(tzinfo=timezone.utc)
+            if abs(now - ev) <= cutoff:
+                return True
+        return False
+
+    def clear(self) -> None:
+        self._events.clear()
 
 
 # ── Equity tracker ────────────────────────────────────────────────────────────
@@ -120,6 +163,7 @@ class Gatekeeper:
         self._orch         = orchestrator
         self._lineage      = lineage_store
         self._equity       = _EquityTracker(initial_balance)
+        self._calendar     = _NewsCalendar()
         self._kill_active: bool  = False
         self._paused_until: float = 0.0
         self._daily_trades: int  = 0
@@ -249,38 +293,51 @@ class Gatekeeper:
 
     def _run_checks_on_signal(self, signal) -> List[Dict]:
         """Run checks against an ExecutionSignal object (direct mode)."""
-        return self._run_checks(
-            kill_active    = self._kill_active,
-            paused_until   = self._paused_until,
-            daily_dd       = self._equity.daily_dd,
-            max_dd         = self._equity.max_dd,
+        equity = getattr(self, "_equity", _EquityTracker(0))
+        return self._run_checks_params(
+            kill_active    = getattr(self, "_kill_active", False),
+            paused_until   = getattr(self, "_paused_until", 0.0),
+            daily_dd       = equity.daily_dd,
+            max_dd         = equity.max_dd,
             data_quality   = self._get_data_quality(signal),
             is_blackout    = self._get_blackout(),
             impact_score   = self._get_impact_score(signal),
             sentiment_score= self._get_sentiment(signal),
-            daily_trades   = self._daily_trades,
+            daily_trades   = getattr(self, "_daily_trades", 0),
             confidence     = getattr(signal, "confidence", 0.0),
             spread         = getattr(signal, "tick_spread", 0.0),
         )
 
     def _run_checks_on_dict(self, signal: dict) -> List[Dict]:
         """Run checks against a signal dict (event-bus mode)."""
-        return self._run_checks(
-            kill_active    = self._kill_active,
-            paused_until   = self._paused_until,
-            daily_dd       = self._equity.daily_dd,
-            max_dd         = self._equity.max_dd,
+        equity = getattr(self, "_equity", _EquityTracker(0))
+        return self._run_checks_params(
+            kill_active    = getattr(self, "_kill_active", False),
+            paused_until   = getattr(self, "_paused_until", 0.0),
+            daily_dd       = equity.daily_dd,
+            max_dd         = equity.max_dd,
             data_quality   = self._get_data_quality_from_orch(),
             is_blackout    = self._get_blackout(),
             impact_score   = self._get_impact_score_from_orch(),
             sentiment_score= self._get_sentiment_from_orch(),
-            daily_trades   = self._daily_trades,
+            daily_trades   = getattr(self, "_daily_trades", 0),
             confidence     = float(signal.get("confidence", 0.0)),
             spread         = float(signal.get("spread", 0.0)),
         )
 
+    def _run_checks(self, signal) -> List[Dict]:
+        """Unified entry-point: accepts a signal dict or ExecutionSignal object.
+
+        This is the method called by tests and external code that has a
+        pre-constructed Gatekeeper instance and wants to evaluate a signal
+        without going through the async event-bus path.
+        """
+        if isinstance(signal, dict):
+            return self._run_checks_on_dict(signal)
+        return self._run_checks_on_signal(signal)
+
     @staticmethod
-    def _run_checks(
+    def _run_checks_params(
         kill_active:     bool,
         paused_until:    float,
         daily_dd:        float,
@@ -300,8 +357,9 @@ class Gatekeeper:
             return [{"reason": "kill_switch_active", "detail": "Kill switch active."}]
 
         # 2. Pause window
-        if time.monotonic() < paused_until:
-            remaining = paused_until - time.monotonic()
+        _paused = paused_until if paused_until is not None else 0.0
+        if time.monotonic() < _paused:
+            remaining = _paused - time.monotonic()
             return [{"reason": "post_breach_pause", "detail": f"{remaining:.0f}s remaining"}]
 
         # 3. Daily drawdown
@@ -379,17 +437,26 @@ class Gatekeeper:
         return getattr(signal, "data_quality", 1.0)
 
     def _get_data_quality_from_orch(self) -> float:
-        if self._orch is None:
+        if getattr(self, "_orch", None) is None:
             return 1.0
         try:
-            tick = self._orch.get_latest_tick()
+            tick = getattr(self, "_orch", None) and self._orch.get_latest_tick()
             return tick.confidence if tick else 1.0
         except Exception:
             return 1.0
 
     def _get_blackout(self) -> bool:
-        """Orchestrator MacroCalendarEngine is authoritative for blackout."""
-        if self._orch is None:
+        """Return True when a news blackout is active.
+
+        Priority:
+        1. Orchestrator MacroCalendarEngine (authoritative in production).
+        2. Local _NewsCalendar (used in tests / standalone mode).
+        """
+        # Local calendar check first (fast, no I/O)
+        cal = getattr(self, "_calendar", None)
+        if cal is not None and cal.is_blackout():
+            return True
+        if getattr(self, "_orch", None) is None:
             return False
         try:
             return not self._orch.is_safe_to_trade()
@@ -403,7 +470,7 @@ class Gatekeeper:
         return getattr(signal, "impact_score", 0.0)
 
     def _get_impact_score_from_orch(self) -> float:
-        if self._orch is None:
+        if getattr(self, "_orch", None) is None:
             return 0.0
         try:
             return self._orch.get_macro_impact_score()
@@ -417,7 +484,7 @@ class Gatekeeper:
         return getattr(signal, "sentiment_score", 0.0)
 
     def _get_sentiment_from_orch(self) -> float:
-        if self._orch is None:
+        if getattr(self, "_orch", None) is None:
             return 0.0
         try:
             features = self._orch.get_ml_features()
