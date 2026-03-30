@@ -414,39 +414,63 @@ def _detect_sharpe_outliers(symbol_results: List[Dict]) -> Tuple[List[str], List
     return outliers, reasons
 
 
-def _pool_pnls(symbol_results: List[Dict], exclude: Optional[List[str]] = None) -> Tuple[np.ndarray, int]:
+def _pool_pnls(
+    symbol_results: List[Dict], exclude: Optional[List[str]] = None
+) -> Tuple[np.ndarray, int]:
     """
     Pool per-trade P&Ls across symbols, optionally excluding named symbols.
 
     Resolution order for P&L data:
-    1. ``trades`` list — exact per-trade P&Ls (preferred)
-    2. Synthetic normal distribution from mean_pnl_pct + std_pnl_pct + n_trades
-       (used when the report was saved without the full trade list)
+    1. ``trades`` list — exact per-trade P&Ls (preferred, always used when available)
+    2. Normal-distribution approximation from mean_pnl_pct + std_pnl_pct + n_trades
+       when the report was saved without the full trade list.  This approximation
+       assumes Gaussian returns and ignores fat tails — Sharpe estimates from
+       approximated symbols are less reliable.  A warning is logged for each symbol
+       that falls back to this path.
+
+    Symbols with neither trades nor summary stats are skipped entirely.
     """
     exclude_set = set(exclude or [])
     all_pnls: List[float] = []
     n_total = 0
+    approximated_symbols: List[str] = []
     rng = np.random.default_rng(42)  # deterministic seed for reproducibility
 
     for r in symbol_results:
-        if r.get("symbol") in exclude_set:
+        sym = r.get("symbol", "unknown")
+        if sym in exclude_set:
             continue
         n = r.get("n_trades", 0)
         if n == 0:
             continue
 
         if "trades" in r and r["trades"]:
-            # Exact per-trade P&Ls
+            # Exact per-trade P&Ls — preferred path
             all_pnls.extend([t["pnl_pct"] for t in r["trades"]])
         elif r.get("mean_pnl_pct") is not None and r.get("std_pnl_pct") is not None:
-            # Synthetic — sample from reported distribution
+            # Gaussian approximation — only when exact trades are unavailable.
+            # Assumes normally distributed returns; underestimates tail risk.
             mu = float(r["mean_pnl_pct"])
             sigma = float(r["std_pnl_pct"])
-            synthetic = rng.normal(mu, sigma, size=n).tolist()
-            all_pnls.extend(synthetic)
-        # else: no P&L data available for this symbol — skip
+            approximated = rng.normal(mu, sigma, size=n).tolist()
+            all_pnls.extend(approximated)
+            approximated_symbols.append(sym)
+        else:
+            logger.warning(
+                "_pool_pnls: no P&L data for %s (n_trades=%d) — skipping", sym, n
+            )
+            continue
 
         n_total += n
+
+    if approximated_symbols:
+        logger.warning(
+            "_pool_pnls: Gaussian approximation used for %d symbol(s): %s. "
+            "Sharpe estimates for these symbols assume normal returns and may "
+            "underestimate tail risk. Re-run with full trade lists for exact results.",
+            len(approximated_symbols),
+            ", ".join(approximated_symbols),
+        )
 
     return np.array(all_pnls) if all_pnls else np.array([]), n_total
 
