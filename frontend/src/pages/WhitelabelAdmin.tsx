@@ -238,9 +238,25 @@ const TenantRow: React.FC<{
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>;
+    const detail = (e['response'] as Record<string, unknown> | undefined)?.['data'];
+    if (detail && typeof detail === 'object') {
+      const d = detail as Record<string, unknown>;
+      if (typeof d['detail'] === 'string') return d['detail'];
+      if (typeof d['message'] === 'string') return d['message'];
+    }
+    if (typeof e['message'] === 'string') return e['message'];
+  }
+  return fallback;
+}
+
 const WhitelabelAdmin: React.FC = () => {
   const [tenants,    setTenants]    = useState<Tenant[]>([]);
   const [loading,    setLoading]    = useState(true);
+  const [loadErr,    setLoadErr]    = useState<string | null>(null);
+  const [actionErr,  setActionErr]  = useState<string | null>(null);
   const [creating,   setCreating]   = useState(false);
   const [preview,    setPreview]    = useState<Tenant | null>(null);
   const [apiKeyMsg,  setApiKeyMsg]  = useState('');
@@ -248,11 +264,13 @@ const WhitelabelAdmin: React.FC = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadErr(null);
     try {
       const res = await api.get('/whitelabel/tenants');
       setTenants(res.data.tenants || []);
-    } catch {
+    } catch (err) {
       setTenants([]);
+      setLoadErr(extractErrorMessage(err, 'Failed to load tenants. Ensure the whitelabel API is running.'));
     } finally {
       setLoading(false);
     }
@@ -262,21 +280,25 @@ const WhitelabelAdmin: React.FC = () => {
 
   const handleAction = async (id: string, action: string) => {
     if (action === 'delete' && !window.confirm('Delete this tenant? This cannot be undone.')) return;
+    setActionErr(null);
     try {
       if (action === 'activate') await api.post(`/whitelabel/tenants/${id}/activate`);
       else if (action === 'suspend') await api.post(`/whitelabel/tenants/${id}/suspend`);
       else if (action === 'delete') await api.delete(`/whitelabel/tenants/${id}`);
       await load();
-    } catch { /* ignore */ }
+    } catch (err) {
+      setActionErr(extractErrorMessage(err, `Action "${action}" failed. Check permissions and try again.`));
+    }
   };
 
   const handleApiKey = async (id: string) => {
+    setActionErr(null);
     try {
       const res = await api.post(`/whitelabel/tenants/${id}/api-key`);
       setApiKeyMsg(`API Key (copy now — shown once): ${res.data.api_key}`);
       await load();
-    } catch {
-      setApiKeyMsg('Failed to generate API key.');
+    } catch (err) {
+      setActionErr(extractErrorMessage(err, 'Failed to generate API key. Check permissions and try again.'));
     }
   };
 
@@ -306,6 +328,20 @@ const WhitelabelAdmin: React.FC = () => {
         <div style={s.apiKeyBanner}>
           <span>{apiKeyMsg}</span>
           <button style={s.closeBtn} onClick={() => setApiKeyMsg('')}>✕</button>
+        </div>
+      )}
+
+      {/* Action / load errors */}
+      {actionErr && (
+        <div style={s.errorBanner}>
+          <span>{actionErr}</span>
+          <button style={s.closeBtn} onClick={() => setActionErr(null)}>✕</button>
+        </div>
+      )}
+      {loadErr && (
+        <div style={s.errorBanner}>
+          <span>{loadErr}</span>
+          <button style={s.closeBtn} onClick={() => setLoadErr(null)}>✕</button>
         </div>
       )}
 
@@ -396,6 +432,12 @@ const s: Record<string, React.CSSProperties> = {
   apiKeyBanner: {
     background: 'rgba(74,222,128,0.1)', border: '1px solid #4ade80', borderRadius: 8,
     padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#4ade80',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    wordBreak: 'break-all',
+  },
+  errorBanner: {
+    background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8,
+    padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#f87171',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     wordBreak: 'break-all',
   },
