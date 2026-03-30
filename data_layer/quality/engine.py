@@ -134,34 +134,56 @@ class DataQualityEngine:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge, Histogram
-            self._prom_accepted = Counter(
+            from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+
+            def _counter(name: str, doc: str, labels=None):
+                try:
+                    return Counter(name, doc, labels or [])
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            def _histogram(name: str, doc: str, labels=None, buckets=None):
+                kwargs = {"labelnames": labels or []}
+                if buckets:
+                    kwargs["buckets"] = buckets
+                try:
+                    return Histogram(name, doc, **kwargs)
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            def _gauge(name: str, doc: str, labels=None):
+                try:
+                    return Gauge(name, doc, labels or [])
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            self._prom_accepted  = _counter(
                 "hopefx_dqe_ticks_accepted_total",
                 "Ticks accepted by DataQualityEngine",
                 ["source"],
             )
-            self._prom_rejected = Counter(
+            self._prom_rejected  = _counter(
                 "hopefx_dqe_ticks_rejected_total",
                 "Ticks rejected by DataQualityEngine",
                 ["source", "reason"],
             )
-            self._prom_latency = Histogram(
+            self._prom_latency   = _histogram(
                 "hopefx_dqe_source_latency_ms",
                 "Per-source tick latency in milliseconds",
-                ["source"],
+                labels=["source"],
                 buckets=[1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500],
             )
-            self._prom_confidence = Gauge(
+            self._prom_confidence = _gauge(
                 "hopefx_dqe_source_confidence",
                 "Per-source confidence score",
                 ["source"],
             )
-            self._prom_consensus = Gauge(
+            self._prom_consensus  = _gauge(
                 "hopefx_dqe_consensus_price_usd",
                 "Cross-source consensus gold price",
             )
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("DataQualityEngine: Prometheus init skipped: %s", _exc)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
