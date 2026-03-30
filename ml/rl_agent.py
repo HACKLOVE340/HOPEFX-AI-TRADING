@@ -8,7 +8,7 @@ HOPEFX Deep RL Agent — Stable-Baselines3 PPO on a real Gymnasium environment.
 
 Architecture
 ------------
-* ``ForexTradingEnv``  — Gymnasium environment backed by real OANDA candles.
+* ``ForexTradingEnv``  — Gymnasium environment backed by real OHLCV candles.
   Observation: 32-dim feature vector (same as vector store).
   Action space: Discrete(3) — HOLD / BUY / SELL.
   Reward: risk-adjusted return (Sharpe-like incremental reward).
@@ -16,14 +16,24 @@ Architecture
 * ``RLAgent``          — wraps SB3 PPO with train / evaluate / predict API.
   Saves/loads models to ``ml/saved_models/rl/``.
 
-* ``RLAgentTrainer``   — async trainer that fetches live candles from OANDA,
-  trains the agent, and reports metrics.
+* ``RLAgentTrainer``   — async trainer that fetches historical candles via any
+  object with a ``get_candles(symbol, timeframe, count)`` coroutine, trains
+  the agent, and reports metrics.
+
+  The candle source is broker-agnostic.  Pass an ``OANDAStream`` execution
+  broker for historical warm-up data, or any other async candle provider.
+  Live price ticks come from ``data_feed.NuclearStreamer``, not from here.
 
 Usage
 -----
     from ml.rl_agent import RLAgentTrainer
+    from brokers.oanda_stream import OANDAStream
 
-    trainer = RLAgentTrainer(oanda_stream=stream)
+    broker = OANDAStream(api_key=..., account_id=..., instruments=["XAU_USD"])
+    await broker.__aenter__()
+    await broker.connect()
+
+    trainer = RLAgentTrainer(candle_source=broker)
     metrics = await trainer.train(
         symbol="XAU_USD", timeframe="H1", timesteps=50_000
     )
@@ -482,20 +492,42 @@ class RLAgent:
 
 class RLAgentTrainer:
     """
-    Fetches live OANDA candles, trains the RL agent, and returns metrics.
+    Fetches historical candles, trains the RL agent, and returns metrics.
 
     Parameters
     ----------
-    oanda_stream : OANDAStream instance (must be connected)
-    model_name   : name for saving the model
+    candle_source : Any object with a ``get_candles(symbol, timeframe, count)``
+                    coroutine.  Typically an ``OANDAStream`` execution broker
+                    used for historical warm-up data only — not for live ticks.
+                    Live price ticks come from ``data_feed.NuclearStreamer``.
+    model_name    : name for saving the trained model.
+
+    Deprecated parameter
+    --------------------
+    ``oanda_stream`` is accepted as a keyword alias for ``candle_source`` to
+    preserve backwards compatibility with existing call sites.  It will be
+    removed in a future release.
     """
 
     def __init__(
         self,
-        oanda_stream: Any,
+        candle_source: Any = None,
         model_name: str = "hopefx_ppo",
+        # Backwards-compat alias — remove after all call sites are updated.
+        oanda_stream: Any = None,
     ):
-        self.stream = oanda_stream
+        if candle_source is None and oanda_stream is not None:
+            logger.warning(
+                "RLAgentTrainer: 'oanda_stream' parameter is deprecated — "
+                "use 'candle_source' instead."
+            )
+            candle_source = oanda_stream
+        if candle_source is None:
+            raise ValueError(
+                "RLAgentTrainer requires a 'candle_source' with a "
+                "get_candles(symbol, timeframe, count) coroutine."
+            )
+        self.stream = candle_source
         self.agent = RLAgent(model_name=model_name)
 
     async def train(
