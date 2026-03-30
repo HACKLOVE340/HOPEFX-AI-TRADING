@@ -184,6 +184,8 @@ class MarketReplayEngine:
 
         Each tick passes through DQE validation and normalisation.
         """
+        # Import DQE once before the loop — not inside the generator body
+        # to avoid repeated module lookups on every tick.
         from data_layer.quality.engine import dqe
 
         if self._replay_ticks is None or self._replay_ticks.empty:
@@ -192,13 +194,18 @@ class MarketReplayEngine:
         if self._replay_ticks is None or self._replay_ticks.empty:
             return
 
+        # Pre-compute Timestamp bounds once (not on every iteration)
+        ts_start = pd.Timestamp(start, tz="UTC")
+        ts_end   = pd.Timestamp(end,   tz="UTC")
+
         self._is_replaying = True
         prev_ts: Optional[datetime] = None
 
         for ts, row in self._replay_ticks.iterrows():
-            if ts < pd.Timestamp(start, tz="UTC"):
+            if ts < ts_start:
                 continue
-            if ts > pd.Timestamp(end, tz="UTC"):
+            # Causal hard stop: never yield a tick at or after end
+            if ts >= ts_end:
                 break
 
             self._replay_cursor = ts.to_pydatetime()
@@ -208,6 +215,14 @@ class MarketReplayEngine:
             mid = float(row.get("mid", (bid + ask) / 2.0))
 
             if bid <= 0 or ask <= 0:
+                continue
+
+            # Sanity: reject ticks with inverted spread
+            if ask < bid:
+                logger.debug(
+                    "MarketReplayEngine: inverted spread at %s bid=%.4f ask=%.4f — skipped",
+                    ts, bid, ask,
+                )
                 continue
 
             raw_tick = GoldTick(
@@ -220,9 +235,8 @@ class MarketReplayEngine:
                 spread     = round(ask - bid, 4),
             )
 
-            # Pass through DQE
-            validated = dqe.validate_tick(raw_tick, received_at=ts.timestamp())
-            # Pass through normalisation
+            # Pass through DQE then normalisation — same pipeline as live ticks
+            validated  = dqe.validate_tick(raw_tick, received_at=ts.timestamp())
             normalised = normalization_pipeline.normalize_tick(validated)
 
             # Speed control for real-time simulation

@@ -395,6 +395,9 @@ class NormalizationPipeline:
         if not valid:
             return pd.DataFrame()
 
+        # Volume: unit volume (1.0 per tick) — spread*1000 was fabricated data
+        # that created spurious correlation between spread and volume signals.
+        # Tick count is the only honest proxy when no real trade volume exists.
         records = [
             {
                 "timestamp": t.timestamp,
@@ -402,7 +405,7 @@ class NormalizationPipeline:
                 "high":      t.mid,
                 "low":       t.mid,
                 "close":     t.mid,
-                "volume":    max(t.spread * 1000.0, 1.0),
+                "volume":    1.0,
             }
             for t in valid
         ]
