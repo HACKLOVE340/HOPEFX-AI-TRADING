@@ -167,46 +167,19 @@ class HistoricalDataLoader:
                         self._cache[cache_key] = df
                         return df
 
-            # Fallback: generate synthetic data for testing
-            logger.warning(f"Using synthetic data for {symbol}")
-            return self._generate_synthetic_data(symbol, start, end)
+            # No data found in any source — raise so the caller knows
+            # the backtest cannot proceed with real data.
+            raise FileNotFoundError(
+                f"No historical data found for {symbol} "
+                f"({start.date()} – {end.date()}) in CSV files or database. "
+                "Download real OHLCV data before running a backtest."
+            )
 
+        except FileNotFoundError:
+            raise  # propagate the explicit error above
         except Exception as e:
             logger.error(f"Failed to load data for {symbol}: {e}")
-            return None
-
-    def _generate_synthetic_data(
-        self, symbol: str, start: datetime, end: datetime
-    ) -> pd.DataFrame:
-        """Generate synthetic price data for testing"""
-        periods = int((end - start).total_seconds() / 3600)  # Hourly bars
-
-        np.random.seed(42)  # Reproducible
-
-        # Generate random walk
-        returns = np.random.normal(0.0001, 0.001, periods)
-        prices = 100 * np.exp(np.cumsum(returns))
-
-        # Generate OHLC from close
-        df = pd.DataFrame(
-            {
-                "timestamp": pd.date_range(start, periods=periods, freq="H"),
-                "close": prices,
-            }
-        )
-
-        df["open"] = df["close"].shift(1)
-        df["high"] = df[["open", "close"]].max(axis=1) * (
-            1 + abs(np.random.normal(0, 0.001, periods))
-        )
-        df["low"] = df[["open", "close"]].min(axis=1) * (
-            1 - abs(np.random.normal(0, 0.001, periods))
-        )
-        df["volume"] = np.random.randint(1000, 10000, periods)
-
-        df = df.fillna(method="bfill")
-
-        return df
+            raise
 
 
 class SimulatedBroker:
@@ -424,9 +397,10 @@ class SimulatedBroker:
                 multiplier = 1.0
             return base_slippage * multiplier * 0.5  # half-spread model
 
-        # Legacy random fallback — use gold pip
-        pip = 0.10 if price > 100 else 0.0001
-        return abs(np.random.normal(0, self.config.slippage_pips * pip / price))
+        raise ValueError(
+            f"Unknown slippage_model {self.config.slippage_model!r}. "
+            "Supported values: 'fixed', 'variable', 'almgren_chriss'."
+        )
 
     def _record_trade(
         self,
