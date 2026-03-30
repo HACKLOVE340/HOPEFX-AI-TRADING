@@ -740,3 +740,26 @@ def walk_forward_eval(
     )
     logger.info("Walk-forward complete: %s", result)
     return result
+
+
+# ── Module-level singleton ─────────────────────────────────────────────────────
+
+_rl_agent_singleton: Optional["RLAgent"] = None
+_rl_agent_lock = __import__("threading").Lock()
+
+
+def get_rl_agent(model_name: str = "hopefx_ppo") -> Optional["RLAgent"]:
+    """
+    Return the module-level RLAgent singleton (thread-safe).
+
+    Attempts to load the saved model on first call.  Returns None if
+    stable-baselines3 is not installed or no saved model exists.
+    """
+    global _rl_agent_singleton
+    if _rl_agent_singleton is None:
+        with _rl_agent_lock:
+            if _rl_agent_singleton is None:
+                agent = RLAgent(model_name=model_name)
+                loaded = agent.load()
+                _rl_agent_singleton = agent if loaded else None
+    return _rl_agent_singleton

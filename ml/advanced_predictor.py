@@ -717,6 +717,7 @@ class HybridEnsemblePredictor:
 
         # Meta-blender (Ridge on component probabilities)
         self._meta: Optional[Any] = None
+        self._meta_scaler: Optional[Any] = None
         self._meta_trained: bool = False
 
         self._lock = threading.Lock()
@@ -832,9 +833,11 @@ class HybridEnsemblePredictor:
         p_rl = self._rl_predict(X.flatten()) if w_rl > 0 else 0.5
 
         if self._meta_blend and self._meta_trained and self._meta is not None:
-            # Meta-blender: Ridge on [p_xgb, p_lstm, p_rl]
+            # Meta-blender: Ridge on scaled [p_xgb, p_lstm, p_rl]
             try:
                 meta_input = np.array([[p_xgb, p_lstm, p_rl]])
+                if self._meta_scaler is not None:
+                    meta_input = self._meta_scaler.transform(meta_input)
                 blended = float(self._meta.predict(meta_input)[0])
                 return float(np.clip(blended, 0.0, 1.0))
             except Exception:
@@ -869,6 +872,7 @@ class HybridEnsemblePredictor:
 
         with self._lock:
             self._meta = meta
+            self._meta_scaler = scaler
             self._meta_trained = True
         logger.info(
             "HybridEnsemble meta-blender trained on %d samples", len(y)
