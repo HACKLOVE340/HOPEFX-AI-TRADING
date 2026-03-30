@@ -20,8 +20,7 @@
  *   - useBootstrapData() → TanStack Query → Zustand (all orchestrator data)
  */
 
-import React, { useEffect } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useBootstrapData } from '../hooks/useOrchestratorData';
 import { useStore } from '../store';
@@ -37,18 +36,7 @@ import { MacroCalendar }      from '../components/panels/MacroCalendar';
 import { OrderBookDepth }     from '../components/panels/OrderBookDepth';
 import { LiveSignalFeed }     from '../components/panels/LiveSignalFeed';
 
-// ── Query client (singleton for this page) ────────────────────────────────────
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry:              2,
-      retryDelay:         (attempt) => Math.min(1000 * 2 ** attempt, 10_000),
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-
-// ── Inner dashboard (inside QueryClientProvider) ──────────────────────────────
+// ── Dashboard inner ───────────────────────────────────────────────────────────
 
 function DashboardInner() {
   // Connect WebSocket
@@ -111,11 +99,8 @@ function DashboardInner() {
 }
 
 // ── Exported page ─────────────────────────────────────────────────────────────
+// QueryClientProvider is provided by App.tsx root — no wrapper needed here.
 
 export default function TradingDashboard() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <DashboardInner />
-    </QueryClientProvider>
-  );
+  return <DashboardInner />;
 }
