@@ -120,16 +120,38 @@ exclude_lines = [
 # Tests are excluded — assert statements and hardcoded test credentials are expected.
 severity = "high"
 confidence = "medium"
+exclude_dirs = ["tests", "alembic", "build", "dist", ".venv", "venv"]
+skips = [
+    "B101",  # assert_used — acceptable in tests and guard clauses
+    "B311",  # random — non-crypto random is fine for simulations
+]
 
 # ── mypy ──────────────────────────────────────────────────────────────────────
 # Global defaults: non-strict for the annotation backlog.
 # Per-module overrides below enforce strict on the risk-critical packages.
 [tool.mypy]
 python_version = "3.11"
+# Prevents "HOPEFX-AI-TRADING is not a valid Python package name" when mypy
+# is invoked from the repo root — the directory name contains uppercase and
+# hyphens which are not valid Python identifiers.
+explicit_package_bases = true
 ignore_missing_imports = true
 warn_return_any = false
 warn_unused_ignores = true
 no_implicit_optional = true
+# Exclude generated, vendored, test-fixture directories, and root-level
+# legacy files that shadow canonical packages (e.g. execution.py vs execution/).
+exclude = [
+    "alembic/",
+    "build/",
+    "dist/",
+    "site/",
+    "\\.venv/",
+    "venv/",
+    "^execution\\.py$",
+    "^ml/features\\.py$",
+    "^ml/training\\.py$",
+]
 
 # Strict gate: risk analytics (VaR, GARCH, ES)
 [[tool.mypy.overrides]]
@@ -158,30 +180,3 @@ module = ["ml.inference_engine", "ml.live_inference", "ml.pipeline"]
 disallow_untyped_defs = true
 check_untyped_defs = true
 no_implicit_optional = true
-exclude_dirs = ["tests", "alembic", "build", "dist", ".venv", "venv"]
-skips = [
-    "B101",  # assert_used — acceptable in tests and guard clauses
-    "B311",  # random — non-crypto random is fine for simulations
-]
-
-[tool.mypy]
-# Prevents "HOPEFX-AI-TRADING is not a valid Python package name" when mypy
-# is invoked from the repo root — the directory name contains uppercase and
-# hyphens which are not valid Python identifiers.
-explicit_package_bases = true
-ignore_missing_imports = true
-# Exclude generated, vendored, test-fixture directories, and root-level
-# legacy files that shadow canonical packages (e.g. execution.py vs execution/).
-exclude = [
-    "alembic/",
-    "build/",
-    "dist/",
-    "site/",
-    "\\.venv/",
-    "venv/",
-    "^execution\\.py$",
-    "^ml/features\\.py$",
-    "^ml/training\\.py$",
-]
-
-# duplicate [build-system] removed — kept setuptools declaration at top of file
