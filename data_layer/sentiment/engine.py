@@ -108,22 +108,35 @@ class NewsSentimentEngine:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Counter, Gauge
-            self._prom_sentiment = Gauge(
+            from prometheus_client import Counter, Gauge, REGISTRY
+
+            def _gauge(name: str, doc: str):
+                try:
+                    return Gauge(name, doc)
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            def _counter(name: str, doc: str, labels=None):
+                try:
+                    return Counter(name, doc, labels or [])
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            self._prom_sentiment  = _gauge(
                 "hopefx_news_sentiment_ema",
                 "EMA of gold news sentiment score [-1, 1]",
             )
-            self._prom_art_count = Counter(
+            self._prom_art_count  = _counter(
                 "hopefx_news_articles_scored_total",
                 "Total gold-relevant articles scored",
                 ["source"],
             )
-            self._prom_bull_ratio = Gauge(
+            self._prom_bull_ratio = _gauge(
                 "hopefx_news_bullish_ratio",
                 "Fraction of recent articles that are bullish",
             )
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("NewsSentimentEngine: Prometheus init skipped: %s", _exc)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -257,6 +270,9 @@ class NewsSentimentEngine:
         Return 4 sentiment ML features.
 
         as_of: causal cutoff — only use articles published before this time.
+
+        When no articles are in memory (cold start), attempts to read the
+        last cached features from Redis before returning neutral defaults.
         """
         now = as_of or datetime.now(timezone.utc)
         cutoff_1h = now - timedelta(hours=_ARTICLE_WINDOW_H)
@@ -268,6 +284,21 @@ class NewsSentimentEngine:
         ]
 
         if not recent:
+            # Try Redis cache on cold start (no as_of = live mode only)
+            if as_of is None and self._redis:
+                try:
+                    import json
+                    raw = self._redis.get("hopefx:dl:sentiment")
+                    if raw:
+                        cached = json.loads(raw)
+                        return {
+                            "news_sentiment_score":    float(cached.get("news_sentiment_score",    self._sentiment_ema)),
+                            "news_sentiment_momentum": float(cached.get("news_sentiment_momentum", 0.0)),
+                            "news_article_count_1h":   float(cached.get("news_article_count_1h",   0.0)),
+                            "news_bullish_ratio":      float(cached.get("news_bullish_ratio",       0.5)),
+                        }
+                except Exception as exc:
+                    logger.debug("NewsSentimentEngine Redis read error: %s", exc)
             return {
                 "news_sentiment_score":    round(self._sentiment_ema, 4),
                 "news_sentiment_momentum": 0.0,
@@ -413,7 +444,14 @@ class NewsSentimentEngine:
             import json
             features = self.get_ml_features()
             payload  = json.dumps(features)
-            await asyncio.get_event_loop().run_in_executor(
+            loop = asyncio.get_event_loop()
+            # Primary key used by orchestrator and get_ml_features() cold-start read
+            await loop.run_in_executor(
+                None,
+                lambda: self._redis.setex("hopefx:dl:sentiment", 300, payload),
+            )
+            # Legacy key kept for backwards compatibility with any existing consumers
+            await loop.run_in_executor(
                 None,
                 lambda: self._redis.setex("hopefx:news:sentiment", 300, payload),
             )
