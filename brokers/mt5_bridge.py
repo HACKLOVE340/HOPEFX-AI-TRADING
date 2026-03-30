@@ -12,7 +12,7 @@ Features
 --------
 - Direct MetaTrader5 package integration (connect / send_order / monitor_fill / close_position)
 - Hybrid mode: Python strategy signals → MT5 execution
-- .ex5 signal-export stub: writes JSON signal files that a companion MT5 EA reads
+- .ex5 signal exporter: writes JSON signal files that a companion MT5 EA reads
 - PropEnforcer integration: every order is gated through prop-firm compliance rules
 - Exponential-backoff retry on transient errors
 - Per-call timeout enforcement
@@ -143,7 +143,7 @@ def _retry(max_attempts: int = 3, base_delay: float = 0.5):
     return decorator
 
 
-# ── .ex5 signal export stub ───────────────────────────────────────────────────
+# ── .ex5 signal exporter ─────────────────────────────────────────────────────
 
 
 class EX5SignalExporter:
