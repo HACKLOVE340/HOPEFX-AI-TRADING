@@ -45,12 +45,21 @@ def stub_user() -> TokenPayload:
 
 @pytest.fixture
 def app(stub_user: TokenPayload) -> FastAPI:
-    from api.social_feed import router, leaderboard_router
-    from api.auth import get_current_user
+    import sys
+    import importlib
+
+    # Always use the canonical module instances — survive any sys.modules reloads
+    # performed by other tests (e.g. test_oanda_paper_clock clears sys.modules).
+    auth_mod = sys.modules.get("api.auth") or importlib.import_module("api.auth")
+    sf_mod = sys.modules.get("api.social_feed") or importlib.import_module("api.social_feed")
+
     _app = FastAPI()
-    _app.include_router(router)
-    _app.include_router(leaderboard_router)
-    _app.dependency_overrides[get_current_user] = lambda: stub_user
+    _app.include_router(sf_mod.router)
+    _app.include_router(sf_mod.leaderboard_router)
+    # Override using the exact function object the router captured at import time
+    _app.dependency_overrides[sf_mod.get_current_user] = lambda: stub_user
+    # Also override via auth module reference in case FastAPI resolves it there
+    _app.dependency_overrides[auth_mod.get_current_user] = lambda: stub_user
     return _app
 
 
