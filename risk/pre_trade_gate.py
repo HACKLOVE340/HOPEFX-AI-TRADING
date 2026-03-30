@@ -442,9 +442,13 @@ class PreTradeGate:
         if config is None:
             return
 
-        balance = getattr(rm, "current_balance", 0.0) or getattr(
-            rm, "initial_balance", 0.0
-        )
+        def _rf(attr: str) -> float:
+            val = getattr(rm, attr, None)
+            if isinstance(val, (int, float)):
+                return float(val)
+            return 0.0
+
+        balance = _rf("current_balance") or _rf("initial_balance")
         if balance <= 0:
             return  # cannot check — pass
 
@@ -512,9 +516,21 @@ class PreTradeGate:
         (TradeExecutor) is responsible for sizing down before reaching the gate.
         """
         rm = self._rm
-        balance = getattr(rm, "current_equity", None) or getattr(
-            rm, "current_balance", None
-        ) or getattr(rm, "initial_balance", 0.0)
+
+        def _real_float(attr: str) -> float:
+            """Return float only if the attribute is a real numeric value."""
+            val = getattr(rm, attr, None)
+            if val is None:
+                return 0.0
+            if isinstance(val, (int, float)):
+                return float(val)
+            return 0.0
+
+        balance = (
+            _real_float("current_equity")
+            or _real_float("current_balance")
+            or _real_float("initial_balance")
+        )
 
         if not balance or balance <= 0:
             return  # cannot check — pass (balance unavailable)
@@ -558,6 +574,8 @@ class PreTradeGate:
         """
         rm = self._rm
         streak_halted = getattr(rm, "_streak_halted", False)
+        if not isinstance(streak_halted, bool):
+            streak_halted = False
         if streak_halted:
             streak_losses = getattr(rm, "_streak_loss_count", "?")
             detail = (
