@@ -71,6 +71,7 @@ class GoldFeedBase(ABC):
         self._total_ticks: int = 0
         self._cb_state: CircuitState = CircuitState.CLOSED
         self._cb_opened_at: float = 0.0
+        self._last_error_msg: str = ""
         self._prom_ticks    = None
         self._prom_errors   = None
         self._prom_latency  = None
@@ -115,6 +116,7 @@ class GoldFeedBase(ABC):
     async def close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()
+            self._session = None
 
     # ── Circuit breaker ───────────────────────────────────────────────────────
 
@@ -137,9 +139,11 @@ class GoldFeedBase(ABC):
         if self._prom_cb_state:
             self._prom_cb_state.set(0)
 
-    def _on_error(self, reason: str = "unknown") -> None:
+    def _on_error(self, reason: str = "unknown", msg: str = "") -> None:
         self._consecutive_errors += 1
         self._total_errors += 1
+        if msg:
+            self._last_error_msg = msg
         if self._prom_errors:
             try:
                 self._prom_errors.labels(reason=reason).inc()
@@ -200,10 +204,9 @@ class GoldFeedBase(ABC):
                         continue
 
                     if resp.status in (401, 403):
-                        self._on_error("auth")
-                        raise RuntimeError(
-                            f"{self.name.value} auth error HTTP {resp.status}"
-                        )
+                        msg = f"HTTP {resp.status} — check {self._api_key_env}"
+                        self._on_error("auth", msg=msg)
+                        raise RuntimeError(f"{self.name.value}: {msg}")
 
                     if resp.status >= 500:
                         raise aiohttp.ClientResponseError(
@@ -220,10 +223,11 @@ class GoldFeedBase(ABC):
                     return await resp.json(content_type=None)
 
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-                self._on_error("http")
-                wait = backoff + random.uniform(0, 0.5)
+                self._on_error("http", msg=str(exc))
+                # Full-jitter: sleep between 0 and cap
+                wait = random.uniform(0, min(backoff, 30.0))
                 logger.warning(
-                    "%s HTTP error attempt=%d err=%s — retry in %.1fs",
+                    "%s HTTP error attempt=%d/4 err=%s — retry in %.2fs",
                     self.name.value, attempt + 1, exc, wait,
                 )
                 if attempt < 3:
@@ -232,7 +236,7 @@ class GoldFeedBase(ABC):
                 else:
                     raise
 
-        raise RuntimeError(f"{self.name.value}: all retry attempts exhausted")
+        raise RuntimeError(f"{self.name.value}: all 4 retry attempts exhausted")
 
     # ── Abstract interface ────────────────────────────────────────────────────
 
@@ -307,4 +311,5 @@ class GoldFeedBase(ABC):
             "error_rate":         round(
                 self._total_errors / max(self._total_calls, 1), 4
             ),
+            "last_error":         self._last_error_msg or None,
         }
