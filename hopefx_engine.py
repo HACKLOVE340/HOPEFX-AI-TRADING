@@ -207,6 +207,9 @@ class HopeFXEngine:
         self._trade_logger = None
         self._heartbeat = None
         self._predictor = None
+        # Data layer orchestrator — started in start(), stopped in stop().
+        # Provides live gold ticks, sentiment, macro features to all components.
+        self._dl_orchestrator = None
 
         # Rolling OHLCV window per symbol
         self._ohlcv_window: Dict[str, deque] = {}
@@ -276,10 +279,35 @@ class HopeFXEngine:
         # 0. Startup environment validation — aborts in production on fatal errors
         validate_startup_environment()
 
-        # 1. Risk manager
+        # 0a. Start data layer orchestrator — MUST be first so all downstream
+        #     components (RiskManager, InferenceEngine, features_extended) have
+        #     live gold ticks, sentiment, and macro features from the moment
+        #     the engine begins processing bars.
+        try:
+            from data_layer.orchestrator import orchestrator as _dl_orch
+            self._dl_orchestrator = _dl_orch
+            await _dl_orch.start()
+            logger.info(
+                "Data layer orchestrator started — %d ML features available",
+                len(_dl_orch.get_ml_features()),
+            )
+        except Exception as _dl_exc:
+            logger.error(
+                "Data layer orchestrator failed to start: %s — "
+                "ML features will be zero until resolved",
+                _dl_exc,
+            )
+            self._dl_orchestrator = None
+
+        # 1. Risk manager — wired to orchestrator for data quality + macro gating
         from risk.manager import RiskManager
         initial_balance = float(_optional("INITIAL_BALANCE", "100000"))
-        self._risk_manager = RiskManager(initial_balance=initial_balance)
+        self._risk_manager = RiskManager(
+            initial_balance=initial_balance,
+            orchestrator=self._dl_orchestrator,
+            lineage_store=getattr(self._dl_orchestrator, "_lineage", None)
+            if self._dl_orchestrator else None,
+        )
         logger.info("RiskManager initialised (balance=%.2f)", initial_balance)
 
         # 2. HOPEFXBrain
@@ -818,6 +846,14 @@ class HopeFXEngine:
                 await self._broker.__aexit__(None, None, None)
             except Exception as _exc:
                 logger.debug("Broker close error: %s", _exc)
+        # Stop data layer orchestrator last — all components that consume it
+        # must be stopped first so no in-flight tick callbacks fire after stop.
+        if self._dl_orchestrator:
+            try:
+                await self._dl_orchestrator.stop()
+                logger.info("Data layer orchestrator stopped")
+            except Exception as _exc:
+                logger.debug("Data layer orchestrator stop error: %s", _exc)
         logger.info(
             "HOPEFX Engine stopped — bars=%d signals=%d",
             self._bar_count,

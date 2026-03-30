@@ -126,11 +126,12 @@ async def run_example(max_ticks: int = 100) -> None:
             "No live tick — loading last 24h of Dukascopy M1 data for order flow"
         )
         from datetime import timedelta
-        from data_layer.replay.engine import MarketReplayEngine
+        # Access replay engine via orchestrator — single entry point rule
+        from data_layer.orchestrator import orchestrator as _orch
 
         end   = datetime.now(timezone.utc)
         start = end - timedelta(hours=24)
-        engine = MarketReplayEngine()
+        engine = _orch._replay
 
         tick_count = 0
         async for replay_tick in engine.replay_ticks(
