@@ -724,10 +724,24 @@ class MobileAPIServer:
 
 
 class MobileAPI:
-    """Lightweight mobile API client for tests and simple consumers."""
+    """
+    Lightweight mobile API client.
 
-    def __init__(self, compression_enabled: bool = True, **kwargs: Any) -> None:
+    For production portfolio data, pass an *app_state* object that exposes
+    a ``broker`` attribute with ``get_account_info()`` and ``get_positions()``
+    methods.  Without app_state the portfolio endpoint returns an empty
+    skeleton — callers should use the full MobileAPIServer HTTP endpoints
+    instead of this client when live data is required.
+    """
+
+    def __init__(
+        self,
+        compression_enabled: bool = True,
+        app_state: Any = None,
+        **kwargs: Any,
+    ) -> None:
         self.compression_enabled = compression_enabled
+        self._app_state = app_state
 
     def get_portfolio_mobile(
         self,
@@ -735,12 +749,61 @@ class MobileAPI:
         include_charts: bool = False,
         compression: bool = True,
     ) -> dict:
+        """
+        Return portfolio summary for *user_id*.
+
+        Attempts to read live data from self._app_state.broker when available.
+        Falls back to an empty skeleton when no broker is wired — callers
+        must check ``data_source`` in the response to detect this case.
+        """
+        total_value = 0.0
+        positions: list = []
+        balance = 0.0
+        data_source = "none"
+
+        broker = getattr(self._app_state, "broker", None) if self._app_state else None
+        if broker is not None:
+            try:
+                if hasattr(broker, "get_account_info"):
+                    info = broker.get_account_info()
+                    if hasattr(info, "__dict__"):
+                        info = info.__dict__
+                    if isinstance(info, dict):
+                        balance = float(info.get("balance") or info.get("equity") or 0.0)
+                        total_value = float(info.get("equity") or balance)
+                    data_source = "broker"
+                elif hasattr(broker, "balance"):
+                    balance = float(broker.balance)
+                    total_value = float(getattr(broker, "equity", balance))
+                    data_source = "broker"
+            except Exception as exc:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "MobileAPI.get_portfolio_mobile: broker data error: %s", exc
+                )
+
+            try:
+                if hasattr(broker, "get_positions"):
+                    raw = broker.get_positions()
+                    if raw:
+                        positions = [
+                            p.__dict__ if hasattr(p, "__dict__") else p
+                            for p in raw
+                        ]
+            except Exception as exc:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "MobileAPI.get_portfolio_mobile: positions error: %s", exc
+                )
+
         return {
             "user_id": user_id,
-            "total_value": 0.0,
-            "positions": [],
+            "total_value": total_value,
+            "balance": balance,
+            "positions": positions,
             "compression": compression,
             "charts": include_charts,
+            "data_source": data_source,
         }
 
     def place_order_mobile(
