@@ -11,17 +11,21 @@ HOPEFX Engine — unified trading engine entry point.
 What runs
 ---------
 1. Broker selection  — BROKER env var (oanda | mt5 | paper | alpaca …)
-2. HOPEFXBrain       — regime detection, ML predictor, strategy routing
-3. RiskManager       — drawdown tracker, prop-firm enforcement
-4. TradeLogger       — fills + equity snapshots to CSV + Prometheus
-5. HeartbeatService  — Telegram "I'm alive" ping every hour
-6. Live loop         — tick → brain.process_bar() → risk gate → order
+2. NuclearStreamer   — live price ticks (Finnhub / Twelve Data / Polygon)
+3. HOPEFXBrain       — regime detection, ML predictor, strategy routing
+4. RiskManager       — drawdown tracker, prop-firm enforcement
+5. TradeLogger       — fills + equity snapshots to CSV + Prometheus
+6. HeartbeatService  — Telegram "I'm alive" ping every hour
+7. Live loop         — tick → brain.process_bar() → risk gate → order
 
-Broker hot paths
-----------------
-  BROKER=oanda  — OANDA SSE stream (default when OANDA_API_KEY is set)
-  BROKER=mt5    — MT5Bridge (direct or signal-export mode)
-  BROKER=paper  — PaperTradingBroker (no real orders)
+Data / Execution separation
+----------------------------
+  NuclearStreamer  — SOLE source of live price ticks (WebSocket, broker-free)
+  BROKER=oanda     — OANDA REST execution only (orders, positions, account)
+  BROKER=mt5       — MT5Bridge execution only
+  BROKER=paper     — PaperTradingBroker (no real orders)
+
+OANDA is NEVER used for streaming.  All ticks come from NuclearStreamer.
 
 All credentials are read from environment variables (see .env.example).
 """
@@ -194,7 +198,10 @@ class HopeFXEngine:
 
         # ── component handles ─────────────────────────────────────────────────
         self._broker = None
-        self._stream = None
+        # NuclearStreamer instance — live price ticks (WebSocket, broker-free).
+        # OANDA / MT5 are NEVER used for streaming; they are execution-only.
+        self._streamer = None
+        self._streamer_task = None
         self._brain = None
         self._risk_manager = None
         self._trade_logger = None
@@ -337,6 +344,12 @@ class HopeFXEngine:
             self._init_generic_broker()
 
     async def _init_oanda(self) -> None:
+        """
+        Initialise the OANDA execution broker (REST only).
+
+        OANDA is used exclusively for order placement, account queries, and
+        position management.  Live price streaming is handled by NuclearStreamer.
+        """
         oanda_key = _optional("OANDA_API_KEY")
         oanda_account = _optional("OANDA_ACCOUNT_ID")
         if not oanda_key or not oanda_account:
@@ -345,19 +358,19 @@ class HopeFXEngine:
             return
         try:
             from brokers.oanda_stream import OANDAStream
-            self._stream = OANDAStream(
+            broker = OANDAStream(
                 api_key=oanda_key,
                 account_id=oanda_account,
                 instruments=self.instruments,
                 practice=self.practice,
             )
-            await self._stream.__aenter__()
-            connected = await self._stream.connect()
+            await broker.__aenter__()
+            connected = await broker.connect()
             if not connected:
                 logger.error("OANDA connection failed — falling back to paper")
                 self._init_generic_broker()
                 return
-            account = await self._stream.get_account_info()
+            account = await broker.get_account_info()
             if account:
                 logger.info(
                     "OANDA account: balance=%.2f equity=%.2f",
@@ -367,8 +380,8 @@ class HopeFXEngine:
                 self._trade_logger.log_equity(
                     equity=account.equity, balance=account.balance,
                 )
-            self._broker = self._stream
-            logger.info("OANDA broker ready")
+            self._broker = broker
+            logger.info("OANDA execution broker ready (streaming via NuclearStreamer)")
         except Exception as exc:
             logger.error("OANDA init failed: %s — falling back to paper", exc)
             self._init_generic_broker()
@@ -406,25 +419,70 @@ class HopeFXEngine:
     # ── main loop ─────────────────────────────────────────────────────────────
 
     async def _run_loop(self) -> None:
-        if self.broker_name == "oanda" and self._stream is not None:
-            await self._oanda_loop()
+        """
+        Start NuclearStreamer for live ticks and the poll loop as fallback.
+
+        NuclearStreamer feeds _on_tick via the _NuclearTickBridge subscriber.
+        The poll loop runs concurrently and handles symbols not covered by
+        the streamer (e.g. when no API keys are configured).
+        """
+        has_stream_key = any([
+            _optional("FINNHUB_API_KEY"),
+            _optional("TWELVE_API_KEY"),
+            _optional("POLYGON_API_KEY"),
+        ])
+
+        if has_stream_key:
+            await asyncio.gather(
+                self._nuclear_loop(),
+                self._poll_loop(),
+                return_exceptions=True,
+            )
         else:
+            logger.info(
+                "No streaming API keys set — running poll loop only. "
+                "Set FINNHUB_API_KEY / TWELVE_API_KEY / POLYGON_API_KEY for WebSocket ticks."
+            )
             await self._poll_loop()
 
-    async def _oanda_loop(self) -> None:
-        logger.info("Starting OANDA streaming loop")
-        try:
-            async for tick in self._stream.stream_prices():
-                if not self._running:
-                    break
-                await self._on_tick(
-                    symbol=tick.instrument.replace("_", "/"),
-                    bid=tick.bid,
-                    ask=tick.ask,
-                    mid=(tick.bid + tick.ask) / 2,
+    async def _nuclear_loop(self) -> None:
+        """
+        Start NuclearStreamer and bridge ticks into the engine pipeline.
+
+        NuclearStreamer is the SOLE source of live price data.
+        OANDA / MT5 are never used for streaming.
+        """
+        from data_feed import NuclearStreamer
+
+        engine_ref = self  # captured for the inner subscriber class
+
+        class _NuclearTickBridge:
+            """Subscriber that forwards NuclearStreamer ticks to the engine."""
+            async def on_new_price(self, price: float) -> None:
+                if not engine_ref._running:
+                    return
+                # NuclearStreamer delivers a single mid price; use it for bid/ask/mid.
+                symbol = engine_ref.primary_symbol.replace("_", "/")
+                await engine_ref._on_tick(
+                    symbol=symbol,
+                    bid=price,
+                    ask=price,
+                    mid=price,
                 )
+
+        self._streamer = NuclearStreamer(symbol="XAUUSD")
+        self._streamer.subscribe(_NuclearTickBridge())
+        logger.info("NuclearStreamer starting — sources: finnhub=%s twelvedata=%s polygon=%s",
+                    bool(_optional("FINNHUB_API_KEY")),
+                    bool(_optional("TWELVE_API_KEY")),
+                    bool(_optional("POLYGON_API_KEY")))
+        try:
+            self._streamer_task = asyncio.current_task()
+            await self._streamer.run()
+        except asyncio.CancelledError:
+            pass
         except Exception as exc:
-            logger.error("OANDA stream error: %s", exc)
+            logger.error("NuclearStreamer error: %s", exc)
 
     async def _poll_loop(self) -> None:
         interval = float(_optional("POLL_INTERVAL_S", "5"))
@@ -748,11 +806,18 @@ class HopeFXEngine:
         self._running = False
         if self._heartbeat:
             self._heartbeat.stop()
-        if self._stream:
+        # Stop NuclearStreamer gracefully.
+        if self._streamer:
             try:
-                await self._stream.__aexit__(None, None, None)
+                await self._streamer.stop()
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("NuclearStreamer stop error: %s", _exc)
+        # Close OANDA execution broker session if open.
+        if self._broker and hasattr(self._broker, "__aexit__"):
+            try:
+                await self._broker.__aexit__(None, None, None)
+            except Exception as _exc:
+                logger.debug("Broker close error: %s", _exc)
         logger.info(
             "HOPEFX Engine stopped — bars=%d signals=%d",
             self._bar_count,
