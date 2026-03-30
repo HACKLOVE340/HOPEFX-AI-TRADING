@@ -1506,6 +1506,7 @@ def build_component_registry(app, feature_flags):
         .register("database", F.init_database, required=True, deps=["config"])
         .register("cache", F.init_cache, required=False, deps=["config"])
         .register("hot_standby", F.init_hot_standby, required=False, deps=["cache"])
+        .register("chaos_controller", F.init_chaos_controller, required=False, deps=["config"])
         # ── Background services ───────────────────────────────────────────────
         .register("data_scheduler", F.init_data_scheduler, required=False, deps=["config"])
         .register("websocket", _app(F.init_websocket), required=False, deps=["config"])
@@ -1597,6 +1598,40 @@ def build_component_registry(app, feature_flags):
     )
 
     return registry
+
+
+async def init_chaos_controller(s: Any) -> Optional[Any]:
+    """
+    Initialise ChaosController and MutationTestRunner.
+
+    ChaosController is registered on app_state.chaos_controller so the
+    /api/chaos/* endpoints can trigger scenarios on demand.
+
+    MutationTestRunner is registered on app_state.mutation_runner.
+
+    Both are optional — skipped gracefully if imports fail.
+    """
+    try:
+        from chaos.controller import ChaosController
+        from chaos.mutation_runner import MutationTestRunner
+
+        orchestrator = getattr(s, "orchestrator", None)
+        controller = ChaosController(orchestrator=orchestrator)
+        s.chaos_controller = controller
+
+        runner = MutationTestRunner()
+        s.mutation_runner = runner
+
+        logger.info(
+            "ChaosController + MutationTestRunner initialised "
+            "(orchestrator=%s)",
+            "wired" if orchestrator else "not available",
+        )
+        return controller
+
+    except Exception as exc:
+        logger.error("init_chaos_controller failed: %s", exc, exc_info=True)
+        return None
 
 
 async def init_hot_standby(s: Any) -> Optional[Any]:
