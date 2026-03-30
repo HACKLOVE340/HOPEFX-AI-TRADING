@@ -73,17 +73,18 @@ except Exception:
 @dataclass
 class ShadowFill:
     """A simulated paper fill."""
-    signal_id:    str
-    symbol:       str
-    side:         str
-    lots:         float
-    requested:    float
-    fill_price:   float
-    slippage_bps: float
-    timestamp:    datetime
-    pnl:          float = 0.0
-    closed:       bool  = False
-    close_price:  float = 0.0
+    signal_id:        str
+    symbol:           str
+    side:             str
+    lots:             float
+    requested:        float
+    fill_price:       float
+    slippage_bps:     float
+    timestamp:        datetime
+    pnl:              float = 0.0
+    closed:           bool  = False
+    close_price:      float = 0.0
+    live_slippage_bps: Optional[float] = None   # set when live fill is reported
 
 
 @dataclass
@@ -268,16 +269,41 @@ class ShadowTradingEngine:
             _prom_shadow_pnl.set(self._pnl)
             _prom_shadow_equity.set(self._equity)
 
-    def on_live_close(self, signal_id: str, live_pnl: float) -> None:
-        """Record a live trade close for paper-vs-live comparison."""
+    def on_live_close(
+        self,
+        signal_id: str,
+        live_pnl: float,
+        live_fill_price: Optional[float] = None,
+        live_slippage_bps: Optional[float] = None,
+    ) -> None:
+        """
+        Record a live trade close for paper-vs-live comparison.
+
+        Parameters
+        ----------
+        signal_id         : Matches the signal_id used in on_signal()
+        live_pnl          : Realised PnL of the live trade (USD)
+        live_fill_price   : Actual broker fill price (optional)
+        live_slippage_bps : Measured live slippage in bps (optional).
+                            When provided, enables _slippage_accuracy() R²
+                            computation comparing shadow model vs reality.
+        """
         self._live_pnl   += live_pnl
         self._live_fills += 1
+
+        # Attach live slippage to the matching shadow fill for R² computation
+        if live_slippage_bps is not None:
+            for f in self._fills:
+                if f.signal_id == signal_id:
+                    f.live_slippage_bps = live_slippage_bps
+                    break
+
         gap = self._pnl - self._live_pnl
         if _PROM_OK:
             _prom_live_gap.set(gap)
         logger.info(
-            "Shadow vs Live: shadow_pnl=%.2f live_pnl=%.2f gap=%.2f",
-            self._pnl, self._live_pnl, gap,
+            "Shadow vs Live: shadow_pnl=%.2f live_pnl=%.2f gap=%.2f slip_r2=%.3f",
+            self._pnl, self._live_pnl, gap, self._slippage_accuracy(),
         )
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
@@ -322,11 +348,36 @@ class ShadowTradingEngine:
     def _slippage_accuracy(self) -> float:
         """
         Measure how well the slippage model predicts real slippage.
-        Returns R² of shadow_slippage vs live_slippage (0–1, higher = better).
-        Requires live fills to have been recorded via on_live_close().
+
+        Returns R² of shadow_slippage_bps vs live_slippage_bps over all
+        closed fills that have a recorded live_slippage_bps.
+
+        R² = 1 - SS_res / SS_tot
+          SS_res = Σ(shadow_i - live_i)²
+          SS_tot = Σ(live_i - mean(live))²
+
+        Returns 0.0 if fewer than 2 paired observations are available.
         """
-        # Without live slippage data we return 0 (not enough data)
-        return 0.0
+        # Include any fill where live_slippage_bps has been recorded,
+        # regardless of whether the shadow position is still open.
+        paired = [
+            (f.slippage_bps, f.live_slippage_bps)
+            for f in self._fills
+            if f.live_slippage_bps is not None
+        ]
+        if len(paired) < 2:
+            return 0.0
+
+        shadow_vals = [p[0] for p in paired]
+        live_vals   = [p[1] for p in paired]
+        mean_live   = sum(live_vals) / len(live_vals)
+
+        ss_res = sum((s - l) ** 2 for s, l in paired)
+        ss_tot = sum((l - mean_live) ** 2 for l in live_vals)
+
+        if ss_tot < 1e-12:
+            return 1.0  # perfect prediction (zero variance in live)
+        return max(0.0, round(1.0 - ss_res / ss_tot, 4))
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
