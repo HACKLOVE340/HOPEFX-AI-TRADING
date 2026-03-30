@@ -160,8 +160,8 @@ class DataQualityEngine:
                 "hopefx_dqe_consensus_price_usd",
                 "Cross-source consensus gold price",
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -212,8 +212,8 @@ class DataQualityEngine:
                         self._prom_rejected.labels(
                             source=tick.source.value, reason="price_jump"
                         ).inc()
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logger.debug('Suppressed exception: %s', _exc)
                 return self._reject(tick, state, "price_jump", seq)
 
         # ── 5. Stale detection ─────────────────────────────────────────────
@@ -262,8 +262,8 @@ class DataQualityEngine:
                         "DQE Mahalanobis anomaly source=%s dist=%.2f",
                         tick.source.value, mahal,
                     )
-            except Exception:
-                pass  # singular matrix or other numerical issue — skip
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)  # singular matrix or other numerical issue — skip
 
         # ── 8. Latency tracking ────────────────────────────────────────────
         tick_epoch = tick.timestamp.timestamp()
@@ -273,8 +273,8 @@ class DataQualityEngine:
             if self._prom_latency:
                 try:
                     self._prom_latency.labels(source=tick.source.value).observe(latency_ms)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
             if latency_ms > LATENCY_WARN_MS:
                 logger.warning(
                     "DQE high latency source=%s latency_ms=%.1f",
@@ -290,15 +290,15 @@ class DataQualityEngine:
         if self._prom_accepted:
             try:
                 self._prom_accepted.labels(source=tick.source.value).inc()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
         if self._prom_confidence:
             try:
                 self._prom_confidence.labels(source=tick.source.value).set(
                     state.confidence
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         validated = GoldTick(
             symbol     = tick.symbol,
@@ -374,8 +374,8 @@ class DataQualityEngine:
         if self._prom_consensus:
             try:
                 self._prom_consensus.set(consensus)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         return consensus, conf, norm_w
 
@@ -518,8 +518,8 @@ class DataQualityEngine:
                 self._prom_rejected.labels(
                     source=tick.source.value, reason=reason
                 ).inc()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
         return GoldTick(
             symbol     = tick.symbol,
             timestamp  = tick.timestamp,

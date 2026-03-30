@@ -240,8 +240,8 @@ def _get_db_session():
 
         if app_state and app_state.db_session_factory:
             return app_state.db_session_factory()
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
     return None
 
 

@@ -281,8 +281,8 @@ class AdvancedPredictor:
                     f"Model integrity failure: {self._integrity_msg}",
                     level="fatal",
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
             return False
 
         self._integrity_ok = True
@@ -575,8 +575,8 @@ class AdvancedPredictor:
         last_close = 0.0
         try:
             last_close = float(ohlcv.iloc[-1].get("close", ohlcv.iloc[-1].iloc[-1]))
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
         latency_ms = (time.perf_counter() - t0) * 1000.0
         return {
             "direction": "neutral",

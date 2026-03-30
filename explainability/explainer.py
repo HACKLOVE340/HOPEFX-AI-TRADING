@@ -316,8 +316,8 @@ class AIExplainer:
         try:
             if hasattr(model, "predict_proba"):
                 return 0.75  # Simulated probability
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         # Default confidence based on prediction strength
         return abs(prediction - 0.5) * 2 * 0.8 + 0.2

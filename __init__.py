@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 # HOPEFX-AI-TRADING
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
@@ -16,18 +18,18 @@ __license__ = "MIT"
 # Import main components — wrapped so partial installs don't break the package
 try:
     from config import ConfigManager, initialize_config
-except Exception:  # pragma: no cover
-    pass
+except Exception as _exc:  # pragma: no cover
+    logger.debug('Suppressed exception: %s', _exc)
 
 try:
     from cache import MarketDataCache, Timeframe
-except Exception:  # pragma: no cover
-    pass
+except Exception as _exc:  # pragma: no cover
+    logger.debug('Suppressed exception: %s', _exc)
 
 try:
     from database import Base
-except Exception:  # pragma: no cover
-    pass
+except Exception as _exc:  # pragma: no cover
+    logger.debug('Suppressed exception: %s', _exc)
 
 # Import trading components — wrapped so partial installs don't break the package
 try:
@@ -39,13 +41,13 @@ try:
         StrategyManager,
         MovingAverageCrossover,
     )
-except Exception:  # pragma: no cover
-    pass
+except Exception as _exc:  # pragma: no cover
+    logger.debug('Suppressed exception: %s', _exc)
 
 try:
     from risk import RiskManager, RiskConfig, PositionSize, PositionSizeMethod
-except Exception:  # pragma: no cover
-    pass
+except Exception as _exc:  # pragma: no cover
+    logger.debug('Suppressed exception: %s', _exc)
 
 try:
     from brokers import (
@@ -58,8 +60,8 @@ try:
         OrderStatus,
         PaperTradingBroker,
     )
-except Exception:  # pragma: no cover
-    pass
+except Exception as _exc:  # pragma: no cover
+    logger.debug('Suppressed exception: %s', _exc)
 
 try:
     from notifications import (
@@ -67,8 +69,8 @@ try:
         NotificationLevel,
         NotificationChannel,
     )
-except Exception:  # pragma: no cover
-    pass
+except Exception as _exc:  # pragma: no cover
+    logger.debug('Suppressed exception: %s', _exc)
 
 __all__ = [
     # Version info

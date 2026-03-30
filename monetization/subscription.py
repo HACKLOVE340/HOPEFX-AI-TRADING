@@ -875,8 +875,8 @@ def require_plan(minimum_plan: str):
                 from fastapi import Request
                 # In real FastAPI context, user comes from Depends(get_current_user)
                 pass
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         # Get user's current plan from subscription manager
         user_id = getattr(user, "sub", "") if user else ""

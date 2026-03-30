@@ -77,8 +77,8 @@ class ConfigStore:
 
             if app_state and app_state.db_session_factory:
                 return app_state.db_session_factory()
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
         return None
 
     def _db_get(self, key: str) -> Optional[Any]:
@@ -181,8 +181,8 @@ class ConfigStore:
             if r is not None:
                 try:
                     r.set(self._redis_key(key), json.dumps(value))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
             return value
 
         return default

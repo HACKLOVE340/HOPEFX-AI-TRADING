@@ -1,3 +1,4 @@
+import logging
 # HOPEFX-AI-TRADING
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
@@ -21,11 +22,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Import all models so their metadata is registered on Base
 from database.models import Base  # noqa: F401
+logger = logging.getLogger(__name__)
 
 try:
     from database.user_models import User, UserSession, LoginAttempt  # noqa: F401
-except Exception:
-    pass
+except Exception as _exc:
+    logger.debug('Suppressed exception: %s', _exc)
 
 config = context.config
 

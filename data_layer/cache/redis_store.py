@@ -107,8 +107,8 @@ class DataLayerRedisStore:
                     self._r.setex(key, ttl, value)
                     self._writes += 1
                     return True
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
             logger.debug("Redis set error key=%s: %s", key, exc)
             return False
 

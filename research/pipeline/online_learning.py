@@ -613,8 +613,8 @@ class OnlineEnsemble:
                 with torch.no_grad():
                     deep_prob = self.deep.model(X_t).cpu().numpy().squeeze()
                 return self.w_xgb * xgb_prob + (1 - self.w_xgb) * deep_prob
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
         return xgb_prob
 
     def update(

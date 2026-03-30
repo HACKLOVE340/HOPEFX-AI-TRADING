@@ -162,8 +162,8 @@ async def _fetch_ccxt(
         if exchange is not None:
             try:
                 await exchange.close()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
 
 async def _fetch_yfinance(

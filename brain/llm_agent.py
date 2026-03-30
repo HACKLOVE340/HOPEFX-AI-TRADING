@@ -327,8 +327,8 @@ def _run_backtest(
             signal = strategy.generate_signal(analysis)
             if signal is not None:
                 sig_type = signal.signal_type
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         # close on opposite signal
         if position != 0:
@@ -623,8 +623,8 @@ class LLMAgent:
                         f"predictions={h.get('predict_count',0)} "
                         f"fallbacks={h.get('fallback_count',0)}"
                     )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
             return "\n".join(lines)
         except Exception:
@@ -653,8 +653,8 @@ class LLMAgent:
             if self.candle_fetcher:
                 try:
                     candles = await self.candle_fetcher("XAU_USD", "H1", 60)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
 
             if not candles:
                 # Try loading from local CSV as fallback

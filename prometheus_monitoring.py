@@ -102,8 +102,8 @@ def _lookup_existing_collector(name: str):
                 for desc in c.describe():
                     if desc.name == name:
                         return c
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
     return None
 
 

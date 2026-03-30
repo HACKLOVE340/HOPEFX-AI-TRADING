@@ -675,8 +675,8 @@ class DeepEnsembleStore:
             if self._scaler is not None:
                 try:
                     feat = self._scaler.transform(feat)
-                except Exception:
-                    pass  # proceed without scaling
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)  # proceed without scaling
 
             # Build sequence: (1, seq_len, n_features)
             X_seq = feat[-self.seq_len :][np.newaxis, :, :]

@@ -205,8 +205,8 @@ def _before_send(
         from ml import get_model_version
 
         event.setdefault("tags", {})["model_version"] = get_model_version()
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
 
     return event
 
@@ -347,13 +347,13 @@ def init_sentry() -> bool:
                 from ml import get_model_version
 
                 scope.set_tag("model_version", get_model_version())
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
             try:
                 oanda_region = os.getenv("OANDA_REGION", "us")
                 scope.set_tag("oanda_region", oanda_region)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         logger.info(
             "Sentry initialised: env=%s release=%s traces=%.0f%% profiles=%.0f%%",

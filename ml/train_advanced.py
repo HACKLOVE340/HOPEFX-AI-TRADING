@@ -564,8 +564,8 @@ def extract_feature_importance(model, feature_names: List[str]) -> Dict:
         if hasattr(inner, "feature_importances_"):
             imp = pd.Series(inner.feature_importances_, index=feature_names)
             return {k: round(float(v), 6) for k, v in imp.nlargest(20).items()}
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
     return {}
 
 

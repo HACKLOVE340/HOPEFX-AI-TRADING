@@ -325,8 +325,8 @@ class IBKRBroker:
         # Timeout — cancel the order
         try:
             self._ib.cancelOrder(trade.order)
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
         return {"status": "rejected", "reason": "fill_timeout", "broker": "ibkr"}
 
     # ── Order cancellation ────────────────────────────────────────────────────

@@ -601,8 +601,8 @@ class NuclearAIChartEngine:
                 if feats:
                     defaults["cvar_95"] = round(feats.get("cvar_95", 0.0), 4)
                     defaults["cvar_99"] = round(feats.get("cvar_99", 0.0), 4)
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         self._last_risk = defaults
         return defaults

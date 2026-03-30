@@ -152,8 +152,8 @@ async def stripe_webhook(request: Request):
     try:
         mgr = _get_subscription_manager()
         mgr.handle_stripe_webhook(payload, sig)
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
 
     return {"received": True, "event_type": event.get("type"), "result": result}
 
@@ -419,8 +419,8 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
         sub = mgr.get_user_subscription(user.sub)
         if sub and hasattr(sub, "wallet_balance"):
             balance = float(sub.wallet_balance)
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
 
     return {
         "balance": round(balance, 2),

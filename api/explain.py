@@ -59,8 +59,8 @@ def _get_limiter():
             lim = getattr(_main_app.state, "limiter", None)
             if lim is not None:
                 return lim
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         # Module-level fallback limiter (in-memory, no Redis)
         global _fallback_limiter  # noqa: PLW0603

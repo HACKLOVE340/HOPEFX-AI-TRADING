@@ -485,8 +485,8 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
             ORDERS_TOTAL.labels(
                 symbol=order.symbol, side=order.side, status="error"
             ).inc()
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
@@ -580,8 +580,8 @@ async def _record_fill(
         from core.metrics import ORDERS_TOTAL
 
         ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="filled").inc()
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
 
     # Paper trading gate fill counter — increments the Phase-3 fill counter so
     # the gate knows how many paper trades have been completed.

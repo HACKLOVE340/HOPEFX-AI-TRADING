@@ -63,8 +63,8 @@ class MacroStoreBridge:
                 "hopefx_macro_fred_last_refresh_epoch",
                 "Unix epoch of last FRED refresh",
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     async def start(self) -> None:
         """Load FRED data into MacroStore and start daily refresh."""

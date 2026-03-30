@@ -129,8 +129,8 @@ class LiveTradingGate:
                         remaining_days=remaining,
                         environment=status.get("environment", "practice"),
                     )
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
                 return False, (
                     f"Paper clock incomplete: {elapsed:.1f}/{_PAPER_DAYS} days elapsed. "
                     f"{remaining:.1f} days remaining."
@@ -199,8 +199,8 @@ class LiveTradingGate:
                     try:
                         from monitoring.sentry_config import capture_sharpe_gate_alert
                         capture_sharpe_gate_alert(n_trades=0, sharpe=0.0, se=999.0)
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logger.debug('Suppressed exception: %s', _exc)
                     return False, (
                         "Sharpe gate BLOCKED: multi_symbol_report.json exists but "
                         "contains no 'pooled' metrics. "
@@ -219,8 +219,8 @@ class LiveTradingGate:
                         capture_sharpe_gate_alert(
                             n_trades=n_total, sharpe=sharpe, se=se
                         )
-                    except Exception:
-                        pass
+                    except Exception as _exc:
+                        logger.debug('Suppressed exception: %s', _exc)
                     return False, (
                         f"Sharpe gate BLOCKED: N={n_total} trades, SE={se:.3f}. "
                         f"Need N>={_MIN_TRADES}. Run: python backtest/multi_symbol_backtest.py --years 10"

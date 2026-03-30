@@ -293,8 +293,8 @@ class TradeExecutor:
             try:
                 import sentry_sdk  # noqa: PLC0415
                 sentry_sdk.capture_exception(exc)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
             return ExecutionResult(
                 success=False,
                 order_id=None,
@@ -496,8 +496,8 @@ class TradeExecutor:
                 try:
                     self.risk_manager._trading_halted = True
                     self.risk_manager._halt_reason = reason
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
 
     def _check_streak_circuit_breaker(self) -> tuple:
         """

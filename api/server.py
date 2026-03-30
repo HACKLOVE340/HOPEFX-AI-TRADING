@@ -27,6 +27,7 @@ except ImportError:
 from infrastructure.health import HealthStatus, get_health_checker
 from infrastructure.logging import get_logger
 from infrastructure.metrics import get_metrics_registry
+logger = logging.getLogger(__name__)
 
 logger = get_logger(__name__)
 
@@ -165,8 +166,8 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         if _scheduler is not None:
             try:
                 _scheduler.shutdown(wait=False)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
         if _oanda_stream_task and not _oanda_stream_task.done():
             _oanda_stream_task.cancel()
             try:

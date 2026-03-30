@@ -601,8 +601,8 @@ class HopeFXEngine:
             try:
                 from risk.orchestrator import risk_orchestrator as _ro
                 exposure = await _ro.get_current_exposure()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
             # Only dispatch if there's an elevated signal worth checking
             if abs(sentiment) < 0.1 and vol < 1.5:
@@ -751,8 +751,8 @@ class HopeFXEngine:
         if self._stream:
             try:
                 await self._stream.__aexit__(None, None, None)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
         logger.info(
             "HOPEFX Engine stopped — bars=%d signals=%d",
             self._bar_count,

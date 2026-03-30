@@ -207,8 +207,8 @@ def _update_gate_file(ledger: Dict[str, Any]) -> None:
     if GATE_FILE.exists():
         try:
             existing = json.loads(GATE_FILE.read_text())
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     gate = {
         **existing,

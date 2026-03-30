@@ -676,8 +676,8 @@ def build_advanced_features(
             from ml.macro_features import add_regime_features
 
             d = add_regime_features(d, lookback=60)
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     # ── Target ────────────────────────────────────────────────────────────────
     if use_filtered_target:

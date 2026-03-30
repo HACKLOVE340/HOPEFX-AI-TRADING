@@ -419,8 +419,8 @@ def _fetch_mtf_df(
 
         if not flags.MTF_FUSION:
             return None
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.debug('Suppressed exception: %s', _exc)
 
     # Try app_state first (populated by init_mtf_store at startup)
     store = getattr(app_state, "mtf_store", None)
@@ -840,8 +840,8 @@ async def _execute_if_approved(
                             "high": _highs,
                             "low": _lows,
                         })
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
 
                 _filter_result = _filt.check(
                     signal_payload,
@@ -1040,8 +1040,8 @@ async def _execute_if_approved(
                     side=direction.lower(),
                     trade_id=order.id,
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         # Paper trading gate fill counter.
         try:

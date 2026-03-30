@@ -207,8 +207,8 @@ class LSTMSignalLayer:
         last_close = 0.0
         try:
             last_close = float(ohlcv.iloc[-1].get("close", ohlcv.iloc[-1].iloc[-1]))
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
         return {
             "direction": "neutral",
             "probability": 0.5,
@@ -300,8 +300,8 @@ class LSTMSignalLayer:
         last_close = 0.0
         try:
             last_close = float(ohlcv.iloc[-1].get("close", ohlcv.iloc[-1].iloc[-1]))
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         return {
             "direction": direction,

@@ -80,8 +80,8 @@ class _TokenBlacklist:
             try:
                 self._redis.setex(f"revoked:{jti}", ttl_seconds, "1")
                 return
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
         self._mem.add(jti)
 
     def is_revoked(self, jti: str) -> bool:
@@ -89,8 +89,8 @@ class _TokenBlacklist:
         if self._redis:
             try:
                 return bool(self._redis.exists(f"revoked:{jti}"))
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
         return jti in self._mem
 
 
@@ -353,8 +353,8 @@ class AuthService:
                         AUTH_ATTEMPTS.labels(outcome="locked").inc()
                     else:
                         AUTH_ATTEMPTS.labels(outcome="failure").inc()
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
 
             if not user:
                 _record(False, "user_not_found")
@@ -523,8 +523,8 @@ class AuthService:
                 if jti:
                     ttl = max(0, exp - int(_now().timestamp()))
                     revoke_access_token(jti, ttl + 60)  # +60s buffer
-            except Exception:
-                pass  # expired or invalid — no need to blacklist
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)  # expired or invalid — no need to blacklist
 
         return True, "Logged out successfully"
 

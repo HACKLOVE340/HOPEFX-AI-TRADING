@@ -1,3 +1,4 @@
+import logging
 # HOPEFX-AI-TRADING
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
@@ -35,6 +36,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd  # noqa: F401 — used in type annotations below
+logger = logging.getLogger(__name__)
 
 
 class EWCRegularizer:
@@ -371,8 +373,8 @@ class SklearnOnlineLearner:
                 dl_extra[1] = feats.get("micro_ofi",              0.0)
                 dl_extra[2] = feats.get("macro_impact_score_now", 0.0)
                 dl_extra[3] = feats.get("macro_is_blackout",      0.0)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
             flat = np.concatenate([flat, dl_extra])
 

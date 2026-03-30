@@ -549,8 +549,8 @@ async def get_reconciled_investigation(
     if cache_path.exists():
         try:
             return json.loads(cache_path.read_text())
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     # Run investigation synchronously (fast — no model inference needed)
     try:

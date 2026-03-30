@@ -99,8 +99,8 @@ class GoldFeedBase(ABC):
                 f"hopefx_feed_{src}_circuit_open",
                 f"1 if circuit breaker is open for {src}",
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -143,8 +143,8 @@ class GoldFeedBase(ABC):
         if self._prom_errors:
             try:
                 self._prom_errors.labels(reason=reason).inc()
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
         if self._consecutive_errors >= _CB_OPEN_AFTER_ERRORS:
             if self._cb_state != CircuitState.OPEN:
                 self._cb_state = CircuitState.OPEN

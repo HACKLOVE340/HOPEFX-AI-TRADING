@@ -122,8 +122,8 @@ class NewsSentimentEngine:
                 "hopefx_news_bullish_ratio",
                 "Fraction of recent articles that are bullish",
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -221,8 +221,8 @@ class NewsSentimentEngine:
             if self._prom_art_count:
                 try:
                     self._prom_art_count.labels(source=src.value).inc()
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
 
             # Lineage
             if self._lineage:
@@ -235,15 +235,15 @@ class NewsSentimentEngine:
         if self._prom_sentiment:
             try:
                 self._prom_sentiment.set(self._sentiment_ema)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         bull_ratio = self._compute_bullish_ratio()
         if self._prom_bull_ratio:
             try:
                 self._prom_bull_ratio.set(bull_ratio)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         # Cache to Redis
         await self._cache_to_redis()

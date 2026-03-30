@@ -217,8 +217,8 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
                 try:
                     p = np.polyfit(t, seg, 1)
                     rms.append(np.sqrt(np.mean((seg - np.polyval(p, t)) ** 2)))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
             if rms:
                 f.append(np.mean(rms))
         if len(f) < 2:

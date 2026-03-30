@@ -231,8 +231,8 @@ class RiskOrchestrator:
                 if broker is not None:
                     self._broker = broker
                     return broker
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
         return None
 
     # ── Core risk controls ────────────────────────────────────────────────────
@@ -410,24 +410,24 @@ class RiskOrchestrator:
             from risk.manager import risk_manager
             if hasattr(risk_manager, "get_current_exposure"):
                 return float(risk_manager.get_current_exposure())
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         try:
             from data_layer.orchestrator import orchestrator
             tick = orchestrator.get_latest_tick()
             if tick and hasattr(tick, "exposure"):
                 return float(tick.exposure)
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
         # Derive from max_risk as a proxy
         exposure = min(1.0, 1.0 - self._max_risk + 0.1)
         if _PROM_ORCH_AVAILABLE:
             try:
                 _ORCH_EXPOSURE_GAUGE.set(exposure)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
         return exposure
 
     # ── Status ────────────────────────────────────────────────────────────────

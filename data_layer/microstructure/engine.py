@@ -133,8 +133,8 @@ class MicrostructureEngine:
                 "hopefx_micro_cumulative_delta",
                 "Cumulative volume delta (session)",
             )
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
 
     # ── Public API ────────────────────────────────────────────────────────────
 

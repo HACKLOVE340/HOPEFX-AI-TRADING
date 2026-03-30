@@ -427,8 +427,8 @@ try:
                 close = close.squeeze()
                 close.index = pd.to_datetime(close.index).tz_localize(None)
                 _frames[name] = close.rename(name)
-        except Exception:
-            pass
+        except Exception as _exc:
+            print(f"  Macro series fetch failed: {_exc} — skipping")
     if _frames:
         macro_df = pd.concat(_frames.values(), axis=1).ffill()
         print(f"  Macro data: {len(macro_df)} bars, {len(macro_df.columns)} series")

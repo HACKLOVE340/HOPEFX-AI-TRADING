@@ -195,8 +195,8 @@ class PositionReconciler:
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                     },
                 )
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
     async def _trigger_drift_halt(
         self,
@@ -291,8 +291,8 @@ class PositionReconciler:
             hist = ticker.history(period="1d", interval="1m")
             if not hist.empty:
                 return float(hist["Close"].iloc[-1])
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)
         return None
 
     @staticmethod

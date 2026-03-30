@@ -331,8 +331,8 @@ async def broker_status():
                 if hasattr(broker, "get_positions"):
                     positions = await broker.get_positions()
                     open_positions = len(positions) if positions else 0
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
             broker_section = {
                 "connected": True,

@@ -1,3 +1,4 @@
+import logging
 # HOPEFX-AI-TRADING
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
@@ -25,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from cache.market_data_cache import MarketDataCache
 from config.config_manager import ConfigManager
 from strategies.base_enhanced import EnhancedStrategy, StrategyAdapter, StrategySignal
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -133,8 +135,8 @@ class MasterControlCore:
                 self.config.emergency_drawdown_pct = Decimal(
                     str(mcc_settings.get("max_drawdown", 0.10)),
                 )
-        except Exception:
-            pass  # Use defaults
+        except Exception as _exc:
+            logger.debug('Suppressed exception: %s', _exc)  # Use defaults
 
     def register_strategy(
         self,

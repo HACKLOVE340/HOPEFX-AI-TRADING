@@ -569,8 +569,8 @@ class Query:
             try:
                 with open(Path(__file__).parent.parent / "prop_firm_mode.json") as f:
                     prop_cfg = _json.load(f)
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
             return RiskStatus(
                 can_trade=assessment.can_trade,
                 daily_pnl=assessment.daily_pnl,
@@ -749,8 +749,8 @@ class Subscription:
                     if tick:
                         mid = float(tick.get("mid", tick.get("price", 0))) or None
                         spread = float(tick.get("spread", spread))
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
 
             if mid is not None:
                 yield PriceTick(

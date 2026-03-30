@@ -262,14 +262,14 @@ class MT5ZmqBridge:
             if sock is not None:
                 try:
                     sock.close(linger=0)  # type: ignore[union-attr]
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
 
         if self._ctx is not None:
             try:
                 self._ctx.term()  # type: ignore[union-attr]
-            except Exception:
-                pass
+            except Exception as _exc:
+                logger.debug('Suppressed exception: %s', _exc)
 
         self._push = self._pull = self._pub = self._ctx = None
         self._status = BridgeStatus.STOPPED
@@ -513,8 +513,8 @@ class MT5ZmqBridge:
             if q is not None:
                 try:
                     q.put_nowait(msg)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    logger.debug('Suppressed exception: %s', _exc)
             return
 
         logger.debug("Unknown MT5 message type: %s", msg_type)
