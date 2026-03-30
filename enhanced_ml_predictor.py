@@ -2071,43 +2071,67 @@ class EnhancedMLPredictor:
 
 
 # =============================================================================
-# EXAMPLE USAGE & TESTING
+# DEVELOPMENT / SMOKE-TEST UTILITIES
+# These functions use synthetic GBM data and must NOT be called in production.
 # =============================================================================
 
 
 def generate_synthetic_data(
     n_samples: int = 5000, trend: float = 0.0001, volatility: float = 0.001
 ) -> pd.DataFrame:
-    """Generate realistic synthetic market data"""
-    np.random.seed(42)
+    """
+    Generate synthetic GBM market data for smoke-testing the ML pipeline.
 
-    # Generate returns with GARCH-like volatility clustering
+    FOR DEVELOPMENT AND CI USE ONLY.  Results produced from this data are
+    NOT valid for strategy evaluation or performance reporting.
+
+    Raises RuntimeError if called in APP_ENV=production.
+    """
+    import os as _os
+    import warnings
+    if _os.getenv("APP_ENV", "production").lower() == "production":
+        raise RuntimeError(
+            "generate_synthetic_data() cannot be called in production "
+            "(APP_ENV=production). Use real OHLCV data from a market data provider."
+        )
+    warnings.warn(
+        "generate_synthetic_data() produces synthetic GBM data. "
+        "Results are not valid for strategy evaluation.",
+        UserWarning,
+        stacklevel=2,
+    )
+    np.random.seed(42)
     returns = np.random.normal(trend, volatility, n_samples)
     for i in range(1, n_samples):
         returns[i] *= 1 + abs(returns[i - 1]) * 3
-
     prices = 100 * np.exp(np.cumsum(returns))
-
-    # Create OHLCV
     df = pd.DataFrame(index=pd.date_range("2024-01-01", periods=n_samples, freq="5min"))
-
     df["close"] = prices
     df["high"] = prices * (1 + np.abs(np.random.normal(0, volatility, n_samples)))
     df["low"] = prices * (1 - np.abs(np.random.normal(0, volatility, n_samples)))
     df["open"] = df["close"].shift(1).fillna(prices[0])
     df["volume"] = np.random.poisson(1000, n_samples)
-
     return df
 
 
 def run_ml_test():
-    """Comprehensive ML predictor test"""
+    """
+    Smoke-test for the ML predictor using synthetic GBM data.
+
+    FOR DEVELOPMENT / CI USE ONLY.  Raises RuntimeError in APP_ENV=production.
+    """
+    import os as _os
+    if _os.getenv("APP_ENV", "production").lower() == "production":
+        raise RuntimeError(
+            "run_ml_test() uses synthetic data and cannot run in production. "
+            "Set APP_ENV=development or APP_ENV=test to use this function."
+        )
     print("=" * 80)
-    print("HOPEFX ML PREDICTOR v4.0 - COMPREHENSIVE TEST")
+    print("HOPEFX ML PREDICTOR v4.0 - DEVELOPMENT SMOKE TEST")
     print("=" * 80)
 
-    # Generate data
-    print("\n[1] Generating synthetic data...")
+    # Generate synthetic data for smoke-testing only
+    print("\n[1] Generating synthetic GBM data (smoke-test only)...")
     df = generate_synthetic_data(n_samples=3000)
     print(f"    Generated {len(df)} samples")
     print(f"    Date range: {df.index[0]} to {df.index[-1]}")
