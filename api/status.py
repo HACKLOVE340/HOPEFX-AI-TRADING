@@ -353,14 +353,13 @@ async def _run_checks() -> Dict[str, Any]:
             }
         return result
     except Exception as exc:
-        logger.debug("Health checker unavailable: %s", exc)
-        # Return a minimal synthetic check set
+        logger.warning("Health checker unavailable: %s", exc)
+        # Return degraded status reflecting the actual failure — no synthetic data.
         return {
-            "api": {"status": "healthy", "message": "API responding"},
-            "database": {"status": "unknown", "message": "Not connected"},
-            "cache": {"status": "unknown", "message": "Not connected"},
-            "broker": {"status": "unknown", "message": "Not connected"},
-            "price_feed": {"status": "unknown", "message": "Not connected"},
+            "api": {
+                "status": "degraded",
+                "message": f"Health checker error: {exc}",
+            },
         }
 
 
