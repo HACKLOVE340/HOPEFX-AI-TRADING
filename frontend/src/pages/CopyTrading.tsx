@@ -11,6 +11,12 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { api } from '../hooks/useApi';
 
+function extractApiError(err: unknown, fallback: string): string {
+  const detail = (err as { response?: { data?: { detail?: string } } })
+    ?.response?.data?.detail;
+  return detail ?? fallback;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Leader {
@@ -91,6 +97,7 @@ const LeaderCard: React.FC<{
 const CopyTrading: React.FC = () => {
   const [leaders, setLeaders]       = useState<Leader[]>([]);
   const [loading, setLoading]       = useState(true);
+  const [loadErr, setLoadErr]       = useState('');
   const [selected, setSelected]     = useState<string | null>(null);
   const [allocation, setAllocation] = useState(10000);
   const [sortBy, setSortBy]         = useState<'return' | 'sharpe' | 'followers'>('return');
@@ -99,8 +106,12 @@ const CopyTrading: React.FC = () => {
 
   useEffect(() => {
     api.get<Leader[]>('/social/leaderboard')
-      .then((r) => { setLeaders(r.data ?? []); })
-      .catch(() => { setLeaders([]); })
+      .then((r) => { setLeaders(r.data ?? []); setLoadErr(''); })
+      .catch((err: unknown) => {
+        console.warn('[CopyTrading] Failed to load leaders:', err);
+        setLoadErr(extractApiError(err, 'Failed to load traders. Please try again.'));
+        setLeaders([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -146,6 +157,8 @@ const CopyTrading: React.FC = () => {
       {/* Leader cards */}
       {loading ? (
         <p style={{ color: '#64748b', padding: '40px 0' }}>Loading traders…</p>
+      ) : loadErr ? (
+        <p style={{ color: '#f87171', padding: '40px 0' }}>⚠️ {loadErr}</p>
       ) : leaders.length === 0 ? (
         <p style={{ color: '#64748b', padding: '40px 0' }}>No traders available yet. Check back soon.</p>
       ) : (
