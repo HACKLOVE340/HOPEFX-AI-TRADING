@@ -1,0 +1,7 @@
+# Override root-level lib/ exclusion — frontend/src/lib is source code, not a Python venv
+!src/lib/
+!src/lib/**
+
+# Build output
+dist/
+node_modules/
