@@ -41,6 +41,10 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+from risk.intra_trade_monitor import IntraTradeMonitor, OpenPosition as IntraPosition
+from risk.post_trade_analyzer import PostTradeAnalyzer
+from risk.drawdown_tracker import DrawdownTracker
+
 logger = logging.getLogger(__name__)
 
 # ── env config ────────────────────────────────────────────────────────────────
@@ -133,6 +137,10 @@ class HopeFXEngine:
         gatekeeper,
         lineage_store,
         ml_inference_fn=None,
+        intra_trade_monitor: Optional[IntraTradeMonitor] = None,
+        post_trade_analyzer: Optional[PostTradeAnalyzer] = None,
+        drawdown_tracker: Optional[DrawdownTracker] = None,
+        initial_equity: float = float(os.getenv("ENGINE_INITIAL_EQUITY", "100000")),
     ) -> None:
         self._orch        = orchestrator
         self._router      = smart_router
@@ -140,6 +148,19 @@ class HopeFXEngine:
         self._gate        = gatekeeper
         self._lineage     = lineage_store
         self._infer       = ml_inference_fn   # callable(features) → (direction, conf, prob)
+
+        # ── Multi-layer risk components ────────────────────────────────────
+        # Instantiate defaults if not injected — all three layers are mandatory
+        self._intra_monitor: IntraTradeMonitor = (
+            intra_trade_monitor or IntraTradeMonitor(equity=initial_equity)
+        )
+        self._post_analyzer: PostTradeAnalyzer = (
+            post_trade_analyzer or PostTradeAnalyzer(lineage_store=lineage_store)
+        )
+        self._dd_tracker: DrawdownTracker = (
+            drawdown_tracker or DrawdownTracker(initial_balance=initial_equity)
+        )
+        self._current_equity: float = initial_equity
 
         self._state       = EngineState.IDLE
         self._tick_count  = 0
@@ -248,6 +269,38 @@ class HopeFXEngine:
         if tick_epoch == self._last_tick_epoch:
             return
         self._last_tick_epoch = tick_epoch
+
+        # ── Step 2b: Intra-trade risk monitor (tick-frequency CVaR/ES) ────
+        # Must run on every tick regardless of whether we generate a new signal.
+        # Any UnwindSignal triggers an immediate close before new signal logic.
+        unwind_signals = self._intra_monitor.on_tick(
+            mid=tick.mid,
+            data_quality=tick.confidence,
+        )
+        for unwind in unwind_signals:
+            logger.critical(
+                "INTRA-TRADE UNWIND position=%s symbol=%s reason=%s mtm_pnl=%.2f",
+                unwind.position_id, unwind.symbol, unwind.reason, unwind.mtm_pnl,
+            )
+            await self._close_position_for_unwind(unwind)
+
+        # ── Step 2c: Drawdown gate ─────────────────────────────────────────
+        # Compute floating equity from open positions and check drawdown limits.
+        floating_pnl = sum(
+            pos.get("mtm_pnl", 0.0) for pos in self._open_positions.values()
+        )
+        floating_equity = self._current_equity + floating_pnl
+        dd_result = self._dd_tracker.update(equity=floating_equity)
+        if dd_result.total_breach or dd_result.daily_breach:
+            breach_type = "total" if dd_result.total_breach else "daily"
+            logger.critical(
+                "DRAWDOWN BREACH type=%s pct=%.2f%% — halting engine",
+                breach_type,
+                (dd_result.total_drawdown_pct if dd_result.total_breach
+                 else dd_result.daily_drawdown_pct) * 100,
+            )
+            self.halt(f"drawdown_breach:{breach_type}")
+            return
 
         # ── Step 3: Spread gate ────────────────────────────────────────────
         if tick.spread > _MAX_SPREAD_USD:
@@ -456,13 +509,44 @@ class HopeFXEngine:
         self._fill_history.append(fill_record)
 
         # Track open position
+        position_id = fill_record.fill_id
         self._open_positions[signal.symbol] = {
+            "position_id": position_id,
             "direction":   signal.direction,
             "quantity":    quantity,
             "entry_price": fill_price,
             "signal_id":   signal.signal_id,
             "opened_at":   fill_record.filled_at.isoformat(),
+            "mtm_pnl":     0.0,
         }
+
+        # ── Register with IntraTradeMonitor ───────────────────────────────
+        intra_pos = IntraPosition(
+            position_id  = position_id,
+            symbol       = signal.symbol,
+            side         = signal.direction,
+            lots         = quantity,
+            entry_price  = fill_price,
+            stop_loss    = float(order.get("stop_loss", fill_price * 0.99)),
+            take_profit  = float(order.get("take_profit", fill_price * 1.01)),
+            opened_at    = fill_record.filled_at,
+        )
+        self._intra_monitor.on_open(intra_pos)
+
+        # ── Post-trade fill analysis ───────────────────────────────────────
+        self._post_analyzer.record_fill(
+            trade_id       = fill_record.fill_id,
+            symbol         = signal.symbol,
+            side           = signal.direction,
+            lots           = quantity,
+            decision_price = signal.tick_mid,
+            fill_price     = fill_price,
+            mid_at_fill    = signal.tick_mid,
+            spread_at_fill = signal.tick_spread,
+        )
+
+        # ── Update drawdown tracker with new balance ───────────────────────
+        self._current_equity = self._current_equity  # balance unchanged on open
 
         # Write fill to lineage store
         self._lineage.record_signal(
@@ -498,6 +582,93 @@ class HopeFXEngine:
             slippage_bps, broker, latency_ms,
         )
 
+    async def _close_position_for_unwind(self, unwind) -> None:
+        """
+        Close a position triggered by IntraTradeMonitor auto-unwind.
+
+        Sends a market close order through the router, then:
+        - Removes position from open_positions
+        - Notifies IntraTradeMonitor of close
+        - Records post-trade analysis
+        - Updates drawdown tracker with realised PnL
+        """
+        pos = self._open_positions.get(unwind.symbol)
+        if pos is None:
+            logger.warning(
+                "Unwind for unknown position symbol=%s — already closed?",
+                unwind.symbol,
+            )
+            return
+
+        close_direction = "short" if pos["direction"] == "long" else "long"
+        close_request = {
+            "order_id":   str(uuid.uuid4()),
+            "signal_id":  pos["signal_id"],
+            "symbol":     unwind.symbol,
+            "direction":  close_direction,
+            "quantity":   pos["quantity"],
+            "order_type": "MARKET",
+            "mid_price":  0.0,   # router will use live price from broker
+            "bid":        0.0,
+            "ask":        0.0,
+            "spread":     0.0,
+            "confidence": 1.0,   # unwind is unconditional
+            "sentiment":  0.0,
+            "impact":     0.0,
+            "features":   {},
+            "lineage_id": unwind.position_id,
+            "is_unwind":  True,
+            "unwind_reason": unwind.reason,
+        }
+
+        try:
+            fill = await self._router.route_and_execute(close_request)
+        except Exception as exc:
+            logger.critical(
+                "UNWIND ROUTING FAILED symbol=%s reason=%s: %s",
+                unwind.symbol, unwind.reason, exc,
+            )
+            return
+
+        close_price = float(fill.get("fill_price", pos["entry_price"]))
+
+        # Realised PnL
+        if pos["direction"] == "long":
+            realised_pnl = (close_price - pos["entry_price"]) * pos["quantity"] * 100.0
+        else:
+            realised_pnl = (pos["entry_price"] - close_price) * pos["quantity"] * 100.0
+
+        # Notify IntraTradeMonitor
+        self._intra_monitor.on_close(
+            position_id=unwind.position_id,
+            close_price=close_price,
+        )
+
+        # Post-trade analysis on the close leg
+        self._post_analyzer.record_fill(
+            trade_id       = str(uuid.uuid4()),
+            symbol         = unwind.symbol,
+            side           = close_direction,
+            lots           = pos["quantity"],
+            decision_price = pos["entry_price"],
+            fill_price     = close_price,
+            mid_at_fill    = close_price,
+            spread_at_fill = 0.0,
+        )
+
+        # Update equity and drawdown tracker
+        self._current_equity += realised_pnl
+        self._dd_tracker.update(equity=self._current_equity)
+        self._dd_tracker.record_fill(pnl=realised_pnl)
+
+        # Remove from open positions
+        self._open_positions.pop(unwind.symbol, None)
+
+        logger.warning(
+            "UNWIND COMPLETE symbol=%s reason=%s pnl=%.2f close_price=%.4f",
+            unwind.symbol, unwind.reason, realised_pnl, close_price,
+        )
+
     def _record_rejection(self, signal: ExecutionSignal, reason: str) -> None:
         """Write rejection event to lineage."""
         try:
@@ -524,6 +695,20 @@ class HopeFXEngine:
         avg_lat = (
             sum(f.latency_ms for f in fills) / len(fills) if fills else 0.0
         )
+
+        # Drawdown snapshot
+        floating_pnl = sum(
+            pos.get("mtm_pnl", 0.0) for pos in self._open_positions.values()
+        )
+        floating_equity = self._current_equity + floating_pnl
+        dd_result = self._dd_tracker.update(equity=floating_equity)
+
+        # Post-trade summary (rolling_stats over last 50 fills)
+        pt_summary = self._post_analyzer.rolling_stats()
+
+        # Intra-trade snapshot
+        intra_summary = self._intra_monitor.snapshot()
+
         return {
             "state":            self._state.value,
             "uptime_s":         round(uptime, 1),
@@ -535,6 +720,17 @@ class HopeFXEngine:
             "avg_slippage_bps": round(avg_slip, 3),
             "avg_latency_ms":   round(avg_lat, 2),
             "open_positions":   len(self._open_positions),
+            "current_equity":   round(self._current_equity, 2),
+            "floating_equity":  round(floating_equity, 2),
+            "drawdown": {
+                "total_pct":   round(dd_result.total_drawdown_pct * 100, 3),
+                "daily_pct":   round(dd_result.daily_drawdown_pct * 100, 3),
+                "hwm":         round(dd_result.total_hwm, 2),
+                "total_alert": dd_result.total_alert,
+                "daily_alert": dd_result.daily_alert,
+            },
+            "post_trade":  pt_summary,
+            "intra_trade": intra_summary,
         }
 
 
