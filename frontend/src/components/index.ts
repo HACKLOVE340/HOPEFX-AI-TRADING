@@ -18,3 +18,5 @@ export { MetricCard } from './MetricCard';
 export { EmptyState } from './EmptyState';
 export { ErrorBanner } from './ErrorBanner';
 export { PageHeader } from './PageHeader';
+export { GlobalAttackMap, type AttackLog, type AttackRecord, type AttackGeo } from './GlobalAttackMap';
+export { FixApprovalQueue, type FixRecord } from './FixApprovalQueue';

@@ -53,8 +53,11 @@ import TwoFactorSetup       from './pages/TwoFactorSetup';
 import Wallet               from './pages/Wallet';
 
 // ── New pages (Audit, SubAccounts) ────────────────────────────────────────────
-import AuditLog     from './pages/AuditLog';
-import SubAccounts  from './pages/SubAccounts';
+import AuditLog          from './pages/AuditLog';
+import SubAccounts       from './pages/SubAccounts';
+
+// ── Security Operations Centre ────────────────────────────────────────────────
+import SecurityDashboard from './pages/SecurityDashboard';
 
 // ── Auth + Store ──────────────────────────────────────────────────────────────
 import AuthGuard from './components/AuthGuard';
@@ -123,6 +126,7 @@ const NAV_ITEMS = [
   { path: '/admin',         label: 'Admin',           icon: '🔧', auth: true  },
   { path: '/audit',         label: 'Audit Log',       icon: '🔍', auth: true  },
   { path: '/sub-accounts',  label: 'Sub-Accounts',    icon: '👥', auth: true  },
+  { path: '/security',      label: 'Security Ops',    icon: '🛡️', auth: true  },
   { path: '/status',        label: 'Status',          icon: '🟢', auth: false },
   { path: '/settings',      label: 'Settings',        icon: '⚙️', auth: true  },
 ];
@@ -280,6 +284,7 @@ const AppShell: React.FC = () => {
           <Route path="/2fa-setup"    element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
           <Route path="/audit"        element={wrap(<AuthGuard requiredRole="admin"><AuditLog /></AuthGuard>)} />
           <Route path="/sub-accounts" element={wrap(<AuthGuard><SubAccounts /></AuthGuard>)} />
+          <Route path="/security"     element={wrap(<AuthGuard requiredRole="admin"><SecurityDashboard /></AuthGuard>)} />
 
           {/* Fallback — redirect unknown shell paths to dashboard */}
           <Route path="*"             element={<Navigate to="/dashboard" replace />} />
