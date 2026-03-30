@@ -50,6 +50,12 @@ spec:
                   key: {{ $key }}
                   optional: true
             {{- end }}
+            # Inject pod name as STANDBY_POD_ID so each replica has a unique
+            # heartbeat key in Redis for hot-standby leader election.
+            - name: STANDBY_POD_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           volumeMounts:
             - name: data
               mountPath: {{ .Values.persistence.mountPath }}

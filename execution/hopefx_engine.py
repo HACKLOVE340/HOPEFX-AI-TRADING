@@ -46,6 +46,7 @@ from risk.post_trade_analyzer import PostTradeAnalyzer
 from risk.drawdown_tracker import DrawdownTracker
 from shadow.trading_engine import ShadowTradingEngine
 from shadow.data_validator import ShadowDataValidator
+from resilience.hot_standby import HotStandbyReplicator
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,7 @@ class HopeFXEngine:
         drawdown_tracker: Optional[DrawdownTracker] = None,
         shadow_engine: Optional[ShadowTradingEngine] = None,
         shadow_validator: Optional[ShadowDataValidator] = None,
+        hot_standby: Optional[HotStandbyReplicator] = None,
         initial_equity: float = float(os.getenv("ENGINE_INITIAL_EQUITY", "100000")),
     ) -> None:
         self._orch        = orchestrator
@@ -177,6 +179,12 @@ class HopeFXEngine:
             shadow_validator or ShadowDataValidator()
         )
 
+        # ── Hot-standby replication ────────────────────────────────────────
+        # Optional — only active when a Redis client is available.
+        # When present, every state change is replicated so a standby pod
+        # can take over without replaying the full order book.
+        self._standby: Optional[HotStandbyReplicator] = hot_standby
+
         self._state       = EngineState.IDLE
         self._tick_count  = 0
         self._signal_count = 0
@@ -202,6 +210,10 @@ class HopeFXEngine:
         await self._shadow.start()
         await self._shadow_validator.start()
 
+        # Start hot-standby replication (no-op if not configured)
+        if self._standby is not None:
+            await self._standby.start()
+
         self._loop_task = asyncio.create_task(
             self._tick_loop(), name="hopefx_engine_tick_loop"
         )
@@ -222,6 +234,10 @@ class HopeFXEngine:
         # Stop shadow components
         await self._shadow.stop()
         await self._shadow_validator.stop()
+
+        # Stop hot-standby replication
+        if self._standby is not None:
+            await self._standby.stop()
 
         logger.info(
             "HopeFXEngine stopped — ticks=%d signals=%d fills=%d rejects=%d",
@@ -606,6 +622,23 @@ class HopeFXEngine:
         # ── Update drawdown tracker with new balance ───────────────────────
         self._current_equity = self._current_equity  # balance unchanged on open
 
+        # ── Replicate state to hot-standby ────────────────────────────────
+        if self._standby is not None:
+            self._standby.update_positions(self._open_positions)
+            self._standby.update_equity(
+                equity=self._current_equity,
+                balance=self._current_equity,
+            )
+            self._standby.record_fill({
+                "fill_id":    fill_record.fill_id,
+                "symbol":     signal.symbol,
+                "direction":  signal.direction,
+                "quantity":   quantity,
+                "fill_price": fill_price,
+                "broker":     broker,
+                "filled_at":  fill_record.filled_at.isoformat(),
+            })
+
         # ── Close any existing shadow position on the same symbol ─────────
         # If we already had an open position on this symbol and are now
         # opening in the opposite direction, the previous position is closed.
@@ -768,6 +801,11 @@ class HopeFXEngine:
         # Remove from open positions
         self._open_positions.pop(unwind.symbol, None)
 
+        # Replicate updated state after unwind
+        if self._standby is not None:
+            self._standby.update_positions(self._open_positions)
+            self._standby.update_equity(equity=self._current_equity)
+
         logger.warning(
             "UNWIND COMPLETE symbol=%s reason=%s pnl=%.2f close_price=%.4f",
             unwind.symbol, unwind.reason, realised_pnl, close_price,
@@ -837,6 +875,7 @@ class HopeFXEngine:
             "intra_trade": intra_summary,
             "shadow":      self._shadow.health(),
             "shadow_comparison": self._shadow.get_comparison_report(),
+            "hot_standby": self._standby.stats() if self._standby else None,
         }
 
 

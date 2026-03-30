@@ -1505,6 +1505,7 @@ def build_component_registry(app, feature_flags):
         .register("secrets", F.init_secrets_manager, required=False, deps=["config"])
         .register("database", F.init_database, required=True, deps=["config"])
         .register("cache", F.init_cache, required=False, deps=["config"])
+        .register("hot_standby", F.init_hot_standby, required=False, deps=["cache"])
         # ── Background services ───────────────────────────────────────────────
         .register("data_scheduler", F.init_data_scheduler, required=False, deps=["config"])
         .register("websocket", _app(F.init_websocket), required=False, deps=["config"])
@@ -1596,6 +1597,71 @@ def build_component_registry(app, feature_flags):
     )
 
     return registry
+
+
+async def init_hot_standby(s: Any) -> Optional[Any]:
+    """
+    Initialise HotStandbyReplicator for position-state replication and
+    auto-failover beyond Redis Sentinel.
+
+    Requires a Redis client on app_state.cache (set by init_cache).
+    Skipped gracefully if Redis is unavailable.
+
+    The replicator is stored on app_state.hot_standby so the execution
+    engine can call update_positions() / update_equity() / record_fill()
+    on every state change.
+    """
+    try:
+        from resilience.hot_standby import HotStandbyReplicator
+
+        redis_client = getattr(s, "cache", None)
+        if redis_client is None:
+            logger.warning(
+                "init_hot_standby: no Redis client available — "
+                "hot-standby replication disabled"
+            )
+            return None
+
+        async def _on_promote(snapshot) -> None:
+            """Restore engine state after standby promotion."""
+            logger.warning(
+                "HOT-STANDBY PROMOTED: restoring %d positions equity=%.2f",
+                len(snapshot.positions), snapshot.equity,
+            )
+            # Restore open positions into the execution engine if available
+            engine = getattr(s, "hopefx_engine", None)
+            if engine is not None:
+                engine._open_positions = snapshot.positions
+                engine._current_equity = snapshot.equity
+                engine._dd_tracker.update(equity=snapshot.equity)
+                engine._intra_monitor.update_equity(snapshot.equity)
+                logger.info(
+                    "HOT-STANDBY: engine state restored — "
+                    "positions=%d equity=%.2f",
+                    len(snapshot.positions), snapshot.equity,
+                )
+
+        async def _on_demote() -> None:
+            logger.critical(
+                "HOT-STANDBY DEMOTED: this pod lost the leader key"
+            )
+
+        replicator = HotStandbyReplicator(
+            redis_client=redis_client,
+            on_promote_callback=_on_promote,
+            on_demote_callback=_on_demote,
+        )
+        await replicator.start()
+        s.hot_standby = replicator
+        logger.info(
+            "HotStandbyReplicator started role=%s pod=%s",
+            replicator._role.value, replicator._pod_id,
+        )
+        return replicator
+
+    except Exception as exc:
+        logger.error("init_hot_standby failed: %s", exc, exc_info=True)
+        return None
 
 
 def run_startup_stress_tests(risk_manager) -> None:
