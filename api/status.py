@@ -102,6 +102,38 @@ async def status_history():
     return {"history": history}
 
 
+@router.get(
+    "/api/status/incidents",
+    summary="Recent incident history",
+)
+async def status_incidents(limit: int = 20):
+    """
+    Return days with degraded uptime as incident records.
+
+    Each entry includes the date, uptime percentage, and a severity label.
+    Sourced from the same rolling uptime history as /api/status/history.
+    """
+    today = datetime.now(timezone.utc).date()
+    incidents = []
+    for i in range(89, -1, -1):
+        day = (today - timedelta(days=i)).isoformat()
+        pct = _uptime_history.get(day, 100.0)
+        if pct < 100.0:
+            severity = "major" if pct < 90 else "minor"
+            incidents.append(
+                {
+                    "date": day,
+                    "uptime_pct": pct,
+                    "severity": severity,
+                    "title": f"{'Major outage' if severity == 'major' else 'Partial degradation'} — {pct:.1f}% uptime",
+                    "resolved": True,
+                }
+            )
+    # Most recent first
+    incidents.reverse()
+    return {"incidents": incidents[:limit], "total": len(incidents)}
+
+
 # ── HTML status page ──────────────────────────────────────────────────────────
 
 

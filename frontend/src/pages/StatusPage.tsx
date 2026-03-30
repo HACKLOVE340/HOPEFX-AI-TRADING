@@ -22,6 +22,14 @@ interface HistoryDay {
   uptime_pct: number;
 }
 
+interface Incident {
+  date: string;
+  uptime_pct: number;
+  severity: 'major' | 'minor';
+  title: string;
+  resolved: boolean;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const STATUS_COLOR: Record<string, string> = {
@@ -96,6 +104,7 @@ const UptimeBar: React.FC<{ history: HistoryDay[] }> = ({ history }) => (
 const StatusPage: React.FC = () => {
   const [data, setData] = useState<StatusData | null>(null);
   const [history, setHistory] = useState<HistoryDay[]>([]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -103,9 +112,10 @@ const StatusPage: React.FC = () => {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [statusRes, histRes] = await Promise.allSettled([
+      const [statusRes, histRes, incidentRes] = await Promise.allSettled([
         api.get<StatusData>('/status/json'),
         api.get<{ history?: HistoryDay[] }>('/status/history'),
+        api.get<{ incidents: Incident[] }>('/status/incidents'),
       ]);
       if (statusRes.status === 'fulfilled') {
         setData(statusRes.value.data);
@@ -116,6 +126,11 @@ const StatusPage: React.FC = () => {
       setHistory(
         histRes.status === 'fulfilled'
           ? (histRes.value.data.history ?? [])
+          : []
+      );
+      setIncidents(
+        incidentRes.status === 'fulfilled'
+          ? (incidentRes.value.data.incidents ?? [])
           : []
       );
     } catch (err) {
@@ -225,25 +240,24 @@ const StatusPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Incident history placeholder */}
+      {/* Incident history */}
       <div style={styles.sectionTitle}>Recent incidents</div>
       <div style={styles.incidentCard}>
-        {history.some(d => d.uptime_pct < 100) ? (
-          history
-            .filter(d => d.uptime_pct < 100)
-            .slice(-5)
-            .reverse()
-            .map(d => (
-              <div key={d.date} style={styles.incidentRow}>
-                <span style={{ color: '#fbbf24' }}>⚠️</span>
-                <span style={{ color: '#e2e8f0', fontWeight: 500 }}>{d.date}</span>
-                <span style={{ color: '#94a3b8', fontSize: 13 }}>
-                  Uptime: {d.uptime_pct.toFixed(1)}%
-                </span>
-              </div>
-            ))
-        ) : (
+        {incidents.length === 0 ? (
           <p style={{ color: '#64748b', fontSize: 14 }}>No incidents in the last 90 days.</p>
+        ) : (
+          incidents.slice(0, 10).map(inc => (
+            <div key={inc.date} style={styles.incidentRow}>
+              <span style={{ color: inc.severity === 'major' ? '#ef4444' : '#fbbf24' }}>
+                {inc.severity === 'major' ? '❌' : '⚠️'}
+              </span>
+              <span style={{ color: '#e2e8f0', fontWeight: 500 }}>{inc.date}</span>
+              <span style={{ color: '#94a3b8', fontSize: 13, flex: 1 }}>{inc.title}</span>
+              <span style={{ fontSize: 11, color: inc.resolved ? '#4ade80' : '#fbbf24' }}>
+                {inc.resolved ? 'Resolved' : 'Ongoing'}
+              </span>
+            </div>
+          ))
         )}
       </div>
 
