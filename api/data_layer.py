@@ -6,6 +6,11 @@ api/data_layer.py
 ==================
 REST endpoints for the data layer orchestrator.
 
+Architecture rule (non-negotiable):
+  ALL data is fetched through MarketDataOrchestrator — the single entry point.
+  No endpoint may import directly from data_layer sub-modules (feeds/, quality/,
+  microstructure/, sentiment/, calendar/, cache/, lineage/).
+
 Routes
 ------
 GET  /api/data-layer/health          — full orchestrator health snapshot
@@ -16,6 +21,7 @@ GET  /api/data-layer/microstructure  — current microstructure snapshot
 GET  /api/data-layer/quality         — data quality report
 GET  /api/data-layer/lineage         — recent lineage records (audit trail)
 GET  /api/data-layer/feeds           — per-feed health and configuration status
+GET  /api/data-layer/ml-features     — complete ML feature set
 """
 from __future__ import annotations
 
@@ -31,6 +37,7 @@ router = APIRouter(prefix="/api/data-layer", tags=["Data Layer"])
 
 
 def _get_orchestrator():
+    """Return the MarketDataOrchestrator singleton — the ONLY data entry point."""
     try:
         from data_layer.orchestrator import orchestrator
         return orchestrator
@@ -68,25 +75,36 @@ async def get_latest_tick(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
 
 @router.get("/sentiment")
 async def get_sentiment() -> Dict[str, Any]:
-    """Current news sentiment signal for gold."""
+    """Current news sentiment signal for gold — via orchestrator."""
+    orch = _get_orchestrator()
     try:
-        from data_layer.sentiment.engine import news_sentiment_engine
-        signal = news_sentiment_engine.get_ml_features()
-        articles = news_sentiment_engine.get_recent_articles(limit=10)
-        return {
-            "signal": signal,
-            "recent_articles": [
+        features = orch.get_ml_features()
+        sentiment_features = {k: v for k, v in features.items() if k.startswith("news_")}
+        health = orch.health()
+        sentiment_health = health.get("sentiment", {})
+
+        recent_articles: list = []
+        try:
+            articles = orch._sentiment.get_recent_articles(hours=1.0, min_relevance=0.1)
+            recent_articles = [
                 {
-                    "headline":       a.headline[:120],
-                    "source":         a.source.value,
-                    "published_at":   a.published_at.isoformat(),
+                    "headline":        a.headline[:120],
+                    "source":          a.source.value,
+                    "published_at":    a.published_at.isoformat(),
                     "sentiment_score": a.sentiment_score,
                     "sentiment_label": a.sentiment_label,
-                    "gold_relevance": a.gold_relevance,
-                    "impact_score":   a.impact_score,
+                    "gold_relevance":  a.gold_relevance,
+                    "impact_score":    a.impact_score,
                 }
-                for a in articles
-            ],
+                for a in articles[:10]
+            ]
+        except Exception as exc:
+            logger.debug("data_layer API: recent articles error: %s", exc)
+
+        return {
+            "signal":          sentiment_features,
+            "health":          sentiment_health,
+            "recent_articles": recent_articles,
         }
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -94,33 +112,45 @@ async def get_sentiment() -> Dict[str, Any]:
 
 @router.get("/macro")
 async def get_macro() -> Dict[str, Any]:
-    """Current macro features and economic calendar."""
+    """Current macro features and economic calendar — via orchestrator."""
+    orch = _get_orchestrator()
     try:
-        from data_layer.calendar.engine import macro_calendar_engine
-        from data_layer.feeds.macro.store_bridge import macro_store_bridge
+        features     = orch.get_ml_features()
+        cal_features = {k: v for k, v in features.items() if k.startswith("macro_")}
+        macro_impact = orch.get_macro_impact_score()
+        is_blackout  = orch.is_blackout_window()
 
-        calendar_features = macro_calendar_engine.get_ml_features()
-        macro_features    = macro_store_bridge.get_ml_features()
-        upcoming          = macro_calendar_engine.get_upcoming_events(hours_ahead=24)
+        upcoming: list = []
+        try:
+            events = orch._calendar.get_upcoming_events(hours_ahead=24)
+            upcoming = [
+                {
+                    "name":              e.name,
+                    "country":           e.country,
+                    "scheduled_at":      e.scheduled_at.isoformat(),
+                    "impact":            e.impact.value,
+                    "gold_impact_score": e.gold_impact_score,
+                    "forecast":          e.forecast,
+                    "actual":            e.actual,
+                    "surprise_pct":      e.surprise_pct,
+                }
+                for e in events
+            ]
+        except Exception as exc:
+            logger.debug("data_layer API: upcoming events error: %s", exc)
+
+        macro_snapshot: dict = {}
+        try:
+            macro_snapshot = orch._macro_bridge.snapshot()
+        except Exception as exc:
+            logger.debug("data_layer API: macro snapshot error: %s", exc)
 
         return {
-            "calendar_features": calendar_features,
-            "macro_features":    macro_features,
-            "is_blackout":       macro_calendar_engine.is_blackout_window(),
-            "impact_score":      macro_calendar_engine.get_current_impact_score(),
-            "upcoming_events": [
-                {
-                    "name":             e.name,
-                    "country":          e.country,
-                    "scheduled_at":     e.scheduled_at.isoformat(),
-                    "impact":           e.impact.value,
-                    "gold_impact_score": e.gold_impact_score,
-                    "forecast":         e.forecast,
-                    "actual":           e.actual,
-                    "surprise_pct":     e.surprise_pct,
-                }
-                for e in upcoming
-            ],
+            "calendar_features":  cal_features,
+            "macro_impact_score": macro_impact,
+            "is_blackout":        is_blackout,
+            "upcoming_events":    upcoming,
+            "fred_snapshot":      macro_snapshot,
         }
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -128,30 +158,35 @@ async def get_macro() -> Dict[str, Any]:
 
 @router.get("/microstructure")
 async def get_microstructure(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
-    """Current microstructure snapshot."""
+    """Current microstructure snapshot — via orchestrator."""
+    orch = _get_orchestrator()
     try:
-        from data_layer.microstructure.engine import microstructure_engine
-        snap = microstructure_engine.get_snapshot()
-        features = microstructure_engine.get_ml_features()
-        if snap is None:
-            return {"snapshot": None, "features": features}
-        return {
-            "snapshot": {
-                "timestamp":           snap.timestamp.isoformat(),
-                "bid":                 snap.bid,
-                "ask":                 snap.ask,
-                "spread":              snap.spread,
-                "spread_pct":          snap.spread_pct,
-                "volume_delta":        snap.volume_delta,
-                "cumulative_delta":    snap.cumulative_delta,
-                "buy_pressure":        snap.buy_pressure,
-                "sell_pressure":       snap.sell_pressure,
+        features      = orch.get_ml_features()
+        micro_features = {k: v for k, v in features.items() if k.startswith("micro_")}
+
+        snap = orch._micro.get_snapshot()
+        snapshot_dict: Optional[Dict[str, Any]] = None
+        if snap is not None:
+            snapshot_dict = {
+                "timestamp":            snap.timestamp.isoformat(),
+                "bid":                  snap.bid,
+                "ask":                  snap.ask,
+                "spread":               snap.spread,
+                "spread_pct":           snap.spread_pct,
+                "volume_delta":         snap.volume_delta,
+                "cumulative_delta":     snap.cumulative_delta,
+                "buy_pressure":         snap.buy_pressure,
+                "sell_pressure":        snap.sell_pressure,
                 "order_flow_imbalance": snap.order_flow_imbalance,
-                "trade_pressure":      snap.trade_pressure,
-                "vwap":                snap.vwap,
-                "tick_count":          snap.tick_count,
-            },
-            "features": features,
+                "trade_pressure":       snap.trade_pressure,
+                "vwap":                 snap.vwap,
+                "tick_count":           snap.tick_count,
+            }
+
+        return {
+            "symbol":   symbol,
+            "snapshot": snapshot_dict,
+            "features": micro_features,
         }
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -159,10 +194,15 @@ async def get_microstructure(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
 
 @router.get("/quality")
 async def get_quality_report(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
-    """Data quality report for the given symbol."""
+    """Data quality report — via orchestrator."""
+    orch = _get_orchestrator()
     try:
-        from data_layer.quality.engine import dqe
-        report = dqe.generate_report(symbol)
+        report = orch.get_quality_report(symbol)
+        if report is None:
+            return {
+                "symbol":  symbol,
+                "message": "No quality data yet — feed not started or no ticks received",
+            }
         return {
             "timestamp":       report.timestamp.isoformat(),
             "symbol":          report.symbol,
@@ -171,11 +211,12 @@ async def get_quality_report(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
             "ticks_rejected":  report.ticks_rejected,
             "stale_count":     report.stale_count,
             "jump_count":      report.jump_count,
+            "anomaly_count":   report.anomaly_count,
             "active_sources":  report.active_sources,
             "primary_source":  report.primary_source,
             "consensus_price": report.consensus_price,
             "price_spread_across_sources": report.price_spread_across_sources,
-            "source_health":   dqe.get_source_health(),
+            "source_health":   orch._dqe.get_source_health(),
         }
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -187,15 +228,15 @@ async def get_lineage(
     symbol: Optional[str] = Query("XAU_USD"),
     limit: int = Query(50, ge=1, le=500),
 ) -> Dict[str, Any]:
-    """Recent lineage records (immutable audit trail)."""
+    """Recent lineage records (immutable audit trail) — via orchestrator."""
+    orch = _get_orchestrator()
     try:
-        from data_layer.lineage.store import lineage_store
-        records = lineage_store.query(
+        records = orch._lineage.query(
             record_type=record_type,
             symbol=symbol,
             limit=limit,
         )
-        stats = lineage_store.stats()
+        stats = orch._lineage.stats()
         return {"records": records, "stats": stats}
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -203,16 +244,17 @@ async def get_lineage(
 
 @router.get("/feeds")
 async def get_feed_health() -> Dict[str, Any]:
-    """Per-feed health and configuration status."""
+    """Per-feed health and configuration status — via orchestrator."""
+    orch = _get_orchestrator()
     try:
-        from data_layer.feeds.gold.manager import GoldFeedManager
-        from data_layer.orchestrator import orchestrator
-        health = orchestrator.health()
+        health = orch.health()
+        # health() key is "gold_feed" (not "gold_feeds")
         return {
-            "gold_feeds":  health.get("gold_feeds", {}),
-            "news_feeds":  health.get("news", {}).get("feed_health", {}),
-            "macro_bridge": health.get("macro_bridge", {}),
-            "cache_stats": health.get("cache", {}),
+            "gold_feed":    health.get("gold_feed", {}),
+            "news_feeds":   health.get("sentiment", {}).get("feed_health", {}),
+            "macro_bridge": health.get("macro", {}),
+            "cache_stats":  health.get("redis", {}),
+            "dqe_health":   health.get("dqe", {}),
         }
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc))
@@ -220,12 +262,15 @@ async def get_feed_health() -> Dict[str, Any]:
 
 @router.get("/ml-features")
 async def get_ml_features(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
-    """Complete ML feature set from all data layer components."""
+    """Complete ML feature set from all data layer components — via orchestrator."""
     orch = _get_orchestrator()
-    features = orch.get_ml_features(symbol=symbol)
-    return {
-        "symbol":   symbol,
-        "features": features,
-        "count":    len(features),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
+    try:
+        features = orch.get_ml_features()
+        return {
+            "symbol":    symbol,
+            "features":  features,
+            "count":     len(features),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
