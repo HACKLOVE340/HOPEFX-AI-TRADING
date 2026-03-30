@@ -5,7 +5,8 @@
 analytics/simulations.py
 ========================
 Simulation engine — delegates to analytics.monte_carlo for bootstrap MC
-and provides a genetic algorithm optimiser stub.
+and provides a genetic algorithm optimiser (scipy differential_evolution
+with random-search fallback).
 
 The MonteCarloEngine in analytics/monte_carlo.py is the canonical
 implementation. This module re-exports it for backward compatibility
@@ -25,9 +26,10 @@ class SimulationEngine:
     """
     Simulation engine used by the dashboard and backtesting pipeline.
 
-    monte_carlo_simulation() now delegates to the production-grade
-    bootstrap engine in analytics.monte_carlo rather than the previous
-    random-walk stub.
+    monte_carlo_simulation() delegates to the bootstrap engine in
+    analytics.monte_carlo (block or i.i.d. resampling of actual trade P&Ls).
+    genetic_algorithm_optimization() uses scipy differential_evolution
+    with a random-search fallback when scipy is unavailable.
     """
 
     def monte_carlo_simulation(
