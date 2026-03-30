@@ -70,13 +70,15 @@ const CHANNELS  = ['discord', 'telegram', 'email', 'push'];
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const PriceAlerts: React.FC = () => {
-  const [alerts, setAlerts]     = useState<Alert[]>([]);
-  const [history, setHistory]   = useState<AlertTrigger[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [tab, setTab]           = useState<'active' | 'history'>('active');
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState('');
+  const [alerts, setAlerts]       = useState<Alert[]>([]);
+  const [history, setHistory]     = useState<AlertTrigger[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [loadErr, setLoadErr]     = useState<string | null>(null);
+  const [tab, setTab]             = useState<'active' | 'history'>('active');
+  const [showForm, setShowForm]   = useState(false);
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
+  const [actionErr, setActionErr] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -88,15 +90,24 @@ const PriceAlerts: React.FC = () => {
   });
 
   const fetchAlerts = useCallback(async () => {
+    setLoadErr(null);
     try {
       const [alertsRes, histRes] = await Promise.allSettled([
         api.get<Alert[]>('/alerts/'),
         api.get<AlertTrigger[]>('/alerts/history/triggers'),
       ]);
-      if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data ?? []);
-      if (histRes.status === 'fulfilled')   setHistory(histRes.value.data ?? []);
-    } catch { /* silent */ }
-    setLoading(false);
+      if (alertsRes.status === 'fulfilled') {
+        setAlerts(alertsRes.value.data ?? []);
+      } else {
+        setLoadErr('Failed to load alerts. Ensure the alerts API is running.');
+      }
+      if (histRes.status === 'fulfilled') setHistory(histRes.value.data ?? []);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load alerts.';
+      setLoadErr(msg);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
@@ -123,16 +134,26 @@ const PriceAlerts: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    try { await api.delete(`/alerts/${id}`); } catch { /* silent */ }
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
+    setActionErr(null);
+    try {
+      await api.delete(`/alerts/${id}`);
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete alert.';
+      setActionErr(msg);
+    }
   };
 
   const handleToggle = async (alert: Alert) => {
     const action = alert.status === 'paused' ? 'resume' : 'pause';
+    setActionErr(null);
     try {
       await api.post(`/alerts/${alert.id}/${action}`);
       await fetchAlerts();
-    } catch { /* silent */ }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : `Failed to ${action} alert.`;
+      setActionErr(msg);
+    }
   };
 
   const toggleChannel = (ch: string) => {
@@ -210,6 +231,10 @@ const PriceAlerts: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* Load / action errors */}
+      {loadErr && <div style={s.errorBox}>{loadErr}</div>}
+      {actionErr && <div style={{ ...s.errorBox, marginBottom: 12 }}>{actionErr}</div>}
 
       {/* Tabs */}
       <div style={s.tabs}>
