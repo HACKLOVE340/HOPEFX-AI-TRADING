@@ -16,7 +16,6 @@ import argparse
 import asyncio
 import json
 import logging
-import random
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -32,26 +31,42 @@ logger = logging.getLogger('xauusd_bot')
 
 
 class PaperBroker:
-    """Simple paper broker for testing - no real money."""
+    """Paper broker backed by the live OANDA practice feed."""
 
     def __init__(self, initial_balance=10000.0):
         self.balance = initial_balance
         self.equity = initial_balance
         self.positions = {}
         self.trades = []
-        self.price = 2000.0  # Starting XAUUSD price
+        self._last_price: float = 0.0
 
     def get_price(self, symbol):
-        """Simulate realistic XAUUSD price movement."""
-        # Random walk with mean reversion around 2000
-        change = random.gauss(0, 0.5)
-        self.price = max(1800, min(2200, self.price + change))
-        return {
-            'bid': self.price - 0.05,
-            'ask': self.price + 0.05,
-            'mid': self.price,
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }
+        """
+        Fetch the latest price from the OANDA practice feed.
+
+        Raises RuntimeError if the feed is unavailable — no synthetic
+        fallback; callers must handle the error and retry.
+        """
+        try:
+            from data_layer.orchestrator import orchestrator
+            tick = orchestrator.get_latest_tick(symbol.replace("XAUUSD", "XAU_USD"))
+            if tick is None:
+                raise RuntimeError(
+                    f"No live tick available for {symbol}. "
+                    "Ensure the data layer is started before running the bot."
+                )
+            self._last_price = tick.mid
+            return {
+                'bid': tick.bid,
+                'ask': tick.ask,
+                'mid': tick.mid,
+                'timestamp': tick.timestamp.isoformat(),
+            }
+        except ImportError as exc:
+            raise RuntimeError(
+                "data_layer.orchestrator not available — "
+                "run the bot from the project root with all dependencies installed."
+            ) from exc
 
     def place_order(self, symbol, side, qty, order_type='market'):
         """Simulate order execution."""
@@ -105,14 +120,19 @@ class PaperBroker:
 
 
 class SimpleMLModel:
-    """Dummy ML model for demonstration - replace with real LSTM/XGBoost."""
+    """
+    Momentum-based signal model used when the full ML predictor is unavailable.
+
+    Uses only real price history — no synthetic data. Replace with
+    ml.advanced_predictor.get_predictor() for production use.
+    """
 
     def __init__(self):
         self.price_history = []
         self.prediction_history = []
 
     def predict(self, price_data):
-        """Generate simple prediction based on momentum."""
+        """Generate prediction based on recent price momentum."""
         self.price_history.append(price_data['mid'])
         if len(self.price_history) < 5:
             return {'signal': 'neutral', 'confidence': 0.5, 'target': price_data['mid']}
