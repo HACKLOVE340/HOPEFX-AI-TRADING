@@ -35,7 +35,7 @@ Usage
 
 Configuration (env vars)
 ------------------------
-L2_PROVIDER          — "oanda" | "ibkr" | "mock" (default: "oanda")
+L2_PROVIDER          — "oanda" | "ibkr" | "mock" (default: "oanda"; "mock" blocked in production)
 L2_DEPTH_LEVELS      — number of book levels to track (default: 10)
 L2_DEPTH_BPS         — depth window in bps for bid/ask depth calc (default: 50)
 L2_SNAPSHOT_INTERVAL — OANDA REST snapshot poll interval in seconds (default: 1.0)
@@ -454,12 +454,23 @@ class IBKROrderBookFeed:
 
 class MockL2Feed:
     """
-    Mock L2 feed for testing and development.
+    Synthetic L2 order book feed — FOR TESTING AND DEVELOPMENT ONLY.
 
-    Generates synthetic order book snapshots with realistic microstructure.
+    Generates statistically plausible but entirely fabricated order book
+    snapshots.  MUST NOT be used in production.  Set L2_PROVIDER=oanda or
+    L2_PROVIDER=ibkr and configure the corresponding credentials.
+
+    Raises RuntimeError if instantiated when APP_ENV=production.
     """
 
     def __init__(self) -> None:
+        import os as _os
+        if _os.getenv("APP_ENV", "production").lower() == "production":
+            raise RuntimeError(
+                "MockL2Feed cannot be used in production (APP_ENV=production). "
+                "Set L2_PROVIDER=oanda or L2_PROVIDER=ibkr and configure the "
+                "corresponding credentials (OANDA_API_KEY / IBKR_HOST)."
+            )
         self._books: Dict[str, OrderBook] = {}
         self._tasks: Dict[str, asyncio.Task] = {}
         self._running = False
@@ -472,7 +483,7 @@ class MockL2Feed:
                 self._generate(symbol), name=f"l2_mock_{symbol}"
             )
             self._tasks[symbol] = task
-            logger.info("Mock L2 feed started for %s", symbol)
+            logger.info("MockL2Feed started for %s (development only)", symbol)
 
     async def stop(self) -> None:
         self._running = False
@@ -536,9 +547,20 @@ class OrderBookFeed:
             self._provider = OandaL2Feed()
         elif self._provider_name == "ibkr":
             self._provider = IBKROrderBookFeed()
-        else:
-            logger.info("L2 feed using mock provider (L2_PROVIDER=%s)", self._provider_name)
+        elif self._provider_name == "mock":
+            # MockL2Feed raises RuntimeError in APP_ENV=production.
+            logger.warning(
+                "L2 feed using MockL2Feed (L2_PROVIDER=mock). "
+                "This is only permitted in non-production environments."
+            )
             self._provider = MockL2Feed()
+        else:
+            raise RuntimeError(
+                f"Unknown L2_PROVIDER={self._provider_name!r}. "
+                "Valid values: 'oanda', 'ibkr'. "
+                "Set the L2_PROVIDER environment variable and configure the "
+                "corresponding credentials."
+            )
 
         await self._provider.start(symbols)
         logger.info(
