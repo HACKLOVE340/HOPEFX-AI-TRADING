@@ -24,7 +24,7 @@ import {
   selectSignals,
   selectWsStatus,
 } from '../store';
-import { tradingApi, mlApi } from '../hooks/useApi';
+import { tradingApi, mlApi, performanceApi } from '../hooks/useApi';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -267,14 +267,12 @@ const MlAccuracyCard: React.FC = () => {
   useEffect(() => {
     mlApi.accuracy()
       .then((r) => setModels((r.data as { models: MlAccuracy[] })?.models ?? []))
-      .catch(() => {
-        setModels([
-          { model: 'Stacking Ensemble', accuracy: 0.87, auc: 0.91, f1: 0.86 },
-          { model: 'XGBoost',           accuracy: 0.83, auc: 0.88, f1: 0.82 },
-          { model: 'Random Forest',     accuracy: 0.81, auc: 0.85, f1: 0.80 },
-        ]);
-      });
+      .catch(() => { setModels([]); });
   }, []);
+
+  if (models.length === 0) {
+    return <p style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>No model metrics available yet.</p>;
+  }
 
   return (
     <div style={s.mlGrid}>
@@ -329,28 +327,14 @@ const WsBadge: React.FC = () => {
   );
 };
 
-// ─── Equity history (demo) ────────────────────────────────────────────────────
 
-function generateEquityHistory(startBalance = 100_000): EquityPoint[] {
-  const points: EquityPoint[] = [];
-  let val = startBalance;
-  const now = new Date();
-  for (let i = 89; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    val = val * (1 + (Math.random() - 0.44) * 0.008);
-    points.push({ time: d.toISOString().slice(0, 10), value: parseFloat(val.toFixed(2)) });
-  }
-  return points;
-}
-
-const EQUITY_HISTORY = generateEquityHistory();
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const Dashboard: React.FC = () => {
   const account  = useStore(selectAccount);
   const wsStatus = useStore(selectWsStatus);
+  const [equityHistory, setEquityHistory] = useState<EquityPoint[]>([]);
 
   // WebSocket and price simulator are managed at the AppShell level (App.tsx).
   // Dashboard only reads from the Zustand store — no duplicate connections.
@@ -384,27 +368,21 @@ const Dashboard: React.FC = () => {
     return () => clearInterval(t);
   }, [poll]);
 
-  // Seed demo data when store is empty
-  const signals = useStore(selectSignals);
+  // Fetch real equity curve from performance API
   useEffect(() => {
-    if (signals.length === 0) {
-      useStore.getState().setSignals([
-        { id: '1', symbol: 'XAU/USD', direction: 'long',  confidence: 0.87, model: 'Stacking Ensemble', entry_price: 2341.50, stop_loss: 2320.00, take_profit: 2380.00, generated_at: new Date().toISOString(), status: 'active' },
-        { id: '2', symbol: 'EUR/USD', direction: 'short', confidence: 0.72, model: 'XGBoost',           entry_price: 1.0852,  stop_loss: 1.0880,  take_profit: 1.0810,  generated_at: new Date().toISOString(), status: 'active' },
-        { id: '3', symbol: 'GBP/USD', direction: 'long',  confidence: 0.65, model: 'Random Forest',    entry_price: 1.2705,  stop_loss: 1.2670,  take_profit: 1.2760,  generated_at: new Date().toISOString(), status: 'active' },
-      ]);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!account) {
-      useStore.getState().setAccount({
-        balance: 100_000, equity: 102_847.50, margin_used: 4_200, margin_free: 98_647.50,
-        margin_level: 2449.7, daily_pnl: 847.50, daily_pnl_pct: 0.83, total_pnl: 2_847.50,
-        win_rate: 0.64, sharpe_ratio: 1.82, max_drawdown: 0.043, open_trades: 2,
+    performanceApi.equityCurve()
+      .then((r) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const points = (r.data as any)?.equity_curve ?? (r.data as any)?.points ?? [];
+        if (Array.isArray(points) && points.length > 0) {
+          setEquityHistory(points);
+        }
+      })
+      .catch(() => {
+        // No equity history yet — chart stays empty until trades are made
+        setEquityHistory([]);
       });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const acc = account;
 
@@ -440,7 +418,13 @@ const Dashboard: React.FC = () => {
             </span>
           )}
         </div>
-        <EquityChart data={EQUITY_HISTORY} />
+        {equityHistory.length === 0 ? (
+          <p style={{ color: '#475569', fontSize: 13, padding: '40px 0', textAlign: 'center' }}>
+            No equity history yet. Start trading to see your curve.
+          </p>
+        ) : (
+          <EquityChart data={equityHistory} />
+        )}
       </div>
 
       <div style={s.twoCol}>
