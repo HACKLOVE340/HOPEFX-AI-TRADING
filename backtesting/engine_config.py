@@ -56,7 +56,7 @@ class BacktestConfig:
     initial_capital: float = 100000.0
     # Commission: $7 round-trip is realistic for XAUUSD CFD/futures (was $5)
     commission_per_trade: float = 7.0
-    slippage_model: str = "fixed"  # fixed, variable, none
+    slippage_model: str = "almgren_chriss"  # almgren_chriss, variable, fixed, none
     # Gold spread: ~$0.30 typical, $0.50 conservative.  1 pip for gold = $0.10.
     # 3 pips = $0.30 spread — realistic for OANDA XAU_USD practice account.
     slippage_pips: float = 3.0
@@ -345,21 +345,63 @@ class SimulatedBroker:
         }
 
     def _calculate_slippage(
-        self, price: float, bar_high: float = 0.0, bar_low: float = 0.0
+        self,
+        price: float,
+        bar_high: float = 0.0,
+        bar_low: float = 0.0,
+        bar_volume: float = 0.0,
+        adv: float = 0.0,
+        quantity: float = 1.0,
+        side: str = "BUY",
     ) -> float:
         """
         Calculate execution slippage as a fraction of price.
 
+        slippage_model options:
+          "almgren_chriss" — Almgren-Chriss (2001) model: temporary + permanent
+                             impact + spread + queue position. Most realistic.
+          "variable"       — Bar-range scaled spread model (legacy).
+          "fixed"          — Fixed pip-based spread (legacy).
+          "none"           — Zero slippage (optimistic, not recommended).
+
         Gold (XAU/USD) pip convention: 1 pip = $0.10 (i.e. 0.1 USD per oz).
         A 3-pip spread at $2000/oz = $0.30 = 0.015% — realistic for OANDA practice.
-
-        'variable' model scales by the bar's high-low range relative to a 0.2%
-        base spread, with a multiplier clamped to [0.5, 3.0].  Wide bars (high
-        volatility) produce up to 3× the base slippage; narrow bars produce as
-        little as 0.5×.
         """
         if self.config.slippage_model == "none":
             return 0.0
+
+        if self.config.slippage_model == "almgren_chriss":
+            # Almgren-Chriss: realistic impact including partial fills and queue position.
+            try:
+                from execution.market_impact import AlmgrenChrissModel
+
+                model = AlmgrenChrissModel()
+                # Estimate daily volatility from bar range if not provided
+                if price > 0 and bar_high > bar_low:
+                    bar_range_pct = (bar_high - bar_low) / price
+                    # Approximate daily vol: bar range / sqrt(bars_per_day)
+                    bars_per_day = getattr(self.config, "bars_per_day", 24.0)
+                    vol_daily = bar_range_pct / np.sqrt(bars_per_day)
+                else:
+                    vol_daily = 0.012  # 1.2% default (gold ~1%)
+
+                # Spread: use config pips converted to bps
+                pip = 0.10 if price > 100 else 0.0001
+                spread_bps = (self.config.slippage_pips * pip / price) * 10_000
+
+                impact = model.estimate(
+                    order_size=quantity,
+                    adv=adv if adv > 0 else bar_volume * 24,  # estimate ADV from bar vol
+                    volatility_daily=vol_daily,
+                    spread_bps=spread_bps,
+                    price=price,
+                )
+                return impact.total_impact_bps / 10_000
+            except ImportError:
+                logger.warning(
+                    "execution.market_impact not available — falling back to variable model"
+                )
+                # Fall through to variable model
 
         if self.config.slippage_model == "fixed":
             # Gold pip = $0.10; forex pip = $0.0001.
@@ -367,14 +409,13 @@ class SimulatedBroker:
             pip = 0.10 if price > 100 else 0.0001
             return (self.config.slippage_pips * pip) / price
 
-        if self.config.slippage_model == "variable":
+        if self.config.slippage_model in ("variable", "almgren_chriss"):
             # Base spread: 0.015% (~$0.30 at $2000 gold) — realistic for gold CFD.
             base_slippage = 0.00015
             if price > 0 and bar_high > bar_low:
                 bar_range_pct = (bar_high - bar_low) / price
                 # Normalise against a 1% reference range so the [0.5, 3.0] clamp
                 # spans the realistic distribution of bar widths.
-                # A 0.1% bar → multiplier≈0.5 (min); a 2%+ bar → multiplier≈3.0 (max).
                 ref_range_pct = 0.01  # 1% reference bar range
                 multiplier = bar_range_pct / ref_range_pct
                 multiplier = max(0.5, min(3.0, multiplier))
