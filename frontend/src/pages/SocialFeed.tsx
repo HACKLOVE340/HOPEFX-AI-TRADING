@@ -6,7 +6,7 @@
  * Opt-in/out toggle controls whether your own signals appear.
  */
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { api } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,6 +50,20 @@ const timeAgo = (iso: string) => {
   return `${Math.floor(h / 24)}d ago`;
 };
 
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>;
+    const detail = (e['response'] as Record<string, unknown> | undefined)?.['data'];
+    if (detail && typeof detail === 'object') {
+      const d = detail as Record<string, unknown>;
+      if (typeof d['detail'] === 'string') return d['detail'];
+      if (typeof d['message'] === 'string') return d['message'];
+    }
+    if (typeof e['message'] === 'string') return e['message'];
+  }
+  return fallback;
+}
+
 // ─── Comment panel ────────────────────────────────────────────────────────────
 
 const CommentPanel: React.FC<{ signalId: string; onClose: () => void }> = ({
@@ -58,21 +72,28 @@ const CommentPanel: React.FC<{ signalId: string; onClose: () => void }> = ({
   const [comments, setComments] = useState<Comment[]>([]);
   const [text, setText]         = useState('');
   const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     api.get(`/feed/${signalId}/comments`)
       .then((r) => setComments(r.data.comments || []))
-      .catch(() => {})
+      .catch((err) => setError(extractErrorMessage(err, 'Failed to load comments.')))
       .finally(() => setLoading(false));
   }, [signalId]);
 
   const submit = async () => {
     if (!text.trim()) return;
+    setSubmitError(null);
     try {
       const res = await api.post(`/feed/${signalId}/comment`, { text });
       setComments((prev) => [...prev, res.data]);
       setText('');
-    } catch { /* ignore */ }
+    } catch (err) {
+      setSubmitError(extractErrorMessage(err, 'Failed to post comment.'));
+    }
   };
 
   return (
@@ -83,7 +104,8 @@ const CommentPanel: React.FC<{ signalId: string; onClose: () => void }> = ({
       </div>
       <div style={s.commentList}>
         {loading && <div style={s.dim}>Loading…</div>}
-        {!loading && comments.length === 0 && <div style={s.dim}>No comments yet. Be first!</div>}
+        {!loading && error && <div style={{ ...s.dim, color: '#f87171' }}>{error}</div>}
+        {!loading && !error && comments.length === 0 && <div style={s.dim}>No comments yet. Be first!</div>}
         {comments.map((c) => (
           <div key={c.comment_id} style={s.commentItem}>
             <span style={s.commentUser}>{c.username}</span>
@@ -92,6 +114,9 @@ const CommentPanel: React.FC<{ signalId: string; onClose: () => void }> = ({
           </div>
         ))}
       </div>
+      {submitError && (
+        <div style={{ padding: '4px 16px', fontSize: 12, color: '#f87171' }}>{submitError}</div>
+      )}
       <div style={s.commentInput}>
         <input
           style={s.textInput}
@@ -113,7 +138,8 @@ const FeedCard: React.FC<{
   item: FeedItem;
   onReact: (id: string, r: 'up' | 'down') => void;
   onComment: (id: string) => void;
-}> = ({ item, onReact, onComment }) => {
+  onCopyTrade: (item: FeedItem) => void;
+}> = ({ item, onReact, onComment, onCopyTrade }) => {
   const isBuy = item.direction === 'BUY';
   const pnlPos = item.pnl >= 0;
 
@@ -195,11 +221,9 @@ const FeedCard: React.FC<{
         <button style={s.actionBtn} onClick={() => onComment(item.signal_id)}>
           💬 {item.comment_count}
         </button>
-        <button style={s.copyTradeBtn} onClick={async () => {
-          try {
-            await api.post(`/social/copy/${item.trader_id}`, { signal_id: item.signal_id });
-          } catch { /* ignore — user may not be authenticated */ }
-        }}>Copy Trade</button>
+        <button style={s.copyTradeBtn} onClick={() => onCopyTrade(item)}>
+          Copy Trade
+        </button>
       </div>
     </div>
   );
@@ -217,7 +241,10 @@ const SocialFeed: React.FC = () => {
   const [totalPages, setTotal]    = useState(1);
   const [filter, setFilter]       = useState('All');
   const [optedIn, setOptedIn]     = useState(false);
-  const [commentFor, setCommentFor] = useState<string | null>(null);
+  const [optInError, setOptInError]   = useState<string | null>(null);
+  const [reactError, setReactError]   = useState<string | null>(null);
+  const [copyError, setCopyError]     = useState<string | null>(null);
+  const [commentFor, setCommentFor]   = useState<string | null>(null);
 
   const load = useCallback(async (p = 1, sym = filter) => {
     setLoading(true);
@@ -229,9 +256,9 @@ const SocialFeed: React.FC = () => {
       setItems(res.data.items || []);
       setTotal(res.data.pages || 1);
       setPage(p);
-    } catch {
+    } catch (err) {
       setItems([]);
-      setError('Unable to load feed. Check your connection.');
+      setError(extractErrorMessage(err, 'Unable to load feed. Check your connection.'));
     } finally {
       setLoading(false);
     }
@@ -239,14 +266,15 @@ const SocialFeed: React.FC = () => {
 
   useEffect(() => { load(1, filter); }, [filter]);
 
-  // Check opt-in status
+  // Check opt-in status — non-critical, default to false on failure
   useEffect(() => {
     api.get('/feed/status/me')
       .then((r) => setOptedIn(r.data.opted_in))
-      .catch(() => {});
+      .catch(() => { /* opt-in status unavailable; default to false */ });
   }, []);
 
   const handleReact = async (signalId: string, reaction: 'up' | 'down') => {
+    setReactError(null);
     try {
       const res = await api.post(`/feed/${signalId}/react`, { reaction });
       setItems((prev) => prev.map((item) =>
@@ -254,10 +282,22 @@ const SocialFeed: React.FC = () => {
           ? { ...item, thumbs_up: res.data.thumbs_up, thumbs_down: res.data.thumbs_down, your_reaction: res.data.your_reaction }
           : item
       ));
-    } catch { /* ignore */ }
+    } catch (err) {
+      setReactError(extractErrorMessage(err, 'Failed to record reaction. Please try again.'));
+    }
+  };
+
+  const handleCopyTrade = async (item: FeedItem) => {
+    setCopyError(null);
+    try {
+      await api.post(`/social/copy/${item.trader_id}`, { signal_id: item.signal_id });
+    } catch (err) {
+      setCopyError(extractErrorMessage(err, 'Copy trade failed. Ensure you are logged in and have a paper account.'));
+    }
   };
 
   const toggleOptIn = async () => {
+    setOptInError(null);
     try {
       if (optedIn) {
         await api.post('/feed/opt-out');
@@ -266,7 +306,9 @@ const SocialFeed: React.FC = () => {
         await api.post('/feed/opt-in');
         setOptedIn(true);
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      setOptInError(extractErrorMessage(err, 'Failed to update signal sharing preference.'));
+    }
   };
 
   return (
@@ -277,12 +319,15 @@ const SocialFeed: React.FC = () => {
           <h1 style={s.title}>Community Signal Feed</h1>
           <p style={s.subtitle}>High-confidence AI signals shared by the community. React, comment, and copy.</p>
         </div>
-        <button
-          style={{ ...s.optBtn, ...(optedIn ? s.optBtnActive : {}) }}
-          onClick={toggleOptIn}
-        >
-          {optedIn ? '✓ Sharing My Signals' : 'Share My Signals'}
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <button
+            style={{ ...s.optBtn, ...(optedIn ? s.optBtnActive : {}) }}
+            onClick={toggleOptIn}
+          >
+            {optedIn ? '✓ Sharing My Signals' : 'Share My Signals'}
+          </button>
+          {optInError && <div style={{ fontSize: 12, color: '#f87171' }}>{optInError}</div>}
+        </div>
       </div>
 
       {/* Symbol filter */}
@@ -297,6 +342,20 @@ const SocialFeed: React.FC = () => {
           </button>
         ))}
       </div>
+
+      {/* Inline action errors */}
+      {reactError && (
+        <div style={s.actionError}>
+          {reactError}
+          <button style={s.dismissBtn} onClick={() => setReactError(null)}>✕</button>
+        </div>
+      )}
+      {copyError && (
+        <div style={s.actionError}>
+          {copyError}
+          <button style={s.dismissBtn} onClick={() => setCopyError(null)}>✕</button>
+        </div>
+      )}
 
       {/* Feed */}
       <div style={s.feedGrid}>
@@ -314,6 +373,7 @@ const SocialFeed: React.FC = () => {
               item={item}
               onReact={handleReact}
               onComment={(id) => setCommentFor(commentFor === id ? null : id)}
+              onCopyTrade={handleCopyTrade}
             />
           ))}
 
@@ -375,6 +435,15 @@ const s: Record<string, React.CSSProperties> = {
   },
   filterBtnActive: {
     background: '#3b82f6', borderColor: '#3b82f6', color: '#fff',
+  },
+  actionError: {
+    background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8,
+    padding: '8px 14px', marginBottom: 12, fontSize: 13, color: '#f87171',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  },
+  dismissBtn: {
+    background: 'transparent', border: 'none', color: '#f87171',
+    fontSize: 14, cursor: 'pointer', marginLeft: 8,
   },
   feedGrid: { display: 'flex', gap: 20, alignItems: 'flex-start' },
   feedCol:  { flex: 1, minWidth: 0 },
