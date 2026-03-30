@@ -63,13 +63,69 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # ── Environment-configurable thresholds ──────────────────────────────────────
-_THRESHOLD_LONG = float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.58"))
-_THRESHOLD_SHORT = float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.42"))
-_EV_MIN = float(os.getenv("EV_MIN_THRESHOLD", "0.0"))
-_EV_WINDOW = int(os.getenv("EV_WINDOW", "50"))          # rolling window for EV calc
-_REGIME_FILTER = os.getenv("REGIME_FILTER_ENABLED", "true").lower() == "true"
-_MTF_CONFLUENCE = os.getenv("MTF_CONFLUENCE_REQUIRED", "false").lower() == "true"
-_MIN_CONFIDENCE_ABS = float(os.getenv("MIN_CONFIDENCE_ABS", "0.55"))  # hard floor
+_THRESHOLD_LONG     = float(os.getenv("SIGNAL_THRESHOLD_LONG",    "0.58"))
+_THRESHOLD_SHORT    = float(os.getenv("SIGNAL_THRESHOLD_SHORT",   "0.42"))
+_EV_MIN             = float(os.getenv("EV_MIN_THRESHOLD",         "0.0"))
+_EV_WINDOW          = int(os.getenv("EV_WINDOW",                  "50"))
+_REGIME_FILTER      = os.getenv("REGIME_FILTER_ENABLED",          "true").lower()  == "true"
+_MTF_CONFLUENCE     = os.getenv("MTF_CONFLUENCE_REQUIRED",        "false").lower() == "true"
+_MIN_CONFIDENCE_ABS = float(os.getenv("MIN_CONFIDENCE_ABS",       "0.55"))
+_BLACKOUT_GATE      = os.getenv("BLACKOUT_GATE_ENABLED",          "true").lower()  == "true"
+_CIRCUIT_BREAKER    = os.getenv("CIRCUIT_BREAKER_ENABLED",        "true").lower()  == "true"
+# Circuit-breaker: halt all signals when rolling accuracy drops below this
+_CB_MIN_ACCURACY    = float(os.getenv("CB_MIN_ACCURACY",          "0.45"))
+# Circuit-breaker: minimum outcomes before the breaker can trip
+_CB_MIN_OUTCOMES    = int(os.getenv("CB_MIN_OUTCOMES",            "30"))
+
+
+# ── Prometheus metrics (optional) ────────────────────────────────────────────
+
+def _init_prometheus():
+    try:
+        from prometheus_client import Counter, Gauge
+        class _M:
+            signals_checked = Counter(
+                "hopefx_signal_filter_checked_total",
+                "Total signals evaluated by SignalFilter",
+                ["symbol", "direction"],
+            )
+            signals_passed = Counter(
+                "hopefx_signal_filter_passed_total",
+                "Signals that passed all gates",
+                ["symbol", "direction"],
+            )
+            signals_blocked = Counter(
+                "hopefx_signal_filter_blocked_total",
+                "Signals blocked by a gate",
+                ["symbol", "gate"],
+            )
+            ev_gauge = Gauge(
+                "hopefx_signal_filter_ev",
+                "Current expected value estimate",
+                ["symbol"],
+            )
+            accuracy_gauge = Gauge(
+                "hopefx_signal_filter_accuracy",
+                "Rolling prediction accuracy",
+                ["symbol"],
+            )
+            circuit_breaker_trips = Counter(
+                "hopefx_signal_filter_circuit_breaker_trips_total",
+                "Number of times the circuit breaker tripped",
+                ["symbol"],
+            )
+        return _M()
+    except Exception:
+        class _Noop:
+            class _C:
+                def labels(self, **_kw): return self
+                def inc(self, *a, **kw): pass
+                def set(self, *a, **kw): pass
+            def __getattr__(self, _): return self._C()
+        return _Noop()
+
+
+_PROM = _init_prometheus()
 
 
 @dataclass
@@ -99,8 +155,30 @@ class SignalFilter:
     """
     Multi-gate signal quality filter.
 
-    Thread-safe for read operations. Write operations (record_outcome) should
-    be called from a single writer thread (the execution path).
+    Gates (evaluated in order — first failure short-circuits):
+    1. Circuit-breaker  — halt all signals when rolling accuracy < CB_MIN_ACCURACY
+    2. Blackout window  — block during macro HIGH-impact event windows
+    3. Confidence       — probability must exceed direction-specific threshold
+    4. Expected value   — rolling EV must be positive (after 10+ outcomes)
+    5. Regime           — block in HIGH_VOL / MEAN_REVERTING regimes
+    6. MTF confluence   — H4/D1 trend must agree with signal direction
+
+    Regime-conditional threshold tightening
+    ----------------------------------------
+    When the orchestrator reports a MEAN_REVERTING regime the confidence
+    thresholds are tightened by 5% to require higher conviction before
+    forwarding a directional signal.
+
+    Prometheus instrumentation
+    --------------------------
+    All gate decisions are exported as Prometheus counters/gauges when
+    prometheus_client is installed.  Degrades gracefully when absent.
+
+    Thread-safety
+    -------------
+    Read operations (check, ev_stats, get_stats) are thread-safe.
+    Write operations (record_outcome) should be called from a single
+    writer thread (the execution path).
     """
 
     def __init__(self) -> None:
@@ -108,6 +186,9 @@ class SignalFilter:
         self._outcomes: Dict[str, Deque[_TradeOutcome]] = {}
         # Global outcome window (used when per-symbol window is too small)
         self._global_outcomes: Deque[_TradeOutcome] = deque(maxlen=_EV_WINDOW * 3)
+        # Circuit-breaker state
+        self._cb_tripped: Dict[str, bool] = {}   # per-symbol trip state
+        self._cb_trip_count: int = 0
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -128,39 +209,77 @@ class SignalFilter:
 
         Returns FilterResult — check .passed before forwarding to execution.
         """
-        sym = symbol or signal.get("symbol", "UNKNOWN")
+        sym       = symbol or signal.get("symbol", "UNKNOWN")
         direction = signal.get("direction", "HOLD")
         confidence = self._extract_confidence(signal)
 
-        # Gate 1: Hard confidence floor
-        result = self._gate_confidence(direction, confidence)
+        _PROM.signals_checked.labels(symbol=sym, direction=direction).inc()
+
+        # ── Gate 0: Circuit-breaker ───────────────────────────────────────────
+        if _CIRCUIT_BREAKER:
+            result = self._gate_circuit_breaker(sym, direction, confidence)
+            if not result.passed:
+                _PROM.signals_blocked.labels(symbol=sym, gate="circuit_breaker").inc()
+                return result
+
+        # ── Gate 1: Macro blackout window ─────────────────────────────────────
+        if _BLACKOUT_GATE:
+            result = self._gate_blackout(direction, confidence)
+            if not result.passed:
+                _PROM.signals_blocked.labels(symbol=sym, gate="blackout").inc()
+                return result
+
+        # ── Regime-conditional threshold tightening ───────────────────────────
+        # Pull current regime from orchestrator; tighten thresholds in
+        # MEAN_REVERTING regime where directional accuracy is historically lower.
+        regime_str = self._get_current_regime(ohlcv)
+
+        # ── Gate 2: Confidence (regime-adjusted) ──────────────────────────────
+        result = self._gate_confidence(direction, confidence, regime=regime_str)
         if not result.passed:
+            _PROM.signals_blocked.labels(symbol=sym, gate="confidence").inc()
             return result
 
-        # Gate 2: Expected value
+        # ── Gate 3: Expected value ────────────────────────────────────────────
         result = self._gate_expected_value(sym, confidence, direction)
         if not result.passed:
+            _PROM.signals_blocked.labels(symbol=sym, gate="expected_value").inc()
             return result
 
-        # Gate 3: Regime filter (optional, requires OHLCV)
+        # ── Gate 4: Regime filter (optional, requires OHLCV) ─────────────────
         if _REGIME_FILTER and ohlcv is not None:
             result = self._gate_regime(ohlcv, direction, confidence)
             if not result.passed:
+                _PROM.signals_blocked.labels(symbol=sym, gate="regime").inc()
                 return result
 
-        # Gate 4: MTF confluence (optional)
+        # ── Gate 5: MTF confluence (optional) ────────────────────────────────
         if _MTF_CONFLUENCE:
             result = self._gate_mtf_confluence(sym, direction, confidence)
             if not result.passed:
+                _PROM.signals_blocked.labels(symbol=sym, gate="mtf_confluence").inc()
                 return result
 
         ev = self._compute_ev(sym, confidence)
+        _PROM.signals_passed.labels(symbol=sym, direction=direction).inc()
+        _PROM.ev_gauge.labels(symbol=sym).set(ev)
+
         return FilterResult(
             passed=True,
             reason="all gates passed",
             confidence=confidence,
             expected_value=ev,
+            regime=regime_str,
         )
+
+    def filter(
+        self,
+        signal: Dict[str, Any],
+        ohlcv: Optional[Any] = None,
+        symbol: Optional[str] = None,
+    ) -> FilterResult:
+        """Alias for check() — provided for backward compatibility."""
+        return self.check(signal=signal, ohlcv=ohlcv, symbol=symbol)
 
     def record_outcome(
         self,
@@ -170,15 +289,25 @@ class SignalFilter:
         confidence: float,
     ) -> None:
         """
-        Record a completed trade outcome for EV calculation.
+        Record a completed trade outcome for EV and circuit-breaker calculation.
 
         Call this from the execution path after a trade closes.
+        Updates Prometheus accuracy gauge immediately.
         """
         outcome = _TradeOutcome(pnl_pct=pnl_pct, direction=direction, confidence=confidence)
         if symbol not in self._outcomes:
             self._outcomes[symbol] = deque(maxlen=_EV_WINDOW)
         self._outcomes[symbol].append(outcome)
         self._global_outcomes.append(outcome)
+
+        # Update Prometheus accuracy gauge
+        try:
+            recent = list(self._outcomes[symbol])[-_CB_MIN_OUTCOMES:]
+            if len(recent) >= 5:
+                win_rate = sum(1 for o in recent if o.pnl_pct > 0) / len(recent)
+                _PROM.accuracy_gauge.labels(symbol=symbol).set(win_rate)
+        except Exception:
+            pass
 
     def ev_stats(self, symbol: Optional[str] = None) -> Dict[str, Any]:
         """Return EV statistics for monitoring/API exposure."""
@@ -205,9 +334,8 @@ class SignalFilter:
         """
         Return aggregate filter statistics for health endpoints.
 
-        Includes global EV stats, per-symbol outcome counts, and
-        current gate configuration so operators can monitor signal
-        quality without querying individual symbols.
+        Includes global EV stats, per-symbol outcome counts, circuit-breaker
+        state, and current gate configuration.
         """
         global_stats = self.ev_stats(None)
         per_symbol: Dict[str, Any] = {}
@@ -220,66 +348,217 @@ class SignalFilter:
             "per_symbol": per_symbol,
             "symbols_tracked": len(self._outcomes),
             "global_outcomes_buffered": len(self._global_outcomes),
+            "circuit_breaker": {
+                "enabled":    _CIRCUIT_BREAKER,
+                "trip_count": self._cb_trip_count,
+                "tripped":    dict(self._cb_tripped),
+                "min_accuracy": _CB_MIN_ACCURACY,
+                "min_outcomes": _CB_MIN_OUTCOMES,
+            },
             "config": {
-                "threshold_long": _THRESHOLD_LONG,
-                "threshold_short": _THRESHOLD_SHORT,
-                "ev_min": _EV_MIN,
-                "ev_window": _EV_WINDOW,
-                "min_confidence_abs": _MIN_CONFIDENCE_ABS,
-                "regime_filter_enabled": _REGIME_FILTER,
+                "threshold_long":         _THRESHOLD_LONG,
+                "threshold_short":        _THRESHOLD_SHORT,
+                "ev_min":                 _EV_MIN,
+                "ev_window":              _EV_WINDOW,
+                "min_confidence_abs":     _MIN_CONFIDENCE_ABS,
+                "regime_filter_enabled":  _REGIME_FILTER,
                 "mtf_confluence_required": _MTF_CONFLUENCE,
+                "blackout_gate_enabled":  _BLACKOUT_GATE,
+                "circuit_breaker_enabled": _CIRCUIT_BREAKER,
             },
         }
 
     # ── Gate implementations ──────────────────────────────────────────────────
 
-    def _gate_confidence(self, direction: str, confidence: float) -> FilterResult:
-        """Gate 1: confidence must exceed threshold for the signal direction."""
-        dir_upper = direction.upper()
+    def _gate_circuit_breaker(
+        self, symbol: str, direction: str, confidence: float
+    ) -> FilterResult:
+        """
+        Gate 0: Circuit-breaker — halt all signals when rolling accuracy is too low.
 
-        # HOLD signals are never forwarded
-        if dir_upper in ("HOLD", "NEUTRAL", ""):
+        Trips when:
+          - At least CB_MIN_OUTCOMES outcomes have been recorded, AND
+          - Rolling win-rate < CB_MIN_ACCURACY
+
+        Resets automatically when win-rate recovers above CB_MIN_ACCURACY.
+        """
+        outcomes = list(self._outcomes.get(symbol, [])) or list(self._global_outcomes)
+        if len(outcomes) < _CB_MIN_OUTCOMES:
+            return FilterResult(passed=True, confidence=confidence)
+
+        pnls = [o.pnl_pct for o in outcomes[-_CB_MIN_OUTCOMES:]]
+        win_rate = sum(1 for p in pnls if p > 0) / len(pnls)
+
+        # Update Prometheus accuracy gauge
+        _PROM.accuracy_gauge.labels(symbol=symbol).set(win_rate)
+
+        was_tripped = self._cb_tripped.get(symbol, False)
+
+        if win_rate < _CB_MIN_ACCURACY:
+            if not was_tripped:
+                self._cb_tripped[symbol] = True
+                self._cb_trip_count += 1
+                _PROM.circuit_breaker_trips.labels(symbol=symbol).inc()
+                logger.warning(
+                    "SignalFilter: circuit breaker TRIPPED for %s "
+                    "(win_rate=%.3f < %.3f, n=%d)",
+                    symbol, win_rate, _CB_MIN_ACCURACY, len(pnls),
+                )
             return FilterResult(
                 passed=False,
-                gate="confidence",
-                reason="HOLD signal — not forwarded",
-                confidence=confidence,
-            )
-
-        # Hard floor
-        if confidence < _MIN_CONFIDENCE_ABS:
-            return FilterResult(
-                passed=False,
-                gate="confidence",
+                gate="circuit_breaker",
                 reason=(
-                    f"confidence {confidence:.3f} < hard floor {_MIN_CONFIDENCE_ABS:.3f}"
+                    f"Circuit breaker: win_rate={win_rate:.3f} < "
+                    f"threshold={_CB_MIN_ACCURACY:.3f} over last {len(pnls)} trades"
                 ),
                 confidence=confidence,
             )
 
-        # Direction-specific threshold
-        if dir_upper in ("BUY", "LONG"):
-            if confidence < _THRESHOLD_LONG:
-                return FilterResult(
-                    passed=False,
-                    gate="confidence",
-                    reason=(
-                        f"BUY confidence {confidence:.3f} < threshold {_THRESHOLD_LONG:.3f}"
-                    ),
-                    confidence=confidence,
-                )
-        elif dir_upper in ("SELL", "SHORT"):
-            if confidence > _THRESHOLD_SHORT:
-                return FilterResult(
-                    passed=False,
-                    gate="confidence",
-                    reason=(
-                        f"SELL confidence {confidence:.3f} > threshold {_THRESHOLD_SHORT:.3f}"
-                    ),
-                    confidence=confidence,
-                )
+        # Auto-reset when accuracy recovers
+        if was_tripped:
+            self._cb_tripped[symbol] = False
+            logger.info(
+                "SignalFilter: circuit breaker RESET for %s (win_rate=%.3f recovered)",
+                symbol, win_rate,
+            )
 
         return FilterResult(passed=True, confidence=confidence)
+
+    def _gate_blackout(self, direction: str, confidence: float) -> FilterResult:
+        """
+        Gate 1: Block signals during macro HIGH-impact event blackout windows.
+
+        Reads from data_layer.orchestrator.is_blackout_window().
+        Falls back to pass when orchestrator is unavailable.
+        """
+        try:
+            from data_layer.orchestrator import orchestrator
+            if orchestrator.is_blackout_window():
+                return FilterResult(
+                    passed=False,
+                    gate="blackout",
+                    reason="Macro HIGH-impact event blackout window — no signals",
+                    confidence=confidence,
+                )
+        except Exception as exc:
+            logger.debug("SignalFilter: blackout gate orchestrator error: %s", exc)
+        return FilterResult(passed=True, confidence=confidence)
+
+    def _get_current_regime(self, ohlcv: Optional[Any]) -> str:
+        """
+        Determine the current market regime for threshold tightening.
+
+        Priority:
+        1. Orchestrator ML features (macro_is_blackout, micro_ofi)
+        2. OHLCV-based Hurst + volatility (same logic as _gate_regime)
+        3. "unknown" fallback
+        """
+        # Try orchestrator first
+        try:
+            from data_layer.orchestrator import orchestrator
+            feats = orchestrator.get_ml_features()
+            if feats:
+                # Use micro_ofi as a proxy for trending vs mean-reverting
+                ofi = float(feats.get("micro_ofi", 0.0))
+                sentiment = float(feats.get("news_sentiment_score", 0.0))
+                # Strong OFI + sentiment alignment → trending
+                if abs(ofi) > 0.5 and abs(sentiment) > 0.3:
+                    return "TRENDING"
+        except Exception:
+            pass
+
+        # Fall back to OHLCV-based regime
+        if ohlcv is not None:
+            try:
+                import numpy as _np
+                closes = _np.array(ohlcv["close"].values[-50:], dtype=float)
+                if len(closes) >= 20:
+                    hurst = self._hurst_exponent(closes)
+                    log_ret = _np.diff(_np.log(closes))
+                    rv_14 = float(_np.std(log_ret[-14:])) if len(log_ret) >= 14 else 0.0
+                    rv_90 = float(_np.std(log_ret)) if len(log_ret) >= 20 else rv_14
+                    if rv_90 > 0 and rv_14 > 2.0 * rv_90:
+                        return "HIGH_VOL"
+                    if hurst < 0.45:
+                        return "MEAN_REVERTING"
+                    if hurst > 0.55:
+                        return "TRENDING"
+            except Exception:
+                pass
+
+        return "unknown"
+
+    def _gate_confidence(self, direction: str, confidence: float, regime: str = "unknown") -> FilterResult:
+        """
+        Gate 2: confidence must exceed the direction-specific threshold.
+
+        Regime-conditional tightening:
+          MEAN_REVERTING → thresholds tightened by 0.05 (require higher conviction)
+          HIGH_VOL       → thresholds tightened by 0.03 (model less reliable)
+          TRENDING       → standard thresholds
+        """
+        dir_upper = direction.upper()
+
+        # HOLD / NEUTRAL signals are never forwarded
+        if dir_upper in ("HOLD", "NEUTRAL", ""):
+            return FilterResult(
+                passed=False,
+                gate="confidence",
+                reason="HOLD/NEUTRAL signal — not forwarded to execution",
+                confidence=confidence,
+            )
+
+        # Regime-conditional threshold adjustment
+        tighten = 0.0
+        if regime == "MEAN_REVERTING":
+            tighten = 0.05
+        elif regime == "HIGH_VOL":
+            tighten = 0.03
+
+        threshold_long  = _THRESHOLD_LONG  + tighten
+        threshold_short = _THRESHOLD_SHORT - tighten
+        min_conf        = _MIN_CONFIDENCE_ABS + tighten
+
+        # Hard floor (regime-adjusted)
+        if confidence < min_conf:
+            return FilterResult(
+                passed=False,
+                gate="confidence",
+                reason=(
+                    f"confidence {confidence:.3f} < floor {min_conf:.3f}"
+                    + (f" (regime={regime} tighten={tighten:+.2f})" if tighten else "")
+                ),
+                confidence=confidence,
+                regime=regime,
+            )
+
+        # Direction-specific threshold (regime-adjusted)
+        if dir_upper in ("BUY", "LONG"):
+            if confidence < threshold_long:
+                return FilterResult(
+                    passed=False,
+                    gate="confidence",
+                    reason=(
+                        f"BUY confidence {confidence:.3f} < threshold {threshold_long:.3f}"
+                        + (f" (regime={regime})" if tighten else "")
+                    ),
+                    confidence=confidence,
+                    regime=regime,
+                )
+        elif dir_upper in ("SELL", "SHORT"):
+            if confidence > threshold_short:
+                return FilterResult(
+                    passed=False,
+                    gate="confidence",
+                    reason=(
+                        f"SELL confidence {confidence:.3f} > threshold {threshold_short:.3f}"
+                        + (f" (regime={regime})" if tighten else "")
+                    ),
+                    confidence=confidence,
+                    regime=regime,
+                )
+
+        return FilterResult(passed=True, confidence=confidence, regime=regime)
 
     def _gate_expected_value(
         self, symbol: str, confidence: float, direction: str
