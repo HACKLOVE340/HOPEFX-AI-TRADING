@@ -44,6 +44,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from risk.intra_trade_monitor import IntraTradeMonitor, OpenPosition as IntraPosition
 from risk.post_trade_analyzer import PostTradeAnalyzer
 from risk.drawdown_tracker import DrawdownTracker
+from shadow.trading_engine import ShadowTradingEngine
+from shadow.data_validator import ShadowDataValidator
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +142,8 @@ class HopeFXEngine:
         intra_trade_monitor: Optional[IntraTradeMonitor] = None,
         post_trade_analyzer: Optional[PostTradeAnalyzer] = None,
         drawdown_tracker: Optional[DrawdownTracker] = None,
+        shadow_engine: Optional[ShadowTradingEngine] = None,
+        shadow_validator: Optional[ShadowDataValidator] = None,
         initial_equity: float = float(os.getenv("ENGINE_INITIAL_EQUITY", "100000")),
     ) -> None:
         self._orch        = orchestrator
@@ -162,6 +166,17 @@ class HopeFXEngine:
         )
         self._current_equity: float = initial_equity
 
+        # ── Shadow trading components ──────────────────────────────────────
+        # ShadowTradingEngine: paper-executes every live signal in parallel.
+        # ShadowDataValidator: compares production vs shadow feed on every tick.
+        # Both are optional — if not injected, defaults are created.
+        self._shadow: ShadowTradingEngine = (
+            shadow_engine or ShadowTradingEngine(initial_balance=initial_equity)
+        )
+        self._shadow_validator: ShadowDataValidator = (
+            shadow_validator or ShadowDataValidator()
+        )
+
         self._state       = EngineState.IDLE
         self._tick_count  = 0
         self._signal_count = 0
@@ -182,6 +197,11 @@ class HopeFXEngine:
             return
         self._state = EngineState.RUNNING
         self._start_time = time.monotonic()
+
+        # Start shadow components
+        await self._shadow.start()
+        await self._shadow_validator.start()
+
         self._loop_task = asyncio.create_task(
             self._tick_loop(), name="hopefx_engine_tick_loop"
         )
@@ -198,6 +218,11 @@ class HopeFXEngine:
                 await self._loop_task
             except asyncio.CancelledError:
                 pass
+
+        # Stop shadow components
+        await self._shadow.stop()
+        await self._shadow_validator.stop()
+
         logger.info(
             "HopeFXEngine stopped — ticks=%d signals=%d fills=%d rejects=%d",
             self._tick_count, self._signal_count, self._fill_count, self._reject_count,
@@ -269,6 +294,20 @@ class HopeFXEngine:
         if tick_epoch == self._last_tick_epoch:
             return
         self._last_tick_epoch = tick_epoch
+
+        # ── Step 2a: Shadow feed validation ───────────────────────────────
+        # Feed every production tick to the shadow validator so it can
+        # compare against the shadow feed and detect divergences.
+        try:
+            self._shadow_validator.on_production_tick(tick)
+        except Exception as exc:
+            logger.debug("ShadowDataValidator.on_production_tick error: %s", exc)
+
+        # Update shadow engine open positions on every tick
+        try:
+            self._shadow.on_tick(mid=tick.mid)
+        except Exception as exc:
+            logger.debug("ShadowTradingEngine.on_tick error: %s", exc)
 
         # ── Step 2b: Intra-trade risk monitor (tick-frequency CVaR/ES) ────
         # Must run on every tick regardless of whether we generate a new signal.
@@ -435,6 +474,25 @@ class HopeFXEngine:
         """Route order through SmartRouter and handle fill/rejection."""
         t0 = time.monotonic()
 
+        # ── Shadow execution (zero side-effects, runs before live) ────────
+        # Paper-execute the same signal so we can compare shadow vs live PnL.
+        try:
+            self._shadow.on_signal(
+                signal_id   = signal.signal_id,
+                symbol      = signal.symbol,
+                side        = signal.direction,
+                lots        = sized.quantity,
+                mid         = signal.tick_mid,
+                stop_loss   = float(signal.features.get(
+                    "stop_loss", signal.tick_mid * (0.99 if signal.direction == "long" else 1.01)
+                )),
+                take_profit = float(signal.features.get(
+                    "take_profit", signal.tick_mid * (1.01 if signal.direction == "long" else 0.99)
+                )),
+            )
+        except Exception as exc:
+            logger.debug("ShadowTradingEngine.on_signal error: %s", exc)
+
         order_request = {
             "order_id":   str(uuid.uuid4()),
             "signal_id":  signal.signal_id,
@@ -547,6 +605,36 @@ class HopeFXEngine:
 
         # ── Update drawdown tracker with new balance ───────────────────────
         self._current_equity = self._current_equity  # balance unchanged on open
+
+        # ── Close any existing shadow position on the same symbol ─────────
+        # If we already had an open position on this symbol and are now
+        # opening in the opposite direction, the previous position is closed.
+        # Notify shadow engine so it can record the live PnL for comparison.
+        existing = self._open_positions.get(signal.symbol)
+        if existing and existing.get("direction") != signal.direction:
+            prev_entry = existing.get("entry_price", fill_price)
+            prev_qty   = existing.get("quantity", quantity)
+            if existing["direction"] == "long":
+                prev_pnl = (fill_price - prev_entry) * prev_qty * 100.0
+            else:
+                prev_pnl = (prev_entry - fill_price) * prev_qty * 100.0
+            try:
+                # Compute live slippage for the closing leg so shadow engine
+                # can calibrate its slippage model via R² tracking.
+                if existing["direction"] == "long":
+                    live_slip = (fill_price - prev_entry) / max(prev_entry, 1e-9) * 10_000
+                else:
+                    live_slip = (prev_entry - fill_price) / max(prev_entry, 1e-9) * 10_000
+                self._shadow.on_live_close(
+                    signal_id=existing.get("signal_id", ""),
+                    live_pnl=prev_pnl,
+                    live_fill_price=fill_price,
+                    live_slippage_bps=abs(live_slip),
+                )
+            except Exception as exc:
+                logger.debug("ShadowTradingEngine.on_live_close (flip) error: %s", exc)
+            self._current_equity += prev_pnl
+            self._dd_tracker.record_fill(pnl=prev_pnl)
 
         # Write fill to lineage store
         self._lineage.record_signal(
@@ -661,6 +749,22 @@ class HopeFXEngine:
         self._dd_tracker.update(equity=self._current_equity)
         self._dd_tracker.record_fill(pnl=realised_pnl)
 
+        # Notify shadow engine of live close for paper-vs-live comparison
+        try:
+            entry = pos.get("entry_price", close_price)
+            if pos["direction"] == "long":
+                live_slip = (close_price - entry) / max(entry, 1e-9) * 10_000
+            else:
+                live_slip = (entry - close_price) / max(entry, 1e-9) * 10_000
+            self._shadow.on_live_close(
+                signal_id=pos["signal_id"],
+                live_pnl=realised_pnl,
+                live_fill_price=close_price,
+                live_slippage_bps=abs(live_slip),
+            )
+        except Exception as exc:
+            logger.debug("ShadowTradingEngine.on_live_close error: %s", exc)
+
         # Remove from open positions
         self._open_positions.pop(unwind.symbol, None)
 
@@ -731,6 +835,8 @@ class HopeFXEngine:
             },
             "post_trade":  pt_summary,
             "intra_trade": intra_summary,
+            "shadow":      self._shadow.health(),
+            "shadow_comparison": self._shadow.get_comparison_report(),
         }
 
 
