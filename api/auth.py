@@ -13,6 +13,7 @@ Read-only endpoints use get_current_user.
 Token generation is handled externally (login endpoint / mobile auth).
 """
 
+import functools
 import logging
 import os
 from typing import Optional
@@ -140,9 +141,14 @@ def get_current_user(
     return _decode_token(credentials.credentials)
 
 
+@functools.lru_cache(maxsize=None)
 def require_role(minimum_role: str):
     """
     Dependency factory: require caller to hold at least `minimum_role`.
+
+    Cached via lru_cache so the same role string always returns the *same*
+    callable object — this is required for FastAPI's dependency_overrides to
+    work correctly in tests (dict key identity must match).
 
     Usage:
         @router.post("/order")
