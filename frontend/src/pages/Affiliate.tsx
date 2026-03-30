@@ -94,15 +94,17 @@ const MetricCard: React.FC<{ label: string; value: string; sub?: string }> = ({ 
 // ── Main component ────────────────────────────────────────────────────────────
 
 const Affiliate: React.FC = () => {
-  const [account, setAccount] = useState<AffiliateAccount | null>(null);
-  const [metrics, setMetrics] = useState<AffiliateMetrics | null>(null);
-  const [referrals, setReferrals] = useState<Referral[]>([]);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [account, setAccount]           = useState<AffiliateAccount | null>(null);
+  const [metrics, setMetrics]           = useState<AffiliateMetrics | null>(null);
+  const [referrals, setReferrals]       = useState<Referral[]>([]);
+  const [leaderboard, setLeaderboard]   = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [apiError, setApiError]         = useState<string | null>(null);
+  const [referralErr, setReferralErr]   = useState<string | null>(null);
+  const [leaderErr, setLeaderErr]       = useState<string | null>(null);
+  const [copied, setCopied]             = useState(false);
   const [signupLoading, setSignupLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'referrals' | 'leaderboard'>('overview');
+  const [activeTab, setActiveTab]       = useState<'overview' | 'referrals' | 'leaderboard'>('overview');
 
   const user   = useStore((s) => s.user);
   const userId = user?.id;
@@ -126,7 +128,9 @@ const Affiliate: React.FC = () => {
             `/monetization/affiliate/${data.affiliate.affiliate_id}/referrals`
           );
           setReferrals(rRes.data.referrals ?? []);
-        } catch { /* referrals non-fatal */ }
+        } catch (err: unknown) {
+          setReferralErr(err instanceof Error ? err.message : 'Failed to load referrals.');
+        }
       }
       try {
         const lRes = await api.get<{ leaderboard?: LeaderboardEntry[] } | LeaderboardEntry[]>(
@@ -134,7 +138,9 @@ const Affiliate: React.FC = () => {
         );
         const lData = lRes.data;
         setLeaderboard(Array.isArray(lData) ? lData : (lData as { leaderboard?: LeaderboardEntry[] }).leaderboard ?? []);
-      } catch { /* leaderboard non-fatal */ }
+      } catch (err: unknown) {
+        setLeaderErr(err instanceof Error ? err.message : 'Failed to load leaderboard.');
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load affiliate data.';
       setApiError(msg);
@@ -294,7 +300,8 @@ const Affiliate: React.FC = () => {
       {activeTab === 'referrals' && (
         <div style={styles.card}>
           <h3 style={styles.cardTitle}>Referral history</h3>
-          {referrals.length === 0 ? (
+          {referralErr && <div style={styles.subError}>{referralErr}</div>}
+          {!referralErr && referrals.length === 0 ? (
             <p style={{ color: '#64748b', fontSize: 14 }}>No referrals yet. Share your link to get started.</p>
           ) : (
             <table style={styles.table}>
@@ -327,7 +334,8 @@ const Affiliate: React.FC = () => {
       {activeTab === 'leaderboard' && (
         <div style={styles.card}>
           <h3 style={styles.cardTitle}>Top affiliates</h3>
-          <table style={styles.table}>
+          {leaderErr && <div style={styles.subError}>{leaderErr}</div>}
+          {!leaderErr && <table style={styles.table}>
             <thead>
               <tr>
                 <th style={styles.th}>#</th>
@@ -356,7 +364,7 @@ const Affiliate: React.FC = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>}
         </div>
       )}
     </div>
@@ -428,6 +436,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '20px 24px', marginBottom: 16,
   },
   cardTitle: { fontSize: 16, fontWeight: 600, color: '#e2e8f0', marginBottom: 16, marginTop: 0 },
+  subError: { background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#f87171', marginBottom: 12 },
   howList: { color: '#94a3b8', fontSize: 14, lineHeight: 2, paddingLeft: 20, margin: 0 },
   table: { width: '100%', borderCollapse: 'collapse' },
   th: { textAlign: 'left', fontSize: 12, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, padding: '8px 12px', borderBottom: '1px solid #334155' },
