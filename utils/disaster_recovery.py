@@ -163,6 +163,9 @@ class FailoverManager:
     Automatic failover to backup nodes.
     """
 
+    # Default port used when a peer string contains no port component.
+    HEARTBEAT_PORT: int = 8765
+
     def __init__(self, node_id: str, peers: List[str]):
         self.node_id = node_id
         self.peers = peers  # Other HOPEFX nodes
@@ -170,6 +173,8 @@ class FailoverManager:
         self.heartbeat_interval = 5  # seconds
         self.last_peer_heartbeat: Dict[str, datetime] = {}
         self.failover_timeout = 15  # seconds
+        # Shared aiohttp session — created lazily on first use
+        self._session: "aiohttp.ClientSession | None" = None  # type: ignore[name-defined]
 
     async def start_election(self):
         """
@@ -213,10 +218,46 @@ class FailoverManager:
 
             await asyncio.sleep(self.heartbeat_interval)
 
-    async def _send_heartbeat(self, peer: str):
-        """Send heartbeat to peer node"""
-        # Implement via your event bus or direct TCP
-        pass
+    async def _send_heartbeat(self, peer: str) -> None:
+        """POST a heartbeat JSON payload to the peer's /heartbeat endpoint.
+
+        Peer format: ``host``, ``host:port``, or ``http://host:port``.
+        Falls back to HEARTBEAT_PORT when no port is specified.
+        Updates last_peer_heartbeat on a successful (2xx) response.
+        """
+        import aiohttp
+
+        # Build the target URL
+        if peer.startswith("http://") or peer.startswith("https://"):
+            url = peer.rstrip("/") + "/heartbeat"
+        elif ":" in peer:
+            url = f"http://{peer}/heartbeat"
+        else:
+            url = f"http://{peer}:{self.HEARTBEAT_PORT}/heartbeat"
+
+        payload = {
+            "node_id": self.node_id,
+            "is_primary": self.is_primary,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        # Lazily create a shared session
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=3.0)
+            )
+
+        try:
+            async with self._session.post(url, json=payload) as resp:
+                if resp.status < 300:
+                    self.last_peer_heartbeat[peer] = datetime.now(timezone.utc)
+                else:
+                    print(
+                        f"⚠️ Heartbeat to {peer} returned HTTP {resp.status}"
+                    )
+        except aiohttp.ClientError as exc:
+            # Network errors are expected when a peer is down — log and continue
+            print(f"⚠️ Heartbeat to {peer} failed: {exc}")
 
     async def _trigger_failover(self):
         """Promote self to primary"""
