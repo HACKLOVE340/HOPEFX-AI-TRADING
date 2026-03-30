@@ -1,5 +1,12 @@
 // HOPEFX-AI-TRADING — AGPL-3.0
-import React, { useEffect, useState } from 'react';
+/**
+ * screens/SignalsScreen.tsx
+ * =========================
+ * Live AI signal feed with confidence bars, factor reasoning,
+ * one-tap trade approval, and haptic feedback.
+ */
+
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl,
   TouchableOpacity,
@@ -7,169 +14,229 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useTradingStore } from '../store/tradingStore';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+
+import { useTradingStore }   from '../store/tradingStore';
 import { useRefreshOnFocus } from '../hooks/useRefreshOnFocus';
-import { Card } from '../components/Card';
-import { SignalBadge } from '../components/SignalBadge';
-import { COLORS, SPACING, RADIUS } from '../utils/theme';
-import { formatRelativeTime, confidenceLabel } from '../utils/formatters';
-import { Signal, TradingStackParamList } from '../types';
+import { SignalCard }        from '../components/SignalCard';
+import { SentimentMeter }   from '../components/SentimentMeter';
+import { Card }              from '../components/Card';
+
+import { COLORS, SPACING, RADIUS, TEXT, confidenceColor } from '../utils/theme';
+import { TradingStackParamList } from '../types';
 
 type Nav = NativeStackNavigationProp<TradingStackParamList>;
 
-const SYMBOLS = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'BTCUSD'];
+const SYMBOLS = ['All', 'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'BTCUSD'];
+const DIRECTIONS = ['All', 'Long', 'Short'] as const;
 
 export function SignalsScreen() {
   const navigation = useNavigation<Nav>();
-  const { signals, fetchSignals, isLoading } = useTradingStore();
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const {
+    signals, sentiment, fetchSignals, fetchSentiment,
+    approveSignal, isLoading,
+  } = useTradingStore();
 
-  const load = () => fetchSignals(selectedSymbol ?? undefined);
+  const [selectedSymbol, setSelectedSymbol]    = useState('All');
+  const [selectedDir, setSelectedDir]          = useState<typeof DIRECTIONS[number]>('All');
+  const [minConfidence, setMinConfidence]       = useState(0);
+
+  const load = useCallback(() => {
+    fetchSignals(selectedSymbol !== 'All' ? selectedSymbol : undefined);
+    fetchSentiment(selectedSymbol !== 'All' ? selectedSymbol : 'XAUUSD');
+  }, [selectedSymbol]);
 
   useEffect(() => { load(); }, [selectedSymbol]);
   useRefreshOnFocus(load);
 
-  const filtered = selectedSymbol
-    ? signals.filter((s) => s.symbol === selectedSymbol)
-    : signals;
+  const filtered = signals.filter((s) => {
+    if (selectedSymbol !== 'All' && s.symbol !== selectedSymbol) return false;
+    if (selectedDir === 'Long'  && s.direction !== 'long')  return false;
+    if (selectedDir === 'Short' && s.direction !== 'short') return false;
+    if (s.confidence < minConfidence) return false;
+    return true;
+  });
+
+  const activeSignals  = filtered.filter((s) => new Date(s.expires_at) > new Date());
+  const expiredSignals = filtered.filter((s) => new Date(s.expires_at) <= new Date());
+
+  // Stats
+  const avgConfidence = activeSignals.length > 0
+    ? activeSignals.reduce((s, sig) => s + sig.confidence, 0) / activeSignals.length
+    : 0;
+  const longCount  = activeSignals.filter((s) => s.direction === 'long').length;
+  const shortCount = activeSignals.filter((s) => s.direction === 'short').length;
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Symbol filter */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterBar}
-        contentContainerStyle={styles.filterContent}
-      >
-        <TouchableOpacity
-          style={[styles.chip, !selectedSymbol && styles.chipActive]}
-          onPress={() => setSelectedSymbol(null)}
+      {/* ── Symbol filter ── */}
+      <View style={styles.filterSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
         >
-          <Text style={[styles.chipText, !selectedSymbol && styles.chipTextActive]}>All</Text>
-        </TouchableOpacity>
-        {SYMBOLS.map((sym) => (
+          {SYMBOLS.map((sym) => (
+            <TouchableOpacity
+              key={sym}
+              style={[styles.chip, selectedSymbol === sym && styles.chipActive]}
+              onPress={() => {
+                setSelectedSymbol(sym);
+                Haptics.selectionAsync();
+              }}
+            >
+              <Text style={[styles.chipText, selectedSymbol === sym && styles.chipTextActive]}>
+                {sym}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Direction filter */}
+        <View style={styles.dirRow}>
+          {DIRECTIONS.map((dir) => (
+            <TouchableOpacity
+              key={dir}
+              style={[styles.dirChip, selectedDir === dir && styles.dirChipActive]}
+              onPress={() => setSelectedDir(dir)}
+            >
+              <Text style={[styles.dirChipText, selectedDir === dir && styles.dirChipTextActive]}>
+                {dir}
+              </Text>
+            </TouchableOpacity>
+          ))}
+
+          {/* Confidence threshold */}
           <TouchableOpacity
-            key={sym}
-            style={[styles.chip, selectedSymbol === sym && styles.chipActive]}
-            onPress={() => setSelectedSymbol(sym)}
+            style={[styles.confChip, minConfidence > 0 && styles.confChipActive]}
+            onPress={() => setMinConfidence(minConfidence === 0 ? 0.6 : minConfidence === 0.6 ? 0.8 : 0)}
           >
-            <Text style={[styles.chipText, selectedSymbol === sym && styles.chipTextActive]}>
-              {sym}
+            <Ionicons name="filter" size={12} color={minConfidence > 0 ? COLORS.black : COLORS.textMuted} />
+            <Text style={[styles.dirChipText, minConfidence > 0 && styles.dirChipTextActive]}>
+              {minConfidence === 0 ? 'All' : `≥${(minConfidence * 100).toFixed(0)}%`}
             </Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+        </View>
+      </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={load} tintColor={COLORS.accent} />}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoading}
+            onRefresh={load}
+            tintColor={COLORS.accent}
+            colors={[COLORS.accent]}
+          />
+        }
       >
-        <Text style={styles.pageTitle}>AI Signals</Text>
-        <Text style={styles.subtitle}>
-          Generated by the HopeFX ML engine · {(signals[0]?.ml_probability ?? 0 * 100).toFixed(0)}% model accuracy
-        </Text>
-
-        {filtered.length === 0 ? (
-          <Text style={styles.emptyText}>No signals available. Pull to refresh.</Text>
-        ) : (
-          filtered.map((signal) => (
-            <SignalCard
-              key={signal.id}
-              signal={signal}
-              onTrade={() => navigation.navigate('PlaceOrder', {
-                symbol: signal.symbol,
-                side: signal.direction === 'long' ? 'buy' : 'sell',
-              })}
+        {/* ── Stats bar ── */}
+        <Card style={styles.statsCard}>
+          <View style={styles.statsRow}>
+            <StatItem label="ACTIVE" value={String(activeSignals.length)} color={COLORS.accent} />
+            <StatItem label="LONG" value={String(longCount)} color={COLORS.buy} />
+            <StatItem label="SHORT" value={String(shortCount)} color={COLORS.sell} />
+            <StatItem
+              label="AVG CONF"
+              value={`${(avgConfidence * 100).toFixed(0)}%`}
+              color={confidenceColor(avgConfidence)}
             />
-          ))
+          </View>
+        </Card>
+
+        {/* ── Sentiment context ── */}
+        {sentiment && <SentimentMeter sentiment={sentiment} maxHeadlines={2} />}
+
+        {/* ── Active signals ── */}
+        {activeSignals.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              ACTIVE SIGNALS ({activeSignals.length})
+            </Text>
+            {activeSignals.map((signal) => (
+              <SignalCard
+                key={signal.id}
+                signal={signal}
+                onTrade={() => navigation.navigate('PlaceOrder', {
+                  symbol: signal.symbol,
+                  side: signal.direction === 'long' ? 'buy' : 'sell',
+                })}
+                onApprove={() => approveSignal(signal.id)}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* ── Expired signals ── */}
+        {expiredSignals.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: COLORS.textDim }]}>
+              EXPIRED ({expiredSignals.length})
+            </Text>
+            {expiredSignals.slice(0, 5).map((signal) => (
+              <SignalCard
+                key={signal.id}
+                signal={signal}
+                onTrade={() => {}}
+              />
+            ))}
+          </View>
+        )}
+
+        {filtered.length === 0 && !isLoading && (
+          <View style={styles.empty}>
+            <Ionicons name="pulse-outline" size={48} color={COLORS.textDim} />
+            <Text style={styles.emptyTitle}>No signals</Text>
+            <Text style={styles.emptyText}>
+              {selectedSymbol !== 'All' || selectedDir !== 'All' || minConfidence > 0
+                ? 'Try adjusting your filters'
+                : 'Pull to refresh — signals are generated in real time'}
+            </Text>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function SignalCard({ signal, onTrade }: { signal: Signal; onTrade: () => void }) {
-  const isExpired = new Date(signal.expires_at) < new Date();
-
+function StatItem({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <Card style={[styles.signalCard, isExpired && styles.expired]}>
-      <View style={styles.signalHeader}>
-        <View>
-          <Text style={styles.signalSymbol}>{signal.symbol}</Text>
-          <Text style={styles.signalTime}>{formatRelativeTime(signal.generated_at)}</Text>
-        </View>
-        <SignalBadge direction={signal.direction} confidence={signal.confidence} />
-      </View>
-
-      <View style={styles.signalGrid}>
-        {[
-          ['Entry', signal.entry_price.toFixed(2)],
-          ['Stop Loss', signal.stop_loss.toFixed(2)],
-          ['Take Profit', signal.take_profit.toFixed(2)],
-          ['R:R', signal.risk_reward.toFixed(1)],
-          ['Confidence', confidenceLabel(signal.confidence)],
-          ['Regime', signal.regime],
-        ].map(([label, value]) => (
-          <View key={label} style={styles.gridItem}>
-            <Text style={styles.gridLabel}>{label}</Text>
-            <Text style={styles.gridValue}>{value}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* ML probability bar */}
-      <View style={styles.probRow}>
-        <Text style={styles.probLabel}>ML Probability</Text>
-        <View style={styles.probBar}>
-          <View style={[styles.probFill, { width: `${signal.ml_probability * 100}%` as any }]} />
-        </View>
-        <Text style={styles.probValue}>{(signal.ml_probability * 100).toFixed(1)}%</Text>
-      </View>
-
-      {!isExpired && signal.direction !== 'neutral' && (
-        <TouchableOpacity
-          style={[styles.tradeBtn, { backgroundColor: signal.direction === 'long' ? COLORS.buy : COLORS.sell }]}
-          onPress={onTrade}
-        >
-          <Text style={styles.tradeBtnText}>
-            Trade This Signal — {signal.direction === 'long' ? 'BUY' : 'SELL'} {signal.symbol}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {isExpired && <Text style={styles.expiredText}>Signal expired</Text>}
-    </Card>
+    <View style={statStyles.item}>
+      <Text style={statStyles.label}>{label}</Text>
+      <Text style={[statStyles.value, { color }]}>{value}</Text>
+    </View>
   );
 }
 
+const statStyles = StyleSheet.create({
+  item:  { flex: 1, alignItems: 'center' },
+  label: { ...TEXT.labelSM, color: COLORS.textDim },
+  value: { ...TEXT.numericMD, fontWeight: '800', marginTop: 3 },
+});
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  filterBar: { maxHeight: 52, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  filterContent: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, gap: SPACING.sm },
-  chip: { paddingHorizontal: SPACING.md, paddingVertical: 6, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.border },
-  chipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
-  chipText: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  chipTextActive: { color: COLORS.white },
-  content: { padding: SPACING.md, gap: SPACING.md, paddingBottom: SPACING.xl },
-  pageTitle: { color: COLORS.text, fontSize: 24, fontWeight: '800' },
-  subtitle: { color: COLORS.textMuted, fontSize: 13, lineHeight: 18 },
-  emptyText: { color: COLORS.textMuted, textAlign: 'center', paddingVertical: SPACING.xl },
-  signalCard: { gap: SPACING.md },
-  expired: { opacity: 0.5 },
-  signalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  signalSymbol: { color: COLORS.text, fontSize: 18, fontWeight: '700' },
-  signalTime: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
-  signalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
-  gridItem: { width: '30%' },
-  gridLabel: { color: COLORS.textMuted, fontSize: 11 },
-  gridValue: { color: COLORS.text, fontSize: 13, fontWeight: '600', marginTop: 2 },
-  probRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  probLabel: { color: COLORS.textMuted, fontSize: 12, width: 100 },
-  probBar: { flex: 1, height: 6, backgroundColor: COLORS.border, borderRadius: RADIUS.full, overflow: 'hidden' },
-  probFill: { height: '100%', backgroundColor: COLORS.accent, borderRadius: RADIUS.full },
-  probValue: { color: COLORS.accent, fontSize: 12, fontWeight: '700', width: 40, textAlign: 'right' },
-  tradeBtn: { borderRadius: RADIUS.md, padding: SPACING.sm, alignItems: 'center' },
-  tradeBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 13 },
-  expiredText: { color: COLORS.textMuted, fontSize: 12, textAlign: 'center' },
+  safe:          { flex: 1, backgroundColor: COLORS.background },
+  filterSection: { backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  filterRow:     { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, gap: SPACING.sm },
+  chip:          { paddingHorizontal: SPACING.md, paddingVertical: 6, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.border },
+  chipActive:    { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  chipText:      { ...TEXT.bodySM, color: COLORS.textMuted, fontWeight: '600' },
+  chipTextActive:{ color: COLORS.black, fontWeight: '800' },
+  dirRow:        { flexDirection: 'row', paddingHorizontal: SPACING.md, paddingBottom: SPACING.sm, gap: SPACING.sm },
+  dirChip:       { paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.border },
+  dirChipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  dirChipText:   { ...TEXT.caption, color: COLORS.textMuted, fontWeight: '600' },
+  dirChipTextActive: { color: COLORS.black, fontWeight: '800' },
+  confChip:      { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.border },
+  confChipActive:{ backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  content:       { padding: SPACING.md, gap: SPACING.md, paddingBottom: SPACING.xxl },
+  statsCard:     { padding: SPACING.sm },
+  statsRow:      { flexDirection: 'row', justifyContent: 'space-around' },
+  section:       { gap: SPACING.sm },
+  sectionTitle:  { ...TEXT.label, color: COLORS.textMuted },
+  empty:         { alignItems: 'center', paddingVertical: SPACING.xxl, gap: SPACING.md },
+  emptyTitle:    { ...TEXT.h3, color: COLORS.textMuted },
+  emptyText:     { ...TEXT.body, color: COLORS.textDim, textAlign: 'center', lineHeight: 22 },
 });
