@@ -92,15 +92,22 @@ class FREDFeed:
         else:
             start = observation_start
 
+        # FRED requires an API key for all requests since 2024.
+        # Without a key every request returns HTTP 400.
+        if not _FRED_KEY:
+            logger.debug(
+                "FRED fetch_series %s skipped — FRED_API_KEY not set", series_id
+            )
+            return pd.Series(dtype=float)
+
         params = {
             "series_id":         series_id,
             "observation_start": start,
             "file_type":         "json",
             "sort_order":        "asc",
             "limit":             limit,
+            "api_key":           _FRED_KEY,
         }
-        if _FRED_KEY:
-            params["api_key"] = _FRED_KEY
 
         try:
             session = await self._get_session()

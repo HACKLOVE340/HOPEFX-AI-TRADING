@@ -218,12 +218,49 @@ class MarketDataOrchestrator:
         logger.info("MarketDataOrchestrator: all components started")
 
     async def stop(self) -> None:
-        """Gracefully stop all components."""
-        if self._gold_feed:
-            await self._gold_feed.stop()
+        """
+        Gracefully stop all components in reverse startup order.
+
+        Order:
+          1. MacroStoreBridge (FRED HTTP sessions)
+          2. MacroCalendarEngine (Finnhub HTTP sessions)
+          3. NewsSentimentEngine (all news HTTP sessions)
+          4. GoldFeedManager (all price feed HTTP sessions)
+          5. DataLineageStore (flush queue, close SQLite)
+        """
+        # 1. Macro bridge (FRED sessions)
+        try:
+            await self._macro_bridge.stop()
+        except Exception as exc:
+            logger.debug("MacroStoreBridge stop error: %s", exc)
+
+        # 2. Calendar engine
+        try:
+            await self._calendar.stop()
+        except Exception as exc:
+            logger.debug("MacroCalendarEngine stop error: %s", exc)
+
+        # 3. Sentiment engine
         if self._sentiment:
-            await self._sentiment.stop()
-        self._lineage.stop()
+            try:
+                await self._sentiment.stop()
+            except Exception as exc:
+                logger.debug("NewsSentimentEngine stop error: %s", exc)
+
+        # 4. Gold feed manager
+        if self._gold_feed:
+            try:
+                await self._gold_feed.stop()
+            except Exception as exc:
+                logger.debug("GoldFeedManager stop error: %s", exc)
+
+        # 5. Lineage store — flush remaining records before closing
+        try:
+            self._lineage.flush()
+            self._lineage.stop()
+        except Exception as exc:
+            logger.debug("DataLineageStore stop error: %s", exc)
+
         self._started = False
         logger.info("MarketDataOrchestrator: stopped")
 
