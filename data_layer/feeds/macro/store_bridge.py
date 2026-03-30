@@ -44,6 +44,7 @@ class MacroStoreBridge:
     def __init__(self, fred: Optional[FREDFeed] = None) -> None:
         self._fred    = fred or fred_feed
         self._loaded  = False
+        self._running = False
         self._last_refresh: Optional[datetime] = None
         self._series_loaded: int = 0
 
@@ -68,10 +69,19 @@ class MacroStoreBridge:
 
     async def start(self) -> None:
         """Load FRED data into MacroStore and start daily refresh."""
+        self._running = True
         await self._load_fred_into_store()
         asyncio.create_task(
             self._daily_refresh_loop(), name="macro_store_bridge_refresh"
         )
+
+    async def stop(self) -> None:
+        """Close FRED HTTP session and stop refresh loop."""
+        self._running = False
+        try:
+            await self._fred.close()
+        except Exception as exc:
+            logger.debug("MacroStoreBridge.stop: FRED close error: %s", exc)
 
     async def _load_fred_into_store(self) -> None:
         """Fetch all FRED series and load into MacroStore singleton."""
@@ -118,7 +128,7 @@ class MacroStoreBridge:
 
     async def _daily_refresh_loop(self) -> None:
         """Refresh FRED data daily at 18:00 UTC (after US market close)."""
-        while True:
+        while self._running:
             now    = datetime.now(timezone.utc)
             target = now.replace(hour=18, minute=0, second=0, microsecond=0)
             if target <= now:

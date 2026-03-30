@@ -163,6 +163,7 @@ class MacroCalendarEngine:
         self._session: Optional[aiohttp.ClientSession] = None
         self._last_refresh: float = 0.0
         self._lock = asyncio.Lock()
+        self._running: bool = False
 
         # Prometheus
         self._prom_impact     = None
@@ -186,11 +187,20 @@ class MacroCalendarEngine:
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
+        self._running = True
         asyncio.create_task(self._refresh_loop(), name="macro_calendar_refresh")
         logger.info("MacroCalendarEngine started")
 
+    async def stop(self) -> None:
+        """Stop refresh loop and close HTTP session."""
+        self._running = False
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
+        logger.info("MacroCalendarEngine stopped")
+
     async def _refresh_loop(self) -> None:
-        while True:
+        while self._running:
             try:
                 await self.refresh()
             except Exception as exc:
