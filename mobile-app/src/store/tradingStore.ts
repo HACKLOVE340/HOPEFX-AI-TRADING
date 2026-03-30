@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import { apiClient } from '../services/apiClient';
 import { wsClient } from '../services/wsClient';
+import { pushNotifications } from '../services/pushNotifications';
 import {
   Account, Order, Position, Quote, Signal, Trade,
   Microstructure, RiskMetrics, SentimentData, WSConnectionStatus,
@@ -263,6 +264,8 @@ export const useTradingStore = create<TradingState>((set, get) => ({
               }
             : null,
         }));
+        // Fire local push notification immediately
+        pushNotifications.alertKillSwitch(data?.reason ?? 'Risk limit breached').catch(console.warn);
       }
     );
 
@@ -295,6 +298,12 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     const unsubSignal = wsClient.on<Signal>('signal', (signal) => {
       if (signal) {
         set((state) => ({ signals: [signal, ...state.signals.slice(0, 49)] }));
+        // Push alert for high-confidence signals (≥ 0.75)
+        if (signal.confidence >= 0.75 && signal.direction !== 'neutral') {
+          pushNotifications
+            .alertSignal(signal.symbol, signal.direction, signal.confidence)
+            .catch(console.warn);
+        }
       }
     });
 
