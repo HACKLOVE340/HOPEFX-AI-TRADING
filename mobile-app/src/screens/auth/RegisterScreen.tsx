@@ -1,96 +1,81 @@
 // HOPEFX-AI-TRADING — AGPL-3.0
 import React, { useState } from 'react';
-import {
-  View, Text, TextInput, StyleSheet, ScrollView,
-  KeyboardAvoidingView, Platform, TouchableOpacity,
-} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { AuthStackParamList } from '../../types';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../store/authStore';
-import { Button } from '../../components/Button';
-import { ErrorBanner } from '../../components/ErrorBanner';
-import { COLORS, SPACING, RADIUS } from '../../utils/theme';
+import { COLORS, SPACING, RADIUS, TEXT, SHADOW } from '../../utils/theme';
+import { AuthStackParamList } from '../../types';
 
-type Props = { navigation: NativeStackNavigationProp<AuthStackParamList, 'Register'> };
+type Nav = NativeStackNavigationProp<AuthStackParamList>;
 
-export function RegisterScreen({ navigation }: Props) {
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [localError, setLocalError] = useState('');
-
+export function RegisterScreen() {
+  const navigation = useNavigation<Nav>();
   const { register, isLoading, error, clearError } = useAuthStore();
+  const [username, setUsername] = useState('');
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
 
   const handleRegister = async () => {
+    if (!username || !email || !password) return;
     clearError();
-    setLocalError('');
-    if (!email || !username || !password) {
-      setLocalError('All fields are required.');
-      return;
-    }
-    if (password.length < 8) {
-      setLocalError('Password must be at least 8 characters.');
-      return;
-    }
-    if (password !== confirm) {
-      setLocalError('Passwords do not match.');
-      return;
-    }
-    try {
-      await register(email.trim().toLowerCase(), password, username.trim());
-    } catch {
-      // error shown via store
-    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await register(email.trim().toLowerCase(), password, username.trim());
   };
-
-  const displayError = localError || error;
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.kav}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <Text style={styles.logo}>HOPE<Text style={styles.logoAccent}>FX</Text></Text>
-          </View>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={22} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join HopeFX institutional trading</Text>
 
-          <View style={styles.form}>
-            <Text style={styles.title}>Create Account</Text>
+          {error && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
 
-            {displayError && (
-              <ErrorBanner message={displayError} onDismiss={() => { clearError(); setLocalError(''); }} />
-            )}
-
-            {[
-              { label: 'Email', value: email, setter: setEmail, keyboard: 'email-address' as const, placeholder: 'you@example.com' },
-              { label: 'Username', value: username, setter: setUsername, keyboard: 'default' as const, placeholder: 'trader123' },
-              { label: 'Password', value: password, setter: setPassword, keyboard: 'default' as const, placeholder: '••••••••', secure: true },
-              { label: 'Confirm Password', value: confirm, setter: setConfirm, keyboard: 'default' as const, placeholder: '••••••••', secure: true },
-            ].map(({ label, value, setter, keyboard, placeholder, secure }) => (
-              <View key={label} style={styles.field}>
-                <Text style={styles.label}>{label}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={value}
-                  onChangeText={setter}
-                  placeholder={placeholder}
-                  placeholderTextColor={COLORS.textDim}
-                  keyboardType={keyboard}
-                  autoCapitalize="none"
-                  secureTextEntry={secure}
-                />
+          {[
+            { label: 'USERNAME', value: username, setter: setUsername, placeholder: 'trader_name', icon: 'person-outline', type: 'default' as const },
+            { label: 'EMAIL',    value: email,    setter: setEmail,    placeholder: 'you@hopefx.io', icon: 'mail-outline',   type: 'email-address' as const },
+          ].map(({ label, value, setter, placeholder, icon, type }) => (
+            <View key={label} style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>{label}</Text>
+              <View style={styles.inputWrap}>
+                <Ionicons name={icon as any} size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                <TextInput style={styles.input} value={value} onChangeText={setter} placeholder={placeholder} placeholderTextColor={COLORS.textDim} keyboardType={type} autoCapitalize="none" selectionColor={COLORS.accent} />
               </View>
-            ))}
+            </View>
+          ))}
 
-            <Button title="Create Account" onPress={handleRegister} loading={isLoading} fullWidth style={styles.btn} />
-
-            <View style={styles.loginRow}>
-              <Text style={styles.loginText}>Already have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                <Text style={styles.loginLink}>Sign In</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>PASSWORD</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="lock-closed-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+              <TextInput style={[styles.input, { paddingRight: 40 }]} value={password} onChangeText={setPassword} placeholder="Min 8 characters" placeholderTextColor={COLORS.textDim} secureTextEntry={!showPass} selectionColor={COLORS.accent} />
+              <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
+                <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={18} color={COLORS.textMuted} />
               </TouchableOpacity>
             </View>
+          </View>
+
+          <TouchableOpacity style={[styles.btn, isLoading && styles.btnDisabled]} onPress={handleRegister} disabled={isLoading || !username || !email || !password}>
+            {isLoading ? <ActivityIndicator color={COLORS.black} /> : <Text style={styles.btnText}>CREATE ACCOUNT</Text>}
+          </TouchableOpacity>
+
+          <View style={styles.loginRow}>
+            <Text style={styles.loginPrompt}>Already have an account? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.loginLink}>Sign In</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -99,22 +84,24 @@ export function RegisterScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  kav: { flex: 1 },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: SPACING.lg },
-  header: { alignItems: 'center', marginBottom: SPACING.xl },
-  logo: { fontSize: 36, fontWeight: '900', color: COLORS.text, letterSpacing: 2 },
-  logoAccent: { color: COLORS.accent },
-  form: { gap: SPACING.md },
-  title: { fontSize: 24, fontWeight: '700', color: COLORS.text, marginBottom: SPACING.sm },
-  field: { gap: SPACING.xs },
-  label: { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  input: {
-    backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border,
-    borderRadius: RADIUS.md, padding: SPACING.md, color: COLORS.text, fontSize: 15,
-  },
-  btn: { marginTop: SPACING.sm },
-  loginRow: { flexDirection: 'row', justifyContent: 'center', marginTop: SPACING.md },
-  loginText: { color: COLORS.textMuted, fontSize: 14 },
-  loginLink: { color: COLORS.accent, fontSize: 14, fontWeight: '600' },
+  safe:        { flex: 1, backgroundColor: COLORS.background },
+  flex:        { flex: 1 },
+  scroll:      { flexGrow: 1, padding: SPACING.lg, gap: SPACING.md },
+  backBtn:     { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.sm },
+  title:       { ...TEXT.h1, color: COLORS.text },
+  subtitle:    { ...TEXT.body, color: COLORS.textMuted },
+  errorBox:    { backgroundColor: COLORS.lossDim, borderRadius: RADIUS.sm, padding: SPACING.sm, borderWidth: 1, borderColor: COLORS.loss + '44' },
+  errorText:   { ...TEXT.bodySM, color: COLORS.loss },
+  inputGroup:  { gap: SPACING.xs },
+  inputLabel:  { ...TEXT.label, color: COLORS.textMuted },
+  inputWrap:   { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surfaceAlt, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: SPACING.sm },
+  inputIcon:   { marginRight: SPACING.xs },
+  input:       { flex: 1, height: 48, color: COLORS.text, fontSize: 15 },
+  eyeBtn:      { position: 'absolute', right: SPACING.sm, padding: 4 },
+  btn:         { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, height: 52, alignItems: 'center', justifyContent: 'center', ...SHADOW.accentGlow },
+  btnDisabled: { opacity: 0.5 },
+  btnText:     { color: COLORS.black, fontWeight: '800', fontSize: 15, letterSpacing: 2 },
+  loginRow:    { flexDirection: 'row', justifyContent: 'center' },
+  loginPrompt: { ...TEXT.bodySM, color: COLORS.textMuted },
+  loginLink:   { ...TEXT.bodySM, color: COLORS.accent, fontWeight: '700' },
 });

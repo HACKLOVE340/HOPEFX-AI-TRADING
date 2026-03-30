@@ -164,6 +164,19 @@ export const apiClient = {
     await _axios.post('/api/auth/forgot-password', { email });
   },
 
+  /** Alias used by ForgotPasswordScreen */
+  async requestPasswordReset(email: string): Promise<void> {
+    await _axios.post('/api/auth/forgot-password', { email });
+  },
+
+  /** Full 2FA verify with email + password + code (used by TwoFactorScreen) */
+  async verifyTwoFactorLogin(email: string, password: string, code: string): Promise<import('../types').AuthTokens> {
+    const res = await _axios.post<import('../types').AuthTokens>('/api/auth/2fa/verify', { email, password, code });
+    _accessToken  = res.data.access_token;
+    _refreshToken = res.data.refresh_token;
+    return res.data;
+  },
+
   // ── Account ────────────────────────────────────────────────────────────────
 
   async getAccount(): Promise<Account> {

@@ -1,76 +1,61 @@
-// HOPEFX-AI-TRADING
-// Copyright (c) 2025-2026 — AGPL-3.0
+// HOPEFX-AI-TRADING — AGPL-3.0
 /**
  * App.tsx — Root entry point for HopeFX React Native app.
  *
  * Responsibilities:
- *  - Initialise Zustand auth store from SecureStore on cold start
- *  - Register push notification handlers
- *  - Wrap the navigator tree in required providers
- *  - Gate navigation between Auth and Main stacks based on auth state
+ *  - Gesture handler root (required by react-native-gesture-handler)
+ *  - Safe area provider
+ *  - Root navigator (auth ↔ main tab)
+ *  - Push notification setup
+ *  - App state listener for offline cache flush
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { StatusBar } from 'expo-status-bar';
-import * as SplashScreen from 'expo-splash-screen';
+import 'react-native-gesture-handler';
+import React, { useEffect, useRef } from 'react';
+import { AppState, AppStateStatus, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { StyleSheet, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 
-import { RootNavigator } from './src/navigation/RootNavigator';
-import { useAuthStore } from './src/store/authStore';
+import { RootNavigator }    from './src/navigation/RootNavigator';
 import { pushNotifications } from './src/services/pushNotifications';
-import { apiClient } from './src/services/apiClient';
+import { offlineCache }     from './src/services/offlineCache';
+import { useTradingStore }  from './src/store/tradingStore';
 
-// Keep splash screen visible while we initialise
-SplashScreen.preventAutoHideAsync();
+// Suppress known non-critical warnings in dev
+LogBox.ignoreLogs([
+  'Non-serializable values were found in the navigation state',
+  'Sending `onAnimatedValueUpdate`',
+]);
 
 export default function App() {
-  const [appReady, setAppReady] = useState(false);
-  const { hydrate, token } = useAuthStore();
+  const appState = useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
-    async function prepare() {
-      try {
-        // 1. Rehydrate auth token from SecureStore
-        await hydrate();
+    // Register for push notifications
+    pushNotifications.register().catch(console.warn);
 
-        // 2. Sync axios default auth header
-        if (token) {
-          apiClient.setAuthToken(token);
-        }
-
-        // 3. Register for push notifications (non-blocking)
-        await pushNotifications.registerForPushNotificationsAsync();
-        pushNotifications.setupNotificationHandlers();
-      } catch (e) {
-        console.warn('[App] Prepare error:', e);
-      } finally {
-        setAppReady(true);
+    // Flush offline cache when app goes to background
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (
+        appState.current.match(/active/) &&
+        nextState.match(/inactive|background/)
+      ) {
+        const state = useTradingStore.getState();
+        offlineCache.flush().catch(console.warn);
       }
-    }
+      appState.current = nextState;
+    });
 
-    prepare();
-  }, [hydrate, token]);
-
-  const onLayoutRootView = useCallback(async () => {
-    if (appReady) {
-      await SplashScreen.hideAsync();
-    }
-  }, [appReady]);
-
-  if (!appReady) return null;
+    return () => sub.remove();
+  }, []);
 
   return (
-    <GestureHandlerRootView style={styles.root} onLayout={onLayoutRootView}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="light" backgroundColor="#0a0f1c" />
+        <StatusBar style="light" backgroundColor="transparent" translucent />
         <RootNavigator />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0a0f1c' },
-});
