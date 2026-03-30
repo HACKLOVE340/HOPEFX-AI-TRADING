@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../hooks/useApi';
+import { useStore, selectUser } from '../store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -118,6 +119,7 @@ interface CryptoCheckoutProps {
 }
 
 const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
+  const currentUser = useStore(selectUser);
   const [step, setStep] = useState<CheckoutStep>('select');
   const [selectedPlan, setSelectedPlan] = useState<Plan>(
     PLANS.find((p) => p.id === initialPlanId) ?? PLANS[1]
@@ -174,7 +176,7 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
         network,
         plan_id: selectedPlan.id,
         amount_usd: selectedPlan.price_usd,
-        user_id: 'demo_user',
+        user_id: currentUser?.id ?? '',
       });
       setDepositInfo(res.data);
     } catch (err: unknown) {
