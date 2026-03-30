@@ -34,6 +34,7 @@ To accumulate ≥600 trades:
 from __future__ import annotations
 
 import math
+import os
 import time
 from typing import Any, Optional
 
@@ -497,11 +498,42 @@ def run_multi_symbol_backtest(
     symbol_results: dict[str, dict] = {}
 
     for sym in symbols:
-        print(f"\nFetching {sym} {TIMEFRAME} bars from Binance …")
+        print(f"\nFetching {sym} {TIMEFRAME} bars (multi-source validated) …")
         try:
-            df = fetch_ohlcv_paginated(
-                exchange, sym, TIMEFRAME, since_ms=since_ms, max_bars=max_bars
-            )
+            # ── Multi-source validation: require ≥2 sources in agreement ─────
+            # Prevents silent corruption from gaps, spikes, or wrong prices
+            # in any single feed. Falls back to single-source OHLC sanity
+            # checks when fewer than MIN_SOURCES sources are available.
+            try:
+                import asyncio as _asyncio
+                from backtest.data_validator import fetch_validated_ohlcv
+
+                df = _asyncio.run(
+                    fetch_validated_ohlcv(
+                        symbol=sym,
+                        timeframe=TIMEFRAME,
+                        since_ms=since_ms,
+                        min_sources=int(os.getenv("BACKTEST_MIN_SOURCES", "2")),
+                    )
+                )
+                report = df.attrs.get("validation_report")
+                if report:
+                    print(
+                        f"  {sym}: {report.accepted_bars}/{report.total_bars} bars accepted "
+                        f"({report.coverage_pct:.1f}%) | sources={report.sources_used}"
+                    )
+                    if report.rejection_reasons:
+                        print(f"  {sym}: rejections={report.rejection_reasons}")
+            except Exception as _mv_exc:
+                # Multi-source validation unavailable — fall back to single source
+                print(f"  {sym}: multi-source validation failed ({_mv_exc}) — using Binance only")
+                df = fetch_ohlcv_paginated(
+                    exchange, sym, TIMEFRAME, since_ms=since_ms, max_bars=max_bars
+                )
+
+            if df is None or df.empty:
+                print(f"  {sym}: SKIP — no data returned")
+                continue
             print(f"  {sym}: {len(df)} bars  ({df.index[0]} → {df.index[-1]})")
         except Exception as exc:
             print(f"  {sym}: SKIP — {exc}")
