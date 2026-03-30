@@ -56,67 +56,6 @@ const FOLD_COLORS = [
   '#34d399', '#fb923c', '#e879f9', '#38bdf8', '#84cc16',
 ];
 
-// ─── Mock data (used when API returns no walk-forward results) ────────────────
-
-function generateMockFolds(n = 5): FoldResult[] {
-  const folds: FoldResult[] = [];
-  for (let i = 0; i < n; i++) {
-    const year = 2020 + i;
-    const equity: { time: string; value: number }[] = [];
-    let v = 10000;
-    for (let d = 0; d < 252; d++) {
-      v += (Math.random() - 0.47) * 120;
-      const date = new Date(year, 0, 1);
-      date.setDate(date.getDate() + d);
-      equity.push({ time: date.toISOString().slice(0, 10), value: Math.max(v, 5000) });
-    }
-    folds.push({
-      fold: i + 1,
-      train_start: `${year - 1}-01-01`,
-      train_end:   `${year}-01-01`,
-      test_start:  `${year}-01-01`,
-      test_end:    `${year + 1}-01-01`,
-      accuracy:    55 + Math.random() * 15,
-      sharpe:      0.8 + Math.random() * 1.4,
-      max_drawdown: 5 + Math.random() * 12,
-      total_return: (v - 10000) / 100,
-      total_trades: 80 + Math.floor(Math.random() * 60),
-      win_rate:    50 + Math.random() * 15,
-      equity_curve: equity,
-    });
-  }
-  return folds;
-}
-
-function mockWalkForward(): WalkForwardData {
-  const folds = generateMockFolds(5);
-  const avgSharpe = folds.reduce((s, f) => s + f.sharpe, 0) / folds.length;
-  const avgAcc    = folds.reduce((s, f) => s + f.accuracy, 0) / folds.length;
-  const avgDD     = folds.reduce((s, f) => s + f.max_drawdown, 0) / folds.length;
-  const sharpes   = folds.map((f) => f.sharpe);
-  const mean      = avgSharpe;
-  const std       = Math.sqrt(sharpes.reduce((s, v) => s + (v - mean) ** 2, 0) / sharpes.length);
-  const stability = Math.max(0, Math.min(100, 100 - (std / mean) * 100));
-
-  return {
-    run_id: 'demo-wf-001',
-    strategy: 'MovingAverageCrossover',
-    symbol: 'XAU/USD',
-    folds,
-    stability_score: stability,
-    avg_sharpe: avgSharpe,
-    avg_accuracy: avgAcc,
-    avg_drawdown: avgDD,
-    monte_carlo: {
-      median_equity: 12400,
-      p5_equity:     8200,
-      p95_equity:    18600,
-      probability_of_ruin: 4.2,
-      simulations: 1000,
-    },
-  };
-}
-
 // ─── Equity chart ─────────────────────────────────────────────────────────────
 
 const EquityChart: React.FC<{ folds: FoldResult[]; visibleFolds: Set<number> }> = ({
@@ -195,14 +134,16 @@ const StabilityBadge: React.FC<{ score: number }> = ({ score }) => {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const WalkForward: React.FC = () => {
-  const [data, setData]           = useState<WalkForwardData | null>(null);
-  const [loading, setLoading]     = useState(true);
+  const [data, setData]            = useState<WalkForwardData | null>(null);
+  const [loading, setLoading]      = useState(true);
+  const [apiError, setApiError]    = useState<string | null>(null);
   const [visibleFolds, setVisible] = useState<Set<number>>(new Set());
-  const [runId, setRunId]         = useState('');
-  const [inputId, setInputId]     = useState('');
+  const [runId, setRunId]          = useState('');
+  const [inputId, setInputId]      = useState('');
 
   const load = useCallback(async (id?: string) => {
     setLoading(true);
+    setApiError(null);
     try {
       const endpoint = id
         ? `/backtest/walk-forward/${id}`
@@ -210,11 +151,14 @@ const WalkForward: React.FC = () => {
       const res = await api.get(endpoint);
       setData(res.data);
       setVisible(new Set(res.data.folds.map((f: FoldResult) => f.fold)));
-    } catch {
-      // Fall back to mock data for demo
-      const mock = mockWalkForward();
-      setData(mock);
-      setVisible(new Set(mock.folds.map((f) => f.fold)));
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 404) {
+        setApiError('No walk-forward results yet. Run a backtest first via the Backtesting page.');
+      } else {
+        setApiError('Failed to load walk-forward results. Check your connection.');
+      }
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -231,6 +175,26 @@ const WalkForward: React.FC = () => {
   };
 
   if (loading) return <div style={s.loading}>Loading walk-forward results…</div>;
+
+  if (apiError || !data) {
+    return (
+      <div style={s.page}>
+        <h1 style={s.title}>Walk-Forward Analysis</h1>
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '24px', color: '#94a3b8', textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+          <div style={{ fontSize: 16, color: '#e2e8f0', marginBottom: 8 }}>
+            {apiError ?? 'No walk-forward data available.'}
+          </div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>
+            Go to the Backtesting page and run a walk-forward analysis to see results here.
+          </div>
+          <button onClick={() => load()} style={{ marginTop: 16, background: '#3b82f6', border: 'none', color: '#fff', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (!data)   return <div style={s.loading}>No walk-forward data available.</div>;
 
   return (

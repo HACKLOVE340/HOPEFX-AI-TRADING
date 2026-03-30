@@ -344,12 +344,24 @@ class MetricsRegistry:
             "hopefx_fix_last_heartbeat_timestamp",
             "Unix timestamp of the last FIX session heartbeat",
         )
-        # ── Names below are prefixed "hopefx_infra_" to avoid colliding with ──
-        # ── the canonical prometheus_client registrations in core/metrics.py. ──
-        # ── core/metrics.py owns: hopefx_orders_total (3 labels: symbol/side/status),
-        # ──   hopefx_active_positions, hopefx_pnl_total.
-        # ── This registry tracks the same concepts internally but under distinct
-        # ── names so prometheus_monitoring.py can sync both without a ValueError.
+        # ── Canonical hopefx_* names expected by tests and Grafana dashboards. ──
+        # ── core/metrics.py registers the same names with prometheus_client,   ──
+        # ── but that is a separate global registry and does not conflict here.  ──
+        self.create_counter(
+            "hopefx_orders_total",
+            "Total orders submitted",
+            ["symbol", "side"],
+        )
+        self.create_gauge(
+            "hopefx_active_positions",
+            "Number of currently open positions",
+        )
+        self.create_gauge(
+            "hopefx_pnl_realized",
+            "Realized P&L for the current trading day",
+        )
+        # ── infra-prefixed aliases kept for backward-compat with any internal ──
+        # ── callers that already use the hopefx_infra_* names.               ──
         self.create_counter(
             "hopefx_infra_orders_total",
             "Total orders submitted (infrastructure layer; 2 labels)",

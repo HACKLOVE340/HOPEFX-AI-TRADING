@@ -157,18 +157,18 @@ const PreviewPanel: React.FC<{ tenant: Tenant; onClose: () => void }> = ({ tenan
             <span style={{ fontWeight: 700, color: '#fff', fontSize: 16 }}>{tenant.theme.company_name}</span>
             <span style={{ marginLeft: 'auto', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>Powered by HOPEFX</span>
           </div>
-          {/* Mock content */}
+          {/* Theme preview — shows how the tenant's brand colours apply to the dashboard */}
           <div style={{ padding: 20 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 16 }}>
-              {['Balance: $10,000', 'P&L: +$420', 'Win Rate: 58%'].map((t) => (
-                <div key={t} style={{ background: '#1e293b', borderRadius: 8, padding: '12px 14px', borderTop: `3px solid ${color}` }}>
-                  <div style={{ fontSize: 12, color: '#94a3b8' }}>{t.split(':')[0]}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc' }}>{t.split(':')[1]}</div>
+              {(['Balance', 'P&L', 'Win Rate'] as const).map((label) => (
+                <div key={label} style={{ background: '#1e293b', borderRadius: 8, padding: '12px 14px', borderTop: `3px solid ${color}` }}>
+                  <div style={{ fontSize: 12, color: '#94a3b8' }}>{label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc' }}>—</div>
                 </div>
               ))}
             </div>
             <div style={{ background: '#1e293b', borderRadius: 8, padding: 16, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 13 }}>
-              [Equity Chart — branded with {color}]
+              Equity chart — accent colour: <span style={{ color, marginLeft: 6, fontWeight: 700 }}>{color}</span>
             </div>
           </div>
         </div>

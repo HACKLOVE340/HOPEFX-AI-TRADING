@@ -22,28 +22,6 @@ interface HistoryDay {
   uptime_pct: number;
 }
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-const MOCK_STATUS: StatusData = {
-  status: 'healthy',
-  uptime_seconds: 86400 * 12 + 3600 * 4,
-  uptime_human: '12d 4h',
-  checked_at: new Date().toISOString(),
-  components: {
-    api:         { status: 'healthy',  message: 'API responding' },
-    database:    { status: 'healthy',  message: 'PostgreSQL connected, 4ms' },
-    cache:       { status: 'healthy',  message: 'Redis connected, 1ms' },
-    broker:      { status: 'healthy',  message: 'Paper broker active' },
-    price_feed:  { status: 'healthy',  message: 'OANDA feed live' },
-    brain:       { status: 'healthy',  message: 'Decision engine running' },
-  },
-};
-
-const MOCK_HISTORY: HistoryDay[] = Array.from({ length: 90 }, (_, i) => ({
-  date: new Date(Date.now() - (89 - i) * 86400000).toISOString().slice(0, 10),
-  uptime_pct: i < 85 ? 100 : i === 86 ? 94.2 : 100,
-}));
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const STATUS_COLOR: Record<string, string> = {
@@ -119,19 +97,30 @@ const StatusPage: React.FC = () => {
   const [data, setData] = useState<StatusData | null>(null);
   const [history, setHistory] = useState<HistoryDay[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   const load = useCallback(async () => {
-    const [statusRes, histRes] = await Promise.allSettled([
-      api.get<StatusData>('/status/json'),
-      api.get<{ history?: HistoryDay[] }>('/status/history'),
-    ]);
-    setData(statusRes.status === 'fulfilled' ? statusRes.value.data : MOCK_STATUS);
-    setHistory(
-      histRes.status === 'fulfilled'
-        ? (histRes.value.data.history ?? [])
-        : MOCK_HISTORY
-    );
+    setError(null);
+    try {
+      const [statusRes, histRes] = await Promise.allSettled([
+        api.get<StatusData>('/status/json'),
+        api.get<{ history?: HistoryDay[] }>('/status/history'),
+      ]);
+      if (statusRes.status === 'fulfilled') {
+        setData(statusRes.value.data);
+      } else {
+        setError('Unable to reach the status API. Check your connection.');
+        setData(null);
+      }
+      setHistory(
+        histRes.status === 'fulfilled'
+          ? (histRes.value.data.history ?? [])
+          : []
+      );
+    } catch (err) {
+      setError('Status API unavailable.');
+    }
     setLoading(false);
     setLastRefresh(new Date());
   }, []);
@@ -144,6 +133,21 @@ const StatusPage: React.FC = () => {
 
   if (loading) {
     return <div style={styles.page}><p style={{ color: '#64748b' }}>Checking system status…</p></div>;
+  }
+
+  if (error || !data) {
+    return (
+      <div style={styles.page}>
+        <div style={{ ...styles.banner, background: '#450a0a', borderColor: '#dc2626' }}>
+          <span style={{ fontSize: 32 }}>❌</span>
+          <div>
+            <div style={styles.bannerTitle}>Status unavailable</div>
+            <div style={styles.bannerSub}>{error ?? 'No data received from the API.'}</div>
+          </div>
+          <button onClick={load} style={styles.refreshBtn} title="Retry">↻</button>
+        </div>
+      </div>
+    );
   }
 
   const status = data?.status ?? 'unknown';

@@ -51,12 +51,17 @@ class StrategyType(Enum):
 
 
 class StrategyStatus(Enum):
-    """Lifecycle state of a registered strategy."""
-    IDLE = "idle"
-    RUNNING = "running"
-    PAUSED = "paused"
-    STOPPED = "stopped"
-    ERROR = "error"
+    """Lifecycle state of a registered strategy.
+
+    Values match strategies.base.StrategyStatus so that comparisons between
+    strategies registered via the manager and those created directly from
+    BaseStrategy are consistent.
+    """
+    IDLE = "IDLE"
+    RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+    STOPPED = "STOPPED"
+    ERROR = "ERROR"
 
 
 # Minimum subscription tier required per strategy name.

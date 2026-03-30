@@ -81,38 +81,6 @@ const statusBadge = (s: string) => {
   );
 };
 
-// ── Mock data for when API is unavailable ─────────────────────────────────────
-
-const MOCK_ACCOUNT: AffiliateAccount = {
-  affiliate_id: 'AFF_DEMO',
-  code: 'HOPEFX-DEMO',
-  level: 'silver',
-  commission_rate: 0.15,
-  status: 'active',
-};
-
-const MOCK_METRICS: AffiliateMetrics = {
-  total_referrals: 24,
-  converted_referrals: 9,
-  total_revenue: 4320.0,
-  total_commissions: 648.0,
-  pending_commissions: 112.5,
-  conversion_rate: 37.5,
-};
-
-const MOCK_REFERRALS: Referral[] = [
-  { referral_id: 'R1', referred_user_id: 'user_abc', status: 'converted', created_at: '2024-11-01T10:00:00Z', commission_amount: 72 },
-  { referral_id: 'R2', referred_user_id: 'user_def', status: 'pending',   created_at: '2024-12-10T14:30:00Z' },
-  { referral_id: 'R3', referred_user_id: 'user_ghi', status: 'paid',      created_at: '2024-10-15T09:00:00Z', commission_amount: 108 },
-  { referral_id: 'R4', referred_user_id: 'user_jkl', status: 'expired',   created_at: '2024-09-01T08:00:00Z' },
-];
-
-const MOCK_LEADERBOARD: LeaderboardEntry[] = [
-  { rank: 1, affiliate_id: 'AFF_001', code: 'TOPTRADER', level: 'platinum', total_commissions: 8400, converted_referrals: 42 },
-  { rank: 2, affiliate_id: 'AFF_002', code: 'GOLDPRO',   level: 'gold',     total_commissions: 3200, converted_referrals: 21 },
-  { rank: 3, affiliate_id: 'AFF_DEMO', code: 'HOPEFX-DEMO', level: 'silver', total_commissions: 648, converted_referrals: 9 },
-];
-
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 const MetricCard: React.FC<{ label: string; value: string; sub?: string }> = ({ label, value, sub }) => (
@@ -131,16 +99,18 @@ const Affiliate: React.FC = () => {
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [signupLoading, setSignupLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'referrals' | 'leaderboard'>('overview');
 
-  // User id comes from auth store; falls back to 'demo_user' for unauthenticated preview
   const user   = useStore((s) => s.user);
-  const userId = user?.id ?? 'demo_user';
+  const userId = user?.id;
 
   const loadData = useCallback(async () => {
+    if (!userId) return;
     setLoading(true);
+    setApiError(null);
     try {
       const res = await api.get<{
         has_affiliate_account: boolean;
@@ -152,28 +122,22 @@ const Affiliate: React.FC = () => {
         setAccount(data.affiliate);
         setMetrics(data.metrics);
         try {
-          const rRes = await api.get<{ referrals: Referral[] }>(`/monetization/affiliate/${data.affiliate.affiliate_id}/referrals`
+          const rRes = await api.get<{ referrals: Referral[] }>(
+            `/monetization/affiliate/${data.affiliate.affiliate_id}/referrals`
           );
           setReferrals(rRes.data.referrals ?? []);
-        } catch { /* non-fatal */ }
-      } else {
-        setAccount(MOCK_ACCOUNT);
-        setMetrics(MOCK_METRICS);
-        setReferrals(MOCK_REFERRALS);
+        } catch { /* referrals non-fatal */ }
       }
       try {
-        const lRes = await api.get<{ leaderboard?: LeaderboardEntry[] } | LeaderboardEntry[]>('/monetization/affiliate/leaderboard?limit=10'
+        const lRes = await api.get<{ leaderboard?: LeaderboardEntry[] } | LeaderboardEntry[]>(
+          '/monetization/affiliate/leaderboard?limit=10'
         );
         const lData = lRes.data;
         setLeaderboard(Array.isArray(lData) ? lData : (lData as { leaderboard?: LeaderboardEntry[] }).leaderboard ?? []);
-      } catch {
-        setLeaderboard(MOCK_LEADERBOARD);
-      }
-    } catch {
-      setAccount(MOCK_ACCOUNT);
-      setMetrics(MOCK_METRICS);
-      setReferrals(MOCK_REFERRALS);
-      setLeaderboard(MOCK_LEADERBOARD);
+      } catch { /* leaderboard non-fatal */ }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load affiliate data.';
+      setApiError(msg);
     } finally {
       setLoading(false);
     }
@@ -182,13 +146,14 @@ const Affiliate: React.FC = () => {
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleSignup = async () => {
+    if (!userId) return;
     setSignupLoading(true);
     try {
       await api.post('/monetization/affiliate/signup', { user_id: userId });
       await loadData();
-    } catch {
-      setAccount(MOCK_ACCOUNT);
-      setMetrics(MOCK_METRICS);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Signup failed. Please try again.';
+      setApiError(msg);
     } finally {
       setSignupLoading(false);
     }
@@ -203,8 +168,26 @@ const Affiliate: React.FC = () => {
     });
   };
 
+  if (!userId) {
+    return <div style={styles.page}><p style={{ color: '#94a3b8' }}>Please log in to view your affiliate dashboard.</p></div>;
+  }
+
   if (loading) {
     return <div style={styles.page}><p style={{ color: '#94a3b8' }}>Loading affiliate data…</p></div>;
+  }
+
+  if (apiError) {
+    return (
+      <div style={styles.page}>
+        <h1 style={styles.heading}>Affiliate Program</h1>
+        <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 10, padding: '20px 24px', color: '#fca5a5' }}>
+          <strong>Error:</strong> {apiError}
+          <button onClick={loadData} style={{ marginLeft: 16, background: 'transparent', border: '1px solid #dc2626', color: '#fca5a5', borderRadius: 6, padding: '4px 12px', cursor: 'pointer' }}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // ── Not enrolled ──────────────────────────────────────────────────────────

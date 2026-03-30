@@ -148,6 +148,15 @@ class RiskConfig:
     max_drawdown_pct:      float = _MAX_DRAWDOWN_PCT
     max_open_positions:    int   = _MAX_OPEN_POSITIONS
     min_data_quality:      float = _MIN_DATA_QUALITY
+    # Alias accepted at construction time; maps to max_daily_loss_pct.
+    daily_loss_limit_pct:  float = field(default=-1.0, repr=False)
+
+    def __post_init__(self) -> None:
+        # If caller passed daily_loss_limit_pct, treat it as max_daily_loss_pct.
+        if self.daily_loss_limit_pct >= 0:
+            self.max_daily_loss_pct = self.daily_loss_limit_pct
+        # Normalise alias to match canonical field so comparisons are consistent.
+        self.daily_loss_limit_pct = self.max_daily_loss_pct
 
 
 @dataclass
@@ -201,6 +210,16 @@ class RiskState:
         self.account_equity = equity
         if equity > self.peak_equity:
             self.peak_equity = equity
+
+
+@dataclass
+class DrawdownCheckResult:
+    """Result of RiskManager.check_drawdown()."""
+    passed:              bool
+    current_drawdown:    float   # fraction, e.g. 0.05 = 5 %
+    daily_drawdown:      float
+    max_drawdown_pct:    float
+    max_daily_loss_pct:  float
 
 
 # ── RiskManager ───────────────────────────────────────────────────────────────
@@ -458,6 +477,81 @@ class RiskManager:
             kelly_f, quality_f, sentiment_f, impact_f, dd_f,
         )
         return sized
+
+    # ── Convenience public API (used by tests and downstream callers) ─────────
+
+    @property
+    def kill_switch_active(self) -> bool:
+        """True when trading has been halted via _halt_trading()."""
+        return self._halt
+
+    def calculate_position_size(
+        self,
+        symbol: str,
+        entry_price: float,
+        account_balance: float,
+        direction: str = "long",
+        confidence: float = 0.7,
+        probability: float = 0.55,
+    ) -> "PositionSizingResult":
+        """Convenience wrapper around size_order() for callers that supply
+        raw parameters rather than a signal object."""
+
+        class _Signal:
+            pass
+
+        sig = _Signal()
+        sig.symbol = symbol          # type: ignore[attr-defined]
+        sig.direction = direction    # type: ignore[attr-defined]
+        sig.confidence = confidence  # type: ignore[attr-defined]
+        sig.probability = probability  # type: ignore[attr-defined]
+        sig.data_quality = 1.0       # type: ignore[attr-defined]
+        sig.features = {}            # type: ignore[attr-defined]
+        # Temporarily update equity so sizing reflects the supplied balance.
+        prev_equity = self._state.account_equity
+        self._state.account_equity = account_balance
+        result = self.size_order(sig)
+        self._state.account_equity = prev_equity
+        return result
+
+    def validate_trade(
+        self,
+        symbol: str,
+        quantity: float,
+        direction: str = "buy",
+    ) -> "tuple[bool, str]":
+        """Return (allowed, reason) for a proposed trade.
+
+        Checks halt state, drawdown limits, and open-position cap.
+        Does not perform full sizing — use assess() for that.
+        """
+        if self._halt:
+            return False, f"halted:{self._halt_reason}"
+        if self._state.daily_drawdown >= self._config.max_daily_loss_pct:
+            return False, f"daily_drawdown:{self._state.daily_drawdown*100:.2f}%"
+        if self._state.current_drawdown >= self._config.max_drawdown_pct:
+            return False, f"drawdown:{self._state.current_drawdown*100:.2f}%"
+        if self._state.open_positions >= self._config.max_open_positions:
+            return False, f"max_positions:{self._config.max_open_positions}"
+        if quantity <= 0:
+            return False, "quantity_zero"
+        return True, "approved"
+
+    def check_drawdown(self) -> "DrawdownCheckResult":
+        """Return a DrawdownCheckResult with current drawdown metrics."""
+        dd = self._state.current_drawdown
+        daily_dd = self._state.daily_drawdown
+        passed = (
+            dd < self._config.max_drawdown_pct
+            and daily_dd < self._config.max_daily_loss_pct
+        )
+        return DrawdownCheckResult(
+            passed=passed,
+            current_drawdown=dd,
+            daily_drawdown=daily_dd,
+            max_drawdown_pct=self._config.max_drawdown_pct,
+            max_daily_loss_pct=self._config.max_daily_loss_pct,
+        )
 
     # ── Equity / position updates ─────────────────────────────────────────────
 

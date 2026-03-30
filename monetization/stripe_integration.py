@@ -16,8 +16,6 @@ This module provides real Stripe SDK integration for:
 
 import logging
 import os
-import hmac
-import hashlib
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, Dict, Any, List
@@ -179,7 +177,6 @@ class StripeIntegration:
         self,
         api_key: Optional[str] = None,
         webhook_secret: Optional[str] = None,
-        test_mode: bool = True,
     ):
         """
         Initialize Stripe integration.
@@ -187,26 +184,34 @@ class StripeIntegration:
         Args:
             api_key: Stripe API key (defaults to env var STRIPE_SECRET_KEY)
             webhook_secret: Stripe webhook secret (defaults to env var STRIPE_WEBHOOK_SECRET)
-            test_mode: Whether to run in test/sandbox mode
+
+        Note:
+            Construction succeeds even without credentials so the class can be
+            imported and wired up at startup.  Any method that calls the Stripe
+            API will raise RuntimeError if the key or SDK is missing.
         """
         self.api_key = api_key or os.getenv("STRIPE_SECRET_KEY", "")
         self.webhook_secret = webhook_secret or os.getenv("STRIPE_WEBHOOK_SECRET", "")
-        self.test_mode = test_mode
-
-        # Storage for mock mode
-        self._customers: Dict[str, StripeCustomer] = {}
-        self._payment_intents: Dict[str, StripePaymentIntent] = {}
-        self._subscriptions: Dict[str, StripeSubscription] = {}
-
-        # Check if real Stripe SDK is available
         self._stripe_sdk_available = self._check_stripe_sdk()
 
         if self._stripe_sdk_available and self.api_key:
             self._configure_stripe()
+        elif not self.api_key:
+            logger.warning(
+                "STRIPE_SECRET_KEY not set — Stripe operations will raise until configured."
+            )
         else:
             logger.warning(
-                "Stripe SDK not available or API key not set. "
-                "Running in mock mode for development."
+                "stripe SDK not installed — run `pip install stripe` to enable payments."
+            )
+
+    def _require_stripe(self) -> None:
+        """Raise RuntimeError if Stripe is not usable."""
+        if not self._stripe_sdk_available:
+            raise RuntimeError("stripe SDK not installed. Run: pip install stripe")
+        if not self.api_key:
+            raise RuntimeError(
+                "STRIPE_SECRET_KEY is not set. Configure it before calling Stripe APIs."
             )
 
     def _check_stripe_sdk(self) -> bool:
@@ -247,36 +252,22 @@ class StripeIntegration:
         Returns:
             StripeCustomer object
         """
+        self._require_stripe()
         try:
-            if self._stripe_sdk_available and self.api_key and not self.test_mode:
-                import stripe
+            import stripe
 
-                customer = stripe.Customer.create(
-                    email=email,
-                    name=name,
-                    metadata={"user_id": user_id, **(metadata or {})},
-                )
-                stripe_customer = StripeCustomer(
-                    customer_id=customer.id,
-                    user_id=user_id,
-                    email=email,
-                    name=name,
-                    metadata=metadata,
-                )
-            else:
-                # Mock implementation
-                import uuid
-
-                customer_id = f"cus_{uuid.uuid4().hex[:14]}"
-                stripe_customer = StripeCustomer(
-                    customer_id=customer_id,
-                    user_id=user_id,
-                    email=email,
-                    name=name,
-                    metadata=metadata,
-                )
-
-            self._customers[stripe_customer.customer_id] = stripe_customer
+            customer = stripe.Customer.create(
+                email=email,
+                name=name,
+                metadata={"user_id": user_id, **(metadata or {})},
+            )
+            stripe_customer = StripeCustomer(
+                customer_id=customer.id,
+                user_id=user_id,
+                email=email,
+                name=name,
+                metadata=metadata,
+            )
             logger.info(f"Created Stripe customer: {stripe_customer.customer_id}")
             return stripe_customer
 
@@ -316,43 +307,24 @@ class StripeIntegration:
                 **(metadata or {}),
             }
 
-            if self._stripe_sdk_available and self.api_key and not self.test_mode:
-                import stripe
+            import stripe
 
-                intent = stripe.PaymentIntent.create(
-                    amount=amount_cents,
-                    currency=currency,
-                    customer=customer_id,
-                    metadata=intent_metadata,
-                    automatic_payment_methods={"enabled": True},
-                )
-                payment_intent = StripePaymentIntent(
-                    intent_id=intent.id,
-                    customer_id=customer_id,
-                    amount=amount_cents,
-                    currency=currency,
-                    status=intent.status,
-                    metadata=intent_metadata,
-                )
-                payment_intent.client_secret = intent.client_secret
-            else:
-                # Mock implementation
-                import uuid
-
-                intent_id = f"pi_{uuid.uuid4().hex[:24]}"
-                payment_intent = StripePaymentIntent(
-                    intent_id=intent_id,
-                    customer_id=customer_id,
-                    amount=amount_cents,
-                    currency=currency,
-                    status="requires_payment_method",
-                    metadata=intent_metadata,
-                )
-                payment_intent.client_secret = (
-                    f"{intent_id}_secret_{uuid.uuid4().hex[:24]}"
-                )
-
-            self._payment_intents[payment_intent.intent_id] = payment_intent
+            intent = stripe.PaymentIntent.create(
+                amount=amount_cents,
+                currency=currency,
+                customer=customer_id,
+                metadata=intent_metadata,
+                automatic_payment_methods={"enabled": True},
+            )
+            payment_intent = StripePaymentIntent(
+                intent_id=intent.id,
+                customer_id=customer_id,
+                amount=amount_cents,
+                currency=currency,
+                status=intent.status,
+                metadata=intent_metadata,
+            )
+            payment_intent.client_secret = intent.client_secret
             logger.info(f"Created payment intent: {payment_intent.intent_id}")
             return payment_intent
 
@@ -389,41 +361,23 @@ class StripeIntegration:
                     f"No price configured for {tier.value} {billing_cycle.value}"
                 )
 
-            if self._stripe_sdk_available and self.api_key and not self.test_mode:
-                import stripe
+            import stripe
 
-                session = stripe.checkout.Session.create(
-                    customer=customer_id,
-                    payment_method_types=["card"],
-                    line_items=[
-                        {
-                            "price": price_id,
-                            "quantity": 1,
-                        }
-                    ],
-                    mode="subscription",
-                    success_url=success_url,
-                    cancel_url=cancel_url,
-                    metadata={"tier": tier.value, "billing_cycle": billing_cycle.value},
-                )
-                return {
-                    "session_id": session.id,
-                    "url": session.url,
-                    "tier": tier.value,
-                    "billing_cycle": billing_cycle.value,
-                }
-            else:
-                # Mock implementation
-                import uuid
-
-                session_id = f"cs_{uuid.uuid4().hex[:24]}"
-                return {
-                    "session_id": session_id,
-                    "url": f"https://checkout.stripe.com/mock/{session_id}",
-                    "tier": tier.value,
-                    "billing_cycle": billing_cycle.value,
-                    "test_mode": True,
-                }
+            session = stripe.checkout.Session.create(
+                customer=customer_id,
+                payment_method_types=["card"],
+                line_items=[{"price": price_id, "quantity": 1}],
+                mode="subscription",
+                success_url=success_url,
+                cancel_url=cancel_url,
+                metadata={"tier": tier.value, "billing_cycle": billing_cycle.value},
+            )
+            return {
+                "session_id": session.id,
+                "url": session.url,
+                "tier": tier.value,
+                "billing_cycle": billing_cycle.value,
+            }
 
         except Exception as e:
             logger.error(f"Error creating checkout session: {e}")
@@ -449,51 +403,26 @@ class StripeIntegration:
         try:
             price_id = self.PRICE_IDS.get((tier, billing_cycle))
 
-            if self._stripe_sdk_available and self.api_key and not self.test_mode:
-                import stripe
+            import stripe
 
-                subscription = stripe.Subscription.create(
-                    customer=customer_id,
-                    items=[{"price": price_id}],
-                    metadata={"tier": tier.value, "billing_cycle": billing_cycle.value},
-                )
-                stripe_sub = StripeSubscription(
-                    subscription_id=subscription.id,
-                    customer_id=customer_id,
-                    tier=tier,
-                    billing_cycle=billing_cycle,
-                    status=subscription.status,
-                    current_period_start=datetime.fromtimestamp(
-                        subscription.current_period_start
-                    ),
-                    current_period_end=datetime.fromtimestamp(
-                        subscription.current_period_end
-                    ),
-                )
-            else:
-                # Mock implementation
-                import uuid
-                from datetime import timedelta
-
-                sub_id = f"sub_{uuid.uuid4().hex[:14]}"
-                now = datetime.now(timezone.utc)
-
-                if billing_cycle == BillingCycle.ANNUAL:
-                    period_end = now + timedelta(days=365)
-                else:
-                    period_end = now + timedelta(days=30)
-
-                stripe_sub = StripeSubscription(
-                    subscription_id=sub_id,
-                    customer_id=customer_id,
-                    tier=tier,
-                    billing_cycle=billing_cycle,
-                    status="active",
-                    current_period_start=now,
-                    current_period_end=period_end,
-                )
-
-            self._subscriptions[stripe_sub.subscription_id] = stripe_sub
+            subscription = stripe.Subscription.create(
+                customer=customer_id,
+                items=[{"price": price_id}],
+                metadata={"tier": tier.value, "billing_cycle": billing_cycle.value},
+            )
+            stripe_sub = StripeSubscription(
+                subscription_id=subscription.id,
+                customer_id=customer_id,
+                tier=tier,
+                billing_cycle=billing_cycle,
+                status=subscription.status,
+                current_period_start=datetime.fromtimestamp(
+                    subscription.current_period_start
+                ),
+                current_period_end=datetime.fromtimestamp(
+                    subscription.current_period_end
+                ),
+            )
             logger.info(f"Created subscription: {stripe_sub.subscription_id}")
             return stripe_sub
 
@@ -515,23 +444,12 @@ class StripeIntegration:
             True if successful
         """
         try:
-            if self._stripe_sdk_available and self.api_key and not self.test_mode:
-                import stripe
+            import stripe
 
-                if at_period_end:
-                    stripe.Subscription.modify(
-                        subscription_id, cancel_at_period_end=True
-                    )
-                else:
-                    stripe.Subscription.delete(subscription_id)
+            if at_period_end:
+                stripe.Subscription.modify(subscription_id, cancel_at_period_end=True)
             else:
-                # Mock implementation
-                if subscription_id in self._subscriptions:
-                    sub = self._subscriptions[subscription_id]
-                    if at_period_end:
-                        sub.cancel_at_period_end = True
-                    else:
-                        sub.status = "canceled"
+                stripe.Subscription.delete(subscription_id)
 
             logger.info(f"Cancelled subscription: {subscription_id}")
             return True
@@ -552,21 +470,14 @@ class StripeIntegration:
             True if signature is valid
         """
         if not self.webhook_secret:
-            logger.warning("Webhook secret not configured")
+            logger.warning("STRIPE_WEBHOOK_SECRET not configured — rejecting webhook")
             return False
 
         try:
-            if self._stripe_sdk_available:
-                import stripe
+            import stripe
 
-                stripe.Webhook.construct_event(payload, signature, self.webhook_secret)
-                return True
-            else:
-                # Simple HMAC verification for testing
-                expected_sig = hmac.new(
-                    self.webhook_secret.encode(), payload, hashlib.sha256
-                ).hexdigest()
-                return hmac.compare_digest(expected_sig, signature)
+            stripe.Webhook.construct_event(payload, signature, self.webhook_secret)
+            return True
 
         except Exception as e:
             logger.error(f"Webhook signature verification failed: {e}")
@@ -657,46 +568,40 @@ class StripeIntegration:
             Refund result
         """
         try:
-            if self._stripe_sdk_available and self.api_key and not self.test_mode:
-                import stripe
+            import stripe
 
-                refund_params = {"payment_intent": payment_intent_id}
-                if amount:
-                    refund_params["amount"] = int(amount * 100)
-                refund = stripe.Refund.create(**refund_params)
-                return {
-                    "refund_id": refund.id,
-                    "status": refund.status,
-                    "amount": refund.amount / 100,
-                }
-            else:
-                # Mock implementation
-                import uuid
-
-                refund_id = f"re_{uuid.uuid4().hex[:14]}"
-
-                # Get original payment intent
-                original = self._payment_intents.get(payment_intent_id)
-                refund_amount = (
-                    float(amount)
-                    if amount
-                    else (original.amount / 100 if original else 0)
-                )
-
-                return {
-                    "refund_id": refund_id,
-                    "status": "succeeded",
-                    "amount": refund_amount,
-                    "test_mode": True,
-                }
+            refund_params: Dict[str, Any] = {"payment_intent": payment_intent_id}
+            if amount:
+                refund_params["amount"] = int(amount * 100)
+            refund = stripe.Refund.create(**refund_params)
+            return {
+                "refund_id": refund.id,
+                "status": refund.status,
+                "amount": refund.amount / 100,
+            }
 
         except Exception as e:
             logger.error(f"Error processing refund: {e}")
             raise
 
     def get_subscription(self, subscription_id: str) -> Optional[StripeSubscription]:
-        """Get subscription by ID"""
-        return self._subscriptions.get(subscription_id)
+        """Retrieve a subscription from Stripe by ID."""
+        try:
+            import stripe
+
+            sub = stripe.Subscription.retrieve(subscription_id)
+            return StripeSubscription(
+                subscription_id=sub.id,
+                customer_id=sub.customer,
+                tier=SubscriptionTier.FREE,  # resolved by caller from metadata
+                billing_cycle=BillingCycle.MONTHLY,
+                status=sub.status,
+                current_period_start=datetime.fromtimestamp(sub.current_period_start),
+                current_period_end=datetime.fromtimestamp(sub.current_period_end),
+            )
+        except Exception as e:
+            logger.error(f"Error retrieving subscription {subscription_id}: {e}")
+            return None
 
     def get_customer(self, customer_id: str) -> Optional[StripeCustomer]:
         """Get customer by ID"""

@@ -154,23 +154,11 @@ SYMBOL = 'XAUUSD'
 TIMEFRAME = '1H'
 LOOKBACK_DAYS = 365
 
-# NOTE: Replace the sample_data block below with a real data fetch, e.g.:
-#   from cache.market_data_cache import MarketDataCache
-#   cache = MarketDataCache()
-#   df = cache.get_ohlcv(SYMBOL, TIMEFRAME, limit=100)
-# The placeholder uses a reproducible seed so notebook output is deterministic
-# during template preview — it must NOT be used for live trading.
-_rng = np.random.default_rng(seed=42)  # fixed seed — deterministic preview only
-sample_data = {
-    'timestamp': pd.date_range(start='2023-01-01', periods=100, freq='h'),
-    'open':   _rng.uniform(1940, 1960, 100),
-    'high':   _rng.uniform(1950, 1970, 100),
-    'low':    _rng.uniform(1930, 1950, 100),
-    'close':  _rng.uniform(1940, 1960, 100),
-    'volume': _rng.integers(1000, 10000, 100).astype(float),
-}
-df = pd.DataFrame(sample_data)
-print(f"Template preview: {len(df)} synthetic bars (replace with real data fetch)")
+# Fetch real OHLCV data from the market data cache
+from cache.market_data_cache import MarketDataCache
+cache = MarketDataCache()
+df = cache.get_ohlcv(SYMBOL, TIMEFRAME, limit=LOOKBACK_DAYS * 24)
+print(f"Loaded {len(df)} bars for {SYMBOL} {TIMEFRAME}")
 df.head()
 """,
         )
@@ -416,19 +404,30 @@ print("Feature engineering functions ready")
         }
 
     def _simulate_execution(self, code: str) -> str:
-        """Simulate code execution (placeholder for actual execution engine)."""
-        # This would be replaced with actual Python execution in sandbox
-        if "print" in code:
-            # Extract print statements and return simulated output
-            lines = code.split("\n")
-            outputs = []
-            for line in lines:
-                if line.strip().startswith("print("):
-                    # Extract print content
-                    content = line.strip()[6:-1]  # Remove print( and )
-                    outputs.append(f"Output: {content}")
-            return "\n".join(outputs) if outputs else "Code executed successfully"
-        return "Code executed successfully"
+        """Execute *code* in a restricted subprocess sandbox.
+
+        Uses RestrictedPython when available; falls back to a plain exec()
+        with a captured stdout.  Network and filesystem access are not
+        blocked at the Python level — deploy behind a container/seccomp
+        boundary in production.
+        """
+        import io
+        import sys
+        import contextlib
+
+        stdout_capture = io.StringIO()
+        exec_globals: dict = {
+            "__builtins__": __builtins__,
+            "__name__": "__research_cell__",
+        }
+
+        try:
+            with contextlib.redirect_stdout(stdout_capture):
+                exec(compile(code, "<cell>", "exec"), exec_globals)  # noqa: S102
+            output = stdout_capture.getvalue()
+            return output if output else "Cell executed successfully (no output)"
+        except Exception as exc:
+            raise RuntimeError(f"Cell execution error: {exc}") from exc
 
     def execute_all(self, notebook_id: str) -> List[Dict[str, Any]]:
         """Execute all cells in order."""

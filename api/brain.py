@@ -129,45 +129,13 @@ async def generate_strategy(
                 error=str(exc),
             )
 
-    # ── Stub response when no API key is configured ───────────────────────────
-    stub_code = f'''"""
-Auto-generated strategy: {req.symbol} {req.timeframe}
-Prompt: {req.prompt[:100]}
-"""
-from strategies.base import BaseStrategy
-
-class GeneratedStrategy(BaseStrategy):
-    """Generated from: {req.prompt[:80]}"""
-
-    def __init__(self):
-        super().__init__()
-        self.rsi_period = 14
-        self.rsi_oversold = 30
-        self.rsi_overbought = 70
-
-    def generate_signal(self, data):
-        if len(data) < self.rsi_period + 1:
-            return None
-        rsi = self._rsi(data["close"], self.rsi_period)
-        if rsi < self.rsi_oversold:
-            return {{"direction": "long", "confidence": 0.65}}
-        if rsi > self.rsi_overbought:
-            return {{"direction": "short", "confidence": 0.65}}
-        return None
-'''
-    return GenerateResponse(
-        success=True,
-        strategy_name="GeneratedStrategy",
-        strategy_code=stub_code,
-        backtest=BacktestSummary(
-            total_return_pct=12.4,
-            sharpe_ratio=1.3,
-            max_drawdown_pct=-8.2,
-            win_rate=54.0,
-            total_trades=87,
+    # No LLM API key configured — cannot generate strategy
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=(
+            "LLM backend not configured. "
+            "Set OPENAI_API_KEY or ANTHROPIC_API_KEY to enable AI strategy generation."
         ),
-        iterations=1,
-        error=None,
     )
 
 
