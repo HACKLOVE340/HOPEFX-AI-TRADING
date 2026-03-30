@@ -980,6 +980,125 @@ def check_redis_store_prometheus() -> ValidationResult:
         )
 
 
+def check_orchestrator_subscribe_ticks() -> ValidationResult:
+    """orchestrator.subscribe_ticks / unsubscribe_ticks must work correctly."""
+    try:
+        from data_layer.orchestrator import orchestrator
+        received = []
+        orchestrator.subscribe_ticks("_test_sub", lambda t: received.append(t))
+        assert "_test_sub" in orchestrator._tick_callbacks, "subscriber not registered"
+        orchestrator.unsubscribe_ticks("_test_sub")
+        assert "_test_sub" not in orchestrator._tick_callbacks, "subscriber not removed"
+        return ValidationResult(
+            "Orchestrator.subscribe_ticks", True,
+            "subscribe/unsubscribe roundtrip OK"
+        )
+    except Exception as exc:
+        return ValidationResult("Orchestrator.subscribe_ticks", False, str(exc))
+
+
+def check_orchestrator_get_ohlcv_window() -> ValidationResult:
+    """orchestrator.get_ohlcv_window must exist and return None gracefully."""
+    try:
+        from data_layer.orchestrator import orchestrator
+        assert hasattr(orchestrator, "get_ohlcv_window"), "get_ohlcv_window missing"
+        result = orchestrator.get_ohlcv_window()
+        # None is acceptable — no live data in test environment
+        assert result is None or hasattr(result, "shape"), "unexpected return type"
+        return ValidationResult(
+            "Orchestrator.get_ohlcv_window", True,
+            f"returns {'DataFrame' if result is not None else 'None'} (no live data expected)"
+        )
+    except Exception as exc:
+        return ValidationResult("Orchestrator.get_ohlcv_window", False, str(exc))
+
+
+def check_redis_store_health() -> ValidationResult:
+    """DataLayerRedisStore.health() must return a dict with required keys."""
+    try:
+        from data_layer.cache.redis_store import dl_redis_store
+        h = dl_redis_store.health()
+        required = {"hits", "misses", "writes", "errors", "hit_rate", "connected", "alive"}
+        missing = required - set(h.keys())
+        assert not missing, f"health() missing keys: {missing}"
+        assert isinstance(h["alive"], bool), "alive must be bool"
+        return ValidationResult(
+            "DataLayerRedisStore.health()", True,
+            f"alive={h['alive']} ping_ms={h.get('ping_ms')} keys={h.get('key_count', '?')}"
+        )
+    except Exception as exc:
+        return ValidationResult("DataLayerRedisStore.health()", False, str(exc))
+
+
+def check_lineage_pg_stats() -> ValidationResult:
+    """DataLineageStore.stats() must expose pg_enabled and pg_export_count."""
+    try:
+        from data_layer.lineage.store import lineage_store
+        lineage_store.start()
+        stats = lineage_store.stats()
+        assert "pg_enabled" in stats, "pg_enabled missing from stats()"
+        assert "pg_export_count" in stats, "pg_export_count missing from stats()"
+        assert isinstance(stats["pg_enabled"], bool), "pg_enabled must be bool"
+        lineage_store.stop()
+        return ValidationResult(
+            "DataLineageStore PG stats", True,
+            f"pg_enabled={stats['pg_enabled']} pg_export_count={stats['pg_export_count']}"
+        )
+    except Exception as exc:
+        return ValidationResult("DataLineageStore PG stats", False, str(exc))
+
+
+def check_risk_gatekeeper_full_wiring() -> ValidationResult:
+    """RiskManager and Gatekeeper must be wired to the orchestrator singleton."""
+    try:
+        from risk.manager import RiskManager
+        from risk.gatekeeper import gatekeeper
+        from data_layer.orchestrator import orchestrator
+        from data_layer.lineage.store import lineage_store
+
+        rm = RiskManager(orchestrator=orchestrator, lineage_store=lineage_store)
+        assert rm._orch is orchestrator, "RiskManager._orch not wired"
+        assert rm._lineage is lineage_store, "RiskManager._lineage not wired"
+
+        assert gatekeeper._orch is orchestrator, "Gatekeeper._orch not wired"
+        assert gatekeeper._lineage is lineage_store, "Gatekeeper._lineage not wired"
+
+        # Verify orchestrator data methods are callable
+        assert callable(getattr(rm._orch, "get_latest_tick", None))
+        assert callable(getattr(rm._orch, "get_ml_features", None))
+        assert callable(getattr(rm._orch, "get_macro_impact_score", None))
+        assert callable(getattr(rm._orch, "is_safe_to_trade", None))
+
+        return ValidationResult(
+            "Risk/Gatekeeper orchestrator wiring", True,
+            "RiskManager + Gatekeeper both wired to orchestrator + lineage_store"
+        )
+    except Exception as exc:
+        return ValidationResult("Risk/Gatekeeper orchestrator wiring", False, str(exc))
+
+
+def check_macro_csv_startup_population() -> ValidationResult:
+    """MacroStore must be populated from CSV at orchestrator startup."""
+    try:
+        from ml.macro_store import macro_store
+        from data_layer.feeds.macro.store_bridge import macro_store_bridge
+
+        # Trigger CSV load (simulates orchestrator startup step 7)
+        macro_store_bridge._load_csv_fallback()
+        n = len(macro_store)
+        assert n > 0, f"MacroStore empty after CSV fallback load (got {n} series)"
+
+        feats = macro_store_bridge.get_ml_features()
+        assert len(feats) > 0, "MacroStoreBridge.get_ml_features() returned empty dict"
+
+        return ValidationResult(
+            "Macro CSV startup population", True,
+            f"{n} series loaded, {len(feats)} ML features available"
+        )
+    except Exception as exc:
+        return ValidationResult("Macro CSV startup population", False, str(exc))
+
+
 async def run_all(verbose: bool = False) -> Tuple[int, int]:
     print(_head("HOPEFX Data Layer — Connection Validation"))
     print(f"  Timestamp: {datetime.now(timezone.utc).isoformat()}")
@@ -1025,6 +1144,13 @@ async def run_all(verbose: bool = False) -> Tuple[int, int]:
         check_data_layer_features_injection,
         check_macro_store_bridge_retry_config,
         check_redis_store_prometheus,
+        # ── Phase-2 hardening checks ──────────────────────────────────────────
+        check_orchestrator_subscribe_ticks,
+        check_orchestrator_get_ohlcv_window,
+        check_redis_store_health,
+        check_lineage_pg_stats,
+        check_risk_gatekeeper_full_wiring,
+        check_macro_csv_startup_population,
     ]
 
     print(_head("Synchronous checks"))
