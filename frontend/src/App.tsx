@@ -59,6 +59,9 @@ import SubAccounts       from './pages/SubAccounts';
 // ── Security Operations Centre ────────────────────────────────────────────────
 import SecurityDashboard from './pages/SecurityDashboard';
 
+// ── Transaction Cost Analysis ─────────────────────────────────────────────────
+import TCADashboard from './pages/TCADashboard';
+
 // ── Auth + Store ──────────────────────────────────────────────────────────────
 import AuthGuard from './components/AuthGuard';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -126,6 +129,7 @@ const NAV_ITEMS = [
   { path: '/admin',         label: 'Admin',           icon: '🔧', auth: true  },
   { path: '/audit',         label: 'Audit Log',       icon: '🔍', auth: true  },
   { path: '/sub-accounts',  label: 'Sub-Accounts',    icon: '👥', auth: true  },
+  { path: '/tca',           label: 'TCA',             icon: '📊', auth: true  },
   { path: '/security',      label: 'Security Ops',    icon: '🛡️', auth: true  },
   { path: '/status',        label: 'Status',          icon: '🟢', auth: false },
   { path: '/settings',      label: 'Settings',        icon: '⚙️', auth: true  },
@@ -284,6 +288,7 @@ const AppShell: React.FC = () => {
           <Route path="/2fa-setup"    element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
           <Route path="/audit"        element={wrap(<AuthGuard requiredRole="admin"><AuditLog /></AuthGuard>)} />
           <Route path="/sub-accounts" element={wrap(<AuthGuard><SubAccounts /></AuthGuard>)} />
+          <Route path="/tca"          element={wrap(<AuthGuard><TCADashboard /></AuthGuard>)} />
           <Route path="/security"     element={wrap(<AuthGuard requiredRole="admin"><SecurityDashboard /></AuthGuard>)} />
 
           {/* Fallback — redirect unknown shell paths to dashboard */}
