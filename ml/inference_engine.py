@@ -109,8 +109,29 @@ def _init_prometheus():
 
         return _Metrics()
 
-    except Exception:
-        # prometheus_client not installed or already registered — use no-op stub.
+    except ImportError:
+        logger.warning(
+            "prometheus_client is not installed — inference metrics will not be exported. "
+            "Install with: pip install prometheus-client"
+        )
+        class _Noop:
+            class _C:
+                def labels(self, **_kw):
+                    return self
+                def inc(self, *a, **kw): pass
+                def observe(self, *a, **kw): pass
+                def set(self, *a, **kw): pass
+            def __getattr__(self, _name):
+                return self._C()
+
+        return _Noop()
+
+    except Exception as exc:
+        logger.warning(
+            "Prometheus metrics registration failed (%s) — inference metrics will not "
+            "be exported. This may indicate a duplicate metric name or registry conflict.",
+            exc,
+        )
         class _Noop:
             class _C:
                 def labels(self, **_kw):
