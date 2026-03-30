@@ -10,9 +10,11 @@ Multi-Gateway Payment Processor
 - Bank transfers
 """
 
+import os
+from datetime import datetime, timezone
+from decimal import Decimal
 from enum import Enum
 from typing import Dict, Optional
-from datetime import datetime, timezone
 import logging
 import uuid
 
@@ -97,20 +99,88 @@ class PaymentGateway:
             logger.error(f"Payment failed: {e}")
             return False
 
-    def _process_stripe(self, payment: Payment):
-        """Process Stripe payment"""
-        # Would integrate with Stripe API
-        pass
+    def _process_stripe(self, payment: Payment) -> None:
+        """Process Stripe payment via monetization.stripe_integration."""
+        try:
+            import stripe as _stripe  # type: ignore[import]
+        except ImportError as exc:
+            raise RuntimeError(
+                "stripe package is required for Stripe payments. "
+                "Install it with: pip install stripe"
+            ) from exc
 
-    def _process_crypto(self, payment: Payment):
-        """Process crypto payment"""
-        # Would integrate with crypto service
-        pass
+        secret_key = os.getenv("STRIPE_SECRET_KEY", "")
+        if not secret_key:
+            raise RuntimeError(
+                "STRIPE_SECRET_KEY is not set. "
+                "Configure it in .env before accepting Stripe payments."
+            )
 
-    def _process_bank(self, payment: Payment):
-        """Process bank transfer"""
-        # Would integrate with bank API
-        pass
+        _stripe.api_key = secret_key
+        intent = _stripe.PaymentIntent.create(
+            amount=int(payment.amount * 100),  # Stripe expects cents
+            currency="usd",
+            metadata={
+                "hopefx_payment_id": payment.id,
+                "user_id": payment.user_id,
+                "description": payment.description,
+            },
+        )
+        payment.transaction_id = intent["id"]
+        logger.info(
+            "Stripe PaymentIntent created: %s for payment %s",
+            intent["id"],
+            payment.id,
+        )
+
+    def _process_crypto(self, payment: Payment) -> None:
+        """Process crypto payment via payments.crypto.address_generator.
+
+        Assigns a unique deposit address for the user.  The currency is read
+        from payment.description (e.g. "BTC", "ETH", "USDT_ERC20").
+        Defaults to "BTC" when description is blank.
+        """
+        from payments.crypto.address_generator import address_generator
+
+        currency = (payment.description or "BTC").strip().upper()
+        deposit_address = address_generator.generate_address(
+            user_id=payment.user_id,
+            currency=currency,
+        )
+        payment.transaction_id = deposit_address
+        logger.info(
+            "Crypto deposit address assigned: %s (%s) for payment %s",
+            deposit_address,
+            currency,
+            payment.id,
+        )
+
+    def _process_bank(self, payment: Payment) -> None:
+        """Process bank transfer via payments.fintech.bank_transfer."""
+        from payments.fintech.bank_transfer import bank_transfer_client
+
+        # bank_code and account_number are passed via payment.description
+        # as "bank_code:account_number" when this method is called.
+        parts = (payment.description or "").split(":")
+        if len(parts) < 2:
+            raise ValueError(
+                "Bank transfer requires description in format 'bank_code:account_number'. "
+                f"Got: '{payment.description}'"
+            )
+        bank_code, account_number = parts[0].strip(), parts[1].strip()
+
+        result = bank_transfer_client.initiate_transfer(
+            user_id=payment.user_id,
+            amount=Decimal(str(payment.amount)),
+            bank_code=bank_code,
+            account_number=account_number,
+        )
+        payment.transaction_id = result["transfer_id"]
+        logger.info(
+            "Bank transfer initiated: %s for payment %s",
+            result["transfer_id"],
+            payment.id,
+        )
 
     def refund_payment(self, payment_id: str) -> bool:
         """Refund payment"""
