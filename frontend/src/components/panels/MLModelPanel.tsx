@@ -1,0 +1,388 @@
+/**
+ * components/panels/MLModelPanel.tsx
+ * ML model status panel: accuracy metrics, feature importance bar chart,
+ * model list, and health status.
+ *
+ * Wires to:
+ *   GET /api/ml/accuracy   — AccuracyResponse
+ *   GET /api/ml/health     — MLHealthResponse
+ *   GET /api/ml/models     — ModelInfo[]
+ *   GET /api/ml/features   — { features: FeatureEntry[], note? } (admin only)
+ */
+
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { mlApi, mlExtendedApi } from '../../hooks/useApi';
+import { Panel } from '../ui/Panel';
+import { PanelSkeleton } from '../ui/Skeleton';
+import { withPanelGuard } from '../ui/withPanelGuard';
+import { cn } from '../../lib/utils';
+
+// ── Types (mirror backend Pydantic models) ────────────────────────────────────
+
+interface AccuracyResponse {
+  model_id:      string;
+  accuracy:      number;
+  precision:     number;
+  recall:        number;
+  f1:            number;
+  sharpe:        number;
+  win_rate:      number;
+  total_signals: number;
+  evaluated_at:  string;
+  note:          string;
+}
+
+interface ModelInfo {
+  model_id:   string;
+  name:       string;
+  available:  boolean;
+  size_kb?:   number;
+  trained_at?: string;
+}
+
+interface FeatureEntry {
+  name:       string;
+  importance: number;
+}
+
+interface MLHealthResponse {
+  status:         string;
+  model_loaded:   boolean;
+  model_id:       string;
+  feature_count:  number;
+  oos_accuracy?:  number;
+  last_trained_at?: string;
+  predict_count:  number;
+}
+
+// ── Metric tile ───────────────────────────────────────────────────────────────
+
+function MetricTile({
+  label,
+  value,
+  color,
+  sub,
+}: {
+  label: string;
+  value: string;
+  color?: string;
+  sub?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 px-3 py-2 bg-[#0d1421] rounded border border-[#1e2d3d]">
+      <span className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</span>
+      <span className={cn('text-[15px] font-bold tabular-nums', color ?? 'text-slate-200')}>
+        {value}
+      </span>
+      {sub && <span className="text-[10px] text-slate-600">{sub}</span>}
+    </div>
+  );
+}
+
+// ── Feature importance bar ────────────────────────────────────────────────────
+
+function FeatureBar({ name, importance, max }: { name: string; importance: number; max: number }) {
+  const pct = max > 0 ? (importance / max) * 100 : 0;
+  const color =
+    pct > 66 ? '#00e676' :
+    pct > 33 ? '#ffb800' : '#60a5fa';
+
+  return (
+    <div className="flex items-center gap-2 group">
+      <span
+        className="text-[10px] text-slate-400 truncate shrink-0"
+        style={{ width: 140 }}
+        title={name}
+      >
+        {name}
+      </span>
+      <div className="flex-1 h-1.5 bg-[#1e2d3d] rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, background: color }}
+        />
+      </div>
+      <span className="text-[10px] tabular-nums text-slate-500 shrink-0 w-10 text-right">
+        {(importance * 100).toFixed(1)}%
+      </span>
+    </div>
+  );
+}
+
+// ── Health badge ──────────────────────────────────────────────────────────────
+
+function HealthBadge({ status, loaded }: { status: string; loaded: boolean }) {
+  const ok = loaded && (status === 'ok' || status === 'healthy');
+  return (
+    <span className={cn(
+      'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold',
+      ok
+        ? 'bg-[#00e676]/10 text-[#00e676]'
+        : 'bg-[#ff1744]/10 text-[#ff1744]',
+    )}>
+      <span className={cn('w-1.5 h-1.5 rounded-full', ok ? 'bg-[#00e676]' : 'bg-[#ff1744]')} />
+      {ok ? 'Live' : loaded ? status : 'No model'}
+    </span>
+  );
+}
+
+// ── Tab bar ───────────────────────────────────────────────────────────────────
+
+type Tab = 'metrics' | 'features' | 'models';
+
+function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'metrics',  label: 'Metrics'  },
+    { id: 'features', label: 'Features' },
+    { id: 'models',   label: 'Models'   },
+  ];
+  return (
+    <div className="flex gap-1">
+      {tabs.map(({ id, label }) => (
+        <button
+          key={id}
+          onClick={() => onChange(id)}
+          className={cn(
+            'px-3 py-1 rounded text-[11px] font-semibold border transition-colors',
+            active === id
+              ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
+              : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+function MLModelPanelInner() {
+  const [tab, setTab] = useState<Tab>('metrics');
+
+  // Accuracy metrics
+  const accuracyQ = useQuery<AccuracyResponse>({
+    queryKey: ['ml', 'accuracy'],
+    queryFn:  async () => { const r = await mlApi.accuracy(); return r.data; },
+    refetchInterval: 60_000,
+    staleTime:       30_000,
+  });
+
+  // ML health
+  const healthQ = useQuery<MLHealthResponse>({
+    queryKey: ['ml', 'health'],
+    queryFn:  async () => { const r = await mlExtendedApi.health(); return r.data; },
+    refetchInterval: 30_000,
+    staleTime:       15_000,
+  });
+
+  // Models list
+  const modelsQ = useQuery<ModelInfo[]>({
+    queryKey: ['ml', 'models'],
+    queryFn:  async () => { const r = await mlApi.models(); return r.data; },
+    refetchInterval: 120_000,
+    staleTime:       60_000,
+    enabled: tab === 'models',
+  });
+
+  // Feature importances (admin-only — gracefully handles 403)
+  const featuresQ = useQuery<{ features: FeatureEntry[]; note?: string }>({
+    queryKey: ['ml', 'features'],
+    queryFn:  async () => {
+      const r = await mlApi.features();
+      // Backend returns { features: [...], note? } or flat array
+      const raw = r.data as FeatureEntry[] | { features: FeatureEntry[]; note?: string };
+      return Array.isArray(raw) ? { features: raw } : raw;
+    },
+    refetchInterval: 120_000,
+    staleTime:       60_000,
+    enabled: tab === 'features',
+    retry: (count, err: unknown) => {
+      // Don't retry 403 (non-admin user)
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      return status !== 403 && count < 2;
+    },
+  });
+
+  const acc    = accuracyQ.data;
+  const health = healthQ.data;
+
+  const headerRight = health ? (
+    <HealthBadge status={health.status} loaded={health.model_loaded} />
+  ) : undefined;
+
+  return (
+    <Panel title="ML Model" headerRight={headerRight}>
+      <div className="flex flex-col gap-3">
+        <TabBar active={tab} onChange={setTab} />
+
+        {/* ── Metrics tab ─────────────────────────────────────────────────── */}
+        {tab === 'metrics' && (
+          <>
+            {accuracyQ.isLoading && <PanelSkeleton rows={4} />}
+            {accuracyQ.isError && (
+              <div className="text-[11px] text-[#ff1744] px-1">
+                Failed to load accuracy metrics
+              </div>
+            )}
+            {acc && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <MetricTile
+                    label="Accuracy"
+                    value={`${(acc.accuracy * 100).toFixed(1)}%`}
+                    color={acc.accuracy >= 0.6 ? 'text-[#00e676]' : acc.accuracy >= 0.5 ? 'text-[#ffb800]' : 'text-[#ff1744]'}
+                  />
+                  <MetricTile
+                    label="Win Rate"
+                    value={`${(acc.win_rate * 100).toFixed(1)}%`}
+                    color={acc.win_rate >= 0.55 ? 'text-[#00e676]' : 'text-[#ffb800]'}
+                  />
+                  <MetricTile
+                    label="Sharpe"
+                    value={acc.sharpe.toFixed(2)}
+                    color={acc.sharpe >= 1.5 ? 'text-[#00e676]' : acc.sharpe >= 0.5 ? 'text-[#ffb800]' : 'text-[#ff1744]'}
+                  />
+                  <MetricTile
+                    label="F1 Score"
+                    value={acc.f1.toFixed(3)}
+                    color={acc.f1 >= 0.6 ? 'text-[#00e676]' : 'text-[#ffb800]'}
+                  />
+                  <MetricTile
+                    label="Precision"
+                    value={`${(acc.precision * 100).toFixed(1)}%`}
+                  />
+                  <MetricTile
+                    label="Recall"
+                    value={`${(acc.recall * 100).toFixed(1)}%`}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1 px-2.5 py-2 bg-[#0d1421] rounded border border-[#1e2d3d] text-[10px]">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Model ID</span>
+                    <span className="text-slate-300 font-mono truncate max-w-[160px]">{acc.model_id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Total signals</span>
+                    <span className="text-slate-300 tabular-nums">{acc.total_signals.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Evaluated</span>
+                    <span className="text-slate-400">
+                      {acc.evaluated_at ? new Date(acc.evaluated_at).toLocaleDateString() : '—'}
+                    </span>
+                  </div>
+                  {health && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Predict count</span>
+                      <span className="text-slate-300 tabular-nums">{health.predict_count.toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+
+                {acc.note && (
+                  <div className="px-2.5 py-2 rounded bg-[#78350f]/20 border border-[#92400e]/30 text-[10px] text-[#fbbf24]">
+                    {acc.note}
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* ── Features tab ────────────────────────────────────────────────── */}
+        {tab === 'features' && (
+          <>
+            {featuresQ.isLoading && <PanelSkeleton rows={8} />}
+            {featuresQ.isError && (
+              <div className="text-[11px] text-[#ff1744] px-1">
+                {(featuresQ.error as { response?: { status?: number } })?.response?.status === 403
+                  ? 'Feature importances require admin role'
+                  : 'Failed to load feature importances'}
+              </div>
+            )}
+            {featuresQ.data && (
+              <>
+                {featuresQ.data.note && (
+                  <div className="px-2.5 py-1.5 rounded bg-[#1e2d3d] text-[10px] text-slate-500">
+                    {featuresQ.data.note}
+                  </div>
+                )}
+                {featuresQ.data.features.length === 0 ? (
+                  <div className="text-[11px] text-slate-500 text-center py-6">
+                    No feature importances available — run training first
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5 max-h-72 overflow-y-auto pr-1">
+                    {(() => {
+                      const sorted = [...featuresQ.data!.features]
+                        .sort((a, b) => b.importance - a.importance)
+                        .slice(0, 20);
+                      const max = sorted[0]?.importance ?? 1;
+                      return sorted.map((f) => (
+                        <FeatureBar key={f.name} name={f.name} importance={f.importance} max={max} />
+                      ));
+                    })()}
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* ── Models tab ──────────────────────────────────────────────────── */}
+        {tab === 'models' && (
+          <>
+            {modelsQ.isLoading && <PanelSkeleton rows={3} />}
+            {modelsQ.isError && (
+              <div className="text-[11px] text-[#ff1744] px-1">Failed to load models</div>
+            )}
+            {modelsQ.data && modelsQ.data.length === 0 && (
+              <div className="text-[11px] text-slate-500 text-center py-6">
+                No trained models found
+              </div>
+            )}
+            {modelsQ.data && modelsQ.data.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                {modelsQ.data.map((m) => (
+                  <div
+                    key={m.model_id}
+                    className="flex items-center gap-3 px-3 py-2 rounded bg-[#0d1421] border border-[#1e2d3d]"
+                  >
+                    <span className={cn(
+                      'w-2 h-2 rounded-full shrink-0',
+                      m.available ? 'bg-[#00e676]' : 'bg-[#334155]',
+                    )} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] font-semibold text-slate-200 truncate">{m.name}</div>
+                      <div className="text-[10px] text-slate-500 font-mono truncate">{m.model_id}</div>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      {m.size_kb && (
+                        <span className="text-[10px] text-slate-500">{m.size_kb.toFixed(0)} KB</span>
+                      )}
+                      {m.trained_at && (
+                        <span className="text-[10px] text-slate-600">
+                          {new Date(m.trained_at).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+// ── Exports ───────────────────────────────────────────────────────────────────
+
+export { MLModelPanelInner as MLModelPanel };
+export const MLModelPanelGuarded = withPanelGuard(MLModelPanelInner, 'ML Model', 6);
+export default MLModelPanelInner;
