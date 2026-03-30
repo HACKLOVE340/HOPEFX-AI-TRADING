@@ -19,7 +19,7 @@
  *   useNuclearWS() → /ws/nuclear → useNuclearStore → all components
  */
 
-import React, { memo, useEffect, useCallback } from 'react';
+import React, { memo, useEffect, useCallback, useState } from 'react';
 import { useNuclearWS } from '../hooks/useNuclearWS';
 import { useNuclearStore } from '../store/nuclear-store';
 import NuclearGeopoliticalBanner from './NuclearGeopoliticalBanner';
@@ -27,7 +27,20 @@ import NuclearCandleChart        from './NuclearCandleChart';
 import NuclearExplainPanel       from './NuclearExplainPanel';
 import NuclearEquityPanel        from './NuclearEquityPanel';
 import NuclearAlertOverlay       from './NuclearAlertOverlay';
+import NuclearMobileView         from './NuclearMobileView';
 import { useStore }              from '../../../store';
+
+// ─── Responsive breakpoint hook ───────────────────────────────────────────────
+
+function useIsMobile(breakpoint = 768): boolean {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', handler, { passive: true });
+    return () => window.removeEventListener('resize', handler);
+  }, [breakpoint]);
+  return isMobile;
+}
 
 // ─── CSS injection ────────────────────────────────────────────────────────────
 
@@ -89,10 +102,14 @@ const ProtectedViewBanner = memo(() => (
 // ─── Main dashboard ───────────────────────────────────────────────────────────
 
 const NuclearDashboard = memo(() => {
-  const isAuth = useStore((s) => s.token !== null);
+  const isAuth  = useStore((s) => s.token !== null);
+  const isMobile = useIsMobile();
 
   // Connect to /ws/nuclear
   const { status, lastAlert } = useNuclearWS(isAuth);
+
+  // Render mobile layout on small screens
+  if (isMobile) return <NuclearMobileView />;
 
   const protectedView      = useNuclearStore((s) => s.protectedView);
   const showExplainPanel   = useNuclearStore((s) => s.showExplainPanel);
