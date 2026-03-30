@@ -8,12 +8,15 @@ core/background_tasks.py
 ========================
 Long-running asyncio background tasks for the trading server.
 
-Extracted from app.py to keep the application entry point under 300 lines.
-
 Tasks
 -----
-- oanda_price_poller   — polls OANDA pricing endpoint, writes to broker price table
-- price_stream_loop    — broadcasts paper-broker prices to WebSocket clients
+nuclear_price_bridge  — subscribes to NuclearStreamer (Finnhub / Twelve Data /
+                        Polygon) and writes validated ticks into the active
+                        broker's price table via update_market_price().
+                        OANDA is never used as a price source.
+
+price_stream_loop     — reads the broker's in-memory price table and broadcasts
+                        tick updates to all connected WebSocket clients.
 """
 
 from __future__ import annotations
@@ -26,100 +29,87 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-async def oanda_price_poller(state: Any) -> None:
+async def nuclear_price_bridge(state: Any) -> None:
     """
-    Background task: polls OANDA's pricing endpoint and writes real bid/ask
-    into the active broker's price table via update_market_price().
+    Subscribe to NuclearStreamer and write ticks into the broker price table.
 
-    Only runs when BROKER_OANDA_TOKEN and BROKER_OANDA_ACCOUNT are set.
-    Falls back silently if OANDA is unreachable so paper trading still works.
+    Requires at least one of:
+        FINNHUB_API_KEY, TWELVE_API_KEY, POLYGON_API_KEY
+
+    When a validated tick arrives it calls ``broker.update_market_price(sym, price)``
+    so the paper broker and any downstream consumers see live prices without
+    polling OANDA or any other broker endpoint.
     """
-    _SYMBOLS = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",")
-    _SYMBOLS = [s.strip().upper() for s in _SYMBOLS]
-    _INTERVAL = float(os.getenv("OANDA_POLL_INTERVAL", "1.0"))
-
-    oanda_token = os.getenv("BROKER_OANDA_TOKEN", "")
-    oanda_account = os.getenv("BROKER_OANDA_ACCOUNT", "")
-    oanda_env = os.getenv("BROKER_OANDA_ENVIRONMENT", "practice")
-
-    if not oanda_token or not oanda_account:
-        logger.info("OANDA price poller disabled — BROKER_OANDA_TOKEN/ACCOUNT not set")
+    has_key = any([
+        os.getenv("FINNHUB_API_KEY"),
+        os.getenv("TWELVE_API_KEY"),
+        os.getenv("POLYGON_API_KEY"),
+    ])
+    if not has_key:
+        logger.info(
+            "nuclear_price_bridge disabled — set FINNHUB_API_KEY, TWELVE_API_KEY, "
+            "or POLYGON_API_KEY to enable live WebSocket price feed."
+        )
         return
 
     try:
-        from brokers.oanda import OANDAConnector
-
-        oanda = OANDAConnector(
-            api_key=oanda_token,
-            account_id=oanda_account,
-            practice=(oanda_env != "live"),
-        )
-        if not oanda.connect():
-            logger.warning("OANDA price poller: connection failed — using static prices")
-            return
-        logger.info(
-            "OANDA price poller connected — symbols=%s interval=%.1fs",
-            _SYMBOLS,
-            _INTERVAL,
-        )
-    except Exception as exc:
-        logger.warning("OANDA price poller init failed: %s", exc)
+        from data_feed import NuclearStreamer
+    except ImportError as exc:
+        logger.error("nuclear_price_bridge: cannot import NuclearStreamer — %s", exc)
         return
 
-    from core.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
+    symbol = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",")[0].strip().upper()
 
-    _cb = CircuitBreaker.get("oanda_poller", failure_threshold=5, reset_timeout=60.0)
-    _backoff = 1.0
-    _MAX_BACKOFF = 300.0
+    class _BrokerPriceBridge:
+        """Subscriber that writes each validated tick into the broker price table."""
 
-    while True:
-        try:
-            async with _cb:
-                prices = oanda.get_live_prices(_SYMBOLS)
+        async def on_new_price(self, price: float) -> None:
             broker = getattr(state, "broker", None)
-            if broker is not None and prices:
-                for sym, tick in prices.items():
-                    mid = tick.get("mid", 0.0)
-                    if mid > 0 and hasattr(broker, "update_market_price"):
-                        broker.update_market_price(sym, mid)
-            _backoff = 1.0
-        except asyncio.CancelledError:
-            logger.info("OANDA price poller stopped")
-            oanda.disconnect()
-            return
-        except CircuitBreakerOpen as cbo:
-            logger.warning(
-                "OANDA price poller: circuit OPEN — sleeping %.0fs", cbo.retry_after
-            )
-            await asyncio.sleep(min(cbo.retry_after, _MAX_BACKOFF))
-            continue
-        except Exception as exc:
-            logger.warning(
-                "OANDA price poller error (backoff=%.0fs): %s", _backoff, exc
-            )
-            await asyncio.sleep(_backoff)
-            _backoff = min(_backoff * 2, _MAX_BACKOFF)
-            continue
+            if broker is not None and hasattr(broker, "update_market_price"):
+                try:
+                    broker.update_market_price(symbol, price)
+                except Exception as _exc:
+                    logger.debug("update_market_price error: %s", _exc)
 
-        await asyncio.sleep(_INTERVAL)
+    streamer = NuclearStreamer(symbol=symbol)
+    streamer.subscribe(_BrokerPriceBridge())
+
+    logger.info(
+        "nuclear_price_bridge started — symbol=%s finnhub=%s twelvedata=%s polygon=%s",
+        symbol,
+        bool(os.getenv("FINNHUB_API_KEY")),
+        bool(os.getenv("TWELVE_API_KEY")),
+        bool(os.getenv("POLYGON_API_KEY")),
+    )
+
+    try:
+        await streamer.run()
+    except asyncio.CancelledError:
+        await streamer.stop()
+        logger.info("nuclear_price_bridge stopped")
+    except Exception as exc:
+        logger.error("nuclear_price_bridge fatal error: %s", exc)
+        await streamer.stop()
 
 
 async def price_stream_loop(ws_manager: Any) -> None:
     """
-    Background task: polls the paper broker for current prices and broadcasts
-    tick updates to all connected WebSocket clients.
+    Broadcast live prices to all connected WebSocket clients.
 
-    Uses the broker's in-memory price table so no external feed is required
-    for paper trading.  When a real broker is wired in, replace the polling
-    loop with the broker's native streaming callback.
+    Reads the broker's in-memory price table (populated by nuclear_price_bridge)
+    and pushes updates to ws_manager at PRICE_STREAM_INTERVAL seconds.
     """
     from app import app_state
 
-    _STREAM_SYMBOLS = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",")
+    _STREAM_SYMBOLS = [
+        s.strip().upper()
+        for s in os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",")
+        if s.strip()
+    ]
     _POLL_INTERVAL = float(os.getenv("PRICE_STREAM_INTERVAL", "1.0"))
 
     logger.info(
-        "Price stream loop started — symbols=%s interval=%.1fs",
+        "price_stream_loop started — symbols=%s interval=%.1fs",
         _STREAM_SYMBOLS,
         _POLL_INTERVAL,
     )
@@ -129,7 +119,6 @@ async def price_stream_loop(ws_manager: Any) -> None:
             broker = getattr(app_state, "broker", None)
             if broker is not None:
                 for sym in _STREAM_SYMBOLS:
-                    sym = sym.strip().upper()
                     price = broker.get_market_price(sym)
                     if price:
                         spread = price * 0.0001
@@ -140,9 +129,9 @@ async def price_stream_loop(ws_manager: Any) -> None:
                             ask=round(price + spread / 2, 5),
                         )
         except asyncio.CancelledError:
-            logger.info("Price stream loop stopped")
+            logger.info("price_stream_loop stopped")
             return
         except Exception as exc:
-            logger.warning("Price stream error: %s", exc)
+            logger.warning("price_stream_loop error: %s", exc)
 
         await asyncio.sleep(_POLL_INTERVAL)
