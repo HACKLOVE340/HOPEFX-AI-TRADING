@@ -6,13 +6,34 @@
 """
 data_feed — real-time price ingestion layer.
 
+Architecture
+------------
+Market data and order execution are strictly separated:
+
+  NuclearStreamer       — WebSocket streaming layer (Finnhub / Twelve Data /
+                          Polygon).  This is the ONLY source of live price
+                          ticks for the entire system.  No broker connector
+                          is ever used for streaming.
+
+  ProductionDataEngine  — REST polling engine (GoldAPI / MetalPriceAPI / MT5
+                          demo) used as a fallback when WebSocket sources are
+                          unavailable or during backtesting warm-up.
+
+  MT5Backup             — Last-resort MT5 demo price source used exclusively
+                          by ProductionDataEngine.
+
+Broker connectors (brokers/) handle ORDER EXECUTION ONLY and must never be
+used to obtain price data.
+
 Public API
 ----------
-ProductionDataEngine  : primary async engine (REST + MT5 fallback)
-MT5Backup             : MT5 price source used as last-resort fallback
+NuclearStreamer       : primary WebSocket streaming engine
+ProductionDataEngine  : REST polling fallback engine
+MT5Backup             : MT5 price source (ProductionDataEngine internal use)
 """
 
 from .engine import ProductionDataEngine
 from .mt5_backup import MT5Backup
+from .nuclear_streamer import NuclearStreamer
 
-__all__ = ["ProductionDataEngine", "MT5Backup"]
+__all__ = ["NuclearStreamer", "ProductionDataEngine", "MT5Backup"]
