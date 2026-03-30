@@ -107,7 +107,8 @@ class DataLineageStore:
     blocking the hot tick path. Reads are synchronous.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, db_path: Optional[Path] = None) -> None:
+        self._db_path: Path = Path(db_path) if db_path else _DB_PATH
         self._queue: queue.Queue = queue.Queue(maxsize=_QUEUE_MAXSIZE)
         self._conn: Optional[sqlite3.Connection] = None
         self._worker: Optional[threading.Thread] = None
@@ -121,9 +122,9 @@ class DataLineageStore:
 
     def start(self) -> None:
         """Initialise DB and start background writer + pruner threads."""
-        _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(
-            str(_DB_PATH),
+            str(self._db_path),
             check_same_thread=False,
             timeout=30.0,
         )
@@ -150,7 +151,7 @@ class DataLineageStore:
         )
         self._pruner.start()
 
-        logger.info("DataLineageStore started — db=%s WAL=on", _DB_PATH)
+        logger.info("DataLineageStore started — db=%s WAL=on", self._db_path)
 
     def stop(self) -> None:
         self._running = False
@@ -283,7 +284,7 @@ class DataLineageStore:
 
         if record_type:
             clauses.append("record_type = ?")
-            params.append(record_type)
+            params.append(record_type.upper())
         if symbol:
             clauses.append("symbol = ?")
             params.append(symbol)
@@ -414,7 +415,7 @@ class DataLineageStore:
 
         if record_type:
             clauses.append("record_type = ?")
-            params.append(record_type)
+            params.append(record_type.upper())
         if symbol:
             clauses.append("symbol = ?")
             params.append(symbol)
@@ -571,7 +572,7 @@ class DataLineageStore:
             "drop_count":    self._drop_count,
             "prune_count":   self._prune_count,
             "queue_size":    self._queue.qsize(),
-            "db_path":       str(_DB_PATH),
+            "db_path":       str(self._db_path),
             "total_records": self.count(),
             "by_type": {
                 t: self.count(t)
@@ -607,6 +608,17 @@ class DataLineageStore:
         except queue.Full:
             self._drop_count += 1
             logger.debug("DataLineageStore queue full — dropping record")
+
+    def flush(self) -> int:
+        """
+        Synchronously flush all queued records to SQLite.
+
+        Returns the number of records written.
+        Use in tests and graceful shutdown to ensure no records are lost.
+        """
+        before = self._write_count
+        self._flush_queue()
+        return self._write_count - before
 
     def _flush_loop(self) -> None:
         while self._running:
