@@ -6,7 +6,11 @@
 """
 Mobile Applications Module
 
-Provides mobile-optimized APIs and features.
+Provides mobile-optimised APIs and features.
+
+All classes accept an optional app_state parameter for wiring to real
+data sources (broker, db, orchestrator). Without wiring they operate in
+a safe degraded mode — no mocks, no synthetic data.
 """
 
 from .api import MobileAPI
@@ -15,26 +19,47 @@ from .push_notifications import PushNotificationManager
 from .trading import MobileTradingEngine
 from .analytics import MobileAnalytics
 
+# Unwired singletons — callers should instantiate with app_state for production
 try:
     mobile_api = MobileAPI()
 except Exception:
     mobile_api = None
+
 try:
     mobile_auth = MobileAuth()
 except Exception:
     mobile_auth = None
+
 try:
     push_notification_manager = PushNotificationManager()
 except Exception:
     push_notification_manager = None
+
 try:
     mobile_trading_engine = MobileTradingEngine()
 except Exception:
     mobile_trading_engine = None
+
 try:
     mobile_analytics = MobileAnalytics()
 except Exception:
     mobile_analytics = None
+
+
+def create_wired_mobile(app_state: object) -> dict:
+    """
+    Create fully-wired mobile service instances from a live app_state.
+
+    Usage:
+        services = create_wired_mobile(app_state)
+        engine   = services["trading_engine"]
+        analytics = services["analytics"]
+    """
+    return {
+        "trading_engine": MobileTradingEngine(app_state=app_state),
+        "analytics":      MobileAnalytics(app_state=app_state, enable_background_flush=True),
+    }
+
 
 __all__ = [
     "MobileAPI",
@@ -47,9 +72,9 @@ __all__ = [
     "push_notification_manager",
     "mobile_trading_engine",
     "mobile_analytics",
+    "create_wired_mobile",
 ]
 
-# Module metadata
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __author__ = "HOPEFX Development Team"
-__description__ = "Mobile-optimized APIs with push notifications and trading features"
+__description__ = "Mobile-optimised APIs with real broker/DB wiring"
