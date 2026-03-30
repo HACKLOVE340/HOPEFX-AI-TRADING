@@ -38,6 +38,9 @@ from monetization.enterprise import (
     WhiteLabelConfig,
     WhiteLabelStatus,
 )
+from unittest.mock import MagicMock, patch
+from datetime import datetime, timezone
+
 from monetization.stripe_integration import StripeIntegration, StripeWebhookEvent
 
 
@@ -529,106 +532,163 @@ class TestEnterpriseFeatures:
         assert "enterprise_customers" in stats
 
 
+def _make_stripe_mock() -> MagicMock:
+    """Build a minimal Stripe SDK mock covering all methods under test."""
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    mock = MagicMock()
+
+    # Customer
+    mock.Customer.create.return_value = MagicMock(
+        id="cus_test123456789012",
+        email="customer@test.com",
+        name="Test Customer",
+        metadata={"user_id": "user123"},
+    )
+
+    # PaymentIntent
+    pi_mock = MagicMock(
+        id="pi_test123456789012",
+        customer="cus_test123456789012",
+        amount=180000,
+        currency="usd",
+        status="requires_payment_method",
+        client_secret="pi_test123456789012_secret_abc",
+        metadata={},
+    )
+    mock.PaymentIntent.create.return_value = pi_mock
+
+    # Checkout session
+    mock.checkout.Session.create.return_value = MagicMock(
+        id="cs_test123456789012",
+        url="https://checkout.stripe.com/pay/cs_test123456789012",
+    )
+
+    # Subscription
+    mock.Subscription.create.return_value = MagicMock(
+        id="sub_test123456789012",
+        customer="cus_test123456789012",
+        status="active",
+        current_period_start=now_ts,
+        current_period_end=now_ts + 2592000,
+        cancel_at_period_end=False,
+        metadata={"tier": "enterprise", "billing_cycle": "annual"},
+    )
+    mock.Subscription.modify.return_value = MagicMock()
+    mock.Subscription.delete.return_value = MagicMock()
+
+    # Refund
+    mock.Refund.create.return_value = MagicMock(
+        id="re_test123456789012",
+        status="succeeded",
+        amount=50000,
+    )
+
+    return mock
+
+
 class TestStripeIntegration:
-    """Test Stripe integration module"""
+    """Stripe integration tests — patch the SDK module, no network calls."""
+
+    def _run_with_mock(self, fn):
+        """Execute fn(si, mock_stripe) with the Stripe SDK fully mocked.
+
+        Uses sys.modules to reach the actual module object (not the instance
+        exported by monetization/__init__.py) and patches _stripe +
+        _STRIPE_AVAILABLE so _require_stripe() passes without network calls.
+        """
+        import sys
+        # Force the real module object — monetization.__init__ re-exports the
+        # stripe_integration *instance* under the same name, so we must go
+        # through sys.modules to get the module itself.
+        import importlib
+        _mod = sys.modules.get("monetization.stripe_integration") or \
+               importlib.import_module("monetization.stripe_integration")
+
+        mock_stripe = _make_stripe_mock()
+        original_stripe = _mod._stripe
+        original_available = _mod._STRIPE_AVAILABLE
+        try:
+            _mod._stripe = mock_stripe
+            _mod._STRIPE_AVAILABLE = True
+            with patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_unit"}):
+                si = StripeIntegration()
+            fn(si, mock_stripe)
+        finally:
+            _mod._stripe = original_stripe
+            _mod._STRIPE_AVAILABLE = original_available
 
     def test_create_customer(self):
-        """Test creating Stripe customer"""
-        stripe = StripeIntegration(test_mode=True)
-
-        customer = stripe.create_customer(
-            user_id="user123", email="customer@test.com", name="Test Customer"
-        )
-
-        assert customer is not None
-        assert customer.email == "customer@test.com"
-        assert customer.customer_id.startswith("cus_")
+        def _test(si, mock_stripe):
+            customer = si.create_customer(
+                user_id="user123", email="customer@test.com", name="Test Customer"
+            )
+            assert customer is not None
+            assert customer.email == "customer@test.com"
+            assert customer.customer_id.startswith("cus_")
+            mock_stripe.Customer.create.assert_called_once()
+        self._run_with_mock(_test)
 
     def test_create_payment_intent(self):
-        """Test creating payment intent"""
-        stripe = StripeIntegration(test_mode=True)
-
-        customer = stripe.create_customer("user456", "payer@test.com")
-
-        intent = stripe.create_payment_intent(
-            customer_id=customer.customer_id,
-            amount=Decimal("1800.00"),
-            tier=SubscriptionTier.STARTER,
-        )
-
-        assert intent is not None
-        assert intent.amount == 180000  # cents
-        assert intent.client_secret is not None
+        def _test(si, mock_stripe):
+            intent = si.create_payment_intent(
+                customer_id="cus_test123456789012",
+                amount=Decimal("1800.00"),
+                tier=SubscriptionTier.STARTER,
+            )
+            assert intent is not None
+            assert intent.amount == 180000  # cents
+            assert intent.client_secret is not None
+            mock_stripe.PaymentIntent.create.assert_called_once()
+        self._run_with_mock(_test)
 
     def test_create_checkout_session(self):
-        """Test creating checkout session"""
-        stripe = StripeIntegration(test_mode=True)
-
-        customer = stripe.create_customer("user789", "checkout@test.com")
-
-        session = stripe.create_checkout_session(
-            customer_id=customer.customer_id,
-            tier=SubscriptionTier.PROFESSIONAL,
-            billing_cycle=BillingCycle.MONTHLY,
-        )
-
-        assert session is not None
-        assert "url" in session
-        assert session["tier"] == "professional"
+        def _test(si, mock_stripe):
+            session = si.create_checkout_session(
+                customer_id="cus_test123456789012",
+                tier=SubscriptionTier.PROFESSIONAL,
+                billing_cycle=BillingCycle.MONTHLY,
+            )
+            assert session is not None
+            assert "url" in session
+            assert session["tier"] == "professional"
+            mock_stripe.checkout.Session.create.assert_called_once()
+        self._run_with_mock(_test)
 
     def test_create_subscription(self):
-        """Test creating subscription"""
-        stripe = StripeIntegration(test_mode=True)
-
-        customer = stripe.create_customer("subuser", "sub@test.com")
-
-        subscription = stripe.create_subscription(
-            customer_id=customer.customer_id,
-            tier=SubscriptionTier.ENTERPRISE,
-            billing_cycle=BillingCycle.ANNUAL,
-        )
-
-        assert subscription is not None
-        assert subscription.tier == SubscriptionTier.ENTERPRISE
-        assert subscription.status == "active"
+        def _test(si, mock_stripe):
+            subscription = si.create_subscription(
+                customer_id="cus_test123456789012",
+                tier=SubscriptionTier.ENTERPRISE,
+                billing_cycle=BillingCycle.ANNUAL,
+            )
+            assert subscription is not None
+            assert subscription.tier == SubscriptionTier.ENTERPRISE
+            assert subscription.status == "active"
+            mock_stripe.Subscription.create.assert_called_once()
+        self._run_with_mock(_test)
 
     def test_cancel_subscription(self):
-        """Test canceling subscription"""
-        stripe = StripeIntegration(test_mode=True)
-
-        customer = stripe.create_customer("canceluser", "cancel@test.com")
-        subscription = stripe.create_subscription(
-            customer_id=customer.customer_id, tier=SubscriptionTier.STARTER
-        )
-
-        result = stripe.cancel_subscription(
-            subscription.subscription_id, at_period_end=True
-        )
-
-        assert result is True
-        assert subscription.cancel_at_period_end is True
+        def _test(si, mock_stripe):
+            result = si.cancel_subscription("sub_test123456789012", at_period_end=True)
+            assert result is True
+            mock_stripe.Subscription.modify.assert_called_once_with(
+                "sub_test123456789012", cancel_at_period_end=True
+            )
+        self._run_with_mock(_test)
 
     def test_handle_webhook(self):
-        """Test webhook handling"""
-        stripe = StripeIntegration(test_mode=True)
-
-        result = stripe.handle_webhook(
-            event_type=StripeWebhookEvent.PAYMENT_INTENT_SUCCEEDED.value,
-            event_data={"id": "pi_test123"},
-        )
-
-        assert result["status"] == "success"
+        def _test(si, mock_stripe):
+            result = si.handle_webhook(
+                event_type=StripeWebhookEvent.PAYMENT_INTENT_SUCCEEDED.value,
+                event_data={"id": "pi_test123"},
+            )
+            assert result["status"] == "success"
+        self._run_with_mock(_test)
 
     def test_refund_payment(self):
-        """Test refunding payment"""
-        stripe = StripeIntegration(test_mode=True)
-
-        customer = stripe.create_customer("refunduser", "refund@test.com")
-        intent = stripe.create_payment_intent(
-            customer_id=customer.customer_id, amount=Decimal("500.00")
-        )
-
-        refund = stripe.refund_payment(intent.intent_id)
-
-        assert refund is not None
-        assert refund["status"] == "succeeded"
+        def _test(si, mock_stripe):
+            refund = si.refund_payment("pi_test123456789012")
+            assert refund is not None
+            assert refund["status"] == "succeeded"
+            mock_stripe.Refund.create.assert_called_once()
+        self._run_with_mock(_test)
