@@ -1,0 +1,73 @@
+# HOPEFX AI Trading — NuclearStreamer Configuration
+#
+# NuclearStreamer is the SOLE source of live price ticks for the entire system.
+# Broker connectors (brokers/) are for ORDER EXECUTION ONLY.
+#
+# Provider priority (all run concurrently; first valid tick wins per cycle):
+#   1. Polygon   — fastest, sub-50 ms latency (requires paid subscription)
+#   2. Finnhub   — free tier available; FOREX:OANDA:XAU_USD
+#   3. Twelve Data — free tier available; XAU/USD
+#
+# Set API keys via environment variables.  Never commit real keys.
+# Placeholder values here are used only when the env var is absent.
+
+nuclear_streamer:
+
+  # Trading symbol streamed by all sources.
+  symbol: "XAUUSD"
+
+  # Percentage price change that triggers an anomaly alert and discards the tick.
+  anomaly_jump_pct: 5.0
+
+  # Per-source circuit breaker: opens after this many consecutive failures.
+  circuit_breaker_threshold: 5
+
+  # Seconds to wait before retrying a tripped source.
+  circuit_breaker_cooldown: 60
+
+  # Prometheus metrics HTTP server port (0 = disabled).
+  prometheus_port: 8000
+
+  # Redis queue key where validated ticks are published.
+  redis_queue: "price_queue"
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    host: "${REDIS_HOST:localhost}"
+    port: "${REDIS_PORT:6379}"
+    db:   "${REDIS_DB:0}"
+
+  # ── Finnhub ──────────────────────────────────────────────────────────────────
+  # Free tier: 60 API calls/minute.  WebSocket is included in all plans.
+  # Symbol format: OANDA:XAU_USD  (spot gold via OANDA feed on Finnhub)
+  # Docs: https://finnhub.io/docs/api/websocket-trades
+  finnhub:
+    api_key: "${FINNHUB_API_KEY:}"
+    symbol:  "OANDA:XAU_USD"
+    url:     "wss://ws.finnhub.io"
+    # Seconds to wait for the initial "connected" message.
+    connect_timeout: 10
+    # Seconds without a message before sending a ping.
+    recv_timeout: 30
+
+  # ── Twelve Data ──────────────────────────────────────────────────────────────
+  # Free tier: 800 API credits/day.  WebSocket included.
+  # Symbol format: XAU/USD
+  # Docs: https://twelvedata.com/docs#websocket
+  twelvedata:
+    api_key: "${TWELVE_API_KEY:}"
+    symbol:  "XAU/USD"
+    url:     "wss://ws.twelvedata.com/v1/quotes/price"
+    connect_timeout: 10
+    recv_timeout: 30
+
+  # ── Polygon ──────────────────────────────────────────────────────────────────
+  # Requires Currencies subscription (Starter plan or above).
+  # Symbol format: C.XAU/USD  (forex channel, gold/USD pair)
+  # Docs: https://polygon.io/docs/forex/ws_forex_ca_-ticker
+  polygon:
+    api_key: "${POLYGON_API_KEY:}"
+    symbol:  "C.XAU/USD"
+    url:     "wss://socket.polygon.io/forex"
+    connect_timeout: 10
+    recv_timeout: 30
