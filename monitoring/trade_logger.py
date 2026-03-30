@@ -66,7 +66,12 @@ _EQUITY_SNAPSHOT_INTERVAL = float(os.getenv("EQUITY_SNAPSHOT_INTERVAL_S", "60"))
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 
 def _init_prometheus():
-    """Initialise Prometheus gauges/counters. Returns metric objects or stubs."""
+    """Initialise Prometheus gauges/counters. Returns metric objects or empty dict.
+
+    Returns an empty dict when prometheus_client is unavailable or registration
+    fails. Callers must guard metric access with ``if _PROM.get('equity')``.
+    A warning is always logged so missing metrics are visible in logs.
+    """
     try:
         from prometheus_client import Counter, Gauge
 
@@ -86,8 +91,18 @@ def _init_prometheus():
             "positions":   positions_gauge,
             "drawdown":    drawdown_gauge,
         }
+    except ImportError:
+        logger.warning(
+            "prometheus_client is not installed — trade metrics will not be exported. "
+            "Install with: pip install prometheus-client"
+        )
+        return {}
     except Exception as exc:
-        logger.warning("Prometheus metrics init failed (non-fatal): %s", exc)
+        logger.warning(
+            "Prometheus trade metrics registration failed (%s) — metrics will not be "
+            "exported. This may indicate a duplicate metric name or registry conflict.",
+            exc,
+        )
         return {}
 
 
