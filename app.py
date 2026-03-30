@@ -218,6 +218,16 @@ except Exception as _kyc_router_err:
         "KYC router failed to register: %s", _kyc_router_err
     )
 
+# TCA endpoints (slippage stats, fill quality, alerts)
+try:
+    from api.tca import router as _tca_router
+    app.include_router(_tca_router, prefix="/api")
+except Exception as _tca_router_err:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "TCA router failed to register: %s", _tca_router_err
+    )
+
 # Prometheus /metrics endpoint + background sync to MetricsRegistry
 try:
     from prometheus_monitoring import setup_prometheus_monitoring

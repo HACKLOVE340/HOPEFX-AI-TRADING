@@ -442,7 +442,25 @@ class ExecutionEngine:
             except Exception as _scb_exc:
                 logger.debug("SharpeCircuitBreaker check failed: %s", _scb_exc)
 
-        # ── 5. Submit to broker ───────────────────────────────────────────────
+        # ── 5. TCA: record signal price before broker submission ─────────────
+        # Captures the expected price at signal time so post-fill slippage
+        # can be computed as fill_price - signal_price.
+        _signal_price = request.metadata.get("signal_price") or request.price or 0.0
+        if _signal_price > 0:
+            try:
+                from execution.tca_recorder import get_tca_recorder
+                get_tca_recorder().record_signal(
+                    request_id=request.request_id,
+                    symbol=request.symbol,
+                    side=request.side,
+                    signal_price=float(_signal_price),
+                    quantity=request.quantity,
+                    model_version=request.metadata.get("model_version", "unknown"),
+                )
+            except Exception as _tca_exc:
+                logger.debug("TCA record_signal failed: %s", _tca_exc)
+
+        # ── 6. Submit to broker ───────────────────────────────────────────────
         try:
             report = await self._submit_to_broker(request, t0)
         except Exception as exc:
@@ -683,7 +701,27 @@ class ExecutionEngine:
         request: ExecutionRequest,
         report: ExecutionReport,
     ) -> None:
-        """Record transaction cost analysis."""
+        """
+        Record transaction cost analysis.
+
+        Uses TCARecorder to compute slippage as fill_price - signal_price.
+        Also calls the legacy tca_recorder if one was injected at construction.
+        """
+        # ── New TCARecorder: signal_price vs fill_price ───────────────────────
+        try:
+            from execution.tca_recorder import get_tca_recorder
+            broker = report.metadata.get("broker", "unknown") if report.metadata else "unknown"
+            get_tca_recorder().record_fill(
+                request_id=request.request_id,
+                fill_price=report.average_price,
+                filled_quantity=report.filled_quantity,
+                broker=broker,
+                latency_ms=report.latency_ms,
+            )
+        except Exception as exc:
+            logger.debug("TCARecorder record_fill failed: %s", exc)
+
+        # ── Legacy tca_recorder (backward compat) ─────────────────────────────
         if self._tca is None:
             return
         try:
@@ -697,7 +735,7 @@ class ExecutionEngine:
                     strategy_id=request.strategy_id,
                 )
         except Exception as exc:
-            logger.error("ExecutionEngine: TCA record failed: %s", exc)
+            logger.error("ExecutionEngine: legacy TCA record failed: %s", exc)
 
     async def _notify_callbacks(self, report: ExecutionReport) -> None:
         """Invoke all registered fill callbacks."""
