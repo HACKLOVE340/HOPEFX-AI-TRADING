@@ -35,6 +35,8 @@ services:
       ARGOCD_ROLLBACK_WEBHOOK: ${ARGOCD_ROLLBACK_WEBHOOK:-}
       BRAIN_SCAN_INTERVAL: ${BRAIN_SCAN_INTERVAL:-30}
       BRAIN_HEAL_INTERVAL: ${BRAIN_HEAL_INTERVAL:-1800}
+      # Disabled by default — requires PyTorch ~1 GB. Set to "true" in .env to enable.
+      BRAIN_SEMANTIC_ENCODER: ${BRAIN_SEMANTIC_ENCODER:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,6 +91,7 @@ services:
       ARGOCD_ROLLBACK_WEBHOOK: ${ARGOCD_ROLLBACK_WEBHOOK:-}
       BRAIN_SCAN_INTERVAL: ${BRAIN_SCAN_INTERVAL:-30}
       BRAIN_HEAL_INTERVAL: ${BRAIN_HEAL_INTERVAL:-1800}
+      BRAIN_SEMANTIC_ENCODER: ${BRAIN_SEMANTIC_ENCODER:-false}
     depends_on:
       postgres:
         condition: service_healthy

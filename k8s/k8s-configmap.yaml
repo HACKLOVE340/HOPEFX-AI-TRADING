@@ -61,3 +61,6 @@ data:
   # Brain loop intervals (seconds)
   BRAIN_SCAN_INTERVAL: "30"
   BRAIN_HEAL_INTERVAL: "1800"
+  # Semantic encoder — disabled by default (requires PyTorch ~1 GB).
+  # Set to "true" only on nodes with >=4 GB RAM and PyTorch pre-installed.
+  BRAIN_SEMANTIC_ENCODER: "false"
