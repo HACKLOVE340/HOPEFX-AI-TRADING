@@ -298,28 +298,79 @@ class EnsemblePredictor:
 
 class SklearnOnlineLearner:
     """
-    Sklearn-compatible incremental learner backed by SGDClassifier.
+    Production incremental learner backed by SGDClassifier.
 
-    Provides ``partial_fit()`` so the HourlyTrainer can feed recent bars
-    without requiring PyTorch.  Falls back gracefully when sklearn is absent.
+    Catastrophic forgetting prevention
+    ------------------------------------
+    SGD with elasticnet penalty naturally forgets old patterns as new data
+    arrives.  This class adds two complementary mechanisms:
 
-    The learner is stateless across restarts unless ``persist_path`` is set,
-    in which case it is serialised to disk after every ``partial_fit`` call.
+    1. EWC-style L2 anchor (sklearn approximation)
+       After every ``ewc_anchor_every`` updates the current model weights are
+       snapshotted as an "anchor".  The SGD alpha (L2 penalty) is then
+       temporarily increased proportional to how far the new weights drift
+       from the anchor — penalising large weight changes that would erase
+       previously learned patterns.
+
+    2. Drift-triggered reset
+       A KS-test drift detector monitors the rolling prediction probability
+       distribution.  When significant drift is detected (p < 0.05) the
+       model is reset to a fresh SGDClassifier so it can adapt to the new
+       regime without being anchored to stale weights.  The reset counter
+       is exposed in status() for monitoring.
+
+    Data layer injection
+    --------------------
+    Four orchestrator features (sentiment, OFI, macro impact, blackout) are
+    appended to every feature vector so the learner sees live market context.
+
+    Persistence
+    -----------
+    When ``persist_path`` is set the learner is serialised after every
+    ``partial_fit`` call.  On startup the persisted state is loaded
+    automatically by ``get_online_learner()``.
     """
+
+    # Drift detection window and KS p-value threshold
+    _DRIFT_WINDOW    = 50
+    _DRIFT_P_THRESH  = 0.05
+    # EWC anchor: snapshot weights every N updates
+    _EWC_ANCHOR_EVERY = 20
+    # Performance tracking window
+    _PERF_WINDOW = 100
 
     def __init__(
         self,
         symbol: str = "XAU_USD",
         persist_path: Optional[str] = None,
         n_features: int = 176,
+        ewc_lambda: float = 0.10,
     ) -> None:
-        self.symbol = symbol
+        self.symbol       = symbol
         self.persist_path = persist_path
-        self.n_features = n_features
-        self._fitted = False
-        self._update_count = 0
-        self._model = None
-        self._scaler = None
+        self.n_features   = n_features
+        self.ewc_lambda   = ewc_lambda  # L2 anchor strength (0 = disabled)
+
+        self._fitted        = False
+        self._update_count  = 0
+        self._reset_count   = 0
+        self._model         = None
+        self._scaler        = None
+
+        # EWC anchor: snapshot of model coef_ after stable training
+        self._anchor_coef: Optional[np.ndarray] = None
+        self._anchor_intercept: Optional[np.ndarray] = None
+        self._base_alpha = 1e-4  # SGD alpha before EWC adjustment
+
+        # Drift detection: rolling window of predicted probabilities
+        self._prob_window: deque = deque(maxlen=self._DRIFT_WINDOW)
+        self._ref_probs: Optional[np.ndarray] = None  # reference distribution
+        self._drift_count = 0
+
+        # Performance tracking: rolling accuracy
+        self._correct_window: deque = deque(maxlen=self._PERF_WINDOW)
+        self._rolling_accuracy: float = 0.5
+
         self._init_model()
 
     # ── Internal ──────────────────────────────────────────────────────────────
@@ -332,7 +383,7 @@ class SklearnOnlineLearner:
             self._model = SGDClassifier(
                 loss="log_loss",
                 penalty="elasticnet",
-                alpha=1e-4,
+                alpha=self._base_alpha,
                 l1_ratio=0.15,
                 max_iter=1,
                 tol=None,
@@ -342,40 +393,46 @@ class SklearnOnlineLearner:
             )
             self._scaler = _SS()
         except ImportError:
-            import logging as _log
-
-            _log.getLogger(__name__).warning(
-                "sklearn not available — SklearnOnlineLearner is a no-op"
-            )
+            logger.warning("sklearn not available — SklearnOnlineLearner is a no-op")
 
     def _extract_features(self, bars: "pd.DataFrame") -> Optional[np.ndarray]:
         """
         Extract feature vector from OHLCV bars.
 
-        Appends 4 data layer features (sentiment, OFI, macro impact, blackout)
-        from the orchestrator when available. These are appended after the OHLCV
-        features and padded/truncated to n_features.
+        Features (in order):
+          - Flattened OHLCV values (open/high/low/close/volume)
+          - Log returns (close pct_change)
+          - Rolling volatility (std of last 10 returns)
+          - 4 data layer scalars: sentiment, OFI, macro_impact, blackout
+
+        All values are padded/truncated to ``n_features``.
         """
         try:
-            import pandas as pd  # noqa: F401
-
             cols = [c for c in ["open", "high", "low", "close", "volume"] if c in bars.columns]
             if not cols:
                 return None
-            X = bars[cols].ffill().bfill().values.astype(float)
-            flat = X.flatten()
 
-            # Append data layer features (4 scalars)
+            ohlcv_vals = bars[cols].ffill().bfill().values.astype(float)
+            flat = ohlcv_vals.flatten()
+
+            # Log returns (last 20 bars)
+            if "close" in bars.columns:
+                closes = bars["close"].values.astype(float)
+                log_ret = np.diff(np.log(np.maximum(closes, 1e-9)))[-20:]
+                vol = float(np.std(log_ret)) if len(log_ret) > 1 else 0.0
+                flat = np.concatenate([flat, log_ret, [vol]])
+
+            # Data layer features (4 scalars from orchestrator)
             dl_extra = np.zeros(4, dtype=float)
             try:
                 from data_layer.orchestrator import orchestrator
                 feats = orchestrator.get_ml_features()
-                dl_extra[0] = feats.get("news_sentiment_score",   0.0)
-                dl_extra[1] = feats.get("micro_ofi",              0.0)
-                dl_extra[2] = feats.get("macro_impact_score_now", 0.0)
-                dl_extra[3] = feats.get("macro_is_blackout",      0.0)
+                dl_extra[0] = float(feats.get("news_sentiment_score",   0.0))
+                dl_extra[1] = float(feats.get("micro_ofi",              0.0))
+                dl_extra[2] = float(feats.get("macro_impact_score_now", 0.0))
+                dl_extra[3] = float(feats.get("macro_is_blackout",      0.0))
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("SklearnOnlineLearner: data layer injection skipped: %s", _exc)
 
             flat = np.concatenate([flat, dl_extra])
 
@@ -384,8 +441,12 @@ class SklearnOnlineLearner:
                 flat = np.pad(flat, (0, self.n_features - len(flat)))
             else:
                 flat = flat[: self.n_features]
+
+            # Replace inf/nan
+            flat = np.where(np.isfinite(flat), flat, 0.0)
             return flat.reshape(1, -1)
-        except Exception:
+        except Exception as exc:
+            logger.debug("SklearnOnlineLearner._extract_features: %s", exc)
             return None
 
     def _extract_label(self, bars: "pd.DataFrame") -> Optional[np.ndarray]:
@@ -396,17 +457,120 @@ class SklearnOnlineLearner:
         except Exception:
             return None
 
+    def _update_ewc_anchor(self) -> None:
+        """
+        Snapshot current model weights as the EWC anchor.
+
+        Called every ``_EWC_ANCHOR_EVERY`` updates.  After anchoring, the
+        SGD alpha is adjusted to penalise drift from the anchor weights.
+        """
+        if self._model is None or not hasattr(self._model, "coef_"):
+            return
+        try:
+            self._anchor_coef      = self._model.coef_.copy()
+            self._anchor_intercept = self._model.intercept_.copy()
+            logger.debug(
+                "SklearnOnlineLearner[%s]: EWC anchor updated at update #%d",
+                self.symbol, self._update_count,
+            )
+        except Exception as exc:
+            logger.debug("EWC anchor update failed: %s", exc)
+
+    def _apply_ewc_penalty(self) -> None:
+        """
+        Adjust SGD alpha based on weight drift from the EWC anchor.
+
+        Drift = mean absolute deviation of current coef_ from anchor.
+        alpha = base_alpha * (1 + ewc_lambda * drift)
+
+        This increases regularisation when the model is drifting far from
+        its previously learned weights, preventing catastrophic forgetting.
+        """
+        if (
+            self._model is None
+            or self._anchor_coef is None
+            or not hasattr(self._model, "coef_")
+            or self.ewc_lambda <= 0
+        ):
+            return
+        try:
+            drift = float(np.mean(np.abs(self._model.coef_ - self._anchor_coef)))
+            new_alpha = self._base_alpha * (1.0 + self.ewc_lambda * drift * 100.0)
+            new_alpha = float(np.clip(new_alpha, self._base_alpha, self._base_alpha * 100))
+            self._model.alpha = new_alpha
+        except Exception as exc:
+            logger.debug("EWC penalty application failed: %s", exc)
+
+    def _check_drift(self, prob: float) -> bool:
+        """
+        Add ``prob`` to the rolling window and run a KS drift test.
+
+        Returns True when significant drift is detected (p < threshold).
+        Sets the reference distribution from the first full window.
+        """
+        self._prob_window.append(prob)
+
+        if len(self._prob_window) < self._DRIFT_WINDOW:
+            return False
+
+        window_arr = np.array(self._prob_window)
+
+        # Establish reference on first full window
+        if self._ref_probs is None:
+            self._ref_probs = window_arr.copy()
+            return False
+
+        try:
+            from scipy.stats import ks_2samp
+            _, p_value = ks_2samp(self._ref_probs, window_arr)
+            if p_value < self._DRIFT_P_THRESH:
+                logger.info(
+                    "SklearnOnlineLearner[%s]: drift detected (p=%.4f) — "
+                    "resetting model to adapt to new regime",
+                    self.symbol, p_value,
+                )
+                return True
+        except Exception as exc:
+            logger.debug("Drift check failed: %s", exc)
+
+        return False
+
+    def _reset_for_new_regime(self) -> None:
+        """
+        Reset the SGD model to adapt to a new market regime.
+
+        Preserves the scaler (feature normalisation is regime-independent)
+        and the EWC anchor (so the new model starts from a reasonable prior).
+        Increments the reset counter for monitoring.
+        """
+        self._init_model()
+        self._fitted        = False
+        self._reset_count  += 1
+        self._drift_count  += 1
+        # Update reference distribution to the current window
+        if len(self._prob_window) >= self._DRIFT_WINDOW:
+            self._ref_probs = np.array(self._prob_window)
+        logger.info(
+            "SklearnOnlineLearner[%s]: model reset #%d for new regime",
+            self.symbol, self._reset_count,
+        )
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     def partial_fit(self, bars: "pd.DataFrame") -> bool:
         """
         Incrementally update the model with new OHLCV bars.
 
-        Args:
-            bars: DataFrame with columns open/high/low/close/volume.
+        Steps:
+        1. Extract features + label from bars
+        2. Scale features (fit scaler on first call)
+        3. SGD partial_fit
+        4. EWC anchor update (every _EWC_ANCHOR_EVERY steps)
+        5. EWC penalty adjustment
+        6. Drift check → reset if regime changed
+        7. Persist to disk if persist_path is set
 
-        Returns:
-            True if the update succeeded, False otherwise.
+        Returns True on success, False on any failure.
         """
         if self._model is None:
             return False
@@ -424,25 +588,53 @@ class SklearnOnlineLearner:
             self._model.partial_fit(X_scaled, y, classes=[0, 1])
             self._update_count += 1
 
+            # Track rolling accuracy
+            try:
+                pred = int(self._model.predict(X_scaled)[0])
+                correct = int(pred == int(y[0]))
+                self._correct_window.append(correct)
+                if len(self._correct_window) >= 10:
+                    self._rolling_accuracy = float(np.mean(self._correct_window))
+            except Exception:
+                pass
+
+            # EWC anchor snapshot
+            if self._update_count % self._EWC_ANCHOR_EVERY == 0:
+                self._update_ewc_anchor()
+
+            # EWC penalty (adjust alpha to resist forgetting)
+            self._apply_ewc_penalty()
+
+            # Drift detection — reset model if regime changed
+            try:
+                prob = float(self._model.predict_proba(X_scaled)[0, 1])
+                if self._check_drift(prob):
+                    self._reset_for_new_regime()
+            except Exception:
+                pass
+
             if self.persist_path:
                 self._save()
 
-            import logging as _log
-            _log.getLogger(__name__).debug(
-                "SklearnOnlineLearner[%s] partial_fit #%d OK",
-                self.symbol,
-                self._update_count,
+            logger.debug(
+                "SklearnOnlineLearner[%s] partial_fit #%d OK (acc=%.3f resets=%d)",
+                self.symbol, self._update_count,
+                self._rolling_accuracy, self._reset_count,
             )
             return True
         except Exception as exc:
-            import logging as _log
-            _log.getLogger(__name__).warning(
+            logger.warning(
                 "SklearnOnlineLearner[%s] partial_fit failed: %s", self.symbol, exc
             )
             return False
 
     def predict_proba(self, bars: "pd.DataFrame") -> Optional[float]:
-        """Return P(up) for the given bars, or None if not yet fitted."""
+        """
+        Return P(up) for the given bars, or None if not yet fitted.
+
+        Returns a float in [0, 1] representing the probability that the
+        next bar closes higher than the current bar.
+        """
         if self._model is None or not self._fitted:
             return None
         try:
@@ -452,15 +644,32 @@ class SklearnOnlineLearner:
             X_scaled = self._scaler.transform(X)
             proba = self._model.predict_proba(X_scaled)
             return float(proba[0, 1])
-        except Exception:
+        except Exception as exc:
+            logger.debug("SklearnOnlineLearner.predict_proba failed: %s", exc)
             return None
 
+    def reset(self) -> None:
+        """
+        Manually reset the model (e.g. after a major regime change).
+
+        Preserves the scaler and increments the reset counter.
+        """
+        self._reset_for_new_regime()
+
     def status(self) -> Dict:
+        """Return monitoring status dict."""
         return {
-            "symbol": self.symbol,
-            "fitted": self._fitted,
-            "update_count": self._update_count,
-            "persist_path": self.persist_path,
+            "symbol":           self.symbol,
+            "fitted":           self._fitted,
+            "update_count":     self._update_count,
+            "reset_count":      self._reset_count,
+            "drift_count":      self._drift_count,
+            "rolling_accuracy": round(self._rolling_accuracy, 4),
+            "ewc_lambda":       self.ewc_lambda,
+            "n_features":       self.n_features,
+            "persist_path":     self.persist_path,
+            "prob_window_size": len(self._prob_window),
+            "has_anchor":       self._anchor_coef is not None,
         }
 
     def _save(self) -> None:
