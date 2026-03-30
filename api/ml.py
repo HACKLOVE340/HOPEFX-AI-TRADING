@@ -295,16 +295,9 @@ def _get_macro_df_for_symbol(symbol: str, lookback: int = 200):
         if len(macro_store) == 0:
             return None
 
-        import pandas as pd
-
-        idx = pd.date_range(
-            end=pd.Timestamp.utcnow().floor("h"),
-            periods=lookback,
-            freq="h",
-            tz="UTC",
-        )
-        dummy_ohlcv = pd.DataFrame({"close": 1.0}, index=idx)
-        return macro_store.align_to_hourly(dummy_ohlcv)
+        # Macro alignment requires real OHLCV data from the broker.
+        # Return None here; the caller will proceed without macro features.
+        return None
     except Exception as exc:
         logger.debug("MacroStore alignment failed (non-fatal): %s", exc)
         return None

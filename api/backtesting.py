@@ -292,73 +292,13 @@ async def run_backtest(
 _wf_results: Dict[str, dict] = {}
 
 
-def _generate_mock_walk_forward(
-    strategy: str = "MovingAverageCrossover",
-    symbol: str = "XAU/USD",
-) -> dict:
-    """Generate demo walk-forward data when no real results exist."""
-    import math
-    import random
-    from datetime import date, timedelta
-
-    random.seed(42)
-    folds = []
-    for i in range(5):
-        year = 2020 + i
-        equity: list = []
-        v = 10000.0
-        for d in range(252):
-            v += (random.random() - 0.47) * 120
-            v = max(v, 5000.0)
-            dt = date(year, 1, 1) + timedelta(days=d)
-            equity.append({"time": dt.isoformat(), "value": round(v, 2)})
-        sharpe = 0.8 + random.random() * 1.4
-        folds.append(
-            {
-                "fold": i + 1,
-                "train_start": f"{year - 1}-01-01",
-                "train_end": f"{year}-01-01",
-                "test_start": f"{year}-01-01",
-                "test_end": f"{year + 1}-01-01",
-                "accuracy": round(55 + random.random() * 15, 2),
-                "sharpe": round(sharpe, 3),
-                "max_drawdown": round(5 + random.random() * 12, 2),
-                "total_return": round((v - 10000) / 100, 2),
-                "total_trades": 80 + int(random.random() * 60),
-                "win_rate": round(50 + random.random() * 15, 2),
-                "equity_curve": equity,
-            },
-        )
-    avg_sharpe = sum(f["sharpe"] for f in folds) / len(folds)
-    avg_acc = sum(f["accuracy"] for f in folds) / len(folds)
-    avg_dd = sum(f["max_drawdown"] for f in folds) / len(folds)
-    sharpes = [f["sharpe"] for f in folds]
-    std = math.sqrt(sum((x - avg_sharpe) ** 2 for x in sharpes) / len(sharpes))
-    stability = (
-        max(0.0, min(100.0, 100 - (std / avg_sharpe) * 100)) if avg_sharpe else 0.0
-    )
-    return {
-        "run_id": "demo-wf-001",
-        "strategy": strategy,
-        "symbol": symbol,
-        "folds": folds,
-        "stability_score": round(stability, 1),
-        "avg_sharpe": round(avg_sharpe, 3),
-        "avg_accuracy": round(avg_acc, 2),
-        "avg_drawdown": round(avg_dd, 2),
-        "monte_carlo": {
-            "median_equity": 12400,
-            "p5_equity": 8200,
-            "p95_equity": 18600,
-            "probability_of_ruin": 4.2,
-            "simulations": 1000,
-        },
-    }
-
-
 @router.get("/walk-forward/latest")
 async def get_latest_walk_forward(user: TokenPayload = Depends(get_current_user)):
-    """Return the most recent walk-forward result, or demo data if none exist."""
+    """Return the most recent walk-forward result.
+
+    Returns 404 when no walk-forward run has been executed yet.
+    Trigger a run via POST /api/backtest/walk-forward/run first.
+    """
     if _wf_results:
         latest = sorted(
             _wf_results.values(),
@@ -366,7 +306,10 @@ async def get_latest_walk_forward(user: TokenPayload = Depends(get_current_user)
             reverse=True,
         )[0]
         return latest
-    return _generate_mock_walk_forward()
+    raise HTTPException(
+        status_code=404,
+        detail="No walk-forward results found. Run a walk-forward backtest first.",
+    )
 
 
 @router.get("/walk-forward/{run_id}")
@@ -374,8 +317,6 @@ async def get_walk_forward(run_id: str, user: TokenPayload = Depends(get_current
     """Return walk-forward results for a specific run_id."""
     if run_id in _wf_results:
         return _wf_results[run_id]
-    if run_id == "demo-wf-001":
-        return _generate_mock_walk_forward()
     raise HTTPException(status_code=404, detail="Walk-forward result not found")
 
 

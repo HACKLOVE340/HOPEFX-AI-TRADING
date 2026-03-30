@@ -581,7 +581,7 @@ class FeatureFlags:
     )
 
     LSTM_SIGNAL_ENABLED = _FeatureDef(
-        "LSTM_SIGNAL_ENABLED",
+        "FEATURE_LSTM_SIGNAL_ENABLED",
         default=False,
         status=FeatureStatus.EXPERIMENTAL,
         description=(

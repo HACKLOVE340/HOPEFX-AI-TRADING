@@ -854,21 +854,6 @@ async def get_prices(
                 "timestamp": tick.timestamp,
             }
 
-    # Fallback: when no live ticks are available (e.g. paper mode without a
-    # real feed), synthesise quotes from the paper broker's static prices.
-    if not prices and app_state.broker is not None:
-        import time as _time
-
-        _now = _time.time()
-        _market_prices = getattr(app_state.broker, "market_prices", {})
-        for symbol, mid in _market_prices.items():
-            spread = mid * 0.0002  # 2 pip synthetic spread
-            prices[symbol] = {
-                "bid": round(mid - spread / 2, 5),
-                "ask": round(mid + spread / 2, 5),
-                "last": mid,
-                "timestamp": _now,
-            }
     return prices
 
 
@@ -893,26 +878,6 @@ async def get_ohlcv(
         )
 
     data = await app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
-
-    # Fallback: when the live engine has no buffered candles (paper / no feed),
-    # use the paper broker's simulated market data so the endpoint returns
-    # something useful rather than an empty list.
-    if not data and app_state.broker is not None:
-        _get_md = getattr(app_state.broker, "get_market_data", None)
-        if callable(_get_md):
-            _fallback = _get_md(symbol, timeframe, limit)
-            if _fallback:
-                return [
-                    {
-                        "timestamp": float(d["timestamp"]),
-                        "open": float(d["open"]),
-                        "high": float(d["high"]),
-                        "low": float(d["low"]),
-                        "close": float(d["close"]),
-                        "volume": float(d["volume"]),
-                    }
-                    for d in _fallback
-                ]
 
     return [
         {

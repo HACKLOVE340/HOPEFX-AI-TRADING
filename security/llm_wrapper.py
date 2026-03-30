@@ -9,10 +9,10 @@ auto-generated code fixes.
 
 Supports two backends (selected via LLM_BACKEND env var):
   - "anthropic"  → Claude 3 Haiku (fast, cheap, good for security analysis)
-  - "openai"     → GPT-4o-mini (fallback)
+  - "openai"     → GPT-4o-mini
 
-Falls back to a stub response when no API key is configured so the
-system degrades gracefully in dev/test environments.
+Raises RuntimeError when called without a configured API key.
+Set ANTHROPIC_API_KEY or OPENAI_API_KEY before use.
 """
 
 from __future__ import annotations
@@ -40,22 +40,19 @@ async def call_llm(prompt: str) -> str:
     """
     Send *prompt* to the configured LLM backend and return the text response.
 
-    Never raises — on any error returns a safe fallback string so the
-    HOPEFXBrain loop continues uninterrupted.
+    Raises:
+        RuntimeError: When no API key is configured for the selected backend.
+        httpx.HTTPStatusError / openai.APIError: On upstream API failures.
     """
-    try:
-        if LLM_BACKEND == "anthropic" and ANTHROPIC_API_KEY:
-            return await _call_anthropic(prompt)
-        elif LLM_BACKEND == "openai" and OPENAI_API_KEY:
-            return await _call_openai(prompt)
-        else:
-            logger.warning(
-                "LLM backend '%s' not configured — using stub response", LLM_BACKEND
-            )
-            return _stub_response(prompt)
-    except Exception as exc:  # noqa: BLE001
-        logger.error("LLM call failed: %s", exc)
-        return _stub_response(prompt)
+    if LLM_BACKEND == "anthropic" and ANTHROPIC_API_KEY:
+        return await _call_anthropic(prompt)
+    elif LLM_BACKEND == "openai" and OPENAI_API_KEY:
+        return await _call_openai(prompt)
+    else:
+        raise RuntimeError(
+            f"LLM backend '{LLM_BACKEND}' is not configured. "
+            "Set ANTHROPIC_API_KEY or OPENAI_API_KEY in your environment."
+        )
 
 
 # ── Anthropic backend ─────────────────────────────────────────────────────────
@@ -120,19 +117,3 @@ async def _call_openai(prompt: str) -> str:
         return data["choices"][0]["message"]["content"].strip()
 
 
-# ── Stub (no API key configured) ─────────────────────────────────────────────
-
-def _stub_response(prompt: str) -> str:
-    """
-    Deterministic stub used when no LLM backend is available.
-    Returns a safe, parseable string so downstream code never breaks.
-    """
-    prompt_lower = prompt.lower()
-    if "intent" in prompt_lower or "attack" in prompt_lower:
-        return "probe"
-    if "rewrite" in prompt_lower or "fix" in prompt_lower or "secure" in prompt_lower:
-        return (
-            "# Auto-fix stub (configure LLM_BACKEND + API key for real fixes)\n"
-            "# Original code requires manual security review."
-        )
-    return "analysis_unavailable"
