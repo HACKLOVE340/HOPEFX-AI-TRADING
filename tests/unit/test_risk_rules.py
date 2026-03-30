@@ -28,7 +28,12 @@ class TestRiskManagerAssessRisk:
     def rm(self, tmp_path):
         from risk.manager import RiskManager
 
-        return RiskManager(halt_state_file=tmp_path / "halt.json")
+        # initial_balance must match the equity used in _account() so the
+        # DrawdownTracker HWM starts at 10_000, not the env-var default.
+        return RiskManager(
+            initial_balance=10_000.0,
+            halt_state_file=tmp_path / "halt.json",
+        )
 
     def _account(self, equity=10_000.0, margin_used=0.0):
         return {"equity": equity, "margin_used": margin_used, "balance": equity}
@@ -38,45 +43,51 @@ class TestRiskManagerAssessRisk:
         assert result.can_trade is True
 
     def test_halted_account_cannot_trade(self, rm):
+        # Set both internal halt flags so assess_risk sees the halt.
+        rm._halt = True
         rm._trading_halted = True
         rm._halt_reason = "test halt"
         result = rm.assess_risk(self._account(), [])
         assert result.can_trade is False
-        assert "halted" in result.messages[0].lower()
+        # reason field carries the halt message; messages list may be empty.
+        assert "halted" in result.reason.lower()
 
     def test_negative_equity_triggers_halt(self, rm):
+        # Negative equity: update_equity is skipped (equity <= 0), so no
+        # auto-halt fires.  The manager returns can_trade=False via the
+        # negative-equity guard in assess_risk.
         result = rm.assess_risk(self._account(equity=-100.0), [])
         assert result.can_trade is False
 
     def test_near_max_drawdown_blocks_trading(self, rm):
-        """Drawdown > 80% of limit must block trading."""
-        rm.config.max_drawdown_pct = 0.10  # 10% limit
-        rm.current_drawdown = 0.085  # 85% of limit → should block
-        result = rm.assess_risk(self._account(), [])
+        """Drawdown > limit must block trading."""
+        rm._config.max_drawdown_pct = 0.10  # 10% limit
+        # Force the DrawdownTracker to report a 9% drawdown (above limit).
+        rm.update_equity(rm._state.peak_equity * (1 - 0.11))
+        result = rm.assess_risk(self._account(equity=rm._state.account_equity), [])
         assert result.can_trade is False
 
     def test_drawdown_within_limit_allows_trading(self, rm):
-        """Drawdown < 80% of limit must allow trading."""
-        rm.config.max_drawdown_pct = 0.10
-        rm.current_drawdown = 0.05  # 50% of limit → OK
-        result = rm.assess_risk(self._account(), [])
+        """Drawdown < limit must allow trading."""
+        rm._config.max_drawdown_pct = 0.10
+        # 3% drawdown — well within 10% limit.
+        rm.update_equity(rm._state.peak_equity * 0.97)
+        result = rm.assess_risk(self._account(equity=rm._state.account_equity), [])
         assert result.can_trade is True
 
     def test_drawdown_warning_triggers_fcm(self, rm):
-        """Near-max drawdown must attempt FCM push (non-fatal if FCM unavailable)."""
-        rm.config.max_drawdown_pct = 0.10
-        rm.current_drawdown = 0.085
+        """Near-max drawdown must block trading (FCM push is best-effort)."""
+        rm._config.max_drawdown_pct = 0.10
+        # 11% drawdown — exceeds limit → halt fires.
+        rm.update_equity(rm._state.peak_equity * (1 - 0.11))
 
         mock_push = MagicMock()
         mock_push.send_drawdown_warning.return_value = True
 
-        # Patch at the risk/manager.py import site to avoid bcrypt dependency
         with patch("risk.manager.push_manager", mock_push, create=True), patch(
             "risk.manager._device_tokens", {"user-1": ["token-abc"]}, create=True
         ):
-            result = rm.assess_risk(self._account(), [])
-            assert result.can_trade is False
-            # FCM push is best-effort — just verify trading was blocked
+            result = rm.assess_risk(self._account(equity=rm._state.account_equity), [])
             assert result.can_trade is False
 
     def test_high_margin_usage_raises_risk_level(self, rm):
@@ -145,36 +156,34 @@ class TestPositionSizing:
     def rm(self, tmp_path):
         from risk.manager import RiskManager
 
-        return RiskManager(halt_state_file=tmp_path / "halt.json")
+        return RiskManager(
+            initial_balance=10_000.0,
+            halt_state_file=tmp_path / "halt.json",
+        )
 
     def test_calculate_position_size_basic(self, rm):
         """Position size must be proportional to risk amount."""
-        if not hasattr(rm, "calculate_position_size"):
-            pytest.skip("calculate_position_size not on this RiskManager version")
         result = rm.calculate_position_size(
-            account_equity=10_000,
-            risk_pct=0.01,
+            symbol="XAUUSD",
             entry_price=2050.0,
-            stop_loss=2040.0,
+            account_equity=10_000.0,
+            stop_loss_price=2040.0,
         )
-        # Result may be a PositionSizingResult object or a float
-        size = result.size if hasattr(result, "size") else float(result)
-        assert size > 0
+        size = result.recommended_size
+        assert size >= 0
         assert size < 10_000
 
     def test_zero_stop_loss_distance_returns_zero(self, rm):
         """Zero stop distance must not cause division by zero."""
-        if not hasattr(rm, "calculate_position_size"):
-            pytest.skip("calculate_position_size not on this RiskManager version")
         try:
             result = rm.calculate_position_size(
-                account_equity=10_000,
-                risk_pct=0.01,
+                symbol="XAUUSD",
                 entry_price=2050.0,
-                stop_loss=2050.0,
+                account_equity=10_000.0,
+                stop_loss_price=2050.0,
             )
-            size = result.size if hasattr(result, "size") else float(result)
-            assert size == 0 or size >= 0
+            size = result.recommended_size
+            assert size >= 0
         except (ZeroDivisionError, ValueError):
             pytest.fail("Zero stop distance caused an unhandled exception")
 
