@@ -77,13 +77,19 @@ _redis_client: Optional[Any] = None
 
 
 async def _get_redis() -> Any:
+    """Return Sentinel-aware Redis client (lazy init)."""
     global _redis_client
     if _redis_client is None:
         try:
-            import redis.asyncio as aioredis
-            _redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
-        except Exception as exc:
-            logger.warning("Redis unavailable for HOPEFXBrain: %s", exc)
+            from cache.redis_client import get_redis as _get_redis_client
+            _redis_client = await _get_redis_client()
+        except Exception:
+            # Fallback: direct URL
+            try:
+                import redis.asyncio as aioredis
+                _redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
+            except Exception as exc:
+                logger.warning("Redis unavailable for HOPEFXBrain: %s", exc)
     return _redis_client
 
 

@@ -1,0 +1,186 @@
+# docker-compose.sentinel.yml
+# Redis high-availability overlay: 1 master + 2 replicas + 3 Sentinels.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.sentinel.yml up -d
+#
+# This overlay REPLACES the single `redis` service from docker-compose.yml
+# with a full Sentinel cluster. The app and trading services connect via
+# Sentinel (REDIS_SENTINEL_HOSTS) instead of a direct Redis URL.
+#
+# Required env vars (add to .env):
+#   REDIS_PASSWORD          — shared auth password for all Redis nodes
+#   REDIS_SENTINEL_HOSTS    — comma-separated sentinel host:port list
+#                             default: redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379
+
+version: "3.9"
+
+services:
+
+  # ── Disable the single-node Redis from base compose ──────────────────────
+  redis:
+    deploy:
+      replicas: 0
+
+  # ── Redis master ──────────────────────────────────────────────────────────
+  redis-master:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - ./redis/redis-master.conf:/etc/redis/redis-master.conf:ro
+      - ./redis/entrypoint.sh:/entrypoint.sh:ro
+      - redis_master_data:/data
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+      REDIS_CONFIG_FILE: /etc/redis/redis-master.conf
+      REDIS_PROCESS: redis-server
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - hopefx_net
+
+  # ── Redis replica 1 ───────────────────────────────────────────────────────
+  redis-replica-1:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - ./redis/redis-replica.conf:/etc/redis/redis-replica.conf:ro
+      - ./redis/entrypoint.sh:/entrypoint.sh:ro
+      - redis_replica1_data:/data
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_CONFIG_FILE: /etc/redis/redis-replica.conf
+      REDIS_PROCESS: redis-server
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - hopefx_net
+
+  # ── Redis replica 2 ───────────────────────────────────────────────────────
+  redis-replica-2:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - ./redis/redis-replica.conf:/etc/redis/redis-replica.conf:ro
+      - ./redis/entrypoint.sh:/entrypoint.sh:ro
+      - redis_replica2_data:/data
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_CONFIG_FILE: /etc/redis/redis-replica.conf
+      REDIS_PROCESS: redis-server
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - hopefx_net
+
+  # ── Sentinel 1 ────────────────────────────────────────────────────────────
+  redis-sentinel-1:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - ./redis/sentinel.conf:/etc/redis/sentinel.conf:ro
+      - ./redis/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_CONFIG_FILE: /etc/redis/sentinel.conf
+      REDIS_PROCESS: redis-sentinel
+    ports:
+      - "26379:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - hopefx_net
+
+  # ── Sentinel 2 ────────────────────────────────────────────────────────────
+  redis-sentinel-2:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - ./redis/sentinel.conf:/etc/redis/sentinel.conf:ro
+      - ./redis/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_CONFIG_FILE: /etc/redis/sentinel.conf
+      REDIS_PROCESS: redis-sentinel
+    ports:
+      - "26380:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - hopefx_net
+
+  # ── Sentinel 3 ────────────────────────────────────────────────────────────
+  redis-sentinel-3:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - ./redis/sentinel.conf:/etc/redis/sentinel.conf:ro
+      - ./redis/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_CONFIG_FILE: /etc/redis/sentinel.conf
+      REDIS_PROCESS: redis-sentinel
+    ports:
+      - "26381:26379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    networks:
+      - hopefx_net
+
+  # ── Override app + trading to use Sentinel URL ────────────────────────────
+  app:
+    environment:
+      REDIS_URL: ""
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379}
+      REDIS_SENTINEL_MASTER: hopefx-master
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      redis-sentinel-1:
+        condition: service_started
+      redis-sentinel-2:
+        condition: service_started
+      redis-sentinel-3:
+        condition: service_started
+
+  trading:
+    environment:
+      REDIS_URL: ""
+      REDIS_SENTINEL_HOSTS: ${REDIS_SENTINEL_HOSTS:-redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379}
+      REDIS_SENTINEL_MASTER: hopefx-master
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      redis-sentinel-1:
+        condition: service_started
+
+volumes:
+  redis_master_data:
+  redis_replica1_data:
+  redis_replica2_data:
+
+networks:
+  hopefx_net:
+    driver: bridge
