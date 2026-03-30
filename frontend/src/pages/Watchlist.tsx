@@ -166,7 +166,10 @@ const WatchlistPage: React.FC = () => {
     try {
       await api.delete(`/watchlist/${symbol}`);
       setItems((prev) => prev.filter((i) => i.symbol !== symbol));
-    } catch { /* silent */ }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : `Failed to remove ${symbol}.`;
+      setError(msg);
+    }
   };
 
   return (
