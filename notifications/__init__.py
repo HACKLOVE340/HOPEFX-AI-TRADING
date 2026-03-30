@@ -137,8 +137,21 @@ class NotificationManager:
                 if resp.status != 204:
                     logger.error(f"Discord notification failed: {resp.status}")
 
+    @staticmethod
+    def _escape_mdv2(text: str) -> str:
+        """
+        Escape all MarkdownV2 reserved characters in a plain-text string.
+
+        Telegram MarkdownV2 requires these characters to be escaped with a
+        leading backslash when they appear outside of formatting constructs:
+        _ * [ ] ( ) ~ ` > # + - = | { } . !
+        """
+        # Characters that must be escaped per Telegram MarkdownV2 spec
+        _RESERVED = r"\_*[]()~`>#+-=|{}.!"
+        return "".join(f"\\{ch}" if ch in _RESERVED else ch for ch in text)
+
     async def _send_telegram(self, notification: Notification):
-        """Send to Telegram"""
+        """Send to Telegram using MarkdownV2 with correct escaping."""
         bot_token = self.config.get("telegram_bot_token")
         chat_id = self.config.get("telegram_chat_id")
         if not bot_token or not chat_id:
@@ -151,14 +164,26 @@ class NotificationManager:
             NotificationLevel.CRITICAL: "🚨",
         }
 
-        text = f"{emoji_map.get(notification.level, 'ℹ️')} *HOPEFX Alert*\\n"
-        text += f"*{notification.level.value.upper()}*\\n\\n"
-        text += notification.message
+        esc = self._escape_mdv2
+        level_label = esc(notification.level.value.upper())
+        # Emoji are safe — they contain no MarkdownV2 reserved chars
+        emoji = emoji_map.get(notification.level, "ℹ️")
+
+        lines = [
+            f"{emoji} *HOPEFX Alert*",
+            f"*{level_label}*",
+            "",
+            esc(notification.message),
+        ]
 
         if notification.data:
-            text += "\\n\\n*Data:*\\n"
+            lines.append("")
+            lines.append("*Data:*")
             for key, value in notification.data.items():
-                text += f"• {key}: `{value}`\\n"
+                # Escape both key and value; backtick-wrap value for monospace
+                lines.append(f"• {esc(str(key))}: `{esc(str(value))}`")
+
+        text = "\n".join(lines)
 
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "MarkdownV2"}
@@ -166,7 +191,11 @@ class NotificationManager:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=payload) as resp:
                 if resp.status != 200:
-                    logger.error(f"Telegram notification failed: {resp.status}")
+                    body = await resp.text()
+                    logger.error(
+                        "Telegram notification failed: status=%s body=%s",
+                        resp.status, body[:200],
+                    )
 
     async def _send_webhook(self, notification: Notification):
         """Send to custom webhook"""
