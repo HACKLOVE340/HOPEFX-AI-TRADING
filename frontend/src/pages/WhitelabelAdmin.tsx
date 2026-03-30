@@ -481,10 +481,6 @@ const s: Record<string, React.CSSProperties> = {
     flex: 1, background: '#334155', border: 'none', borderRadius: 8,
     color: '#94a3b8', padding: '10px', fontSize: 14, cursor: 'pointer',
   },
-  errorBanner: {
-    background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6,
-    padding: '8px 12px', fontSize: 13, color: '#f87171', marginBottom: 12,
-  },
 };
 
 export default WhitelabelAdmin;

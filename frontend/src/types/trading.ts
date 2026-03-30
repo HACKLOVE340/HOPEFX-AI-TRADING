@@ -223,6 +223,7 @@ export interface AccountMetrics {
   readonly sortino_ratio?: number;
   readonly max_drawdown:   number;
   readonly open_trades:    number;
+  readonly open_risk_pct?: number;   // % of equity at risk across open positions
   readonly cvar_95?:       number;   // Conditional Value at Risk 95%
   readonly kill_switch?:   boolean;
 }
