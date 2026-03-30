@@ -291,33 +291,42 @@ class FeatureEngineer:
             logger.error(f"Feature extraction error for {symbol}: {e}")
             return None
 
-    def get_feature_importance(self, model=None) -> Dict[str, float]:
+    def get_feature_importance(self, model: Any) -> Dict[str, float]:
         """
-        Get feature importance from trained model
+        Return feature importances from a trained model.
+
+        Supports:
+        - sklearn / XGBoost models with ``feature_importances_`` attribute
+        - Models with a ``get_feature_importances()`` method (XGBoostPredictor)
+
+        Raises
+        ------
+        ValueError
+            If the model exposes no recognised importance interface.
         """
         if model is None:
-            # Return dummy importance based on domain knowledge
-            return {
-                "rsi": 0.15,
-                "macd_hist": 0.12,
-                "return_20": 0.10,
-                "bb_position": 0.09,
-                "volatility_20": 0.08,
-                "atr_pct": 0.07,
-                "price_position_20": 0.06,
-                "trend_slope": 0.05,
-                "ob_imbalance": 0.05,
-                "spread_pct": 0.04,
-                "volume_trend_20": 0.04,
-                "body_size": 0.03,
-                "rsi_10": 0.02,
-                "return_50": 0.02,
-                "macd": 0.01,
-                "macd_signal": 0.01,
-            }
+            raise ValueError(
+                "A trained model must be supplied; no model provided."
+            )
 
-        # Would extract from actual model
-        return {}
+        # XGBoostPredictor wrapper (ml/pipeline.py)
+        if hasattr(model, "get_feature_importances") and callable(model.get_feature_importances):
+            return model.get_feature_importances()
+
+        # sklearn / XGBoost / LightGBM native attribute
+        if hasattr(model, "feature_importances_"):
+            importances = model.feature_importances_
+            names = (
+                self.feature_names
+                if hasattr(self, "feature_names") and len(self.feature_names) == len(importances)
+                else [str(i) for i in range(len(importances))]
+            )
+            return dict(zip(names, importances.tolist()))
+
+        raise ValueError(
+            f"Model of type {type(model).__name__!r} does not expose "
+            "feature_importances_ or get_feature_importances()."
+        )
 
     def detect_anomalies(self, symbol: str, threshold: float = 3.0) -> List[Dict]:
         """
@@ -408,19 +417,34 @@ class SignalEnsemble:
         }
 
     def _get_model_prediction(self, model: Any, features: FeatureVector) -> Dict:
-        """Get prediction from individual model"""
-        # This would call actual model.predict()
-        # For now, return dummy based on features
+        """
+        Obtain a probability estimate from a single model.
 
-        rsi = features.features.get("rsi", 50)
-        macd = features.features.get("macd_hist", 0)
+        Supported interfaces (tried in order):
+        1. ``predict_proba(X)`` — sklearn / XGBoost classifiers; returns P(class=1).
+        2. ``predict(X)``       — models that return a probability directly (0–1).
 
-        # Simple rule-based for demonstration
-        prob = 0.5
+        The feature vector is converted to a 2-D numpy array (1 × n_features)
+        using the insertion order of ``features.features``.
 
-        if rsi < 30 and macd > 0:
-            prob = 0.8  # Oversold + MACD turning up = buy
-        elif rsi > 70 and macd < 0:
-            prob = 0.2  # Overbought + MACD turning down = sell
+        Raises
+        ------
+        TypeError
+            If the model exposes neither ``predict_proba`` nor ``predict``.
+        """
+        X = features.to_array().reshape(1, -1)
 
-        return {"probability": prob, "raw_output": {"rsi": rsi, "macd": macd}}
+        if hasattr(model, "predict_proba") and callable(model.predict_proba):
+            proba = model.predict_proba(X)
+            # sklearn returns shape (1, n_classes); take P(class=1)
+            prob = float(proba[0, 1]) if proba.ndim == 2 else float(proba[0])
+        elif hasattr(model, "predict") and callable(model.predict):
+            raw = model.predict(X)
+            prob = float(raw[0])
+        else:
+            raise TypeError(
+                f"Model of type {type(model).__name__!r} exposes neither "
+                "predict_proba() nor predict()."
+            )
+
+        return {"probability": prob, "raw_output": {"feature_count": len(features.features)}}
