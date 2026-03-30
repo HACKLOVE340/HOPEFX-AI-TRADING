@@ -1,0 +1,159 @@
+{
+  "_comment": "Sample NuclearChartState — exact JSON structure broadcast over /ws/nuclear every tick.",
+  "_version": "2.0.0",
+
+  "type": "nuclear_chart_update",
+  "ts": 1735000000000,
+
+  "price": {
+    "bid": 2649.85,
+    "ask": 2650.15,
+    "mid": 2650.00,
+    "spread": 0.30,
+    "change_pct": 0.0042,
+    "source": "live"
+  },
+
+  "bars": {
+    "1m": [
+      { "time": 1734999900, "open": 2648.10, "high": 2651.20, "low": 2647.80, "close": 2650.00, "volume": 1240.5 },
+      { "time": 1734999960, "open": 2650.00, "high": 2652.40, "low": 2649.50, "close": 2651.80, "volume": 980.2 }
+    ],
+    "5m": [
+      { "time": 1734999600, "open": 2645.00, "high": 2653.00, "low": 2644.20, "close": 2650.00, "volume": 5820.0 }
+    ],
+    "1h": [
+      { "time": 1734996000, "open": 2630.00, "high": 2655.00, "low": 2628.50, "close": 2650.00, "volume": 42100.0 }
+    ]
+  },
+
+  "nuclear": {
+    "severity": 9,
+    "action": "nuclear_mode",
+    "nuclear_level": 3,
+    "trading_paused": true,
+    "rl_action": 3,
+    "rl_action_label": "NUCLEAR",
+    "rl_agent_loaded": true,
+    "confidence": 0.92,
+    "raw_score": 9.35,
+    "matched_terms": [
+      { "term": "nuclear strike", "category": "nuclear", "weight": 10.0, "count": 1, "contribution": 10.0 },
+      { "term": "military invasion", "category": "war",    "weight": 8.5,  "count": 1, "contribution": 8.5  },
+      { "term": "swift ban",        "category": "sanctions","weight": 8.5, "count": 1, "contribution": 8.5  }
+    ],
+    "category_scores": {
+      "nuclear":    10.0,
+      "war":         8.5,
+      "sanctions":   8.5,
+      "geopolitical": 7.0
+    },
+    "vol_factor": 1.625,
+    "sentiment_factor": 0.45,
+    "explanation": "RL agent (PPO) triggered NUCLEAR (severity=9/10). WORDMAP matched: \"nuclear strike\" (nuclear, w=10.0), \"military invasion\" (war, w=8.5), \"swift ban\" (sanctions, w=8.5). Risk categories: nuclear=10.0, war=8.5. Amplified by: volatility spike (×1.63), negative sentiment (+0.45). Confidence: 92%. FULL LIQUIDATION. All positions closed. Trading halted.",
+    "alert_active": true,
+    "historical_analog": "Similar to 2022 Russia-Ukraine invasion: Gold +12% in 48h, then -8% reversal. Expected drawdown: -28% if long.",
+    "cooldown_remaining": 0.0,
+    "event_count": 3
+  },
+
+  "risk": {
+    "cvar_95": 0.0285,
+    "cvar_99": 0.0412,
+    "var_95":  0.0198,
+    "exposure": 0.0,
+    "max_risk": 0.0,
+    "kill_switch_active": true,
+    "kill_switch_reason": "RL nuclear supervisor: nuclear event detected",
+    "daily_pnl": -1240.50,
+    "drawdown_pct": -1.24,
+    "equity": 98759.50,
+    "balance": 100000.00
+  },
+
+  "signals": [
+    {
+      "id": "sig_1735000000",
+      "direction": "neutral",
+      "confidence": 0.31,
+      "model": "XGBoost+RL",
+      "entry": 2650.00,
+      "sl": 2644.70,
+      "tp": 2660.60,
+      "reason": "Nuclear mode active — signal suppressed",
+      "ts": 1735000000000
+    }
+  ],
+
+  "equity_curve": [
+    { "time": 1734990000, "equity": 100000.00, "drawdown": 0.0,   "annotation": null },
+    { "time": 1734993600, "equity": 100420.00, "drawdown": 0.0,   "annotation": null },
+    { "time": 1734997200, "equity": 99800.00,  "drawdown": -0.2,  "annotation": "PAUSED" },
+    { "time": 1735000000, "equity": 98759.50,  "drawdown": -1.24, "annotation": "NUC-L3" }
+  ],
+
+  "prediction_path": [
+    { "time": 1735000060, "price": 2650.00, "low": 2628.80, "high": 2671.20, "scenario": "nuclear" },
+    { "time": 1735000120, "price": 2650.00, "low": 2614.60, "high": 2685.40, "scenario": "nuclear" },
+    { "time": 1735000180, "price": 2650.00, "low": 2603.20, "high": 2696.80, "scenario": "nuclear" }
+  ],
+
+  "geopolitical_gauge": {
+    "score": 90,
+    "label": "CRITICAL",
+    "color": "#ff0033",
+    "flashing": true,
+    "severity": 9
+  },
+
+  "nuclear_events": [
+    {
+      "ts": 1735000000000,
+      "text": "Breaking: nuclear strike reported near capital city, military invasion underway",
+      "severity": 9,
+      "action": "nuclear_mode",
+      "explanation": "RL agent (PPO) triggered NUCLEAR (severity=9/10). WORDMAP matched: \"nuclear strike\" (nuclear, w=10.0)..."
+    }
+  ],
+
+  "_nuclear_alert_message": {
+    "_comment": "Sent as a separate nuclear_alert message when severity >= 7",
+    "type": "nuclear_alert",
+    "ts": 1735000000000,
+    "severity": 9,
+    "action": "nuclear_mode",
+    "rl_action_label": "NUCLEAR",
+    "explanation": "RL agent (PPO) triggered NUCLEAR (severity=9/10)...",
+    "historical_analog": "Similar to 2022 Russia-Ukraine invasion: Gold +12% in 48h...",
+    "gauge": {
+      "score": 90,
+      "label": "CRITICAL",
+      "color": "#ff0033",
+      "flashing": true,
+      "severity": 9
+    }
+  },
+
+  "_websocket_client_messages": {
+    "_comment": "Messages the frontend can send to /ws/nuclear",
+    "ping":           { "type": "ping", "ts": 1735000000000 },
+    "subscribe":      { "type": "subscribe", "channels": ["nuclear", "price"] },
+    "inject_event":   { "type": "inject_event", "text": "nuclear strike reported", "vol": 2.5, "sentiment": -0.9 },
+    "get_snapshot":   { "type": "get_snapshot" },
+    "get_history":    { "type": "get_history", "n": 20 }
+  },
+
+  "_severity_action_map": {
+    "0-4":  "normal            — no action",
+    "5-6":  "pause_new_entries — halt new entries, keep existing",
+    "7-8":  "hedge_mode        — max risk 15%, open inverse hedges",
+    "9-10": "nuclear_mode      — full liquidation + trading halt"
+  },
+
+  "_rl_action_map": {
+    "0": "NORMAL  — continue trading",
+    "1": "PAUSE   — halt new entries",
+    "2": "HEDGE   — reduce risk to 15%",
+    "3": "NUCLEAR — full liquidation + halt"
+  }
+}
