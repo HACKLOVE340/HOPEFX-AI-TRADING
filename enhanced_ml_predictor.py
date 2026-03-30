@@ -344,13 +344,14 @@ class AdvancedFeatureEngineer:
                 )
 
             # Garman-Klass volatility (open-high-low-close)
+            # The inner term can be negative when low/open is far from 1, so
+            # clip to 0 before sqrt to avoid NaN propagation.
             if all(c in df.columns for c in ["open", "high", "low"]):
                 log_ho = np.log(df["high"] / df["open"])
                 log_lo = np.log(df["low"] / df["open"])
-                np.log(df["close"] / df["open"])
-
+                gk_inner = (0.5 * log_ho**2 - (2 * np.log(2) - 1) * log_lo**2).clip(lower=0)
                 features[f"garman_klass_{w}"] = (
-                    np.sqrt(0.5 * log_ho**2 - (2 * np.log(2) - 1) * log_lo**2)
+                    np.sqrt(gk_inner)
                     .rolling(w)
                     .mean()
                 )
