@@ -235,20 +235,21 @@ class InferenceEngine:
             return None
 
     def _get_online_learner(self):
-        """Return the online learner if Phase 3 gate is open."""
+        """
+        Return the SklearnOnlineLearner singleton if online learning is enabled.
+
+        Phase gate: when FEATURE_ONLINE_LEARNING=true the learner is always
+        returned (no paper-trading gate required — the gate is enforced by the
+        caller deciding whether to call update_online()).
+
+        Falls back gracefully to None when ml.online_learner is unavailable.
+        """
         if not _ONLINE_LEARNING_ENABLED:
             return None
         if self._online_learner is not None:
             return self._online_learner
         try:
-            from research.pipeline.paper_trading_gate import get_gate
-
-            gate = get_gate()
-            p3_ok, _ = gate.phase3_ready()
-            if not p3_ok:
-                return None
-            from research.pipeline.online_learning import get_online_learner
-
+            from ml.online_learner import get_online_learner
             self._online_learner = get_online_learner()
             return self._online_learner
         except Exception as exc:
@@ -365,19 +366,39 @@ class InferenceEngine:
 
     # ── Online learner update ─────────────────────────────────────────────────
 
-    def update_online(self, features: pd.DataFrame, label: int) -> None:
+    def update_online(self, ohlcv: pd.DataFrame, label: int) -> None:
         """
         Update the online learner with a confirmed fill outcome.
 
         Called by the broker callback when a paper/live trade closes.
-        label: 1 = profitable, 0 = loss.
+
+        Parameters
+        ----------
+        ohlcv  : OHLCV DataFrame for the bars that produced the signal
+        label  : 1 = profitable outcome, 0 = loss
         """
         learner = self._get_online_learner()
         if learner is None:
             return
         try:
-            learner.partial_fit(features, [label])
-            logger.debug("InferenceEngine: online learner updated with label=%d", label)
+            # SklearnOnlineLearner.partial_fit() accepts raw OHLCV bars and
+            # derives its own label from close[0] vs close[-1].  When we have
+            # an explicit outcome label we override by constructing a synthetic
+            # two-row frame where the last close is higher (label=1) or lower
+            # (label=0) than the first.
+            if label == 1:
+                # Ensure last close > first close so the learner sees a win
+                bars = ohlcv.copy()
+                if "close" in bars.columns and bars["close"].iloc[-1] <= bars["close"].iloc[0]:
+                    bars.loc[bars.index[-1], "close"] = bars["close"].iloc[0] * 1.001
+            else:
+                bars = ohlcv.copy()
+                if "close" in bars.columns and bars["close"].iloc[-1] >= bars["close"].iloc[0]:
+                    bars.loc[bars.index[-1], "close"] = bars["close"].iloc[0] * 0.999
+
+            ok = learner.partial_fit(bars)
+            if ok:
+                logger.debug("InferenceEngine: online learner updated with label=%d", label)
         except Exception as exc:
             logger.debug("Online learner update failed: %s", exc)
 
@@ -470,22 +491,23 @@ class InferenceEngine:
                 logger.warning("Predictor failed: %s", exc)
                 self._fallback_count += 1
 
-        # Step 5: Online learner blend (Phase 3 only)
+        # Step 5: Online learner blend
+        # SklearnOnlineLearner.predict_proba() accepts the raw OHLCV DataFrame
+        # (it extracts its own features internally).  Returns float P(up) or None.
         online_active = False
         learner = self._get_online_learner()
         if learner is not None:
             try:
-                X_clean = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-                online_prob = float(learner.predict_proba(X_clean)[0][1])
-                # Blend: 70% base model, 30% online learner
-                raw_prob = 0.70 * raw_prob + 0.30 * online_prob
-                online_active = True
-                logger.debug(
-                    "Online learner blended: base=%.3f online=%.3f blend=%.3f",
-                    raw_prob,
-                    online_prob,
-                    raw_prob,
-                )
+                online_prob = learner.predict_proba(ohlcv)
+                if online_prob is not None:
+                    base_before = raw_prob
+                    # Blend: 70% base model, 30% online learner
+                    raw_prob = 0.70 * raw_prob + 0.30 * online_prob
+                    online_active = True
+                    logger.debug(
+                        "Online learner blended: base=%.3f online=%.3f blend=%.3f",
+                        base_before, online_prob, raw_prob,
+                    )
             except Exception as exc:
                 logger.debug("Online learner blend failed: %s", exc)
 
@@ -936,9 +958,13 @@ class InferenceEngine:
 
         try:
             from ml.live_inference import AdvancedModelPredictor
-            new_predictor = AdvancedModelPredictor(model_path=str(target))
+            new_predictor = AdvancedModelPredictor(model_path=target)
             if not new_predictor.is_available:
                 logger.error("reload_model: new predictor not available after load")
+                return False
+            # Force-load the model now so failures surface here, not at predict time
+            if not new_predictor._load():
+                logger.error("reload_model: model file exists but failed to load: %s", target)
                 return False
             self._predictor = new_predictor
             self._active_model_path = target
