@@ -41,6 +41,81 @@ def event_loop():
     loop.close()
 
 
+_CANONICAL_JWT_SECRET = os.environ.get(
+    "SECURITY_JWT_SECRET",
+    "test-only-jwt-secret-key-minimum-32-chars!!",
+)
+
+
+@pytest.fixture(autouse=True)
+def _restore_critical_env_vars():
+    """
+    Snapshot and restore critical environment variables after every test.
+
+    Prevents test-ordering pollution from tests that mutate env vars without
+    using monkeypatch (e.g. setting SECURITY_JWT_SECRET to a short value to
+    test validation, then failing to restore it).
+    """
+    _KEYS = (
+        "SECURITY_JWT_SECRET",
+        "JWT_SECRET",
+        "APP_ENV",
+        "BROKER",
+    )
+    snapshot = {k: os.environ.get(k) for k in _KEYS}
+    # Ensure canonical JWT secret is always set going into each test
+    os.environ.setdefault("SECURITY_JWT_SECRET", _CANONICAL_JWT_SECRET)
+    yield
+    # Restore exact pre-test state
+    for k, v in snapshot.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    # Always guarantee a valid JWT secret after teardown
+    if len(os.environ.get("SECURITY_JWT_SECRET", "")) < 32:
+        os.environ["SECURITY_JWT_SECRET"] = _CANONICAL_JWT_SECRET
+
+
+@pytest.fixture(autouse=True)
+def _reset_global_kill_switch():
+    """
+    Reset the global kill switch singleton after every test.
+
+    Tests that activate the kill switch (e.g. drawdown breach tests) write
+    a flag file to disk.  Without cleanup, subsequent tests that expect the
+    kill switch to be inactive fail because the persisted state is restored
+    on the next KillSwitch instantiation.
+    """
+    yield
+    # Teardown: deactivate and remove flag/state files from the global instance
+    try:
+        from pathlib import Path
+        flag = Path(__file__).parent.parent / "kill_switch.flag"
+        state = flag.with_suffix(".state.json")
+        for f in (flag, state):
+            if f.exists():
+                f.unlink(missing_ok=True)
+        # Reset the in-memory singleton if already imported
+        import sys
+        ks_mod = sys.modules.get("kill_switch")
+        if ks_mod is not None:
+            ks = getattr(ks_mod, "kill_switch", None)
+            if ks is not None and callable(getattr(ks, "_deactivate_internal", None)):
+                ks._deactivate_internal()
+            elif ks is not None:
+                ks._active = False
+                ks._reason = ""
+        app_mod = sys.modules.get("app")
+        if app_mod is not None:
+            ks = getattr(app_mod, "kill_switch", None)
+            if ks is not None:
+                ks._active = False
+                ks._reason = ""
+    except Exception:
+        pass
+
+
 @pytest.fixture
 async def paper_broker():
     """Create paper trading broker for tests"""
