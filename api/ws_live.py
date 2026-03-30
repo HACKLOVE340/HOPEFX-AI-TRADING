@@ -52,7 +52,6 @@ import asyncio
 import json
 import logging
 import os
-import random
 from datetime import datetime, timezone
 from typing import Dict, Optional, Set
 
@@ -312,11 +311,7 @@ def _make_tick(symbol: str) -> Optional[dict]:
     if live is None:
         return None
 
-    # Tiny sub-pip jitter (≤ 0.5 × spread) so the stream looks like a real
-    # tick feed rather than a static snapshot.  This is NOT simulation —
-    # the mid price is always anchored to the live broker value.
-    jitter = cfg["spread"] * 0.05 * (random.random() - 0.5)
-    mid = live + jitter
+    mid = live
     cfg["price"] = mid
 
     half = cfg["spread"] / 2
