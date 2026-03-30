@@ -34,6 +34,9 @@ import CustomIndicators     from './pages/CustomIndicators';
 // ── AI Chart Bot ──────────────────────────────────────────────────────────────
 import { ChartDashboard }   from './features/chart-bot';
 
+// ── Nuclear Dashboard ─────────────────────────────────────────────────────────
+import NuclearDashboardPage from './pages/NuclearDashboardPage';
+
 // ── Ported pages (dashboard → frontend) ──────────────────────────────────────
 import Trading              from './pages/Trading';
 import TradeJournal         from './pages/TradeJournal';
@@ -94,6 +97,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
 // ── Nav items ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { path: '/dashboard',     label: 'Dashboard',       icon: '📊', auth: true  },
+  { path: '/nuclear',       label: 'Nuclear Dashboard', icon: '☢️', auth: true  },
   { path: '/trading',       label: 'AI Chart Bot',    icon: '🧠', auth: true  },
   { path: '/journal',       label: 'Trade Journal',   icon: '📓', auth: true  },
   { path: '/performance',   label: 'Performance',     icon: '🏆', auth: true  },
@@ -256,6 +260,9 @@ const AppShell: React.FC = () => {
           <Route path="/ab-testing"   element={wrap(<AuthGuard><ABTesting /></AuthGuard>)} />
           <Route path="/correlation"  element={wrap(<AuthGuard><CorrelationDashboard /></AuthGuard>)} />
           <Route path="/indicators"   element={wrap(<AuthGuard><CustomIndicators /></AuthGuard>)} />
+
+          {/* Nuclear AI Dashboard */}
+          <Route path="/nuclear"      element={wrap(<AuthGuard><NuclearDashboardPage /></AuthGuard>)} />
 
           {/* AI Chart Bot — replaces the old basic Trading page */}
           <Route path="/trading"      element={wrap(<AuthGuard><ChartDashboard /></AuthGuard>)} />
