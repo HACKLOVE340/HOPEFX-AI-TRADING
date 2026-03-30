@@ -2,50 +2,47 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { TradingStackParamList } from '../../types';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useTradingStore } from '../../store/tradingStore';
-import { useLivePrice } from '../../hooks/useLivePrice';
 import { Card } from '../../components/Card';
-import { COLORS, SPACING, RADIUS } from '../../utils/theme';
+import { COLORS, SPACING, RADIUS, TEXT, SHADOW, pnlColor, sideColor } from '../../utils/theme';
 import { formatCurrency, formatPnl, formatPct, formatDateTime } from '../../utils/formatters';
+import { TradingStackParamList } from '../../types';
 
-type Props = {
-  navigation: NativeStackNavigationProp<TradingStackParamList, 'PositionDetail'>;
-  route: RouteProp<TradingStackParamList, 'PositionDetail'>;
-};
+type RouteT = RouteProp<TradingStackParamList, 'PositionDetail'>;
 
-export function PositionDetailScreen({ navigation, route }: Props) {
-  const { positionId } = route.params;
+export function PositionDetailScreen() {
+  const navigation = useNavigation();
+  const route = useRoute<RouteT>();
   const { positions, closePosition } = useTradingStore();
-  const position = positions.find((p) => p.id === positionId);
-  const quote = useLivePrice(position?.symbol ?? '');
+  const position = positions.find((p) => p.id === route.params.positionId);
 
   if (!position) {
     return (
       <SafeAreaView style={styles.safe}>
-        <Text style={styles.notFound}>Position not found or already closed.</Text>
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>Position not found</Text>
+        </View>
       </SafeAreaView>
     );
   }
 
-  const pnlColor = position.unrealized_pnl >= 0 ? COLORS.profit : COLORS.loss;
-  const currentPrice = quote?.mid ?? position.current_price;
-  const liveUnrealizedPnl = (currentPrice - position.entry_price) *
-    position.quantity * (position.side === 'buy' ? 1 : -1);
+  const pnlC = pnlColor(position.unrealized_pnl);
+  const sideC = sideColor(position.side);
 
   const handleClose = () => {
     Alert.alert(
       'Close Position',
-      `Close ${position.side.toUpperCase()} ${position.quantity} lots of ${position.symbol}?\n` +
-      `Current P&L: ${formatPnl(liveUnrealizedPnl)}`,
+      `Close ${position.side.toUpperCase()} ${position.quantity} ${position.symbol} at market?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Close Position',
           style: 'destructive',
           onPress: async () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             await closePosition(position.id);
             navigation.goBack();
           },
@@ -57,39 +54,40 @@ export function PositionDetailScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* P&L Hero */}
-        <Card style={styles.heroCard} elevated>
-          <Text style={styles.heroSymbol}>{position.symbol}</Text>
-          <Text style={[styles.heroPnl, { color: pnlColor }]}>
-            {formatPnl(liveUnrealizedPnl)}
-          </Text>
-          <Text style={[styles.heroPct, { color: pnlColor }]}>
-            {formatPct(position.unrealized_pnl_pct)}
-          </Text>
-          <View style={[styles.sideBadge, { backgroundColor: position.side === 'buy' ? COLORS.buy + '33' : COLORS.sell + '33' }]}>
-            <Text style={[styles.sideText, { color: position.side === 'buy' ? COLORS.buy : COLORS.sell }]}>
-              {position.side.toUpperCase()} · {position.quantity} lots
-            </Text>
-          </View>
+        {/* P&L hero */}
+        <Card elevated style={styles.heroCard}>
+          <Text style={styles.heroLabel}>UNREALIZED P&L</Text>
+          <Text style={[styles.heroValue, { color: pnlC }]}>{formatPnl(position.unrealized_pnl)}</Text>
+          <Text style={[styles.heroPct, { color: pnlC }]}>{formatPct(position.unrealized_pnl_pct)}</Text>
         </Card>
 
         {/* Details */}
         <Card style={styles.detailCard}>
           {[
-            ['Entry Price', position.entry_price.toFixed(2)],
-            ['Current Price', currentPrice.toFixed(2)],
-            ['Quantity', `${position.quantity} lots`],
-            ['Opened', formatDateTime(position.opened_at)],
-          ].map(([label, value]) => (
-            <View key={label} style={styles.row}>
-              <Text style={styles.rowLabel}>{label}</Text>
-              <Text style={styles.rowValue}>{value}</Text>
-            </View>
+            { label: 'Symbol',        value: position.symbol },
+            { label: 'Side',          value: position.side.toUpperCase(), color: sideC },
+            { label: 'Quantity',      value: `${position.quantity} lots` },
+            { label: 'Entry Price',   value: position.entry_price.toFixed(2) },
+            { label: 'Current Price', value: position.current_price.toFixed(2) },
+            { label: 'Stop Loss',     value: position.stop_loss?.toFixed(2) ?? '—', color: COLORS.loss },
+            { label: 'Take Profit',   value: position.take_profit?.toFixed(2) ?? '—', color: COLORS.profit },
+            { label: 'Margin Used',   value: position.margin_used ? formatCurrency(position.margin_used) : '—' },
+            { label: 'Swap',          value: position.swap ? formatPnl(position.swap) : '—' },
+            { label: 'Opened',        value: formatDateTime(position.opened_at) },
+          ].map(({ label, value, color }, i, arr) => (
+            <React.Fragment key={label}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>{label}</Text>
+                <Text style={[styles.detailValue, color ? { color } : {}]}>{value}</Text>
+              </View>
+              {i < arr.length - 1 && <View style={styles.divider} />}
+            </React.Fragment>
           ))}
         </Card>
 
-        <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
-          <Text style={styles.closeBtnText}>Close Position</Text>
+        <TouchableOpacity style={styles.closeBtn} onPress={handleClose} activeOpacity={0.85}>
+          <Ionicons name="close-circle" size={20} color={COLORS.white} />
+          <Text style={styles.closeBtnText}>CLOSE POSITION AT MARKET</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -97,22 +95,19 @@ export function PositionDetailScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: SPACING.md, gap: SPACING.md },
-  notFound: { color: COLORS.textMuted, textAlign: 'center', marginTop: SPACING.xl },
-  heroCard: { alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.xl },
-  heroSymbol: { color: COLORS.textMuted, fontSize: 14, fontWeight: '600' },
-  heroPnl: { fontSize: 40, fontWeight: '900', fontFamily: 'Courier' },
-  heroPct: { fontSize: 18, fontWeight: '700' },
-  sideBadge: { paddingHorizontal: SPACING.md, paddingVertical: 6, borderRadius: RADIUS.full, marginTop: SPACING.sm },
-  sideText: { fontWeight: '700', fontSize: 14 },
-  detailCard: { gap: SPACING.sm },
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: SPACING.xs, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  rowLabel: { color: COLORS.textMuted, fontSize: 13 },
-  rowValue: { color: COLORS.text, fontSize: 13, fontWeight: '600' },
-  closeBtn: {
-    backgroundColor: COLORS.sell, borderRadius: RADIUS.md,
-    padding: SPACING.md, alignItems: 'center',
-  },
-  closeBtnText: { color: COLORS.white, fontWeight: '800', fontSize: 16 },
+  safe:        { flex: 1, backgroundColor: COLORS.background },
+  content:     { padding: SPACING.md, gap: SPACING.md, paddingBottom: SPACING.xxl },
+  empty:       { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyText:   { ...TEXT.body, color: COLORS.textMuted },
+  heroCard:    { alignItems: 'center', gap: SPACING.xs, paddingVertical: SPACING.lg },
+  heroLabel:   { ...TEXT.label, color: COLORS.textMuted },
+  heroValue:   { ...TEXT.displayLG },
+  heroPct:     { ...TEXT.numericMD },
+  detailCard:  { gap: 0 },
+  detailRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: SPACING.sm },
+  detailLabel: { ...TEXT.body, color: COLORS.textMuted },
+  detailValue: { ...TEXT.numericSM, color: COLORS.text },
+  divider:     { height: 1, backgroundColor: COLORS.border },
+  closeBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm, height: 56, backgroundColor: COLORS.sell, borderRadius: RADIUS.lg, ...SHADOW.sellGlow },
+  closeBtnText:{ color: COLORS.white, fontWeight: '800', fontSize: 14, letterSpacing: 1 },
 });

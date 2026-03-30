@@ -2,39 +2,39 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { TradingStackParamList } from '../../types';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { useTradingStore } from '../../store/tradingStore';
 import { Card } from '../../components/Card';
-import { COLORS, SPACING, RADIUS } from '../../utils/theme';
-import { formatDateTime, formatCurrency } from '../../utils/formatters';
+import { COLORS, SPACING, RADIUS, TEXT, sideColor } from '../../utils/theme';
+import { formatDateTime } from '../../utils/formatters';
+import { TradingStackParamList } from '../../types';
 
-type Props = {
-  navigation: NativeStackNavigationProp<TradingStackParamList, 'OrderDetail'>;
-  route: RouteProp<TradingStackParamList, 'OrderDetail'>;
-};
+type RouteT = RouteProp<TradingStackParamList, 'OrderDetail'>;
 
-export function OrderDetailScreen({ navigation, route }: Props) {
-  const { orderId } = route.params;
+export function OrderDetailScreen() {
+  const navigation = useNavigation();
+  const route = useRoute<RouteT>();
   const { orders, cancelOrder } = useTradingStore();
-  const order = orders.find((o) => o.id === orderId);
+  const order = orders.find((o) => o.id === route.params.orderId);
 
   if (!order) {
     return (
       <SafeAreaView style={styles.safe}>
-        <Text style={styles.notFound}>Order not found.</Text>
+        <View style={styles.empty}><Text style={styles.emptyText}>Order not found</Text></View>
       </SafeAreaView>
     );
   }
 
+  const canCancel = order.status === 'open' || order.status === 'pending';
+
   const handleCancel = () => {
-    Alert.alert('Cancel Order', 'Are you sure you want to cancel this order?', [
+    Alert.alert('Cancel Order', 'Cancel this order?', [
       { text: 'No', style: 'cancel' },
       {
-        text: 'Yes, Cancel',
-        style: 'destructive',
+        text: 'Cancel Order', style: 'destructive',
         onPress: async () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           await cancelOrder(order.id);
           navigation.goBack();
         },
@@ -42,51 +42,35 @@ export function OrderDetailScreen({ navigation, route }: Props) {
     ]);
   };
 
-  const rows: [string, string][] = [
-    ['Order ID', order.id.slice(0, 16) + '…'],
-    ['Symbol', order.symbol],
-    ['Side', order.side.toUpperCase()],
-    ['Type', order.type.toUpperCase()],
-    ['Quantity', `${order.quantity} lots`],
-    ['Status', order.status.toUpperCase()],
-    ['Created', formatDateTime(order.created_at)],
-    ...(order.price ? [['Limit Price', order.price.toFixed(2)] as [string, string]] : []),
-    ...(order.stop_loss ? [['Stop Loss', order.stop_loss.toFixed(2)] as [string, string]] : []),
-    ...(order.take_profit ? [['Take Profit', order.take_profit.toFixed(2)] as [string, string]] : []),
-    ...(order.fill_price ? [['Fill Price', order.fill_price.toFixed(2)] as [string, string]] : []),
-    ...(order.filled_at ? [['Filled At', formatDateTime(order.filled_at)] as [string, string]] : []),
-  ];
-
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.card}>
-          <View style={styles.header}>
-            <Text style={styles.symbol}>{order.symbol}</Text>
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: order.status === 'filled' ? COLORS.buy + '33' : COLORS.warning + '33' }
-            ]}>
-              <Text style={[
-                styles.statusText,
-                { color: order.status === 'filled' ? COLORS.buy : COLORS.warning }
-              ]}>
-                {order.status.toUpperCase()}
-              </Text>
-            </View>
-          </View>
-
-          {rows.map(([label, value]) => (
-            <View key={label} style={styles.row}>
-              <Text style={styles.rowLabel}>{label}</Text>
-              <Text style={styles.rowValue}>{value}</Text>
-            </View>
+          {[
+            { label: 'Symbol',      value: order.symbol },
+            { label: 'Side',        value: order.side.toUpperCase(), color: sideColor(order.side) },
+            { label: 'Type',        value: order.type.toUpperCase() },
+            { label: 'Quantity',    value: `${order.quantity} lots` },
+            { label: 'Price',       value: order.price?.toFixed(2) ?? 'Market' },
+            { label: 'Stop Loss',   value: order.stop_loss?.toFixed(2) ?? '—', color: COLORS.loss },
+            { label: 'Take Profit', value: order.take_profit?.toFixed(2) ?? '—', color: COLORS.profit },
+            { label: 'Status',      value: order.status.toUpperCase(), color: order.status === 'filled' ? COLORS.profit : COLORS.accent },
+            { label: 'Created',     value: formatDateTime(order.created_at) },
+            { label: 'Filled At',   value: order.filled_at ? formatDateTime(order.filled_at) : '—' },
+            { label: 'Fill Price',  value: order.fill_price?.toFixed(2) ?? '—' },
+          ].map(({ label, value, color }, i, arr) => (
+            <React.Fragment key={label}>
+              <View style={styles.row}>
+                <Text style={styles.label}>{label}</Text>
+                <Text style={[styles.value, color ? { color } : {}]}>{value}</Text>
+              </View>
+              {i < arr.length - 1 && <View style={styles.divider} />}
+            </React.Fragment>
           ))}
         </Card>
-
-        {(order.status === 'open' || order.status === 'pending') && (
+        {canCancel && (
           <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
-            <Text style={styles.cancelBtnText}>Cancel Order</Text>
+            <Text style={styles.cancelBtnText}>CANCEL ORDER</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -95,20 +79,15 @@ export function OrderDetailScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: SPACING.md, gap: SPACING.md },
-  notFound: { color: COLORS.textMuted, textAlign: 'center', marginTop: SPACING.xl },
-  card: { gap: SPACING.sm },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },
-  symbol: { color: COLORS.text, fontSize: 22, fontWeight: '800' },
-  statusBadge: { paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: RADIUS.sm },
-  statusText: { fontSize: 12, fontWeight: '700' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: SPACING.xs, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  rowLabel: { color: COLORS.textMuted, fontSize: 13 },
-  rowValue: { color: COLORS.text, fontSize: 13, fontWeight: '600' },
-  cancelBtn: {
-    backgroundColor: COLORS.sell + '22', borderWidth: 1, borderColor: COLORS.sell,
-    borderRadius: RADIUS.md, padding: SPACING.md, alignItems: 'center',
-  },
-  cancelBtnText: { color: COLORS.sell, fontWeight: '700', fontSize: 15 },
+  safe:         { flex: 1, backgroundColor: COLORS.background },
+  content:      { padding: SPACING.md, gap: SPACING.md, paddingBottom: SPACING.xxl },
+  empty:        { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyText:    { ...TEXT.body, color: COLORS.textMuted },
+  card:         { gap: 0 },
+  row:          { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: SPACING.sm },
+  label:        { ...TEXT.body, color: COLORS.textMuted },
+  value:        { ...TEXT.numericSM, color: COLORS.text },
+  divider:      { height: 1, backgroundColor: COLORS.border },
+  cancelBtn:    { height: 52, backgroundColor: COLORS.surfaceAlt, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.loss + '55' },
+  cancelBtnText:{ color: COLORS.loss, fontWeight: '800', letterSpacing: 1 },
 });

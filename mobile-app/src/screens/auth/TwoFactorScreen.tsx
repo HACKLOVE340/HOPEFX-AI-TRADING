@@ -1,45 +1,40 @@
 // HOPEFX-AI-TRADING — AGPL-3.0
 import React, { useState, useRef } from 'react';
-import {
-  View, Text, TextInput, StyleSheet,
-  KeyboardAvoidingView, Platform, TouchableOpacity,
-} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
-import { AuthStackParamList } from '../../types';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
+import { apiClient } from '../../services/apiClient';
 import { useAuthStore } from '../../store/authStore';
-import { Button } from '../../components/Button';
-import { ErrorBanner } from '../../components/ErrorBanner';
-import { COLORS, SPACING, RADIUS } from '../../utils/theme';
+import { wsClient } from '../../services/wsClient';
+import { COLORS, SPACING, RADIUS, TEXT, SHADOW } from '../../utils/theme';
+import { AuthStackParamList } from '../../types';
 
-type Props = {
-  navigation: NativeStackNavigationProp<AuthStackParamList, 'TwoFactor'>;
-  route: RouteProp<AuthStackParamList, 'TwoFactor'>;
-};
+type RouteT = RouteProp<AuthStackParamList, 'TwoFactor'>;
 
-export function TwoFactorScreen({ navigation, route }: Props) {
-  const [code, setCode] = useState('');
+export function TwoFactorScreen() {
+  const navigation = useNavigation();
+  const route = useRoute<RouteT>();
+  const { setUser } = useAuthStore();
+  const [code, setCode]       = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const inputRef = useRef<TextInput>(null);
-
-  const { login } = useAuthStore();
-  const { email, password } = route.params;
+  const [error, setError]     = useState('');
 
   const handleVerify = async () => {
-    if (code.length !== 6) {
-      setError('Enter the 6-digit code from your authenticator app.');
-      return;
-    }
+    if (code.length !== 6) return;
     setLoading(true);
     setError('');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      // Re-login with 2FA code appended — backend expects totp_code in body
-      await login(email, password);
-      // Navigation handled by RootNavigator auth state
+      const tokens = await apiClient.verifyTwoFactorLogin(route.params.email, route.params.password, code);
+      apiClient.setAuthToken(tokens.access_token);
+      const user = await apiClient.getMe();
+      wsClient.connect(tokens.access_token);
+      setUser(user);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      setError('Invalid code. Please try again.');
+      setError('Invalid code. Try again.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
     }
@@ -47,59 +42,40 @@ export function TwoFactorScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.kav}>
-        <View style={styles.container}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
+      <View style={styles.content}>
+        <Text style={styles.title}>Two-Factor Auth</Text>
+        <Text style={styles.subtitle}>Enter the 6-digit code from your authenticator app.</Text>
 
-          <Text style={styles.title}>Two-Factor Auth</Text>
-          <Text style={styles.subtitle}>
-            Enter the 6-digit code from your authenticator app.
-          </Text>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {error ? <ErrorBanner message={error} onDismiss={() => setError('')} /> : null}
+        <TextInput
+          style={styles.codeInput}
+          value={code}
+          onChangeText={(t) => { setCode(t.replace(/\D/g, '').slice(0, 6)); }}
+          keyboardType="number-pad"
+          maxLength={6}
+          placeholder="000000"
+          placeholderTextColor={COLORS.textDim}
+          selectionColor={COLORS.accent}
+          textAlign="center"
+        />
 
-          <TextInput
-            ref={inputRef}
-            style={styles.codeInput}
-            value={code}
-            onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
-            placeholder="000000"
-            placeholderTextColor={COLORS.textDim}
-            keyboardType="number-pad"
-            maxLength={6}
-            textAlign="center"
-            autoFocus
-          />
-
-          <Button
-            title="Verify"
-            onPress={handleVerify}
-            loading={loading}
-            disabled={code.length !== 6}
-            fullWidth
-            style={styles.btn}
-          />
-        </View>
-      </KeyboardAvoidingView>
+        <TouchableOpacity style={[styles.btn, (loading || code.length !== 6) && styles.btnDisabled]} onPress={handleVerify} disabled={loading || code.length !== 6}>
+          {loading ? <ActivityIndicator color={COLORS.black} /> : <Text style={styles.btnText}>VERIFY</Text>}
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  kav: { flex: 1 },
-  container: { flex: 1, padding: SPACING.lg, gap: SPACING.md },
-  back: { marginBottom: SPACING.sm },
-  backText: { color: COLORS.accent, fontSize: 15 },
-  title: { fontSize: 26, fontWeight: '700', color: COLORS.text },
-  subtitle: { color: COLORS.textMuted, fontSize: 14, lineHeight: 20 },
-  codeInput: {
-    backgroundColor: COLORS.surface, borderWidth: 2, borderColor: COLORS.accent,
-    borderRadius: RADIUS.lg, padding: SPACING.lg, color: COLORS.text,
-    fontSize: 32, fontWeight: '700', letterSpacing: 12, textAlign: 'center',
-    marginVertical: SPACING.lg,
-  },
-  btn: { marginTop: SPACING.sm },
+  safe:      { flex: 1, backgroundColor: COLORS.background },
+  content:   { flex: 1, padding: SPACING.lg, gap: SPACING.lg, justifyContent: 'center' },
+  title:     { ...TEXT.h1, color: COLORS.text, textAlign: 'center' },
+  subtitle:  { ...TEXT.body, color: COLORS.textMuted, textAlign: 'center' },
+  error:     { ...TEXT.bodySM, color: COLORS.loss, textAlign: 'center' },
+  codeInput: { height: 72, backgroundColor: COLORS.surfaceAlt, borderRadius: RADIUS.lg, borderWidth: 2, borderColor: COLORS.borderAccent, color: COLORS.accent, fontSize: 36, fontWeight: '800', fontFamily: 'Courier New', letterSpacing: 12 },
+  btn:       { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, height: 52, alignItems: 'center', justifyContent: 'center', ...SHADOW.accentGlow },
+  btnDisabled: { opacity: 0.5 },
+  btnText:   { color: COLORS.black, fontWeight: '800', fontSize: 15, letterSpacing: 2 },
 });
