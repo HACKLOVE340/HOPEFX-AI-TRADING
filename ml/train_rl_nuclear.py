@@ -6,6 +6,8 @@
 """
 ml/train_rl_nuclear.py
 ======================
+TRAINING SCRIPT ONLY — not imported by any production path.
+
 Train the NuclearDecision PPO agent that powers NuclearHopeFXSupervisor.
 
 The agent learns to map a 7-dim observation vector to one of four discrete
@@ -42,7 +44,6 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import random
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -136,7 +137,7 @@ if _GYM_AVAILABLE:
             self._peak_equity = 100_000.0
             self._nuclear_level = 0
             self._trading_paused = False
-            self._obs = self._generate_obs()
+            self._obs = self._sample_training_obs()
             return self._obs.copy(), {}
 
         def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict]:
@@ -161,13 +162,13 @@ if _GYM_AVAILABLE:
                 self._nuclear_level = max(0, self._nuclear_level - 1)
                 self._trading_paused = False
 
-            # Simulate equity change
+            # Simulate equity change using the seeded Gymnasium RNG
             if not self._trading_paused:
-                pnl = random.gauss(0.0002, 0.001) * self._equity
+                pnl = self.np_random.normal(0.0002, 0.001) * self._equity
                 self._equity += pnl
                 self._peak_equity = max(self._peak_equity, self._equity)
 
-            self._obs = self._generate_obs()
+            self._obs = self._sample_training_obs()
             terminated = self._step >= self.episode_length
             truncated = False
             info: Dict[str, Any] = {
@@ -185,7 +186,7 @@ if _GYM_AVAILABLE:
             if self.reward_mode == "sharpe_minus_drawdown":
                 # Base: small positive reward for staying in market when safe
                 if not self._trading_paused and severity < 5:
-                    pnl_sim = random.gauss(0.0002, 0.001)
+                    pnl_sim = self.np_random.normal(0.0002, 0.001)
                     reward += pnl_sim / (vol + 1e-6)
 
                 # Drawdown penalty
@@ -220,20 +221,30 @@ if _GYM_AVAILABLE:
 
             return float(reward)
 
-        def _generate_obs(self) -> np.ndarray:
-            """Generate a synthetic observation for the next step."""
-            # Occasionally inject high-severity events (10% of steps)
-            if random.random() < 0.05:
-                severity = random.uniform(8.0, 10.0)
-            elif random.random() < 0.10:
-                severity = random.uniform(5.0, 8.0)
-            else:
-                severity = random.uniform(0.0, 4.0)
+        def _sample_training_obs(self) -> np.ndarray:
+            """
+            Sample a stochastic observation for the current training step.
 
-            vol = max(0.1, random.gauss(1.0, 0.5))
-            sentiment = random.uniform(-1.0, 1.0)
-            confidence = random.uniform(0.2, 1.0)
-            exposure = random.uniform(0.0, 1.0)
+            Uses self.np_random (Gymnasium's seeded RNG) so episodes are
+            fully reproducible when a seed is passed to reset().
+
+            Severity distribution:
+              5 % of steps → critical event  [8, 10]
+             10 % of steps → elevated event  [5,  8]
+             85 % of steps → normal market   [0,  4]
+            """
+            roll = self.np_random.random()
+            if roll < 0.05:
+                severity = self.np_random.uniform(8.0, 10.0)
+            elif roll < 0.15:
+                severity = self.np_random.uniform(5.0, 8.0)
+            else:
+                severity = self.np_random.uniform(0.0, 4.0)
+
+            vol        = max(0.1, self.np_random.normal(1.0, 0.5))
+            sentiment  = self.np_random.uniform(-1.0, 1.0)
+            confidence = self.np_random.uniform(0.2, 1.0)
+            exposure   = self.np_random.uniform(0.0, 1.0)
             nuclear_level_norm = self._nuclear_level / 3.0
             paused = 1.0 if self._trading_paused else 0.0
 
