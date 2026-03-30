@@ -2384,6 +2384,12 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> List[Tic
     For real backtesting use real_data_backtest.py with actual XAUUSD tick data
     from a vendor (e.g. Dukascopy, Tick Data Suite, OANDA history API).
     """
+    import os as _os
+    if _os.getenv("APP_ENV", "production").lower() == "production":
+        raise RuntimeError(
+            "generate_test_data() cannot be called in production (APP_ENV=production). "
+            "Use real_data_backtest.py with actual XAUUSD tick data."
+        )
     warnings.warn(
         "generate_test_data() produces SYNTHETIC GBM data. "
         "Do not use for strategy validation or performance reporting. "
@@ -2486,43 +2492,51 @@ def run_comprehensive_backtest(use_real_data: bool = True):
     Run full backtest with all engine features.
 
     Args:
-        use_real_data: When True (default), attempt to fetch real XAUUSD 1h
-                       bars from Binance via real_data_backtest.py.  Falls
-                       back to synthetic GBM data only if the real feed is
-                       unavailable (no ccxt, no network, etc.).
-                       Pass False to force synthetic data (unit tests only).
+        use_real_data: When True (default), fetch real XAUUSD 1h bars from
+                       Binance via real_data_backtest.py.  Raises RuntimeError
+                       if real data is unavailable in APP_ENV=production.
+                       Pass False only in APP_ENV=development/test (smoke-test).
 
     WARNING: Results on synthetic data are NOT valid for strategy evaluation.
-    The synthetic GBM path exists only for engine smoke-tests.
+    The synthetic GBM path exists only for engine smoke-tests in non-production.
     """
+    import os as _os
+    _app_env = _os.getenv("APP_ENV", "production").lower()
+    _is_production = _app_env == "production"
+
     print("=" * 80)
     print("HOPEFX ENHANCED BACKTEST ENGINE v4.0 - COMPREHENSIVE TEST")
     print("=" * 80)
 
     # ── Data loading ──────────────────────────────────────────────────────────
     ticks: Optional[List[TickData]] = None
-    data_source = "synthetic"
+    data_source = "real/binance"
 
     if use_real_data:
         print("\n[1] Attempting to load real XAUUSD data via real_data_backtest.py ...")
         ticks = _load_real_ticks(max_bars=5000)
         if ticks:
-            data_source = "real/binance"
             print(f"    Loaded {len(ticks)} real ticks")
             print(
                 f"    Time range: {ticks[0].timestamp.to_datetime()} "
                 f"to {ticks[-1].timestamp.to_datetime()}"
             )
         else:
-            print("    Real data unavailable — falling back to SYNTHETIC data.")
-            print()
-            print("    *** WARNING ***")
-            print("    Backtest results on synthetic GBM data are NOT valid for")
-            print("    strategy evaluation or performance reporting.  Install ccxt")
-            print("    and ensure network access to use real data.")
-            print()
+            if _is_production:
+                raise RuntimeError(
+                    "run_comprehensive_backtest(): real XAUUSD data unavailable. "
+                    "Install ccxt and ensure network access to Binance. "
+                    "Do not use synthetic data for production backtests."
+                )
+            print("    Real data unavailable — falling back to SYNTHETIC data (non-production only).")
+            print("    *** WARNING: Results are NOT valid for strategy evaluation. ***")
 
     if ticks is None:
+        if _is_production:
+            raise RuntimeError(
+                "run_comprehensive_backtest(): cannot use synthetic data in production "
+                "(APP_ENV=production). Provide real XAUUSD tick data."
+            )
         print("\n[1] Generating SYNTHETIC tick data (smoke-test only)...")
         warnings.warn(
             "run_comprehensive_backtest() is using SYNTHETIC GBM data. "
@@ -2532,6 +2546,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
             UserWarning,
             stacklevel=2,
         )
+        data_source = "synthetic"
         ticks = generate_test_data(n_ticks=5000)
         print(f"    Generated {len(ticks)} synthetic ticks")
         print(
