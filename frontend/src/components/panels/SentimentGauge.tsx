@@ -186,3 +186,7 @@ export function SentimentGauge() {
     </Panel>
   );
 }
+
+// ── Guarded export (ErrorBoundary + Suspense) ─────────────────────────────────
+import { withPanelGuard } from '../ui/withPanelGuard';
+export const SentimentGaugeGuarded = withPanelGuard(SentimentGauge, 'Sentiment', 3);

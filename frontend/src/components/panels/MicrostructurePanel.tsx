@@ -257,3 +257,7 @@ export function MicrostructurePanel() {
     </Panel>
   );
 }
+
+// ── Guarded export (ErrorBoundary + Suspense) ─────────────────────────────────
+import { withPanelGuard } from '../ui/withPanelGuard';
+export const MicrostructurePanelGuarded = withPanelGuard(MicrostructurePanel, 'Microstructure', 6);

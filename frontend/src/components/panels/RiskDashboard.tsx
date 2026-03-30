@@ -212,3 +212,7 @@ export function RiskDashboard() {
     </Panel>
   );
 }
+
+// ── Guarded export (ErrorBoundary + Suspense) ─────────────────────────────────
+import { withPanelGuard } from '../ui/withPanelGuard';
+export const RiskDashboardGuarded = withPanelGuard(RiskDashboard, 'Risk Dashboard', 4);
