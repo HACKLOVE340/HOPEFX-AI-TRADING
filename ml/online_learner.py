@@ -32,7 +32,8 @@ except ImportError:
     DataLoader = None  # type: ignore[assignment,misc]
     TensorDataset = None  # type: ignore[assignment,misc]
 from collections import deque
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd  # noqa: F401 — used in type annotations below
@@ -521,3 +522,169 @@ def get_online_learner(
         _learner_registry[symbol] = learner
 
     return _learner_registry[symbol]
+
+
+# ── XGBoostOnlineModel ────────────────────────────────────────────────────────
+
+@dataclass
+class ModelMetadata:
+    """Training metadata returned by XGBoostOnlineModel.fit()."""
+    val_score: float = 0.0
+    n_samples: int = 0
+    n_features: int = 0
+    train_score: float = 0.0
+    extra: Dict[str, Any] = field(default_factory=dict)
+
+
+class XGBoostOnlineModel:
+    """
+    Async-compatible XGBoost wrapper with incremental partial_fit support.
+
+    Designed for online learning loops where the model is retrained on
+    rolling windows without full refit overhead.  Uses XGBClassifier for
+    binary classification (direction prediction).
+
+    Attributes
+    ----------
+    _is_trained : bool  — True after first successful fit()
+    metadata    : ModelMetadata | None  — populated after fit()
+    """
+
+    def __init__(
+        self,
+        n_estimators: int = 100,
+        max_depth: int = 4,
+        learning_rate: float = 0.05,
+        subsample: float = 0.8,
+        colsample_bytree: float = 0.8,
+        eval_fraction: float = 0.2,
+        random_state: int = 42,
+    ) -> None:
+        try:
+            import xgboost as xgb  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                "xgboost is required for XGBoostOnlineModel. "
+                "Install with: pip install xgboost"
+            ) from exc
+
+        self._n_estimators = n_estimators
+        self._max_depth = max_depth
+        self._learning_rate = learning_rate
+        self._subsample = subsample
+        self._colsample_bytree = colsample_bytree
+        self._eval_fraction = eval_fraction
+        self._random_state = random_state
+
+        self._model: Any = None
+        self._is_trained: bool = False
+        self.metadata: Optional[ModelMetadata] = None
+
+    async def fit(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+    ) -> ModelMetadata:
+        """
+        Train (or retrain) the XGBoost model on (X, y).
+
+        Runs synchronously inside an executor so the event loop is not blocked.
+        Returns ModelMetadata with val_score populated.
+        """
+        import asyncio
+        loop = asyncio.get_event_loop()
+        meta = await loop.run_in_executor(None, self._fit_sync, X, y)
+        return meta
+
+    def _fit_sync(self, X: np.ndarray, y: np.ndarray) -> ModelMetadata:
+        from xgboost import XGBClassifier
+        from sklearn.model_selection import train_test_split
+        from sklearn.metrics import roc_auc_score
+
+        n_samples, n_features = X.shape
+        X_train, X_val, y_train, y_val = train_test_split(
+            X, y,
+            test_size=self._eval_fraction,
+            random_state=self._random_state,
+            stratify=y if len(np.unique(y)) > 1 else None,
+        )
+
+        model = XGBClassifier(
+            n_estimators=self._n_estimators,
+            max_depth=self._max_depth,
+            learning_rate=self._learning_rate,
+            subsample=self._subsample,
+            colsample_bytree=self._colsample_bytree,
+            random_state=self._random_state,
+            eval_metric="logloss",
+            use_label_encoder=False,
+            verbosity=0,
+        )
+        model.fit(
+            X_train, y_train,
+            eval_set=[(X_val, y_val)],
+            verbose=False,
+        )
+
+        val_proba = model.predict_proba(X_val)[:, 1]
+        train_proba = model.predict_proba(X_train)[:, 1]
+
+        try:
+            val_score = float(roc_auc_score(y_val, val_proba))
+            train_score = float(roc_auc_score(y_train, train_proba))
+        except ValueError:
+            val_score = 0.5
+            train_score = 0.5
+
+        self._model = model
+        self._is_trained = True
+        self.metadata = ModelMetadata(
+            val_score=val_score,
+            train_score=train_score,
+            n_samples=n_samples,
+            n_features=n_features,
+        )
+        logger.info(
+            "XGBoostOnlineModel fitted: n=%d features=%d val_auc=%.4f",
+            n_samples, n_features, val_score,
+        )
+        return self.metadata
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """Return probability of class 1 for each sample."""
+        if not self._is_trained or self._model is None:
+            raise RuntimeError("Model not trained — call fit() first")
+        return self._model.predict_proba(X)[:, 1]
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Return binary predictions (threshold 0.5)."""
+        return (self.predict_proba(X) >= 0.5).astype(int)
+
+    def partial_fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        """
+        Incremental update via warm-start: add n_estimators more trees.
+
+        Falls back to full refit if model not yet trained.
+        """
+        if not self._is_trained or self._model is None:
+            import asyncio
+            asyncio.run(self.fit(X, y))
+            return
+
+        from xgboost import XGBClassifier
+        prev = self._model
+        n_prev = prev.n_estimators
+        updated = XGBClassifier(
+            n_estimators=n_prev + self._n_estimators,
+            max_depth=self._max_depth,
+            learning_rate=self._learning_rate,
+            subsample=self._subsample,
+            colsample_bytree=self._colsample_bytree,
+            random_state=self._random_state,
+            eval_metric="logloss",
+            use_label_encoder=False,
+            verbosity=0,
+        )
+        updated.fit(X, y, xgb_model=prev.get_booster(), verbose=False)
+        self._model = updated
+        logger.debug("XGBoostOnlineModel partial_fit: added %d trees", self._n_estimators)

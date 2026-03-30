@@ -11,10 +11,11 @@ regime detection, and overfitting prevention.
 
 import logging
 import warnings
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
 import joblib
 import lightgbm as lgb
@@ -852,3 +853,87 @@ class RegimeDetector:
         """Detect current regime"""
         regimes = self.detect(X)
         return regimes[-1] if len(regimes) > 0 else Regime.UNKNOWN
+
+
+# ── Drift detection ───────────────────────────────────────────────────────────
+
+@dataclass
+class DriftResult:
+    """Result returned by DriftDetector.update() when drift is evaluated."""
+    detected: bool
+    statistic: float          # KS test statistic (0–1)
+    p_value: float            # p-value; low = drift
+    window_mean: float        # mean of current window
+    reference_mean: float     # mean of reference distribution
+    window_size: int
+    reference_size: int
+    extra: Dict[str, Any] = field(default_factory=dict)
+
+
+class DriftDetector:
+    """
+    Online distribution-drift detector using the Kolmogorov-Smirnov test.
+
+    Usage
+    -----
+    1. Call set_reference(data) to establish the baseline distribution.
+    2. Call update(value) for each new observation.
+    3. update() returns a DriftResult every `check_every` calls once the
+       sliding window is full; returns None otherwise.
+
+    Parameters
+    ----------
+    window_size  : Number of recent samples in the sliding window.
+    check_every  : Evaluate KS test every N updates (reduces overhead).
+    p_threshold  : p-value below which drift is flagged (default 0.05).
+    """
+
+    def __init__(
+        self,
+        window_size: int = 50,
+        check_every: int = 10,
+        p_threshold: float = 0.05,
+    ) -> None:
+        self._window_size = window_size
+        self._check_every = check_every
+        self._p_threshold = p_threshold
+        self._window: Deque[float] = deque(maxlen=window_size)
+        self._reference: Optional[np.ndarray] = None
+        self._update_count: int = 0
+
+    def set_reference(self, data: np.ndarray) -> None:
+        """Set the reference (baseline) distribution."""
+        self._reference = np.asarray(data, dtype=float).copy()
+
+    def update(self, value: float) -> Optional[DriftResult]:
+        """
+        Add a new observation.  Returns DriftResult when the window is full
+        and it is time to check (every check_every calls), else None.
+        """
+        self._window.append(value)
+        self._update_count += 1
+
+        if len(self._window) < self._window_size:
+            return None
+        if self._update_count % self._check_every != 0:
+            return None
+        if self._reference is None or len(self._reference) == 0:
+            return None
+
+        return self._evaluate()
+
+    def _evaluate(self) -> DriftResult:
+        from scipy.stats import ks_2samp
+
+        window_arr = np.array(self._window, dtype=float)
+        stat, p_value = ks_2samp(self._reference, window_arr)
+
+        return DriftResult(
+            detected=bool(p_value < self._p_threshold),
+            statistic=float(stat),
+            p_value=float(p_value),
+            window_mean=float(window_arr.mean()),
+            reference_mean=float(self._reference.mean()),
+            window_size=len(window_arr),
+            reference_size=len(self._reference),
+        )
