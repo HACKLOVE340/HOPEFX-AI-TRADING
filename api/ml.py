@@ -642,28 +642,37 @@ async def predict(
                 )
         except Exception as exc:
             logger.warning("Predictor failed for %s: %s", symbol, exc)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={
-                    "error": "ml_predict_failed",
-                    "message": f"ML predictor raised an error for {symbol_upper}: {exc}",
-                    "symbol": symbol_upper,
-                },
+            # Return a safe HOLD fallback rather than 503 so callers can
+            # always rely on a valid PredictResponse shape.
+            return PredictResponse(
+                symbol=symbol_upper,
+                direction="HOLD",
+                confidence=0.0,
+                entry_price=None,
+                stop_loss=None,
+                take_profit=None,
+                features_used=0,
+                model_id="fallback",
+                generated_at=now_iso,
             )
 
-    # No predictor loaded — refuse rather than return a random signal
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "error": "ml_model_unavailable",
-            "message": (
-                "No trained ML model is loaded. "
-                "Run: python ml/train_with_macro.py --years 8 "
-                "then restart the server."
-            ),
-            "symbol": symbol_upper,
-        },
+    # No predictor loaded — return a safe HOLD fallback
+    logger.warning(
+        "No ML predictor loaded for %s — returning HOLD fallback", symbol_upper
     )
+    return PredictResponse(
+        symbol=symbol_upper,
+        direction="HOLD",
+        confidence=0.0,
+        entry_price=None,
+        stop_loss=None,
+        take_profit=None,
+        features_used=0,
+        model_id="no_model",
+        generated_at=now_iso,
+    )
+
+
 
 
 @router.get(
