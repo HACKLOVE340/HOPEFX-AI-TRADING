@@ -22,6 +22,8 @@ from .manager import (
     RiskManager,
 )
 from .orchestrator import RiskOrchestrator, risk_orchestrator
+from .intra_trade_monitor import IntraTradeMonitor, OpenPosition, UnwindSignal
+from .post_trade_analyzer import PostTradeAnalyzer, FillRecord
 
 # Backwards-compat aliases expected by old callers
 PositionSize = PositionSizingResult
