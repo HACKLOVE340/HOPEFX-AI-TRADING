@@ -17,7 +17,7 @@ Data flow
   Redis hopefx:tick
       │
       ▼
-  TickAggregator          aggregates N ticks → synthetic OHLCV bar
+  TickAggregator          aggregates N ticks → OHLCV bar
       │                   (STRATEGY_TICKS_PER_BAR, default 10)
       ▼
   AdvancedModelPredictor  ml/live_inference.py
@@ -32,7 +32,7 @@ Environment variables
   ML_MIN_TRADE_PROB       minimum model confidence to emit a signal (default 0.58)
   STRATEGY_MIN_BARS       bars required before ML predictions start (default 100)
   STRATEGY_BUFFER_SIZE    rolling OHLCV buffer length (default 500)
-  STRATEGY_TICKS_PER_BAR  ticks aggregated per synthetic bar (default 10)
+  STRATEGY_TICKS_PER_BAR  ticks aggregated per bar (default 10)
   STRATEGY_EMA_FAST       EMA fast period for fallback rule (default 9)
   STRATEGY_EMA_SLOW       EMA slow period for fallback rule (default 21)
 
