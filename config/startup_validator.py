@@ -208,6 +208,61 @@ def validate_environment(*, strict: bool = True) -> None:
                 "INSECURE HOPEFX_KILL_SWITCH_TOKEN: placeholder value — replace before deploying",
             )
 
+    # ── HOPEFXBrain — LLM backend ─────────────────────────────────────────────
+    # Validated in both dev and prod: a misconfigured backend silently falls
+    # back to stubs, which is safe but means no real threat analysis.
+    llm_backend = os.getenv("LLM_BACKEND", "anthropic").strip().lower()
+    valid_backends = {"anthropic", "openai"}
+    if llm_backend not in valid_backends:
+        errors.append(
+            f"INVALID  LLM_BACKEND={llm_backend!r}: must be one of "
+            f"{sorted(valid_backends)}. "
+            "Set LLM_BACKEND=anthropic (default) or LLM_BACKEND=openai."
+        )
+    else:
+        # Warn (not error) when the matching key is absent — brain degrades to stub
+        if llm_backend == "anthropic":
+            anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+            if not anthropic_key:
+                logger.warning(
+                    "HOPEFXBrain: ANTHROPIC_API_KEY not set — brain will use stub "
+                    "responses (no real attack analysis). "
+                    "Get a key at https://console.anthropic.com/settings/keys"
+                )
+            elif anthropic_key.startswith("CHANGE_ME"):
+                errors.append(
+                    "INSECURE ANTHROPIC_API_KEY: placeholder value detected — "
+                    "replace with a real key from https://console.anthropic.com/settings/keys"
+                )
+        elif llm_backend == "openai":
+            openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+            if not openai_key:
+                logger.warning(
+                    "HOPEFXBrain: OPENAI_API_KEY not set — brain will use stub "
+                    "responses (no real attack analysis). "
+                    "Get a key at https://platform.openai.com/api-keys"
+                )
+            elif openai_key.startswith("CHANGE_ME"):
+                errors.append(
+                    "INSECURE OPENAI_API_KEY: placeholder value detected — "
+                    "replace with a real key from https://platform.openai.com/api-keys"
+                )
+
+    # ArgoCD rollback webhook — warn if missing in production (non-fatal)
+    if not dev_mode:
+        argocd_webhook = os.getenv("ARGOCD_ROLLBACK_WEBHOOK", "").strip()
+        if not argocd_webhook:
+            logger.warning(
+                "HOPEFXBrain: ARGOCD_ROLLBACK_WEBHOOK not set — nuclear lockdown "
+                "will block IPs and set Redis flag but cannot trigger auto-rollback. "
+                "Set to: https://<argocd-server>/api/v1/applications/hopefx/sync"
+            )
+        elif argocd_webhook and not argocd_webhook.startswith("https://"):
+            errors.append(
+                f"INVALID  ARGOCD_ROLLBACK_WEBHOOK={argocd_webhook[:60]!r}: "
+                "must be an https:// URL"
+            )
+
     # ── Optional validated vars ───────────────────────────────────────────────
     sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
     if sentry_dsn and not sentry_dsn.startswith("https://"):
