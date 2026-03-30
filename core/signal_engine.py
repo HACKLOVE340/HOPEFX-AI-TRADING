@@ -177,11 +177,12 @@ async def _fetch_market_data(
     app_state: Any = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    Fetch latest OHLCV data for a symbol.
+    Fetch latest OHLCV data for a symbol from the broker's market data feed.
 
-    Uses the broker's get_market_data() so no external feed is required for
-    paper trading. Falls back to a synthetic bar built from the broker's spot
-    price when OHLCV history is unavailable.
+    Returns None when OHLCV history is unavailable — callers must skip the
+    signal tick rather than proceeding with insufficient data. A single-point
+    degenerate bar (open=high=low=close, volume=0) produces zero ATR, zero
+    range, and zero volume features that corrupt ML model inputs.
     """
     broker = getattr(app_state, "broker", None) if app_state is not None else None
 
@@ -209,28 +210,9 @@ async def _fetch_market_data(
                 }
         except Exception as exc:
             logger.warning("Broker OHLCV fetch failed for %s: %s", symbol, exc)
+    else:
+        logger.warning("No broker available — cannot fetch market data for %s", symbol)
 
-        # Fallback: build a synthetic bar from the spot price
-        try:
-            price = broker.get_market_price(symbol)
-            if price:
-                return {
-                    "symbol": symbol,
-                    "open": price,
-                    "high": price,
-                    "low": price,
-                    "close": price,
-                    "volume": 0.0,
-                    "prices": [price],
-                    "highs": [price],
-                    "lows": [price],
-                    "volumes": [0.0],
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-        except Exception as exc:
-            logger.warning("Broker spot price fetch failed for %s: %s", symbol, exc)
-
-    logger.warning("No broker available — cannot fetch market data for %s", symbol)
     return None
 
 
