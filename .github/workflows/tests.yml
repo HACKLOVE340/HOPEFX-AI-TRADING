@@ -53,15 +53,13 @@ jobs:
         pip install -r requirements-ci.txt
         pip install matplotlib "sentry-sdk[fastapi]>=1.40.0" "pytest>=7.4.3" "pytest-cov>=4.1.0" "pytest-asyncio>=0.23.6"
 
-    - name: Run tests
+    - name: Run tests (full suite, 70% baseline)
       env:
         CONFIG_ENCRYPTION_KEY: ${{ secrets.CONFIG_ENCRYPTION_KEY || 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }}
         CONFIG_SALT: ${{ secrets.CONFIG_SALT || 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' }}
-        # Minimum-length secret so auth tests pass without a real secret configured
         SECURITY_JWT_SECRET: ${{ secrets.SECURITY_JWT_SECRET || 'ci-test-secret-key-minimum-32-characters-long' }}
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
-        # Connector hub — safe CI defaults (no real broker calls in unit tests)
         OANDA_API_KEY: ci-placeholder
         OANDA_ACCOUNT_ID: ci-placeholder
         OANDA_PRACTICE: "true"
@@ -76,10 +74,70 @@ jobs:
           --cov=config --cov=strategies --cov=risk --cov=brokers \
           --cov=notifications --cov=cache --cov=database --cov=api \
           --cov=data --cov=analysis --cov=ml --cov=utils --cov=auth \
-          --cov=execution --cov=strategy --cov=core \
+          --cov=execution --cov=strategy --cov=core --cov=compliance \
+          --cov=kill_switch \
           --cov-report=xml --cov-report=term-missing \
           --cov-fail-under=70 \
           --junitxml=test-results.xml
+
+    # ── Critical-path coverage gates (90% branch coverage required) ──────────
+    - name: Coverage gate — risk/ (90%)
+      env:
+        REDIS_URL: redis://localhost:6379/15
+        ENVIRONMENT: testing
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+      run: |
+        pytest tests/ -m "not slow" -q \
+          --cov=risk --cov-branch \
+          --cov-report=term-missing \
+          --cov-fail-under=90
+
+    - name: Coverage gate — execution/ (90%)
+      env:
+        REDIS_URL: redis://localhost:6379/15
+        ENVIRONMENT: testing
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+      run: |
+        pytest tests/ -m "not slow" -q \
+          --cov=execution --cov-branch \
+          --cov-report=term-missing \
+          --cov-fail-under=90
+
+    - name: Coverage gate — kill_switch.py (90%)
+      env:
+        REDIS_URL: redis://localhost:6379/15
+        ENVIRONMENT: testing
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+      run: |
+        pytest tests/ -m "not slow" -q \
+          --cov=kill_switch --cov-branch \
+          --cov-report=term-missing \
+          --cov-fail-under=90
+
+    - name: Coverage gate — brokers/ (90%)
+      env:
+        REDIS_URL: redis://localhost:6379/15
+        ENVIRONMENT: testing
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+        OANDA_API_KEY: ci-placeholder
+        OANDA_ACCOUNT_ID: ci-placeholder
+        OANDA_PRACTICE: "true"
+      run: |
+        pytest tests/ -m "not slow" -q \
+          --cov=brokers --cov-branch \
+          --cov-report=term-missing \
+          --cov-fail-under=90
+
+    - name: Coverage gate — compliance/ (90%)
+      env:
+        REDIS_URL: redis://localhost:6379/15
+        ENVIRONMENT: testing
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+      run: |
+        pytest tests/ -m "not slow" -q \
+          --cov=compliance --cov-branch \
+          --cov-report=term-missing \
+          --cov-fail-under=90
 
     - name: Publish test results
       uses: actions/upload-artifact@v4

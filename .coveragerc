@@ -1,5 +1,5 @@
 [coverage]
-# Scope: critical paths only — auth, risk, brokers, execution, market_data, ml
+# Scope: all packages — full project coverage baseline
 source =
     auth
     risk
@@ -8,6 +8,10 @@ source =
     market_data
     ml
     config
+    kill_switch
+    compliance
+    analytics
+    backtesting
 branch = true
 omit =
     */tests/*
@@ -27,6 +31,7 @@ omit =
     ml/rl_agent.py
     ml/advanced_ai.py
 report_precision = 2
+# Global baseline — individual critical-path gates are enforced in CI
 fail_under = 75
 show_missing = true
 skip_empty = true
@@ -37,3 +42,14 @@ title = HOPEFX Coverage Report — Critical Paths
 
 [xml]
 output = coverage.xml
+
+# ── Critical path coverage gates ──────────────────────────────────────────────
+# These are enforced as separate pytest-cov runs in CI (see .github/workflows/ci.yml).
+# Each critical module must maintain ≥90% branch coverage.
+#
+# Modules gated at 90%:
+#   risk/           — VaR, drawdown, position sizing, circuit breakers
+#   execution/      — order routing, engine, TCA, algo orders
+#   kill_switch.py  — system-wide halt mechanism
+#   brokers/        — broker adapters (excluding live-only files)
+#   compliance/     — KYC/AML gateway and rules
