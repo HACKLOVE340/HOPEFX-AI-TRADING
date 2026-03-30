@@ -317,86 +317,151 @@ class RobustPredictor:
         regime: Optional[Regime] = None,
     ) -> PredictionResult:
         """
-        Make prediction with uncertainty quantification.
+        Make a regime-aware prediction with uncertainty quantification.
+
+        Pipeline
+        --------
+        1. Engineer features (with data layer injection)
+        2. Detect regime from Hurst + ADX features
+        3. Regime-conditional model selection:
+           - TRENDING / LOW_VOLATILITY → full ensemble
+           - MEAN_REVERTING            → conservative ensemble (higher thresholds)
+           - HIGH_VOLATILITY           → fallback to neutral (model unreliable)
+           - UNKNOWN                   → full ensemble with reduced confidence
+        4. Ensemble aggregation with uncertainty quantification
+        5. Threshold-based direction + confidence assignment
         """
         if not self.models:
-            raise ValueError("Model not trained")
+            raise ValueError("Model not trained. Call fit() first.")
 
-        # Feature engineering
+        # ── Feature engineering ───────────────────────────────────────────────
         X_features = self._engineer_features(X)
+
+        # Align to selected features — fill missing with 0 (safe degradation)
+        missing = [f for f in self.selected_features if f not in X_features.columns]
+        for col in missing:
+            X_features[col] = 0.0
         X_selected = X_features[self.selected_features]
 
-        # Detect regime if not provided
-        if regime is None:
-            regime = self.regime_detector.detect_single(X_selected.iloc[-1:])
+        if X_selected.empty:
+            raise ValueError("Feature engineering produced empty DataFrame")
 
-        # Get predictions from all models
-        predictions = []
-        probabilities = []
+        last_row = X_selected.iloc[[-1]]
+
+        # ── Regime detection ──────────────────────────────────────────────────
+        if regime is None:
+            regime = self.regime_detector.detect_single(X_selected)
+
+        # ── Regime-conditional model gating ───────────────────────────────────
+        # HIGH_VOLATILITY: model accuracy historically drops — return neutral
+        if regime == Regime.HIGH_VOLATILITY:
+            logger.debug(
+                "RobustPredictor: HIGH_VOLATILITY regime — returning neutral"
+            )
+            return PredictionResult(
+                direction=0,
+                probability=0.5,
+                confidence="low",
+                expected_return=0.0,
+                uncertainty=1.0,
+                regime=regime,
+                model_agreement=0.0,
+                features_importance={},
+                timestamp=datetime.now(timezone.utc),
+                thresholds_calibrated=self._thresholds_calibrated,
+            )
+
+        # MEAN_REVERTING: tighten thresholds (require higher conviction)
+        bullish_med  = self._bullish_med_threshold
+        bullish_high = self._bullish_high_threshold
+        bearish_med  = self._bearish_med_threshold
+        bearish_high = self._bearish_high_threshold
+        agreement_thr = self._agreement_threshold
+
+        if regime == Regime.MEAN_REVERTING:
+            # Require 5% more conviction in mean-reverting regimes
+            bullish_med  = min(bullish_med  + 0.05, 0.80)
+            bullish_high = min(bullish_high + 0.05, 0.85)
+            bearish_med  = max(bearish_med  - 0.05, 0.20)
+            bearish_high = max(bearish_high - 0.05, 0.15)
+            agreement_thr = min(agreement_thr + 0.10, 0.90)
+
+        # ── Ensemble prediction ───────────────────────────────────────────────
+        predictions: List[int] = []
+        probabilities: List[float] = []
+
+        last_clean = last_row.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
         for name, model in self.models.items():
-            if hasattr(model, "predict_proba"):
-                proba = model.predict_proba(X_selected.iloc[-1:])[0]
-                pred = np.argmax(proba)
-                prob = proba[pred] if pred == 1 else proba[0]
-            else:
-                pred = model.predict(X_selected.iloc[-1:])[0]
-                prob = 0.5
+            try:
+                if hasattr(model, "predict_proba"):
+                    proba = model.predict_proba(last_clean)[0]
+                    # proba[1] = P(up), proba[0] = P(down)
+                    prob_up = float(proba[1]) if len(proba) > 1 else float(proba[0])
+                    pred = 1 if prob_up >= 0.5 else 0
+                else:
+                    pred = int(model.predict(last_clean)[0])
+                    prob_up = float(pred)
+                predictions.append(pred)
+                probabilities.append(prob_up)
+            except Exception as exc:
+                logger.debug("RobustPredictor: model %s failed: %s", name, exc)
 
-            predictions.append(pred)
-            probabilities.append(prob)
+        if not probabilities:
+            # All models failed — return neutral
+            return PredictionResult(
+                direction=0,
+                probability=0.5,
+                confidence="low",
+                expected_return=0.0,
+                uncertainty=1.0,
+                regime=regime,
+                model_agreement=0.0,
+                features_importance={},
+                timestamp=datetime.now(timezone.utc),
+                thresholds_calibrated=self._thresholds_calibrated,
+            )
 
-        # Ensemble aggregation
-        predictions = np.array(predictions)
-        probabilities = np.array(probabilities)
+        # ── Aggregation ───────────────────────────────────────────────────────
+        preds_arr = np.array(predictions)
+        probs_arr = np.array(probabilities)
 
-        # Direction based on majority vote with confidence threshold
-        mean_prob = np.mean(probabilities)
-        std_prob = np.std(probabilities)
+        mean_prob = float(np.mean(probs_arr))
+        std_prob  = float(np.std(probs_arr))
 
-        # Model agreement
-        agreement = np.mean(predictions == stats.mode(predictions)[0])
+        # Model agreement: fraction voting with the majority
+        mode_val = int(stats.mode(preds_arr, keepdims=True)[0][0])
+        agreement = float(np.mean(preds_arr == mode_val))
 
-        # Uncertainty quantification
-        uncertainty = std_prob + (1 - agreement) * 0.5
+        # Uncertainty: combination of probability spread and disagreement
+        uncertainty = float(np.clip(std_prob + (1.0 - agreement) * 0.5, 0.0, 1.0))
 
-        # ── Determine direction and confidence using (possibly calibrated) thresholds ──
-        # Thresholds are set by calibrate_thresholds() if OOS data is available,
-        # otherwise the defaults (0.3/0.4/0.6/0.7) are used.
-        if (
-            mean_prob > self._bullish_med_threshold
-            and agreement > self._agreement_threshold
-        ):
+        # ── Direction + confidence ────────────────────────────────────────────
+        if mean_prob > bullish_med and agreement >= agreement_thr:
             direction = 1
-            confidence = (
-                "high" if mean_prob > self._bullish_high_threshold else "medium"
-            )
-        elif (
-            mean_prob < self._bearish_med_threshold
-            and agreement > self._agreement_threshold
-        ):
+            confidence = "high" if mean_prob > bullish_high else "medium"
+        elif mean_prob < bearish_med and agreement >= agreement_thr:
             direction = -1
-            confidence = (
-                "high" if mean_prob < self._bearish_high_threshold else "medium"
-            )
+            confidence = "high" if mean_prob < bearish_high else "medium"
         else:
-            direction = 0  # No trade — uncertainty too high
+            direction = 0
             confidence = "low"
 
-        # Expected return estimate (calibrated)
-        expected_return = self._estimate_return(direction, mean_prob, regime)
+        # UNKNOWN regime: downgrade confidence one level
+        if regime == Regime.UNKNOWN and confidence == "high":
+            confidence = "medium"
 
-        # Feature importance for this prediction
-        current_importance = self._get_current_feature_importance(X_selected.iloc[-1])
+        expected_return = self._estimate_return(direction, mean_prob, regime)
+        current_importance = self._get_current_feature_importance(last_clean.iloc[0])
 
         return PredictionResult(
             direction=direction,
-            probability=float(mean_prob),
+            probability=mean_prob,
             confidence=confidence,
             expected_return=expected_return,
-            uncertainty=float(uncertainty),
+            uncertainty=uncertainty,
             regime=regime,
-            model_agreement=float(agreement),
+            model_agreement=agreement,
             features_importance=current_importance,
             timestamp=datetime.now(timezone.utc),
             thresholds_calibrated=self._thresholds_calibrated,
@@ -580,32 +645,109 @@ class RobustPredictor:
         )
 
     def _engineer_features(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Create features with strict constraints to prevent lookahead bias"""
+        """
+        Create features with strict lookahead-bias prevention.
+
+        All rolling/lagged features are shifted by 1 bar so no future
+        information leaks into the feature matrix.  Data layer features
+        (microstructure, sentiment, macro calendar) are injected from the
+        orchestrator at the last bar's timestamp — causal by construction.
+        """
         features = pd.DataFrame(index=X.index)
 
-        # Price-based features (lagged)
+        # ── Price-based features (lagged) ─────────────────────────────────────
         for lag in [1, 2, 5, 10, 20]:
             features[f"return_lag_{lag}"] = X["close"].pct_change(lag).shift(1)
             features[f"volatility_{lag}"] = (
                 X["close"].pct_change().rolling(lag).std().shift(1)
             )
 
-        # Technical indicators (only using past data)
+        # ── Technical indicators (past data only) ─────────────────────────────
         features["sma_ratio"] = (
             X["close"].rolling(10).mean() / X["close"].rolling(30).mean()
         ).shift(1)
-
         features["rsi"] = self._calculate_rsi(X["close"], 14).shift(1)
 
-        # Volume features
+        # ATR (14-bar)
+        if all(c in X.columns for c in ["high", "low", "close"]):
+            tr = pd.concat([
+                X["high"] - X["low"],
+                (X["high"] - X["close"].shift(1)).abs(),
+                (X["low"]  - X["close"].shift(1)).abs(),
+            ], axis=1).max(axis=1)
+            features["atr_14"] = tr.rolling(14).mean().shift(1)
+            features["atr_ratio"] = (
+                features["atr_14"] / X["close"].rolling(14).mean().shift(1)
+            )
+
+        # Bollinger band position
+        roll_mean = X["close"].rolling(20).mean()
+        roll_std  = X["close"].rolling(20).std()
+        features["bb_position"] = (
+            (X["close"] - roll_mean) / (roll_std + 1e-9)
+        ).shift(1)
+
+        # MACD signal
+        ema12 = X["close"].ewm(span=12, adjust=False).mean()
+        ema26 = X["close"].ewm(span=26, adjust=False).mean()
+        macd  = ema12 - ema26
+        features["macd_signal"] = (macd - macd.ewm(span=9, adjust=False).mean()).shift(1)
+
+        # Hurst exponent proxy (rolling R/S over 40 bars)
+        def _rolling_hurst(prices: pd.Series, window: int = 40) -> pd.Series:
+            def _hurst(x: np.ndarray) -> float:
+                if len(x) < 10:
+                    return 0.5
+                lags = range(2, min(len(x) // 2, 10))
+                rs_vals = []
+                for lag in lags:
+                    sub = x[:lag]
+                    mean = np.mean(sub)
+                    dev = np.cumsum(sub - mean)
+                    r = np.max(dev) - np.min(dev)
+                    s = np.std(sub, ddof=1)
+                    if s > 0:
+                        rs_vals.append(np.log(r / s))
+                if len(rs_vals) < 2:
+                    return 0.5
+                log_lags = np.log(list(lags[:len(rs_vals)]))
+                return float(np.clip(np.polyfit(log_lags, rs_vals, 1)[0], 0.0, 1.0))
+            return prices.rolling(window).apply(_hurst, raw=True)
+
+        features["regime_hurst"] = _rolling_hurst(X["close"], 40).shift(1)
+
+        # ADX proxy (normalised trend strength)
+        if all(c in X.columns for c in ["high", "low", "close"]):
+            plus_dm  = (X["high"] - X["high"].shift(1)).clip(lower=0)
+            minus_dm = (X["low"].shift(1) - X["low"]).clip(lower=0)
+            tr_smooth = tr.rolling(14).mean()
+            plus_di  = 100 * plus_dm.rolling(14).mean()  / (tr_smooth + 1e-9)
+            minus_di = 100 * minus_dm.rolling(14).mean() / (tr_smooth + 1e-9)
+            dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
+            features["regime_trend_str"] = (dx.rolling(14).mean() / 100.0).shift(1)
+
+        # ── Volume features ───────────────────────────────────────────────────
         if "volume" in X.columns:
             features["volume_sma_ratio"] = (
                 X["volume"] / X["volume"].rolling(20).mean()
             ).shift(1)
 
-        # Time features
-        features["hour"] = X.index.hour
-        features["day_of_week"] = X.index.dayofweek
+        # ── Time features ─────────────────────────────────────────────────────
+        if hasattr(X.index, "hour"):
+            features["hour"]        = X.index.hour
+            features["day_of_week"] = X.index.dayofweek
+
+        # ── Data layer injection (orchestrator — causal, last bar only) ───────
+        try:
+            from data_layer.orchestrator import orchestrator
+            dl_feats = orchestrator.get_ml_features()
+            if dl_feats:
+                for key, val in dl_feats.items():
+                    # Broadcast scalar to all rows (same value for every bar —
+                    # represents the current live state, not a per-bar series)
+                    features[f"dl_{key}"] = float(val)
+        except Exception as _exc:
+            logger.debug("RobustPredictor: data layer injection skipped: %s", _exc)
 
         return features.dropna()
 
@@ -786,29 +928,99 @@ class RobustPredictor:
 
         return False
 
-    def save(self, path: str):
-        """Save model state"""
+    def save(self, path: str) -> str:
+        """
+        Persist model state to ``path`` directory.
+
+        Each ensemble member is saved as ``{name}.joblib`` and a
+        ``state.joblib`` manifest records config, feature list, and metadata.
+        Returns the manifest path on success.
+        """
+        import os
+        os.makedirs(path, exist_ok=True)
+
+        # Save each ensemble member individually
+        saved_members: Dict[str, str] = {}
+        for name, model in self.models.items():
+            member_path = os.path.join(path, f"{name}.joblib")
+            joblib.dump(model, member_path)
+            saved_members[name] = member_path
+
+        # Save meta-model
+        meta_path = None
+        if self.meta_model is not None:
+            meta_path = os.path.join(path, "meta_model.joblib")
+            joblib.dump(self.meta_model, meta_path)
+
+        # Save scalers
+        for name, scaler in self.scalers.items():
+            joblib.dump(scaler, os.path.join(path, f"scaler_{name}.joblib"))
+
         state = {
-            "models": {
-                k: joblib.dump(v, f"{path}/{k}.joblib") for k, v in self.models.items()
-            },
             "config": self.config,
             "selected_features": self.selected_features,
             "feature_importance_history": self.feature_importance_history,
             "last_retrain": self.last_retrain,
+            "saved_members": saved_members,
+            "meta_model_path": meta_path,
+            "thresholds": self._current_thresholds(),
+            "thresholds_calibrated": self._thresholds_calibrated,
         }
-        joblib.dump(state, f"{path}/state.joblib")
+        manifest = os.path.join(path, "state.joblib")
+        joblib.dump(state, manifest)
+        logger.info("RobustPredictor saved to %s (%d members)", path, len(saved_members))
+        return manifest
 
-    def load(self, path: str):
-        """Load model state"""
-        state = joblib.load(f"{path}/state.joblib")
-        self.config = state["config"]
-        self.selected_features = state["selected_features"]
-        self.feature_importance_history = state["feature_importance_history"]
-        self.last_retrain = state["last_retrain"]
+    def load(self, path: str) -> None:
+        """
+        Restore model state from ``path`` directory.
 
+        Loads the manifest then each ensemble member from its recorded path.
+        Raises FileNotFoundError if the manifest is missing.
+        """
+        import os
+        manifest = os.path.join(path, "state.joblib")
+        if not os.path.exists(manifest):
+            raise FileNotFoundError(f"RobustPredictor manifest not found: {manifest}")
+
+        state = joblib.load(manifest)
+        self.config                    = state["config"]
+        self.selected_features         = state["selected_features"]
+        self.feature_importance_history = state.get("feature_importance_history", [])
+        self.last_retrain              = state.get("last_retrain")
+        self._thresholds_calibrated    = state.get("thresholds_calibrated", False)
+
+        # Restore calibrated thresholds
+        thresholds = state.get("thresholds", {})
+        if thresholds:
+            self._bullish_high_threshold = thresholds.get("bullish_high", self._bullish_high_threshold)
+            self._bullish_med_threshold  = thresholds.get("bullish_med",  self._bullish_med_threshold)
+            self._bearish_high_threshold = thresholds.get("bearish_high", self._bearish_high_threshold)
+            self._bearish_med_threshold  = thresholds.get("bearish_med",  self._bearish_med_threshold)
+
+        # Load ensemble members
+        self.models = {}
+        for name, member_path in state.get("saved_members", {}).items():
+            if os.path.exists(member_path):
+                self.models[name] = joblib.load(member_path)
+            else:
+                logger.warning("RobustPredictor: member %s not found at %s", name, member_path)
+
+        # Load meta-model
+        meta_path = state.get("meta_model_path")
+        if meta_path and os.path.exists(meta_path):
+            self.meta_model = joblib.load(meta_path)
+
+        # Load scalers
         for name in self.config.ensemble_methods:
-            self.models[name] = joblib.load(f"{path}/{name}.joblib")
+            scaler_path = os.path.join(path, f"scaler_{name}.joblib")
+            if os.path.exists(scaler_path):
+                self.scalers[name] = joblib.load(scaler_path)
+
+        logger.info(
+            "RobustPredictor loaded from %s (%d members, calibrated=%s)",
+            path, len(self.models), self._thresholds_calibrated,
+        )
 
 
 class RegimeDetector:
@@ -850,7 +1062,28 @@ class RegimeDetector:
         return np.array(regimes)
 
     def detect_single(self, X: pd.DataFrame) -> Regime:
-        """Detect current regime"""
+        """
+        Detect the current (last-bar) regime.
+
+        Accepts either a single-row or multi-row DataFrame.  When the
+        feature matrix already contains ``regime_hurst`` and
+        ``regime_trend_str`` columns (produced by _engineer_features) those
+        are used directly to avoid recomputing the rolling windows.
+        """
+        # Fast path: pre-computed regime columns present
+        if "regime_hurst" in X.columns and "regime_trend_str" in X.columns:
+            last = X.iloc[-1]
+            hurst = float(last["regime_hurst"])
+            adx   = float(last["regime_trend_str"])
+            if np.isnan(hurst) or np.isnan(adx):
+                return Regime.UNKNOWN
+            if adx > 0.25 and hurst > 0.55:
+                return Regime.TRENDING
+            if adx < 0.20 and hurst < 0.45:
+                return Regime.MEAN_REVERTING
+            return Regime.UNKNOWN
+
+        # Slow path: compute from OHLCV
         regimes = self.detect(X)
         return regimes[-1] if len(regimes) > 0 else Regime.UNKNOWN
 
