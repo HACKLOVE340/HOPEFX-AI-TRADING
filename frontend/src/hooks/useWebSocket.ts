@@ -86,7 +86,9 @@ export function useWebSocket(enabled = true) {
             }));
           }
         } else {
-          // No auth required — subscribe immediately
+          // No auth required — mark connected and subscribe immediately
+          authedRef.current = true;
+          setWsStatus('connected');
           wsRef.current?.send(JSON.stringify({
             type: 'subscribe',
             channels: ['prices', 'positions', 'signals', 'account'],

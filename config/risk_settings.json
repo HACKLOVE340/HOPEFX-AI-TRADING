@@ -1,0 +1,7 @@
+{
+  "max_risk_per_trade": 1.0,
+  "max_open_positions": 5,
+  "paper_trading_mode": true,
+  "max_daily_loss": 5.0,
+  "max_drawdown": 10.0
+}

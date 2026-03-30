@@ -48,6 +48,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -460,6 +461,280 @@ class OANDABroker:
 
 
 # ── Backward-compat aliases ───────────────────────────────────────────────────
-OandaBroker      = OANDABroker
+OandaBroker         = OANDABroker
 AsyncOANDAConnector = OANDABroker
-OandaAPI         = OANDABroker
+OandaAPI            = OANDABroker
+
+
+# ── Synchronous OANDAConnector ────────────────────────────────────────────────
+# Used by tests, BrokerFactory, and any synchronous execution path.
+# Wraps the OANDA v20 REST API with requests.Session (no async).
+
+from brokers.base import (  # noqa: E402
+    OrderType as _OrderType,
+    OrderSide as _OrderSide,
+    OrderStatus as _OrderStatus,
+    Order as _Order,
+    Position as _Position,
+    AccountInfo as _AccountInfo,
+)
+
+
+class OANDAConnector:
+    """Synchronous OANDA v20 REST connector.
+
+    Config keys
+    -----------
+    api_key      : personal access token (required)
+    account_id   : OANDA account number (required)
+    environment  : "practice" | "live"  (default: "practice")
+    timeout      : request timeout in seconds (default: 10)
+    """
+
+    PRACTICE_URL = _PRACTICE_BASE
+    LIVE_URL     = _LIVE_BASE
+
+    def __init__(self, config: Dict[str, Any]) -> None:
+        api_key    = config.get("api_key") or os.getenv("OANDA_API_TOKEN", "")
+        account_id = config.get("account_id") or os.getenv("OANDA_ACCOUNT_ID", "")
+        if not api_key or not account_id:
+            raise ValueError(
+                "OANDAConnector requires 'api_key' and 'account_id' in config "
+                "or OANDA_API_TOKEN / OANDA_ACCOUNT_ID env vars."
+            )
+        env = config.get("environment", "practice")
+        self.environment  = env
+        self.base_url     = self.LIVE_URL if env == "live" else self.PRACTICE_URL
+        self._account_id  = account_id
+        self._api_key     = api_key
+        self._timeout     = float(config.get("timeout", 10))
+        self.connected    = False
+        self.session: Optional[requests.Session] = None
+
+    # ── Connection ────────────────────────────────────────────────────────────
+
+    def connect(self) -> bool:
+        """Open a requests.Session and verify credentials against the account endpoint."""
+        try:
+            sess = requests.Session()
+            sess.headers.update({
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type":  "application/json",
+            })
+            url  = f"{self.base_url}/v3/accounts/{self._account_id}"
+            resp = sess.get(url, timeout=self._timeout)
+            resp.raise_for_status()
+            self.session   = sess
+            self.connected = True
+            logger.info("OANDAConnector: connected (%s) account=%s", self.environment, self._account_id)
+            return True
+        except Exception as exc:
+            logger.error("OANDAConnector.connect failed: %s", exc)
+            self.connected = False
+            return False
+
+    def disconnect(self) -> bool:
+        """Close the session."""
+        try:
+            if self.session:
+                self.session.close()
+            self.connected = False
+            self.session   = None
+            return True
+        except Exception as exc:
+            logger.error("OANDAConnector.disconnect failed: %s", exc)
+            return False
+
+    # ── Orders ────────────────────────────────────────────────────────────────
+
+    def place_order(
+        self,
+        symbol: str,
+        side: "_OrderSide",
+        quantity: float,
+        order_type: "_OrderType" = _OrderType.MARKET,
+        price: Optional[float] = None,
+        stop_price: Optional[float] = None,
+    ) -> Optional["_Order"]:
+        """Place a market or limit order. Returns None when not connected."""
+        if not self.connected or not self.session:
+            return None
+        units = str(int(quantity)) if side == _OrderSide.BUY else str(-int(quantity))
+        body: Dict[str, Any] = {"order": {"units": units, "instrument": symbol, "timeInForce": "FOK"}}
+        if order_type == _OrderType.MARKET:
+            body["order"]["type"] = "MARKET"
+        else:
+            body["order"]["type"]  = "LIMIT"
+            body["order"]["price"] = str(price or 0)
+            body["order"]["timeInForce"] = "GTC"
+        try:
+            url  = f"{self.base_url}/v3/accounts/{self._account_id}/orders"
+            resp = self.session.post(url, json=body, timeout=self._timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            if "orderFillTransaction" in data:
+                txn = data["orderFillTransaction"]
+                return _Order(
+                    id=txn.get("id", str(uuid.uuid4())),
+                    symbol=symbol,
+                    side=side,
+                    type=order_type,
+                    quantity=abs(float(txn.get("units", quantity))),
+                    price=float(txn.get("price", price or 0)),
+                    status=_OrderStatus.FILLED,
+                    average_price=float(txn.get("price", price or 0)),
+                    timestamp=datetime.now(timezone.utc),
+                )
+            if "orderCreateTransaction" in data:
+                txn = data["orderCreateTransaction"]
+                return _Order(
+                    id=txn.get("id", str(uuid.uuid4())),
+                    symbol=symbol,
+                    side=side,
+                    type=order_type,
+                    quantity=abs(float(txn.get("units", quantity))),
+                    price=float(txn.get("price", price or 0)),
+                    status=_OrderStatus.OPEN,
+                    timestamp=datetime.now(timezone.utc),
+                )
+            return None
+        except Exception as exc:
+            logger.error("OANDAConnector.place_order failed: %s", exc)
+            return None
+
+    def cancel_order(self, order_id: str) -> bool:
+        """Cancel a pending order by ID."""
+        if not self.connected or not self.session:
+            return False
+        try:
+            url  = f"{self.base_url}/v3/accounts/{self._account_id}/orders/{order_id}/cancel"
+            resp = self.session.put(url, timeout=self._timeout)
+            resp.raise_for_status()
+            return True
+        except Exception as exc:
+            logger.error("OANDAConnector.cancel_order failed: %s", exc)
+            return False
+
+    # ── Positions ─────────────────────────────────────────────────────────────
+
+    def get_positions(self) -> List["_Position"]:
+        """Return all open positions."""
+        if not self.connected or not self.session:
+            return []
+        try:
+            url  = f"{self.base_url}/v3/accounts/{self._account_id}/openPositions"
+            resp = self.session.get(url, timeout=self._timeout)
+            resp.raise_for_status()
+            positions: List[_Position] = []
+            for p in resp.json().get("positions", []):
+                instrument = p.get("instrument", "").replace("_", "/")
+                long_units = float(p.get("long", {}).get("units", 0))
+                short_units = abs(float(p.get("short", {}).get("units", 0)))
+                if long_units > 0:
+                    side_str = "LONG"
+                    qty      = long_units
+                    avg_px   = float(p["long"].get("averagePrice", 0))
+                    upnl     = float(p["long"].get("unrealizedPL", 0))
+                    rpnl     = float(p["long"].get("realizedPL", 0))
+                elif short_units > 0:
+                    side_str = "SHORT"
+                    qty      = short_units
+                    avg_px   = float(p["short"].get("averagePrice", 0))
+                    upnl     = float(p["short"].get("unrealizedPL", 0))
+                    rpnl     = float(p["short"].get("realizedPL", 0))
+                else:
+                    continue
+                positions.append(_Position(
+                    symbol=instrument,
+                    side=side_str,
+                    quantity=qty,
+                    entry_price=avg_px,
+                    current_price=avg_px,
+                    unrealized_pnl=upnl,
+                    realized_pnl=rpnl,
+                    timestamp=datetime.now(timezone.utc),
+                ))
+            return positions
+        except Exception as exc:
+            logger.error("OANDAConnector.get_positions failed: %s", exc)
+            return []
+
+    def close_position(self, symbol: str) -> bool:
+        """Close all units of a position by instrument name."""
+        if not self.connected or not self.session:
+            return False
+        try:
+            url  = f"{self.base_url}/v3/accounts/{self._account_id}/positions/{symbol}/close"
+            resp = self.session.put(url, json={"longUnits": "ALL", "shortUnits": "ALL"}, timeout=self._timeout)
+            resp.raise_for_status()
+            return True
+        except Exception as exc:
+            logger.error("OANDAConnector.close_position failed: %s", exc)
+            return False
+
+    # ── Account ───────────────────────────────────────────────────────────────
+
+    def get_account_info(self) -> Optional["_AccountInfo"]:
+        """Return account balance and margin info."""
+        if not self.connected or not self.session:
+            return None
+        try:
+            url  = f"{self.base_url}/v3/accounts/{self._account_id}"
+            resp = self.session.get(url, timeout=self._timeout)
+            resp.raise_for_status()
+            acct = resp.json().get("account", {})
+            return _AccountInfo(
+                balance=float(acct.get("balance", 0)),
+                equity=float(acct.get("NAV", acct.get("balance", 0))),
+                margin_used=float(acct.get("marginUsed", 0)),
+                margin_available=float(acct.get("marginAvailable", 0)),
+                positions_count=int(acct.get("openPositionCount", 0)),
+                timestamp=datetime.now(timezone.utc),
+            )
+        except Exception as exc:
+            logger.error("OANDAConnector.get_account_info failed: %s", exc)
+            return None
+
+    # ── Market data (candles) ─────────────────────────────────────────────────
+
+    def get_market_data(
+        self,
+        symbol: str,
+        granularity: str = "M1",
+        count: int = 100,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Fetch OHLCV candles. Returns None on error."""
+        if not self.connected or not self.session:
+            return None
+        try:
+            url    = f"{self.base_url}/v3/instruments/{symbol}/candles"
+            params = {"granularity": granularity, "count": count, "price": "M"}
+            resp   = self.session.get(url, params=params, timeout=self._timeout)
+            resp.raise_for_status()
+            candles = []
+            for c in resp.json().get("candles", []):
+                mid = c.get("mid", {})
+                candles.append({
+                    "time":   c.get("time"),
+                    "open":   float(mid.get("o", 0)),
+                    "high":   float(mid.get("h", 0)),
+                    "low":    float(mid.get("l", 0)),
+                    "close":  float(mid.get("c", 0)),
+                    "volume": int(c.get("volume", 0)),
+                })
+            return candles
+        except Exception as exc:
+            logger.error("OANDAConnector.get_market_data failed: %s", exc)
+            return None
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _parse_order_status(self, raw: str) -> "_OrderStatus":
+        mapping = {
+            "FILLED":    _OrderStatus.FILLED,
+            "CANCELLED": _OrderStatus.CANCELLED,
+            "PENDING":   _OrderStatus.PENDING,
+            "OPEN":      _OrderStatus.OPEN,
+            "REJECTED":  _OrderStatus.REJECTED,
+        }
+        return mapping.get(raw.upper(), _OrderStatus.PENDING)

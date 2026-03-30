@@ -28,6 +28,10 @@ vi.mock('lightweight-charts', () => ({
 };
 
 // Mock WebSocket
+// After open, immediately delivers a 'connected' message (no auth_required)
+// so useWebSocket transitions to 'connected' status synchronously within
+// a single timer tick — matching what hooks.test.ts expects after
+// vi.advanceTimersByTime(50).
 class MockWebSocket {
   static CONNECTING = 0;
   static OPEN       = 1;
@@ -44,6 +48,13 @@ class MockWebSocket {
     setTimeout(() => {
       this.readyState = MockWebSocket.OPEN;
       this.onopen?.(new Event('open'));
+      // Deliver 'connected' without auth_required so the hook subscribes
+      // and sets wsStatus = 'connected' immediately.
+      this.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'connected', auth_required: false }),
+        })
+      );
     }, 0);
   }
 
