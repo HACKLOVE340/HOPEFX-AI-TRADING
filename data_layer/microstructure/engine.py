@@ -240,15 +240,51 @@ class MicrostructureEngine:
             }
 
     def reset_session(self) -> None:
-        """Reset cumulative delta and VWAP at session open (00:00 UTC)."""
+        """Reset cumulative delta and VWAP at session open (00:00 UTC).
+
+        Public API — acquires the lock. Do NOT call from within _process_tick
+        (which already holds the lock) — use _reset_session_unlocked() instead.
+        """
         with self._lock:
-            self._cumulative_delta = 0.0
-            self._vwap_num         = 0.0
-            self._vwap_den         = 0.0
-            self._kyles_num        = 0.0
-            self._kyles_den        = 0.0
-            self._session_open     = time.time()
-            logger.debug("MicrostructureEngine: session reset")
+            self._reset_session_unlocked()
+
+    def _reset_session_unlocked(self) -> None:
+        """Reset session accumulators. Caller must already hold self._lock."""
+        self._cumulative_delta = 0.0
+        self._vwap_num         = 0.0
+        self._vwap_den         = 0.0
+        self._kyles_num        = 0.0
+        self._kyles_den        = 0.0
+        self._session_open     = time.time()
+        logger.debug("MicrostructureEngine: session reset")
+
+    def inject_l2_depth(
+        self,
+        symbol: str,
+        bid_depth: float,
+        ask_depth: float,
+    ) -> None:
+        """
+        Inject real Level-2 order book depth into the latest tick record.
+
+        Called by market_data/order_book.py when a real L2 snapshot arrives.
+        Updates the most recent _TickRecord in-place so the next
+        get_ml_features() call reflects real depth imbalance.
+
+        Parameters
+        ----------
+        symbol    : instrument symbol (must match "XAU_USD")
+        bid_depth : total bid-side volume within L2_DEPTH_BPS of mid
+        ask_depth : total ask-side volume within L2_DEPTH_BPS of mid
+        """
+        if symbol != "XAU_USD":
+            return
+        with self._lock:
+            if not self._ticks:
+                return
+            last = self._ticks[-1]
+            last.bid_depth = max(bid_depth, 0.0)
+            last.ask_depth = max(ask_depth, 0.0)
 
     def health(self) -> Dict[str, object]:
         """
@@ -302,20 +338,24 @@ class MicrostructureEngine:
         spread = max(tick.ask - tick.bid, 0.0)
         mid    = tick.mid
 
-        # Lee-Ready classification
+        # Lee-Ready trade classification
         if self._last_mid > 0:
             if mid > self._last_mid:
                 is_buy = True
             elif mid < self._last_mid:
                 is_buy = False
             else:
-                # Quote rule: trade at ask = buy, at bid = sell
+                # Quote rule: trade at or above mid = buy
                 is_buy = mid >= (tick.bid + tick.ask) / 2
         else:
             is_buy = True  # first tick — assume buy
 
-        # Proxy volume from spread × 1000 (no real volume from REST APIs)
-        volume = max(spread * 1000.0, 1.0)
+        # Volume: use unit volume (1.0 per tick) for REST-only feeds that
+        # provide no real trade volume. Using spread×1000 was fabricated data
+        # that created spurious correlation between spread and OFI signals.
+        # When real L2 volume is injected via inject_l2_depth(), the depth
+        # fields carry the actual size information.
+        volume = 1.0
 
         rec = _TickRecord(
             ts=ts, mid=mid, bid=tick.bid, ask=tick.ask,
@@ -324,10 +364,10 @@ class MicrostructureEngine:
         self._ticks.append(rec)
         self._tick_count += 1
 
-        # Signed volume
-        signed_vol = volume if is_buy else -volume
+        # Signed volume (tick-count delta)
+        signed_vol = 1.0 if is_buy else -1.0
 
-        # Cumulative delta
+        # Cumulative delta (net buy ticks - sell ticks this session)
         self._cumulative_delta += signed_vol
 
         # Trade pressure EMA
@@ -336,14 +376,14 @@ class MicrostructureEngine:
             + (1.0 - _PRESSURE_ALPHA) * self._trade_pressure
         )
 
-        # VWAP
-        self._vwap_num += mid * volume
-        self._vwap_den += volume
+        # VWAP (mid-price weighted by tick count — best proxy without real volume)
+        self._vwap_num += mid
+        self._vwap_den += 1.0
 
-        # Kyle's lambda: Σ|Δprice| / Σvolume
+        # Kyle's lambda: Σ|Δprice| / Σtick_count (price impact per tick)
         if self._last_mid > 0:
             self._kyles_num += abs(mid - self._last_mid)
-            self._kyles_den += volume
+            self._kyles_den += 1.0
 
         # Spread EMAs
         if self._spread_ema_fast == 0.0:
@@ -361,10 +401,12 @@ class MicrostructureEngine:
 
         self._last_mid = mid
 
-        # Auto-reset at UTC midnight
+        # Auto-reset at UTC midnight — call _reset_session_unlocked() to avoid
+        # deadlock: _process_tick is already called under self._lock, and the
+        # public reset_session() also acquires self._lock.
         now_utc = datetime.now(timezone.utc)
         if now_utc.day != self._last_session_day and self._last_session_day >= 0:
-            self.reset_session()
+            self._reset_session_unlocked()
         self._last_session_day = now_utc.day
 
         snap = self._build_snapshot()
