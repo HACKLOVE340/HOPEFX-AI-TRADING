@@ -172,17 +172,24 @@ class MacroCalendarEngine:
 
     def _init_prometheus(self) -> None:
         try:
-            from prometheus_client import Gauge
-            self._prom_impact = Gauge(
+            from prometheus_client import Gauge, REGISTRY
+
+            def _gauge(name: str, doc: str):
+                try:
+                    return Gauge(name, doc)
+                except ValueError:
+                    return REGISTRY._names_to_collectors.get(name)
+
+            self._prom_impact      = _gauge(
                 "hopefx_macro_impact_score",
                 "Current macro calendar impact score [0, 1]",
             )
-            self._prom_event_count = Gauge(
+            self._prom_event_count = _gauge(
                 "hopefx_macro_upcoming_high_events",
                 "Number of HIGH-impact events in next 24h",
             )
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("MacroCalendarEngine: Prometheus init skipped: %s", _exc)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -362,17 +369,24 @@ class MacroCalendarEngine:
 
     def is_blackout_window(self) -> bool:
         """
-        True if within the blackout window of a HIGH-impact event.
+        True if the current wall-clock time is within a HIGH-impact event blackout.
 
         Blackout = [event_time - BLACKOUT_BEFORE_MIN, event_time + BLACKOUT_AFTER_MIN]
         """
-        now = datetime.now(timezone.utc)
+        return self._is_blackout_at(datetime.now(timezone.utc))
+
+    def _is_blackout_at(self, at: datetime) -> bool:
+        """
+        True if `at` falls within any HIGH-impact event blackout window.
+
+        Used by get_ml_features() for causal backtesting correctness.
+        """
         for event in self._events:
             if event.impact != MacroImpact.HIGH:
                 continue
             before = event.scheduled_at - timedelta(minutes=_BLACKOUT_BEFORE_MIN)
             after  = event.scheduled_at + timedelta(minutes=_BLACKOUT_AFTER_MIN)
-            if before <= now <= after:
+            if before <= at <= after:
                 return True
         return False
 
@@ -437,13 +451,16 @@ class MacroCalendarEngine:
         else:
             impact_score = self.get_current_impact_score()
 
+        # Causal blackout check: use as_of time, not live datetime.now()
+        is_blackout = self._is_blackout_at(now)
+
         return {
             "macro_impact_score_now":      impact_score,
             "macro_hours_to_next_high":    round(hours_to_next, 2),
             "macro_hours_since_last_high": round(hours_since_last, 2),
             "macro_surprise_last":         round(last_surprise, 4),
             "macro_high_event_count_24h":  float(high_count),
-            "macro_is_blackout":           1.0 if self.is_blackout_window() else 0.0,
+            "macro_is_blackout":           1.0 if is_blackout else 0.0,
         }
 
     def _compute_impact_at(self, as_of: datetime) -> float:
