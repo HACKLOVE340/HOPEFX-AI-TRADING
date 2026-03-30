@@ -41,3 +41,4 @@ export { OrderBookDepth, OrderBookDepthGuarded } from './panels/OrderBookDepth';
 export { RiskDashboard, RiskDashboardGuarded } from './panels/RiskDashboard';
 export { SentimentGauge, SentimentGaugeGuarded } from './panels/SentimentGauge';
 export { PositionsTable, PositionsTableGuarded, PositionsTableSkeleton } from './panels/PositionsTable';
+export { OrderEntryForm, OrderEntryFormGuarded } from './panels/OrderEntryForm';
