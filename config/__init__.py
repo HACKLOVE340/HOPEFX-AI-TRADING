@@ -24,24 +24,30 @@ from .config_manager import (
 )
 
 
-# EncryptionManager, APIConfig, LoggingConfig, AppConfig were removed from
-# config_manager.py in a prior refactor. Import stubs keep existing callers
-# from breaking at import time.
+# EncryptionManager, APIConfig, LoggingConfig, AppConfig were consolidated
+# into ConfigManager in a prior refactor. These shims preserve import
+# compatibility for callers that reference them by name.
 class EncryptionManager:  # pragma: no cover
-    """Stub — encryption is handled inside ConfigManager._setup_encryption."""
+    """Backwards-compat shim. Encryption is handled by ConfigManager._setup_encryption."""
 
     pass
 
 
 class APIConfig:  # pragma: no cover
+    """Backwards-compat shim. API configuration is managed by ConfigManager."""
+
     pass
 
 
 class LoggingConfig:  # pragma: no cover
+    """Backwards-compat shim. Logging configuration is managed by ConfigManager."""
+
     pass
 
 
 class AppConfig:  # pragma: no cover
+    """Backwards-compat shim. Application configuration is managed by ConfigManager."""
+
     pass
 
 
