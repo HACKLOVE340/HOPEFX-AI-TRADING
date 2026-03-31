@@ -78,13 +78,13 @@ SYMBOLS = [
 
 # Extended 7-symbol set — targets N>919 for SE≤0.10 gate
 SYMBOLS_EXTENDED = [
-    ("GC=F",     "XAU/USD",   0.01),
-    ("BTC-USD",  "BTC/USD",   1.0),
-    ("ETH-USD",  "ETH/USD",   0.1),
-    ("EURUSD=X", "EUR/USD",   0.0001),
-    ("GBPUSD=X", "GBP/USD",   0.0001),
-    ("SI=F",     "Silver",    0.001),
-    ("CL=F",     "Crude Oil", 0.01),
+    ("GC=F", "XAU/USD", 0.01),
+    ("BTC-USD", "BTC/USD", 1.0),
+    ("ETH-USD", "ETH/USD", 0.1),
+    ("EURUSD=X", "EUR/USD", 0.0001),
+    ("GBPUSD=X", "GBP/USD", 0.0001),
+    ("SI=F", "Silver", 0.001),
+    ("CL=F", "Crude Oil", 0.01),
 ]
 
 # SE≤0.10 requires N≥919 at SR=1.52
@@ -110,7 +110,7 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
                 logger.info("Loaded %s from cache: %d bars", ticker, len(df))
                 return df
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
     try:
         import yfinance as yf
@@ -139,7 +139,7 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
         try:
             df.to_csv(cache_path)
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
         logger.info("Downloaded %s: %d bars", ticker, len(df))
         return df
     except Exception as exc:
@@ -149,7 +149,8 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
             # strategy evaluation.
             logger.warning(
                 "Could not fetch %s: %s — using synthetic GBM data (smoke mode only)",
-                ticker, exc,
+                ticker,
+                exc,
             )
             return _synthetic_ohlcv_smoke(ticker)
         # Production backtest: real data is required.  Raise so the caller
@@ -171,6 +172,7 @@ def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
     network access).
     """
     import warnings
+
     warnings.warn(
         f"_synthetic_ohlcv_smoke({ticker!r}): using synthetic GBM data. "
         "Results are not valid for strategy evaluation.",
@@ -402,14 +404,17 @@ def _detect_sharpe_outliers(symbol_results: List[Dict]) -> Tuple[List[str], List
         if sharpe > 5.0:
             flags.append(f"Sharpe={sharpe:.2f} > 5.0 (implausible for daily bars)")
         if win_rate > 0.75 and n > 50:
-            flags.append(f"win_rate={win_rate:.1%} on {n} trades (implausible for direction model)")
+            flags.append(
+                f"win_rate={win_rate:.1%} on {n} trades (implausible for direction model)"
+            )
         if flags:
             outliers.append(sym)
             reasons.append("; ".join(flags))
             logger.warning(
                 "Sharpe outlier detected: %s — %s. "
                 "Excluding from honest pooled Sharpe.",
-                sym, "; ".join(flags),
+                sym,
+                "; ".join(flags),
             )
     return outliers, reasons
 
@@ -493,7 +498,9 @@ def _sharpe_stats(pnls: np.ndarray, n_total: int, target_n: int) -> Dict:
     credible = se <= 0.10
     n_req = int(np.ceil((1 + 0.5 * sr**2) / 0.01))
     if gate_passed:
-        se_note = f"SE={se:.3f}" + (" (credible)" if credible else f" (need N>={n_req} for SE<=0.10)")
+        se_note = f"SE={se:.3f}" + (
+            " (credible)" if credible else f" (need N>={n_req} for SE<=0.10)"
+        )
         msg = f"Sharpe gate PASSED: N={n_total} >= {target_n}. {se_note}"
     else:
         msg = (
@@ -581,7 +588,9 @@ def compute_pooled_metrics(symbol_results: List[Dict], target_n: int = 600) -> D
             f"Symbols {outlier_syms} have implausible Sharpe ratios and are excluded "
             f"from the honest pooled Sharpe. The gate check uses the honest pool. "
             f"These results must be independently validated before citing."
-        ) if outlier_syms else "No outliers detected — full pool is authoritative.",
+        )
+        if outlier_syms
+        else "No outliers detected — full pool is authoritative.",
     }
 
     # Override gate fields with honest pool values when outliers exist
@@ -589,7 +598,8 @@ def compute_pooled_metrics(symbol_results: List[Dict], target_n: int = 600) -> D
         result["sharpe_gate_passed"] = honest_stats["sharpe_gate_passed"]
         result["sharpe_credible"] = honest_stats["sharpe_credible"]
         result["message"] = (
-            f"[HONEST POOL — {','.join(outlier_syms)} excluded] " + honest_stats["message"]
+            f"[HONEST POOL — {','.join(outlier_syms)} excluded] "
+            + honest_stats["message"]
         )
 
     return result

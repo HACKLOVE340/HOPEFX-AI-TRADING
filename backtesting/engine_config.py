@@ -365,7 +365,9 @@ class SimulatedBroker:
 
                 impact = model.estimate(
                     order_size=quantity,
-                    adv=adv if adv > 0 else bar_volume * 24,  # estimate ADV from bar vol
+                    adv=adv
+                    if adv > 0
+                    else bar_volume * 24,  # estimate ADV from bar vol
                     volatility_daily=vol_daily,
                     spread_bps=spread_bps,
                     price=price,
@@ -962,6 +964,7 @@ class BacktestEngine:
         # Falls back to the internal simple MC if the module is unavailable.
         try:
             from analytics.monte_carlo import run_bootstrap
+
             _mc_result = run_bootstrap(
                 trade_pnls=[t.get("net_pnl", 0.0) for t in trades],
                 initial_capital=initial_equity,

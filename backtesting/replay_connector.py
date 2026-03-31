@@ -53,77 +53,81 @@ Usage
     report = await stress.run_all_regimes()
     print(stress.summary(report))
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Any, Callable, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
 # ── Regime definitions ────────────────────────────────────────────────────────
 
+
 @dataclass
 class StressRegime:
     """A named historical stress period for regime-shift testing."""
-    name:        str
-    start:       datetime
-    end:         datetime
+
+    name: str
+    start: datetime
+    end: datetime
     description: str
-    expected_vol_mult: float   # expected vol relative to baseline (informational)
+    expected_vol_mult: float  # expected vol relative to baseline (informational)
 
 
 # Built-in stress regimes covering major market dislocations
 STRESS_REGIMES: List[StressRegime] = [
     StressRegime(
-        name        = "covid_crash_2020",
-        start       = datetime(2020, 2, 20, tzinfo=timezone.utc),
-        end         = datetime(2020, 4, 30, tzinfo=timezone.utc),
-        description = "COVID-19 market crash — extreme vol, liquidity crunch",
-        expected_vol_mult = 4.0,
+        name="covid_crash_2020",
+        start=datetime(2020, 2, 20, tzinfo=timezone.utc),
+        end=datetime(2020, 4, 30, tzinfo=timezone.utc),
+        description="COVID-19 market crash — extreme vol, liquidity crunch",
+        expected_vol_mult=4.0,
     ),
     StressRegime(
-        name        = "gold_flash_crash_2021",
-        start       = datetime(2021, 8, 9, tzinfo=timezone.utc),
-        end         = datetime(2021, 8, 13, tzinfo=timezone.utc),
-        description = "Gold flash crash — $100 drop in minutes, thin liquidity",
-        expected_vol_mult = 3.5,
+        name="gold_flash_crash_2021",
+        start=datetime(2021, 8, 9, tzinfo=timezone.utc),
+        end=datetime(2021, 8, 13, tzinfo=timezone.utc),
+        description="Gold flash crash — $100 drop in minutes, thin liquidity",
+        expected_vol_mult=3.5,
     ),
     StressRegime(
-        name        = "fed_rate_shock_2022",
-        start       = datetime(2022, 3, 1, tzinfo=timezone.utc),
-        end         = datetime(2022, 6, 30, tzinfo=timezone.utc),
-        description = "Fed 75bps hike cycle — USD surge, gold selloff",
-        expected_vol_mult = 2.5,
+        name="fed_rate_shock_2022",
+        start=datetime(2022, 3, 1, tzinfo=timezone.utc),
+        end=datetime(2022, 6, 30, tzinfo=timezone.utc),
+        description="Fed 75bps hike cycle — USD surge, gold selloff",
+        expected_vol_mult=2.5,
     ),
     StressRegime(
-        name        = "ukraine_war_spike_2022",
-        start       = datetime(2022, 2, 24, tzinfo=timezone.utc),
-        end         = datetime(2022, 3, 15, tzinfo=timezone.utc),
-        description = "Russia-Ukraine war onset — gold safe-haven spike",
-        expected_vol_mult = 3.0,
+        name="ukraine_war_spike_2022",
+        start=datetime(2022, 2, 24, tzinfo=timezone.utc),
+        end=datetime(2022, 3, 15, tzinfo=timezone.utc),
+        description="Russia-Ukraine war onset — gold safe-haven spike",
+        expected_vol_mult=3.0,
     ),
     StressRegime(
-        name        = "svb_banking_crisis_2023",
-        start       = datetime(2023, 3, 8, tzinfo=timezone.utc),
-        end         = datetime(2023, 3, 31, tzinfo=timezone.utc),
-        description = "SVB collapse — risk-off, gold bid, rate vol",
-        expected_vol_mult = 2.0,
+        name="svb_banking_crisis_2023",
+        start=datetime(2023, 3, 8, tzinfo=timezone.utc),
+        end=datetime(2023, 3, 31, tzinfo=timezone.utc),
+        description="SVB collapse — risk-off, gold bid, rate vol",
+        expected_vol_mult=2.0,
     ),
     StressRegime(
-        name        = "normal_baseline_2019",
-        start       = datetime(2019, 6, 1, tzinfo=timezone.utc),
-        end         = datetime(2019, 8, 31, tzinfo=timezone.utc),
-        description = "Normal market baseline — low vol, trending gold",
-        expected_vol_mult = 1.0,
+        name="normal_baseline_2019",
+        start=datetime(2019, 6, 1, tzinfo=timezone.utc),
+        end=datetime(2019, 8, 31, tzinfo=timezone.utc),
+        description="Normal market baseline — low vol, trending gold",
+        expected_vol_mult=1.0,
     ),
 ]
 
 
 # ── ReplayDataHandler — async→sync bridge ────────────────────────────────────
+
 
 class ReplayDataHandler:
     """
@@ -140,12 +144,12 @@ class ReplayDataHandler:
         self,
         replay_engine: Any,
         symbol: str = "XAU_USD",
-        speed: float = 0.0,   # 0 = as fast as possible (backtest mode)
+        speed: float = 0.0,  # 0 = as fast as possible (backtest mode)
     ) -> None:
-        self._replay  = replay_engine
-        self._symbol  = symbol
-        self._speed   = speed
-        self._ticks:  List[Any] = []   # pre-loaded GoldTick list
+        self._replay = replay_engine
+        self._symbol = symbol
+        self._speed = speed
+        self._ticks: List[Any] = []  # pre-loaded GoldTick list
 
     def preload(
         self,
@@ -159,13 +163,14 @@ class ReplayDataHandler:
         Must be called before get_data(). Returns tick count.
         Uses the provided event loop or creates a new one.
         """
+
         async def _load():
             ticks = []
             async for tick in self._replay.replay_ticks(
                 start=start,
                 end=end,
                 symbol=self._symbol,
-                speed=0.0,   # always load at max speed
+                speed=0.0,  # always load at max speed
             ):
                 ticks.append(tick)
             return ticks
@@ -209,16 +214,17 @@ class ReplayDataHandler:
                 continue
 
             tick = TickData(
-                timestamp = ts,
-                symbol    = getattr(gold_tick, "symbol", self._symbol),
-                bid       = float(getattr(gold_tick, "bid", 0.0)),
-                ask       = float(getattr(gold_tick, "ask", 0.0)),
-                volume    = float(getattr(gold_tick, "volume", 0.0)),
+                timestamp=ts,
+                symbol=getattr(gold_tick, "symbol", self._symbol),
+                bid=float(getattr(gold_tick, "bid", 0.0)),
+                ask=float(getattr(gold_tick, "ask", 0.0)),
+                volume=float(getattr(gold_tick, "volume", 0.0)),
             )
             yield ts, tick.symbol, tick
 
 
 # ── ReplayBacktestRunner ──────────────────────────────────────────────────────
+
 
 class ReplayBacktestRunner:
     """
@@ -236,12 +242,12 @@ class ReplayBacktestRunner:
         leverage: float = 1.0,
         replay_engine: Optional[Any] = None,
     ) -> None:
-        self._strategy_fn    = strategy_fn
-        self._symbols        = symbols or ["XAU_USD"]
+        self._strategy_fn = strategy_fn
+        self._symbols = symbols or ["XAU_USD"]
         self._initial_capital = initial_capital
         self._data_frequency = data_frequency
-        self._leverage       = leverage
-        self._replay_engine  = replay_engine
+        self._leverage = leverage
+        self._replay_engine = replay_engine
 
     async def run(
         self,
@@ -256,6 +262,7 @@ class ReplayBacktestRunner:
         """
         from backtesting.engine import BacktestEngine, TransactionCostModel
         from data_layer.orchestrator import orchestrator as _orch
+
         MarketReplayEngine = type(_orch._replay)
 
         replay = self._replay_engine or MarketReplayEngine()
@@ -268,22 +275,26 @@ class ReplayBacktestRunner:
         if tick_count == 0:
             logger.warning(
                 "ReplayBacktestRunner: no ticks loaded for %s %s→%s",
-                symbol, start.date(), end.date(),
+                symbol,
+                start.date(),
+                end.date(),
             )
             return None
 
         engine = BacktestEngine(
-            initial_capital   = self._initial_capital,
-            transaction_costs = TransactionCostModel(),
-            data_frequency    = self._data_frequency,
-            leverage          = self._leverage,
+            initial_capital=self._initial_capital,
+            transaction_costs=TransactionCostModel(),
+            data_frequency=self._data_frequency,
+            leverage=self._leverage,
         )
         engine.set_strategy(self._strategy_fn, self._symbols)
         engine.set_data_handler(handler)
 
         logger.info(
             "ReplayBacktestRunner: running backtest %s→%s ticks=%d",
-            start.date(), end.date(), tick_count,
+            start.date(),
+            end.date(),
+            tick_count,
         )
         metrics = engine.run(start, end)
         return metrics
@@ -291,13 +302,15 @@ class ReplayBacktestRunner:
 
 # ── RegimeShiftStressTester ───────────────────────────────────────────────────
 
+
 @dataclass
 class RegimeResult:
     """Backtest result for a single stress regime."""
-    regime:        StressRegime
-    metrics:       Any            # PerformanceMetrics or None
-    tick_count:    int
-    error:         Optional[str] = None
+
+    regime: StressRegime
+    metrics: Any  # PerformanceMetrics or None
+    tick_count: int
+    error: Optional[str] = None
 
     @property
     def passed(self) -> bool:
@@ -305,18 +318,19 @@ class RegimeResult:
         if self.metrics is None:
             return False
         max_dd = getattr(self.metrics, "max_drawdown", 1.0)
-        return max_dd < 0.20   # < 20% drawdown = survived
+        return max_dd < 0.20  # < 20% drawdown = survived
 
 
 @dataclass
 class StressReport:
     """Full regime-shift stress test report."""
-    strategy_name:  str
-    regimes_run:    int
+
+    strategy_name: str
+    regimes_run: int
     regimes_passed: int
     regimes_failed: int
-    results:        List[RegimeResult]
-    generated_at:   str = field(
+    results: List[RegimeResult]
+    generated_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
 
@@ -363,10 +377,10 @@ class RegimeShiftStressTester:
         replay_engine: Optional[Any] = None,
         max_drawdown_threshold: float = 0.20,
     ) -> None:
-        self._strategy_fn   = strategy_fn
+        self._strategy_fn = strategy_fn
         self._strategy_name = strategy_name
         self._initial_capital = initial_capital
-        self._regimes       = regimes or STRESS_REGIMES
+        self._regimes = regimes or STRESS_REGIMES
         self._replay_engine = replay_engine
         self._max_dd_thresh = max_drawdown_threshold
 
@@ -381,33 +395,39 @@ class RegimeShiftStressTester:
         for regime in self._regimes:
             logger.info(
                 "RegimeShiftStressTester: running regime=%s (%s → %s)",
-                regime.name, regime.start.date(), regime.end.date(),
+                regime.name,
+                regime.start.date(),
+                regime.end.date(),
             )
             result = await self._run_regime(regime)
             results.append(result)
 
             icon = "✓" if result.passed else "✗"
-            dd   = getattr(result.metrics, "max_drawdown", None)
-            sr   = getattr(result.metrics, "sharpe_ratio", None)
+            dd = getattr(result.metrics, "max_drawdown", None)
+            sr = getattr(result.metrics, "sharpe_ratio", None)
             logger.info(
                 "  [%s] %s: ticks=%d dd=%.1f%% sharpe=%.2f%s",
-                icon, regime.name, result.tick_count,
-                (dd or 0) * 100, sr or 0,
+                icon,
+                regime.name,
+                result.tick_count,
+                (dd or 0) * 100,
+                sr or 0,
                 f" ERROR: {result.error}" if result.error else "",
             )
 
         passed = sum(1 for r in results if r.passed)
         report = StressReport(
-            strategy_name  = self._strategy_name,
-            regimes_run    = len(results),
-            regimes_passed = passed,
-            regimes_failed = len(results) - passed,
-            results        = results,
+            strategy_name=self._strategy_name,
+            regimes_run=len(results),
+            regimes_passed=passed,
+            regimes_failed=len(results) - passed,
+            results=results,
         )
         logger.info(
             "RegimeShiftStressTester: %d/%d regimes passed "
             "worst_dd=%.1f%% best_sharpe=%.2f worst_sharpe=%.2f",
-            passed, len(results),
+            passed,
+            len(results),
             report.worst_drawdown() * 100,
             report.best_sharpe(),
             report.worst_sharpe(),
@@ -417,33 +437,34 @@ class RegimeShiftStressTester:
     async def _run_regime(self, regime: StressRegime) -> RegimeResult:
         """Run a single regime. Returns RegimeResult."""
         runner = ReplayBacktestRunner(
-            strategy_fn     = self._strategy_fn,
-            initial_capital = self._initial_capital,
-            replay_engine   = self._replay_engine,
+            strategy_fn=self._strategy_fn,
+            initial_capital=self._initial_capital,
+            replay_engine=self._replay_engine,
         )
         try:
             metrics = await runner.run(
-                start  = regime.start,
-                end    = regime.end,
-                symbol = "XAU_USD",
+                start=regime.start,
+                end=regime.end,
+                symbol="XAU_USD",
             )
             # Count ticks from the handler (approximate from metrics)
             tick_count = getattr(metrics, "total_trades", 0) if metrics else 0
             return RegimeResult(
-                regime     = regime,
-                metrics    = metrics,
-                tick_count = tick_count,
+                regime=regime,
+                metrics=metrics,
+                tick_count=tick_count,
             )
         except Exception as exc:
             logger.error(
                 "RegimeShiftStressTester: regime=%s failed: %s",
-                regime.name, exc,
+                regime.name,
+                exc,
             )
             return RegimeResult(
-                regime     = regime,
-                metrics    = None,
-                tick_count = 0,
-                error      = str(exc),
+                regime=regime,
+                metrics=None,
+                tick_count=0,
+                error=str(exc),
             )
 
     def summary(self, report: StressReport) -> str:
@@ -460,9 +481,9 @@ class RegimeShiftStressTester:
         ]
         for r in report.results:
             icon = "✓" if r.passed else "✗"
-            dd   = getattr(r.metrics, "max_drawdown",  None)
-            sr   = getattr(r.metrics, "sharpe_ratio",  None)
-            ret  = getattr(r.metrics, "total_return",  None)
+            dd = getattr(r.metrics, "max_drawdown", None)
+            sr = getattr(r.metrics, "sharpe_ratio", None)
+            ret = getattr(r.metrics, "total_return", None)
             lines.append(
                 f"  [{icon}] {r.regime.name:<35} "
                 f"dd={f'{dd:.1%}' if dd is not None else 'N/A':>7}  "

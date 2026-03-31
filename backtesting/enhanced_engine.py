@@ -2385,6 +2385,7 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> List[Tic
     from a vendor (e.g. Dukascopy, Tick Data Suite, OANDA history API).
     """
     import os as _os
+
     if _os.getenv("APP_ENV", "production").lower() == "production":
         raise RuntimeError(
             "generate_test_data() cannot be called in production (APP_ENV=production). "
@@ -2501,6 +2502,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
     The synthetic GBM path exists only for engine smoke-tests in non-production.
     """
     import os as _os
+
     _app_env = _os.getenv("APP_ENV", "production").lower()
     _is_production = _app_env == "production"
 
@@ -2528,7 +2530,9 @@ def run_comprehensive_backtest(use_real_data: bool = True):
                     "Install ccxt and ensure network access to Binance. "
                     "Do not use synthetic data for production backtests."
                 )
-            print("    Real data unavailable — falling back to SYNTHETIC data (non-production only).")
+            print(
+                "    Real data unavailable — falling back to SYNTHETIC data (non-production only)."
+            )
             print("    *** WARNING: Results are NOT valid for strategy evaluation. ***")
 
     if ticks is None:

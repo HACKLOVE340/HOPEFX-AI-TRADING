@@ -105,7 +105,9 @@ def _win_rate(pnls: List[float], cost: float = 0.0) -> float:
     return sum(1 for p in net if p > 0) / len(net)
 
 
-def _total_return(pnls: List[float], cost: float = 0.0, initial: float = 100_000.0) -> float:
+def _total_return(
+    pnls: List[float], cost: float = 0.0, initial: float = 100_000.0
+) -> float:
     net = sum(p - cost for p in pnls)
     return net / initial * 100.0
 
@@ -168,26 +170,32 @@ def sweep_confidence_thresholds(
     """
     results = []
     for thresh in thresholds:
-        filtered = [t for t in trades if abs(t.get("signal_prob", 0.5) - 0.5) + 0.5 >= thresh]
+        filtered = [
+            t for t in trades if abs(t.get("signal_prob", 0.5) - 0.5) + 0.5 >= thresh
+        ]
         pnls = [t["pnl_usd"] for t in filtered]
         if not pnls:
-            results.append({
-                "threshold": thresh,
-                "n_trades": 0,
-                "win_rate": 0.0,
-                "sharpe": 0.0,
-                "total_return_pct": 0.0,
-                "avg_pnl": 0.0,
-            })
+            results.append(
+                {
+                    "threshold": thresh,
+                    "n_trades": 0,
+                    "win_rate": 0.0,
+                    "sharpe": 0.0,
+                    "total_return_pct": 0.0,
+                    "avg_pnl": 0.0,
+                }
+            )
             continue
-        results.append({
-            "threshold": thresh,
-            "n_trades": len(pnls),
-            "win_rate": round(_win_rate(pnls, cost), 4),
-            "sharpe": round(_sharpe(pnls, cost), 4),
-            "total_return_pct": round(_total_return(pnls, cost), 4),
-            "avg_pnl": round(np.mean([p - cost for p in pnls]), 2),
-        })
+        results.append(
+            {
+                "threshold": thresh,
+                "n_trades": len(pnls),
+                "win_rate": round(_win_rate(pnls, cost), 4),
+                "sharpe": round(_sharpe(pnls, cost), 4),
+                "total_return_pct": round(_total_return(pnls, cost), 4),
+                "avg_pnl": round(np.mean([p - cost for p in pnls]), 2),
+            }
+        )
     return results
 
 
@@ -212,7 +220,10 @@ def _load_xauusd_daily() -> Optional[pd.DataFrame]:
     # Try yfinance
     try:
         import yfinance as yf
-        df = yf.download("GC=F", period="10y", interval="1d", progress=False, auto_adjust=True)
+
+        df = yf.download(
+            "GC=F", period="10y", interval="1d", progress=False, auto_adjust=True
+        )
         if df is not None and len(df) > 100:
             df.columns = [c.lower() for c in df.columns]
             df.index.name = "timestamp"
@@ -245,15 +256,17 @@ def sweep_hold_periods(
             # This is approximate — real re-simulation needs OHLCV
             scale = hold / 5.0
             pnls = [t["pnl_usd"] * scale for t in trades]
-            results.append({
-                "hold_bars": hold,
-                "n_trades": len(pnls),
-                "win_rate": round(_win_rate(pnls, cost), 4),
-                "sharpe": round(_sharpe(pnls, cost), 4),
-                "total_return_pct": round(_total_return(pnls, cost), 4),
-                "avg_pnl": round(np.mean([p - cost for p in pnls]), 2),
-                "note": "Approximate — scaled from 5-bar P&L. Run with OHLCV for exact results.",
-            })
+            results.append(
+                {
+                    "hold_bars": hold,
+                    "n_trades": len(pnls),
+                    "win_rate": round(_win_rate(pnls, cost), 4),
+                    "sharpe": round(_sharpe(pnls, cost), 4),
+                    "total_return_pct": round(_total_return(pnls, cost), 4),
+                    "avg_pnl": round(np.mean([p - cost for p in pnls]), 2),
+                    "note": "Approximate — scaled from 5-bar P&L. Run with OHLCV for exact results.",
+                }
+            )
         return results
 
     # Full re-simulation with OHLCV
@@ -264,7 +277,9 @@ def sweep_hold_periods(
         for t in trades:
             entry_bar = t.get("entry_bar", 0)
             direction = t.get("direction", 1)
-            entry_price = t.get("entry_price", closes[entry_bar] if entry_bar < len(closes) else 0)
+            entry_price = t.get(
+                "entry_price", closes[entry_bar] if entry_bar < len(closes) else 0
+            )
             exit_bar = min(entry_bar + hold, len(closes) - 1)
             if exit_bar >= len(closes) or entry_bar >= len(closes):
                 continue
@@ -276,15 +291,17 @@ def sweep_hold_periods(
 
         if not pnls:
             continue
-        results.append({
-            "hold_bars": hold,
-            "n_trades": len(pnls),
-            "win_rate": round(_win_rate(pnls, cost), 4),
-            "sharpe": round(_sharpe(pnls, cost), 4),
-            "total_return_pct": round(_total_return(pnls, cost), 4),
-            "avg_pnl": round(np.mean([p - cost for p in pnls]), 2),
-            "note": "Exact re-simulation from OHLCV data.",
-        })
+        results.append(
+            {
+                "hold_bars": hold,
+                "n_trades": len(pnls),
+                "win_rate": round(_win_rate(pnls, cost), 4),
+                "sharpe": round(_sharpe(pnls, cost), 4),
+                "total_return_pct": round(_total_return(pnls, cost), 4),
+                "avg_pnl": round(np.mean([p - cost for p in pnls]), 2),
+                "note": "Exact re-simulation from OHLCV data.",
+            }
+        )
     return results
 
 
@@ -301,15 +318,17 @@ def sweep_costs(
     pnls_gross = [t["pnl_usd"] for t in trades]
     results = []
     for cost in costs:
-        results.append({
-            "round_trip_cost_usd": cost,
-            "n_trades": len(pnls_gross),
-            "win_rate": round(_win_rate(pnls_gross, cost), 4),
-            "sharpe": round(_sharpe(pnls_gross, cost), 4),
-            "total_return_pct": round(_total_return(pnls_gross, cost), 4),
-            "avg_pnl": round(np.mean([p - cost for p in pnls_gross]), 2),
-            "total_cost_drag_usd": round(cost * len(pnls_gross), 2),
-        })
+        results.append(
+            {
+                "round_trip_cost_usd": cost,
+                "n_trades": len(pnls_gross),
+                "win_rate": round(_win_rate(pnls_gross, cost), 4),
+                "sharpe": round(_sharpe(pnls_gross, cost), 4),
+                "total_return_pct": round(_total_return(pnls_gross, cost), 4),
+                "avg_pnl": round(np.mean([p - cost for p in pnls_gross]), 2),
+                "total_cost_drag_usd": round(cost * len(pnls_gross), 2),
+            }
+        )
     return results
 
 
@@ -535,8 +554,12 @@ def run_investigation(smoke: bool = False) -> Dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Reconciled backtest root cause investigation")
-    parser.add_argument("--smoke", action="store_true", help="Fast CI run (fewer sweep points)")
+    parser = argparse.ArgumentParser(
+        description="Reconciled backtest root cause investigation"
+    )
+    parser.add_argument(
+        "--smoke", action="store_true", help="Fast CI run (fewer sweep points)"
+    )
     args = parser.parse_args()
 
     results = run_investigation(smoke=args.smoke)
