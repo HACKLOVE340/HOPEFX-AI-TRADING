@@ -180,20 +180,20 @@ def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
         stacklevel=3,
     )
     n = 500
-    np.random.seed(abs(hash(ticker)) % 2**31)
+    rng = np.random.default_rng(abs(hash(ticker)) % 2**31)
     base = 1800.0 if "GC" in ticker else (40000.0 if "BTC" in ticker else 2500.0)
-    returns = np.random.randn(n) * 0.015
+    returns = rng.standard_normal(n) * 0.015
     close = base * np.exp(np.cumsum(returns))
     idx = pd.date_range(
         end=datetime.now(timezone.utc).date(), periods=n, freq="B", tz="UTC"
     )
     return pd.DataFrame(
         {
-            "open": close * (1 + np.random.randn(n) * 0.002),
-            "high": close * (1 + abs(np.random.randn(n)) * 0.008),
-            "low": close * (1 - abs(np.random.randn(n)) * 0.008),
+            "open": close * (1 + rng.standard_normal(n) * 0.002),
+            "high": close * (1 + abs(rng.standard_normal(n)) * 0.008),
+            "low": close * (1 - abs(rng.standard_normal(n)) * 0.008),
             "close": close,
-            "volume": abs(np.random.randn(n)) * 1e6 + 1e5,
+            "volume": abs(rng.standard_normal(n)) * 1e6 + 1e5,
         },
         index=idx,
     )
@@ -337,7 +337,7 @@ def backtest_symbol(
     f1 = f1_score(y_oos, (proba >= 0.5).astype(int), zero_division=0)
     try:
         auc = roc_auc_score(y_oos, proba)
-    except Exception:
+    except (ValueError, RuntimeError):
         auc = 0.5
 
     logger.info(
