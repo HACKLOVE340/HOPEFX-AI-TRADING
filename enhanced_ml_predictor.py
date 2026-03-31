@@ -349,12 +349,10 @@ class AdvancedFeatureEngineer:
             if all(c in df.columns for c in ["open", "high", "low"]):
                 log_ho = np.log(df["high"] / df["open"])
                 log_lo = np.log(df["low"] / df["open"])
-                gk_inner = (0.5 * log_ho**2 - (2 * np.log(2) - 1) * log_lo**2).clip(lower=0)
-                features[f"garman_klass_{w}"] = (
-                    np.sqrt(gk_inner)
-                    .rolling(w)
-                    .mean()
+                gk_inner = (0.5 * log_ho**2 - (2 * np.log(2) - 1) * log_lo**2).clip(
+                    lower=0
                 )
+                features[f"garman_klass_{w}"] = np.sqrt(gk_inner).rolling(w).mean()
 
         # Technical indicators
         for w in self.windows:
@@ -992,7 +990,11 @@ class DeepLearningModel:
         # A window of 20 bars captures short-term volatility regime; edges use expanding window.
         y_series = pd.Series(y)
         y_uncertainty = (
-            y_series.rolling(window=20, min_periods=1).std().fillna(0.0).to_numpy().reshape(-1, 1)
+            y_series.rolling(window=20, min_periods=1)
+            .std()
+            .fillna(0.0)
+            .to_numpy()
+            .reshape(-1, 1)
         )
 
         return {
@@ -2102,6 +2104,7 @@ def generate_synthetic_data(
     """
     import os as _os
     import warnings
+
     if _os.getenv("APP_ENV", "production").lower() == "production":
         raise RuntimeError(
             "generate_synthetic_data() cannot be called in production "
@@ -2134,6 +2137,7 @@ def run_ml_test():
     FOR DEVELOPMENT / CI USE ONLY.  Raises RuntimeError in APP_ENV=production.
     """
     import os as _os
+
     if _os.getenv("APP_ENV", "production").lower() == "production":
         raise RuntimeError(
             "run_ml_test() uses synthetic data and cannot run in production. "

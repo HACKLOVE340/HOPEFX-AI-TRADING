@@ -34,29 +34,31 @@ VALID_ENVIRONMENTS = ["development", "staging", "production"]
 
 COMPOSE_FILES = {
     "development": "docker-compose.yml",
-    "staging":     "docker-compose.yml",
-    "production":  "docker-compose.yml",
+    "staging": "docker-compose.yml",
+    "production": "docker-compose.yml",
 }
 
 K8S_NAMESPACES = {
     "development": "hopefx-dev",
-    "staging":     "hopefx-staging",
-    "production":  "hopefx-prod",
+    "staging": "hopefx-staging",
+    "production": "hopefx-prod",
 }
 
 K8S_DEPLOYMENT = "hopefx-trading"
 
 HEALTH_ENDPOINTS = {
     "development": "http://localhost:8000/health",
-    "staging":     "http://staging.hopefx.ai/health",
-    "production":  "http://app.hopefx.ai/health",
+    "staging": "http://staging.hopefx.ai/health",
+    "production": "http://app.hopefx.ai/health",
 }
 
 HEALTH_CHECK_RETRIES = 10
 HEALTH_CHECK_INTERVAL_S = 6
 
 
-def _run(cmd: List[str], dry_run: bool = False, check: bool = True) -> subprocess.CompletedProcess:
+def _run(
+    cmd: List[str], dry_run: bool = False, check: bool = True
+) -> subprocess.CompletedProcess:
     logger.info("$ %s", " ".join(cmd))
     if dry_run:
         logger.info("  [dry-run] skipped")
@@ -84,7 +86,9 @@ class DeploymentManager:
         Returns True on success, False on failure.
         """
         if environment not in self.environments:
-            logger.error("Unknown environment: %s. Valid: %s", environment, self.environments)
+            logger.error(
+                "Unknown environment: %s. Valid: %s", environment, self.environments
+            )
             return False
 
         logger.info("=== Deploying to %s ===", environment)
@@ -119,7 +123,8 @@ class DeploymentManager:
 
         logger.info(
             "Health check: %s (up to %ds)",
-            url, HEALTH_CHECK_RETRIES * HEALTH_CHECK_INTERVAL_S,
+            url,
+            HEALTH_CHECK_RETRIES * HEALTH_CHECK_INTERVAL_S,
         )
         for attempt in range(1, HEALTH_CHECK_RETRIES + 1):
             try:
@@ -157,9 +162,16 @@ class DeploymentManager:
     def _record_current_state(self, environment: str) -> None:
         try:
             result = subprocess.run(
-                ["docker", "inspect", "--format", "{{.Id}}",
-                 f"hopefx-trading:{environment}"],
-                capture_output=True, text=True, check=False,
+                [
+                    "docker",
+                    "inspect",
+                    "--format",
+                    "{{.Id}}",
+                    f"hopefx-trading:{environment}",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
             )
             if result.returncode == 0:
                 self._previous_image = result.stdout.strip()
@@ -173,8 +185,9 @@ class DeploymentManager:
     def _pull_images(self, environment: str) -> None:
         compose_file = COMPOSE_FILES.get(environment, "docker-compose.yml")
         if self._is_compose_available():
-            _run(["docker", "compose", "-f", compose_file, "pull"],
-                 dry_run=self.dry_run)
+            _run(
+                ["docker", "compose", "-f", compose_file, "pull"], dry_run=self.dry_run
+            )
 
     def _apply_deployment(self, environment: str) -> None:
         if self._is_kubernetes_available():
@@ -194,13 +207,26 @@ class DeploymentManager:
         namespace = K8S_NAMESPACES.get(environment, "hopefx-prod")
         logger.info("Deploying via Kubernetes: namespace=%s", namespace)
         _run(
-            ["kubectl", "rollout", "restart",
-             f"deployment/{K8S_DEPLOYMENT}", "-n", namespace],
+            [
+                "kubectl",
+                "rollout",
+                "restart",
+                f"deployment/{K8S_DEPLOYMENT}",
+                "-n",
+                namespace,
+            ],
             dry_run=self.dry_run,
         )
         _run(
-            ["kubectl", "rollout", "status",
-             f"deployment/{K8S_DEPLOYMENT}", "-n", namespace, "--timeout=300s"],
+            [
+                "kubectl",
+                "rollout",
+                "status",
+                f"deployment/{K8S_DEPLOYMENT}",
+                "-n",
+                namespace,
+                "--timeout=300s",
+            ],
             dry_run=self.dry_run,
         )
 
@@ -209,13 +235,26 @@ class DeploymentManager:
         logger.warning("Kubernetes rollback: namespace=%s", namespace)
         try:
             _run(
-                ["kubectl", "rollout", "undo",
-                 f"deployment/{K8S_DEPLOYMENT}", "-n", namespace],
+                [
+                    "kubectl",
+                    "rollout",
+                    "undo",
+                    f"deployment/{K8S_DEPLOYMENT}",
+                    "-n",
+                    namespace,
+                ],
                 dry_run=self.dry_run,
             )
             _run(
-                ["kubectl", "rollout", "status",
-                 f"deployment/{K8S_DEPLOYMENT}", "-n", namespace, "--timeout=120s"],
+                [
+                    "kubectl",
+                    "rollout",
+                    "status",
+                    f"deployment/{K8S_DEPLOYMENT}",
+                    "-n",
+                    namespace,
+                    "--timeout=120s",
+                ],
                 dry_run=self.dry_run,
             )
             logger.info("Kubernetes rollback completed")
@@ -228,17 +267,25 @@ class DeploymentManager:
         compose_file = COMPOSE_FILES.get(environment, "docker-compose.yml")
         logger.warning("Docker Compose rollback: %s", compose_file)
         try:
-            _run(["docker", "compose", "-f", compose_file, "down"],
-                 dry_run=self.dry_run)
+            _run(
+                ["docker", "compose", "-f", compose_file, "down"], dry_run=self.dry_run
+            )
             if self._previous_image:
                 logger.info("Restoring previous image: %s", self._previous_image[:20])
                 _run(
-                    ["docker", "tag", self._previous_image,
-                     f"hopefx-trading:{environment}"],
-                    dry_run=self.dry_run, check=False,
+                    [
+                        "docker",
+                        "tag",
+                        self._previous_image,
+                        f"hopefx-trading:{environment}",
+                    ],
+                    dry_run=self.dry_run,
+                    check=False,
                 )
-            _run(["docker", "compose", "-f", compose_file, "up", "-d"],
-                 dry_run=self.dry_run)
+            _run(
+                ["docker", "compose", "-f", compose_file, "up", "-d"],
+                dry_run=self.dry_run,
+            )
             logger.info("Docker Compose rollback completed")
             return True
         except subprocess.CalledProcessError as exc:
@@ -250,7 +297,9 @@ class DeploymentManager:
         try:
             r = subprocess.run(
                 ["kubectl", "cluster-info"],
-                capture_output=True, check=False, timeout=5,
+                capture_output=True,
+                check=False,
+                timeout=5,
             )
             return r.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -261,7 +310,9 @@ class DeploymentManager:
         try:
             r = subprocess.run(
                 ["docker", "compose", "version"],
-                capture_output=True, check=False, timeout=5,
+                capture_output=True,
+                check=False,
+                timeout=5,
             )
             return r.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
