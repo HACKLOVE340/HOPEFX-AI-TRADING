@@ -39,9 +39,90 @@ class StrategyOrchestra:
         self.active_strategies: list[str] = []
         self.current_regime: str = "unknown"
         self.signal_buffer: dict[str, list[Signal]] = defaultdict(list)
+        self._rebalancer: Optional[Any] = None
+        self._returns_buffer: dict[str, list[float]] = defaultdict(list)
 
         self.event_bus.subscribe("POSITION_CLOSED", self._on_position_closed)
         self.event_bus.subscribe("REGIME_CHANGE", self._on_regime_change)
+
+    def attach_rebalancer(
+        self,
+        method: str = "risk_parity",
+        max_weight: float = 0.40,
+        dd_limit: float = 0.15,
+        interval_hours: float = 4.0,
+    ) -> Any:
+        """
+        Attach a DynamicRebalancer to the orchestra.
+
+        Once attached, the orchestra feeds each strategy's return stream into
+        the rebalancer on every POSITION_CLOSED event and uses the rebalancer's
+        target weights to update ``self.allocations``.
+
+        Returns the rebalancer so callers can inspect or force a rebalance.
+        """
+        try:
+            from portfolio.rebalancer import DynamicRebalancer
+            self._rebalancer = DynamicRebalancer(
+                method=method,
+                max_weight=max_weight,
+                dd_limit=dd_limit,
+                interval_hours=interval_hours,
+            )
+            # Seed current weights
+            for sid, alloc in self.allocations.items():
+                self._rebalancer.update_current_weight(sid, alloc)
+            print(f"🎼 DynamicRebalancer attached (method={method})")
+            return self._rebalancer
+        except Exception as exc:
+            print(f"⚠️  DynamicRebalancer attach failed: {exc}")
+            return None
+
+    def run_rebalance(self, force: bool = False) -> Optional[dict]:
+        """
+        Trigger a rebalance check and apply resulting weights to allocations.
+
+        Returns the RebalanceResult dict, or None if no rebalance was triggered.
+        """
+        if self._rebalancer is None:
+            return None
+
+        # Feed current drawdowns
+        for sid, perf in self.performance.items():
+            self._rebalancer.update_drawdown(sid, perf.current_drawdown)
+
+        result = self._rebalancer.rebalance(force=force)
+        if result is None:
+            return None
+
+        # Apply new weights to allocations
+        for sid, weight in result.weights.items():
+            if sid in self.allocations:
+                self.allocations[sid] = weight
+
+        self.event_bus.publish(
+            DomainEvent.create(
+                "REBALANCE_COMPLETE",
+                "orchestra",
+                {
+                    "method": result.method,
+                    "weights": result.weights,
+                    "sharpe": result.expected_sharpe,
+                },
+            )
+        )
+        print(
+            f"🎼 Rebalanced: method={result.method} "
+            f"sharpe={result.expected_sharpe:.2f} "
+            f"strategies={list(result.weights.keys())}"
+        )
+        return result.to_dict()
+
+    def get_rebalancer_status(self) -> dict:
+        """Return rebalancer status dict."""
+        if self._rebalancer is None:
+            return {"attached": False}
+        return {"attached": True, **self._rebalancer.status()}
 
     def register_strategy(self, strategy: BaseStrategy, max_allocation: float = 0.20):
         sid = strategy.config.name
@@ -170,11 +251,20 @@ class StrategyOrchestra:
     def _on_position_closed(self, event: DomainEvent):
         data = event.decode()
         sid = data.get("strategy_id")
-        data.get("pnl", 0)
+        pnl = float(data.get("pnl", 0))
+        entry_price = float(data.get("entry_price", 1.0))
         if sid in self.performance:
             perf = self.performance[sid]
             perf.total_signals += 1
-            # Update metrics (simplified)
+            # Track return for rebalancer
+            ret = pnl / entry_price if entry_price > 0 else 0.0
+            self._returns_buffer[sid].append(ret)
+            # Feed into rebalancer when we have enough history
+            if self._rebalancer is not None and len(self._returns_buffer[sid]) >= 5:
+                import pandas as pd
+                returns_series = pd.Series(self._returns_buffer[sid])
+                self._rebalancer.update_strategy_returns(sid, returns_series)
+                self._rebalancer.update_drawdown(sid, perf.current_drawdown)
 
     def _on_regime_change(self, event: DomainEvent):
         data = event.decode()
