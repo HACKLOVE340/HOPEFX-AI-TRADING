@@ -17,6 +17,8 @@ from dataclasses import dataclass
 import logging
 import secrets
 
+import pyotp
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,49 +95,53 @@ class SecurityManager:
             },
         }
 
-    def setup_2fa(self, user_id: str) -> str:
+    def setup_2fa(self, user_id: str) -> Dict[str, str]:
         """
-        Set up 2FA for user
+        Set up 2FA for user using RFC 6238 TOTP.
 
         Args:
             user_id: User ID
 
         Returns:
-            TOTP secret
+            Dict with 'secret' (base32) and 'provisioning_uri' for QR code
         """
-        # Generate random secret
-        secret = secrets.token_hex(16)
+        secret = pyotp.random_base32()
         self.totp_secrets[user_id] = secret
 
-        logger.info(f"2FA setup for user {user_id}")
-        return secret
+        totp = pyotp.TOTP(secret)
+        provisioning_uri = totp.provisioning_uri(
+            name=user_id,
+            issuer_name="HOPEFX",
+        )
+
+        logger.info("2FA setup for user %s", user_id)
+        return {"secret": secret, "provisioning_uri": provisioning_uri}
 
     def verify_2fa(self, user_id: str, token: str) -> bool:
         """
-        Verify 2FA token
+        Verify a TOTP token using pyotp with a ±1 window for clock skew.
 
         Args:
             user_id: User ID
-            token: TOTP token
+            token: 6-digit TOTP token
 
         Returns:
-            Verification result
+            True if the token is valid for the current or adjacent time window
         """
-        # Simplified verification (in production, use TOTP library)
         secret = self.totp_secrets.get(user_id)
         if not secret:
-            logger.warning(f"No 2FA secret for user {user_id}")
+            logger.warning("No 2FA secret for user %s", user_id)
             return False
 
-        # For demo purposes, accept any 6-digit token
-        # In production, use pyotp.TOTP(secret).verify(token)
-        is_valid = len(token) == 6 and token.isdigit()
+        totp = pyotp.TOTP(secret)
+        # valid_window=1 allows ±30 s clock skew (one step either side)
+        is_valid = totp.verify(token, valid_window=1)
 
         if is_valid:
-            logger.info(f"2FA verified for user {user_id}")
+            logger.info("2FA verified for user %s", user_id)
         else:
             self._record_failed_attempt(user_id)
-            logger.warning(f"2FA failed for user {user_id}")
+            logger.warning("2FA failed for user %s", user_id)
 
         return is_valid
 
