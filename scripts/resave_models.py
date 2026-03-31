@@ -86,7 +86,9 @@ def resave_all() -> int:
 
     if errors:
         log.warning("%d file(s) could not be processed — retrain required.", errors)
-        log.warning("  docker compose run --rm app python ml/train_advanced.py --years 50 --oos-years 3")
+        log.warning(
+            "  docker compose run --rm app python ml/train_advanced.py --years 50 --oos-years 3"
+        )
     else:
         log.info("All models re-saved successfully. Restart the app to reload.")
 

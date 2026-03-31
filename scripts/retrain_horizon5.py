@@ -212,12 +212,17 @@ def validate_horizon_alignment(horizon: int) -> None:
             "Horizon mismatch: training with --horizon %d but execution engine "
             "hold period is %d bars (SIGNAL_HOLD_BARS=%d). "
             "Set SIGNAL_HOLD_BARS=%d or use --horizon %d to align.",
-            horizon, hold_bars, hold_bars, horizon, hold_bars,
+            horizon,
+            hold_bars,
+            hold_bars,
+            horizon,
+            hold_bars,
         )
     else:
         logger.info(
             "Horizon aligned: training horizon=%d matches execution hold period=%d bars",
-            horizon, hold_bars,
+            horizon,
+            hold_bars,
         )
 
 
@@ -229,8 +234,12 @@ def dry_run(args: argparse.Namespace) -> None:
     Exits with code 0 on success, 1 on failure.
     """
     logger.info("=== DRY RUN: validating data pipeline (no training) ===")
-    logger.info("Horizon: %d bars | Years: %d | Macro: %s",
-                args.horizon, args.years, not args.no_macro)
+    logger.info(
+        "Horizon: %d bars | Years: %d | Macro: %s",
+        args.horizon,
+        args.years,
+        not args.no_macro,
+    )
 
     try:
         from ml.train_advanced import fetch_gold_ohlcv, fetch_macro
@@ -243,8 +252,12 @@ def dry_run(args: argparse.Namespace) -> None:
             use_cached=args.use_cached,
             cached_csv=None,
         )
-        logger.info("OHLCV: %d bars (%s → %s)",
-                    len(ohlcv), ohlcv.index[0].date(), ohlcv.index[-1].date())
+        logger.info(
+            "OHLCV: %d bars (%s → %s)",
+            len(ohlcv),
+            ohlcv.index[0].date(),
+            ohlcv.index[-1].date(),
+        )
 
         macro_df = None
         if not args.no_macro:
@@ -258,9 +271,11 @@ def dry_run(args: argparse.Namespace) -> None:
         logger.info("Building feature matrix (horizon=%d)...", args.horizon)
         try:
             from ml.features_extended import build_extended_features as build_fn
+
             logger.info("Using extended 230+ feature builder")
         except ImportError:
             from ml.advanced_features import build_advanced_features as build_fn
+
             logger.info("Using base 100-feature builder")
 
         X, y = build_fn(
@@ -276,6 +291,7 @@ def dry_run(args: argparse.Namespace) -> None:
         logger.info("NaN count: %d", X.isna().sum().sum())
 
         import numpy as np
+
         inf_count = int(np.isinf(X.values).sum())
         logger.info("Inf count: %d", inf_count)
 
@@ -373,16 +389,18 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
         try:
             existing_meta = json.loads(oos_meta_path.read_text())
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
-    existing_meta.update({
-        "horizon": args.horizon,
-        "oos_accuracy": meta["oos_accuracy"],
-        "oos_f1": meta["oos_f1"],
-        "feature_count": meta["feature_count"],
-        "validated_at": now_iso,
-        "note": meta["note"],
-    })
+    existing_meta.update(
+        {
+            "horizon": args.horizon,
+            "oos_accuracy": meta["oos_accuracy"],
+            "oos_f1": meta["oos_f1"],
+            "feature_count": meta["feature_count"],
+            "validated_at": now_iso,
+            "note": meta["note"],
+        }
+    )
     oos_meta_path.write_text(json.dumps(existing_meta, indent=2))
     logger.info("advanced_oos_meta.json updated with horizon=%d", args.horizon)
 
@@ -426,7 +444,8 @@ def verify_output_artifacts(args: argparse.Namespace) -> bool:
             if meta.get("horizon") != args.horizon:
                 logger.error(
                     "CI GATE FAILED: horizon5_meta.json has horizon=%s, expected %d",
-                    meta.get("horizon"), args.horizon,
+                    meta.get("horizon"),
+                    args.horizon,
                 )
                 all_ok = False
             else:
@@ -445,7 +464,8 @@ def verify_output_artifacts(args: argparse.Namespace) -> bool:
             if rpt.get("horizon") != args.horizon:
                 logger.error(
                     "CI GATE FAILED: horizon5_training_report.json has horizon=%s, expected %d",
-                    rpt.get("horizon"), args.horizon,
+                    rpt.get("horizon"),
+                    args.horizon,
                 )
                 all_ok = False
             else:
@@ -480,12 +500,18 @@ def run_training(args: argparse.Namespace) -> dict:
     cmd = [
         sys.executable,
         str(_TRAIN_SCRIPT),
-        "--horizon", str(args.horizon),
-        "--years", str(args.years),
-        "--oos-years", str(args.oos_years),
-        "--splits", str(args.splits),
-        "--min-move", str(args.min_move),
-        "--symbol", args.symbol,
+        "--horizon",
+        str(args.horizon),
+        "--years",
+        str(args.years),
+        "--oos-years",
+        str(args.oos_years),
+        "--splits",
+        str(args.splits),
+        "--min-move",
+        str(args.min_move),
+        "--symbol",
+        args.symbol,
     ]
 
     if args.stacking:
@@ -507,9 +533,7 @@ def run_training(args: argparse.Namespace) -> dict:
     result = subprocess.run(cmd, check=False)
 
     if result.returncode != 0:
-        logger.error(
-            "train_advanced.py exited with code %d", result.returncode
-        )
+        logger.error("train_advanced.py exited with code %d", result.returncode)
         sys.exit(result.returncode)
 
     # Load the report written by train_advanced.py
@@ -541,7 +565,9 @@ def print_horizon_summary(args: argparse.Namespace, report: dict) -> None:
     print(f"  Samples          : {report.get('sample_count', '?')}")
     print()
     if wf:
-        print(f"  Walk-forward acc : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}")
+        print(
+            f"  Walk-forward acc : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}"
+        )
         print(f"  Walk-forward F1  : {wf.get('mean_f1', 0):.3f}")
     if oos:
         sig = "✓ significant" if oos.get("significant") else "✗ not significant"
@@ -565,7 +591,9 @@ def main() -> None:
 
     # Smoke-test overrides
     if args.smoke:
-        logger.info("Smoke-test mode: overriding years=2, oos_years=0, no_macro, splits=2")
+        logger.info(
+            "Smoke-test mode: overriding years=2, oos_years=0, no_macro, splits=2"
+        )
         args.years = 2
         args.oos_years = 0.0
         args.no_macro = True
@@ -578,7 +606,8 @@ def main() -> None:
         "  This run:       horizon=%d (matches %d-bar hold period)\n"
         "  Root cause: 66%% 1-bar accuracy ≠ tradeable edge over 5 bars\n"
         "  Fix: align training objective with execution hold period",
-        args.horizon, args.horizon,
+        args.horizon,
+        args.horizon,
     )
 
     # Validate horizon alignment

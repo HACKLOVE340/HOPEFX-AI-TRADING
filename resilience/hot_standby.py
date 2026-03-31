@@ -89,6 +89,7 @@ Usage
     await replicator.graceful_handoff()
     await replicator.stop()
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -97,7 +98,6 @@ import logging
 import os
 import socket
 import time
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -106,37 +106,41 @@ from typing import Any, Callable, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-_HEARTBEAT_INTERVAL_S    = float(os.getenv("STANDBY_HEARTBEAT_INTERVAL_S",     "5.0"))
-_HEARTBEAT_MISS_THRESHOLD = int(os.getenv("STANDBY_HEARTBEAT_MISS_THRESHOLD",  "3"))
-_LEADER_TTL_S            = float(os.getenv("STANDBY_LEADER_TTL_S",             "15.0"))
-_STATE_INTERVAL_S        = float(os.getenv("STANDBY_STATE_INTERVAL_S",         "1.0"))
-_FILLS_RING_SIZE         = int(os.getenv("STANDBY_FILLS_RING_SIZE",            "500"))
-_POD_ID                  = os.getenv("STANDBY_POD_ID", socket.gethostname())
-_ROLE_ENV                = os.getenv("STANDBY_ROLE", "auto").lower()
+_HEARTBEAT_INTERVAL_S = float(os.getenv("STANDBY_HEARTBEAT_INTERVAL_S", "5.0"))
+_HEARTBEAT_MISS_THRESHOLD = int(os.getenv("STANDBY_HEARTBEAT_MISS_THRESHOLD", "3"))
+_LEADER_TTL_S = float(os.getenv("STANDBY_LEADER_TTL_S", "15.0"))
+_STATE_INTERVAL_S = float(os.getenv("STANDBY_STATE_INTERVAL_S", "1.0"))
+_FILLS_RING_SIZE = int(os.getenv("STANDBY_FILLS_RING_SIZE", "500"))
+_POD_ID = os.getenv("STANDBY_POD_ID", socket.gethostname())
+_ROLE_ENV = os.getenv("STANDBY_ROLE", "auto").lower()
 
 # ── Redis key constants ───────────────────────────────────────────────────────
-_KEY_LEADER      = "hopefx:leader"
-_KEY_HEARTBEAT   = f"hopefx:heartbeat:{_POD_ID}"
-_KEY_POSITIONS   = "hopefx:state:positions"
-_KEY_EQUITY      = "hopefx:state:equity"
-_KEY_FILLS       = "hopefx:state:fills"
-_KEY_VERSION     = "hopefx:state:version"
+_KEY_LEADER = "hopefx:leader"
+_KEY_HEARTBEAT = f"hopefx:heartbeat:{_POD_ID}"
+_KEY_POSITIONS = "hopefx:state:positions"
+_KEY_EQUITY = "hopefx:state:equity"
+_KEY_FILLS = "hopefx:state:fills"
+_KEY_VERSION = "hopefx:state:version"
 
 # ── Prometheus ────────────────────────────────────────────────────────────────
 try:
     from prometheus_client import Counter, Gauge, Histogram
 
-    _prom_role          = Gauge("hopefx_standby_role",
-                                "Current pod role: 1=primary 0=standby")
-    _prom_promotions    = Counter("hopefx_standby_promotions_total",
-                                  "Number of standby→primary promotions")
-    _prom_heartbeat_age = Gauge("hopefx_standby_heartbeat_age_s",
-                                "Seconds since last primary heartbeat")
-    _prom_state_version = Gauge("hopefx_standby_state_version",
-                                "Current replicated state version")
-    _prom_repl_lag_ms   = Histogram("hopefx_standby_replication_lag_ms",
-                                    "State replication write latency ms",
-                                    buckets=[1, 5, 10, 25, 50, 100, 250])
+    _prom_role = Gauge("hopefx_standby_role", "Current pod role: 1=primary 0=standby")
+    _prom_promotions = Counter(
+        "hopefx_standby_promotions_total", "Number of standby→primary promotions"
+    )
+    _prom_heartbeat_age = Gauge(
+        "hopefx_standby_heartbeat_age_s", "Seconds since last primary heartbeat"
+    )
+    _prom_state_version = Gauge(
+        "hopefx_standby_state_version", "Current replicated state version"
+    )
+    _prom_repl_lag_ms = Histogram(
+        "hopefx_standby_replication_lag_ms",
+        "State replication write latency ms",
+        buckets=[1, 5, 10, 25, 50, 100, 250],
+    )
     _PROM_OK = True
 except Exception:
     _PROM_OK = False
@@ -150,27 +154,29 @@ class Role(str, Enum):
 @dataclass
 class StateSnapshot:
     """Complete trading state snapshot for standby restoration."""
-    positions:    Dict[str, Any]   # symbol → position dict
-    equity:       float
-    balance:      float
-    fills:        List[Dict]       # last N fills (ring buffer)
-    version:      int
-    captured_at:  str              # ISO timestamp
-    pod_id:       str
+
+    positions: Dict[str, Any]  # symbol → position dict
+    equity: float
+    balance: float
+    fills: List[Dict]  # last N fills (ring buffer)
+    version: int
+    captured_at: str  # ISO timestamp
+    pod_id: str
 
 
 @dataclass
 class ReplicationStats:
     """Runtime replication statistics."""
-    role:                Role
-    pod_id:              str
-    state_version:       int       = 0
-    last_heartbeat_ts:   float     = 0.0
-    missed_heartbeats:   int       = 0
-    promotions:          int       = 0
-    last_replication_ms: float     = 0.0
-    is_leader:           bool      = False
-    started_at:          str       = field(
+
+    role: Role
+    pod_id: str
+    state_version: int = 0
+    last_heartbeat_ts: float = 0.0
+    missed_heartbeats: int = 0
+    promotions: int = 0
+    last_replication_ms: float = 0.0
+    is_leader: bool = False
+    started_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
 
@@ -191,8 +197,8 @@ class HotStandbyReplicator:
         role: Optional[Role] = None,
     ) -> None:
         self._redis = redis_client
-        self._on_promote = on_promote_callback   # async def(StateSnapshot)
-        self._on_demote  = on_demote_callback    # async def()
+        self._on_promote = on_promote_callback  # async def(StateSnapshot)
+        self._on_demote = on_demote_callback  # async def()
 
         # Determine initial role
         if role is not None:
@@ -206,16 +212,16 @@ class HotStandbyReplicator:
             self._role = Role.STANDBY  # will be resolved in start()
 
         self._pod_id = _POD_ID
-        self._stats  = ReplicationStats(role=self._role, pod_id=self._pod_id)
+        self._stats = ReplicationStats(role=self._role, pod_id=self._pod_id)
 
         # In-memory state buffer (written by engine, read by replication loop)
         self._positions: Dict[str, Any] = {}
-        self._equity:    float = 0.0
-        self._balance:   float = 0.0
-        self._fills:     List[Dict] = []
+        self._equity: float = 0.0
+        self._balance: float = 0.0
+        self._fills: List[Dict] = []
 
         self._running = False
-        self._tasks:  List[asyncio.Task] = []
+        self._tasks: List[asyncio.Task] = []
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -229,7 +235,8 @@ class HotStandbyReplicator:
             self._stats.role = self._role
             logger.info(
                 "HotStandbyReplicator: auto-resolved role=%s pod=%s",
-                self._role.value, self._pod_id,
+                self._role.value,
+                self._pod_id,
             )
 
         if _PROM_OK:
@@ -249,7 +256,8 @@ class HotStandbyReplicator:
         self._tasks.clear()
         logger.info(
             "HotStandbyReplicator: stopped role=%s pod=%s",
-            self._role.value, self._pod_id,
+            self._role.value,
+            self._pod_id,
         )
 
     async def graceful_handoff(self) -> None:
@@ -278,7 +286,7 @@ class HotStandbyReplicator:
 
     def update_equity(self, equity: float, balance: Optional[float] = None) -> None:
         """Update equity/balance snapshot."""
-        self._equity  = equity
+        self._equity = equity
         self._balance = balance if balance is not None else equity
 
     def record_fill(self, fill: Dict[str, Any]) -> None:
@@ -296,10 +304,14 @@ class HotStandbyReplicator:
             asyncio.create_task(self._heartbeat_loop(), name="standby_heartbeat")
         )
         self._tasks.append(
-            asyncio.create_task(self._state_replication_loop(), name="standby_state_repl")
+            asyncio.create_task(
+                self._state_replication_loop(), name="standby_state_repl"
+            )
         )
         self._tasks.append(
-            asyncio.create_task(self._leader_refresh_loop(), name="standby_leader_refresh")
+            asyncio.create_task(
+                self._leader_refresh_loop(), name="standby_leader_refresh"
+            )
         )
 
     async def _heartbeat_loop(self) -> None:
@@ -308,7 +320,7 @@ class HotStandbyReplicator:
             try:
                 await self._redis.setex(
                     _KEY_HEARTBEAT,
-                    int(_LEADER_TTL_S * 2),   # TTL = 2× leader TTL
+                    int(_LEADER_TTL_S * 2),  # TTL = 2× leader TTL
                     str(time.time()),
                 )
                 self._stats.last_heartbeat_ts = time.time()
@@ -339,14 +351,13 @@ class HotStandbyReplicator:
                 # GETSET pattern: only refresh if we still own the key
                 current = await self._redis.get(_KEY_LEADER)
                 if current and current.decode() == self._pod_id:
-                    await self._redis.pexpire(
-                        _KEY_LEADER, int(_LEADER_TTL_S * 1000)
-                    )
+                    await self._redis.pexpire(_KEY_LEADER, int(_LEADER_TTL_S * 1000))
                 else:
                     # Lost the leader key — demote
                     logger.critical(
                         "HotStandbyReplicator: lost leader key! current=%s pod=%s — demoting",
-                        current, self._pod_id,
+                        current,
+                        self._pod_id,
                     )
                     await self._demote()
                     return
@@ -377,7 +388,7 @@ class HotStandbyReplicator:
                     age_s = _HEARTBEAT_INTERVAL_S * self._stats.missed_heartbeats
                 else:
                     last_ts = float(raw.decode())
-                    age_s   = time.time() - last_ts
+                    age_s = time.time() - last_ts
                     if age_s < _HEARTBEAT_INTERVAL_S * 1.5:
                         self._stats.missed_heartbeats = 0
                     else:
@@ -388,18 +399,21 @@ class HotStandbyReplicator:
 
                 logger.debug(
                     "Standby monitor: missed=%d age=%.1fs pod=%s",
-                    self._stats.missed_heartbeats, age_s, self._pod_id,
+                    self._stats.missed_heartbeats,
+                    age_s,
+                    self._pod_id,
                 )
 
                 if self._stats.missed_heartbeats >= _HEARTBEAT_MISS_THRESHOLD:
                     logger.warning(
                         "Primary heartbeat missed %d times — attempting promotion pod=%s",
-                        self._stats.missed_heartbeats, self._pod_id,
+                        self._stats.missed_heartbeats,
+                        self._pod_id,
                     )
                     acquired = await self._try_acquire_leader(initial=False)
                     if acquired:
                         await self._promote()
-                        return   # monitor loop ends; primary loops take over
+                        return  # monitor loop ends; primary loops take over
 
             except Exception as exc:
                 logger.error("Standby monitor error: %s", exc)
@@ -417,13 +431,14 @@ class HotStandbyReplicator:
             result = await self._redis.set(
                 _KEY_LEADER,
                 self._pod_id,
-                nx=True,       # only set if not exists
-                px=ttl_ms,     # TTL in milliseconds
+                nx=True,  # only set if not exists
+                px=ttl_ms,  # TTL in milliseconds
             )
             if result:
                 logger.info(
                     "HotStandbyReplicator: acquired leader key pod=%s ttl=%.1fs",
-                    self._pod_id, _LEADER_TTL_S,
+                    self._pod_id,
+                    _LEADER_TTL_S,
                 )
                 return True
             if initial:
@@ -499,20 +514,22 @@ class HotStandbyReplicator:
         version = self._stats.state_version + 1
 
         positions_json = json.dumps(self._positions, default=str)
-        equity_json    = json.dumps({
-            "equity":      self._equity,
-            "balance":     self._balance,
-            "version":     version,
-            "pod_id":      self._pod_id,
-            "captured_at": datetime.now(timezone.utc).isoformat(),
-        })
+        equity_json = json.dumps(
+            {
+                "equity": self._equity,
+                "balance": self._balance,
+                "version": version,
+                "pod_id": self._pod_id,
+                "captured_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         fills_json = json.dumps(self._fills[-_FILLS_RING_SIZE:], default=str)
 
         # Use a pipeline for atomic multi-key write
         pipe = self._redis.pipeline()
         pipe.setex(_KEY_POSITIONS, int(_LEADER_TTL_S * 10), positions_json)
-        pipe.setex(_KEY_EQUITY,    int(_LEADER_TTL_S * 10), equity_json)
-        pipe.setex(_KEY_FILLS,     int(_LEADER_TTL_S * 10), fills_json)
+        pipe.setex(_KEY_EQUITY, int(_LEADER_TTL_S * 10), equity_json)
+        pipe.setex(_KEY_FILLS, int(_LEADER_TTL_S * 10), fills_json)
         pipe.set(_KEY_VERSION, str(version))
         await pipe.execute()
 
@@ -523,10 +540,10 @@ class HotStandbyReplicator:
     async def _restore_state_snapshot(self) -> Optional[StateSnapshot]:
         """Read state snapshot from Redis. Returns None if unavailable."""
         try:
-            pos_raw    = await self._redis.get(_KEY_POSITIONS)
+            pos_raw = await self._redis.get(_KEY_POSITIONS)
             equity_raw = await self._redis.get(_KEY_EQUITY)
-            fills_raw  = await self._redis.get(_KEY_FILLS)
-            ver_raw    = await self._redis.get(_KEY_VERSION)
+            fills_raw = await self._redis.get(_KEY_FILLS)
+            ver_raw = await self._redis.get(_KEY_VERSION)
 
             if not pos_raw or not equity_raw:
                 logger.warning(
@@ -535,33 +552,36 @@ class HotStandbyReplicator:
                 )
                 return None
 
-            positions   = json.loads(pos_raw.decode())
+            positions = json.loads(pos_raw.decode())
             equity_data = json.loads(equity_raw.decode())
-            fills       = json.loads(fills_raw.decode()) if fills_raw else []
-            version     = int(ver_raw.decode()) if ver_raw else 0
+            fills = json.loads(fills_raw.decode()) if fills_raw else []
+            version = int(ver_raw.decode()) if ver_raw else 0
 
             snapshot = StateSnapshot(
-                positions   = positions,
-                equity      = float(equity_data.get("equity", 0.0)),
-                balance     = float(equity_data.get("balance", 0.0)),
-                fills       = fills,
-                version     = version,
-                captured_at = equity_data.get("captured_at", ""),
-                pod_id      = equity_data.get("pod_id", "unknown"),
+                positions=positions,
+                equity=float(equity_data.get("equity", 0.0)),
+                balance=float(equity_data.get("balance", 0.0)),
+                fills=fills,
+                version=version,
+                captured_at=equity_data.get("captured_at", ""),
+                pod_id=equity_data.get("pod_id", "unknown"),
             )
 
             # Restore into local buffer so we start replicating from here
             self._positions = positions
-            self._equity    = snapshot.equity
-            self._balance   = snapshot.balance
-            self._fills     = fills
+            self._equity = snapshot.equity
+            self._balance = snapshot.balance
+            self._fills = fills
             self._stats.state_version = version
 
             logger.info(
                 "HotStandbyReplicator: restored state version=%d positions=%d "
                 "equity=%.2f from pod=%s captured_at=%s",
-                version, len(positions), snapshot.equity,
-                snapshot.pod_id, snapshot.captured_at,
+                version,
+                len(positions),
+                snapshot.equity,
+                snapshot.pod_id,
+                snapshot.captured_at,
             )
             return snapshot
 
@@ -574,15 +594,15 @@ class HotStandbyReplicator:
     def stats(self) -> Dict[str, Any]:
         """Return current replication statistics."""
         return {
-            "role":                self._role.value,
-            "pod_id":              self._pod_id,
-            "is_leader":           self._stats.is_leader,
-            "state_version":       self._stats.state_version,
-            "last_heartbeat_ts":   self._stats.last_heartbeat_ts,
-            "missed_heartbeats":   self._stats.missed_heartbeats,
-            "promotions":          self._stats.promotions,
+            "role": self._role.value,
+            "pod_id": self._pod_id,
+            "is_leader": self._stats.is_leader,
+            "state_version": self._stats.state_version,
+            "last_heartbeat_ts": self._stats.last_heartbeat_ts,
+            "missed_heartbeats": self._stats.missed_heartbeats,
+            "promotions": self._stats.promotions,
             "last_replication_ms": round(self._stats.last_replication_ms, 2),
-            "open_positions":      len(self._positions),
-            "fills_buffered":      len(self._fills),
-            "started_at":          self._stats.started_at,
+            "open_positions": len(self._positions),
+            "fills_buffered": len(self._fills),
+            "started_at": self._stats.started_at,
         }

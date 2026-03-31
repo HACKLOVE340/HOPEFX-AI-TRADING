@@ -102,6 +102,7 @@ def _resolve_file_path(endpoint: str) -> Optional[str]:
 
 # ── GitHub API helpers ────────────────────────────────────────────────────────
 
+
 def _headers() -> Dict[str, str]:
     if not GITHUB_TOKEN:
         raise RuntimeError(
@@ -121,9 +122,12 @@ def _repo() -> str:
     # Auto-detect from git remote
     try:
         import subprocess
+
         result = subprocess.run(
             ["git", "remote", "get-url", "origin"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         url = result.stdout.strip()
         # https://github.com/owner/repo.git  or  git@github.com:owner/repo.git
@@ -137,7 +141,9 @@ def _repo() -> str:
     )
 
 
-async def _get_file(client: httpx.AsyncClient, repo: str, path: str) -> Optional[Dict[str, Any]]:
+async def _get_file(
+    client: httpx.AsyncClient, repo: str, path: str
+) -> Optional[Dict[str, Any]]:
     """Fetch file metadata and content from GitHub. Returns None if not found."""
     url = f"{_GITHUB_API}/repos/{repo}/contents/{path}"
     resp = await client.get(url, headers=_headers(), params={"ref": GITHUB_BASE_BRANCH})
@@ -239,6 +245,7 @@ async def _add_label(
 
 # ── Patch application ─────────────────────────────────────────────────────────
 
+
 def _apply_patch(original_content: str, original_snippet: str, fix_snippet: str) -> str:
     """
     Replace *original_snippet* with *fix_snippet* in *original_content*.
@@ -260,12 +267,15 @@ def _apply_patch(original_content: str, original_snippet: str, fix_snippet: str)
         + textwrap.indent(original_snippet or "(not provided)", "# ")
         + "\n# Suggested fix:\n"
         + textwrap.indent(fix_snippet or "(not provided)", "# ")
-        + "\n" + "#" * 72 + "\n"
+        + "\n"
+        + "#" * 72
+        + "\n"
     )
     return original_content + separator + note
 
 
 # ── PR body builder ───────────────────────────────────────────────────────────
+
 
 def _build_pr_body(
     endpoint: str,
@@ -310,6 +320,7 @@ def _build_pr_body(
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
+
 
 class GitHubPRPublisher:
     """
@@ -409,8 +420,13 @@ class GitHubPRPublisher:
                     f"Co-authored-by: HOPEFXBrain <no-reply@hopefx.io>"
                 )
                 await _commit_file(
-                    client, repo, branch_name, file_path,
-                    patched_content, commit_message, file_sha,
+                    client,
+                    repo,
+                    branch_name,
+                    file_path,
+                    patched_content,
+                    commit_message,
+                    file_sha,
                 )
 
                 # 5. Open PR
@@ -431,7 +447,10 @@ class GitHubPRPublisher:
 
                 logger.info(
                     "Auto-heal PR created: #%d %s branch=%s file=%s",
-                    pr["number"], pr["html_url"], branch_name, file_path,
+                    pr["number"],
+                    pr["html_url"],
+                    branch_name,
+                    file_path,
                 )
 
                 return {
@@ -446,7 +465,8 @@ class GitHubPRPublisher:
                 error_body = exc.response.text[:500]
                 logger.error(
                     "Auto-heal PR failed: HTTP %d — %s",
-                    exc.response.status_code, error_body,
+                    exc.response.status_code,
+                    error_body,
                 )
                 return {
                     "status": "error",

@@ -36,28 +36,29 @@ import logging
 import os
 from collections import deque
 from datetime import datetime, timezone
-from typing import Any, Deque, Dict, Optional
+from typing import Any, Deque, Optional
 
 import pandas as pd
 
-from core.event_bus import bus, CH_TICK, CH_SIGNAL
+from core.event_bus import bus, CH_TICK
 
 logger = logging.getLogger(__name__)
 
 # ── config ────────────────────────────────────────────────────────────────────
-ML_MIN_PROB:        float = float(os.environ.get("ML_MIN_TRADE_PROB",      "0.58"))
-MIN_BARS:           int   = int(os.environ.get("STRATEGY_MIN_BARS",        "100"))
-BUFFER_SIZE:        int   = int(os.environ.get("STRATEGY_BUFFER_SIZE",     "500"))
-EMA_FAST:           int   = int(os.environ.get("STRATEGY_EMA_FAST",        "9"))
-EMA_SLOW:           int   = int(os.environ.get("STRATEGY_EMA_SLOW",        "21"))
-HEARTBEAT_INTERVAL: int   = int(os.environ.get("STRATEGY_HEARTBEAT_TICKS", "100"))
+ML_MIN_PROB: float = float(os.environ.get("ML_MIN_TRADE_PROB", "0.58"))
+MIN_BARS: int = int(os.environ.get("STRATEGY_MIN_BARS", "100"))
+BUFFER_SIZE: int = int(os.environ.get("STRATEGY_BUFFER_SIZE", "500"))
+EMA_FAST: int = int(os.environ.get("STRATEGY_EMA_FAST", "9"))
+EMA_SLOW: int = int(os.environ.get("STRATEGY_EMA_SLOW", "21"))
+HEARTBEAT_INTERVAL: int = int(os.environ.get("STRATEGY_HEARTBEAT_TICKS", "100"))
 # Aggregate N ticks into one synthetic OHLCV bar
-TICKS_PER_BAR:      int   = int(os.environ.get("STRATEGY_TICKS_PER_BAR",   "10"))
+TICKS_PER_BAR: int = int(os.environ.get("STRATEGY_TICKS_PER_BAR", "10"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tick → OHLCV aggregator
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class _OHLCVBuffer:
     """
@@ -69,10 +70,10 @@ class _OHLCVBuffer:
     """
 
     def __init__(self, maxbars: int = BUFFER_SIZE) -> None:
-        self._bars:    Deque[dict] = deque(maxlen=maxbars)
-        self._pending: list        = []
-        self._ema_f:   Optional[float] = None
-        self._ema_s:   Optional[float] = None
+        self._bars: Deque[dict] = deque(maxlen=maxbars)
+        self._pending: list = []
+        self._ema_f: Optional[float] = None
+        self._ema_s: Optional[float] = None
         self._alpha_f: float = 2 / (EMA_FAST + 1)
         self._alpha_s: float = 2 / (EMA_SLOW + 1)
 
@@ -90,14 +91,16 @@ class _OHLCVBuffer:
 
         if len(self._pending) >= TICKS_PER_BAR:
             prices = self._pending
-            self._bars.append({
-                "open":      prices[0],
-                "high":      max(prices),
-                "low":       min(prices),
-                "close":     prices[-1],
-                "volume":    float(len(prices)),
-                "timestamp": timestamp,
-            })
+            self._bars.append(
+                {
+                    "open": prices[0],
+                    "high": max(prices),
+                    "low": min(prices),
+                    "close": prices[-1],
+                    "volume": float(len(prices)),
+                    "timestamp": timestamp,
+                }
+            )
             self._pending = []
             return True
         return False
@@ -129,6 +132,7 @@ class _OHLCVBuffer:
 # ML predictor wrapper
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class _MLPredictor:
     """
     Wraps AdvancedModelPredictor (advanced_oos.pkl) for live inference.
@@ -146,10 +150,10 @@ class _MLPredictor:
     def _load(self) -> None:
         try:
             from ml.live_inference import get_advanced_predictor
+
             self._predictor = get_advanced_predictor()
             self._available = (
-                self._predictor is not None and
-                self._predictor.is_available
+                self._predictor is not None and self._predictor.is_available
             )
             if self._available:
                 logger.info(
@@ -163,12 +167,14 @@ class _MLPredictor:
                 )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
-                "StrategyEngine: ML predictor unavailable (%s) — EMA fallback active.", exc
+                "StrategyEngine: ML predictor unavailable (%s) — EMA fallback active.",
+                exc,
             )
             self._available = False
 
-    def predict(self, ohlcv_df: pd.DataFrame,
-                ema_cross: float, symbol: str) -> tuple[str, float]:
+    def predict(
+        self, ohlcv_df: pd.DataFrame, ema_cross: float, symbol: str
+    ) -> tuple[str, float]:
         """
         Return (direction, confidence).
 
@@ -183,7 +189,7 @@ class _MLPredictor:
                     threshold_long=ML_MIN_PROB,
                     threshold_short=1.0 - ML_MIN_PROB,
                 )
-                raw_dir    = result.get("direction", "neutral").lower()
+                raw_dir = result.get("direction", "neutral").lower()
                 confidence = float(result.get("confidence", 0.0))
 
                 if raw_dir == "long":
@@ -210,6 +216,7 @@ class _MLPredictor:
 # Strategy engine
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class StrategyEngine:
     """
     Subscribes to tick events, runs ML inference on bar close,
@@ -222,11 +229,11 @@ class StrategyEngine:
     """
 
     def __init__(self) -> None:
-        self._buffer     = _OHLCVBuffer()
-        self._predictor  = _MLPredictor()
-        self._tick_count:    int = 0
-        self._bar_count:     int = 0
-        self._signal_count:  int = 0
+        self._buffer = _OHLCVBuffer()
+        self._predictor = _MLPredictor()
+        self._tick_count: int = 0
+        self._bar_count: int = 0
+        self._signal_count: int = 0
         self._abstain_count: int = 0
         self._running: bool = False
 
@@ -237,7 +244,9 @@ class StrategyEngine:
         self._running = True
         logger.info(
             "StrategyEngine starting — min_bars=%d ticks_per_bar=%d min_prob=%.2f",
-            MIN_BARS, TICKS_PER_BAR, ML_MIN_PROB,
+            MIN_BARS,
+            TICKS_PER_BAR,
+            ML_MIN_PROB,
         )
         await self._consume()
 
@@ -245,8 +254,10 @@ class StrategyEngine:
         self._running = False
         logger.info(
             "StrategyEngine stopped. ticks=%d bars=%d signals=%d abstains=%d",
-            self._tick_count, self._bar_count,
-            self._signal_count, self._abstain_count,
+            self._tick_count,
+            self._bar_count,
+            self._signal_count,
+            self._abstain_count,
         )
 
     # ── tick consumer ─────────────────────────────────────────────────────────
@@ -264,9 +275,9 @@ class StrategyEngine:
 
     async def _on_tick(self, tick: dict) -> None:
         """Process one tick: update OHLCV buffer, predict on bar close."""
-        mid       = float(tick.get("mid", 0))
-        spread    = float(tick.get("spread", 0))
-        symbol    = tick.get("symbol", "XAU/USD")
+        mid = float(tick.get("mid", 0))
+        spread = float(tick.get("spread", 0))
+        symbol = tick.get("symbol", "XAU/USD")
         timestamp = tick.get("timestamp", datetime.now(timezone.utc).isoformat())
 
         if mid <= 0:
@@ -276,14 +287,16 @@ class StrategyEngine:
 
         # Heartbeat every N ticks
         if self._tick_count % HEARTBEAT_INTERVAL == 0:
-            await bus.publish_signal({
-                "type":       "heartbeat",
-                "source":     "strategy_engine",
-                "tick_count": self._tick_count,
-                "bar_count":  self._buffer.bar_count,
-                "ml_ready":   self._buffer.ready(),
-                "timestamp":  datetime.now(timezone.utc).isoformat(),
-            })
+            await bus.publish_signal(
+                {
+                    "type": "heartbeat",
+                    "source": "strategy_engine",
+                    "tick_count": self._tick_count,
+                    "bar_count": self._buffer.bar_count,
+                    "ml_ready": self._buffer.ready(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
 
         # Push tick; only act on bar close
         bar_closed = self._buffer.push(mid, spread, timestamp)
@@ -296,11 +309,12 @@ class StrategyEngine:
         if not self._buffer.ready():
             logger.debug(
                 "StrategyEngine: warming up — %d/%d bars",
-                self._buffer.bar_count, MIN_BARS,
+                self._buffer.bar_count,
+                MIN_BARS,
             )
             return
 
-        ohlcv_df  = self._buffer.to_dataframe()
+        ohlcv_df = self._buffer.to_dataframe()
         ema_cross = self._buffer.ema_cross
         direction, confidence = self._predictor.predict(ohlcv_df, ema_cross, symbol)
 
@@ -311,20 +325,24 @@ class StrategyEngine:
 
         self._signal_count += 1
         signal = {
-            "type":       "signal_event",
-            "symbol":     symbol,
-            "direction":  direction,
+            "type": "signal_event",
+            "symbol": symbol,
+            "direction": direction,
             "confidence": round(confidence, 4),
-            "mid":        mid,
-            "spread":     spread,
-            "bar_count":  self._bar_count,
-            "tick_seq":   tick.get("seq", self._tick_count),
-            "timestamp":  datetime.now(timezone.utc).isoformat(),
+            "mid": mid,
+            "spread": spread,
+            "bar_count": self._bar_count,
+            "tick_seq": tick.get("seq", self._tick_count),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         logger.info(
             "SIGNAL  %s %s  conf=%.4f  mid=%.5f  bars=%d",
-            direction, symbol, confidence, mid, self._bar_count,
+            direction,
+            symbol,
+            confidence,
+            mid,
+            self._bar_count,
         )
         await bus.publish_signal(signal)
 
@@ -332,10 +350,10 @@ class StrategyEngine:
 
     def metrics(self) -> dict:
         return {
-            "tick_count":    self._tick_count,
-            "bar_count":     self._bar_count,
-            "signal_count":  self._signal_count,
+            "tick_count": self._tick_count,
+            "bar_count": self._bar_count,
+            "signal_count": self._signal_count,
             "abstain_count": self._abstain_count,
-            "ml_ready":      self._buffer.ready(),
-            "ml_available":  self._predictor._available,
+            "ml_ready": self._buffer.ready(),
+            "ml_available": self._predictor._available,
         }

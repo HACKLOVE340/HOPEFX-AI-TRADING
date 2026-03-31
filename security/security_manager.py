@@ -17,7 +17,7 @@ import logging
 import secrets
 import threading
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
@@ -105,9 +105,7 @@ class SecurityManager:
         """
         raw = secrets.token_bytes(32)
         # HMAC-SHA256 binds the random bytes to the user_id
-        mac = hmac.new(
-            user_id.encode("utf-8"), raw, hashlib.sha256
-        ).hexdigest()
+        mac = hmac.new(user_id.encode("utf-8"), raw, hashlib.sha256).hexdigest()
         with self._csrf_lock:
             self._csrf_store[user_id] = (mac, time.monotonic())
             self._evict_expired_csrf()
@@ -145,7 +143,8 @@ class SecurityManager:
         """Remove expired CSRF tokens (called under _csrf_lock)."""
         now = time.monotonic()
         expired = [
-            uid for uid, (_, issued_at) in self._csrf_store.items()
+            uid
+            for uid, (_, issued_at) in self._csrf_store.items()
             if now - issued_at > _CSRF_TOKEN_TTL
         ]
         for uid in expired:

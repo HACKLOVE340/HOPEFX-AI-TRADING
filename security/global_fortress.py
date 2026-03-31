@@ -40,14 +40,15 @@ from typing import Any, Dict, List, Optional
 import httpx
 import numpy as np
 from fastapi import APIRouter, FastAPI
-from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SCAN_INTERVAL: int = int(os.getenv("BRAIN_SCAN_INTERVAL", "30"))       # seconds
-HEAL_INTERVAL: int = int(os.getenv("BRAIN_HEAL_INTERVAL", "1800"))     # 30 min
-FLASHPOINT_API: str = os.getenv("FLASHPOINT_API_URL", "https://api.flashpoint.io/v1/iocs")
+SCAN_INTERVAL: int = int(os.getenv("BRAIN_SCAN_INTERVAL", "30"))  # seconds
+HEAL_INTERVAL: int = int(os.getenv("BRAIN_HEAL_INTERVAL", "1800"))  # 30 min
+FLASHPOINT_API: str = os.getenv(
+    "FLASHPOINT_API_URL", "https://api.flashpoint.io/v1/iocs"
+)
 FLASHPOINT_KEY: str = os.getenv("FLASHPOINT_API_KEY", "")
 ARGOCD_WEBHOOK: str = os.getenv("ARGOCD_ROLLBACK_WEBHOOK", "")
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -82,11 +83,13 @@ async def _get_redis() -> Any:
     if _redis_client is None:
         try:
             from cache.redis_client import get_redis as _get_redis_client
+
             _redis_client = await _get_redis_client()
         except Exception:
             # Fallback: direct URL
             try:
                 import redis.asyncio as aioredis
+
                 _redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
             except Exception as exc:
                 logger.warning("Redis unavailable for HOPEFXBrain: %s", exc)
@@ -103,14 +106,22 @@ def _get_rl_agent() -> Optional[Any]:
     if _rl_agent is None:
         try:
             from stable_baselines3 import PPO
+
             model_path = os.path.join(
-                os.path.dirname(__file__), "..", "ml", "rl_models", "nuclear_decision_ppo.zip"
+                os.path.dirname(__file__),
+                "..",
+                "ml",
+                "rl_models",
+                "nuclear_decision_ppo.zip",
             )
             if os.path.exists(model_path):
                 _rl_agent = PPO.load(model_path)
                 logger.info("HOPEFXBrain: RL agent loaded from %s", model_path)
             else:
-                logger.warning("HOPEFXBrain: RL model not found at %s — using rule-based fallback", model_path)
+                logger.warning(
+                    "HOPEFXBrain: RL model not found at %s — using rule-based fallback",
+                    model_path,
+                )
         except Exception as exc:
             logger.warning("HOPEFXBrain: RL agent load failed: %s", exc)
     return _rl_agent
@@ -141,6 +152,7 @@ def _get_encoder() -> Optional[Any]:
     if _encoder is None:
         try:
             from sentence_transformers import SentenceTransformer
+
             logger.info(
                 "HOPEFXBrain: loading SentenceTransformer (all-MiniLM-L6-v2, ~90 MB). "
                 "Requires PyTorch — set BRAIN_SEMANTIC_ENCODER=false on CPU-only nodes "
@@ -160,6 +172,7 @@ def _get_encoder() -> Optional[Any]:
 
 
 # ── HOPEFXBrain ───────────────────────────────────────────────────────────────
+
 
 class HOPEFXBrain:
     """
@@ -204,14 +217,20 @@ class HOPEFXBrain:
             if not path or path in ("/health", "/ready", "/metrics"):
                 continue
             # Mark trader/broker/data routes as high-priority
-            priority = "high" if any(k in path for k in ("trader", "broker", "data", "order")) else "normal"
+            priority = (
+                "high"
+                if any(k in path for k in ("trader", "broker", "data", "order"))
+                else "normal"
+            )
             if priority == "high":
                 flagged.append(path)
 
         if redis and flagged:
             await redis.set(
                 "brain:scanned_routes",
-                json.dumps({"ts": datetime.now(timezone.utc).isoformat(), "routes": flagged}),
+                json.dumps(
+                    {"ts": datetime.now(timezone.utc).isoformat(), "routes": flagged}
+                ),
                 ex=120,
             )
 
@@ -253,7 +272,9 @@ class HOPEFXBrain:
 
             # Persist to Redis for dashboard polling
             if redis:
-                await redis.hset("brain:attack_log", ip, json.dumps(self.attack_log[ip]))
+                await redis.hset(
+                    "brain:attack_log", ip, json.dumps(self.attack_log[ip])
+                )
                 await redis.expire("brain:attack_log", 86400)  # 24 h TTL
 
             # RL decision
@@ -264,7 +285,9 @@ class HOPEFXBrain:
         """Geo-locate an IP via ip-api.com (free, no key required)."""
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"http://ip-api.com/json/{ip}?fields=country,city,lat,lon,isp,org")
+                resp = await client.get(
+                    f"http://ip-api.com/json/{ip}?fields=country,city,lat,lon,isp,org"
+                )
                 if resp.status_code == 200:
                     return resp.json()
         except Exception as exc:
@@ -275,6 +298,7 @@ class HOPEFXBrain:
         """Classify attack intent via LLM."""
         try:
             from security.llm_wrapper import call_llm
+
             result = await call_llm(LLM_INTENT_PROMPT.format(log=data[:512]))
             # Normalise to known intents
             result = result.strip().lower().split()[0] if result.strip() else "unknown"
@@ -327,14 +351,22 @@ class HOPEFXBrain:
     async def _execute_action(self, action: int, ip: str) -> None:
         """Execute the chosen action for *ip*."""
         redis = await _get_redis()
-        action_name = {0: "monitor", 1: "rate_limit", 2: "block", 3: "nuclear"}.get(action, "monitor")
+        action_name = {0: "monitor", 1: "rate_limit", 2: "block", 3: "nuclear"}.get(
+            action, "monitor"
+        )
         logger.info("HOPEFXBrain: action=%s ip=%s", action_name, ip)
 
         if redis:
-            await redis.hset("brain:actions", ip, json.dumps({
-                "action": action_name,
-                "ts": datetime.now(timezone.utc).isoformat(),
-            }))
+            await redis.hset(
+                "brain:actions",
+                ip,
+                json.dumps(
+                    {
+                        "action": action_name,
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                    }
+                ),
+            )
 
         if action == ACTION_RATE_LIMIT and redis:
             await redis.setex(f"ratelimit:block:{ip}", 300, "1")  # 5-min rate limit
@@ -396,7 +428,9 @@ class HOPEFXBrain:
             rule = entry.get("rule", "unknown")
 
             if not code:
-                logger.debug("HOPEFXBrain: empty code snippet for %s — skipping", endpoint)
+                logger.debug(
+                    "HOPEFXBrain: empty code snippet for %s — skipping", endpoint
+                )
                 continue
 
             try:
@@ -418,7 +452,9 @@ class HOPEFXBrain:
                     await redis.rpush("fixes:queue", json.dumps(record))
                     logger.info(
                         "HOPEFXBrain: fix queued endpoint=%s severity=%s rule=%s",
-                        endpoint, severity, rule,
+                        endpoint,
+                        severity,
+                        rule,
                     )
             except Exception as exc:
                 logger.warning(
@@ -470,11 +506,13 @@ class HOPEFXBrain:
             await redis.rpush("security:blocked_ips", ip)
             await redis.rpush(
                 "alerts:critical",
-                json.dumps({
-                    "type": "lockdown",
-                    "ip": ip,
-                    "ts": datetime.now(timezone.utc).isoformat(),
-                }),
+                json.dumps(
+                    {
+                        "type": "lockdown",
+                        "ip": ip,
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                    }
+                ),
             )
 
         # ArgoCD rollback via webhook
@@ -491,6 +529,7 @@ class HOPEFXBrain:
 
 
 # ── FastAPI sub-router (dashboard API) ────────────────────────────────────────
+
 
 def _build_router(brain: HOPEFXBrain) -> APIRouter:
     """Return a router exposing brain state to the React dashboard."""
@@ -539,7 +578,10 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
             for i, raw in enumerate(raw_list):
                 try:
                     rec = json.loads(raw)
-                    if rec.get("endpoint") == endpoint and rec.get("status") == "pending":
+                    if (
+                        rec.get("endpoint") == endpoint
+                        and rec.get("status") == "pending"
+                    ):
                         fix_record = rec
                         # Remove this entry from the queue
                         await redis.lrem("fixes:queue", 1, raw)
@@ -549,6 +591,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
 
         if fix_record is None:
             from fastapi import HTTPException
+
             raise HTTPException(
                 status_code=404,
                 detail=f"No pending fix found for endpoint '{endpoint}'",
@@ -588,7 +631,9 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
 
         logger.info(
             "HOPEFXBrain: fix approved endpoint=%s pr_status=%s pr_url=%s",
-            endpoint, pr_result.get("status"), pr_result.get("pr_url"),
+            endpoint,
+            pr_result.get("status"),
+            pr_result.get("pr_url"),
         )
 
         return {
@@ -617,7 +662,10 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
             for raw in raw_list:
                 try:
                     rec = json.loads(raw)
-                    if rec.get("endpoint") == endpoint and rec.get("status") == "pending":
+                    if (
+                        rec.get("endpoint") == endpoint
+                        and rec.get("status") == "pending"
+                    ):
                         await redis.lrem("fixes:queue", 1, raw)
                         declined_record = {
                             **rec,
@@ -631,7 +679,9 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
                 except json.JSONDecodeError:
                     continue
 
-        logger.info("HOPEFXBrain: fix declined endpoint=%s by=%s", endpoint, declined_by)
+        logger.info(
+            "HOPEFXBrain: fix declined endpoint=%s by=%s", endpoint, declined_by
+        )
         return {"status": "declined", "endpoint": endpoint}
 
     @router.get("/fixes/approved")

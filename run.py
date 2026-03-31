@@ -63,12 +63,13 @@ logger = logging.getLogger("run")
 
 # ── supported values ──────────────────────────────────────────────────────────
 BROKERS = ("oanda", "mt5", "ibkr", "binance", "alpaca", "paper")
-MODES   = ("paper", "live", "api", "backtest")
+MODES = ("paper", "live", "api", "backtest")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Argument parser
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -123,6 +124,7 @@ def _build_parser() -> argparse.ArgumentParser:
 # Environment setup
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _setup_env(args: argparse.Namespace) -> None:
     """
     Apply broker/mode overrides to the environment before any module imports.
@@ -146,17 +148,17 @@ def _setup_env(args: argparse.Namespace) -> None:
 
     # Map broker flag to exchange identifier used by MarketIngest
     broker_exchange_map = {
-        "oanda":   "oanda",
-        "mt5":     "mt5",
-        "ibkr":    "ibkr",
+        "oanda": "oanda",
+        "mt5": "mt5",
+        "ibkr": "ibkr",
         "binance": "binance",
-        "alpaca":  "alpaca",
-        "paper":   "oanda",   # paper broker still uses OANDA for price data
+        "alpaca": "alpaca",
+        "paper": "oanda",  # paper broker still uses OANDA for price data
     }
     os.environ["INGEST_EXCHANGE"] = broker_exchange_map.get(args.broker, "oanda")
-    os.environ["DEFAULT_BROKER"]  = args.broker
-    os.environ["BROKER"]          = args.broker
-    os.environ["TRADING_MODE"]    = args.mode
+    os.environ["DEFAULT_BROKER"] = args.broker
+    os.environ["BROKER"] = args.broker
+    os.environ["TRADING_MODE"] = args.mode
 
     # Symbol override
     if getattr(args, "symbol", None):
@@ -167,6 +169,7 @@ def _setup_env(args: argparse.Namespace) -> None:
         try:
             import json as _json
             from pathlib import Path as _Path
+
             cfg_path = _Path(args.config)
             cfg = {}
             if cfg_path.exists():
@@ -187,6 +190,7 @@ def _setup_env(args: argparse.Namespace) -> None:
 # Config loader
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _load_prop_config(path: str) -> dict:
     """Load and return prop_firm_mode.json; return defaults if absent."""
     p = Path(path)
@@ -202,6 +206,7 @@ def _load_prop_config(path: str) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 # Dry-run plan printer
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
     """Print the startup plan and env validation result, then exit."""
@@ -277,6 +282,7 @@ def _get_pipeline(mode: str) -> list[str]:
 # Mode runners
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def _run_trading(args: argparse.Namespace) -> None:
     """
     Start the full trading pipeline via HopeFXEngine.
@@ -289,7 +295,9 @@ async def _run_trading(args: argparse.Namespace) -> None:
     """
     logger.info(
         "Starting trading pipeline — broker=%s mode=%s config=%s",
-        args.broker, args.mode, args.config,
+        args.broker,
+        args.mode,
+        args.config,
     )
 
     try:
@@ -309,6 +317,7 @@ async def _run_trading(args: argparse.Namespace) -> None:
         # Fallback to legacy MainLoop
         logger.warning("HopeFXEngine not available — falling back to core.main_loop")
         from core.main_loop import MainLoop
+
         ml = MainLoop()
         await ml.run()
 
@@ -318,6 +327,7 @@ async def _run_api() -> None:
     try:
         import uvicorn
         from app import app as fastapi_app
+
         config = uvicorn.Config(
             fastapi_app,
             host=os.environ.get("API_HOST", "0.0.0.0"),
@@ -335,11 +345,13 @@ async def _run_backtest(args: argparse.Namespace) -> None:
     """Run the backtest engine."""
     try:
         from backtesting.engine import BacktestEngine
+
         engine = BacktestEngine(prop_config_path=args.config)
         await engine.run()
     except ImportError:
         # Fallback to the existing backtest runner
         import subprocess
+
         result = subprocess.run(
             [sys.executable, "backtest_runner.py", "--config", args.config],
             check=False,
@@ -350,6 +362,7 @@ async def _run_backtest(args: argparse.Namespace) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def _main(args: argparse.Namespace) -> None:
     if args.mode in ("paper", "live"):
@@ -365,7 +378,7 @@ def main() -> None:
     load_dotenv(override=False)
 
     parser = _build_parser()
-    args   = parser.parse_args()
+    args = parser.parse_args()
 
     # Apply log level
     logging.getLogger().setLevel(getattr(logging, args.log))
@@ -400,7 +413,8 @@ def main() -> None:
 
     logger.info(
         "HOPEFX-AI-TRADING starting — broker=%s mode=%s",
-        args.broker, args.mode,
+        args.broker,
+        args.mode,
     )
     asyncio.run(_main(args))
 

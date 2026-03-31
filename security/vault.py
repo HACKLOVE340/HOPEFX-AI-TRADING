@@ -218,7 +218,7 @@ class HSMVault:
         except Exception as exc:
             raise RuntimeError(f"AWS KMS GenerateDataKey failed: {exc}") from exc
 
-        plaintext_key: bytes = response["Plaintext"]   # 32 bytes AES-256
+        plaintext_key: bytes = response["Plaintext"]  # 32 bytes AES-256
         encrypted_key: bytes = response["CiphertextBlob"]
 
         # Persist the encrypted copy for disaster recovery (KMS Decrypt to recover)
@@ -231,7 +231,9 @@ class HSMVault:
         except OSError as exc:
             logger.warning("Could not persist KMS encrypted key blob: %s", exc)
 
-        logger.info("Master key derived via AWS KMS (key_id=%s, region=%s)", key_id, region)
+        logger.info(
+            "Master key derived via AWS KMS (key_id=%s, region=%s)", key_id, region
+        )
         return plaintext_key
 
     def _derive_key_azure_keyvault(self) -> bytes:
@@ -254,20 +256,22 @@ class HSMVault:
                 "integration. Install with: pip install azure-keyvault-keys azure-identity"
             )
 
-        vault_url  = os.getenv("AZURE_KEY_VAULT_URL")
-        key_name   = os.getenv("AZURE_KEY_NAME")
-        client_id  = os.getenv("AZURE_CLIENT_ID")
+        vault_url = os.getenv("AZURE_KEY_VAULT_URL")
+        key_name = os.getenv("AZURE_KEY_NAME")
+        client_id = os.getenv("AZURE_CLIENT_ID")
         client_sec = os.getenv("AZURE_CLIENT_SECRET")
-        tenant_id  = os.getenv("AZURE_TENANT_ID")
+        tenant_id = os.getenv("AZURE_TENANT_ID")
 
         missing = [
-            name for name, val in [
+            name
+            for name, val in [
                 ("AZURE_KEY_VAULT_URL", vault_url),
                 ("AZURE_KEY_NAME", key_name),
                 ("AZURE_CLIENT_ID", client_id),
                 ("AZURE_CLIENT_SECRET", client_sec),
                 ("AZURE_TENANT_ID", tenant_id),
-            ] if not val
+            ]
+            if not val
         ]
         if missing:
             raise RuntimeError(
@@ -306,7 +310,9 @@ class HSMVault:
             logger.warning("Could not persist Azure wrapped key: %s", exc)
 
         logger.info(
-            "Master key derived via Azure Key Vault (vault=%s, key=%s)", vault_url, key_name
+            "Master key derived via Azure Key Vault (vault=%s, key=%s)",
+            vault_url,
+            key_name,
         )
         return plaintext_key
 

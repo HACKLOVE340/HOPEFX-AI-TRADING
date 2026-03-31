@@ -25,17 +25,15 @@ Run:
 Exit code 0 = all checks passed (warnings allowed).
 Exit code 1 = one or more FAIL.
 """
+
 from __future__ import annotations
 
 import ast
-import hashlib
-import os
 import pathlib
 import re
 import sys
-import time
 from datetime import datetime, timezone
-from typing import List, Tuple
+from typing import List
 
 # Ensure repo root is on sys.path so data_layer imports work when the
 # script is run from scripts/ or from the repo root.
@@ -44,15 +42,15 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 # ── colour helpers ────────────────────────────────────────────────────────────
-GREEN  = "\033[92m"
-RED    = "\033[91m"
+GREEN = "\033[92m"
+RED = "\033[91m"
 YELLOW = "\033[93m"
-BOLD   = "\033[1m"
-RESET  = "\033[0m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
 
-passed:  List[str] = []
-failed:  List[str] = []
-warned:  List[str] = []
+passed: List[str] = []
+failed: List[str] = []
+warned: List[str] = []
 
 
 def ok(msg: str) -> None:
@@ -76,6 +74,7 @@ def section(title: str) -> None:
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def read(path: str) -> str:
     return pathlib.Path(path).read_text()
 
@@ -96,9 +95,15 @@ section("1. Architecture: single-entry-point rule")
 arch_violations = []
 allowed_prefixes = ("data_layer/", "scripts/", "examples/")
 sub_modules = (
-    "data_layer.feeds.", "data_layer.quality.", "data_layer.microstructure.",
-    "data_layer.sentiment.", "data_layer.calendar.", "data_layer.lineage.",
-    "data_layer.cache.", "data_layer.normalization.", "data_layer.replay.",
+    "data_layer.feeds.",
+    "data_layer.quality.",
+    "data_layer.microstructure.",
+    "data_layer.sentiment.",
+    "data_layer.calendar.",
+    "data_layer.lineage.",
+    "data_layer.cache.",
+    "data_layer.normalization.",
+    "data_layer.replay.",
 )
 
 for path in sorted(pathlib.Path(".").rglob("*.py")):
@@ -232,9 +237,13 @@ else:
     fail("MicrostructureEngine: missing inject_l2_depth() method")
 
 if "self._reset_session_unlocked()" in micro:
-    ok("MicrostructureEngine: _process_tick calls _reset_session_unlocked (not reset_session)")
+    ok(
+        "MicrostructureEngine: _process_tick calls _reset_session_unlocked (not reset_session)"
+    )
 else:
-    fail("MicrostructureEngine: _process_tick still calls reset_session() — deadlock risk")
+    fail(
+        "MicrostructureEngine: _process_tick still calls reset_session() — deadlock risk"
+    )
 
 try:
     ast.parse(micro)
@@ -353,7 +362,10 @@ if "ts >= ts_end" in replay:
 else:
     fail("MarketReplayEngine: missing causal hard stop — end tick could leak")
 
-if "ts_start = pd.Timestamp(start" in replay and "ts_end   = pd.Timestamp(end" in replay:
+if (
+    "ts_start = pd.Timestamp(start" in replay
+    and "ts_end   = pd.Timestamp(end" in replay
+):
     ok("MarketReplayEngine: Timestamp bounds pre-computed outside loop")
 else:
     fail("MarketReplayEngine: Timestamp bounds still computed inside loop")
@@ -407,7 +419,9 @@ else:
 if "await _dl_orch.start()" in engine:
     ok("hopefx_engine: orchestrator.start() called in engine.start()")
 else:
-    fail("hopefx_engine: orchestrator.start() NOT called — data layer never starts standalone")
+    fail(
+        "hopefx_engine: orchestrator.start() NOT called — data layer never starts standalone"
+    )
 
 if "await self._dl_orchestrator.stop()" in engine:
     ok("hopefx_engine: orchestrator.stop() called in engine.stop()")
@@ -458,12 +472,25 @@ section("11. .env.example: all hardening env vars documented")
 env_example = read(".env.example")
 
 required_vars = [
-    "GOLDAPI_IO_KEY", "METALS_DEV_KEY", "METALS_API_KEY", "METALPRICEAPI_KEY",
-    "COMMODITY_PRICE_API_KEY", "FMP_API_KEY", "NEWSDATA_IO_KEY",
-    "ALPHA_VANTAGE_KEY", "NEWSAPI_ORG_KEY", "FRED_API_KEY",
-    "DUKASCOPY_CACHE_DIR", "LINEAGE_DB_PATH", "LINEAGE_MAX_RECORDS",
-    "MICRO_WINDOW_TICKS", "SENT_EMA_ALPHA", "FEED_CB_OPEN_ERRORS",
-    "DQE_STALE_THRESHOLD_S", "SENT_MAX_ARTICLE_AGE_H", "SENT_DEDUP_WINDOW_H",
+    "GOLDAPI_IO_KEY",
+    "METALS_DEV_KEY",
+    "METALS_API_KEY",
+    "METALPRICEAPI_KEY",
+    "COMMODITY_PRICE_API_KEY",
+    "FMP_API_KEY",
+    "NEWSDATA_IO_KEY",
+    "ALPHA_VANTAGE_KEY",
+    "NEWSAPI_ORG_KEY",
+    "FRED_API_KEY",
+    "DUKASCOPY_CACHE_DIR",
+    "LINEAGE_DB_PATH",
+    "LINEAGE_MAX_RECORDS",
+    "MICRO_WINDOW_TICKS",
+    "SENT_EMA_ALPHA",
+    "FEED_CB_OPEN_ERRORS",
+    "DQE_STALE_THRESHOLD_S",
+    "SENT_MAX_ARTICLE_AGE_H",
+    "SENT_DEDUP_WINDOW_H",
     "L2_SNAPSHOT_INTERVAL",
 ]
 
@@ -523,7 +550,10 @@ for path in sorted(pathlib.Path(".").rglob("*.py")):
     for i, line in enumerate(src.splitlines(), 1):
         stripped = line.strip()
         # Only flag actual class instantiation / usage, not string literals in checks
-        if re.search(r"\b(MockBroker|MockTick|MockPrice|FakeBroker|DummyBroker|SyntheticFeed)\b", stripped):
+        if re.search(
+            r"\b(MockBroker|MockTick|MockPrice|FakeBroker|DummyBroker|SyntheticFeed)\b",
+            stripped,
+        ):
             # Skip lines that are just string literals (e.g. in validation scripts)
             if stripped.startswith(("#", '"', "'")):
                 continue
@@ -572,6 +602,7 @@ section("15. Functional: orchestrator ML features")
 
 try:
     from data_layer.orchestrator import orchestrator
+
     features = orchestrator.get_ml_features()
     if len(features) >= 20:
         ok(f"Orchestrator: {len(features)} ML features available")
@@ -580,9 +611,17 @@ try:
 
     health = orchestrator.health()
     required_health_keys = [
-        "started", "uptime_s", "tick_count",
-        "redis", "lineage", "dqe", "micro", "sentiment",
-        "calendar", "macro", "replay",
+        "started",
+        "uptime_s",
+        "tick_count",
+        "redis",
+        "lineage",
+        "dqe",
+        "micro",
+        "sentiment",
+        "calendar",
+        "macro",
+        "replay",
     ]
     missing_keys = [k for k in required_health_keys if k not in health]
     if missing_keys:
@@ -605,6 +644,7 @@ try:
 
     # Create two articles with the same URL (simulating Finnhub + FMP duplicate)
     from data_layer.types import NewsArticle, NewsSource
+
     now = datetime.now(timezone.utc)
     art1 = NewsArticle(
         article_id="a1",
@@ -641,9 +681,13 @@ try:
     ema1, ema2, seen_count = asyncio.run(_test_dedup())
 
     if ema1 == ema2:
-        ok(f"NewsSentimentEngine: duplicate article correctly skipped (EMA unchanged: {ema1:.4f})")
+        ok(
+            f"NewsSentimentEngine: duplicate article correctly skipped (EMA unchanged: {ema1:.4f})"
+        )
     else:
-        fail(f"NewsSentimentEngine: duplicate article NOT skipped (EMA changed: {ema1:.4f} → {ema2:.4f})")
+        fail(
+            f"NewsSentimentEngine: duplicate article NOT skipped (EMA changed: {ema1:.4f} → {ema2:.4f})"
+        )
 
     if seen_count == 1:
         ok("NewsSentimentEngine: _seen_urls has exactly 1 entry (dedup working)")
@@ -727,11 +771,17 @@ try:
         # After log1p normalisation, log1p(20) ≈ 3.04
         # If spread*1000 was used, volume would be ~500
         if raw_volume is not None and raw_volume < 100:
-            ok(f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} (unit-based, not spread*1000)")
+            ok(
+                f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} (unit-based, not spread*1000)"
+            )
         elif raw_volume is not None:
-            fail(f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} — suspiciously large (spread*1000?)")
+            fail(
+                f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} — suspiciously large (spread*1000?)"
+            )
         else:
-            ok("NormalizationPipeline: tick_to_ohlcv returned DataFrame (volume col not present after norm)")
+            ok(
+                "NormalizationPipeline: tick_to_ohlcv returned DataFrame (volume col not present after norm)"
+            )
     else:
         fail("NormalizationPipeline: tick_to_ohlcv returned empty DataFrame")
 

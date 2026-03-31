@@ -46,7 +46,7 @@ import traceback
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, List
 
 # ── Environment bootstrap ─────────────────────────────────────────────────────
 # Must happen before any app module is imported so startup validators see
@@ -56,9 +56,9 @@ os.environ.setdefault(
     "SECURITY_JWT_SECRET",
     "validate-ml-flow-jwt-secret-key-minimum-32-chars!!",
 )
-os.environ.setdefault("HOPEFX_CI", "1")   # reduces XGBoost n_estimators for speed
+os.environ.setdefault("HOPEFX_CI", "1")  # reduces XGBoost n_estimators for speed
 
-warnings.filterwarnings("ignore")          # suppress FutureWarning / PerformanceWarning
+warnings.filterwarnings("ignore")  # suppress FutureWarning / PerformanceWarning
 
 # ── Project root on sys.path ──────────────────────────────────────────────────
 _ROOT = Path(__file__).resolve().parent.parent
@@ -67,34 +67,35 @@ if str(_ROOT) not in sys.path:
 
 # ── ANSI colours (disabled when not a TTY) ───────────────────────────────────
 _TTY = sys.stdout.isatty()
-_GREEN  = "\033[32m" if _TTY else ""
-_RED    = "\033[31m" if _TTY else ""
+_GREEN = "\033[32m" if _TTY else ""
+_RED = "\033[31m" if _TTY else ""
 _YELLOW = "\033[33m" if _TTY else ""
-_CYAN   = "\033[36m" if _TTY else ""
-_BOLD   = "\033[1m"  if _TTY else ""
-_RESET  = "\033[0m"  if _TTY else ""
+_CYAN = "\033[36m" if _TTY else ""
+_BOLD = "\033[1m" if _TTY else ""
+_RESET = "\033[0m" if _TTY else ""
 
 # ── Data file ─────────────────────────────────────────────────────────────────
 _H1_CSV = _ROOT / "data" / "XAU_USD_H1.csv"
 
 # ── Latency SLAs (seconds) ────────────────────────────────────────────────────
 _SLA: dict[str, float] = {
-    "data_loading":        2.0,
+    "data_loading": 2.0,
     "feature_engineering": 30.0,  # 11k-bar full feature build; ~20s on first run
-    "ml_inference":        10.0,
-    "online_learning":     5.0,
-    "brain_signal":        15.0,
-    "risk_sizing":         2.0,
-    "order_execution":     2.0,
+    "ml_inference": 10.0,
+    "online_learning": 5.0,
+    "brain_signal": 15.0,
+    "risk_sizing": 2.0,
+    "order_execution": 2.0,
     "position_accounting": 2.0,
-    "kill_switch_gate":    5.0,
-    "latency_budget":      0.0,   # meta-stage, no SLA of its own
+    "kill_switch_gate": 5.0,
+    "latency_budget": 0.0,  # meta-stage, no SLA of its own
 }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Result tracking
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class StageResult:
@@ -133,6 +134,7 @@ class ValidationReport:
 # Runner helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _run_stage(
     name: str,
     fn: Callable[[], str],
@@ -144,13 +146,15 @@ def _run_stage(
     try:
         detail = fn() or ""
         elapsed = time.perf_counter() - t0
-        result = StageResult(name=name, passed=True, elapsed_s=elapsed,
-                             detail=detail, sla_s=sla)
+        result = StageResult(
+            name=name, passed=True, elapsed_s=elapsed, detail=detail, sla_s=sla
+        )
     except Exception as exc:
         elapsed = time.perf_counter() - t0
         tb = traceback.format_exc()
-        result = StageResult(name=name, passed=False, elapsed_s=elapsed,
-                             detail=f"{exc}\n{tb}", sla_s=sla)
+        result = StageResult(
+            name=name, passed=False, elapsed_s=elapsed, detail=f"{exc}\n{tb}", sla_s=sla
+        )
 
     if not quiet:
         _print_result(result)
@@ -184,9 +188,11 @@ def _print_header(title: str) -> None:
 def _print_summary(report: ValidationReport) -> None:
     print(f"\n{_BOLD}{'═' * 60}{_RESET}")
     colour = _GREEN if report.passed else _RED
-    label  = "ALL STAGES PASSED" if report.passed else "VALIDATION FAILED"
-    print(f"{colour}{_BOLD}  {label}  "
-          f"({report.n_passed}/{len(report.results)} stages){_RESET}")
+    label = "ALL STAGES PASSED" if report.passed else "VALIDATION FAILED"
+    print(
+        f"{colour}{_BOLD}  {label}  "
+        f"({report.n_passed}/{len(report.results)} stages){_RESET}"
+    )
     if not report.passed:
         print(f"\n  {_RED}Failed stages:{_RESET}")
         for r in report.results:
@@ -200,19 +206,21 @@ def _print_summary(report: ValidationReport) -> None:
 # Shared state passed between stages
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class _Ctx:
     """Mutable context shared across stage functions."""
-    ohlcv_df = None          # raw H1 DataFrame (timestamp index)
-    features_df = None       # feature-engineered DataFrame
-    predictor = None         # AdvancedPredictor instance
-    ml_result: dict = {}     # last predict() output
-    online_learner = None    # SklearnOnlineLearner instance
-    brain = None             # HOPEFXBrain instance
-    brain_decision = None    # last BrainDecision
-    risk_manager = None      # RiskManager instance
-    sizing_result = None     # PositionSizingResult
-    broker = None            # PaperTradingBroker instance
-    order = None             # last placed Order
+
+    ohlcv_df = None  # raw H1 DataFrame (timestamp index)
+    features_df = None  # feature-engineered DataFrame
+    predictor = None  # AdvancedPredictor instance
+    ml_result: dict = {}  # last predict() output
+    online_learner = None  # SklearnOnlineLearner instance
+    brain = None  # HOPEFXBrain instance
+    brain_decision = None  # last BrainDecision
+    risk_manager = None  # RiskManager instance
+    sizing_result = None  # PositionSizingResult
+    broker = None  # PaperTradingBroker instance
+    order = None  # last placed Order
     stage_latencies: dict = {}  # stage_name → elapsed_s
 
 
@@ -224,6 +232,7 @@ def _ensure_ohlcv() -> None:
     if ctx.ohlcv_df is not None:
         return
     import pandas as pd
+
     df = pd.read_csv(_H1_CSV)
     df.columns = [c.lower() for c in df.columns]
     df["timestamp"] = pd.to_datetime(df["timestamp"])
@@ -233,6 +242,7 @@ def _ensure_ohlcv() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 1 — Data loading
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def stage_data_loading() -> str:
     import pandas as pd
@@ -260,14 +270,17 @@ def stage_data_loading() -> str:
     assert df.index.is_monotonic_increasing, "timestamps not monotonic"
 
     ctx.ohlcv_df = df
-    return (f"{len(df):,} bars  "
-            f"{df.index[0].date()} → {df.index[-1].date()}  "
-            f"close range [{df['close'].min():.2f}, {df['close'].max():.2f}]")
+    return (
+        f"{len(df):,} bars  "
+        f"{df.index[0].date()} → {df.index[-1].date()}  "
+        f"close range [{df['close'].min():.2f}, {df['close'].max():.2f}]"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — Feature engineering
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def stage_feature_engineering() -> str:
     from enhanced_ml_predictor import AdvancedFeatureEngineer
@@ -296,6 +309,7 @@ def stage_feature_engineering() -> str:
 # Stage 3 — ML inference
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def stage_ml_inference() -> str:
     from ml.advanced_predictor import AdvancedPredictor
 
@@ -307,8 +321,12 @@ def stage_ml_inference() -> str:
 
     # Required keys
     required_keys = {
-        "direction", "probability", "confidence",
-        "abstain", "model_version", "latency_ms",
+        "direction",
+        "probability",
+        "confidence",
+        "abstain",
+        "model_version",
+        "latency_ms",
     }
     missing = required_keys - set(result.keys())
     if missing:
@@ -327,14 +345,17 @@ def stage_ml_inference() -> str:
 
     ctx.predictor = predictor
     ctx.ml_result = result
-    return (f"direction={direction}  prob={prob:.4f}  conf={conf:.4f}  "
-            f"abstain={result['abstain']}  latency={result['latency_ms']:.1f}ms  "
-            f"model={result['model_version']}")
+    return (
+        f"direction={direction}  prob={prob:.4f}  conf={conf:.4f}  "
+        f"abstain={result['abstain']}  latency={result['latency_ms']:.1f}ms  "
+        f"model={result['model_version']}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 4 — Online learning
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def stage_online_learning() -> str:
     from ml.online_learner import SklearnOnlineLearner
@@ -367,14 +388,17 @@ def stage_online_learning() -> str:
 
     ctx.online_learner = learner
     prob_str = f"{prob:.4f}" if prob is not None else "None"
-    return (f"updates={update_count}  "
-            f"rolling_acc={status.get('rolling_accuracy', 'n/a')}  "
-            f"predict_proba={prob_str}")
+    return (
+        f"updates={update_count}  "
+        f"rolling_acc={status.get('rolling_accuracy', 'n/a')}  "
+        f"predict_proba={prob_str}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 5 — Brain signal
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def stage_brain_signal() -> str:
     from brain.hopefx_brain import HOPEFXBrain, BrainDecision
@@ -385,7 +409,9 @@ def stage_brain_signal() -> str:
     decision = brain.process_bar(ctx.ohlcv_df.tail(300), symbol="XAUUSD")
 
     if not isinstance(decision, BrainDecision):
-        raise TypeError(f"process_bar() returned {type(decision)}, expected BrainDecision")
+        raise TypeError(
+            f"process_bar() returned {type(decision)}, expected BrainDecision"
+        )
 
     if decision.action not in ("long", "short", "hold"):
         raise ValueError(f"unexpected action: {decision.action!r}")
@@ -396,14 +422,17 @@ def stage_brain_signal() -> str:
 
     ctx.brain = brain
     ctx.brain_decision = decision
-    return (f"action={decision.action}  conf={decision.confidence:.4f}  "
-            f"regime={decision.regime}  ml_prob={decision.ml_probability:.4f}  "
-            f"reason={decision.reason!r}")
+    return (
+        f"action={decision.action}  conf={decision.confidence:.4f}  "
+        f"regime={decision.regime}  ml_prob={decision.ml_probability:.4f}  "
+        f"reason={decision.reason!r}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 6 — Risk sizing
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def stage_risk_sizing() -> str:
     from risk.manager import RiskManager, RiskConfig
@@ -421,14 +450,14 @@ def stage_risk_sizing() -> str:
 
     # Build a minimal signal object that satisfies size_order()
     class _Sig:
-        symbol       = "XAU_USD"
-        direction    = "long"
-        confidence   = 0.72
-        probability  = 0.65
+        symbol = "XAU_USD"
+        direction = "long"
+        confidence = 0.72
+        probability = 0.65
         data_quality = 1.0
         features: dict = {}
-        tick_mid     = last_close
-        tick_spread  = 1.0
+        tick_mid = last_close
+        tick_spread = 1.0
 
     sig = _Sig()
 
@@ -459,15 +488,18 @@ def stage_risk_sizing() -> str:
 
     ctx.risk_manager = rm
     ctx.sizing_result = sizing
-    return (f"approved={sizing.approved}  qty={sizing.quantity:.4f}  "
-            f"notional=${sizing.notional_usd:,.2f}  "
-            f"stop={sizing.stop_loss_usd:.2f}  tp={sizing.take_profit_usd:.2f}  "
-            f"risk_level={assessment.risk_level}")
+    return (
+        f"approved={sizing.approved}  qty={sizing.quantity:.4f}  "
+        f"notional=${sizing.notional_usd:,.2f}  "
+        f"stop={sizing.stop_loss_usd:.2f}  tp={sizing.take_profit_usd:.2f}  "
+        f"risk_level={assessment.risk_level}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 7 — Order execution
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def stage_order_execution() -> str:
     import asyncio
@@ -500,22 +532,28 @@ def stage_order_execution() -> str:
     # Limit order (price below market — should remain pending)
     limit_price = mid * 0.98
     order_limit = broker.place_order(
-        "XAUUSD", OrderSide.BUY, OrderType.LIMIT,
-        quantity=0.1, price=limit_price,
+        "XAUUSD",
+        OrderSide.BUY,
+        OrderType.LIMIT,
+        quantity=0.1,
+        price=limit_price,
     )
     if order_limit.status == OrderStatus.FILLED:
         raise RuntimeError("Limit order below market filled immediately (unexpected)")
 
     ctx.broker = broker
-    ctx.order  = order_buy
-    return (f"market_buy fill={order_buy.average_price:.4f}  "
-            f"market_sell fill={order_sell.average_price:.4f}  "
-            f"limit_order status={order_limit.status.name}")
+    ctx.order = order_buy
+    return (
+        f"market_buy fill={order_buy.average_price:.4f}  "
+        f"market_sell fill={order_sell.average_price:.4f}  "
+        f"limit_order status={order_limit.status.name}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 8 — Position accounting
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def stage_position_accounting() -> str:
     import asyncio
@@ -530,7 +568,9 @@ def stage_position_accounting() -> str:
     broker.market_prices["XAUUSD"] = mid
 
     # Open a long position
-    buy_order = broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, quantity=1.0)
+    buy_order = broker.place_order(
+        "XAUUSD", OrderSide.BUY, OrderType.MARKET, quantity=1.0
+    )
     if buy_order.status.name != "FILLED":
         raise RuntimeError(f"Buy order not filled: {buy_order.status}")
 
@@ -560,15 +600,18 @@ def stage_position_accounting() -> str:
     positions_after = broker.get_positions()
     open_qty = sum(abs(p.quantity) for p in positions_after if hasattr(p, "quantity"))
 
-    return (f"entry={entry_price:.4f}  exit_mid={new_price:.4f}  "
-            f"balance_start=50000.00  "
-            f"balance_after_close={balance_after_close:.2f}  "
-            f"pnl={pnl:+.2f}  remaining_open_qty={open_qty:.2f}")
+    return (
+        f"entry={entry_price:.4f}  exit_mid={new_price:.4f}  "
+        f"balance_start=50000.00  "
+        f"balance_after_close={balance_after_close:.2f}  "
+        f"pnl={pnl:+.2f}  remaining_open_qty={open_qty:.2f}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 9 — Kill-switch gate
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def stage_kill_switch_gate() -> str:
     import tempfile
@@ -606,12 +649,15 @@ def stage_kill_switch_gate() -> str:
         ks.deactivate("test-token")
         assert not ks.is_active(), "KillSwitch.deactivate() did not clear active state"
 
-    return "kill_switch activated → brain returned hold  |  deactivated → brain unblocked"
+    return (
+        "kill_switch activated → brain returned hold  |  deactivated → brain unblocked"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 10 — Latency budget
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def stage_latency_budget() -> str:
     """Verify all prior stages met their SLA."""
@@ -630,16 +676,16 @@ def stage_latency_budget() -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 STAGES: list[tuple[str, Callable[[], str]]] = [
-    ("Data loading",          stage_data_loading),
-    ("Feature engineering",   stage_feature_engineering),
-    ("ML inference",          stage_ml_inference),
-    ("Online learning",       stage_online_learning),
-    ("Brain signal",          stage_brain_signal),
-    ("Risk sizing",           stage_risk_sizing),
-    ("Order execution",       stage_order_execution),
-    ("Position accounting",   stage_position_accounting),
-    ("Kill-switch gate",      stage_kill_switch_gate),
-    ("Latency budget",        stage_latency_budget),
+    ("Data loading", stage_data_loading),
+    ("Feature engineering", stage_feature_engineering),
+    ("ML inference", stage_ml_inference),
+    ("Online learning", stage_online_learning),
+    ("Brain signal", stage_brain_signal),
+    ("Risk sizing", stage_risk_sizing),
+    ("Order execution", stage_order_execution),
+    ("Position accounting", stage_position_accounting),
+    ("Kill-switch gate", stage_kill_switch_gate),
+    ("Latency budget", stage_latency_budget),
 ]
 
 _report = ValidationReport()
@@ -649,17 +695,20 @@ _report = ValidationReport()
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="End-to-end ML flow validation for HOPEFX-AI-TRADING"
     )
     parser.add_argument(
-        "--quiet", "-q",
+        "--quiet",
+        "-q",
         action="store_true",
         help="Suppress per-stage output; print only the final summary",
     )
     parser.add_argument(
-        "--stage", "-s",
+        "--stage",
+        "-s",
         type=int,
         metavar="N",
         help="Run only stage N (1-based)",
