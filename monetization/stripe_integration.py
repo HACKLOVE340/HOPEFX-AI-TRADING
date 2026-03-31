@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import stripe as _stripe  # type: ignore[import]
+
     _STRIPE_AVAILABLE = True
 except ImportError:
     _stripe = None  # type: ignore[assignment]
@@ -47,6 +48,7 @@ except ImportError:
 
 
 # ── Webhook event types ───────────────────────────────────────────────────────
+
 
 class StripeWebhookEvent(str, Enum):
     PAYMENT_INTENT_SUCCEEDED = "payment_intent.succeeded"
@@ -60,6 +62,7 @@ class StripeWebhookEvent(str, Enum):
 
 
 # ── Domain models ─────────────────────────────────────────────────────────────
+
 
 class StripeCustomer:
     def __init__(
@@ -158,6 +161,7 @@ class StripeSubscription:
 
 # ── Integration class ─────────────────────────────────────────────────────────
 
+
 class StripeIntegration:
     """
     Stripe payment integration — delegates all operations to the real Stripe SDK.
@@ -169,15 +173,31 @@ class StripeIntegration:
 
     # Price IDs loaded from env vars configured in the Stripe Dashboard.
     PRICE_IDS: Dict[tuple, Optional[str]] = {
-        (SubscriptionTier.FREE,         BillingCycle.MONTHLY):  None,
-        (SubscriptionTier.STARTER,      BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_STARTER_MONTHLY", "price_starter_monthly"),
-        (SubscriptionTier.STARTER,      BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_STARTER_ANNUAL",  "price_starter_annual"),
-        (SubscriptionTier.PROFESSIONAL, BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_PROFESSIONAL_MONTHLY", "price_pro_monthly"),
-        (SubscriptionTier.PROFESSIONAL, BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_PROFESSIONAL_ANNUAL",  "price_pro_annual"),
-        (SubscriptionTier.ENTERPRISE,   BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_ENTERPRISE_MONTHLY", "price_ent_monthly"),
-        (SubscriptionTier.ENTERPRISE,   BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_ENTERPRISE_ANNUAL",  "price_ent_annual"),
-        (SubscriptionTier.ELITE,        BillingCycle.MONTHLY):  os.getenv("STRIPE_PRICE_ELITE_MONTHLY", "price_elite_monthly"),
-        (SubscriptionTier.ELITE,        BillingCycle.ANNUAL):   os.getenv("STRIPE_PRICE_ELITE_ANNUAL",   "price_elite_annual"),
+        (SubscriptionTier.FREE, BillingCycle.MONTHLY): None,
+        (SubscriptionTier.STARTER, BillingCycle.MONTHLY): os.getenv(
+            "STRIPE_PRICE_STARTER_MONTHLY", "price_starter_monthly"
+        ),
+        (SubscriptionTier.STARTER, BillingCycle.ANNUAL): os.getenv(
+            "STRIPE_PRICE_STARTER_ANNUAL", "price_starter_annual"
+        ),
+        (SubscriptionTier.PROFESSIONAL, BillingCycle.MONTHLY): os.getenv(
+            "STRIPE_PRICE_PROFESSIONAL_MONTHLY", "price_pro_monthly"
+        ),
+        (SubscriptionTier.PROFESSIONAL, BillingCycle.ANNUAL): os.getenv(
+            "STRIPE_PRICE_PROFESSIONAL_ANNUAL", "price_pro_annual"
+        ),
+        (SubscriptionTier.ENTERPRISE, BillingCycle.MONTHLY): os.getenv(
+            "STRIPE_PRICE_ENTERPRISE_MONTHLY", "price_ent_monthly"
+        ),
+        (SubscriptionTier.ENTERPRISE, BillingCycle.ANNUAL): os.getenv(
+            "STRIPE_PRICE_ENTERPRISE_ANNUAL", "price_ent_annual"
+        ),
+        (SubscriptionTier.ELITE, BillingCycle.MONTHLY): os.getenv(
+            "STRIPE_PRICE_ELITE_MONTHLY", "price_elite_monthly"
+        ),
+        (SubscriptionTier.ELITE, BillingCycle.ANNUAL): os.getenv(
+            "STRIPE_PRICE_ELITE_ANNUAL", "price_elite_annual"
+        ),
     }
 
     def __init__(
@@ -435,20 +455,22 @@ class StripeIntegration:
             subs = _stripe.Subscription.list(customer=customer_id, limit=100)
             results = []
             for sub in subs.auto_paging_iter():
-                results.append(StripeSubscription(
-                    subscription_id=sub.id,
-                    customer_id=customer_id,
-                    tier=SubscriptionTier.FREE,
-                    billing_cycle=BillingCycle.MONTHLY,
-                    status=sub.status,
-                    current_period_start=datetime.fromtimestamp(
-                        sub.current_period_start, tz=timezone.utc
-                    ),
-                    current_period_end=datetime.fromtimestamp(
-                        sub.current_period_end, tz=timezone.utc
-                    ),
-                    cancel_at_period_end=sub.cancel_at_period_end,
-                ))
+                results.append(
+                    StripeSubscription(
+                        subscription_id=sub.id,
+                        customer_id=customer_id,
+                        tier=SubscriptionTier.FREE,
+                        billing_cycle=BillingCycle.MONTHLY,
+                        status=sub.status,
+                        current_period_start=datetime.fromtimestamp(
+                            sub.current_period_start, tz=timezone.utc
+                        ),
+                        current_period_end=datetime.fromtimestamp(
+                            sub.current_period_end, tz=timezone.utc
+                        ),
+                        cancel_at_period_end=sub.cancel_at_period_end,
+                    )
+                )
             return results
         except Exception as exc:
             logger.error("Error listing subscriptions for %s: %s", customer_id, exc)
@@ -461,14 +483,13 @@ class StripeIntegration:
         self._require_stripe()
         try:
             if at_period_end:
-                _stripe.Subscription.modify(
-                    subscription_id, cancel_at_period_end=True
-                )
+                _stripe.Subscription.modify(subscription_id, cancel_at_period_end=True)
             else:
                 _stripe.Subscription.delete(subscription_id)
             logger.info(
                 "Cancelled subscription: %s (at_period_end=%s)",
-                subscription_id, at_period_end,
+                subscription_id,
+                at_period_end,
             )
             return True
         except Exception as exc:
@@ -523,14 +544,14 @@ class StripeIntegration:
     ) -> Dict[str, Any]:
         """Dispatch a verified Stripe webhook event to the appropriate handler."""
         handlers = {
-            StripeWebhookEvent.PAYMENT_INTENT_SUCCEEDED.value:      self._handle_payment_success,
-            StripeWebhookEvent.PAYMENT_INTENT_FAILED.value:         self._handle_payment_failed,
-            StripeWebhookEvent.CHECKOUT_SESSION_COMPLETED.value:    self._handle_checkout_completed,
+            StripeWebhookEvent.PAYMENT_INTENT_SUCCEEDED.value: self._handle_payment_success,
+            StripeWebhookEvent.PAYMENT_INTENT_FAILED.value: self._handle_payment_failed,
+            StripeWebhookEvent.CHECKOUT_SESSION_COMPLETED.value: self._handle_checkout_completed,
             StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_CREATED.value: self._handle_subscription_created,
             StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_UPDATED.value: self._handle_subscription_updated,
             StripeWebhookEvent.CUSTOMER_SUBSCRIPTION_DELETED.value: self._handle_subscription_deleted,
-            StripeWebhookEvent.INVOICE_PAID.value:                  self._handle_invoice_paid,
-            StripeWebhookEvent.INVOICE_PAYMENT_FAILED.value:        self._handle_invoice_failed,
+            StripeWebhookEvent.INVOICE_PAID.value: self._handle_invoice_paid,
+            StripeWebhookEvent.INVOICE_PAYMENT_FAILED.value: self._handle_invoice_failed,
         }
         handler = handlers.get(event_type)
         if handler:

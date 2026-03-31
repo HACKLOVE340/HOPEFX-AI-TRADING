@@ -65,6 +65,7 @@ _EQUITY_SNAPSHOT_INTERVAL = float(os.getenv("EQUITY_SNAPSHOT_INTERVAL_S", "60"))
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 
+
 def _init_prometheus():
     """Initialise Prometheus gauges/counters. Returns metric objects or empty dict.
 
@@ -75,21 +76,23 @@ def _init_prometheus():
     try:
         from prometheus_client import Counter, Gauge
 
-        equity_gauge      = Gauge("hopefx_equity_usd",        "Current floating equity (USD)")
-        balance_gauge     = Gauge("hopefx_balance_usd",       "Current closed balance (USD)")
-        daily_pnl_gauge   = Gauge("hopefx_daily_pnl_usd",     "Today's realised P&L (USD)")
-        fills_counter     = Counter("hopefx_total_fills",     "Total fills since process start")
-        slippage_gauge    = Gauge("hopefx_avg_slippage_pips", "Rolling average slippage (pips)")
-        positions_gauge   = Gauge("hopefx_open_positions",    "Number of open positions")
-        drawdown_gauge    = Gauge("hopefx_drawdown_pct",      "Current drawdown % from HWM")
+        equity_gauge = Gauge("hopefx_equity_usd", "Current floating equity (USD)")
+        balance_gauge = Gauge("hopefx_balance_usd", "Current closed balance (USD)")
+        daily_pnl_gauge = Gauge("hopefx_daily_pnl_usd", "Today's realised P&L (USD)")
+        fills_counter = Counter("hopefx_total_fills", "Total fills since process start")
+        slippage_gauge = Gauge(
+            "hopefx_avg_slippage_pips", "Rolling average slippage (pips)"
+        )
+        positions_gauge = Gauge("hopefx_open_positions", "Number of open positions")
+        drawdown_gauge = Gauge("hopefx_drawdown_pct", "Current drawdown % from HWM")
         return {
-            "equity":      equity_gauge,
-            "balance":     balance_gauge,
-            "daily_pnl":   daily_pnl_gauge,
-            "fills":       fills_counter,
-            "slippage":    slippage_gauge,
-            "positions":   positions_gauge,
-            "drawdown":    drawdown_gauge,
+            "equity": equity_gauge,
+            "balance": balance_gauge,
+            "daily_pnl": daily_pnl_gauge,
+            "fills": fills_counter,
+            "slippage": slippage_gauge,
+            "positions": positions_gauge,
+            "drawdown": drawdown_gauge,
         }
     except ImportError:
         logger.warning(
@@ -109,14 +112,27 @@ def _init_prometheus():
 # ── CSV helpers ───────────────────────────────────────────────────────────────
 
 _FILL_HEADERS = [
-    "timestamp", "symbol", "side", "lots",
-    "requested_price", "fill_price", "slippage_pips", "slippage_usd",
-    "pnl", "broker", "order_id", "notes",
+    "timestamp",
+    "symbol",
+    "side",
+    "lots",
+    "requested_price",
+    "fill_price",
+    "slippage_pips",
+    "slippage_usd",
+    "pnl",
+    "broker",
+    "order_id",
+    "notes",
 ]
 
 _EQUITY_HEADERS = [
-    "timestamp", "equity", "balance", "daily_pnl",
-    "open_positions", "drawdown_pct",
+    "timestamp",
+    "equity",
+    "balance",
+    "daily_pnl",
+    "open_positions",
+    "drawdown_pct",
 ]
 
 
@@ -172,8 +188,8 @@ class TradeLogger:
         # SE formula: 1 / sqrt(2 * (N - 1))  — valid for iid trade returns.
         # At N=250: SE = 1/sqrt(498) ≈ ±0.045 (robust).
         # At N=48:  SE = 1/sqrt(94)  ≈ ±0.103 (current state).
-        self._trade_pnls: list[float] = []   # net PnL per closed trade
-        self._sharpe_target_n: int = 250     # target sample size
+        self._trade_pnls: list[float] = []  # net PnL per closed trade
+        self._sharpe_target_n: int = 250  # target sample size
 
         logger.info("TradeLogger initialised — log_dir=%s", self._log_dir)
 
@@ -276,7 +292,12 @@ class TradeLogger:
 
         logger.info(
             "Fill logged: %s %s %.2f lots @ %.5f (slip=%.2f pips, pnl=%.2f)",
-            side, symbol, lots, fill_price, slippage_pips, pnl,
+            side,
+            symbol,
+            lots,
+            fill_price,
+            slippage_pips,
+            pnl,
         )
 
     # ── Equity snapshot ───────────────────────────────────────────────────────
@@ -309,12 +330,13 @@ class TradeLogger:
             if equity > self._hwm:
                 self._hwm = equity
             drawdown_pct = (
-                (self._hwm - equity) / self._hwm * 100
-                if self._hwm > 0 else 0.0
+                (self._hwm - equity) / self._hwm * 100 if self._hwm > 0 else 0.0
             )
             self._equity = equity
             self._balance = balance
-            self._daily_pnl = daily_pnl if daily_pnl is not None else (balance - self._balance)
+            self._daily_pnl = (
+                daily_pnl if daily_pnl is not None else (balance - self._balance)
+            )
             self._open_positions = open_positions
             self._drawdown_pct = drawdown_pct
 
@@ -348,12 +370,17 @@ class TradeLogger:
 
         logger.debug(
             "Equity snapshot: equity=%.2f balance=%.2f dd=%.2f%% positions=%d",
-            equity, balance, drawdown_pct, open_positions,
+            equity,
+            balance,
+            drawdown_pct,
+            open_positions,
         )
 
     # ── Background equity snapshotter ─────────────────────────────────────────
 
-    def start_equity_snapshotter(self, get_equity_fn, interval: float = _EQUITY_SNAPSHOT_INTERVAL) -> threading.Thread:
+    def start_equity_snapshotter(
+        self, get_equity_fn, interval: float = _EQUITY_SNAPSHOT_INTERVAL
+    ) -> threading.Thread:
         """
         Start a background thread that calls get_equity_fn() every `interval` seconds
         and logs the result.
@@ -366,6 +393,7 @@ class TradeLogger:
 
         Returns the daemon thread (already started).
         """
+
         def _loop():
             logger.info("Equity snapshotter started (interval=%.0fs)", interval)
             while True:
@@ -412,6 +440,7 @@ class TradeLogger:
           sharpe        : float — current trade-level Sharpe (0 if N < 2)
         """
         import math
+
         with self._lock:
             pnls = list(self._trade_pnls)
             target_n = self._sharpe_target_n
@@ -426,10 +455,11 @@ class TradeLogger:
         sharpe = 0.0
         if n >= 2:
             import statistics
+
             mean_pnl = statistics.mean(pnls)
             std_pnl = statistics.stdev(pnls)
             if std_pnl > 0:
-                sharpe = round(mean_pnl / std_pnl * (252 ** 0.5), 3)
+                sharpe = round(mean_pnl / std_pnl * (252**0.5), 3)
 
         return {
             "trade_count": n,
@@ -448,7 +478,8 @@ class TradeLogger:
         with self._lock:
             avg_slip = (
                 sum(self._slippage_history) / len(self._slippage_history)
-                if self._slippage_history else 0.0
+                if self._slippage_history
+                else 0.0
             )
         sp = self.sharpe_progress()
         return {

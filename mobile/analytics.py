@@ -126,10 +126,14 @@ class MobileAnalytics:
             "action": action,
             "symbol": symbol,
         }
-        if side:       props["side"]       = side
-        if quantity:   props["quantity"]   = quantity
-        if result:     props["result"]     = result
-        if latency_ms: props["latency_ms"] = latency_ms
+        if side:
+            props["side"] = side
+        if quantity:
+            props["quantity"] = quantity
+        if result:
+            props["result"] = result
+        if latency_ms:
+            props["latency_ms"] = latency_ms
         self.track_event(user_id, "trade_action", props)
 
     def track_signal_interaction(
@@ -142,13 +146,17 @@ class MobileAnalytics:
         confidence: float,
     ) -> None:
         """Track signal view / approve / dismiss interactions."""
-        self.track_event(user_id, "signal_interaction", {
-            "signal_id":  signal_id,
-            "action":     action,
-            "symbol":     symbol,
-            "direction":  direction,
-            "confidence": confidence,
-        })
+        self.track_event(
+            user_id,
+            "signal_interaction",
+            {
+                "signal_id": signal_id,
+                "action": action,
+                "symbol": symbol,
+                "direction": direction,
+                "confidence": confidence,
+            },
+        )
 
     def track_error(
         self,
@@ -161,12 +169,19 @@ class MobileAnalytics:
         """Track a client-side error."""
         props: Dict[str, Any] = {
             "error_type": error_type,
-            "message":    message,
+            "message": message,
         }
-        if screen:      props["screen"]      = screen
-        if stack_trace: props["stack_trace"] = stack_trace[:2000]  # truncate
+        if screen:
+            props["screen"] = screen
+        if stack_trace:
+            props["stack_trace"] = stack_trace[:2000]  # truncate
         self.track_event(user_id, "error", props)
-        logger.warning("MobileAnalytics error tracked: user=%s type=%s msg=%s", user_id, error_type, message)
+        logger.warning(
+            "MobileAnalytics error tracked: user=%s type=%s msg=%s",
+            user_id,
+            error_type,
+            message,
+        )
 
     def track_performance(
         self,
@@ -177,7 +192,8 @@ class MobileAnalytics:
     ) -> None:
         """Track a performance metric (e.g. WS latency, render time)."""
         props: Dict[str, Any] = {"metric": metric, "value_ms": value_ms}
-        if context: props["context"] = context
+        if context:
+            props["context"] = context
         self.track_event(user_id, "performance", props)
 
     def track_notification_interaction(
@@ -187,10 +203,14 @@ class MobileAnalytics:
         action: str,
     ) -> None:
         """Track push notification tap / dismiss."""
-        self.track_event(user_id, "notification_interaction", {
-            "notification_type": notification_type,
-            "action": action,
-        })
+        self.track_event(
+            user_id,
+            "notification_interaction",
+            {
+                "notification_type": notification_type,
+                "action": action,
+            },
+        )
 
     # ── Session stats ─────────────────────────────────────────────────────────
 
@@ -220,7 +240,9 @@ class MobileAnalytics:
         db = self._get_db()
         if db is None:
             # No DB wired — events are discarded after buffer clear
-            logger.debug("MobileAnalytics: no DB wired, %d events discarded", len(events))
+            logger.debug(
+                "MobileAnalytics: no DB wired, %d events discarded", len(events)
+            )
             return len(events)
 
         try:

@@ -45,7 +45,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 from typing import Dict, List, Optional
@@ -55,15 +55,16 @@ logger = logging.getLogger(__name__)
 # ── optional Stripe ───────────────────────────────────────────────────────────
 try:
     import stripe as _stripe  # type: ignore
+
     _STRIPE_AVAILABLE = True
 except ImportError:
     _stripe = None  # type: ignore
     _STRIPE_AVAILABLE = False
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-PLATFORM_FEE_PCT = Decimal("0.20")   # 20% platform fee
+PLATFORM_FEE_PCT = Decimal("0.20")  # 20% platform fee
 CREATOR_SHARE_PCT = Decimal("0.80")  # 80% to creator
-MIN_PAYOUT_USD = Decimal("10.00")    # minimum payout threshold
+MIN_PAYOUT_USD = Decimal("10.00")  # minimum payout threshold
 
 
 class PayoutStatus(str, Enum):
@@ -152,7 +153,9 @@ class PayoutRecord:
             "stripe_transfer_id": self.stripe_transfer_id,
             "transaction_count": len(self.transaction_ids),
             "created_at": self.created_at.isoformat(),
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
             "failure_reason": self.failure_reason,
         }
 
@@ -204,7 +207,9 @@ class RevenueSplitEngine:
         Returns:
             SaleTransaction with platform_fee and creator_amount computed.
         """
-        gross = Decimal(str(gross_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        gross = Decimal(str(gross_amount)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
         platform_fee = (gross * self.platform_fee_pct).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
@@ -231,7 +236,10 @@ class RevenueSplitEngine:
 
         logger.info(
             "Sale recorded: strategy=%s creator=%s gross=%.2f creator_share=%.2f",
-            strategy_id, creator_id, float(gross), float(creator_amount),
+            strategy_id,
+            creator_id,
+            float(gross),
+            float(creator_amount),
         )
         return txn
 
@@ -279,9 +287,15 @@ class RevenueSplitEngine:
         # Debit creator balance
         bal = self._get_or_create_balance(orig.creator_id)
         bal.pending_usd = max(Decimal("0.00"), bal.pending_usd - creator_amount)
-        bal.total_earned_usd = max(Decimal("0.00"), bal.total_earned_usd - creator_amount)
+        bal.total_earned_usd = max(
+            Decimal("0.00"), bal.total_earned_usd - creator_amount
+        )
 
-        logger.info("Refund recorded: original=%s amount=%.2f", original_transaction_id, float(gross))
+        logger.info(
+            "Refund recorded: original=%s amount=%.2f",
+            original_transaction_id,
+            float(gross),
+        )
         return refund_txn
 
     # ── Payouts ───────────────────────────────────────────────────────────────
@@ -290,7 +304,11 @@ class RevenueSplitEngine:
         """Link a creator's Stripe Connect account for payouts."""
         bal = self._get_or_create_balance(creator_id)
         bal.stripe_account_id = stripe_account_id
-        logger.info("Stripe account registered: creator=%s account=%s", creator_id, stripe_account_id)
+        logger.info(
+            "Stripe account registered: creator=%s account=%s",
+            creator_id,
+            stripe_account_id,
+        )
 
     def process_weekly_payouts(self) -> List[PayoutRecord]:
         """
@@ -311,7 +329,8 @@ class RevenueSplitEngine:
 
             amount = bal.pending_usd
             payout_txn_ids = [
-                t.transaction_id for t in self._transactions.values()
+                t.transaction_id
+                for t in self._transactions.values()
                 if t.creator_id == creator_id and t.creator_amount > 0
             ]
 
@@ -333,7 +352,8 @@ class RevenueSplitEngine:
                 payout.completed_at = datetime.now(timezone.utc)
                 logger.info(
                     "Payout simulated (Stripe unavailable): creator=%s amount=%.2f",
-                    creator_id, float(amount),
+                    creator_id,
+                    float(amount),
                 )
 
             self._payouts[payout.payout_id] = payout
@@ -367,12 +387,16 @@ class RevenueSplitEngine:
             payout.completed_at = datetime.now(timezone.utc)
             logger.info(
                 "Stripe transfer completed: creator=%s transfer=%s amount=%.2f",
-                payout.creator_id, transfer.id, float(payout.amount_usd),
+                payout.creator_id,
+                transfer.id,
+                float(payout.amount_usd),
             )
         except Exception as exc:
             payout.status = PayoutStatus.FAILED
             payout.failure_reason = str(exc)
-            logger.error("Stripe transfer failed: creator=%s error=%s", payout.creator_id, exc)
+            logger.error(
+                "Stripe transfer failed: creator=%s error=%s", payout.creator_id, exc
+            )
 
         return payout
 
@@ -389,10 +413,22 @@ class RevenueSplitEngine:
 
     def get_platform_revenue(self) -> Dict:
         """Return aggregate platform revenue metrics."""
-        total_gross = sum(t.gross_amount for t in self._transactions.values() if t.gross_amount > 0)
-        total_fees = sum(t.platform_fee for t in self._transactions.values() if t.platform_fee > 0)
-        total_creator = sum(t.creator_amount for t in self._transactions.values() if t.creator_amount > 0)
-        total_paid = sum(p.amount_usd for p in self._payouts.values() if p.status == PayoutStatus.PAID)
+        total_gross = sum(
+            t.gross_amount for t in self._transactions.values() if t.gross_amount > 0
+        )
+        total_fees = sum(
+            t.platform_fee for t in self._transactions.values() if t.platform_fee > 0
+        )
+        total_creator = sum(
+            t.creator_amount
+            for t in self._transactions.values()
+            if t.creator_amount > 0
+        )
+        total_paid = sum(
+            p.amount_usd
+            for p in self._payouts.values()
+            if p.status == PayoutStatus.PAID
+        )
 
         return {
             "total_gross_revenue": float(total_gross),
