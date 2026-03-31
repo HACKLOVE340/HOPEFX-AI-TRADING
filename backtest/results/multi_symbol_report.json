@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-03-31T16:30:27.045947+00:00",
+  "run_at": "2026-03-31T17:24:23.255959+00:00",
   "years": 3,
   "oos_frac": 0.4,
   "target_n": 600,
@@ -31,9 +31,9 @@
       "std_pnl_pct": 0.02687,
       "sharpe": 0.7465,
       "max_drawdown": 0.3104,
-      "accuracy": 0.5072,
-      "f1": 0.5166,
-      "auc": 0.5076,
+      "accuracy": 0.5097,
+      "f1": 0.5178,
+      "auc": 0.5117,
       "oos_bars": 414,
       "train_bars": 622,
       "feature_count": 193
@@ -47,9 +47,9 @@
       "std_pnl_pct": 0.040632,
       "sharpe": 0.4291,
       "max_drawdown": 0.578,
-      "accuracy": 0.5121,
-      "f1": 0.61,
-      "auc": 0.5195,
+      "accuracy": 0.5145,
+      "f1": 0.6112,
+      "auc": 0.5211,
       "oos_bars": 414,
       "train_bars": 622,
       "feature_count": 193
