@@ -1,20 +1,23 @@
-# Disabled — this is a Python project with no JavaScript bundle.
-# Re-enable if a frontend build step is added.
+# This project uses Vite (frontend/) not Webpack at the repo root.
+# This workflow is a no-op placeholder kept for historical reference.
+# Re-enable if a webpack-based build is ever added.
 name: NodeJS with Webpack
 
 on:
-  workflow_dispatch:  # manual only
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check for package.json
+      - name: Check for webpack config
         run: |
-          if [ ! -f package.json ]; then
-            echo "No package.json found — skipping Node build."
+          if [ ! -f webpack.config.js ] && [ ! -f webpack.config.ts ]; then
+            echo "No webpack config found — webpack build not applicable for this project."
+            echo "Frontend uses Vite (see frontend/ directory and ci.yml frontend job)."
             exit 0
           fi
+          echo "webpack config found — running build."
           npm install
           npx webpack
