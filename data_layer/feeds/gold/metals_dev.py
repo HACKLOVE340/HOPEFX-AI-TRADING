@@ -79,6 +79,10 @@ class MetalsDevFeed(GoldFeedBase):
         """
         Start WebSocket stream (paid tier only).
         Falls back silently if websockets package is unavailable.
+
+        Note: _ws_enabled is set to True only after the first successful
+        tick is received, so fetch_tick() never returns a stale None tick
+        during the connection window.
         """
         try:
             import websockets  # type: ignore[import]
@@ -86,34 +90,68 @@ class MetalsDevFeed(GoldFeedBase):
             logger.debug("Metals.dev WebSocket: websockets package not installed")
             return
 
-        self._ws_enabled = True
+        # Do NOT set _ws_enabled=True here — set it only after first tick received
         self._ws_task = asyncio.create_task(self._ws_loop())
 
     async def _ws_loop(self) -> None:
-        import websockets  # type: ignore[import]
         import json
+        import random
+        import websockets  # type: ignore[import]
 
         url = f"{_WS_URL}?api_key={self._api_key}"
+        backoff = 1.0
+        _MAX_BACKOFF = 120.0
+
         while True:
             try:
-                async with websockets.connect(url) as ws:
+                async with websockets.connect(
+                    url,
+                    ping_interval=20,
+                    ping_timeout=10,
+                    close_timeout=5,
+                ) as ws:
                     logger.info("Metals.dev WebSocket connected")
+                    backoff = 1.0  # reset on successful connection
                     async for raw in ws:
                         try:
-                            msg = json.loads(raw)
+                            msg   = json.loads(raw)
                             price = float(msg.get("price", 0))
                             if price > 0:
                                 self._latest_tick = self._make_tick(
                                     mid=price, raw=msg
                                 )
+                                # Enable WS path only after first valid tick
+                                if not self._ws_enabled:
+                                    self._ws_enabled = True
+                                    logger.info(
+                                        "Metals.dev WebSocket: first tick received "
+                                        "(price=%.4f) — switching to WS mode",
+                                        price,
+                                    )
                         except Exception as exc:
                             logger.debug("Metals.dev WS parse error: %s", exc)
+            except asyncio.CancelledError:
+                logger.info("Metals.dev WebSocket: cancelled")
+                break
             except Exception as exc:
-                logger.warning("Metals.dev WS disconnected: %s — reconnecting in 5s", exc)
-                await asyncio.sleep(5)
+                # Full-jitter exponential backoff — avoids thundering herd on
+                # server-side restarts and prevents tight reconnect loops on
+                # auth failures (which would burn through rate limits).
+                wait = random.uniform(0, min(backoff, _MAX_BACKOFF))
+                logger.warning(
+                    "Metals.dev WS disconnected: %s — reconnecting in %.1fs",
+                    exc, wait,
+                )
+                self._ws_enabled = False  # fall back to REST while disconnected
+                await asyncio.sleep(wait)
+                backoff = min(backoff * 2, _MAX_BACKOFF)
 
     async def stop_websocket(self) -> None:
         if self._ws_task:
             self._ws_task.cancel()
+            try:
+                await self._ws_task
+            except asyncio.CancelledError:
+                pass
             self._ws_task = None
         self._ws_enabled = False

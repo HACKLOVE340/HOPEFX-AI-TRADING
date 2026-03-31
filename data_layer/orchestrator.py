@@ -295,13 +295,34 @@ class MarketDataOrchestrator:
         logger.info("MarketDataOrchestrator: stopped")
 
     async def _uptime_loop(self) -> None:
+        """
+        Background loop: update Prometheus uptime gauge and push health snapshot
+        to Redis every 10 seconds for monitoring dashboards and alerting.
+        """
+        _health_push_interval = 10.0
         while self._started:
             if self._prom_uptime:
                 try:
                     self._prom_uptime.set(time.time() - self._start_ts)
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
-            await asyncio.sleep(10.0)
+                    logger.debug("Suppressed exception: %s", _exc)
+
+            # Push health snapshot to Redis (TTL 30s) for dashboards/alerting.
+            # Run in executor — self._redis is a sync client.
+            if self._redis_store._r:
+                try:
+                    h = self.health()
+                    import json as _json
+                    payload = _json.dumps(h, default=str)
+                    _r = self._redis_store._r
+                    await asyncio.get_running_loop().run_in_executor(
+                        None,
+                        lambda: _r.setex("hopefx:dl:orchestrator_health", 30, payload),
+                    )
+                except Exception as _exc:
+                    logger.debug("Orchestrator health push error: %s", _exc)
+
+            await asyncio.sleep(_health_push_interval)
 
     # ── Primary data access ───────────────────────────────────────────────────
 
