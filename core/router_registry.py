@@ -62,6 +62,7 @@ def register_routers(
     from api.platform import router as platform_router
     from api.ml import router as ml_router
     from api.accounts import router as accounts_router
+    from api.portfolio import router as portfolio_router
 
     for _router in [
         auth_router,
@@ -90,6 +91,7 @@ def register_routers(
         platform_router,
         ml_router,
         accounts_router,
+        portfolio_router,
     ]:
         app.include_router(_router)
 

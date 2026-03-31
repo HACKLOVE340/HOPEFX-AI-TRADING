@@ -148,6 +148,10 @@ app = FastAPI(
             "name": "ML",
             "description": "Model inference, training status, feature importance",
         },
+        {
+            "name": "Portfolio",
+            "description": "Factor attribution, dynamic rebalancer, tick feed status",
+        },
     ],
 )
 
