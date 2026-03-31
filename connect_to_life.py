@@ -98,6 +98,9 @@ POLL_INTERVAL: int = int(os.environ.get("POLL_INTERVAL", "5"))
 DAILY_REPORT_HOUR_UTC: int = 0
 CHECKPOINT_FILE: str = "state/connect_to_life_checkpoint.json"
 
+# Log message constant — used in multiple except blocks throughout this module
+_SUPPRESSED_EXC_MSG = "Suppressed exception: %s"
+
 # Nuclear supervisor — controls whether it is active
 NUCLEAR_SUPERVISOR_ENABLED: bool = (
     os.environ.get("NUCLEAR_SUPERVISOR_ENABLED", "1") != "0"
@@ -216,9 +219,9 @@ class DailyReporter:
         logger.info("Daily Telegram report sent.")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ===========================================================================
 # Supervisor
-# ─────────────────────────────────────────────────────────────────────────────
+# ===========================================================================
 
 
 class LifeSupervisor:
@@ -411,7 +414,7 @@ class LifeSupervisor:
                     )
                 except Exception as _exc:
                     logger.debug(
-                        "Suppressed exception: %s", _exc
+                        _SUPPRESSED_EXC_MSG, _exc
                     )  # chart engine errors must never crash the supervisor
 
             # If nuclear mode was triggered, enforce DD stop immediately
@@ -450,76 +453,88 @@ class LifeSupervisor:
         heartbeat_ts = time.monotonic()
 
         while not self._shutdown_event.is_set():
-            # If engine task died unexpectedly, stop supervising
             if self._engine_task.done():
-                exc = (
-                    self._engine_task.exception()
-                    if not self._engine_task.cancelled()
-                    else None
-                )
-                if exc:
-                    logger.critical("Engine task died with exception: %s", exc)
-                    self._exit_code = 1
+                self._handle_engine_done()
                 break
 
-            # Read live status from engine
             status = self._read_status()
-
-            # ── daily drawdown hard stop ───────────────────────────────────
             dd_pct = status.get("drawdown_pct", 0.0)
-            # drawdown_pct from trade_logger is already a percentage (e.g. 2.5 = 2.5%)
             dd_frac = dd_pct / 100.0
+
             if dd_frac >= DD_HARD_STOP_PCT:
                 await self._breach_shutdown(dd_frac)
                 return
 
-            # ── daily report ───────────────────────────────────────────────
             await self._reporter.maybe_send(status)
-
-            # ── nuclear supervisor poll (fallback mode) ────────────────────
             await self._poll_news_events()
+            self._record_chart_equity(status)
 
-            # ── nuclear chart engine: record equity point ──────────────────
-            if self._chart_engine is not None:
-                try:
-                    equity = status.get("equity", self._initial_bal)
-                    balance = status.get("balance", self._initial_bal)
-                    # Annotate nuclear events on the equity curve
-                    annotation: Optional[str] = None
-                    if self._nuclear_supervisor is not None:
-                        ns = self._nuclear_supervisor.get_status()
-                        if ns.get("nuclear_level", 0) >= 2:
-                            annotation = f"NUC-L{ns['nuclear_level']}"
-                        elif ns.get("trading_paused"):
-                            annotation = "PAUSED"
-                    self._chart_engine.record_equity_point(equity, balance, annotation)
-                except Exception as _ce:
-                    pass  # chart engine errors must never crash the supervisor
-
-            # ── heartbeat log ──────────────────────────────────────────────
-            if time.monotonic() - heartbeat_ts >= 60:
-                nuclear_info = ""
-                if self._nuclear_supervisor is not None:
-                    ns = self._nuclear_supervisor.get_status()
-                    nuclear_info = (
-                        f" nuclear_level={ns['nuclear_level']}"
-                        f" paused={ns['trading_paused']}"
-                        f" rl={'on' if ns['rl_agent_loaded'] else 'off'}"
-                    )
-                logger.info(
-                    "HEARTBEAT  equity=%.2f balance=%.2f daily_pnl=%+.2f "
-                    "dd=%.2f%% fills=%d broker=%s%s",
-                    status.get("equity", 0),
-                    status.get("balance", 0),
-                    status.get("daily_pnl", 0),
-                    dd_pct,
-                    status.get("fill_count", 0),
-                    status.get("broker", "?"),
-                    nuclear_info,
-                )
-                heartbeat_ts = time.monotonic()
+            heartbeat_ts = self._maybe_log_heartbeat(status, dd_pct, heartbeat_ts)
 
             await asyncio.sleep(POLL_INTERVAL)
+
+    def _handle_engine_done(self) -> None:
+        """Handle an unexpectedly finished engine task."""
+        exc = (
+            self._engine_task.exception()
+            if not self._engine_task.cancelled()
+            else None
+        )
+        if exc:
+            logger.critical("Engine task died with exception: %s", exc)
+            self._exit_code = 1
+
+    def _nuclear_annotation(self) -> Optional[str]:
+        """Return a chart annotation string based on current nuclear supervisor state."""
+        if self._nuclear_supervisor is None:
+            return None
+        ns = self._nuclear_supervisor.get_status()
+        if ns.get("nuclear_level", 0) >= 2:
+            return f"NUC-L{ns['nuclear_level']}"
+        if ns.get("trading_paused"):
+            return "PAUSED"
+        return None
+
+    def _record_chart_equity(self, status: dict) -> None:
+        """Record an equity point on the nuclear chart engine (non-fatal)."""
+        if self._chart_engine is None:
+            return
+        try:
+            equity = status.get("equity", self._initial_bal)
+            balance = status.get("balance", self._initial_bal)
+            self._chart_engine.record_equity_point(equity, balance, self._nuclear_annotation())
+        except Exception:  # noqa: BLE001
+            pass  # chart engine errors must never crash the supervisor
+
+    def _nuclear_info_str(self) -> str:
+        """Return a formatted nuclear supervisor status string for heartbeat logs."""
+        if self._nuclear_supervisor is None:
+            return ""
+        ns = self._nuclear_supervisor.get_status()
+        return (
+            f" nuclear_level={ns['nuclear_level']}"
+            f" paused={ns['trading_paused']}"
+            f" rl={'on' if ns['rl_agent_loaded'] else 'off'}"
+        )
+
+    def _maybe_log_heartbeat(
+        self, status: dict, dd_pct: float, heartbeat_ts: float
+    ) -> float:
+        """Log a heartbeat if 60 s have elapsed; return updated timestamp."""
+        if time.monotonic() - heartbeat_ts < 60:
+            return heartbeat_ts
+        logger.info(
+            "HEARTBEAT  equity=%.2f balance=%.2f daily_pnl=%+.2f "
+            "dd=%.2f%% fills=%d broker=%s%s",
+            status.get("equity", 0),
+            status.get("balance", 0),
+            status.get("daily_pnl", 0),
+            dd_pct,
+            status.get("fill_count", 0),
+            status.get("broker", "?"),
+            self._nuclear_info_str(),
+        )
+        return time.monotonic()
 
     def _read_status(self) -> dict:
         """
@@ -588,7 +603,7 @@ class LifeSupervisor:
             try:
                 await self._chart_engine.stop()
             except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
+                logger.debug(_SUPPRESSED_EXC_MSG, _exc)
 
         # Stop notifications manager cleanly
         try:
@@ -596,7 +611,7 @@ class LifeSupervisor:
 
             await notifications.stop()
         except Exception as _exc:
-            logger.debug("Suppressed exception: %s", _exc)
+            logger.debug(_SUPPRESSED_EXC_MSG, _exc)
 
     async def _breach_shutdown(self, dd_frac: float) -> None:
         """Hard stop triggered by daily drawdown exceeding the limit."""
@@ -625,7 +640,7 @@ class LifeSupervisor:
                 # Remove non-serialisable last_event nested dict for simplicity
                 nuclear_state.pop("last_event", None)
             except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
+                logger.debug(_SUPPRESSED_EXC_MSG, _exc)
         state = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "trading_mode": self._trading_mode,
