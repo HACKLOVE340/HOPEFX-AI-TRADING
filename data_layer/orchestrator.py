@@ -116,6 +116,9 @@ class MarketDataOrchestrator:
         self._start_ts   = 0.0
         self._tick_count = 0
 
+        # Background task handle — tracked so stop() can cancel it immediately
+        self._uptime_task: Optional[asyncio.Task] = None
+
         # Tick subscriber callbacks: name → Callable[[GoldTick], None]
         # Registered via subscribe_ticks(); called on every accepted tick.
         self._tick_callbacks: Dict[str, Any] = {}
@@ -242,8 +245,10 @@ class MarketDataOrchestrator:
         self._started  = True
         self._start_ts = time.time()
 
-        # Start uptime reporter
-        asyncio.create_task(self._uptime_loop(), name="orchestrator_uptime")
+        # Start uptime/health reporter — track task so stop() can cancel it
+        self._uptime_task = asyncio.create_task(
+            self._uptime_loop(), name="orchestrator_uptime"
+        )
 
         logger.info("MarketDataOrchestrator: all components started")
 
@@ -291,6 +296,15 @@ class MarketDataOrchestrator:
         except Exception as exc:
             logger.debug("DataLineageStore stop error: %s", exc)
 
+        # 6. Cancel background uptime/health task immediately (don't wait 10s)
+        if self._uptime_task and not self._uptime_task.done():
+            self._uptime_task.cancel()
+            try:
+                await self._uptime_task
+            except asyncio.CancelledError:
+                pass
+            self._uptime_task = None
+
         self._started = False
         logger.info("MarketDataOrchestrator: stopped")
 
@@ -298,31 +312,35 @@ class MarketDataOrchestrator:
         """
         Background loop: update Prometheus uptime gauge and push health snapshot
         to Redis every 10 seconds for monitoring dashboards and alerting.
+        Cancelled cleanly by stop() via task.cancel().
         """
+        import json as _json
         _health_push_interval = 10.0
-        while self._started:
-            if self._prom_uptime:
-                try:
-                    self._prom_uptime.set(time.time() - self._start_ts)
-                except Exception as _exc:
-                    logger.debug("Suppressed exception: %s", _exc)
+        try:
+            while self._started:
+                if self._prom_uptime:
+                    try:
+                        self._prom_uptime.set(time.time() - self._start_ts)
+                    except Exception as _exc:
+                        logger.debug("Suppressed exception: %s", _exc)
 
-            # Push health snapshot to Redis (TTL 30s) for dashboards/alerting.
-            # Run in executor — self._redis is a sync client.
-            if self._redis_store._r:
-                try:
-                    h = self.health()
-                    import json as _json
-                    payload = _json.dumps(h, default=str)
-                    _r = self._redis_store._r
-                    await asyncio.get_running_loop().run_in_executor(
-                        None,
-                        lambda: _r.setex("hopefx:dl:orchestrator_health", 30, payload),
-                    )
-                except Exception as _exc:
-                    logger.debug("Orchestrator health push error: %s", _exc)
+                # Push health snapshot to Redis (TTL 30s) for dashboards/alerting.
+                # Run in executor — self._redis is a sync client.
+                if self._redis_store._r:
+                    try:
+                        h = self.health()
+                        payload = _json.dumps(h, default=str)
+                        _r = self._redis_store._r
+                        await asyncio.get_running_loop().run_in_executor(
+                            None,
+                            lambda: _r.setex("hopefx:dl:orchestrator_health", 30, payload),
+                        )
+                    except Exception as _exc:
+                        logger.debug("Orchestrator health push error: %s", _exc)
 
-            await asyncio.sleep(_health_push_interval)
+                await asyncio.sleep(_health_push_interval)
+        except asyncio.CancelledError:
+            logger.debug("MarketDataOrchestrator: _uptime_loop cancelled")
 
     # ── Primary data access ───────────────────────────────────────────────────
 
@@ -782,17 +800,11 @@ class MarketDataOrchestrator:
         h["macro"]     = self._macro_bridge.health()
         h["replay"]    = self._replay.health()
 
-        # Cache full health snapshot to Redis (TTL 10s) for monitoring
-        if self._redis_store._r:
-            try:
-                import json
-                self._redis_store._safe_set(
-                    "hopefx:dl:orchestrator_health",
-                    json.dumps(h, default=str),
-                    10,
-                )
-            except Exception as _exc:
-                logger.debug("Orchestrator: health Redis cache error: %s", _exc)
+        # NOTE: Redis caching of this snapshot is handled by _uptime_loop
+        # (every 10s via run_in_executor). Do NOT write to Redis here —
+        # health() is called from both sync API endpoints and the async
+        # _uptime_loop; a direct Redis write here would either block the
+        # event loop (async context) or duplicate the write (sync context).
 
         return h
 
