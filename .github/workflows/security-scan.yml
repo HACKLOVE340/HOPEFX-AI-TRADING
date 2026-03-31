@@ -14,12 +14,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: '3.11'
 
@@ -39,22 +39,24 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: bandit-report
           path: bandit-report.json
+          # Short retention — vulnerability details should not persist publicly
+          retention-days: 14
 
   safety:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: '3.11'
 
@@ -80,10 +82,12 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: safety-report
           path: safety-report.json
+          # Short retention — vulnerability details should not persist publicly
+          retention-days: 14
 
   trivy:
     runs-on: ubuntu-latest
@@ -91,7 +95,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           persist-credentials: false
 
@@ -99,9 +103,6 @@ jobs:
         # Install Trivy binary directly — avoids the trivy-action supply-chain
         # risk (the action was briefly compromised; pinning a SHA is insufficient
         # when the action itself is the attack vector).
-        # exit-code 0: report findings but do not block CI. Dependabot alerts
-        # are the enforcement mechanism. Re-enable exit-code 1 once all
-        # CRITICAL CVEs with available fixes are resolved.
         run: |
           curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
             | sh -s -- -b /usr/local/bin v0.61.0
@@ -113,7 +114,7 @@ jobs:
             --output trivy-results.sarif
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699  # v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
@@ -124,14 +125,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Secret Detection
-        # Scans only the diff on push; full repo scan on schedule/PR.
-        # --only-verified: only fail on secrets that are confirmed live.
         # Pinned to SHA for supply-chain safety (tag: v3.88.1)
         uses: trufflesecurity/trufflehog@d73edfb85d79432e3c767c407afdee59c9a34fde
         with:
