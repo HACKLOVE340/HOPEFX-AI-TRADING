@@ -121,9 +121,9 @@ def check_types() -> ValidationResult:
             source=FeedSource.GOLDAPI,
             lineage_id=str(uuid.uuid4()),
         )
-        assert tick.is_valid(), "GoldTick.is_valid() returned False"
+        assert tick.is_valid(), "GoldTick.is_valid() returned False"  # nosec B101
         # spread auto-computed via __post_init__
-        assert abs(tick.spread - 0.5) < 1e-6, f"Expected spread=0.5, got {tick.spread}"
+        assert abs(tick.spread - 0.5) < 1e-6, f"Expected spread=0.5, got {tick.spread}"  # nosec B101
         # MicrostructureSnapshot.mid property
         snap = MicrostructureSnapshot(
             symbol="XAU_USD",
@@ -139,7 +139,7 @@ def check_types() -> ValidationResult:
             order_flow_imbalance=0.0,
             trade_pressure=0.0,
         )
-        assert abs(snap.mid - 1980.5) < 1e-6, f"Expected mid=1980.5, got {snap.mid}"
+        assert abs(snap.mid - 1980.5) < 1e-6, f"Expected mid=1980.5, got {snap.mid}"  # nosec B101
         return ValidationResult(
             "Types module", True, "GoldTick/MicrostructureSnapshot/MacroEvent"
         )
@@ -167,7 +167,7 @@ def check_dqe() -> ValidationResult:
             lineage_id=str(uuid.uuid4()),
         )
         result = dqe.validate_tick(good)
-        assert result.quality != TickQuality.REJECTED, "Good tick was rejected"
+        assert result.quality != TickQuality.REJECTED, "Good tick was rejected"  # nosec B101
 
         # Inverted spread — must be rejected
         bad = GoldTick(
@@ -180,7 +180,7 @@ def check_dqe() -> ValidationResult:
             lineage_id=str(uuid.uuid4()),
         )
         result2 = dqe.validate_tick(bad)
-        assert result2.quality == TickQuality.REJECTED, "Inverted spread not rejected"
+        assert result2.quality == TickQuality.REJECTED, "Inverted spread not rejected"  # nosec B101
 
         return ValidationResult("DataQualityEngine", True, "good/bad tick validation")
     except Exception as exc:
@@ -206,10 +206,10 @@ def check_normalization() -> ValidationResult:
             index=idx,
         )
         cleaned = pipe.normalize_ohlcv(df)
-        assert "log_return" in cleaned.columns
-        assert "log_volume" in cleaned.columns
-        assert "ohlcv_valid" in cleaned.columns
-        assert (cleaned["high"] >= cleaned["close"]).all()
+        assert "log_return" in cleaned.columns  # nosec B101
+        assert "log_volume" in cleaned.columns  # nosec B101
+        assert "ohlcv_valid" in cleaned.columns  # nosec B101
+        assert (cleaned["high"] >= cleaned["close"]).all()  # nosec B101
         return ValidationResult(
             "NormalizationPipeline", True, f"{len(cleaned)} bars cleaned"
         )
@@ -238,15 +238,15 @@ def check_microstructure() -> ValidationResult:
 
         features = engine.get_ml_features()
         # 17 features: 16 original + micro_tick_count added for dl_tick_count wiring
-        assert len(features) >= 17, f"Expected >= 17 features, got {len(features)}"
-        assert "micro_ofi" in features
-        assert "micro_cumulative_delta" in features
-        assert (
+        assert len(features) >= 17, f"Expected >= 17 features, got {len(features)}"  # nosec B101
+        assert "micro_ofi" in features  # nosec B101
+        assert "micro_cumulative_delta" in features  # nosec B101
+        assert (  # nosec B101
             "micro_tick_count" in features
         ), "micro_tick_count missing from get_ml_features()"
         # Verify _zero_features() also includes micro_tick_count
         zero = engine._zero_features()
-        assert (
+        assert (  # nosec B101
             "micro_tick_count" in zero
         ), "micro_tick_count missing from _zero_features()"
         return ValidationResult(
@@ -274,10 +274,10 @@ def check_sentiment_scorer() -> ValidationResult:
             lineage_id=str(uuid.uuid4()),
         )
         scored = scorer.score_article(article)
-        assert scored.gold_relevance > 0, "Gold relevance should be > 0"
+        assert scored.gold_relevance > 0, "Gold relevance should be > 0"  # nosec B101
         signal = scorer.get_aggregate_signal()
-        assert "news_sentiment_score" in signal
-        assert "news_bullish_ratio" in signal
+        assert "news_sentiment_score" in signal  # nosec B101
+        assert "news_bullish_ratio" in signal  # nosec B101
         return ValidationResult(
             "GoldSentimentScorer",
             True,
@@ -398,7 +398,7 @@ def check_redis() -> ValidationResult:
         store = DataLayerRedisStore(redis_client=client)
         store.set_tick("XAU_USD", {"mid": 1980.0, "epoch": time.time()})
         result = store.get_tick("XAU_USD")
-        assert result is not None
+        assert result is not None  # nosec B101
         client.close()
         return ValidationResult("Redis connectivity", True, f"connected at {url}")
     except Exception as exc:
@@ -450,7 +450,7 @@ def check_lineage_store() -> ValidationResult:
             store._flush_queue()
             count = store.count("TICK")
             store._conn.close()
-            assert count == 1, f"Expected 1 TICK record, got {count}"
+            assert count == 1, f"Expected 1 TICK record, got {count}"  # nosec B101
 
         return ValidationResult("DataLineageStore", True, "SQLite write+read roundtrip")
     except Exception as exc:
@@ -464,13 +464,13 @@ def check_dukascopy_logic() -> ValidationResult:
         fetcher = DukascopyFetcher()
         hour = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
         url = fetcher._build_url("XAUUSD", hour)
-        assert "XAUUSD" in url, f"XAUUSD not in URL: {url}"
-        assert "2024" in url, f"2024 not in URL: {url}"
-        assert "10h_ticks.bi5" in url, f"10h_ticks.bi5 not in URL: {url}"
+        assert "XAUUSD" in url, f"XAUUSD not in URL: {url}"  # nosec B101
+        assert "2024" in url, f"2024 not in URL: {url}"  # nosec B101
+        assert "10h_ticks.bi5" in url, f"10h_ticks.bi5 not in URL: {url}"  # nosec B101
         # Dukascopy uses 0-based months (Jan=00, Dec=11)
-        assert "/00/" in url, f"Expected 0-based month /00/ in URL: {url}"
+        assert "/00/" in url, f"Expected 0-based month /00/ in URL: {url}"  # nosec B101
         path = fetcher._cache_path("XAUUSD", hour)
-        assert "XAUUSD" in str(path), f"XAUUSD not in cache path: {path}"
+        assert "XAUUSD" in str(path), f"XAUUSD not in cache path: {path}"  # nosec B101
         return ValidationResult(
             "DukascopyFetcher", True, "URL format OK (0-based months)"
         )
@@ -484,10 +484,10 @@ def check_macro_calendar() -> ValidationResult:
 
         engine = MacroCalendarEngine()
         features = engine.get_ml_features()
-        assert "macro_impact_score_now" in features
-        assert "macro_hours_to_next_high" in features
-        assert "macro_is_blackout" in features
-        assert len(features) == 6
+        assert "macro_impact_score_now" in features  # nosec B101
+        assert "macro_hours_to_next_high" in features  # nosec B101
+        assert "macro_is_blackout" in features  # nosec B101
+        assert len(features) == 6  # nosec B101
         return ValidationResult(
             "MacroCalendarEngine", True, f"{len(features)} ML features"
         )
@@ -499,12 +499,12 @@ def check_orchestrator() -> ValidationResult:
     try:
         from data_layer.orchestrator import orchestrator
 
-        assert orchestrator is not None
+        assert orchestrator is not None  # nosec B101
         # get_ml_features() must return a dict even when not started
         features = orchestrator.get_ml_features()
-        assert isinstance(features, dict)
+        assert isinstance(features, dict)  # nosec B101
         # Must have microstructure features (always available)
-        assert "micro_ofi" in features
+        assert "micro_ofi" in features  # nosec B101
         return ValidationResult(
             "MarketDataOrchestrator",
             True,
@@ -519,7 +519,7 @@ def check_api_router() -> ValidationResult:
         from api.data_layer import router
 
         routes = [r.path for r in router.routes]
-        assert len(routes) >= 8
+        assert len(routes) >= 8  # nosec B101
         return ValidationResult(
             "API router", True, f"{len(routes)} endpoints registered"
         )
@@ -532,10 +532,10 @@ def check_ml_wiring() -> ValidationResult:
         from ml.inference_engine import InferenceEngine
 
         engine = InferenceEngine()
-        assert hasattr(engine, "_last_sentiment_score")
-        assert hasattr(engine, "_last_macro_impact")
-        assert hasattr(engine, "_get_data_layer_nudge")
-        assert hasattr(engine, "_record_signal_lineage")
+        assert hasattr(engine, "_last_sentiment_score")  # nosec B101
+        assert hasattr(engine, "_last_macro_impact")  # nosec B101
+        assert hasattr(engine, "_get_data_layer_nudge")  # nosec B101
+        assert hasattr(engine, "_record_signal_lineage")  # nosec B101
         return ValidationResult(
             "ML inference_engine wiring", True, "data layer hooks present"
         )
@@ -548,13 +548,13 @@ def check_risk_wiring() -> ValidationResult:
         from risk.manager import RiskManager
 
         rm = RiskManager()
-        assert hasattr(rm, "get_current_gold_price")
-        assert hasattr(rm, "get_macro_impact_score")
+        assert hasattr(rm, "get_current_gold_price")  # nosec B101
+        assert hasattr(rm, "get_macro_impact_score")  # nosec B101
         # These return gracefully when orchestrator not started
         price = rm.get_current_gold_price()
         impact = rm.get_macro_impact_score()
-        assert price is None or isinstance(price, float)
-        assert isinstance(impact, float)
+        assert price is None or isinstance(price, float)  # nosec B101
+        assert isinstance(impact, float)  # nosec B101
         return ValidationResult(
             "Risk manager wiring", True, "data layer methods present"
         )
@@ -568,7 +568,7 @@ def check_execution_wiring() -> ValidationResult:
 
         # Just verify the import and that ExecutionRequest can be constructed
         req = ExecutionRequest(symbol="XAU_USD", side="BUY", quantity=0.1)
-        assert req.symbol == "XAU_USD"
+        assert req.symbol == "XAU_USD"  # nosec B101
         return ValidationResult("Execution engine wiring", True, "ExecutionRequest OK")
     except Exception as exc:
         return ValidationResult("Execution engine wiring", False, str(exc))
@@ -583,7 +583,7 @@ def check_live_inference_wiring() -> ValidationResult:
         import inspect
 
         src = inspect.getsource(pred._build_features)
-        assert "data_layer.orchestrator" in src
+        assert "data_layer.orchestrator" in src  # nosec B101
         return ValidationResult(
             "live_inference data layer injection", True, "injection code present"
         )
@@ -598,12 +598,12 @@ def check_vader_sentiment() -> ValidationResult:
 
         sia = SentimentIntensityAnalyzer()
         scores = sia.polarity_scores("Gold hits record high on safe haven demand")
-        assert "compound" in scores
+        assert "compound" in scores  # nosec B101
 
         from data_layer.sentiment.scorer import GoldSentimentScorer
 
         scorer = GoldSentimentScorer()
-        assert scorer.vader_available, "GoldSentimentScorer.vader_available=False even though vaderSentiment is installed"
+        assert scorer.vader_available, "GoldSentimentScorer.vader_available=False even though vaderSentiment is installed"  # nosec B101
         return ValidationResult(
             "vaderSentiment", True, "installed, scorer.vader_available=True"
         )
@@ -642,10 +642,10 @@ def check_lineage_flush() -> ValidationResult:
 
             # flush() must write synchronously without waiting for background thread
             written = store.flush()
-            assert written == 1, f"Expected flush()=1, got {written}"
+            assert written == 1, f"Expected flush()=1, got {written}"  # nosec B101
 
             count = store.count()
-            assert count == 1, f"Expected count=1 after flush, got {count}"
+            assert count == 1, f"Expected count=1 after flush, got {count}"  # nosec B101
 
             store.stop()
 
@@ -673,7 +673,7 @@ def check_redis_auto_connect() -> ValidationResult:
         # Round-trip test
         store.set_tick("XAU_USD_TEST", {"mid": 2000.0, "epoch": time.time()})
         result = store.get_tick("XAU_USD_TEST")
-        assert result is not None and result["mid"] == 2000.0
+        assert result is not None and result["mid"] == 2000.0  # nosec B101
 
         return ValidationResult(
             "Redis auto-connect", True, "singleton auto-connects on init"
@@ -707,15 +707,15 @@ def check_dqe_mahalanobis() -> ValidationResult:
 
         # Verify latency report is populated
         lr = dqe.latency_report()
-        assert (
+        assert (  # nosec B101
             "goldapi" in lr
         ), f"Expected goldapi in latency_report, got {list(lr.keys())}"
 
         # Verify reset_source works
         dqe.reset_source(FeedSource.GOLDAPI)
         state = dqe._sources[FeedSource.GOLDAPI]
-        assert state.confidence == 1.0, "reset_source did not restore confidence to 1.0"
-        assert state.accept_count == 0, "reset_source did not clear accept_count"
+        assert state.confidence == 1.0, "reset_source did not restore confidence to 1.0"  # nosec B101
+        assert state.accept_count == 0, "reset_source did not clear accept_count"  # nosec B101
 
         return ValidationResult(
             "DataQualityEngine Mahalanobis + reset",
@@ -783,12 +783,12 @@ def check_normalization_batch() -> ValidationResult:
             for i in range(10)
         ]
         batch = normalization_pipeline.normalize_ticks_batch(ticks)
-        assert len(batch) == 10, f"Expected 10 ticks, got {len(batch)}"
+        assert len(batch) == 10, f"Expected 10 ticks, got {len(batch)}"  # nosec B101
 
         df = normalization_pipeline.tick_to_ohlcv(ticks, timeframe_minutes=60)
-        assert not df.empty, "tick_to_ohlcv returned empty DataFrame"
-        assert "close" in df.columns, "tick_to_ohlcv missing 'close' column"
-        assert "volume" in df.columns, "tick_to_ohlcv missing 'volume' column"
+        assert not df.empty, "tick_to_ohlcv returned empty DataFrame"  # nosec B101
+        assert "close" in df.columns, "tick_to_ohlcv missing 'close' column"  # nosec B101
+        assert "volume" in df.columns, "tick_to_ohlcv missing 'volume' column"  # nosec B101
         return ValidationResult(
             "NormalizationPipeline batch + tick_to_ohlcv",
             True,
@@ -826,7 +826,7 @@ def check_dukascopy_timeframe_aliases() -> ValidationResult:
         ]
         for inp, expected in cases:
             result = _parse_timeframe(inp)
-            assert (
+            assert (  # nosec B101
                 result == expected
             ), f"_parse_timeframe({inp!r}) = {result}, expected {expected}"
 
@@ -836,7 +836,7 @@ def check_dukascopy_timeframe_aliases() -> ValidationResult:
             _parse_timeframe("W1")
         except ValueError:
             raised = True
-        assert raised, "_parse_timeframe('W1') should raise ValueError"
+        assert raised, "_parse_timeframe('W1') should raise ValueError"  # nosec B101
 
         return ValidationResult(
             "DukascopyFetcher timeframe aliases",
@@ -859,8 +859,8 @@ def check_replay_engine_timeframe_param() -> ValidationResult:
 
         sig = inspect.signature(MarketReplayEngine.build_ohlcv_dataframe)
         params = list(sig.parameters.keys())
-        assert "timeframe_minutes" in params, "timeframe_minutes param missing"
-        assert "timeframe" in params, "timeframe param missing"
+        assert "timeframe_minutes" in params, "timeframe_minutes param missing"  # nosec B101
+        assert "timeframe" in params, "timeframe param missing"  # nosec B101
         return ValidationResult(
             "MarketReplayEngine timeframe params",
             True,
@@ -881,15 +881,15 @@ def check_macro_calendar_causal_blackout() -> ValidationResult:
 
         engine = MacroCalendarEngine()
         # _is_blackout_at must exist and accept a datetime
-        assert hasattr(engine, "_is_blackout_at"), "_is_blackout_at method missing"
+        assert hasattr(engine, "_is_blackout_at"), "_is_blackout_at method missing"  # nosec B101
         result = engine._is_blackout_at(datetime.now(timezone.utc))
-        assert isinstance(result, bool), "_is_blackout_at must return bool"
+        assert isinstance(result, bool), "_is_blackout_at must return bool"  # nosec B101
 
         # get_ml_features with as_of must not use live datetime.now()
         import inspect
 
         src = inspect.getsource(engine.get_ml_features)
-        assert (
+        assert (  # nosec B101
             "_is_blackout_at" in src
         ), "get_ml_features must call _is_blackout_at(now) not is_blackout_window()"
         return ValidationResult(
@@ -912,13 +912,13 @@ def check_sentiment_redis_cold_start() -> ValidationResult:
         from data_layer.sentiment.engine import NewsSentimentEngine
 
         src = inspect.getsource(NewsSentimentEngine.get_ml_features)
-        assert (
+        assert (  # nosec B101
             "hopefx:dl:sentiment" in src
         ), "get_ml_features must read from hopefx:dl:sentiment on cold start"
         # Verify both cache keys are written
         cache_src = inspect.getsource(NewsSentimentEngine._cache_to_redis)
-        assert "hopefx:dl:sentiment" in cache_src, "primary cache key missing"
-        assert "hopefx:news:sentiment" in cache_src, "legacy cache key missing"
+        assert "hopefx:dl:sentiment" in cache_src, "primary cache key missing"  # nosec B101
+        assert "hopefx:news:sentiment" in cache_src, "legacy cache key missing"  # nosec B101
         return ValidationResult(
             "NewsSentimentEngine Redis cold-start read",
             True,
@@ -937,11 +937,11 @@ def check_orchestrator_get_ohlcv_from_ticks() -> ValidationResult:
     try:
         from data_layer.orchestrator import orchestrator
 
-        assert hasattr(
+        assert hasattr(  # nosec B101
             orchestrator, "get_ohlcv_from_ticks"
         ), "get_ohlcv_from_ticks method missing from orchestrator"
         result = orchestrator.get_ohlcv_from_ticks()
-        assert (
+        assert (  # nosec B101
             result is None
         ), f"Expected None with empty Redis tick history, got {type(result)}"
         return ValidationResult(
@@ -979,7 +979,7 @@ def check_orchestrator_health_keys() -> ValidationResult:
             "replay",
         }
         missing = required - set(h.keys())
-        assert not missing, f"health() missing keys: {missing}"
+        assert not missing, f"health() missing keys: {missing}"  # nosec B101
         return ValidationResult(
             "Orchestrator health keys",
             True,
@@ -1014,17 +1014,17 @@ def check_data_layer_features_injection() -> ValidationResult:
 
         result = add_data_layer_features(df)
         dl_cols = [c for c in result.columns if c.startswith("dl_")]
-        assert len(dl_cols) >= 26, f"Expected >= 26 dl_* columns, got {len(dl_cols)}"
+        assert len(dl_cols) >= 26, f"Expected >= 26 dl_* columns, got {len(dl_cols)}"  # nosec B101
 
         nan_count = result[dl_cols].isna().sum().sum()
-        assert nan_count == 0, f"{nan_count} NaN values in dl_* columns"
+        assert nan_count == 0, f"{nan_count} NaN values in dl_* columns"  # nosec B101
 
         inf_count = result[dl_cols].isin([float("inf"), float("-inf")]).sum().sum()
-        assert inf_count == 0, f"{inf_count} inf values in dl_* columns"
+        assert inf_count == 0, f"{inf_count} inf values in dl_* columns"  # nosec B101
 
-        assert "dl_tick_count" in dl_cols, "dl_tick_count missing"
-        assert "dl_is_blackout" in dl_cols, "dl_is_blackout missing"
-        assert "dl_macro_yield_curve" in dl_cols, "dl_macro_yield_curve missing"
+        assert "dl_tick_count" in dl_cols, "dl_tick_count missing"  # nosec B101
+        assert "dl_is_blackout" in dl_cols, "dl_is_blackout missing"  # nosec B101
+        assert "dl_macro_yield_curve" in dl_cols, "dl_macro_yield_curve missing"  # nosec B101
 
         return ValidationResult(
             "add_data_layer_features injection",
@@ -1049,17 +1049,17 @@ def check_macro_store_bridge_retry_config() -> ValidationResult:
         )
         import inspect
 
-        assert _STARTUP_MAX_RETRIES >= 1, "STARTUP_MAX_RETRIES must be >= 1"
-        assert _STARTUP_RETRY_DELAY > 0, "STARTUP_RETRY_DELAY must be > 0"
+        assert _STARTUP_MAX_RETRIES >= 1, "STARTUP_MAX_RETRIES must be >= 1"  # nosec B101
+        assert _STARTUP_RETRY_DELAY > 0, "STARTUP_RETRY_DELAY must be > 0"  # nosec B101
 
         bridge = MacroStoreBridge()
-        assert hasattr(
+        assert hasattr(  # nosec B101
             bridge, "_load_csv_fallback"
         ), "_load_csv_fallback method missing"
 
         src = inspect.getsource(MacroStoreBridge.start)
-        assert "_STARTUP_MAX_RETRIES" in src, "start() must use _STARTUP_MAX_RETRIES"
-        assert (
+        assert "_STARTUP_MAX_RETRIES" in src, "start() must use _STARTUP_MAX_RETRIES"  # nosec B101
+        assert (  # nosec B101
             "_load_csv_fallback" in src
         ), "start() must call _load_csv_fallback on exhaustion"
 
@@ -1092,9 +1092,9 @@ def check_redis_store_prometheus() -> ValidationResult:
             "_prom_mem_mb",
         ]
         for attr in required_attrs:
-            assert hasattr(store, attr), f"DataLayerRedisStore missing {attr}"
+            assert hasattr(store, attr), f"DataLayerRedisStore missing {attr}"  # nosec B101
             val = getattr(store, attr)
-            assert val is not None, f"{attr} is None — Prometheus init failed"
+            assert val is not None, f"{attr} is None — Prometheus init failed"  # nosec B101
 
         return ValidationResult(
             "DataLayerRedisStore Prometheus metrics",
@@ -1116,9 +1116,9 @@ def check_orchestrator_subscribe_ticks() -> ValidationResult:
 
         received = []
         orchestrator.subscribe_ticks("_test_sub", lambda t: received.append(t))
-        assert "_test_sub" in orchestrator._tick_callbacks, "subscriber not registered"
+        assert "_test_sub" in orchestrator._tick_callbacks, "subscriber not registered"  # nosec B101
         orchestrator.unsubscribe_ticks("_test_sub")
-        assert "_test_sub" not in orchestrator._tick_callbacks, "subscriber not removed"
+        assert "_test_sub" not in orchestrator._tick_callbacks, "subscriber not removed"  # nosec B101
         return ValidationResult(
             "Orchestrator.subscribe_ticks", True, "subscribe/unsubscribe roundtrip OK"
         )
@@ -1131,10 +1131,10 @@ def check_orchestrator_get_ohlcv_window() -> ValidationResult:
     try:
         from data_layer.orchestrator import orchestrator
 
-        assert hasattr(orchestrator, "get_ohlcv_window"), "get_ohlcv_window missing"
+        assert hasattr(orchestrator, "get_ohlcv_window"), "get_ohlcv_window missing"  # nosec B101
         result = orchestrator.get_ohlcv_window()
         # None is acceptable — no live data in test environment
-        assert result is None or hasattr(result, "shape"), "unexpected return type"
+        assert result is None or hasattr(result, "shape"), "unexpected return type"  # nosec B101
         return ValidationResult(
             "Orchestrator.get_ohlcv_window",
             True,
@@ -1160,8 +1160,8 @@ def check_redis_store_health() -> ValidationResult:
             "alive",
         }
         missing = required - set(h.keys())
-        assert not missing, f"health() missing keys: {missing}"
-        assert isinstance(h["alive"], bool), "alive must be bool"
+        assert not missing, f"health() missing keys: {missing}"  # nosec B101
+        assert isinstance(h["alive"], bool), "alive must be bool"  # nosec B101
         return ValidationResult(
             "DataLayerRedisStore.health()",
             True,
@@ -1178,9 +1178,9 @@ def check_lineage_pg_stats() -> ValidationResult:
 
         lineage_store.start()
         stats = lineage_store.stats()
-        assert "pg_enabled" in stats, "pg_enabled missing from stats()"
-        assert "pg_export_count" in stats, "pg_export_count missing from stats()"
-        assert isinstance(stats["pg_enabled"], bool), "pg_enabled must be bool"
+        assert "pg_enabled" in stats, "pg_enabled missing from stats()"  # nosec B101
+        assert "pg_export_count" in stats, "pg_export_count missing from stats()"  # nosec B101
+        assert isinstance(stats["pg_enabled"], bool), "pg_enabled must be bool"  # nosec B101
         lineage_store.stop()
         return ValidationResult(
             "DataLineageStore PG stats",
@@ -1200,17 +1200,17 @@ def check_risk_gatekeeper_full_wiring() -> ValidationResult:
         from data_layer.lineage.store import lineage_store
 
         rm = RiskManager(orchestrator=orchestrator, lineage_store=lineage_store)
-        assert rm._orch is orchestrator, "RiskManager._orch not wired"
-        assert rm._lineage is lineage_store, "RiskManager._lineage not wired"
+        assert rm._orch is orchestrator, "RiskManager._orch not wired"  # nosec B101
+        assert rm._lineage is lineage_store, "RiskManager._lineage not wired"  # nosec B101
 
-        assert gatekeeper._orch is orchestrator, "Gatekeeper._orch not wired"
-        assert gatekeeper._lineage is lineage_store, "Gatekeeper._lineage not wired"
+        assert gatekeeper._orch is orchestrator, "Gatekeeper._orch not wired"  # nosec B101
+        assert gatekeeper._lineage is lineage_store, "Gatekeeper._lineage not wired"  # nosec B101
 
         # Verify orchestrator data methods are callable
-        assert callable(getattr(rm._orch, "get_latest_tick", None))
-        assert callable(getattr(rm._orch, "get_ml_features", None))
-        assert callable(getattr(rm._orch, "get_macro_impact_score", None))
-        assert callable(getattr(rm._orch, "is_safe_to_trade", None))
+        assert callable(getattr(rm._orch, "get_latest_tick", None))  # nosec B101
+        assert callable(getattr(rm._orch, "get_ml_features", None))  # nosec B101
+        assert callable(getattr(rm._orch, "get_macro_impact_score", None))  # nosec B101
+        assert callable(getattr(rm._orch, "is_safe_to_trade", None))  # nosec B101
 
         return ValidationResult(
             "Risk/Gatekeeper orchestrator wiring",
@@ -1230,10 +1230,10 @@ def check_macro_csv_startup_population() -> ValidationResult:
         # Trigger CSV load (simulates orchestrator startup step 7)
         macro_store_bridge._load_csv_fallback()
         n = len(macro_store)
-        assert n > 0, f"MacroStore empty after CSV fallback load (got {n} series)"
+        assert n > 0, f"MacroStore empty after CSV fallback load (got {n} series)"  # nosec B101
 
         feats = macro_store_bridge.get_ml_features()
-        assert len(feats) > 0, "MacroStoreBridge.get_ml_features() returned empty dict"
+        assert len(feats) > 0, "MacroStoreBridge.get_ml_features() returned empty dict"  # nosec B101
 
         return ValidationResult(
             "Macro CSV startup population",

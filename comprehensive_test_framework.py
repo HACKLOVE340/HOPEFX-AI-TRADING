@@ -176,8 +176,8 @@ class UnitTests:
             bid_size=10.0,
             ask_size=15.0,
         )
-        assert tick.mid == 1950.025
-        assert tick.spread == 0.05
+        assert tick.mid == 1950.025  # nosec B101
+        assert tick.spread == 0.05  # nosec B101
 
         # Invalid tick should raise
         try:
@@ -205,9 +205,9 @@ class UnitTests:
             order_size=100000, price=1950.0, volatility=0.001, volume=10000
         )
 
-        assert costs["commission"] == 7.0
-        assert costs["spread_cost"] > 0
-        assert costs["total_cost"] > 0
+        assert costs["commission"] == 7.0  # nosec B101
+        assert costs["spread_cost"] > 0  # nosec B101
+        assert costs["total_cost"] > 0  # nosec B101
 
     async def test_feature_engineering(self):
         """Test feature generation"""
@@ -219,11 +219,11 @@ class UnitTests:
         engineer = FeatureEngineering()
         features = engineer.create_features(df, fit=True)
 
-        assert len(features) > 0
-        assert "returns" in features.columns
-        assert "volatility_20" in features.columns
-        assert "rsi_14" in features.columns
-        assert not features.isnull().any().any()  # No NaN
+        assert len(features) > 0  # nosec B101
+        assert "returns" in features.columns  # nosec B101
+        assert "volatility_20" in features.columns  # nosec B101
+        assert "rsi_14" in features.columns  # nosec B101
+        assert not features.isnull().any().any()  # No NaN  # nosec B101
 
     async def test_order_creation(self):
         """Test order structure"""
@@ -239,8 +239,8 @@ class UnitTests:
             price=1950.0,
         )
 
-        assert order.remaining_size == 100.0
-        assert order.notional == 195000.0
+        assert order.remaining_size == 100.0  # nosec B101
+        assert order.notional == 195000.0  # nosec B101
 
     async def test_market_impact_model(self):
         """Test Almgren-Chriss impact model"""
@@ -257,8 +257,8 @@ class UnitTests:
             V=10000000,  # 10M ADV
         )
 
-        assert temp_impact > 0
-        assert temp_impact < 0.01  # Less than 1%
+        assert temp_impact > 0  # nosec B101
+        assert temp_impact < 0.01  # Less than 1%  # nosec B101
 
 
 class IntegrationTests:
@@ -340,8 +340,8 @@ class IntegrationTests:
 
         # Generate report
         report = engine.get_performance_report()
-        assert "summary" in report
-        assert "risk_metrics" in report
+        assert "summary" in report  # nosec B101
+        assert "risk_metrics" in report  # nosec B101
 
     async def test_realtime_data_flow(self):
         """Test realtime data aggregation"""
@@ -370,8 +370,8 @@ class IntegrationTests:
         aggregator.stop()
         task.cancel()
 
-        assert len(received_ticks) > 0
-        assert all(
+        assert len(received_ticks) > 0  # nosec B101
+        assert all(  # nosec B101
             t.quality.name in ["EXCELLENT", "GOOD", "FAIR"] for t in received_ticks
         )
 
@@ -397,9 +397,9 @@ class IntegrationTests:
         # Predict
         pred = predictor.predict(df.iloc[-100:])
 
-        assert pred is not None
-        assert pred.confidence >= 0
-        assert pred.confidence <= 1
+        assert pred is not None  # nosec B101
+        assert pred.confidence >= 0  # nosec B101
+        assert pred.confidence <= 1  # nosec B101
 
     async def test_routing_execution(self):
         """Test order routing and execution"""
@@ -419,9 +419,9 @@ class IntegrationTests:
 
         result = await router.execute_order(order)
 
-        assert result["status"] == "FILLED"
-        assert result["filled_size"] > 0
-        assert result["avg_price"] > 0
+        assert result["status"] == "FILLED"  # nosec B101
+        assert result["filled_size"] > 0  # nosec B101
+        assert result["avg_price"] > 0  # nosec B101
 
 
 class PerformanceTests:
@@ -481,7 +481,7 @@ class PerformanceTests:
         throughput = len(ticks) / duration
         logger.info(f"Backtest throughput: {throughput:.0f} ticks/sec")
 
-        assert throughput > 1000  # Minimum 1000 ticks/sec
+        assert throughput > 1000  # Minimum 1000 ticks/sec  # nosec B101
 
     async def test_prediction_latency(self):
         """Test ML prediction latency"""
@@ -504,7 +504,7 @@ class PerformanceTests:
         avg_latency = np.mean(latencies)
         logger.info(f"Prediction latency: {avg_latency:.2f} ms")
 
-        assert avg_latency < 100  # Sub-100ms
+        assert avg_latency < 100  # Sub-100ms  # nosec B101
 
     async def test_data_ingestion_rate(self):
         """Test realtime data ingestion"""
@@ -534,7 +534,7 @@ class PerformanceTests:
         rate = received / 5
         logger.info(f"Data ingestion rate: {rate:.0f} ticks/sec")
 
-        assert rate > 10  # At least 10 consensus ticks/sec
+        assert rate > 10  # At least 10 consensus ticks/sec  # nosec B101
 
 
 class ChaosTests:
@@ -600,7 +600,7 @@ class ChaosTests:
         aggregator.stop()
         task.cancel()
 
-        assert True  # If we get here, system handled failure
+        assert True  # If we get here, system handled failure  # nosec B101
 
     async def test_data_corruption(self):
         """Test handling of corrupted data"""
@@ -616,8 +616,8 @@ class ChaosTests:
         features = engineer.create_features(df)
 
         # Should handle gracefully
-        assert len(features) < len(df)  # Some rows dropped
-        assert not features.isnull().any().any()
+        assert len(features) < len(df)  # Some rows dropped  # nosec B101
+        assert not features.isnull().any().any()  # nosec B101
 
     async def test_network_latency(self):
         """Test handling of high latency"""
@@ -626,7 +626,7 @@ class ChaosTests:
 
         # This would require network simulation
         # For now, just verify timeout handling
-        assert True
+        assert True  # nosec B101
 
 
 class ComprehensiveTestFramework:
@@ -763,7 +763,7 @@ async def test_tick_data():
     """Pytest-compatible tick data test"""
     framework = UnitTests()
     await framework.test_tick_data_validation()
-    assert all(r.passed for r in framework.results)
+    assert all(r.passed for r in framework.results)  # nosec B101
 
 
 @pytest.mark.asyncio
@@ -771,7 +771,7 @@ async def test_backtest_integration():
     """Pytest-compatible backtest test"""
     framework = IntegrationTests()
     await framework.test_backtest_full_workflow()
-    assert all(r.passed for r in framework.results)
+    assert all(r.passed for r in framework.results)  # nosec B101
 
 
 @pytest.mark.asyncio
@@ -779,7 +779,7 @@ async def test_performance():
     """Pytest-compatible performance test"""
     framework = PerformanceTests()
     await framework.test_backtest_throughput()
-    assert all(r.passed for r in framework.results)
+    assert all(r.passed for r in framework.results)  # nosec B101
 
 
 # =============================================================================
