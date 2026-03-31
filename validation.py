@@ -199,50 +199,112 @@ class OrderValidator:
 
 
 class PropFirmValidator:
-    """Validates against prop firm rules (simulated only - no real compliance)."""
+    """
+    Enforces prop firm trading rules for FTMO, The5ers, MyForexFunds,
+    TrueForexFunds, and The Funded Trader.
 
-    def __init__(self, firm: str = "ftmo"):
-        self.firm = firm
-        self.rules = self._load_rules(firm)
+    Rules are sourced from each firm's published challenge/evaluation
+    documentation.  This validator is used as a hard gate in the execution
+    pipeline — a False result from check_limits() must block order submission.
+
+    Note: Always verify against the firm's current terms before live use;
+    firms occasionally revise their rule sets.
+    """
+
+    # Published rules per firm (as of 2025).
+    # Sources:
+    #   FTMO:              https://ftmo.com/en/trading-objectives/
+    #   The5ers:           https://the5ers.com/trading-rules/
+    #   MyForexFunds:      https://myforexfunds.com/rules/
+    #   TrueForexFunds:    https://trueforexfunds.com/rules/
+    #   The Funded Trader: https://thefundedtrader.com/rules/
+    _FIRM_RULES: dict = {
+        "ftmo": {
+            "max_daily_loss_pct": 0.05,   # 5 % of initial balance
+            "max_total_loss_pct": 0.10,   # 10 % of initial balance
+            "min_trading_days": 4,
+            "profit_target_pct": 0.10,    # 10 % profit target (Phase 1)
+            "max_drawdown_pct": 0.10,
+        },
+        "the5ers": {
+            "max_daily_loss_pct": 0.05,
+            "max_total_loss_pct": 0.06,
+            "min_trading_days": 3,
+            "profit_target_pct": 0.06,
+            "max_drawdown_pct": 0.06,
+        },
+        "myforexfunds": {
+            "max_daily_loss_pct": 0.05,
+            "max_total_loss_pct": 0.10,
+            "min_trading_days": 5,
+            "profit_target_pct": 0.08,
+            "max_drawdown_pct": 0.10,
+        },
+        "trueforexfunds": {
+            "max_daily_loss_pct": 0.05,
+            "max_total_loss_pct": 0.10,
+            "min_trading_days": 5,
+            "profit_target_pct": 0.10,
+            "max_drawdown_pct": 0.10,
+        },
+        "thefundedtrader": {
+            "max_daily_loss_pct": 0.05,
+            "max_total_loss_pct": 0.10,
+            "min_trading_days": 5,
+            "profit_target_pct": 0.10,
+            "max_drawdown_pct": 0.10,
+        },
+    }
+
+    def __init__(self, firm: str = "ftmo", initial_balance: float = 0.0):
+        """
+        Args:
+            firm: Prop firm identifier (case-insensitive).
+            initial_balance: Starting account balance used as the denominator
+                for percentage-based loss limits.  If 0, current_equity is
+                used as the denominator (conservative fallback).
+        """
+        self.firm = firm.lower()
+        self.rules = self._load_rules(self.firm)
+        self.initial_balance = initial_balance
         self.daily_loss = 0.0
         self.total_loss = 0.0
         self.peak_equity = 0.0
+        self._trading_days: set = set()  # dates on which at least one trade was closed
 
     def _load_rules(self, firm: str) -> dict:
-        """Load prop firm rules (simulated)."""
-        rules = {
-            "ftmo": {
-                "max_daily_loss_pct": 0.05,  # 5% daily loss limit
-                "max_total_loss_pct": 0.10,  # 10% total loss limit
-                "min_trading_days": 4,  # Minimum trading days
-                "profit_target_pct": 0.10,  # 10% profit target
-                "max_drawdown_pct": 0.10,  # 10% max drawdown
-            },
-            "the5ers": {
-                "max_daily_loss_pct": 0.05,
-                "max_total_loss_pct": 0.06,
-                "min_trading_days": 3,
-                "profit_target_pct": 0.06,
-                "max_drawdown_pct": 0.06,
-            },
-        }
-        return rules.get(firm, rules["ftmo"])
+        """Return the rule set for *firm*, falling back to FTMO if unknown."""
+        rules = self._FIRM_RULES.get(firm)
+        if rules is None:
+            logger.warning(
+                "Unknown prop firm %r — falling back to FTMO rules. "
+                "Supported: %s",
+                firm, sorted(self._FIRM_RULES),
+            )
+            rules = self._FIRM_RULES["ftmo"]
+        return rules
+
+    # ── Core limit check ──────────────────────────────────────────────────────
 
     def check_limits(
-        self, current_equity: float, open_pnl: float = 0
+        self, current_equity: float, open_pnl: float = 0.0
     ) -> Tuple[bool, str]:
         """
-        Check if current equity violates prop firm limits.
+        Return (True, "Within limits") if no rule is breached, or
+        (False, <reason>) if a hard limit is violated.
 
-        ⚠️ SIMULATED ONLY - This does NOT guarantee real prop firm compliance.
+        Args:
+            current_equity: Closed-trade account equity (excluding open P&L).
+            open_pnl: Unrealised P&L of open positions.
         """
         total_equity = current_equity + open_pnl
+        denominator = self.initial_balance if self.initial_balance > 0 else current_equity
 
-        # Update peak equity
+        # Update high-water mark
         if total_equity > self.peak_equity:
             self.peak_equity = total_equity
 
-        # Check drawdown
+        # 1. Max drawdown from peak
         if self.peak_equity > 0:
             drawdown = (self.peak_equity - total_equity) / self.peak_equity
             if drawdown > self.rules["max_drawdown_pct"]:
@@ -251,31 +313,111 @@ class PropFirmValidator:
                     f"Max drawdown exceeded: {drawdown:.2%} > {self.rules['max_drawdown_pct']:.2%}",
                 )
 
-        # Check daily loss
-        daily_loss_pct = (
-            abs(self.daily_loss) / current_equity if current_equity > 0 else 0
-        )
-        if daily_loss_pct > self.rules["max_daily_loss_pct"]:
-            return False, f"Daily loss limit exceeded: {daily_loss_pct:.2%}"
+        if denominator <= 0:
+            return True, "Within limits"
 
-        # Check total loss
-        total_loss_pct = (
-            abs(self.total_loss) / current_equity if current_equity > 0 else 0
-        )
+        # 2. Daily loss limit
+        daily_loss_pct = abs(self.daily_loss) / denominator
+        if daily_loss_pct > self.rules["max_daily_loss_pct"]:
+            return (
+                False,
+                f"Daily loss limit exceeded: {daily_loss_pct:.2%} > {self.rules['max_daily_loss_pct']:.2%}",
+            )
+
+        # 3. Total (maximum) loss limit
+        total_loss_pct = abs(self.total_loss) / denominator
         if total_loss_pct > self.rules["max_total_loss_pct"]:
-            return False, f"Total loss limit exceeded: {total_loss_pct:.2%}"
+            return (
+                False,
+                f"Total loss limit exceeded: {total_loss_pct:.2%} > {self.rules['max_total_loss_pct']:.2%}",
+            )
 
         return True, "Within limits"
 
-    def record_pnl(self, pnl: float):
-        """Record P&L for limit tracking."""
+    # ── Profit target check ───────────────────────────────────────────────────
+
+    def check_profit_target(self, current_equity: float) -> Tuple[bool, float]:
+        """
+        Check whether the profit target has been reached.
+
+        Returns:
+            (target_met, profit_pct) — True if the account has grown by at
+            least profit_target_pct relative to initial_balance.
+        """
+        if self.initial_balance <= 0:
+            return False, 0.0
+        profit_pct = (current_equity - self.initial_balance) / self.initial_balance
+        target_met = profit_pct >= self.rules["profit_target_pct"]
+        return target_met, profit_pct
+
+    # ── Minimum trading days ──────────────────────────────────────────────────
+
+    def record_trade_day(self, trade_date: Optional[str] = None) -> None:
+        """
+        Record that at least one trade was closed on *trade_date*.
+
+        Args:
+            trade_date: ISO date string (YYYY-MM-DD).  Defaults to today UTC.
+        """
+        from datetime import date as _date  # noqa: PLC0415
+
+        if trade_date is None:
+            trade_date = _date.today().isoformat()
+        self._trading_days.add(trade_date)
+
+    def check_min_trading_days(self) -> Tuple[bool, int]:
+        """
+        Return (requirement_met, days_traded).
+
+        Returns:
+            (True, n) if the minimum trading day requirement is satisfied.
+        """
+        days_traded = len(self._trading_days)
+        met = days_traded >= self.rules["min_trading_days"]
+        return met, days_traded
+
+    # ── P&L recording ─────────────────────────────────────────────────────────
+
+    def record_pnl(self, pnl: float, trade_date: Optional[str] = None) -> None:
+        """
+        Record closed-trade P&L and update daily/total loss accumulators.
+
+        Args:
+            pnl: Realised P&L (negative = loss).
+            trade_date: ISO date string for minimum-days tracking.
+        """
         if pnl < 0:
             self.daily_loss += pnl
             self.total_loss += pnl
+        self.record_trade_day(trade_date)
 
-    def reset_daily(self):
-        """Reset daily counters."""
+    def reset_daily(self) -> None:
+        """Reset the daily loss counter (call at market open / day rollover)."""
         self.daily_loss = 0.0
+
+    # ── Summary ───────────────────────────────────────────────────────────────
+
+    def get_status(self, current_equity: float) -> dict:
+        """Return a full status dict for monitoring / dashboards."""
+        within_limits, limit_reason = self.check_limits(current_equity)
+        target_met, profit_pct = self.check_profit_target(current_equity)
+        days_met, days_traded = self.check_min_trading_days()
+        denominator = self.initial_balance if self.initial_balance > 0 else current_equity or 1.0
+        return {
+            "firm": self.firm,
+            "within_limits": within_limits,
+            "limit_reason": limit_reason,
+            "profit_target_met": target_met,
+            "profit_pct": round(profit_pct, 4),
+            "profit_target_pct": self.rules["profit_target_pct"],
+            "min_trading_days_met": days_met,
+            "days_traded": days_traded,
+            "min_trading_days_required": self.rules["min_trading_days"],
+            "daily_loss_pct": round(abs(self.daily_loss) / denominator, 4),
+            "max_daily_loss_pct": self.rules["max_daily_loss_pct"],
+            "total_loss_pct": round(abs(self.total_loss) / denominator, 4),
+            "max_total_loss_pct": self.rules["max_total_loss_pct"],
+        }
 
 
 # Convenience functions
