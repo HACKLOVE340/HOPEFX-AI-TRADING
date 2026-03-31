@@ -100,7 +100,7 @@ class TestStartupValidator:
         )
 
         env = {
-            "DB_PASSWORD": "strongpassword123",
+            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file
             "DB_HOST": "localhost",
             "REDIS_URL": "redis://localhost:6379/0",
         }
@@ -115,8 +115,8 @@ class TestStartupValidator:
         )
 
         env = {
-            "SECRET_KEY": "short",  # < 32 chars
-            "DB_PASSWORD": "strongpassword123",
+            "SECRET_KEY": "short",  # < 32 chars  # nosec B105 - test file
+            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file
             "DB_HOST": "localhost",
             "REDIS_URL": "redis://localhost:6379/0",
         }
@@ -147,7 +147,7 @@ class TestStartupValidator:
 
         env = {
             "SECRET_KEY": "a" * 32,
-            "DB_PASSWORD": "strongpassword123",
+            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file
             "DB_HOST": "localhost",
             "REDIS_URL": "http://localhost:6379",  # wrong scheme
         }
@@ -175,7 +175,7 @@ class TestStartupValidator:
 
         env = {
             "SECRET_KEY": "a" * 32,
-            "DB_PASSWORD": "strongpassword123",
+            "DB_PASSWORD": "strongpassword123",  # nosec B105 - test file
             "DB_HOST": "localhost",
             "REDIS_URL": "redis://localhost:6379/0",
             "IBKR_PORT": "9999",  # not a valid IBKR port

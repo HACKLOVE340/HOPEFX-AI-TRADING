@@ -178,7 +178,7 @@ class TestDatabaseConfig:
             host="localhost",
             port=5432,
             username="",
-            password="",
+            password="",  # nosec B106 - test file
             database="test.db",
         )
 
@@ -192,7 +192,7 @@ class TestDatabaseConfig:
             host="localhost",
             port=5432,
             username="",
-            password="",
+            password="",  # nosec B106 - test file
             database="test.db",
         )
 

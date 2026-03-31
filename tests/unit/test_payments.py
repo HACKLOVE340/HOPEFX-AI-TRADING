@@ -226,7 +226,7 @@ class TestPaymentsWebhook:
         """No secret in dev mode returns True (verification skipped)."""
         import api.payments as pm
 
-        pm._WEBHOOK_SECRET = ""
+        pm._WEBHOOK_SECRET = ""  # nosec B105 - test file
         body = b'{"payment_id":"PAY_1"}'
 
         with patch.dict(os.environ, {"APP_ENV": "development"}):
@@ -238,7 +238,7 @@ class TestPaymentsWebhook:
         """No secret in production mode returns False."""
         import api.payments as pm
 
-        pm._WEBHOOK_SECRET = ""
+        pm._WEBHOOK_SECRET = ""  # nosec B105 - test file
         body = b'{"payment_id":"PAY_1"}'
 
         with patch.dict(os.environ, {"APP_ENV": "production"}):

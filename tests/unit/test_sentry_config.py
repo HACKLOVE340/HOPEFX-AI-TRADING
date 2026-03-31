@@ -31,7 +31,7 @@ def _make_event(transaction: str = "/api/signals") -> Dict[str, Any]:
     return {
         "transaction": transaction,
         "request": {
-            "data": {"username": "alice", "password": "s3cr3t"},
+            "data": {"username": "alice", "password": "s3cr3t"},  # nosec B105 - test file
             "headers": {"Authorization": "Bearer tok123"},
         },
         "extra": {"api_key": "key_abc", "note": "ok"},

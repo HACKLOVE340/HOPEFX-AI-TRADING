@@ -45,7 +45,7 @@ if _import_error is not None:
 def _admin_token() -> str:
     """Mint a short-lived admin JWT for integration tests."""
     secret = os.environ.get(
-        "SECURITY_JWT_SECRET", "test-secret-key-minimum-32-characters-long"
+        "SECURITY_JWT_SECRET", "test-secret-key-minimum-32-characters-long"  # nosec B105 - test credential
     )
     return jwt.encode(
         {"sub": "test-admin", "role": "admin", "exp": int(time.time()) + 3600},
@@ -68,7 +68,7 @@ def client():
     background startup tasks (event bus, scheduler) are skipped.
     """
     os.environ.setdefault(
-        "SECURITY_JWT_SECRET", "test-secret-key-minimum-32-characters-long"
+        "SECURITY_JWT_SECRET", "test-secret-key-minimum-32-characters-long"  # nosec B105 - test credential
     )
     # Instantiate without entering the lifespan context so Redis/DB timeouts
     # do not block the test suite.
