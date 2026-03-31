@@ -62,13 +62,14 @@ try:
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
+
     _FASTAPI_AVAILABLE = True
 except ImportError:
     _FASTAPI_AVAILABLE = False
     logger.warning("FastAPI not installed — nuclear WebSocket server disabled")
 
 # ── Internal imports ──────────────────────────────────────────────────────────
-from charting.nuclear_ai_chart_engine import get_chart_engine, NuclearAIChartEngine
+from charting.nuclear_ai_chart_engine import get_chart_engine, NuclearAIChartEngine  # noqa: E402
 
 NUCLEAR_WS_PORT: int = int(os.environ.get("NUCLEAR_WS_PORT", "8001"))
 HEARTBEAT_INTERVAL_S: int = 30
@@ -78,6 +79,7 @@ NUCLEAR_ALERT_SEVERITY: int = 7
 # ─────────────────────────────────────────────────────────────────────────────
 # Connection manager
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class NuclearConnectionManager:
     """Manages all active WebSocket connections to the nuclear dashboard."""
@@ -134,6 +136,7 @@ _manager = NuclearConnectionManager()
 # Broadcast bridge — connects chart engine to WebSocket manager
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _sync_broadcast_callback(state: Dict) -> None:
     """
     Synchronous callback registered with NuclearAIChartEngine.
@@ -152,7 +155,10 @@ async def _async_broadcast(state: Dict) -> None:
 
     # Also send an immediate nuclear_alert if severity is high
     nuclear = state.get("nuclear", {})
-    if nuclear.get("alert_active") and nuclear.get("severity", 0) >= NUCLEAR_ALERT_SEVERITY:
+    if (
+        nuclear.get("alert_active")
+        and nuclear.get("severity", 0) >= NUCLEAR_ALERT_SEVERITY
+    ):
         alert = {
             "type": "nuclear_alert",
             "ts": state.get("ts"),
@@ -170,7 +176,10 @@ async def _async_broadcast(state: Dict) -> None:
 # FastAPI route mounting
 # ─────────────────────────────────────────────────────────────────────────────
 
-def mount_nuclear_routes(app: Any, engine: Optional[NuclearAIChartEngine] = None) -> None:
+
+def mount_nuclear_routes(
+    app: Any, engine: Optional[NuclearAIChartEngine] = None
+) -> None:
     """
     Mount nuclear dashboard routes onto an existing FastAPI app.
 
@@ -203,11 +212,15 @@ def mount_nuclear_routes(app: Any, engine: Optional[NuclearAIChartEngine] = None
                     await _handle_client_message(ws, msg, chart_engine)
                 except asyncio.TimeoutError:
                     # Client silent for 60s — send ping
-                    await _manager.send_to(ws, {"type": "ping", "ts": int(time.time() * 1000)})
+                    await _manager.send_to(
+                        ws, {"type": "ping", "ts": int(time.time() * 1000)}
+                    )
                 except WebSocketDisconnect:
                     break
                 except json.JSONDecodeError:
-                    await _manager.send_to(ws, {"type": "error", "message": "Invalid JSON"})
+                    await _manager.send_to(
+                        ws, {"type": "error", "message": "Invalid JSON"}
+                    )
         finally:
             heartbeat_task.cancel()
             await _manager.disconnect(ws)
@@ -238,13 +251,16 @@ def mount_nuclear_routes(app: Any, engine: Optional[NuclearAIChartEngine] = None
         """Manually resume trading after a nuclear halt."""
         try:
             from brain.nuclear_supervisor import get_nuclear_supervisor
+
             sup = get_nuclear_supervisor()
             await sup.manual_resume()
-            await _manager.broadcast({
-                "type": "nuclear_resume",
-                "ts": int(time.time() * 1000),
-                "message": "Trading manually resumed by operator.",
-            })
+            await _manager.broadcast(
+                {
+                    "type": "nuclear_resume",
+                    "ts": int(time.time() * 1000),
+                    "message": "Trading manually resumed by operator.",
+                }
+            )
             return JSONResponse({"status": "resumed"})
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc))
@@ -254,6 +270,7 @@ def mount_nuclear_routes(app: Any, engine: Optional[NuclearAIChartEngine] = None
         """Return last N nuclear events."""
         try:
             from brain.nuclear_supervisor import get_nuclear_supervisor
+
             sup = get_nuclear_supervisor()
             history = sup.get_event_history(n)
             return JSONResponse({"events": history})
@@ -265,15 +282,18 @@ def mount_nuclear_routes(app: Any, engine: Optional[NuclearAIChartEngine] = None
         """Return nuclear supervisor status + connection count."""
         try:
             from brain.nuclear_supervisor import get_nuclear_supervisor
+
             sup = get_nuclear_supervisor()
             status = sup.get_status()
         except Exception:
             status = {}
-        return JSONResponse({
-            "ws_connections": _manager.count,
-            "supervisor": status,
-            "engine_ticks": chart_engine._tick_count,
-        })
+        return JSONResponse(
+            {
+                "ws_connections": _manager.count,
+                "supervisor": status,
+                "engine_ticks": chart_engine._tick_count,
+            }
+        )
 
     logger.info("Nuclear dashboard routes mounted: /ws/nuclear, /api/nuclear/*")
 
@@ -281,6 +301,7 @@ def mount_nuclear_routes(app: Any, engine: Optional[NuclearAIChartEngine] = None
 # ─────────────────────────────────────────────────────────────────────────────
 # Client message handler
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def _handle_client_message(
     ws: WebSocket, msg: Dict, engine: NuclearAIChartEngine
@@ -293,11 +314,14 @@ async def _handle_client_message(
     elif msg_type == "subscribe":
         # Acknowledge subscription — actual data flows via broadcast
         channels = msg.get("channels", [])
-        await _manager.send_to(ws, {
-            "type": "subscribed",
-            "channels": channels,
-            "ts": int(time.time() * 1000),
-        })
+        await _manager.send_to(
+            ws,
+            {
+                "type": "subscribed",
+                "channels": channels,
+                "ts": int(time.time() * 1000),
+            },
+        )
 
     elif msg_type == "inject_event":
         text = msg.get("text", "")
@@ -305,11 +329,14 @@ async def _handle_client_message(
         sentiment = float(msg.get("sentiment", 0.0))
         if text:
             result = engine.inject_news_event(text, vol, sentiment)
-            await _manager.send_to(ws, {
-                "type": "event_scored",
-                "result": result,
-                "ts": int(time.time() * 1000),
-            })
+            await _manager.send_to(
+                ws,
+                {
+                    "type": "event_scored",
+                    "result": result,
+                    "ts": int(time.time() * 1000),
+                },
+            )
 
     elif msg_type == "get_snapshot":
         snapshot = engine.get_snapshot()
@@ -319,28 +346,37 @@ async def _handle_client_message(
         n = int(msg.get("n", 20))
         try:
             from brain.nuclear_supervisor import get_nuclear_supervisor
+
             history = get_nuclear_supervisor().get_event_history(n)
         except Exception:
             history = []
-        await _manager.send_to(ws, {
-            "type": "nuclear_history",
-            "events": history,
-            "ts": int(time.time() * 1000),
-        })
+        await _manager.send_to(
+            ws,
+            {
+                "type": "nuclear_history",
+                "events": history,
+                "ts": int(time.time() * 1000),
+            },
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Heartbeat loop
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def _heartbeat_loop(ws: WebSocket) -> None:
     while True:
         await asyncio.sleep(HEARTBEAT_INTERVAL_S)
         try:
-            await ws.send_text(json.dumps({
-                "type": "heartbeat",
-                "ts": int(time.time() * 1000),
-            }))
+            await ws.send_text(
+                json.dumps(
+                    {
+                        "type": "heartbeat",
+                        "ts": int(time.time() * 1000),
+                    }
+                )
+            )
         except Exception:
             break
 
@@ -348,6 +384,7 @@ async def _heartbeat_loop(ws: WebSocket) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Standalone server entry point
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def create_standalone_app() -> Any:
     """Create a standalone FastAPI app for the nuclear WebSocket server."""
@@ -380,6 +417,7 @@ def create_standalone_app() -> Any:
 
 if __name__ == "__main__":
     import uvicorn
+
     logging.basicConfig(level=logging.INFO)
     standalone_app = create_standalone_app()
     uvicorn.run(standalone_app, host="0.0.0.0", port=NUCLEAR_WS_PORT, log_level="info")

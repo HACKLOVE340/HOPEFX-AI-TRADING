@@ -681,7 +681,7 @@ class MobileAPIServer:
                                     "timestamp": datetime.now(timezone.utc).isoformat(),
                                 }
                             except Exception as _exc:
-                                logger.debug('Suppressed exception: %s', _exc)
+                                logger.debug("Suppressed exception: %s", _exc)
 
                     if quotes:
                         await websocket.send_json(quotes)
@@ -779,8 +779,9 @@ class MobileAPIServer:
 # in the environment before import. _build_module_app() raises RuntimeError
 # if the secret is absent or too short — there is no fallback or placeholder.
 
-import os as _os
-from fastapi import APIRouter as _APIRouter
+import os as _os  # noqa: E402
+from fastapi import APIRouter as _APIRouter  # noqa: E402
+
 
 def _build_module_app() -> "FastAPI":
     _secret = (

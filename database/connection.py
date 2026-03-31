@@ -400,7 +400,8 @@ def init_db_manager(connection_string: str, **kwargs) -> DatabaseManager:
 # the codebase (get_db, engine, SessionLocal).  They are backed by a lazy
 # singleton so the first import does not require DATABASE_URL to be set.
 
-import os as _os
+import os as _os  # noqa: E402
+
 
 def _default_db_url() -> str:
     return _os.getenv(
@@ -418,10 +419,10 @@ def _get_or_init_manager() -> "DatabaseManager":
 
 
 if SQLALCHEMY_AVAILABLE:
-    from sqlalchemy.orm import sessionmaker as _sessionmaker
 
     class _LazyEngine:
         """Proxy that forwards attribute access to the real engine."""
+
         def __getattr__(self, name: str):
             return getattr(_get_or_init_manager()._engine, name)
 
@@ -438,6 +439,7 @@ if SQLALCHEMY_AVAILABLE:
 
     class _LazySessionLocal:
         """Proxy that creates sessions via the global manager."""
+
         def __call__(self):
             return _get_or_init_manager()._session_factory()
 
@@ -468,4 +470,6 @@ else:
     SessionLocal = None  # type: ignore[assignment]
 
     def get_db():  # type: ignore[misc]
-        raise RuntimeError("SQLAlchemy is not installed — database features unavailable.")
+        raise RuntimeError(
+            "SQLAlchemy is not installed — database features unavailable."
+        )

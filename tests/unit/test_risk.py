@@ -90,7 +90,7 @@ def test_risk_manager_signal_validation(tmp_path):
 # Pure arithmetic tests — no external dependencies
 # ---------------------------------------------------------------------------
 
-import unittest
+import unittest  # noqa: E402
 
 
 class TestRiskCalculations(unittest.TestCase):
