@@ -38,6 +38,14 @@ vi.mock('../hooks/useApi', () => ({
   },
   authApi: { login: vi.fn(), logout: vi.fn(), me: vi.fn() },
   backtestApi: { run: vi.fn(), results: vi.fn(), list: vi.fn() },
+  performanceApi: {
+    summary:     vi.fn().mockResolvedValue({ data: {} }),
+    equity:      vi.fn().mockResolvedValue({ data: { curve: [] } }),
+    equityCurve: vi.fn().mockResolvedValue({ data: { curve: [] } }),
+    trades:      vi.fn().mockResolvedValue({ data: { trades: [] } }),
+    weekly:      vi.fn().mockResolvedValue({ data: {} }),
+    weeklyList:  vi.fn().mockResolvedValue({ data: [] }),
+  },
   api: {
     defaults: { baseURL: '/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } },
     interceptors: { request: { handlers: [{}], use: vi.fn() }, response: { handlers: [{}], use: vi.fn() } },
