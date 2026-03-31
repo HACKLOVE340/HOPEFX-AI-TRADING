@@ -105,15 +105,18 @@ class IBKRFIXConfig:
     password: str = field(
         default_factory=lambda: os.environ.get("IBKR_FIX_PASSWORD", ""),
     )
-    # Path for FIX session store (sequence numbers)
+    # Path for FIX session store (sequence numbers).
+    # Default uses tempfile.gettempdir() instead of hardcoded /tmp (B108).
     store_path: str = field(
         default_factory=lambda: os.environ.get(
-            "IBKR_FIX_STORE_PATH", "/tmp/ibkr_fix_store"
+            "IBKR_FIX_STORE_PATH",
+            os.path.join(tempfile.gettempdir(), "ibkr_fix_store"),
         ),
     )
     log_path: str = field(
         default_factory=lambda: os.environ.get(
-            "IBKR_FIX_LOG_PATH", "/tmp/ibkr_fix_logs"
+            "IBKR_FIX_LOG_PATH",
+            os.path.join(tempfile.gettempdir(), "ibkr_fix_logs"),
         ),
     )
 

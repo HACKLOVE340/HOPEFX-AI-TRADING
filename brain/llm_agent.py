@@ -259,12 +259,15 @@ def _compile_strategy(code: str) -> Tuple[Optional[Any], Optional[str]]:
     except SyntaxError as exc:
         return None, f"SyntaxError: {exc}"
 
-    # Write to a temp file so tracebacks have line numbers
-    with tempfile.NamedTemporaryFile(
-        suffix=".py", mode="w", delete=False, dir="/tmp"
-    ) as f:
-        f.write(code)
-        tmp_path = f.name
+    # Write to a temp file so tracebacks have line numbers.
+    # Use tempfile.gettempdir() instead of hardcoded /tmp (B108).
+    fd, tmp_path = tempfile.mkstemp(suffix=".py", dir=tempfile.gettempdir())
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(code)
+    except Exception:
+        os.close(fd)
+        raise
 
     try:
         spec = importlib.util.spec_from_file_location("_gen_strategy", tmp_path)
