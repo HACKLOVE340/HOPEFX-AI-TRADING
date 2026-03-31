@@ -48,7 +48,7 @@ Usage
 from __future__ import annotations
 
 import logging
-import pickle
+import pickle  # nosec B403 - joblib tried first; pickle only for legacy fallback
 import threading
 from collections import deque
 from pathlib import Path
@@ -560,7 +560,7 @@ class IncrementalXGBoost:
             obj = joblib.load(path)
         except Exception:
             with open(path, "rb") as f:
-                obj = pickle.load(f)
+                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         logger.info("IncrementalXGBoost loaded ← %s", path)
         return obj
 

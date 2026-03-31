@@ -139,10 +139,10 @@ def check_ml_model() -> None:
 
             model = joblib.load(model_path)
         except Exception:
-            import pickle
+            import pickle  # nosec B403
 
             with open(model_path, "rb") as fh:
-                model = pickle.load(fh)
+                model = pickle.load(fh)  # nosec B301 - joblib failed; legacy pickle fallback for deployment check only
         _good(f"advanced_oos.pkl loads cleanly ({type(model).__name__})")
     except Exception as exc:
         _err(

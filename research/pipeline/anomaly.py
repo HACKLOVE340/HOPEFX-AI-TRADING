@@ -255,7 +255,7 @@ class AnomalyWeighter:
     @classmethod
     def load(cls, path: str | Path) -> "AnomalyWeighter":
         import joblib
-        import pickle
+        import pickle  # nosec B403 - joblib tried first; pickle only for legacy fallback
 
         path = Path(path)
         if not path.exists():
@@ -264,7 +264,7 @@ class AnomalyWeighter:
             obj = joblib.load(path)
         except Exception:
             with open(path, "rb") as f:
-                obj = pickle.load(f)
+                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
             raise TypeError(f"Expected AnomalyWeighter, got {type(obj)}")
         logger.info("AnomalyWeighter loaded ← %s", path)

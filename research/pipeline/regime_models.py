@@ -47,7 +47,7 @@ Usage
 from __future__ import annotations
 
 import logging
-import pickle
+import pickle  # nosec B403 - joblib tried first; pickle only for legacy fallback
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -399,6 +399,6 @@ class RegimeRouter:
             obj = joblib.load(path)
         except Exception:
             with open(path, "rb") as f:
-                obj = pickle.load(f)
+                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         logger.info("RegimeRouter loaded ← %s", path)
         return obj

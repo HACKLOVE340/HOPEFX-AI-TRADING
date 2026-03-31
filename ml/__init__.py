@@ -154,10 +154,10 @@ def _try_load(path: _Path) -> _Optional[_Any]:
             "joblib.load failed for %s (%s) — trying pickle", path.name, _jl_exc
         )
         try:
-            import pickle as _pickle
+            import pickle as _pickle  # nosec B403
 
             with open(path, "rb") as f:
-                return _pickle.load(f)
+                return _pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback for protocol mismatch
         except Exception as exc:
             import sys as _sys
 

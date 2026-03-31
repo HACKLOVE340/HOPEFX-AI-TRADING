@@ -12,7 +12,7 @@ Abstract base class for all ML models in the trading framework.
 import json
 import logging
 import os
-import pickle
+import joblib
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
@@ -163,17 +163,17 @@ class BaseMLModel(ABC):
         with open(metadata_path, "w") as f:
             json.dump(self.metadata, f, indent=2)
 
-        # Save model
-        with open(filepath, "wb") as f:
-            pickle.dump(
-                {
-                    "model": self.model,
-                    "config": self.config,
-                    "is_trained": self.is_trained,
-                    "training_history": self.training_history,
-                },
-                f,
-            )
+        # Save model using joblib (safer than raw pickle for sklearn objects)
+        joblib.dump(
+            {
+                "model": self.model,
+                "config": self.config,
+                "is_trained": self.is_trained,
+                "training_history": self.training_history,
+            },
+            filepath,
+            compress=3,
+        )
 
         self.logger.info(f"Model saved to {filepath}")
 
@@ -201,8 +201,7 @@ class BaseMLModel(ABC):
                     f"'{self._MODEL_BASE_DIR}'. Refusing to load.",
                 )
 
-        with open(resolved, "rb") as f:
-            data = pickle.load(f)  # nosec - path validated above; file written by this app
+        data = joblib.load(resolved)  # nosec B301 - path validated above; file written by this app
 
         self.model = data["model"]
         self.config = data["config"]

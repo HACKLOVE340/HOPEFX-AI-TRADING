@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-import pickle
+import joblib
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
@@ -81,8 +81,7 @@ class RegimeDetector:
     async def load(self) -> None:
         """Load or train model."""
         if self.model_path.exists():
-            with open(self.model_path, "rb") as f:
-                saved = pickle.load(f)
+            saved = joblib.load(self.model_path)
                 self.hmm = saved["hmm"]
                 self.vol_gmm = saved["vol_gmm"]
                 self._regime_map = saved["regime_map"]

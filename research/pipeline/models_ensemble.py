@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import json
 import logging
-import pickle
+import pickle  # nosec B403 - joblib tried first; pickle only for legacy fallback
 import threading
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -439,7 +439,7 @@ class EnsemblePredictor:
             obj = joblib.load(path)
         except Exception:
             with open(path, "rb") as f:
-                obj = pickle.load(f)
+                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
             raise TypeError(f"Expected EnsemblePredictor, got {type(obj)}")
         logger.info("Ensemble loaded ← %s", path)
@@ -575,7 +575,7 @@ class DeepEnsembleStore:
                         self._scaler = joblib.load(self.scaler_path)
                     except Exception:
                         with open(self.scaler_path, "rb") as f:
-                            self._scaler = pickle.load(f)
+                            self._scaler = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
                     logger.debug(
                         "DeepEnsembleStore: scaler loaded ← %s", self.scaler_path
                     )

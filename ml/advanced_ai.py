@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import logging
 import os
-import pickle
+import joblib
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -481,11 +481,11 @@ class VectorRAGNewsSentiment:
     def save(self, directory: str = "ml/saved_models/rag") -> None:
         Path(directory).mkdir(parents=True, exist_ok=True)
         faiss.write_index(self._index, str(Path(directory) / "news.index"))
-        with open(Path(directory) / "metadata.pkl", "wb") as fh:
-            pickle.dump(
-                {"headlines": self._stored_headlines, "scores": self._stored_scores},
-                fh,
-            )
+        joblib.dump(
+            {"headlines": self._stored_headlines, "scores": self._stored_scores},
+            Path(directory) / "metadata.pkl",
+            compress=3,
+        )
         logger.info("rag.saved directory=%s", directory)
 
     def load(self, directory: str = "ml/saved_models/rag") -> None:
@@ -494,8 +494,7 @@ class VectorRAGNewsSentiment:
         if index_path.exists():
             self._index = faiss.read_index(str(index_path))
         if meta_path.exists():
-            with open(meta_path, "rb") as fh:
-                meta = pickle.load(fh)
+            meta = joblib.load(meta_path)
             self._stored_headlines = meta["headlines"]
             self._stored_scores = meta["scores"]
         logger.info(
