@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-03-31T17:24:23.255959+00:00",
+  "run_at": "2026-03-31T22:59:48.018581+00:00",
   "years": 3,
   "oos_frac": 0.4,
   "target_n": 600,
@@ -47,9 +47,9 @@
       "std_pnl_pct": 0.040632,
       "sharpe": 0.4291,
       "max_drawdown": 0.578,
-      "accuracy": 0.5145,
-      "f1": 0.6112,
-      "auc": 0.5211,
+      "accuracy": 0.5121,
+      "f1": 0.61,
+      "auc": 0.5202,
       "oos_bars": 414,
       "train_bars": 622,
       "feature_count": 193
