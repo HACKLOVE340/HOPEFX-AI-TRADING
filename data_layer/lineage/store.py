@@ -336,7 +336,7 @@ class DataLineageStore:
             clauses.append("timestamp >= ?")
             params.append(since.isoformat())
 
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""  # nosec B608 - clauses contain only ? placeholders; no user input in SQL structure
         sql = f"""
             SELECT id, record_type, schema_version, lineage_id, source,
                    symbol, timestamp, payload, created_at
@@ -461,7 +461,7 @@ class DataLineageStore:
             clauses.append("symbol = ?")
             params.append(symbol)
 
-        where = "WHERE " + " AND ".join(clauses)
+        where = "WHERE " + " AND ".join(clauses)  # nosec B608 - clauses contain only ? placeholders; no user input in SQL structure
         sql = f"""
             SELECT id, record_type, schema_version, lineage_id, source,
                    symbol, timestamp, payload, created_at

@@ -365,7 +365,7 @@ class DatabaseMigrationManager:
 
                     safe_name = quoted_name(table_name, quote=True)
                     result = session.execute(
-                        text(f"SELECT COUNT(*) FROM {safe_name}")  # noqa: S608
+                        text(f"SELECT COUNT(*) FROM {safe_name}")  # nosec B608 - table name wrapped in quoted_name() by SQLAlchemy
                     )
                     count = result.scalar()
                     stats[table_name] = count

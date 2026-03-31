@@ -11,12 +11,27 @@ Database Connection Management
 - Migration support
 """
 
+import re
 import sqlite3
-from typing import List, Dict, Optional, Any
 from contextlib import contextmanager
+from typing import Any, Dict, List, Optional
+
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Allowlist pattern for SQL identifiers (table/column names).
+# Only alphanumeric characters and underscores are permitted.
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_identifier(name: str, label: str = "identifier") -> str:
+    """Raise ValueError if *name* is not a safe SQL identifier."""
+    if not _IDENTIFIER_RE.match(name):
+        raise ValueError(
+            f"Unsafe SQL {label} {name!r}: only [A-Za-z0-9_] characters are allowed"
+        )
+    return name
 
 
 class DatabasePool:
@@ -88,9 +103,12 @@ class Database:
 
     def insert(self, table: str, data: Dict[str, Any]) -> bool:
         """Insert record"""
+        _validate_identifier(table, "table name")
+        for col in data.keys():
+            _validate_identifier(col, "column name")
         columns = ", ".join(data.keys())
         placeholders = ", ".join(["?" for _ in data])
-        query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+        query = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"  # nosec B608 - identifiers validated above
 
         try:
             with self.pool.get_connection() as conn:
@@ -103,9 +121,16 @@ class Database:
             return False
 
     def update(self, table: str, data: Dict[str, Any], where: str) -> bool:
-        """Update records"""
+        """Update records.
+
+        *where* must be a plain column = ? expression; callers are responsible
+        for ensuring it contains no user-supplied data.
+        """
+        _validate_identifier(table, "table name")
+        for col in data.keys():
+            _validate_identifier(col, "column name")
         updates = ", ".join([f"{k} = ?" for k in data.keys()])
-        query = f"UPDATE {table} SET {updates} WHERE {where}"
+        query = f"UPDATE {table} SET {updates} WHERE {where}"  # nosec B608 - table/column identifiers validated; where is caller-controlled
 
         try:
             with self.pool.get_connection() as conn:
@@ -118,8 +143,13 @@ class Database:
             return False
 
     def delete(self, table: str, where: str) -> bool:
-        """Delete records"""
-        query = f"DELETE FROM {table} WHERE {where}"
+        """Delete records.
+
+        *where* must be a plain column = ? expression; callers are responsible
+        for ensuring it contains no user-supplied data.
+        """
+        _validate_identifier(table, "table name")
+        query = f"DELETE FROM {table} WHERE {where}"  # nosec B608 - table identifier validated; where is caller-controlled
 
         try:
             with self.pool.get_connection() as conn:
