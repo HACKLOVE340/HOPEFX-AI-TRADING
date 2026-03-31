@@ -99,7 +99,7 @@ class CircuitBreaker:
     """
 
     # Global registry so the same breaker is reused across call sites
-    _registry: Dict[str, "CircuitBreaker"] = {}
+    _registry: Dict[str, CircuitBreaker] = {}
 
     def __init__(
         self,
@@ -122,7 +122,7 @@ class CircuitBreaker:
 
     # ── Context manager ───────────────────────────────────────────────────────
 
-    async def __aenter__(self) -> "CircuitBreaker":
+    async def __aenter__(self) -> CircuitBreaker:
         await self._check()
         return self
 
@@ -260,7 +260,7 @@ class CircuitBreaker:
         name: str,
         failure_threshold: int = 5,
         reset_timeout: float = 60.0,
-    ) -> "CircuitBreaker":
+    ) -> CircuitBreaker:
         """Return (or create) the named circuit breaker from the global registry."""
         if name not in cls._registry:
             cls._registry[name] = cls(

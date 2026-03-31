@@ -380,7 +380,7 @@ class AdvancedPredictor:
         ohlcv: pd.DataFrame,
         macro_df: Optional[pd.DataFrame] = None,
         symbol: str = "XAUUSD",
-        as_of: Optional["pd.Timestamp"] = None,
+        as_of: Optional[pd.Timestamp] = None,
     ) -> Optional[pd.DataFrame]:
         """
         Build the feature matrix from a rolling OHLCV window.
@@ -444,7 +444,7 @@ class AdvancedPredictor:
         macro_df: Optional[pd.DataFrame] = None,
         symbol: str = "XAUUSD",
         mtf_df: Optional[pd.DataFrame] = None,
-        as_of: Optional["pd.Timestamp"] = None,
+        as_of: Optional[pd.Timestamp] = None,
     ) -> Dict[str, Any]:
         """
         Full inference pipeline. Returns a signal dict.
@@ -852,7 +852,7 @@ class HybridEnsemblePredictor:
                     meta_input = self._meta_scaler.transform(meta_input)
                 blended = float(self._meta.predict(meta_input)[0])
                 return float(np.clip(blended, 0.0, 1.0))
-            except Exception:  # nosec B110 - meta-model failure falls through to weighted average
+            except Exception:  # nosec B110 - meta-model failure falls through to weighted average  # noqa: S110
                 pass
 
         # Weighted average fallback

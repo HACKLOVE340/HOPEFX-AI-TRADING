@@ -103,7 +103,7 @@ class PublicUser(HttpUser):
 
     @task(4)
     def market_data(self):
-        symbol = random.choice(_SYMBOLS)  # nosec B311 - load test symbol selection, not cryptographic
+        symbol = random.choice(_SYMBOLS)  # nosec B311 - load test symbol selection, not cryptographic  # noqa: S311
         with self.client.get(
             f"/api/market-data/{symbol}",
             catch_response=True,
@@ -243,9 +243,9 @@ class AuthenticatedTrader(HttpUser):
 
     @task(2)
     def place_order(self):
-        symbol = random.choice(_SYMBOLS)  # nosec B311 - load test symbol selection, not cryptographic
-        side = random.choice(["buy", "sell"])  # nosec B311 - load test side selection, not cryptographic
-        qty = round(random.uniform(0.01, 0.1), 2)  # nosec B311 - load test quantity, not cryptographic
+        symbol = random.choice(_SYMBOLS)  # nosec B311 - load test symbol selection, not cryptographic  # noqa: S311
+        side = random.choice(["buy", "sell"])  # nosec B311 - load test side selection, not cryptographic  # noqa: S311
+        qty = round(random.uniform(0.01, 0.1), 2)  # nosec B311 - load test quantity, not cryptographic  # noqa: S311
 
         with self.client.post(
             "/api/trading/order",

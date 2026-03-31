@@ -133,7 +133,7 @@ class RegimeClassifier:
 
     # ── Fit ───────────────────────────────────────────────────────────────────
 
-    def fit(self, X: pd.DataFrame) -> "RegimeClassifier":
+    def fit(self, X: pd.DataFrame) -> RegimeClassifier:
         feats = self._regime_features(X)
         feats_sc = self._scaler.fit_transform(feats)
 
@@ -231,7 +231,7 @@ class _RegimeSpecialist:
         )
         self._fitted = False
 
-    def fit(self, X: pd.DataFrame, y: np.ndarray) -> "_RegimeSpecialist":
+    def fit(self, X: pd.DataFrame, y: np.ndarray) -> _RegimeSpecialist:
         if len(np.unique(y)) < 2:
             logger.warning("Regime %d: only one class — skipping", self.regime_id)
             return self
@@ -290,7 +290,7 @@ class RegimeRouter:
 
     # ── Fit ───────────────────────────────────────────────────────────────────
 
-    def fit(self, X: pd.DataFrame, y: np.ndarray) -> "RegimeRouter":
+    def fit(self, X: pd.DataFrame, y: np.ndarray) -> RegimeRouter:
         """
         1. Fit the regime classifier.
         2. Split training data by regime.
@@ -394,11 +394,11 @@ class RegimeRouter:
         logger.info("RegimeRouter saved → %s", path)
 
     @classmethod
-    def load(cls, path: str | Path) -> "RegimeRouter":
+    def load(cls, path: str | Path) -> RegimeRouter:
         try:
             obj = joblib.load(path)
         except Exception:
             with open(path, "rb") as f:
-                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
+                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback  # noqa: S301
         logger.info("RegimeRouter loaded ← %s", path)
         return obj

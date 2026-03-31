@@ -154,7 +154,7 @@ class SecurityService:
                 options={"require": ["exp", "iat", "sub", "jti"]},
             )
         except _jwt.ExpiredSignatureError:
-            raise ValueError("Token has expired")
+            raise ValueError("Token has expired") from None
         except _jwt.InvalidTokenError as exc:
             raise ValueError(f"Invalid token: {exc}") from exc
 

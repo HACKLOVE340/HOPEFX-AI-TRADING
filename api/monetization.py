@@ -231,7 +231,7 @@ async def get_tier_pricing(tier: str):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid tier: {tier}",
-        )
+        ) from None
 
 
 # ==========================
@@ -253,7 +253,7 @@ async def subscribe(request: SubscribeRequest):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid tier or billing cycle: {str(e)}",
-        )
+        ) from e
 
     # Free tier - no payment needed
     if tier == SubscriptionTier.FREE:
@@ -528,7 +528,7 @@ async def list_strategy(request: StrategyListRequest):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid category, license type, or tier: {str(e)}",
-        )
+        ) from e
 
     strategy = strategy_marketplace.list_strategy(
         creator_id=request.creator_id,
@@ -664,7 +664,7 @@ async def purchase_strategy(request: StrategyPurchaseRequest):
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Payment provider error. Please try again.",
-        )
+        ) from exc
 
     return {
         "success": True,
@@ -797,7 +797,7 @@ async def partner_signup(request: PartnerSignupRequest):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid partner type: {request.partner_type}",
-        )
+        ) from None
 
     partner = enterprise_manager.register_partner(
         company_name=request.company_name,

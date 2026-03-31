@@ -218,7 +218,7 @@ def _check_order_rate_limit(user_id: str) -> None:
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"Order rate limit exceeded: max {_ORDER_RATE_LIMIT} orders per {_ORDER_RATE_WINDOW}s",
                 headers={"Retry-After": str(_ORDER_RATE_WINDOW)},
-            )
+            ) from None
 
 
 # ---------------------------------------------------------------------------
@@ -367,7 +367,7 @@ async def _validate_order(order: "OrderRequest") -> None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Prop-firm rule check unavailable — order rejected for safety",
-        )
+        ) from pf_exc
 
 
 async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
@@ -419,7 +419,7 @@ async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Risk check unavailable — order rejected for safety",
-        )
+        ) from risk_exc
 
     # CVaR pre-trade gate — runs independently so a CVaR breach always blocks
     try:
@@ -447,7 +447,7 @@ async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="CVaR risk check unavailable — order rejected for safety",
-        )
+        ) from cvar_exc
 
 
 def _log_compliance(order: "OrderRequest", user_id: str) -> None:
@@ -497,7 +497,7 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
             ).inc()
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
 
 
 async def _record_fill(
@@ -1537,4 +1537,4 @@ async def run_stress_test(
         _logger.error("Stress test failed: %s", exc, exc_info=True)
         from fastapi import HTTPException
 
-        raise HTTPException(status_code=500, detail=f"Stress test error: {exc}")
+        raise HTTPException(status_code=500, detail=f"Stress test error: {exc}") from None

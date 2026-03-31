@@ -216,7 +216,7 @@ class MutationTestRunner:
                 stdout, stderr = await asyncio.wait_for(
                     proc.communicate(), timeout=self._timeout_s
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 logger.error("mutmut timed out after %.0fs", self._timeout_s)
                 return self._empty_report("mutmut", error="timeout")
@@ -427,7 +427,7 @@ class MutationTestRunner:
                 _, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
                 # returncode != 0 means at least one test failed → mutant killed
                 return "killed" if proc.returncode != 0 else "survived"
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 return "timeout"
         except Exception as exc:

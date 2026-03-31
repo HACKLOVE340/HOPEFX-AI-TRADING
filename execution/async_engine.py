@@ -189,7 +189,7 @@ class AsyncExecutionEngine:
                 if latency > 100:
                     logger.warning(f"High submission latency: {latency:.1f}ms")
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(f"Order submission timeout: {order.id}")
                 order.status = OrderStatus.REJECTED
                 order.metadata["reject_reason"] = "timeout"
@@ -307,7 +307,7 @@ class AsyncExecutionEngine:
 
         # Fetch fresh
         positions = []
-        for venue, broker in self.brokers.items():
+        for venue, _broker in self.brokers.items():
             try:
                 pos = await self._rate_limited_request(venue, "get_positions")
                 for p in pos:

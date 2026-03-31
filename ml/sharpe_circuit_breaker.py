@@ -264,7 +264,7 @@ class SharpeCircuitBreaker:
 
     async def _evaluate_all(self) -> None:
         """Evaluate all tracked model versions."""
-        for version, state in list(self._states.items()):
+        for _version, state in list(self._states.items()):
             await self._evaluate_one(state)
 
     async def _evaluate_one(self, state: CircuitState) -> None:

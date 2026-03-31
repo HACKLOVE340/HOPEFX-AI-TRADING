@@ -21,9 +21,9 @@ def _utcnow() -> datetime:
     """Return current UTC time as timezone-aware datetime."""
     return datetime.now(timezone.utc)
 
-from database.models import Base
+from database.models import Base  # noqa: E402
 
-from sqlalchemy import (
+from sqlalchemy import (  # noqa: E402
     Column,
     String,
     Boolean,
@@ -32,7 +32,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship  # noqa: E402
 
 
 class UserRole(str, enum.Enum):

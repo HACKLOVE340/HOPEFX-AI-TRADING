@@ -139,7 +139,7 @@ class MainLoop:
 
         # Wait for all tasks to finish (ignore CancelledError)
         results = await asyncio.gather(*self._tasks, return_exceptions=True)
-        for task, result in zip(self._tasks, results):
+        for task, result in zip(self._tasks, results, strict=False):
             if isinstance(result, Exception) and not isinstance(
                 result, asyncio.CancelledError
             ):

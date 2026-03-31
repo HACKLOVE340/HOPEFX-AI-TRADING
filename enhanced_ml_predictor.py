@@ -70,7 +70,7 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
-    warnings.warn("TensorFlow not available - deep learning disabled")
+    warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
 
 try:
     import torch  # noqa: F401
@@ -478,7 +478,7 @@ class AdvancedFeatureEngineer:
             features[f"return_autocorr_{lag}"] = (
                 features["returns"]
                 .rolling(50)
-                .apply(lambda x: x.autocorr(lag=lag) if len(x) > lag else 0)
+                .apply(lambda x, _lag=lag: x.autocorr(lag=_lag) if len(x) > _lag else 0)
             )
             features[f"return_lag_{lag}"] = features["returns"].shift(lag)
 
@@ -560,14 +560,14 @@ class AdvancedFeatureEngineer:
         importance_dict: Dict[str, float] = {}
 
         if hasattr(model, "feature_importances_"):
-            for name, imp in zip(self.feature_names, model.feature_importances_):
+            for name, imp in zip(self.feature_names, model.feature_importances_, strict=False):
                 importance_dict[name] = float(imp)
 
         elif hasattr(model, "coef_"):
             coefs = np.abs(model.coef_)
             if len(coefs.shape) > 1:
                 coefs = coefs.mean(axis=0)
-            for name, coef in zip(self.feature_names, coefs):
+            for name, coef in zip(self.feature_names, coefs, strict=False):
                 importance_dict[name] = float(coef)
 
         else:
@@ -647,7 +647,7 @@ class AdvancedFeatureEngineer:
 
         if method == "mutual_info":
             scores = mutual_info_classif(X, y, random_state=42)
-            feature_scores = list(zip(X.columns, scores))
+            feature_scores = list(zip(X.columns, scores, strict=False))
             feature_scores.sort(key=lambda x: x[1], reverse=True)
             return [f for f, _ in feature_scores[:n_features]]
 
@@ -1142,7 +1142,7 @@ class DeepLearningModel:
         if TENSORFLOW_AVAILABLE:
             self.model = load_model(f"{filepath}/model.h5")
 
-            with open(f"{filepath}/config.json", "r") as f:
+            with open(f"{filepath}/config.json") as f:
                 config_dict = json.load(f)
                 self.config.architecture = ModelArchitecture(
                     config_dict["architecture"]
@@ -1329,14 +1329,14 @@ class EnsemblePredictor:
         exp_vals = np.exp(vals)
         softmax_weights = exp_vals / exp_vals.sum()
 
-        self.weights = {name: float(w) for name, w in zip(names, softmax_weights)}
+        self.weights = {name: float(w) for name, w in zip(names, softmax_weights, strict=False)}
         logger.info(f"Optimized weights (softmax over val accuracy): {self.weights}")
 
     def _train_meta_learner(self, X_val: pd.DataFrame, y_val: pd.Series):
         """Train meta-learner for stacking"""
         # Generate base model predictions as features
         meta_features = []
-        for name, model in self.models.items():
+        for _name, model in self.models.items():
             if isinstance(model, DeepLearningModel):
                 probs = []
                 for i in range(len(X_val)):
@@ -1363,7 +1363,7 @@ class EnsemblePredictor:
 
             if hasattr(model, "feature_importances_"):
                 for feat, imp in zip(
-                    self.feature_engineer.feature_names, model.feature_importances_
+                    self.feature_engineer.feature_names, model.feature_importances_, strict=False
                 ):
                     all_importance[feat].append(imp * self.weights[name])
 
@@ -1451,7 +1451,7 @@ class EnsemblePredictor:
 
         # Weighted voting for direction
         vote_weights = defaultdict(float)
-        for pred, conf in zip(model_predictions, model_confidences):
+        for pred, conf in zip(model_predictions, model_confidences, strict=False):
             vote_weights[pred] += conf
 
         final_prediction = max(vote_weights.items(), key=lambda x: x[1])[0]
@@ -1462,7 +1462,7 @@ class EnsemblePredictor:
 
         # Aggregate probabilities
         avg_probs = defaultdict(float)
-        for probs, weight in zip(model_probabilities, model_confidences):
+        for probs, weight in zip(model_probabilities, model_confidences, strict=False):
             for key, val in probs.items():
                 avg_probs[key] += (
                     val * weight / total_weight
@@ -1570,7 +1570,7 @@ def calibrate_uncertainty_threshold(
 
     for thresh in sweep:
         tp = fp = fn = 0
-        for pred, actual in zip(predictions, actuals):
+        for pred, actual in zip(predictions, actuals, strict=False):
             predicted_confident = pred.total_uncertainty < thresh
             if predicted_confident and actual:
                 tp += 1

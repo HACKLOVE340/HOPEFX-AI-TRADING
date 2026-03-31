@@ -280,7 +280,7 @@ class MacroCalendarEngine:
             time_str = item.get("time", "")
             try:
                 scheduled = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
-            except Exception:  # nosec B112 - skip malformed calendar entry
+            except Exception:  # nosec B112 - skip malformed calendar entry  # noqa: S112
                 continue
 
             actual = _safe_float(item.get("actual"))

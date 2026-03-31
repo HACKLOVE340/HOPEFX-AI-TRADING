@@ -312,12 +312,12 @@ class GoldFeedManager:
         if self._prom_consensus_price:
             try:
                 self._prom_consensus_price.set(consensus_mid)
-            except Exception:  # nosec B110 - Prometheus metric failure must not crash feed
+            except Exception:  # nosec B110 - Prometheus metric failure must not crash feed  # noqa: S110
                 pass
         if self._prom_active_sources:
             try:
                 self._prom_active_sources.set(len(live))
-            except Exception:  # nosec B110 - Prometheus metric failure must not crash feed
+            except Exception:  # nosec B110 - Prometheus metric failure must not crash feed  # noqa: S110
                 pass
 
         # Cache consensus tick to Redis for synchronous consumers.

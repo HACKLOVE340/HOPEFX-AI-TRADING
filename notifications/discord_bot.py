@@ -254,7 +254,7 @@ class DiscordSignalBot:
         try:
             import aiohttp
 
-            for attempt in range(retries):
+            for _attempt in range(retries):
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
                         webhook_url,

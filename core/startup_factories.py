@@ -49,7 +49,7 @@ async def init_env(s: Any) -> bool:
             "SECURITY_JWT_SECRET not set — using dev default (not for production)",
         )
         os.environ["SECURITY_JWT_SECRET"] = (  # nosec B105 - dev-only fallback, warning logged above
-            "dev-jwt-secret-minimum-32-characters-long!!"
+            "dev-jwt-secret-minimum-32-characters-long!!"  # noqa: S105
         )
     try:
         from core.env_validator import validate_and_report

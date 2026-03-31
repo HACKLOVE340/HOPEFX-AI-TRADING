@@ -154,7 +154,7 @@ class TestAlpacaConnector:
     def test_initialization_paper(self):
         broker = AlpacaConnector(ALPACA_CONFIG)
         assert broker.api_key == "test_key"
-        assert broker.api_secret == "test_secret"
+        assert broker.api_secret == "test_secret"  # noqa: S105
         assert broker.paper is True
         assert broker.base_url == AlpacaConnector.PAPER_URL
         assert not broker.connected

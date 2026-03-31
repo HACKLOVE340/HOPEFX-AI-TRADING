@@ -623,7 +623,7 @@ class AdvancedOrderManager:
             quantities = [total_quantity / num_levels] * num_levels
 
         # Create levels
-        levels = [{"price": p, "quantity": q} for p, q in zip(prices, quantities)]
+        levels = [{"price": p, "quantity": q} for p, q in zip(prices, quantities, strict=False)]
 
         # Create child orders
         child_orders = []

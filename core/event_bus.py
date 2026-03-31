@@ -100,7 +100,7 @@ class DomainEvent:
     @classmethod
     def create(
         cls, event_type: str, source: str, data: dict, priority: int = 5
-    ) -> "DomainEvent":
+    ) -> DomainEvent:
         try:
             import lz4.frame
             import msgpack

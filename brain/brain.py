@@ -371,7 +371,7 @@ class HOPEFXBrain:
         if sleep_time > 0:
             try:
                 await asyncio.wait_for(self._shutdown_event.wait(), timeout=sleep_time)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     async def _update_state(self):
@@ -390,7 +390,7 @@ class HOPEFXBrain:
                         self.state.equity = account.get("equity", 0)
                         self.state.margin_used = account.get("margin_used", 0)
                         self.state.free_margin = account.get("free_margin", 0)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         logger.error("Broker timeout getting account info")
                         raise
                     except Exception as e:
@@ -416,7 +416,7 @@ class HOPEFXBrain:
                             for p in positions
                         }
                         self.state.open_trades_count = len(positions)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         logger.error("Broker timeout getting positions")
                         self.state.active_positions = {}
                         self.state.open_trades_count = 0
@@ -441,7 +441,7 @@ class HOPEFXBrain:
                             }
                             for o in orders
                         ]
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         logger.error("Broker timeout getting orders")
                         self.state.pending_orders = []
                     except Exception as e:
@@ -578,7 +578,7 @@ class HOPEFXBrain:
         (std_close / mean_close) * 100 if mean_close > 0 else 0
 
         # ATR approximation
-        atr = sum(h - l for h, l in zip(highs[-14:], lows[-14:])) / 14  # noqa: E741
+        atr = sum(h - l for h, l in zip(highs[-14:], lows[-14:], strict=False)) / 14  # noqa: E741
 
         # Classification
         current_price = closes[-1]
@@ -801,7 +801,7 @@ class HOPEFXBrain:
                 *[execute_with_limit(s) for s in signals[:5]], return_exceptions=True
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Strategy decision timeout")
         except Exception as e:
             logger.error(f"Strategy decision error: {e}")
@@ -913,7 +913,7 @@ class HOPEFXBrain:
                         if success:
                             logger.info(f"Closed position {position_id}")
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(f"Signal execution timeout: {signal.get('symbol')}")
             except Exception as e:
                 logger.error(f"Signal execution error: {e}")
@@ -1005,7 +1005,7 @@ class HOPEFXBrain:
         # Wait for current cycle to complete (with timeout)
         try:
             await asyncio.wait_for(self._shutdown_event.wait(), timeout=2.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
     def get_state(self) -> BrainState:

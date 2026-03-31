@@ -39,7 +39,7 @@ class TestKillSwitch:
         return KillSwitch(
             flag_file=tmp_path / "ks.flag",
             poll_interval_sec=0.05,
-            deactivation_token="test-token-abc",
+            deactivation_token="test-token-abc",  # noqa: S106
         )
 
     def test_initial_state_inactive(self, tmp_path):
@@ -336,7 +336,7 @@ class TestAlgoOrders:
         assert cancelled
         try:
             await asyncio.wait_for(task, timeout=1.0)
-        except (asyncio.CancelledError, asyncio.TimeoutError):
+        except (TimeoutError, asyncio.CancelledError):
             pass
         assert order.status in (AlgoStatus.CANCELLED, AlgoStatus.COMPLETED)
 

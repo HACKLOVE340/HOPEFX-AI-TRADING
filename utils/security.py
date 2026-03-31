@@ -155,7 +155,7 @@ class LogSanitizer:
             return message
 
         sanitized = message
-        for pattern_name, pattern in self.patterns.items():
+        for _pattern_name, pattern in self.patterns.items():
             # For patterns with groups, replace the captured group
             if pattern.groups:
                 sanitized = pattern.sub(

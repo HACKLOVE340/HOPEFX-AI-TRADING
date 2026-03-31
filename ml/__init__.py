@@ -157,7 +157,7 @@ def _try_load(path: _Path) -> _Optional[_Any]:
             import pickle as _pickle  # nosec B403
 
             with open(path, "rb") as f:
-                return _pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback for protocol mismatch
+                return _pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback for protocol mismatch  # noqa: S301
         except Exception as exc:
             import sys as _sys
 
@@ -449,7 +449,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         try:
             features_df = feature_engineer.create_features(df)
         except Exception as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         return {
             "rows": len(features_df),
             "feature_count": len(feature_engineer.feature_names),

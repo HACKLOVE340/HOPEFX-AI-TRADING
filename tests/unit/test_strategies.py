@@ -116,7 +116,7 @@ class TestMovingAverageCrossover:
 
         # Process each bar to build up the MA history
         signal = None
-        for idx, row in data.iterrows():
+        for _idx, row in data.iterrows():
             bar_data = {"close": row["close"]}
             analysis = strategy.analyze(bar_data)
             signal = strategy.generate_signal(analysis)
@@ -146,7 +146,7 @@ class TestMovingAverageCrossover:
 
         # Process each bar to build up the MA history
         signal = None
-        for idx, row in data.iterrows():
+        for _idx, row in data.iterrows():
             bar_data = {"close": row["close"]}
             analysis = strategy.analyze(bar_data)
             signal = strategy.generate_signal(analysis)
@@ -179,7 +179,7 @@ class TestMovingAverageCrossover:
 
         # Process the small data
         signal = None
-        for idx, row in small_data.iterrows():
+        for _idx, row in small_data.iterrows():
             bar_data = {"close": row["close"]}
             analysis = strategy.analyze(bar_data)
             signal = strategy.generate_signal(analysis)

@@ -72,7 +72,7 @@ class BrandTheme:
     # Custom CSS injected into the tenant's dashboard (sanitised)
     custom_css: str = ""
 
-    def validate(self) -> "BrandTheme":
+    def validate(self) -> BrandTheme:
         """Validate all colour fields in-place. Returns self for chaining."""
         colour_fields = [
             "primary_color",
@@ -133,7 +133,7 @@ class BrandTheme:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, str]) -> "BrandTheme":
+    def from_dict(cls, data: Dict[str, str]) -> BrandTheme:
         """Construct a BrandTheme from a dict, ignoring unknown keys."""
         known = {f.name for f in cls.__dataclass_fields__.values()}  # type: ignore[attr-defined]
         filtered = {k: v for k, v in data.items() if k in known}

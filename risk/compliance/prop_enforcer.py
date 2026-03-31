@@ -89,7 +89,7 @@ class PropConfig:
     telegram_chat_id: str = ""
 
     @classmethod
-    def from_file(cls, path: Path = _DEFAULT_CONFIG) -> "PropConfig":
+    def from_file(cls, path: Path = _DEFAULT_CONFIG) -> PropConfig:
         """
         Load from prop_firm_mode.json.
         Falls back to defaults if file is absent or malformed.
@@ -433,7 +433,7 @@ class PropEnforcer:
                 data=data,
                 method="POST",
             )
-            urllib.request.urlopen(req, timeout=8)  # nosec B310 - webhook URL validated as https:// in config
+            urllib.request.urlopen(req, timeout=8)  # nosec B310 - webhook URL validated as https:// in config  # noqa: S310
         except Exception as exc:
             logger.warning("PropEnforcer Telegram alert failed: %s", exc)
 

@@ -204,7 +204,7 @@ class TestMACrossoverComprehensive:
 
     def test_ma_analyze(self, ma_strategy, ma_market_data):
         """Test MA analyze method."""
-        for idx, row in ma_market_data.iterrows():
+        for _idx, row in ma_market_data.iterrows():
             data = {"close": row["close"]}
             analysis = ma_strategy.analyze(data)
             assert analysis is not None
@@ -213,7 +213,7 @@ class TestMACrossoverComprehensive:
         """Test MA signal generation."""
         # Process enough data to generate signals
         signal = None
-        for idx, row in ma_market_data.iterrows():
+        for _idx, row in ma_market_data.iterrows():
             data = {"close": row["close"]}
             analysis = ma_strategy.analyze(data)
             signal = ma_strategy.generate_signal(analysis)
@@ -281,7 +281,7 @@ class TestStrategyManagerComprehensive:
         manager.register_strategy(strat2)
 
         count = 0
-        for name, strategy in manager.strategies.items():
+        for _name, strategy in manager.strategies.items():
             count += 1
             assert strategy is not None
 

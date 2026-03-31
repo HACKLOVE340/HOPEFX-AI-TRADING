@@ -835,7 +835,7 @@ class RobustPredictor:
         if self.config.meta_model == "logistic":
             # Generate meta-features
             meta_features = []
-            for name, model in self.models.items():
+            for _name, model in self.models.items():
                 if hasattr(model, "predict_proba"):
                     probs = model.predict_proba(X)[:, 1]
                 else:
@@ -855,7 +855,7 @@ class RobustPredictor:
         predictions = []
         probabilities = []
 
-        for name, model in models.items():
+        for _name, model in models.items():
             if hasattr(model, "predict_proba"):
                 proba = model.predict_proba(X)
                 predictions.append(np.argmax(proba, axis=1))
@@ -875,7 +875,7 @@ class RobustPredictor:
         """Aggregate feature importance across ensemble"""
         importance = {}
 
-        for name, model in models.items():
+        for _name, model in models.items():
             if hasattr(model, "feature_importances_"):
                 imp = model.feature_importances_
                 for i, feat in enumerate(self.selected_features):

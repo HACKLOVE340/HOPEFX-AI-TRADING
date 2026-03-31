@@ -434,7 +434,7 @@ class IncrementalXGBoost:
 
     # ── Initial fit ───────────────────────────────────────────────────────────
 
-    def fit(self, X: pd.DataFrame, y: np.ndarray) -> "IncrementalXGBoost":
+    def fit(self, X: pd.DataFrame, y: np.ndarray) -> IncrementalXGBoost:
         """Full initial training."""
         self._feature_cols = list(X.columns)
         X_sc = self._scaler.fit_transform(X)
@@ -461,7 +461,7 @@ class IncrementalXGBoost:
 
     # ── Incremental update ────────────────────────────────────────────────────
 
-    def update(self, X: pd.DataFrame, y: np.ndarray) -> "IncrementalXGBoost":
+    def update(self, X: pd.DataFrame, y: np.ndarray) -> IncrementalXGBoost:
         """
         Add new data and grow the booster by `n_new_rounds` trees.
 
@@ -523,7 +523,7 @@ class IncrementalXGBoost:
 
     # ── Reset + refit ─────────────────────────────────────────────────────────
 
-    def reset_and_refit(self, X: pd.DataFrame, y: np.ndarray) -> "IncrementalXGBoost":
+    def reset_and_refit(self, X: pd.DataFrame, y: np.ndarray) -> IncrementalXGBoost:
         """
         Full re-train on a recent window (called after drift detection).
         Preserves the scaler fit from the original training data.
@@ -555,12 +555,12 @@ class IncrementalXGBoost:
         logger.info("IncrementalXGBoost saved → %s", path)
 
     @classmethod
-    def load(cls, path: str | Path) -> "IncrementalXGBoost":
+    def load(cls, path: str | Path) -> IncrementalXGBoost:
         try:
             obj = joblib.load(path)
         except Exception:
             with open(path, "rb") as f:
-                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
+                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback  # noqa: S301
         logger.info("IncrementalXGBoost loaded ← %s", path)
         return obj
 
@@ -983,7 +983,7 @@ class OnlineLearnerStore:
 # Module-level singleton factory
 # ─────────────────────────────────────────────────────────────────────────────
 
-_store_registry: Dict[str, "OnlineLearnerStore"] = {}
+_store_registry: Dict[str, OnlineLearnerStore] = {}
 _registry_lock = threading.Lock()
 
 
@@ -994,7 +994,7 @@ def get_online_learner(
     online_weight: float = 0.3,
     min_fills: int = 20,
     adaptive_weights: bool = True,
-) -> "OnlineLearnerStore":
+) -> OnlineLearnerStore:
     """
     Return (or create) the singleton ``OnlineLearnerStore`` for *symbol*.
 

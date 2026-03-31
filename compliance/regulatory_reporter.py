@@ -198,7 +198,7 @@ class DeadLetterQueue:
             try:
                 with open(dlq_file) as fh:
                     count += sum(1 for line in fh if line.strip())
-            except Exception:  # nosec B110 - file read failure is non-fatal for DLQ depth
+            except Exception:  # nosec B110 - file read failure is non-fatal for DLQ depth  # noqa: S110
                 pass
         return count
 
@@ -610,14 +610,14 @@ class RegulatoryReporter:
                 if _parsed.scheme not in ("http", "https"):
                     raise ValueError(f"Regulatory endpoint must use http/https, got {_parsed.scheme!r}")
                 data = json.dumps(payload).encode()
-                req = urllib.request.Request(
+                req = urllib.request.Request(  # noqa: S310
                     endpoint,
                     data=data,
                     headers={**headers, "Content-Type": "application/json"},
                     method="POST",
                 )
                 try:
-                    with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:  # nosec B310 - scheme validated above
+                    with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:  # nosec B310 - scheme validated above  # noqa: S310
                         return True, resp.status, None
                 except urllib.error.HTTPError as e:
                     return False, e.code, str(e)

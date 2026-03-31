@@ -99,11 +99,11 @@ class _ProtectContext:
     On failure: increments counter, trips circuit after FAILURE_THRESHOLD.
     """
 
-    def __init__(self, guard: "FaultGuard", module: str) -> None:
+    def __init__(self, guard: FaultGuard, module: str) -> None:
         self._guard = guard
         self._module = module
 
-    async def __aenter__(self) -> "_ProtectContext":
+    async def __aenter__(self) -> _ProtectContext:
         ms = self._guard._modules.get(self._module)
         if ms is None:
             return self  # unregistered module — pass through

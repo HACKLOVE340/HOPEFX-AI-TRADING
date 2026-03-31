@@ -436,7 +436,7 @@ class XGBoostPredictor:
             base["n_estimators"] = int(os.environ.get("CI_XGB_N_ESTIMATORS", "50"))
         self._params = {**base, **(params or {})}
         self._model: Optional[xgb.XGBClassifier] = None
-        self._scaler: Optional["StandardScaler"] = None
+        self._scaler: Optional[StandardScaler] = None
         self._feature_names: List[str] = []
 
     def fit(
@@ -487,7 +487,7 @@ class XGBoostPredictor:
         if self._model is None:
             return {}
         imp = self._model.feature_importances_
-        return dict(zip(self._feature_names, imp.tolist()))
+        return dict(zip(self._feature_names, imp.tolist(), strict=False))
 
     def save(self, path: str) -> None:
         if self._model is None:
@@ -712,7 +712,7 @@ class MLPipeline:
         mean_auc = float(np.mean([f.auc for f in fold_results]))
 
         # Binomial test: is accuracy significantly better than 0.5?
-        n_correct = sum(p == t for p, t in zip(all_oos_preds, all_oos_true))
+        n_correct = sum(p == t for p, t in zip(all_oos_preds, all_oos_true, strict=False))
         n_total = len(all_oos_true)
         binom_result = stats.binomtest(n_correct, n_total, p=0.5, alternative="greater")
         p_value = float(binom_result.pvalue)

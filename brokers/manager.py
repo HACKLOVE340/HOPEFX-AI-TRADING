@@ -142,7 +142,7 @@ class BrokerManager:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_env(cls, kill_switch=None) -> "BrokerManager":
+    def from_env(cls, kill_switch=None) -> BrokerManager:
         """
         Construct BrokerManager from environment variables.
 
@@ -617,7 +617,7 @@ class BrokerManager:
     # Context manager
     # ------------------------------------------------------------------
 
-    def __enter__(self) -> "BrokerManager":
+    def __enter__(self) -> BrokerManager:
         self.connect_all()
         return self
 

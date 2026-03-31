@@ -92,7 +92,7 @@ TARGET_TRADE_COUNT = 600
 
 
 def fetch_ohlcv_paginated(
-    exchange: "Any",
+    exchange: Any,
     symbol: str,
     timeframe: str,
     since_ms: Optional[int] = None,
@@ -258,7 +258,7 @@ def run_backtest(
     trade_pnls: list[float] = []
     hold_bars: list[int] = []
 
-    for ts, row in df.iterrows():
+    for _ts, row in df.iterrows():
         trade_pnl = 0.0
         pip_val = _pip_value_for_price(row["close"])
 

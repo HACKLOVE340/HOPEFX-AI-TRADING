@@ -552,7 +552,7 @@ def _make_stripe_mock() -> MagicMock:
         amount=180000,
         currency="usd",
         status="requires_payment_method",
-        client_secret="pi_test123456789012_secret_abc",
+        client_secret="pi_test123456789012_secret_abc",  # noqa: S106
         metadata={},
     )
     mock.PaymentIntent.create.return_value = pi_mock

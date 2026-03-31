@@ -309,7 +309,7 @@ class AdvancedOrderFlowAnalyzer:
         bucket = (max_p - min_p) / price_bins
         levels: Dict[int, Dict] = {}
 
-        for ts, price, size, side in trades:
+        for _ts, price, size, side in trades:
             idx = min(int((price - min_p) / bucket), price_bins - 1)
             if idx not in levels:
                 levels[idx] = {
@@ -531,7 +531,7 @@ class AdvancedOrderFlowAnalyzer:
         bucket = (max_p - min_p) / price_bins
         bins: Dict[int, Dict] = {}
 
-        for ts, price, size, side in trades:
+        for _ts, price, size, side in trades:
             idx = min(int((price - min_p) / bucket), price_bins - 1)
             if idx not in bins:
                 bins[idx] = {

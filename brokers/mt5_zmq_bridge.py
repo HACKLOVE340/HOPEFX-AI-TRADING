@@ -458,7 +458,7 @@ class MT5ZmqBridge:
                 raise TimeoutError(
                     f"No response from MT5 for command {cmd_id} "
                     f"after {self.order_timeout_s}s"
-                )
+                ) from None
 
             return self._parse_response(resp, cmd_id, symbol, side, lots)
 
@@ -560,7 +560,7 @@ class MT5ZmqBridge:
 
     # ── context manager ───────────────────────────────────────────────────────
 
-    def __enter__(self) -> "MT5ZmqBridge":
+    def __enter__(self) -> MT5ZmqBridge:
         self.start()
         return self
 

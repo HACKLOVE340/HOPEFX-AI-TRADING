@@ -87,7 +87,7 @@ def _linear_slope(xs: List[float], ys: List[float]) -> Tuple[float, float]:
         return 0.0, ys[0] if ys else 0.0
     sx = sum(xs)
     sy = sum(ys)
-    sxy = sum(x * y for x, y in zip(xs, ys))
+    sxy = sum(x * y for x, y in zip(xs, ys, strict=False))
     sxx = sum(x * x for x in xs)
     denom = n * sxx - sx * sx
     if denom == 0:

@@ -702,4 +702,4 @@ async def paper_trading_gate_record_fill(pnl: float = 0.0):
         logger.warning("paper_trading_gate_record_fill failed: %s", exc)
         from fastapi import HTTPException
 
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from None

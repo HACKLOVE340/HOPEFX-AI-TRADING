@@ -56,7 +56,7 @@ class FeedHandler:
     """
 
     def __init__(self):
-        self.exchanges: Dict[str, "ExchangeFeed"] = {}
+        self.exchanges: Dict[str, ExchangeFeed] = {}
         self.normalized_callbacks: List[Callable[[Tick], None]] = []
         self.symbol_subscriptions: Set[str] = set()
         self.tick_buffer: deque = deque(maxlen=10000)

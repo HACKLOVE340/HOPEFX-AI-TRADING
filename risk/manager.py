@@ -103,7 +103,7 @@ class PositionSizingResult:
     impact_f: float = 1.0  # macro impact scaling factor
     dd_f: float = 1.0  # drawdown scaling factor
     lineage_id: str = ""
-    created_at: "datetime" = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Convenience: allow attribute access as .size (legacy callers)
     @property
@@ -162,7 +162,7 @@ class RiskAssessment:
     approved: bool
     risk_level: str  # RiskLevel constant
     reason: str  # human-readable approval/rejection reason
-    sizing: "Optional[PositionSizingResult]" = None
+    sizing: Optional[PositionSizingResult] = None
     data_quality: float = 1.0
     sentiment_score: float = 0.0
     impact_score: float = 0.0
@@ -170,7 +170,7 @@ class RiskAssessment:
     daily_dd_pct: float = 0.0
     open_positions: int = 0
     var_95: float = 0.0
-    timestamp: "datetime" = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Alias: tests and downstream callers use .can_trade
     @property
@@ -426,7 +426,7 @@ class RiskManager:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def assess(self, signal) -> "RiskAssessment":
+    def assess(self, signal) -> RiskAssessment:
         """
         Full risk assessment for a proposed trade signal.
 
@@ -509,7 +509,7 @@ class RiskManager:
             var_95=self.value_at_risk(),
         )
 
-    def size_order(self, signal) -> "PositionSizingResult":
+    def size_order(self, signal) -> PositionSizingResult:
         """
         Compute position size for a signal.
 
@@ -650,7 +650,7 @@ class RiskManager:
         return self._halt
 
     @property
-    def config(self) -> "RiskConfig":
+    def config(self) -> RiskConfig:
         """Public read-only view of the active RiskConfig (tests use rm.config.*)."""
         return self._config
 
@@ -697,7 +697,7 @@ class RiskManager:
         take_profit_price: Optional[float] = None,
         volatility: float = 0.0,
         **kwargs,
-    ) -> "PositionSizingResult":
+    ) -> PositionSizingResult:
         """
         Convenience wrapper around size_order() for callers that supply
         raw parameters rather than a signal object.
@@ -779,7 +779,7 @@ class RiskManager:
         *,
         size: Optional[float] = None,
         side: Optional[str] = None,
-    ) -> "tuple[bool, str]":
+    ) -> tuple[bool, str]:
         """Return (allowed, reason) for a proposed trade.
 
         Accepts both ``quantity``/``direction`` and ``size``/``side`` kwargs
@@ -808,7 +808,7 @@ class RiskManager:
             return False, f"size_exceeds_limit:{qty:.2f}>{max_qty:.2f}"
         return True, "approved"
 
-    def check_drawdown(self) -> "DrawdownCheckResult":
+    def check_drawdown(self) -> DrawdownCheckResult:
         """Return a DrawdownCheckResult with current drawdown metrics."""
         dd = self._state.current_drawdown
         daily_dd = self._state.daily_drawdown
@@ -1179,7 +1179,7 @@ class RiskManager:
         account_equity: float,
         volatility: float,
         existing_positions: List[Any],  # noqa: ARG002
-    ) -> "PositionSizingResult":
+    ) -> PositionSizingResult:
         """
         Full position-size calculation with halt, R/R, and sizing checks.
 
@@ -1187,7 +1187,7 @@ class RiskManager:
         when any pre-trade gate rejects the signal.
         """
 
-        def _zero_result(reason_str: str) -> "PositionSizingResult":
+        def _zero_result(reason_str: str) -> PositionSizingResult:
             r = PositionSizingResult(
                 symbol=symbol,
                 direction="long",
@@ -1280,7 +1280,7 @@ class RiskManager:
 
     # ── Lineage ───────────────────────────────────────────────────────────────
 
-    def _write_sizing_lineage(self, sized: "PositionSizingResult") -> None:
+    def _write_sizing_lineage(self, sized: PositionSizingResult) -> None:
         if self._lineage is None:
             return
         try:
@@ -1307,7 +1307,7 @@ class RiskManager:
         self,
         account_info: Dict[str, Any],
         positions: List[Any],
-    ) -> "TradeAssessment":
+    ) -> TradeAssessment:
         """
         Lightweight trade-readiness check from raw account info dict.
 
@@ -1403,7 +1403,7 @@ class RiskManager:
         self,
         trade: Any,
         max_pct: float = 0.05,
-    ) -> "RiskCheckResult":
+    ) -> RiskCheckResult:
         """
         FIA 1.1: Validate that a trade's notional size does not exceed max_pct
         of the current account equity.
@@ -1457,7 +1457,7 @@ class RiskManager:
         order: Any,
         current_price: float,
         tolerance: float = 0.02,
-    ) -> "RiskCheckResult":
+    ) -> RiskCheckResult:
         """
         FIA 1.3: Validate that the order price is within tolerance of the
         current market price.
@@ -1535,7 +1535,7 @@ class RiskManager:
         self,
         equity_curve: Any = None,
         max_dd: float = None,
-    ) -> "RiskCheckResult":
+    ) -> RiskCheckResult:
         """
         Validate that the current (or supplied) drawdown does not exceed max_dd.
 
@@ -1584,7 +1584,7 @@ class RiskManager:
         self,
         positions: List[Any],
         max_correlation: float = 0.80,
-    ) -> "RiskCheckResult":
+    ) -> RiskCheckResult:
         """
         Estimate portfolio correlation risk from position symbols.
 
@@ -1646,7 +1646,7 @@ class RiskManager:
         positions: List[Any],
         account: Any,
         max_single: float = 0.40,
-    ) -> "RiskCheckResult":
+    ) -> RiskCheckResult:
         """
         Validate that no single position exceeds max_single fraction of
         account balance.
@@ -1875,7 +1875,7 @@ class RiskManager:
         *,
         size: Optional[float] = None,
         side: Optional[str] = None,  # noqa: ARG002
-    ) -> "tuple[bool, str]":
+    ) -> tuple[bool, str]:
         """Return (allowed, reason) for a proposed trade.
 
         Accepts both ``quantity``/``direction`` and ``size``/``side`` kwargs
@@ -1911,7 +1911,7 @@ class RiskManager:
 
     # ── Extended check_risk_limits (returns violations list) ─────────────────
 
-    def check_risk_limits(self) -> "tuple[bool, List[str]]":  # type: ignore[override]  # noqa: F811
+    def check_risk_limits(self) -> tuple[bool, List[str]]:  # type: ignore[override]  # noqa: F811
         """Return (within_limits: bool, violations: List[str]).
 
         Evaluates drawdown, daily loss, open-position count, and halt state.
@@ -1953,7 +1953,7 @@ class RiskManager:
 
     # ── can_open_position (extended — human-readable reasons) ─────────────────
 
-    def can_open_position(self, size: float) -> "tuple[bool, str]":  # type: ignore[override]  # noqa: F811
+    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]  # noqa: F811
         """Return (True, 'approved') or (False, human-readable reason)."""
         if self._halt or self._trading_halted:
             return False, f"halted:{self._halt_reason}"

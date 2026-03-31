@@ -205,7 +205,7 @@ async def generate_weekly_report():
         logger.error("Weekly report generation failed: %s", exc)
         from fastapi import HTTPException
 
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from None
 
 
 @router.get(

@@ -556,7 +556,7 @@ class EnsemblePredictor(BaseMLModel):
         weight_total = 0.0
         all_predictions = []
 
-        for name, mp in model_predictions.items():
+        for _name, mp in model_predictions.items():
             combined_weight = mp.weight * mp.confidence
             weighted_sum += mp.prediction * combined_weight
             weight_total += combined_weight

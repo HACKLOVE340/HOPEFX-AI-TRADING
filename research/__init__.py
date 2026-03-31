@@ -620,7 +620,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         except ValueError:
             raise HTTPException(
                 status_code=400, detail=f"Invalid cell_type '{req.cell_type}'"
-            )
+            ) from None
         cell = engine.add_cell(notebook_id, cell_type, req.content)
         if not cell:
             raise HTTPException(

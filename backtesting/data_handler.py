@@ -102,7 +102,7 @@ class DataHandler:
 
         # Find common dates
         common_index = None
-        for symbol, df in self.data.items():
+        for _symbol, df in self.data.items():
             if common_index is None:
                 common_index = df.index
             else:

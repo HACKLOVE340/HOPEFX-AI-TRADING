@@ -205,7 +205,7 @@ class EventBus:
                         self._metrics["delivered"] += 1
                     except Exception:
                         self._metrics["dropped"] += 1
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     def get_metrics(self):

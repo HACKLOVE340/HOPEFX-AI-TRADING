@@ -105,7 +105,7 @@ class OnlineLearner:
     Adapts to new data while preserving knowledge of past regimes.
     """
 
-    def __init__(self, model: "nn.Module" = None, learning_rate: float = 1e-4):
+    def __init__(self, model: nn.Module = None, learning_rate: float = 1e-4):
         self.model = model
         if model is not None:
             self.optimizer = torch.optim.AdamW(
@@ -397,7 +397,7 @@ class SklearnOnlineLearner:
         except ImportError:
             logger.warning("sklearn not available — SklearnOnlineLearner is a no-op")
 
-    def _extract_features(self, bars: "pd.DataFrame") -> Optional[np.ndarray]:
+    def _extract_features(self, bars: pd.DataFrame) -> Optional[np.ndarray]:
         """
         Extract feature vector from OHLCV bars.
 
@@ -458,7 +458,7 @@ class SklearnOnlineLearner:
             logger.debug("SklearnOnlineLearner._extract_features: %s", exc)
             return None
 
-    def _extract_label(self, bars: "pd.DataFrame") -> Optional[np.ndarray]:
+    def _extract_label(self, bars: pd.DataFrame) -> Optional[np.ndarray]:
         """Binary label: 1 if last close > first close, else 0."""
         try:
             closes = bars["close"].values
@@ -572,7 +572,7 @@ class SklearnOnlineLearner:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def partial_fit(self, bars: "pd.DataFrame") -> bool:
+    def partial_fit(self, bars: pd.DataFrame) -> bool:
         """
         Incrementally update the model with new OHLCV bars.
 
@@ -610,7 +610,7 @@ class SklearnOnlineLearner:
                 self._correct_window.append(correct)
                 if len(self._correct_window) >= 10:
                     self._rolling_accuracy = float(np.mean(self._correct_window))
-            except Exception:  # nosec B110 - accuracy update failure must not interrupt learning loop
+            except Exception:  # nosec B110 - accuracy update failure must not interrupt learning loop  # noqa: S110
                 pass
 
             # EWC anchor snapshot
@@ -625,7 +625,7 @@ class SklearnOnlineLearner:
                 prob = float(self._model.predict_proba(X_scaled)[0, 1])
                 if self._check_drift(prob):
                     self._reset_for_new_regime()
-            except Exception:  # nosec B110 - drift detection failure must not interrupt learning loop
+            except Exception:  # nosec B110 - drift detection failure must not interrupt learning loop  # noqa: S110
                 pass
 
             if self.persist_path:
@@ -645,7 +645,7 @@ class SklearnOnlineLearner:
             )
             return False
 
-    def predict_proba(self, bars: "pd.DataFrame") -> Optional[float]:
+    def predict_proba(self, bars: pd.DataFrame) -> Optional[float]:
         """
         Return P(up) for the given bars, or None if not yet fitted.
 
@@ -698,7 +698,7 @@ class SklearnOnlineLearner:
         _jl.dump(self, path, compress=3)
 
     @classmethod
-    def load(cls, path: str) -> "SklearnOnlineLearner":
+    def load(cls, path: str) -> SklearnOnlineLearner:
         import joblib as _jl
 
         return _jl.load(path)

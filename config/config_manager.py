@@ -58,7 +58,7 @@ class EncryptionManager:
             try:
                 self._salt = bytes.fromhex(salt_hex)
             except ValueError:
-                raise ValueError(f"CONFIG_SALT is not valid hex: {salt_hex!r}")
+                raise ValueError(f"CONFIG_SALT is not valid hex: {salt_hex!r}") from None
         else:
             logger.warning("CONFIG_SALT not set; deriving salt from master key")
             self._salt = hashlib.sha256(key.encode()).digest()[:16]
@@ -324,7 +324,7 @@ class ConfigManager:
 
     def _write_config(self, cfg: AppConfig, path: Path) -> None:
         d = cfg.to_dict()
-        for name, api_d in d.get("api_configs", {}).items():
+        for _name, api_d in d.get("api_configs", {}).items():
             api_d["api_key"] = self._encrypt_value(api_d.get("api_key", ""))
             api_d["api_secret"] = self._encrypt_value(api_d.get("api_secret", ""))
         with open(path, "w") as f:
@@ -341,7 +341,7 @@ class ConfigManager:
                 d = json.load(f)
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
-        for name, api_d in d.get("api_configs", {}).items():
+        for _name, api_d in d.get("api_configs", {}).items():
             api_d["api_key"] = self._decrypt_value(api_d.get("api_key", ""))
             api_d["api_secret"] = self._decrypt_value(api_d.get("api_secret", ""))
         return AppConfig.from_dict(d)

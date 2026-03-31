@@ -58,7 +58,7 @@ def _get_registry() -> Dict[str, Any]:
         raise HTTPException(
             status_code=503,
             detail=f"ml.online_learner unavailable: {exc}",
-        )
+        ) from exc
 
 
 def _get_learner(symbol: str):
@@ -71,7 +71,7 @@ def _get_learner(symbol: str):
         raise HTTPException(
             status_code=503,
             detail=f"ml.online_learner unavailable: {exc}",
-        )
+        ) from exc
 
 
 def _fetch_bars(symbol: str, lookback: int = 200):
@@ -108,7 +108,7 @@ def _fetch_bars(symbol: str, lookback: int = 200):
         raise HTTPException(
             status_code=502,
             detail=f"Could not fetch OHLCV for {symbol}: {exc}",
-        )
+        ) from exc
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -304,7 +304,7 @@ async def partial_fit(
         raise HTTPException(
             status_code=500,
             detail=f"partial_fit raised: {exc}",
-        )
+        ) from exc
 
     updated_at = datetime.now(timezone.utc).isoformat()
     # Stamp last_fit_at on the learner for status reporting
@@ -414,7 +414,7 @@ async def reset_online_learner(
         raise HTTPException(
             status_code=500,
             detail=f"reset_online_learner failed: {exc}",
-        )
+        ) from exc
 
     msg = (
         f"OnlineLearnerStore for {req.symbol.upper()} removed from registry — "

@@ -79,7 +79,7 @@ def fetch_ohlcv_yfinance(
     try:
         import yfinance as yf
     except ImportError:
-        raise RuntimeError("yfinance not installed — run: pip install yfinance")
+        raise RuntimeError("yfinance not installed — run: pip install yfinance") from None
 
     logger.info("Fetching %s from yfinance (%s, %s)...", symbol, period, interval)
     ticker = yf.Ticker(symbol)

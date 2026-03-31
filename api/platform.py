@@ -400,7 +400,7 @@ async def impersonate_user(
         logger.error("impersonate_user.jwt_failed: %s", exc)
         raise HTTPException(
             status_code=500, detail="Could not generate impersonation token"
-        )
+        ) from exc
 
 
 # ─────────────────────────────────────────────────────────────────────────────

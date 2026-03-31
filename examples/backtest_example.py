@@ -56,7 +56,7 @@ class XAUUSDDataGenerator:
                 high_p = max(open_p, price) + volatility * 0.5
                 low_p = min(open_p, price) - volatility * 0.5
                 close_p = price
-                volume = random.randint(1000, 10000)  # nosec B311 - example data generation, not cryptographic
+                volume = random.randint(1000, 10000)  # nosec B311 - example data generation, not cryptographic  # noqa: S311
 
                 data.append(
                     {
@@ -121,7 +121,7 @@ class BacktestEngine:
         """Run backtest and return results."""
         logger.info("Starting backtest...")
 
-        for i, candle in enumerate(self.data):
+        for _i, candle in enumerate(self.data):
             signal = self.strategy.on_data(candle)
 
             # Execute signals

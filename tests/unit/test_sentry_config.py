@@ -78,7 +78,7 @@ class TestScrubDict:
 
     def test_scrubs_password(self):
         out = self._scrub({"password": "hunter2", "username": "alice"})
-        assert out["password"] == "[Filtered]"
+        assert out["password"] == "[Filtered]"  # noqa: S105
         assert out["username"] == "alice"
 
     def test_scrubs_api_key(self):
@@ -91,12 +91,12 @@ class TestScrubDict:
 
     def test_scrubs_nested_dict(self):
         out = self._scrub({"outer": {"token": "t", "safe": "yes"}})
-        assert out["outer"]["token"] == "[Filtered]"
+        assert out["outer"]["token"] == "[Filtered]"  # noqa: S105
         assert out["outer"]["safe"] == "yes"
 
     def test_scrubs_list_of_dicts(self):
         out = self._scrub({"items": [{"secret": "x"}, {"safe": "y"}]})
-        assert out["items"][0]["secret"] == "[Filtered]"
+        assert out["items"][0]["secret"] == "[Filtered]"  # noqa: S105
         assert out["items"][1]["safe"] == "y"
 
     def test_preserves_non_sensitive_fields(self):
@@ -138,7 +138,7 @@ class TestBeforeSend:
     def test_scrubs_password_in_request_data(self):
         event = _make_event()
         result = self._hook(event, {})
-        assert result["request"]["data"]["password"] == "[Filtered]"
+        assert result["request"]["data"]["password"] == "[Filtered]"  # noqa: S105
         assert result["request"]["data"]["username"] == "alice"
 
     def test_scrubs_authorization_header(self):

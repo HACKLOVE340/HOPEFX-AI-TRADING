@@ -106,7 +106,7 @@ def _parse_timeframe(tf) -> int:
         raise ValueError(
             f"DukascopyFetcher: unrecognised timeframe '{tf}'. "
             f"Use minutes (int) or one of: {sorted(_TF_ALIASES)}"
-        )
+        ) from None
 
 
 class DukascopyFetcher:
@@ -201,7 +201,7 @@ class DukascopyFetcher:
                 if data:
                     self._save_cache(symbol, hour, data)
                 return data if data else None
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Dukascopy timeout: %s", url)
             return None
         except Exception as exc:

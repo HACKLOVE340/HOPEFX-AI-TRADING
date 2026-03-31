@@ -177,7 +177,7 @@ class AMLGate:
         user_id: str,
         amount,
         currency: str,
-        decision: "AMLDecision",
+        decision: AMLDecision,
     ) -> None:
         """
         Write an AML_BLOCK event to the transactional outbox.

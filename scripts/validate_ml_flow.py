@@ -622,7 +622,7 @@ def stage_kill_switch_gate() -> str:
     _ensure_ohlcv()
     with tempfile.TemporaryDirectory() as tmp:
         flag_file = _Path(tmp) / "ks.flag"
-        ks = KillSwitch(flag_file=flag_file, deactivation_token="test-token")
+        ks = KillSwitch(flag_file=flag_file, deactivation_token="test-token")  # noqa: S106
 
         # Activate the kill switch
         ks.activate("validation_test")

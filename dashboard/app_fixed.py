@@ -103,7 +103,7 @@ def read_data():
         return points
     except Exception as exc:
         logger.error("Error retrieving data: %s", exc)
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(status_code=500, detail="Internal Server Error") from exc
 
 
 @app.get("/chart", response_class=HTMLResponse)
@@ -134,4 +134,4 @@ def get_chart():
         return f"<img src='data:image/png;base64,{img_b64}' alt='Equity Curve'/>"
     except Exception as exc:
         logger.error("Error generating chart: %s", exc)
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(status_code=500, detail="Internal Server Error") from exc

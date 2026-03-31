@@ -140,7 +140,7 @@ def _count_touches(
 ) -> int:
     """Count how many bars came within *tolerance* of *price*."""
     count = 0
-    for h, lo in zip(highs, lows):
+    for h, lo in zip(highs, lows, strict=False):
         if lo - tolerance <= price <= h + tolerance:
             count += 1
     return count
@@ -337,7 +337,7 @@ def _build_volume_levels(
     bucket = (max_p - min_p) / bins
     vol_by_bin: Dict[int, float] = {}
 
-    for price, vol in zip(closes, volumes):
+    for price, vol in zip(closes, volumes, strict=False):
         idx = min(int((price - min_p) / bucket), bins - 1)
         vol_by_bin[idx] = vol_by_bin.get(idx, 0.0) + vol
 

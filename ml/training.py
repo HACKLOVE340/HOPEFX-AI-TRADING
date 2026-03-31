@@ -355,11 +355,13 @@ class LSTMModel:
         self,
         sequence_length: int = 60,
         n_features: int = 10,
-        lstm_units: List[int] = [64, 32],
+        lstm_units: List[int] = None,
         dropout_rate: float = 0.2,
         learning_rate: float = 0.001,
         model_name: str = "lstm_model",
     ):
+        if lstm_units is None:
+            lstm_units = [64, 32]
         if not TENSORFLOW_AVAILABLE:
             raise ImportError("TensorFlow not installed. Run: pip install tensorflow")
 
@@ -535,7 +537,7 @@ class LSTMModel:
             "_config.json",
         )
         if Path(config_path).exists():
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 config = json.load(f)
                 self.sequence_length = config.get(
                     "sequence_length",
@@ -849,7 +851,7 @@ class RandomForestModel:
             named_imp = dict(
                 zip(
                     self.feature_importance["feature"],
-                    self.feature_importance["importance"],
+                    self.feature_importance["importance"], strict=False,
                 ),
             )
         return {
@@ -1227,7 +1229,7 @@ class MLEvaluationReport:
 # Convenience function for full ML pipeline
 def train_ml_pipeline(
     df: pd.DataFrame,
-    model_types: List[str] = ["lstm", "xgboost", "random_forest"],
+    model_types: List[str] = None,
     prediction_horizon: int = 1,
     test_size: float = 0.2,
     model_dir: str = "ml/models",
@@ -1245,6 +1247,8 @@ def train_ml_pipeline(
     Returns:
         Dictionary with trained models and evaluation metrics
     """
+    if model_types is None:
+        model_types = ["lstm", "xgboost", "random_forest"]
     Path(model_dir).mkdir(parents=True, exist_ok=True)
 
     results = {}

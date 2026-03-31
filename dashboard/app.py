@@ -111,4 +111,4 @@ class DashboardApp:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(DashboardApp().app, host="0.0.0.0", port=8000)  # nosec B104 - container deployment requires 0.0.0.0
+    uvicorn.run(DashboardApp().app, host="0.0.0.0", port=8000)  # nosec B104 - container deployment requires 0.0.0.0  # noqa: S104

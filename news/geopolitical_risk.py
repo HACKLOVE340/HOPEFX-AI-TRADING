@@ -575,7 +575,6 @@ class GeopoliticalRiskProvider:
 
         Reference: https://blog.gdeltproject.org/gdelt-2-0-our-global-world-in-realtime/
         """
-        import os as _os  # noqa: PLC0415
 
         timeout = int(self.config.get("request_timeout", 15))
         # GDELT GKG API — returns JSON articles matching a theme query
@@ -750,14 +749,14 @@ class GeopoliticalRiskProvider:
         impact_score += severity_impact.get(event.severity, 0)
 
         # Region impact (gold-sensitive regions)
-        for region_key, countries in self.GOLD_SENSITIVE_REGIONS.items():
+        for _region_key, countries in self.GOLD_SENSITIVE_REGIONS.items():
             if any(country in countries for country in event.countries):
                 impact_score += 1
                 break
 
         # Check for high-impact keywords
         text = f"{event.title} {event.description}".lower()
-        for category, keywords in self.HIGH_IMPACT_KEYWORDS.items():
+        for _category, keywords in self.HIGH_IMPACT_KEYWORDS.items():
             if any(keyword in text for keyword in keywords):
                 impact_score += 1
                 break
@@ -796,7 +795,7 @@ class GeopoliticalRiskProvider:
             score += 15
 
         # Adjust by region significance
-        for region_key, countries in self.GOLD_SENSITIVE_REGIONS.items():
+        for _region_key, countries in self.GOLD_SENSITIVE_REGIONS.items():
             if any(country in countries for country in event.countries):
                 score += 10
                 break

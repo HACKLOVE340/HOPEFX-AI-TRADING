@@ -211,19 +211,19 @@ def _get_current_user_id(
         raise HTTPException(
             status_code=503,
             detail="Authentication service misconfigured",
-        )
+        ) from exc
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=401,
             detail="Token expired",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
     except (jwt.InvalidTokenError, ValueError):
         raise HTTPException(
             status_code=401,
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

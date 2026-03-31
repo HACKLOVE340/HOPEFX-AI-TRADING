@@ -695,7 +695,7 @@ def create_subscription_router(manager: Optional[SubscriptionManager] = None):
     except ImportError:
         raise ImportError(
             "fastapi and pydantic are required. pip install fastapi pydantic"
-        )
+        ) from None
 
     _mgr = manager or subscription_manager
     _validator = LicenseValidator(_mgr)
@@ -724,7 +724,7 @@ def create_subscription_router(manager: Optional[SubscriptionManager] = None):
         try:
             tier = SubscriptionTier(req.tier.lower())
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Unknown tier: {req.tier!r}")
+            raise HTTPException(status_code=400, detail=f"Unknown tier: {req.tier!r}") from None
 
         if tier == SubscriptionTier.FREE:
             sub = _mgr.create_subscription(req.user_id, SubscriptionTier.FREE)
@@ -751,7 +751,7 @@ def create_subscription_router(manager: Optional[SubscriptionManager] = None):
             )
         except Exception as exc:
             logger.exception("subscribe endpoint error: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc))
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
         return session
 
@@ -770,10 +770,10 @@ def create_subscription_router(manager: Optional[SubscriptionManager] = None):
         try:
             result = _mgr.handle_stripe_webhook(payload, stripe_signature)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             logger.exception("webhook processing error: %s", exc)
-            raise HTTPException(status_code=500, detail="Webhook processing failed")
+            raise HTTPException(status_code=500, detail="Webhook processing failed") from exc
 
         return result
 

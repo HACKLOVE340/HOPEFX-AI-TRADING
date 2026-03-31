@@ -58,7 +58,7 @@ _SERIES_MAP: Dict[str, Dict[str, str]] = {
 }
 
 
-def _fetch_series(ticker: str, years: int = _HISTORY_YEARS) -> Optional["pd.DataFrame"]:
+def _fetch_series(ticker: str, years: int = _HISTORY_YEARS) -> Optional[pd.DataFrame]:
     """Fetch `years` of daily close data for `ticker` via yfinance."""
     try:
         import yfinance as yf
@@ -151,7 +151,7 @@ def daily_refresh() -> int:
     return bootstrap(force=True)
 
 
-def load_into_store(store: "MacroStore") -> int:
+def load_into_store(store: MacroStore) -> int:
     """
     Load all available CSVs from MACRO_DATA_DIR into a MacroStore instance.
 

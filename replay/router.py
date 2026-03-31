@@ -51,7 +51,7 @@ def create_replay_router(engine: "ChartReplayEngine"):
             start = datetime.fromisoformat(req.start_date)
             end = datetime.fromisoformat(req.end_date)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=f"Invalid date format: {exc}")
+            raise HTTPException(status_code=400, detail=f"Invalid date format: {exc}") from exc
         session = engine.create_session(
             symbol=req.symbol,
             timeframe=req.timeframe,

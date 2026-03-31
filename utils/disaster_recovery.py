@@ -177,7 +177,7 @@ class FailoverManager:
         self.last_peer_heartbeat: Dict[str, datetime] = {}
         self.failover_timeout = 15  # seconds
         # Shared aiohttp session — created lazily on first use
-        self._session: "aiohttp.ClientSession | None" = None  # type: ignore[name-defined]
+        self._session: aiohttp.ClientSession | None = None  # type: ignore[name-defined]
 
     async def start_election(self):
         """

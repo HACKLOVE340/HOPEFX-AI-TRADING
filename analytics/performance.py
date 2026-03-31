@@ -593,7 +593,7 @@ class PerformanceAnalytics:
         """Get daily returns for a period."""
         return [
             r
-            for (dt, _), r in zip(self.daily_equity[:-1], self.daily_returns)
+            for (dt, _), r in zip(self.daily_equity[:-1], self.daily_returns, strict=False)
             if dt >= start_date
         ]
 

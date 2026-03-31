@@ -138,7 +138,7 @@ def _price_impact(
         return 0.0
     remaining = target_vol
     cost = 0.0
-    for p, v in zip(ask_prices, ask_vols):
+    for p, v in zip(ask_prices, ask_vols, strict=False):
         fill = min(remaining, v)
         cost += fill * p
         remaining -= fill

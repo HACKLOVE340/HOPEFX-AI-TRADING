@@ -96,7 +96,7 @@ class MT5LiveFeed:
         self._last_error: Optional[str] = None
         self._reconnect_delay = _RECONNECT_INITIAL_DELAY
 
-        self._ws: Optional["websocket.WebSocketApp"] = None
+        self._ws: Optional[websocket.WebSocketApp] = None
         self._running = False
         self._connect_thread: Optional[threading.Thread] = None
         self._latency: List[float] = []
@@ -388,7 +388,7 @@ class MT5LiveFeed:
         logger.info("MT5LiveFeed: using REST fallback at %s", self.rest_fallback_url)
         while self._running:
             try:
-                with urllib.request.urlopen(  # nosec B310 - scheme validated as http/https above
+                with urllib.request.urlopen(  # nosec B310 - scheme validated as http/https above  # noqa: S310
                     self.rest_fallback_url, timeout=_CONNECTION_TIMEOUT
                 ) as resp:
                     raw = resp.read().decode()

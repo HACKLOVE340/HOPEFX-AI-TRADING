@@ -959,7 +959,7 @@ def calculate_var_garch(
         # Sum of h conditional variances (for VaR of h-day return)
         sigma2_forecast = 0.0
         sigma2_i = sigma2_t
-        for i in range(horizon_days):
+        for _i in range(horizon_days):
             sigma2_forecast += sigma2_i
             sigma2_i = long_run_var + persistence * (sigma2_i - long_run_var)
             sigma2_i = max(sigma2_i, 1e-10)

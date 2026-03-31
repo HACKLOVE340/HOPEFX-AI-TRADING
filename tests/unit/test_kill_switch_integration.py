@@ -131,8 +131,8 @@ def test_wrong_token_rejected():
     import hashlib
     import hmac
 
-    secret = "correct_secret_key"
-    wrong_secret = "wrong_secret_key"
+    secret = "correct_secret_key"  # noqa: S105
+    wrong_secret = "wrong_secret_key"  # noqa: S105
     message = "deactivate"
 
     correct_sig = hmac.new(

@@ -570,7 +570,7 @@ class SmartRouter:
                     last_error,
                 )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._states[broker_id].record_error()
                 last_error = "timeout"
                 logger.error(

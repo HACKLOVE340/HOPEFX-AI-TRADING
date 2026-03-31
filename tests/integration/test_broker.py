@@ -272,7 +272,7 @@ class TestEdgeCases:
             # If it succeeds, order must be a valid object
             if order is not None:
                 assert hasattr(order, "symbol") or hasattr(order, "id")
-        except Exception:
+        except Exception:  # noqa: S110
             pass  # Raising is also acceptable — just must not crash the process
         await broker.disconnect()
 

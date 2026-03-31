@@ -530,7 +530,7 @@ class MetricsRegistry:
             lines.append(f"# TYPE {name} {collector.metric_type.value}")
 
             if isinstance(collector, Counter):
-                for label_key, values in collector.get_all_values().items():
+                for _label_key, values in collector.get_all_values().items():
                     if values:
                         labels = values[-1].labels
                         label_str = ",".join([f'{k}="{v}"' for k, v in labels.items()])
@@ -538,7 +538,7 @@ class MetricsRegistry:
                         lines.append(f"{name}{{{label_str}}} {value}")
 
             elif isinstance(collector, Gauge):
-                for label_key, values in collector.get_all_values().items():
+                for _label_key, values in collector.get_all_values().items():
                     if values:
                         labels = values[-1].labels
                         label_str = ",".join([f'{k}="{v}"' for k, v in labels.items()])

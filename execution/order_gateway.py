@@ -86,7 +86,7 @@ class OrderGateway:
     instantiates OrderGateway without arguments.
     """
 
-    def __init__(self, executor: Optional["TradeExecutor"] = None) -> None:
+    def __init__(self, executor: Optional[TradeExecutor] = None) -> None:
         self.executor = executor
         self.orders: dict[str, Order] = {}
         if executor is None:
@@ -109,7 +109,7 @@ class OrderGateway:
         self.orders[order_id] = order
         return order
 
-    def send_order(self, order: Order) -> "ExecutionResult":
+    def send_order(self, order: Order) -> ExecutionResult:
         """
         Route order to the broker via TradeExecutor.
 
@@ -191,7 +191,7 @@ class OrderGateway:
 
         return result
 
-    async def send_order_async(self, order: Order) -> "ExecutionResult":
+    async def send_order_async(self, order: Order) -> ExecutionResult:
         """
         Async variant of send_order — preferred when called from async code.
 

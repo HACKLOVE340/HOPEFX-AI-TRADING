@@ -59,7 +59,7 @@ class PropFirmConfig:
     telegram_chat_id: str = ""
 
     @classmethod
-    def from_file(cls, path: str | Path = "prop_firm_mode.json") -> "PropFirmConfig":
+    def from_file(cls, path: str | Path = "prop_firm_mode.json") -> PropFirmConfig:
         """Load config from JSON file; fall back to defaults if file absent."""
         p = Path(path)
         if not p.exists():
@@ -175,7 +175,7 @@ class PropComplianceEngine:
         cls,
         path: str | Path = "prop_firm_mode.json",
         initial_equity: float = 100_000.0,
-    ) -> "PropComplianceEngine":
+    ) -> PropComplianceEngine:
         cfg = PropFirmConfig.from_file(path)
         return cls(cfg, initial_equity)
 

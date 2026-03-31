@@ -197,7 +197,7 @@ def _rolling_hfd(series: pd.Series, window: int, k_max: int) -> pd.Series:
             log_lk = np.log(np.array(lk) + 1e-10)
             try:
                 out[wi + window - 1] = float(np.polyfit(log_k, log_lk, 1)[0])
-            except Exception:  # nosec B110 - polyfit failure leaves NaN in output (correct)
+            except Exception:  # nosec B110 - polyfit failure leaves NaN in output (correct)  # noqa: S110
                 pass
     return pd.Series(out, index=series.index)
 
@@ -264,7 +264,7 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
         f_vals.append(rms_per_win)
 
     # Compute DFA exponent from log-log slope
-    valid_scales = [(s, fv) for s, fv in zip(scales, f_vals) if fv is not None]
+    valid_scales = [(s, fv) for s, fv in zip(scales, f_vals, strict=False) if fv is not None]
     if len(valid_scales) < 2:
         return pd.Series(out, index=series.index)
 
@@ -346,7 +346,7 @@ def _rolling_apen(series: pd.Series, window: int, m: int, r_factor: float) -> pd
             continue
         try:
             out[wi + window - 1] = _phi_vec(x, m, r) - _phi_vec(x, m + 1, r)
-        except Exception:  # nosec B110 - SampEn failure leaves NaN in output (correct)
+        except Exception:  # nosec B110 - SampEn failure leaves NaN in output (correct)  # noqa: S110
             pass
     return pd.Series(out, index=series.index)
 
@@ -464,7 +464,7 @@ def _rolling_corr_dim(series: pd.Series, window: int) -> pd.Series:
             log_c = np.log(np.array(c_vals) + 1e-10)
             try:
                 out[wi + window - 1] = float(np.polyfit(log_eps, log_c, 1)[0])
-            except Exception:  # nosec B110 - polyfit failure leaves NaN in output (correct)
+            except Exception:  # nosec B110 - polyfit failure leaves NaN in output (correct)  # noqa: S110
                 pass
     return pd.Series(out, index=series.index)
 
@@ -1209,7 +1209,7 @@ def build_extended_features_with_data_layer(
     min_move_atr: float = 0.25,
     smoke: bool = False,
     as_of: Optional[pd.Timestamp] = None,
-) -> "tuple[pd.DataFrame, pd.Series]":
+) -> tuple[pd.DataFrame, pd.Series]:
     """
     Full feature matrix: 200+ OHLCV features + 26 live data layer features.
 

@@ -204,7 +204,7 @@ async def test_notification(body: TestNotificationRequest):
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Channel delivery failed: {exc}",
-        )
+        ) from exc
 
     return {"status": "delivered", "channel": channel}
 

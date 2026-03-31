@@ -102,7 +102,7 @@ class SimulationEngine:
                     bounds.append((0.0, 1.0))
 
             def _objective(x):
-                params = dict(zip(param_keys, x))
+                params = dict(zip(param_keys, x, strict=False))
                 score = fitness_function(params)
                 return -score  # minimise negative fitness
 
@@ -114,7 +114,7 @@ class SimulationEngine:
                 seed=42,
                 tol=1e-6,
             )
-            best_params = dict(zip(param_keys, result.x))
+            best_params = dict(zip(param_keys, result.x, strict=False))
             return {
                 "best_parameters": best_params,
                 "fitness_score": -result.fun,

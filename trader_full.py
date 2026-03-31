@@ -77,7 +77,7 @@ class SecureConfig:
         if not self.oanda_account_id:
             missing.append("OANDA_ACCOUNT_ID")
         if missing:
-            raise EnvironmentError(f"Live trading requires: {', '.join(missing)}")
+            raise OSError(f"Live trading requires: {', '.join(missing)}")
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +117,7 @@ class LiveDataPipeline:
             ]
         )
         if not has_key:
-            raise EnvironmentError(
+            raise OSError(
                 "LiveDataPipeline requires at least one streaming API key: "
                 "FINNHUB_API_KEY, TWELVE_API_KEY, or POLYGON_API_KEY. "
                 "OANDA is for order execution only — not for price streaming."
@@ -520,7 +520,7 @@ class ForwardTestHarness:
                 pipeline_task.cancel()
                 try:
                     await asyncio.wait_for(pipeline_task, timeout=3.0)
-                except (asyncio.CancelledError, asyncio.TimeoutError):
+                except (TimeoutError, asyncio.CancelledError):
                     pass
             self._alerts.send("ForwardTestHarness stopped", "WARNING")
 

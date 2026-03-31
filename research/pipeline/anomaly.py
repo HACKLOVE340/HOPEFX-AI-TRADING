@@ -120,7 +120,7 @@ class AnomalyWeighter:
 
     # ── Fit ───────────────────────────────────────────────────────────────────
 
-    def fit(self, X: pd.DataFrame | np.ndarray) -> "AnomalyWeighter":
+    def fit(self, X: pd.DataFrame | np.ndarray) -> AnomalyWeighter:
         """
         Fit the Isolation Forest (and optionally LOF) on the training feature matrix.
 
@@ -253,7 +253,7 @@ class AnomalyWeighter:
         logger.info("AnomalyWeighter saved → %s", path)
 
     @classmethod
-    def load(cls, path: str | Path) -> "AnomalyWeighter":
+    def load(cls, path: str | Path) -> AnomalyWeighter:
         import joblib
         import pickle  # nosec B403 - joblib tried first; pickle only for legacy fallback
 
@@ -264,7 +264,7 @@ class AnomalyWeighter:
             obj = joblib.load(path)
         except Exception:
             with open(path, "rb") as f:
-                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
+                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback  # noqa: S301
         if not isinstance(obj, cls):
             raise TypeError(f"Expected AnomalyWeighter, got {type(obj)}")
         logger.info("AnomalyWeighter loaded ← %s", path)

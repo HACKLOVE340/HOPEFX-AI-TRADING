@@ -255,7 +255,7 @@ class PushNotificationManager:
                         "Content-Type": "application/json",
                     },
                 )
-                with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - FCM/APNs https:// endpoint
+                with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - FCM/APNs https:// endpoint  # noqa: S310
                     result = json.loads(resp.read())
                     results.append(result)
                     if result.get("failure"):

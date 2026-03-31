@@ -397,11 +397,11 @@ class MT5Bridge:
         self._exporter = EX5SignalExporter(signal_dir)
 
     @classmethod
-    def from_env(cls, enforcer=None) -> "MT5Bridge":
+    def from_env(cls, enforcer=None) -> MT5Bridge:
         """Construct from MT5_LOGIN / MT5_PASSWORD / MT5_SERVER env vars."""
         login_str = os.environ.get("MT5_LOGIN", "")
         if not login_str:
-            raise EnvironmentError("MT5_LOGIN env var not set")
+            raise OSError("MT5_LOGIN env var not set")
         return cls(
             server=os.environ.get("MT5_SERVER", ""),
             login=int(login_str),
@@ -882,7 +882,7 @@ class MT5Bridge:
 
     # ── context manager ───────────────────────────────────────────────────────
 
-    def __enter__(self) -> "MT5Bridge":
+    def __enter__(self) -> MT5Bridge:
         self.connect()
         return self
 

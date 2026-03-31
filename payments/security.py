@@ -15,7 +15,6 @@ from enum import Enum
 from typing import Dict, Optional, List, Tuple
 from dataclasses import dataclass
 import logging
-import secrets
 
 import pyotp
 

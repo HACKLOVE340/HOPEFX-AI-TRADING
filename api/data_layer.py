@@ -44,7 +44,7 @@ def _get_orchestrator():
 
         return orchestrator
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Data layer unavailable: {exc}")
+        raise HTTPException(status_code=503, detail=f"Data layer unavailable: {exc}") from exc
 
 
 @router.get("/health")
@@ -111,7 +111,7 @@ async def get_sentiment() -> Dict[str, Any]:
             "recent_articles": recent_articles,
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/macro")
@@ -157,7 +157,7 @@ async def get_macro() -> Dict[str, Any]:
             "fred_snapshot": macro_snapshot,
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/microstructure")
@@ -193,7 +193,7 @@ async def get_microstructure(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
             "features": micro_features,
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/quality")
@@ -223,7 +223,7 @@ async def get_quality_report(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
             "source_health": orch._dqe.get_source_health(),
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/lineage")
@@ -243,7 +243,7 @@ async def get_lineage(
         stats = orch._lineage.stats()
         return {"records": records, "stats": stats}
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/feeds")
@@ -261,7 +261,7 @@ async def get_feed_health() -> Dict[str, Any]:
             "dqe_health": health.get("dqe", {}),
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/ml-features")
@@ -277,4 +277,4 @@ async def get_ml_features(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

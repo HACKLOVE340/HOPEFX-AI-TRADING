@@ -345,7 +345,7 @@ class IBKRConnector(BrokerConnector):
     # Contract factory
     # ------------------------------------------------------------------
 
-    def _make_xauusd_contract(self, instrument: str = "commodity") -> "Contract":
+    def _make_xauusd_contract(self, instrument: str = "commodity") -> Contract:
         """
         Build the XAUUSD contract.
 
@@ -365,7 +365,7 @@ class IBKRConnector(BrokerConnector):
         self._ib.qualifyContracts(c)
         return c
 
-    def _make_contract(self, symbol: str, instrument: str = "commodity") -> "Contract":
+    def _make_contract(self, symbol: str, instrument: str = "commodity") -> Contract:
         """Generic contract factory — defaults to XAUUSD commodity."""
         if symbol.upper() in (_XAUUSD_SYMBOL, "GOLD", "XAU"):
             return self._make_xauusd_contract(instrument)
@@ -753,7 +753,7 @@ class IBKRConnector(BrokerConnector):
 
     def _trade_to_order(
         self,
-        trade: "Trade",
+        trade: Trade,
         symbol: str,
         side: OrderSide,
         order_type: OrderType,
@@ -806,7 +806,7 @@ class IBKRConnector(BrokerConnector):
     # Context manager support
     # ------------------------------------------------------------------
 
-    def __enter__(self) -> "IBKRConnector":
+    def __enter__(self) -> IBKRConnector:
         self.connect()
         return self
 

@@ -132,7 +132,7 @@ class MacroStore:
     def update(
         self,
         series_name: str,
-        date: Union[str, "date", datetime],
+        date: Union[str, date, datetime],
         value: float,
     ) -> None:
         """

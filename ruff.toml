@@ -1,0 +1,45 @@
+# ruff.toml — project-wide linting configuration
+# https://docs.astral.sh/ruff/configuration/
+
+line-length = 120
+target-version = "py311"
+
+exclude = [
+    ".git",
+    "__pycache__",
+    "node_modules",
+    "frontend",
+    "alembic",
+    "venv",
+    ".venv",
+    ".greptile.py",
+    "examples",
+]
+
+[lint]
+select = ["E", "W", "F", "B", "S", "UP"]
+ignore = [
+    "E501",
+    "S101",
+    "S603",
+    "S607",
+    "S608",
+    "S324",
+    "B008",
+    "UP007",
+    "UP017",
+    "UP035",
+    "UP006",
+    "UP042",
+    "UP045",
+    "UP036",
+]
+
+[lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S107", "S108", "S110", "S112", "S301", "S311"]
+"tests/unit/**" = ["S105", "S106", "S107", "S108", "S110", "S112", "S301", "S311"]
+"tests/integration/**" = ["S105", "S106", "S107", "S108", "S110", "S112"]
+"scripts/**" = ["E402"]
+"locust/**" = ["S311"]
+"deployment/**" = ["S105"]
+"data_layer/feeds/**" = ["S311"]

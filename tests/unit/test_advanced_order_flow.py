@@ -105,7 +105,7 @@ class TestAdvancedOrderFlowAnalyzer:
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
 
         analyzer = AdvancedOrderFlowAnalyzer(config={"max_trades": 5})
-        for i in range(10):
+        for _i in range(10):
             analyzer.add_trade("XAUUSD", 1950.0, 10.0, "buy")
 
         assert len(analyzer._trades["XAUUSD"]) == 5

@@ -355,7 +355,7 @@ class MultiSourceValidator:
         }
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         sources: Dict[str, pd.DataFrame] = {}
-        for name, result in zip(tasks.keys(), results):
+        for name, result in zip(tasks.keys(), results, strict=False):
             if isinstance(result, pd.DataFrame) and not result.empty:
                 sources[name] = result
             elif isinstance(result, Exception):

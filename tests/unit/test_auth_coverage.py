@@ -22,7 +22,7 @@ from datetime import datetime, timezone, timedelta
 
 
 def _make_jwt(
-    sub: str = "user123", role: str = "trader", secret: str = "test-secret"
+    sub: str = "user123", role: str = "trader", secret: str = "test-secret"  # noqa: S107
 ) -> str:
     import jwt
 
@@ -57,7 +57,7 @@ class TestAuthService:
         """JWT encode → decode must preserve sub and role."""
         import jwt
 
-        secret = "test-secret-key"
+        secret = "test-secret-key"  # noqa: S105
         token = _make_jwt("alice", "admin", secret)
         payload = jwt.decode(token, secret, algorithms=["HS256"])
         assert payload["sub"] == "alice"
@@ -67,7 +67,7 @@ class TestAuthService:
         """Expired JWT must raise DecodeError / ExpiredSignatureError."""
         import jwt
 
-        secret = "test-secret-key"
+        secret = "test-secret-key"  # noqa: S105
         payload = {
             "sub": "bob",
             "exp": datetime.now(timezone.utc) - timedelta(seconds=1),
@@ -80,7 +80,7 @@ class TestAuthService:
         """JWT signed with wrong secret must fail verification."""
         import jwt
 
-        token = _make_jwt("carol", secret="correct-secret")
+        token = _make_jwt("carol", secret="correct-secret")  # noqa: S106
         with pytest.raises(jwt.InvalidSignatureError):
             jwt.decode(token, "wrong-secret", algorithms=["HS256"])
 

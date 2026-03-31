@@ -770,7 +770,7 @@ def create_teams_router(manager: "TeamManager"):
         try:
             role = UserRole(req.role)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid role '{req.role}'")
+            raise HTTPException(status_code=400, detail=f"Invalid role '{req.role}'") from None
         invitation = manager.invite_member(
             team_id=team_id,
             email=req.email,
@@ -821,7 +821,7 @@ def create_teams_router(manager: "TeamManager"):
         except ValueError:
             raise HTTPException(
                 status_code=400, detail=f"Invalid role '{req.new_role}'"
-            )
+            ) from None
         success = manager.change_role(team_id, user_id, new_role, req.changed_by)
         if not success:
             raise HTTPException(status_code=404, detail="Team or member not found")

@@ -113,7 +113,7 @@ def _decode_token(token: str) -> TokenPayload:
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="Auth service temporarily unavailable",
-                )
+                ) from exc
 
         return TokenPayload(**payload)
     except HTTPException:
@@ -123,20 +123,20 @@ def _decode_token(token: str) -> TokenPayload:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expired",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
     except jwt.InvalidTokenError as exc:
         logger.warning("Invalid JWT token: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
     except RuntimeError as exc:
         logger.critical("JWT secret misconfiguration: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication service misconfigured",
-        )
+        ) from exc
 
 
 def get_current_user(

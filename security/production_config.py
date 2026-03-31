@@ -63,7 +63,7 @@ class ProductionConfigManager:
                     f"Encryption key must be 32+ bytes, got {len(key_bytes)}"
                 )
         except ValueError:
-            raise SecureConfigError("Encryption key must be valid hexadecimal")
+            raise SecureConfigError("Encryption key must be valid hexadecimal") from None
 
         self._encryption_key = key_bytes
 
@@ -82,7 +82,7 @@ class ProductionConfigManager:
                     f"Salt must be 16+ bytes, got {len(salt_bytes)}"
                 )
         except ValueError:
-            raise SecureConfigError("Salt must be valid hexadecimal")
+            raise SecureConfigError("Salt must be valid hexadecimal") from None
 
         self._salt = salt_bytes
 
@@ -133,7 +133,7 @@ class ProductionConfigManager:
         import warnings
 
         warnings.warn(
-            "DEVELOPMENT MODE: Using auto-generated temporary keys", RuntimeWarning
+            "DEVELOPMENT MODE: Using auto-generated temporary keys", RuntimeWarning, stacklevel=2
         )
 
         self._encryption_key = secrets.token_bytes(32)

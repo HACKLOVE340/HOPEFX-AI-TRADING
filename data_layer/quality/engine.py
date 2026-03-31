@@ -419,7 +419,7 @@ class DataQualityEngine:
                         self._prom_rejected.labels(
                             source=src.value, reason="cross_source_outlier"
                         ).inc()
-                    except Exception:  # nosec B110 - Prometheus metric failure must not affect quality engine
+                    except Exception:  # nosec B110 - Prometheus metric failure must not affect quality engine  # noqa: S110
                         pass
             else:
                 inliers[src] = t

@@ -514,7 +514,7 @@ class PerformanceTests:
         aggregator = MultiSourceAggregator()
 
         # Add multiple high-frequency providers
-        for i in range(5):
+        for _i in range(5):
             aggregator.add_provider(MockProvider(volatility=0.0005))
 
         received = 0

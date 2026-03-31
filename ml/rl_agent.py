@@ -118,7 +118,7 @@ class ForexTradingEnv:
             import gymnasium as gym
             from gymnasium import spaces
         except ImportError:
-            raise ImportError("gymnasium required: pip install gymnasium")
+            raise ImportError("gymnasium required: pip install gymnasium") from None
 
         import pandas as pd
 
@@ -359,7 +359,7 @@ class RLAgent:
         except ImportError:
             raise ImportError(
                 "stable-baselines3 required: pip install stable-baselines3",
-            )
+            ) from None
 
         logger.info("Training PPO for %d timesteps …", timesteps)
         self._model = PPO(
@@ -784,11 +784,11 @@ def walk_forward_eval(
 
 # ── Module-level singleton ─────────────────────────────────────────────────────
 
-_rl_agent_singleton: Optional["RLAgent"] = None
+_rl_agent_singleton: Optional[RLAgent] = None
 _rl_agent_lock = __import__("threading").Lock()
 
 
-def get_rl_agent(model_name: str = "hopefx_ppo") -> Optional["RLAgent"]:
+def get_rl_agent(model_name: str = "hopefx_ppo") -> Optional[RLAgent]:
     """
     Return the module-level RLAgent singleton (thread-safe).
 

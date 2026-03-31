@@ -367,7 +367,7 @@ class ForwardTestHarness:
         logger.info("Loaded %d real bars from Dukascopy", len(df))
 
         # Replay bar by bar
-        for ts, bar in df.iterrows():
+        for _ts, bar in df.iterrows():
             close = float(bar.get("close", 0.0))
             if close <= 0 or not self._risk.validate_tick(
                 type("_T", (), {"mid": close})()

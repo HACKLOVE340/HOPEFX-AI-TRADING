@@ -228,7 +228,7 @@ async def macro_features():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Macro features unavailable: {exc}",
-        )
+        ) from exc
 
 
 @router.get(
@@ -294,4 +294,4 @@ async def macro_store_update(req: MacroUpdateRequest = Body(...)):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Update failed: {exc}",
-        )
+        ) from exc

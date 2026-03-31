@@ -34,15 +34,15 @@ from datetime import datetime, timezone
 def _utcnow() -> datetime:
     """Return current UTC time as timezone-aware datetime."""
     return datetime.now(timezone.utc)
-from typing import AsyncGenerator, List, Optional
+from typing import AsyncGenerator, List, Optional  # noqa: E402
 
-import strawberry
-from strawberry.fastapi import GraphQLRouter
-from strawberry.subscriptions import (
+import strawberry  # noqa: E402
+from strawberry.fastapi import GraphQLRouter  # noqa: E402
+from strawberry.subscriptions import (  # noqa: E402
     GRAPHQL_TRANSPORT_WS_PROTOCOL,
     GRAPHQL_WS_PROTOCOL,
 )
-from strawberry.types import Info
+from strawberry.types import Info  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

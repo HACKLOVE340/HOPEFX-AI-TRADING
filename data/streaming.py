@@ -316,7 +316,7 @@ class StreamingService:
 
             # Aggregate into bars
             completed_bars = []
-            for tf, aggregator in self._aggregators.items():
+            for _tf, aggregator in self._aggregators.items():
                 bar = aggregator.add_tick(tick)
                 if bar is not None:
                     self._bars[tick.symbol][bar.timeframe].append(bar)

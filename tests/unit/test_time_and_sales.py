@@ -149,7 +149,7 @@ class TestTimeAndSalesService:
         from data.time_and_sales import TimeAndSalesService
 
         service = TimeAndSalesService()
-        for i in range(20):
+        for _i in range(20):
             service.add_trade("XAUUSD", 1950.0, 10.0, "buy")
 
         recent = service.get_recent_trades("XAUUSD", n=5)
