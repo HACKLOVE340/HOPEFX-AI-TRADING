@@ -28,7 +28,12 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 from typing import AsyncGenerator, List, Optional
 
 import strawberry
@@ -72,7 +77,7 @@ def _get_current_user(info: Info) -> Optional[dict]:
 
         payload = decode_access_token(token)
         return payload
-    except Exception as exc:
+    except (RuntimeError, ValueError, OSError, AttributeError) as exc:
         logger.debug("GraphQL auth failed: %s", exc)
         return None
 
@@ -304,7 +309,7 @@ def _get_broker_state():
         from app import app as _app
 
         return getattr(_app.state, "app_state", None)
-    except Exception:
+    except (ImportError, AttributeError):
         return None
 
 
@@ -324,7 +329,7 @@ def _live_account() -> AccountInfo:
                 open_positions=int(info.get("open_positions", 0)),
                 currency=str(info.get("currency", "USD")),
             )
-        except Exception as exc:
+        except (RuntimeError, ValueError, OSError, AttributeError) as exc:
             logger.debug("Live account fetch failed: %s", exc)
     return AccountInfo(
         balance=10000,
@@ -369,11 +374,11 @@ class Query:
                             ask=mid + spread / 2,
                             spread=spread,
                             volume=int(tick.get("volume", 0)),
-                            timestamp=datetime.utcnow().isoformat(),
+                            timestamp=_utcnow().isoformat(),
                             change_pct=float(tick.get("change_pct", 0)),
                         )
                     ]
-            except Exception as exc:
+            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
                 logger.debug("Live price fetch failed: %s", exc)
         # Broker unavailable — return empty; no synthetic prices
         return []
@@ -397,12 +402,12 @@ class Query:
                         stop_loss=p.get("stop_loss"),
                         take_profit=p.get("take_profit"),
                         opened_at=str(
-                            p.get("opened_at", datetime.utcnow().isoformat())
+                            p.get("opened_at", _utcnow().isoformat())
                         ),
                     )
                     for p in (raw or [])
                 ]
-            except Exception as exc:
+            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
                 logger.debug("Positions fetch failed: %s", exc)
         return []
 
@@ -429,7 +434,7 @@ class Query:
                     )
                     for t in (raw or [])
                 ]
-            except Exception as exc:
+            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
                 logger.debug("Trade history fetch failed: %s", exc)
         return []
 
@@ -458,12 +463,12 @@ class Query:
                         take_profit=float(sig.get("take_profit", 0.0)),
                         model_version=str(sig.get("model_version", pred.version)),
                         created_at=str(
-                            sig.get("created_at", datetime.utcnow().isoformat())
+                            sig.get("created_at", _utcnow().isoformat())
                         ),
                     )
                 )
             return results
-        except Exception as exc:
+        except (RuntimeError, ValueError, OSError, AttributeError) as exc:
             logger.debug("Signal history fetch failed: %s", exc)
         # ML engine unavailable — return empty; no synthetic signals
         return []
@@ -498,7 +503,7 @@ class Query:
                 online_learning_enabled=bool(s.get("online_learning_enabled", False)),
                 trained_at=str(m.get("trained_at", "")),
             )
-        except Exception as exc:
+        except (RuntimeError, ValueError, OSError, AttributeError) as exc:
             logger.warning("ML metrics fetch failed: %s", exc)
             return MLMetrics(
                 model_version="unknown",
@@ -571,7 +576,7 @@ class Query:
                         avg_duration_minutes=round(avg_dur, 1),
                         best_symbol=best_sym,
                     )
-            except Exception as exc:
+            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
                 logger.debug("Performance fetch failed: %s", exc)
         # No trade history available — return zeros
         return PerformanceSummary(
@@ -608,7 +613,7 @@ class Query:
             try:
                 with open(Path(__file__).parent.parent / "prop_firm_mode.json") as f:
                     prop_cfg = _json.load(f)
-            except Exception as _exc:
+            except (ImportError, AttributeError, RuntimeError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
             return RiskStatus(
                 can_trade=assessment.can_trade,
@@ -622,7 +627,7 @@ class Query:
                 prop_firm_enabled=bool(prop_cfg.get("enabled", False)),
                 prop_firm_name=str(prop_cfg.get("active_firm", "none")),
             )
-        except Exception as exc:
+        except (RuntimeError, ValueError, OSError, AttributeError) as exc:
             logger.debug("Risk status fetch failed: %s", exc)
             return RiskStatus(
                 can_trade=True,
@@ -676,7 +681,7 @@ class Mutation:
                 )
                 order_id = str(result.get("order_id", order_id))
                 fill_price = float(result.get("fill_price", 0))
-            except Exception as exc:
+            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
                 logger.warning("Broker place_order failed: %s", exc)
 
         logger.info(
@@ -704,7 +709,7 @@ class Mutation:
         if state and hasattr(state, "broker"):
             try:
                 state.broker.cancel_order(order_id)
-            except Exception as exc:
+            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
                 logger.warning("Broker cancel_order failed: %s", exc)
         logger.info("GraphQL cancelOrder user=%s: %s", user.get("sub", "?"), order_id)
         return CancelResult(
@@ -735,7 +740,7 @@ class Mutation:
                     stop_loss=stop_loss,
                     take_profit=take_profit,
                 )
-            except Exception as exc:
+            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
                 logger.warning("Broker modify_order failed: %s", exc)
 
         logger.info(
@@ -822,7 +827,7 @@ class Subscription:
                     if tick:
                         mid = float(tick.get("mid", tick.get("price", 0))) or None
                         spread = float(tick.get("spread", spread))
-                except Exception as _exc:
+                except (ImportError, AttributeError, RuntimeError) as _exc:
                     logger.debug("Suppressed exception: %s", _exc)
 
             if mid is not None:
@@ -832,7 +837,7 @@ class Subscription:
                     ask=round(mid + spread / 2, 5),
                     mid=round(mid, 5),
                     spread=spread,
-                    timestamp=datetime.utcnow().isoformat(),
+                    timestamp=_utcnow().isoformat(),
                 )
             # No live price available — skip this tick, do not emit synthetic data
             await asyncio.sleep(interval)
@@ -863,7 +868,7 @@ class Subscription:
                     direction=str(sig.get("direction", "neutral")),
                     confidence=float(sig.get("confidence", 0.0)),
                     probability=float(sig.get("probability", 0.5)),
-                    timestamp=datetime.utcnow().isoformat(),
+                    timestamp=_utcnow().isoformat(),
                 )
             # No live signal available — skip this tick, do not emit synthetic data
             await asyncio.sleep(5)
@@ -886,7 +891,7 @@ class Subscription:
                 equity=acct.equity,
                 unrealized_pnl=acct.unrealized_pnl,
                 margin_level=acct.margin_level,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=_utcnow().isoformat(),
             )
             await asyncio.sleep(10)
 
