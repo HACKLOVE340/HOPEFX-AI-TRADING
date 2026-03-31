@@ -605,6 +605,10 @@ class RegulatoryReporter:
             import urllib.error
 
             def _sync_post():
+                from urllib.parse import urlparse as _urlparse
+                _parsed = _urlparse(endpoint)
+                if _parsed.scheme not in ("http", "https"):
+                    raise ValueError(f"Regulatory endpoint must use http/https, got {_parsed.scheme!r}")
                 data = json.dumps(payload).encode()
                 req = urllib.request.Request(
                     endpoint,
@@ -613,7 +617,7 @@ class RegulatoryReporter:
                     method="POST",
                 )
                 try:
-                    with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:
+                    with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:  # nosec B310 - scheme validated above
                         return True, resp.status, None
                 except urllib.error.HTTPError as e:
                     return False, e.code, str(e)

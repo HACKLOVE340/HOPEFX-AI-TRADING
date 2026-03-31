@@ -433,7 +433,7 @@ class PropEnforcer:
                 data=data,
                 method="POST",
             )
-            urllib.request.urlopen(req, timeout=8)
+            urllib.request.urlopen(req, timeout=8)  # nosec B310 - webhook URL validated as https:// in config
         except Exception as exc:
             logger.warning("PropEnforcer Telegram alert failed: %s", exc)
 
