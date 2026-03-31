@@ -33,6 +33,7 @@ Derived signals:
 All metrics use only past ticks — causal guarantee enforced.
 Session reset at UTC midnight resets cumulative delta and VWAP.
 """
+
 from __future__ import annotations
 
 import logging
@@ -42,40 +43,57 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
+import os
+
 import numpy as np
 
 from data_layer.types import GoldTick, MicrostructureSnapshot
 
 logger = logging.getLogger(__name__)
 
-import os
-_WINDOW_TICKS    = int(os.getenv("MICRO_WINDOW_TICKS",    "500"))
-_DELTA_WINDOW    = int(os.getenv("MICRO_DELTA_WINDOW",    "100"))
-_PRESSURE_ALPHA  = float(os.getenv("MICRO_PRESSURE_ALPHA", "0.10"))
-_SPREAD_ALPHA_F  = float(os.getenv("MICRO_SPREAD_ALPHA_F", "0.10"))
-_SPREAD_ALPHA_S  = float(os.getenv("MICRO_SPREAD_ALPHA_S", "0.02"))
-_VWAP_WINDOW     = int(os.getenv("MICRO_VWAP_WINDOW",     "200"))
-_ZSCORE_WINDOW   = int(os.getenv("MICRO_ZSCORE_WINDOW",   "100"))
+_WINDOW_TICKS = int(os.getenv("MICRO_WINDOW_TICKS", "500"))
+_DELTA_WINDOW = int(os.getenv("MICRO_DELTA_WINDOW", "100"))
+_PRESSURE_ALPHA = float(os.getenv("MICRO_PRESSURE_ALPHA", "0.10"))
+_SPREAD_ALPHA_F = float(os.getenv("MICRO_SPREAD_ALPHA_F", "0.10"))
+_SPREAD_ALPHA_S = float(os.getenv("MICRO_SPREAD_ALPHA_S", "0.02"))
+_VWAP_WINDOW = int(os.getenv("MICRO_VWAP_WINDOW", "200"))
+_ZSCORE_WINDOW = int(os.getenv("MICRO_ZSCORE_WINDOW", "100"))
 
 
 class _TickRecord:
     """Lightweight tick record for microstructure calculations."""
-    __slots__ = ("ts", "mid", "bid", "ask", "spread", "volume",
-                 "is_buy", "bid_depth", "ask_depth")
+
+    __slots__ = (
+        "ts",
+        "mid",
+        "bid",
+        "ask",
+        "spread",
+        "volume",
+        "is_buy",
+        "bid_depth",
+        "ask_depth",
+    )
 
     def __init__(
         self,
-        ts: float, mid: float, bid: float, ask: float,
-        spread: float, volume: float, is_buy: bool,
-        bid_depth: float = 0.0, ask_depth: float = 0.0,
+        ts: float,
+        mid: float,
+        bid: float,
+        ask: float,
+        spread: float,
+        volume: float,
+        is_buy: bool,
+        bid_depth: float = 0.0,
+        ask_depth: float = 0.0,
     ) -> None:
-        self.ts        = ts
-        self.mid       = mid
-        self.bid       = bid
-        self.ask       = ask
-        self.spread    = spread
-        self.volume    = volume
-        self.is_buy    = is_buy
+        self.ts = ts
+        self.mid = mid
+        self.bid = bid
+        self.ask = ask
+        self.spread = spread
+        self.volume = volume
+        self.is_buy = is_buy
         self.bid_depth = bid_depth
         self.ask_depth = ask_depth
 
@@ -90,20 +108,20 @@ class MicrostructureEngine:
 
     def __init__(self) -> None:
         self._ticks: deque = deque(maxlen=_WINDOW_TICKS)
-        self._lock  = threading.Lock()
+        self._lock = threading.Lock()
 
         # Running accumulators
         self._cumulative_delta: float = 0.0
-        self._trade_pressure:   float = 0.0   # EMA of signed flow
-        self._vwap_num:         float = 0.0   # Σ(price × volume)
-        self._vwap_den:         float = 0.0   # Σ(volume)
-        self._session_open:     float = 0.0
-        self._last_mid:         float = 0.0
-        self._last_session_day: int   = -1
+        self._trade_pressure: float = 0.0  # EMA of signed flow
+        self._vwap_num: float = 0.0  # Σ(price × volume)
+        self._vwap_den: float = 0.0  # Σ(volume)
+        self._session_open: float = 0.0
+        self._last_mid: float = 0.0
+        self._last_session_day: int = -1
 
         # Kyle's lambda accumulators
-        self._kyles_num: float = 0.0   # Σ|Δprice|
-        self._kyles_den: float = 0.0   # Σvolume
+        self._kyles_num: float = 0.0  # Σ|Δprice|
+        self._kyles_den: float = 0.0  # Σvolume
 
         # Spread EMA state
         self._spread_ema_fast: float = 0.0
@@ -113,14 +131,15 @@ class MicrostructureEngine:
         self._tick_count: int = 0
 
         # Prometheus
-        self._prom_spread    = None
-        self._prom_ofi       = None
+        self._prom_spread = None
+        self._prom_ofi = None
         self._prom_cum_delta = None
         self._init_prometheus()
 
     def _init_prometheus(self) -> None:
         try:
             from prometheus_client import Gauge
+
             self._prom_spread = Gauge(
                 "hopefx_micro_spread_usd",
                 "Current bid/ask spread in USD",
@@ -134,7 +153,7 @@ class MicrostructureEngine:
                 "Cumulative volume delta (session)",
             )
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -168,17 +187,17 @@ class MicrostructureEngine:
             if len(self._ticks) < 10:
                 return self._zero_features()
 
-            snap   = self._build_snapshot()
-            ticks  = list(self._ticks)
-            mids   = np.array([t.mid    for t in ticks], dtype=np.float64)
-            spreads= np.array([t.spread for t in ticks], dtype=np.float64)
-            deltas = np.array([
-                t.volume if t.is_buy else -t.volume for t in ticks
-            ], dtype=np.float64)
+            snap = self._build_snapshot()
+            ticks = list(self._ticks)
+            mids = np.array([t.mid for t in ticks], dtype=np.float64)
+            spreads = np.array([t.spread for t in ticks], dtype=np.float64)
+            deltas = np.array(
+                [t.volume if t.is_buy else -t.volume for t in ticks], dtype=np.float64
+            )
 
             # OFI over last 50 ticks
-            recent   = ticks[-50:]
-            buy_vol  = sum(t.volume for t in recent if t.is_buy)
+            recent = ticks[-50:]
+            buy_vol = sum(t.volume for t in recent if t.is_buy)
             sell_vol = sum(t.volume for t in recent if not t.is_buy)
             total_vol = buy_vol + sell_vol
             ofi = (buy_vol - sell_vol) / max(total_vol, 1e-9)
@@ -187,16 +206,14 @@ class MicrostructureEngine:
             w = min(_ZSCORE_WINDOW, len(spreads))
             spread_win = spreads[-w:]
             spread_mean = spread_win.mean()
-            spread_std  = spread_win.std() + 1e-9
-            spread_z    = (snap.spread - spread_mean) / spread_std
+            spread_std = spread_win.std() + 1e-9
+            spread_z = (snap.spread - spread_mean) / spread_std
 
             # Delta divergence: price direction vs cumulative delta direction
             if len(ticks) >= 20:
                 price_dir = np.sign(mids[-1] - mids[-20])
                 delta_dir = np.sign(deltas[-20:].sum())
-                delta_divergence = float(
-                    price_dir != delta_dir and price_dir != 0
-                )
+                delta_divergence = float(price_dir != delta_dir and price_dir != 0)
             else:
                 delta_divergence = 0.0
 
@@ -209,8 +226,8 @@ class MicrostructureEngine:
 
             # Absorption: large volume with small price move
             if len(ticks) >= 10:
-                recent10  = ticks[-10:]
-                vol10     = sum(t.volume for t in recent10)
+                recent10 = ticks[-10:]
+                vol10 = sum(t.volume for t in recent10)
                 price_move = abs(recent10[-1].mid - recent10[0].mid)
                 # Normalise: absorption > 1 means volume >> price move
                 absorption = min(1.0, vol10 / max(price_move * 500, 1e-9) / 100.0)
@@ -218,25 +235,25 @@ class MicrostructureEngine:
                 absorption = 0.0
 
             return {
-                "micro_spread":              round(snap.spread, 6),
-                "micro_spread_pct":          round(snap.spread_pct, 6),
-                "micro_spread_z":            round(float(spread_z), 4),
-                "micro_spread_ema_fast":     round(self._spread_ema_fast, 6),
-                "micro_spread_ema_slow":     round(self._spread_ema_slow, 6),
-                "micro_volume_delta":        round(snap.volume_delta, 4),
-                "micro_cumulative_delta":    round(snap.cumulative_delta, 4),
-                "micro_buy_pressure":        round(snap.buy_pressure, 4),
-                "micro_sell_pressure":       round(snap.sell_pressure, 4),
-                "micro_ofi":                 round(float(ofi), 4),
-                "micro_trade_pressure":      round(snap.trade_pressure, 4),
-                "micro_depth_imbalance":     round(snap.depth_imbalance, 4),
-                "micro_vwap_dev":            round(float(vwap_dev), 6),
-                "micro_kyles_lambda":        round(float(kyles_lambda), 8),
-                "micro_delta_divergence":    round(delta_divergence, 4),
-                "micro_absorption":          round(absorption, 4),
+                "micro_spread": round(snap.spread, 6),
+                "micro_spread_pct": round(snap.spread_pct, 6),
+                "micro_spread_z": round(float(spread_z), 4),
+                "micro_spread_ema_fast": round(self._spread_ema_fast, 6),
+                "micro_spread_ema_slow": round(self._spread_ema_slow, 6),
+                "micro_volume_delta": round(snap.volume_delta, 4),
+                "micro_cumulative_delta": round(snap.cumulative_delta, 4),
+                "micro_buy_pressure": round(snap.buy_pressure, 4),
+                "micro_sell_pressure": round(snap.sell_pressure, 4),
+                "micro_ofi": round(float(ofi), 4),
+                "micro_trade_pressure": round(snap.trade_pressure, 4),
+                "micro_depth_imbalance": round(snap.depth_imbalance, 4),
+                "micro_vwap_dev": round(float(vwap_dev), 6),
+                "micro_kyles_lambda": round(float(kyles_lambda), 8),
+                "micro_delta_divergence": round(delta_divergence, 4),
+                "micro_absorption": round(absorption, 4),
                 # Tick count — used by features_extended.py for normalised
                 # activity feature (dl_tick_count = tick_count / 500)
-                "micro_tick_count":          float(self._tick_count),
+                "micro_tick_count": float(self._tick_count),
             }
 
     def reset_session(self) -> None:
@@ -251,11 +268,11 @@ class MicrostructureEngine:
     def _reset_session_unlocked(self) -> None:
         """Reset session accumulators. Caller must already hold self._lock."""
         self._cumulative_delta = 0.0
-        self._vwap_num         = 0.0
-        self._vwap_den         = 0.0
-        self._kyles_num        = 0.0
-        self._kyles_den        = 0.0
-        self._session_open     = time.time()
+        self._vwap_num = 0.0
+        self._vwap_den = 0.0
+        self._kyles_num = 0.0
+        self._kyles_den = 0.0
+        self._session_open = time.time()
         logger.debug("MicrostructureEngine: session reset")
 
     def inject_l2_depth(
@@ -302,15 +319,16 @@ class MicrostructureEngine:
         """
         with self._lock:
             return {
-                "tick_count":         self._tick_count,
-                "window_size":        len(self._ticks),
-                "cumulative_delta":   round(self._cumulative_delta, 4),
-                "trade_pressure":     round(self._trade_pressure, 4),
-                "spread_ema_fast":    round(self._spread_ema_fast, 6),
-                "spread_ema_slow":    round(self._spread_ema_slow, 6),
+                "tick_count": self._tick_count,
+                "window_size": len(self._ticks),
+                "cumulative_delta": round(self._cumulative_delta, 4),
+                "trade_pressure": round(self._trade_pressure, 4),
+                "spread_ema_fast": round(self._spread_ema_fast, 6),
+                "spread_ema_slow": round(self._spread_ema_slow, 6),
                 "session_open_age_s": round(time.time() - self._session_open, 1)
-                                      if self._session_open > 0 else None,
-                "has_data":           len(self._ticks) >= 10,
+                if self._session_open > 0
+                else None,
+                "has_data": len(self._ticks) >= 10,
             }
 
     def tick_rate(self, window_s: float = 60.0) -> float:
@@ -334,9 +352,9 @@ class MicrostructureEngine:
     # ── Internal processing ───────────────────────────────────────────────────
 
     def _process_tick(self, tick: GoldTick) -> MicrostructureSnapshot:
-        ts     = tick.timestamp.timestamp()
+        ts = tick.timestamp.timestamp()
         spread = max(tick.ask - tick.bid, 0.0)
-        mid    = tick.mid
+        mid = tick.mid
 
         # Lee-Ready trade classification
         if self._last_mid > 0:
@@ -358,8 +376,13 @@ class MicrostructureEngine:
         volume = 1.0
 
         rec = _TickRecord(
-            ts=ts, mid=mid, bid=tick.bid, ask=tick.ask,
-            spread=spread, volume=volume, is_buy=is_buy,
+            ts=ts,
+            mid=mid,
+            bid=tick.bid,
+            ask=tick.ask,
+            spread=spread,
+            volume=volume,
+            is_buy=is_buy,
         )
         self._ticks.append(rec)
         self._tick_count += 1
@@ -430,76 +453,82 @@ class MicrostructureEngine:
         ticks = list(self._ticks)
         if not ticks:
             return MicrostructureSnapshot(
-                symbol="XAU_USD", timestamp=datetime.now(timezone.utc),
-                bid=0, ask=0, spread=0, spread_pct=0,
-                volume_delta=0, cumulative_delta=0,
-                buy_pressure=0.5, sell_pressure=0.5,
-                order_flow_imbalance=0, trade_pressure=0,
+                symbol="XAU_USD",
+                timestamp=datetime.now(timezone.utc),
+                bid=0,
+                ask=0,
+                spread=0,
+                spread_pct=0,
+                volume_delta=0,
+                cumulative_delta=0,
+                buy_pressure=0.5,
+                sell_pressure=0.5,
+                order_flow_imbalance=0,
+                trade_pressure=0,
             )
 
         last = ticks[-1]
-        mid  = last.mid
+        mid = last.mid
         spread_pct = (last.spread / mid * 100.0) if mid > 0 else 0.0
 
         # Rolling buy/sell pressure
-        window   = ticks[-_DELTA_WINDOW:]
-        buy_vol  = sum(t.volume for t in window if t.is_buy)
+        window = ticks[-_DELTA_WINDOW:]
+        buy_vol = sum(t.volume for t in window if t.is_buy)
         sell_vol = sum(t.volume for t in window if not t.is_buy)
-        total    = buy_vol + sell_vol or 1.0
-        ofi      = (buy_vol - sell_vol) / total
+        total = buy_vol + sell_vol or 1.0
+        ofi = (buy_vol - sell_vol) / total
 
         # Depth imbalance (populated when L2 data available)
         bid_depth = last.bid_depth
         ask_depth = last.ask_depth
         depth_total = bid_depth + ask_depth
         depth_imbalance = (
-            (bid_depth - ask_depth) / depth_total
-            if depth_total > 0 else 0.0
+            (bid_depth - ask_depth) / depth_total if depth_total > 0 else 0.0
         )
 
         vwap = self._vwap_num / max(self._vwap_den, 1e-9)
 
         return MicrostructureSnapshot(
-            symbol               = "XAU_USD",
-            timestamp            = datetime.now(timezone.utc),
-            bid                  = last.bid,
-            ask                  = last.ask,
-            spread               = last.spread,
-            spread_pct           = spread_pct,
-            volume_delta         = last.volume if last.is_buy else -last.volume,
-            cumulative_delta     = self._cumulative_delta,
-            buy_pressure         = buy_vol / total,
-            sell_pressure        = sell_vol / total,
-            order_flow_imbalance = ofi,
-            trade_pressure       = self._trade_pressure,
-            bid_depth            = bid_depth,
-            ask_depth            = ask_depth,
-            depth_imbalance      = depth_imbalance,
-            vwap                 = vwap,
-            tick_count           = len(ticks),
+            symbol="XAU_USD",
+            timestamp=datetime.now(timezone.utc),
+            bid=last.bid,
+            ask=last.ask,
+            spread=last.spread,
+            spread_pct=spread_pct,
+            volume_delta=last.volume if last.is_buy else -last.volume,
+            cumulative_delta=self._cumulative_delta,
+            buy_pressure=buy_vol / total,
+            sell_pressure=sell_vol / total,
+            order_flow_imbalance=ofi,
+            trade_pressure=self._trade_pressure,
+            bid_depth=bid_depth,
+            ask_depth=ask_depth,
+            depth_imbalance=depth_imbalance,
+            vwap=vwap,
+            tick_count=len(ticks),
         )
 
     def _zero_features(self) -> Dict[str, float]:
         return {
-            "micro_spread":           0.0,
-            "micro_spread_pct":       0.0,
-            "micro_spread_z":         0.0,
-            "micro_spread_ema_fast":  0.0,
-            "micro_spread_ema_slow":  0.0,
-            "micro_volume_delta":     0.0,
+            "micro_spread": 0.0,
+            "micro_spread_pct": 0.0,
+            "micro_spread_z": 0.0,
+            "micro_spread_ema_fast": 0.0,
+            "micro_spread_ema_slow": 0.0,
+            "micro_volume_delta": 0.0,
             "micro_cumulative_delta": 0.0,
-            "micro_buy_pressure":     0.5,
-            "micro_sell_pressure":    0.5,
-            "micro_ofi":              0.0,
-            "micro_trade_pressure":   0.0,
-            "micro_depth_imbalance":  0.0,
-            "micro_vwap_dev":         0.0,
-            "micro_kyles_lambda":     0.0,
+            "micro_buy_pressure": 0.5,
+            "micro_sell_pressure": 0.5,
+            "micro_ofi": 0.0,
+            "micro_trade_pressure": 0.0,
+            "micro_depth_imbalance": 0.0,
+            "micro_vwap_dev": 0.0,
+            "micro_kyles_lambda": 0.0,
             "micro_delta_divergence": 0.0,
-            "micro_absorption":       0.0,
+            "micro_absorption": 0.0,
             # Always include tick_count even in zero state so downstream
             # consumers (features_extended.py dl_tick_count) never KeyError
-            "micro_tick_count":       float(self._tick_count),
+            "micro_tick_count": float(self._tick_count),
         }
 
 
