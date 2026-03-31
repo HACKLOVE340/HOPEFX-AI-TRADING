@@ -233,8 +233,12 @@ def generate_cover(output: Path = OUTPUT_PATH) -> Path:
 
 def _git_push(output: Path) -> None:
     try:
-        subprocess.run(  # nosec B603 B607 - list-form git calls; no shell=True, no user input["git", "add", str(output)], check=True, cwd=ROOT)
-        r = subprocess.run(  # nosec B603 B607 - list-form git calls; no shell=True, no user input["git", "diff", "--cached", "--quiet"], cwd=ROOT)
+        subprocess.run(  # nosec B603 B607 - list-form git calls; no shell=True, no user input
+            ["git", "add", str(output)], check=True, cwd=ROOT
+        )
+        r = subprocess.run(  # nosec B603 B607 - list-form git calls; no shell=True, no user input
+            ["git", "diff", "--cached", "--quiet"], cwd=ROOT
+        )
         if r.returncode == 0:
             print("No changes to commit — cover.png is already up to date.")
             return
@@ -243,7 +247,9 @@ def _git_push(output: Path) -> None:
             check=True,
             cwd=ROOT,
         )
-        subprocess.run(  # nosec B603 B607 - list-form git calls; no shell=True, no user input["git", "push"], check=True, cwd=ROOT)
+        subprocess.run(  # nosec B603 B607 - list-form git calls; no shell=True, no user input
+            ["git", "push"], check=True, cwd=ROOT
+        )
         print("Pushed cover.png to remote.")
     except subprocess.CalledProcessError as exc:
         print(f"Git operation failed: {exc}", file=sys.stderr)

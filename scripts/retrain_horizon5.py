@@ -530,7 +530,9 @@ def run_training(args: argparse.Namespace) -> dict:
         args.horizon,
     )
 
-    result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user inputcmd, check=False)
+    result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
+        cmd, check=False
+    )
 
     if result.returncode != 0:
         logger.error("train_advanced.py exited with code %d", result.returncode)
