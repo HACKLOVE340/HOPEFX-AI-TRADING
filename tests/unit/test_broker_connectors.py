@@ -654,7 +654,10 @@ class TestOANDAConnector:
         broker = OANDAConnector(cfg)
         assert broker.base_url == OANDAConnector.LIVE_URL
 
-    def test_initialization_missing_credentials_raises(self):
+    def test_initialization_missing_credentials_raises(self, monkeypatch):
+        # Ensure env-var fallback doesn't mask the missing account_id
+        monkeypatch.delenv("OANDA_ACCOUNT_ID", raising=False)
+        monkeypatch.delenv("OANDA_API_TOKEN", raising=False)
         with pytest.raises(ValueError):
             OANDAConnector({"api_key": "token"})
 
