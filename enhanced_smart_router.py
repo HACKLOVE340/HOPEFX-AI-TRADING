@@ -10,15 +10,15 @@ Multi-Venue Execution | AI-Powered Routing | Market Impact Optimization
 """
 
 import asyncio
-import numpy as np
-_ROUTER_RNG = np.random.default_rng()
+import logging
+from abc import ABC, abstractmethod
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Set
 from datetime import datetime, timezone
 from enum import Enum, auto
-from collections import deque, defaultdict
-from abc import ABC, abstractmethod
-import logging
+from typing import Any, Dict, List, Optional, Set
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +221,12 @@ class ExecutionStrategy(ABC):
         self.venues = venues
         self.fills: List[Fill] = []
         self.is_complete = False
+        # Per-strategy seeded RNG for deterministic simulation in tests.
+        # Seed is derived from the order id so different orders get different
+        # but reproducible sequences.
+        self._rng = np.random.default_rng(
+            seed=abs(hash(order.id)) % (2**31) if order.id else 42
+        )
 
     @abstractmethod
     async def execute(self) -> List[Fill]:
@@ -314,17 +320,29 @@ class TWAPStrategy(ExecutionStrategy):
         return min(costs, key=lambda x: x[0])[1]
 
     async def _simulate_fill(self, order: Order, venue: Venue) -> Optional[Fill]:
-        """Simulate fill (replace with actual venue API)"""
+        """
+        Simulate a fill for paper-trading / backtesting.
+
+        Uses the order's arrival_price or limit price as the reference price.
+        Raises RuntimeError if no reference price is available — callers must
+        supply a real market price via order.arrival_price before simulating.
+        """
         # Simulate latency
         await asyncio.sleep(venue.latency_ms / 1000)
 
-        # Simulate price with slippage
-        base_price = 100.0  # Would be market price
-        slippage = _ROUTER_RNG.normal(0, 0.0001)  # 1 bps std
+        # Use the real reference price supplied by the caller.
+        base_price = order.arrival_price or order.price
+        if base_price is None or base_price <= 0:
+            raise RuntimeError(
+                f"Cannot simulate fill for order {order.id}: "
+                "order.arrival_price or order.price must be set to a real market price."
+            )
 
+        # Apply realistic slippage: ~1 bps std, bid/ask spread on sell side.
+        slippage = self._rng.normal(0, 0.0001)  # 1 bps std
         fill_price = base_price * (1 + slippage)
         if order.side == OrderSide.SELL:
-            fill_price *= 0.9999  # Bid side
+            fill_price *= (1 - venue.taker_fee)  # Bid side net of fee
 
         fee = venue.total_cost(order.size * fill_price, is_maker=False)
 
@@ -418,7 +436,12 @@ class ImplementationShortfallStrategy(ExecutionStrategy):
         super().__init__(order, venues)
         self.risk_aversion = risk_aversion
         self.volatility = expected_volatility
-        self.arrival_price = order.arrival_price or 100.0
+        if not order.arrival_price or order.arrival_price <= 0:
+            raise ValueError(
+                f"ImplementationShortfallStrategy requires order.arrival_price "
+                f"to be set to a real market price (got {order.arrival_price!r})."
+            )
+        self.arrival_price = order.arrival_price
 
         # Almgren-Chriss parameters
         self.impact_model = MarketImpactModel()
@@ -482,8 +505,8 @@ class ImplementationShortfallStrategy(ExecutionStrategy):
 
     def _select_venue(self) -> Venue:
         """Select venue minimizing total cost including impact"""
-        # Would calculate total cost including market impact
-        return min(self.venues, key=lambda v: v.total_cost(self.order.size * 100000))
+        notional = self.order.size * self.arrival_price
+        return min(self.venues, key=lambda v: v.total_cost(notional))
 
 
 class SmartOrderRouter:
