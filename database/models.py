@@ -10,7 +10,12 @@ Complete SQLAlchemy models for all entities
 
 import enum
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +120,7 @@ class Trade(Base):
     trade_type = Column(String(20), nullable=True)
 
     # Entry
-    entry_time = Column(DateTime, default=datetime.utcnow)
+    entry_time = Column(DateTime, default=_utcnow)
     entry_price = Column(Float, nullable=True)
     entry_quantity = Column(Float, nullable=True)
     size = Column(Float, nullable=True)  # alias for entry_quantity
@@ -148,8 +153,8 @@ class Trade(Base):
     is_open = Column(Boolean, default=True)
 
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
     notes = Column(Text, nullable=True)
 
     # Relationships
@@ -208,7 +213,7 @@ class Order(Base):
     slippage = Column(Float, default=0.0)
 
     # Timing
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
     submitted_at = Column(DateTime, nullable=True)
     filled_at = Column(DateTime, nullable=True)
     cancelled_at = Column(DateTime, nullable=True)
@@ -275,7 +280,7 @@ class Signal(Base):
     execution_time = Column(DateTime, nullable=True)
 
     # Timing
-    generated_at = Column(DateTime, default=datetime.utcnow)
+    generated_at = Column(DateTime, default=_utcnow)
     expired_at = Column(DateTime, nullable=True)
 
     # Relationships
@@ -301,7 +306,7 @@ class AccountSnapshot(Base):
     __tablename__ = "account_snapshots"
 
     id = Column(BigInteger, primary_key=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=_utcnow, index=True)
 
     # Balance
     balance = Column(Float, nullable=False)
@@ -365,7 +370,7 @@ class SystemEvent(Base):
     __tablename__ = "system_events"
 
     id = Column(BigInteger, primary_key=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=_utcnow, index=True)
     level = Column(String(20), nullable=False)  # DEBUG, INFO, WARNING, ERROR, CRITICAL
     component = Column(String(50), nullable=False, index=True)
     event_type = Column(String(50), nullable=False)
@@ -386,7 +391,7 @@ class PerformanceMetric(Base):
     __tablename__ = "performance_metric_samples"
 
     id = Column(BigInteger, primary_key=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=_utcnow, index=True)
     metric_type = Column(
         String(50), nullable=False, index=True
     )  # strategy, system, risk
@@ -408,7 +413,7 @@ class Configuration(Base):
     __tablename__ = "configurations"
 
     id = Column(Integer, primary_key=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=_utcnow)
     environment = Column(String(20), nullable=False)
 
     config_key = Column(String(100), nullable=False)
@@ -435,7 +440,7 @@ class Account(Base):
     margin_free = Column(Float, nullable=True)
     currency = Column(String(10), default="USD")
     leverage = Column(Float, nullable=True)
-    snapshot_at = Column(DateTime, default=datetime.utcnow, index=True)
+    snapshot_at = Column(DateTime, default=_utcnow, index=True)
 
     user = relationship("User", back_populates="accounts")
     trades = relationship(
@@ -480,7 +485,7 @@ class Position(Base):
     take_profit = Column(Float, nullable=True)
     broker = Column(String(50), nullable=True)
     user_id = Column(String(50), nullable=True, index=True)
-    opened_at = Column(DateTime, default=datetime.utcnow)
+    opened_at = Column(DateTime, default=_utcnow)
     closed_at = Column(DateTime, nullable=True)
     status = Column(String(20), default="open")
 
@@ -503,7 +508,7 @@ class OrderBook(Base):
     asks_json = Column(Text, nullable=True)
     spread = Column(Float, nullable=True)
     mid_price = Column(Float, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(DateTime, default=_utcnow, nullable=False, index=True)
 
 
 class AISignal(Base):
@@ -521,7 +526,7 @@ class AISignal(Base):
     source = Column(String(100), nullable=True)  # strategy name / brain
     executed = Column(Boolean, default=False)
     order_id = Column(String(50), nullable=True)
-    generated_at = Column(DateTime, default=datetime.utcnow, index=True)
+    generated_at = Column(DateTime, default=_utcnow, index=True)
     expires_at = Column(DateTime, nullable=True)
 
 
@@ -539,7 +544,7 @@ class Prediction(Base):
     horizon_minutes = Column(Integer, nullable=True)
     actual_price = Column(Float, nullable=True)
     error_pct = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utcnow, index=True)
 
 
 class NewsData(Base):
@@ -555,7 +560,7 @@ class NewsData(Base):
     sentiment_score = Column(Float, nullable=True)  # -1.0 to 1.0
     sentiment_label = Column(String(20), nullable=True)  # positive, negative, neutral
     published_at = Column(DateTime, nullable=True, index=True)
-    fetched_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime, default=_utcnow)
 
 
 class PerformanceMetrics(Base):
@@ -576,7 +581,7 @@ class PerformanceMetrics(Base):
     sharpe_ratio = Column(Float, nullable=True)
     profit_factor = Column(Float, nullable=True)
     avg_trade_duration_minutes = Column(Float, nullable=True)
-    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+    recorded_at = Column(DateTime, default=_utcnow, index=True)
 
 
 class TickData(Base):
@@ -590,7 +595,7 @@ class TickData(Base):
     ask = Column(Float, nullable=False)
     last_price = Column(Float, nullable=True)
     volume = Column(Float, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(DateTime, default=_utcnow, nullable=False, index=True)
     source = Column(String(50), nullable=True)
 
 
@@ -611,7 +616,7 @@ class WalletTransaction(Base):
     reference = Column(String(100), nullable=True)  # external payment ref
     status = Column(String(20), default="completed")  # pending, completed, failed
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=_utcnow, index=True)
 
 
 class AuditLogEntry(Base):
@@ -621,7 +626,7 @@ class AuditLogEntry(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     sequence_number = Column(BigInteger, nullable=False, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(DateTime, default=_utcnow, nullable=False, index=True)
     level = Column(String(20), nullable=False)  # INFO, COMPLIANCE, CRITICAL
     category = Column(String(30), nullable=False)  # ORDER, RISK, KYC, SYSTEM
     actor = Column(String(100), nullable=False)  # user_id or system component
@@ -646,8 +651,8 @@ class KYCRecord(Base):
     verified_at = Column(DateTime, nullable=True)
     rejected_at = Column(DateTime, nullable=True)
     rejection_reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 # Create indexes for common queries
@@ -758,7 +763,7 @@ if SQLALCHEMY_AVAILABLE:
         user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
         token = Column(String(512), unique=True, nullable=False)
         expires_at = Column(DateTime, nullable=False)
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=_utcnow)
 
 else:
 
@@ -779,7 +784,7 @@ if SQLALCHEMY_AVAILABLE:
         reason = Column(
             String(64), nullable=False
         )  # bounce | spam_report | unsubscribe
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=_utcnow)
 else:
 
     class EmailSuppression:  # type: ignore[no-redef]
@@ -849,12 +854,12 @@ if SQLALCHEMY_AVAILABLE:
         tx_hash = Column(String(200), nullable=True)
         webhook_payload = Column(Text, nullable=True)  # raw JSON from processor
         created_at = Column(
-            DateTime(timezone=True), default=datetime.utcnow, index=True
+            DateTime(timezone=True), default=_utcnow, index=True
         )
         expires_at = Column(DateTime(timezone=True), nullable=False)
         confirmed_at = Column(DateTime(timezone=True), nullable=True)
         updated_at = Column(
-            DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+            DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
         )
 
         def to_dict(self) -> dict:
@@ -904,7 +909,7 @@ if SQLALCHEMY_AVAILABLE:
         channel = Column(String(100), nullable=False)  # Redis pub/sub channel
         payload = Column(Text, nullable=False)  # JSON
         created_at = Column(
-            DateTime(timezone=True), default=datetime.utcnow, index=True
+            DateTime(timezone=True), default=_utcnow, index=True
         )
         published_at = Column(DateTime(timezone=True), nullable=True)
         attempts = Column(Integer, default=0)
@@ -937,7 +942,7 @@ if SQLALCHEMY_AVAILABLE:
         value_json = Column(Text, nullable=False)
         changed_by = Column(String(128), nullable=True)
         updated_at = Column(
-            DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+            DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
         )
 
 else:
