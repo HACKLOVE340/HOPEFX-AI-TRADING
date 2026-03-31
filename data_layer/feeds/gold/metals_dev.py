@@ -136,7 +136,7 @@ class MetalsDevFeed(GoldFeedBase):
                 # Full-jitter exponential backoff — avoids thundering herd on
                 # server-side restarts and prevents tight reconnect loops on
                 # auth failures (which would burn through rate limits).
-                wait = random.uniform(0, min(backoff, _MAX_BACKOFF))
+                wait = random.uniform(0, min(backoff, _MAX_BACKOFF))  # nosec B311 - reconnect backoff jitter, not cryptographic
                 logger.warning(
                     "Metals.dev WS disconnected: %s — reconnecting in %.1fs",
                     exc,

@@ -96,7 +96,7 @@ class SlippageModel:
         self._fixed_pct = float(os.getenv("PAPER_FIXED_SLIPPAGE_PCT", "0.0005"))
         self._impact_factor = float(os.getenv("PAPER_IMPACT_FACTOR", "0.1"))
         self._noise_sigma_pct = float(os.getenv("PAPER_NOISE_SIGMA_PCT", "0.0001"))
-        self._rng = random.Random()  # not seeded — intentionally non-deterministic
+        self._rng = random.Random()  # not seeded  # nosec B311 - paper trading noise, intentionally non-deterministic — intentionally non-deterministic
 
     def fill_price(
         self,

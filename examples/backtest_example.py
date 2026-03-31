@@ -56,7 +56,7 @@ class XAUUSDDataGenerator:
                 high_p = max(open_p, price) + volatility * 0.5
                 low_p = min(open_p, price) - volatility * 0.5
                 close_p = price
-                volume = random.randint(1000, 10000)
+                volume = random.randint(1000, 10000)  # nosec B311 - example data generation, not cryptographic
 
                 data.append(
                     {

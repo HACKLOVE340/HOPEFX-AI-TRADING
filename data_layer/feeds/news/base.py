@@ -121,7 +121,7 @@ class NewsFeedBase(ABC):
             try:
                 async with session.get(url, params=params, headers=headers) as resp:
                     if resp.status == 429:
-                        wait = backoff + random.uniform(0, 1.0)
+                        wait = backoff + random.uniform(0, 1.0)  # nosec B311 - rate-limit retry jitter, not cryptographic
                         logger.warning(
                             "%s rate-limited — sleeping %.1fs", self.name.value, wait
                         )
@@ -132,7 +132,7 @@ class NewsFeedBase(ABC):
                     return await resp.json(content_type=None)
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 self._total_errors += 1
-                wait = backoff + random.uniform(0, 0.5)
+                wait = backoff + random.uniform(0, 0.5)  # nosec B311 - retry jitter, not cryptographic
                 logger.warning(
                     "%s HTTP error attempt=%d: %s — retry %.1fs",
                     self.name.value,

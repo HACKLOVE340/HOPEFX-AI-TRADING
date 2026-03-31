@@ -222,7 +222,7 @@ class GoldFeedBase(ABC):
 
                     if resp.status == 429:
                         retry_after = float(resp.headers.get("Retry-After", backoff))
-                        wait = min(retry_after + random.uniform(0, 1.0), 120.0)
+                        wait = min(retry_after + random.uniform(0, 1.0), 120.0)  # nosec B311 - retry jitter, not cryptographic
                         logger.warning(
                             "%s rate-limited — sleeping %.1fs (attempt %d)",
                             self.name.value,
@@ -257,7 +257,7 @@ class GoldFeedBase(ABC):
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 self._on_error("http", msg=str(exc))
                 # Full-jitter: sleep between 0 and cap
-                wait = random.uniform(0, min(backoff, 30.0))
+                wait = random.uniform(0, min(backoff, 30.0))  # nosec B311 - full-jitter backoff, not cryptographic
                 logger.warning(
                     "%s HTTP error attempt=%d/4 err=%s — retry in %.2fs",
                     self.name.value,

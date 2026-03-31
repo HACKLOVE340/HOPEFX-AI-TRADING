@@ -124,11 +124,12 @@ class OrderLifecycleManager:
         OrderStatus.EXPIRED: set(),
     }
 
-    def __init__(self, event_bus=None):
+    def __init__(self, event_bus=None, broker=None):
         self.orders: Dict[str, Order] = {}
         self.active_orders: Set[str] = set()
         self.order_history: List[Dict] = []
         self.event_bus = event_bus
+        self._broker = broker  # BrokerConnector instance; None = paper/backtest mode
         self._callbacks: Dict[OrderStatus, List[Callable]] = {
             status: [] for status in OrderStatus
         }
@@ -186,22 +187,39 @@ class OrderLifecycleManager:
         return success
 
     async def _async_submit(self, order: Order):
-        """Async order submission to broker"""
-        # In production, this calls broker API
-        await asyncio.sleep(0.01)  # Simulate latency
+        """Async order submission to broker.
 
-        # Randomly simulate rejection for testing
-        import random
-
-        if random.random() < 0.05:  # 5% rejection rate
-            self._transition(
-                order,
-                OrderStatus.REJECTED,
-                reason="INSUFFICIENT_LIQUIDITY",
-            )
-        else:
+        Delegates to the registered broker connector if available.
+        Transitions to NEW on acceptance; REJECTED on broker refusal.
+        """
+        broker = getattr(self, "_broker", None)
+        if broker is None:
+            # No broker wired — accept immediately (paper/backtest mode)
             self._transition(order, OrderStatus.NEW)
             self.active_orders.add(order.id)
+            return
+
+        try:
+            result = await broker.place_order(
+                {
+                    "symbol": order.symbol,
+                    "side": order.side.value if hasattr(order.side, "value") else str(order.side),
+                    "quantity": float(order.quantity),
+                    "order_type": order.order_type.value if hasattr(order.order_type, "value") else str(order.order_type),
+                    "price": float(order.price) if order.price else None,
+                    "client_order_id": order.client_order_id,
+                }
+            )
+            status = (result or {}).get("status", "")
+            if str(status).lower() in ("rejected", "error", "failed"):
+                reason = (result or {}).get("reason", "BROKER_REJECTED")
+                self._transition(order, OrderStatus.REJECTED, reason=reason)
+            else:
+                self._transition(order, OrderStatus.NEW)
+                self.active_orders.add(order.id)
+        except Exception as exc:
+            logger.error("OMS broker submit failed for %s: %s", order.id, exc)
+            self._transition(order, OrderStatus.REJECTED, reason=str(exc))
 
     def fill_order(self, order_id: str, fill_qty: Decimal, fill_price: Decimal) -> bool:
         """Process order fill"""
