@@ -235,7 +235,7 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
                     status_code=503,
                     content={"ready": False, "reason": "lockdown_active"},
                 )
-        except Exception:
+        except Exception:  # nosec B110 - Redis unavailable must not block readiness probe
             # Redis unavailable is non-fatal for readiness — don't block traffic
             pass
 

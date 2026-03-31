@@ -726,7 +726,7 @@ class MarketDataOrchestrator:
                             lineage_id=r.get("lineage_id", ""),
                         )
                     )
-                except Exception:
+                except Exception:  # nosec B112 - skip malformed tick record during replay
                     continue
 
             if len(ticks) < 2:

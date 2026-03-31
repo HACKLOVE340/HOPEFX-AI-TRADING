@@ -322,7 +322,7 @@ class SignalFilter:
             if len(recent) >= 5:
                 win_rate = sum(1 for o in recent if o.pnl_pct > 0) / len(recent)
                 _PROM.accuracy_gauge.labels(symbol=symbol).set(win_rate)
-        except Exception:
+        except Exception:  # nosec B110 - Prometheus metric failure must not affect signal filtering
             pass
 
     def ev_stats(self, symbol: Optional[str] = None) -> Dict[str, Any]:
@@ -494,7 +494,7 @@ class SignalFilter:
                 # Strong OFI + sentiment alignment → trending
                 if abs(ofi) > 0.5 and abs(sentiment) > 0.3:
                     return "TRENDING"
-        except Exception:
+        except Exception:  # nosec B110 - feature unavailable; fall back to OHLCV regime
             pass
 
         # Fall back to OHLCV-based regime
@@ -514,7 +514,7 @@ class SignalFilter:
                         return "MEAN_REVERTING"
                     if hurst > 0.55:
                         return "TRENDING"
-            except Exception:
+            except Exception:  # nosec B110 - Hurst computation unavailable; return unknown regime
                 pass
 
         return "unknown"
