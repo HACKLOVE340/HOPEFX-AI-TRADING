@@ -11,6 +11,7 @@ import base64
 import hashlib
 import json
 import os
+
 try:
     from typing import Self  # Python 3.11+
 except ImportError:
@@ -76,6 +77,7 @@ class SecureVault:
             # that logging configurations that inspect __cause__ (e.g. Sentry,
             # structlog) can surface the root error alongside the VaultError.
             import logging as _logging
+
             _logging.getLogger(__name__).error(
                 "Vault initialization failed: %s", e, exc_info=True
             )

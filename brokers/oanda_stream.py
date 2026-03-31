@@ -35,7 +35,6 @@ Credential resolution
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -74,12 +73,14 @@ _DEFAULT_TIMEOUT = 10  # seconds
 
 # ── Architectural boundary enforcement ───────────────────────────────────────
 
+
 class StreamingForbidden(RuntimeError):
     """
     Raised when code attempts to stream prices through OANDAStream.
 
     Live price data must flow exclusively through data_feed.NuclearStreamer.
     """
+
     def __init__(self) -> None:
         super().__init__(
             "ARCHITECTURAL VIOLATION: stream_prices() called on OANDAStream. "
@@ -90,6 +91,7 @@ class StreamingForbidden(RuntimeError):
 
 
 # ── OANDAStream — execution broker ───────────────────────────────────────────
+
 
 class OANDAStream:
     """

@@ -175,7 +175,11 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> "pd.DataFrame"
             if len(df) >= 10:
                 logger.info(
                     "Backtest data: loaded %d bars from %s for %s %s→%s",
-                    len(df), csv_path.name, symbol, start, end,
+                    len(df),
+                    csv_path.name,
+                    symbol,
+                    start,
+                    end,
                 )
                 return df
         except Exception as exc:
@@ -516,9 +520,7 @@ async def get_latest_multi_symbol_report(
     try:
         report = json.loads(report_path.read_text())
     except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Could not read report: {exc}"
-        )
+        raise HTTPException(status_code=500, detail=f"Could not read report: {exc}")
 
     return report
 
@@ -550,13 +552,15 @@ async def get_reconciled_investigation(
         try:
             return json.loads(cache_path.read_text())
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
     # Run investigation synchronously (fast — no model inference needed)
     try:
         import sys
+
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from backtest.reconciled_backtest_investigation import run_investigation
+
         results = run_investigation(smoke=False)
         cache_path.write_text(json.dumps(results, indent=2))
         return results
@@ -581,41 +585,50 @@ async def refresh_reconciled_investigation(
     Overwrites data/backtest_investigation.json with updated results.
     Poll GET /api/backtest/reconciled/investigation to retrieve results.
     """
+
     def _run():
         try:
             import sys
             from pathlib import Path as _Path
+
             sys.path.insert(0, str(_Path(__file__).parent.parent))
             from backtest.reconciled_backtest_investigation import run_investigation
             import json as _json
+
             results = run_investigation(smoke=False)
             _Path("data/backtest_investigation.json").write_text(
                 _json.dumps(results, indent=2)
             )
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).error("Investigation refresh failed: %s", exc)
 
     background_tasks.add_task(_run)
-    return {"status": "queued", "message": "Investigation running in background. Poll GET /api/backtest/reconciled/investigation for results."}
+    return {
+        "status": "queued",
+        "message": "Investigation running in background. Poll GET /api/backtest/reconciled/investigation for results.",
+    }
 
 
 # ── Replay-backed backtest endpoints ─────────────────────────────────────────
 
 
 class ReplayBacktestRequest(BaseModel):
-    start_date:      str   = Field(..., json_schema_extra={"example": "2022-01-01"})
-    end_date:        str   = Field(..., json_schema_extra={"example": "2022-12-31"})
-    symbol:          str   = Field("XAU_USD", json_schema_extra={"example": "XAU_USD"})
+    start_date: str = Field(..., json_schema_extra={"example": "2022-01-01"})
+    end_date: str = Field(..., json_schema_extra={"example": "2022-12-31"})
+    symbol: str = Field("XAU_USD", json_schema_extra={"example": "XAU_USD"})
     initial_capital: float = Field(10_000.0, gt=0)
-    strategy:        str   = Field("microstructure_heuristic",
-                                   description="Strategy name registered in strategy registry")
+    strategy: str = Field(
+        "microstructure_heuristic",
+        description="Strategy name registered in strategy registry",
+    )
 
 
 class RegimeStressRequest(BaseModel):
-    strategy:        str   = Field("microstructure_heuristic")
+    strategy: str = Field("microstructure_heuristic")
     initial_capital: float = Field(10_000.0, gt=0)
-    regimes:         Optional[List[str]] = Field(
+    regimes: Optional[List[str]] = Field(
         None,
         description="Subset of regime names to run. Omit for all built-in regimes.",
     )
@@ -643,50 +656,55 @@ async def run_replay_backtest(
             from datetime import datetime, timezone
 
             start = datetime.fromisoformat(req.start_date).replace(tzinfo=timezone.utc)
-            end   = datetime.fromisoformat(req.end_date).replace(tzinfo=timezone.utc)
+            end = datetime.fromisoformat(req.end_date).replace(tzinfo=timezone.utc)
 
             # Build a minimal strategy function from the strategy name
             strategy_fn = _resolve_strategy(req.strategy)
 
             runner = ReplayBacktestRunner(
-                strategy_fn     = strategy_fn,
-                symbols         = [req.symbol],
-                initial_capital = req.initial_capital,
+                strategy_fn=strategy_fn,
+                symbols=[req.symbol],
+                initial_capital=req.initial_capital,
             )
             metrics = await runner.run(start=start, end=end, symbol=req.symbol)
 
             _results[run_id] = {
-                "run_id":         run_id,
-                "type":           "replay",
-                "strategy":       req.strategy,
-                "symbol":         req.symbol,
-                "start_date":     req.start_date,
-                "end_date":       req.end_date,
+                "run_id": run_id,
+                "type": "replay",
+                "strategy": req.strategy,
+                "symbol": req.symbol,
+                "start_date": req.start_date,
+                "end_date": req.end_date,
                 "initial_capital": req.initial_capital,
-                "status":         "completed",
+                "status": "completed",
                 "metrics": {
-                    "total_return":  getattr(metrics, "total_return",  None),
-                    "sharpe_ratio":  getattr(metrics, "sharpe_ratio",  None),
-                    "max_drawdown":  getattr(metrics, "max_drawdown",  None),
-                    "win_rate":      getattr(metrics, "win_rate",      None),
-                    "total_trades":  getattr(metrics, "total_trades",  None),
+                    "total_return": getattr(metrics, "total_return", None),
+                    "sharpe_ratio": getattr(metrics, "sharpe_ratio", None),
+                    "max_drawdown": getattr(metrics, "max_drawdown", None),
+                    "win_rate": getattr(metrics, "win_rate", None),
+                    "total_trades": getattr(metrics, "total_trades", None),
                     "profit_factor": getattr(metrics, "profit_factor", None),
-                } if metrics else {},
+                }
+                if metrics
+                else {},
                 "completed_at": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as exc:
             logger.error("Replay backtest %s failed: %s", run_id, exc, exc_info=True)
-            _results[run_id] = {
-                "run_id": run_id, "status": "error", "error": str(exc)
-            }
+            _results[run_id] = {"run_id": run_id, "status": "error", "error": str(exc)}
 
     _results[run_id] = {"run_id": run_id, "status": "running"}
     background_tasks.add_task(_run)
-    return {"run_id": run_id, "status": "running",
-            "message": f"Poll /api/backtest/results/{run_id} for completion"}
+    return {
+        "run_id": run_id,
+        "status": "running",
+        "message": f"Poll /api/backtest/results/{run_id} for completion",
+    }
 
 
-@router.post("/replay/stress", summary="Regime-shift stress test across historical regimes")
+@router.post(
+    "/replay/stress", summary="Regime-shift stress test across historical regimes"
+)
 async def run_regime_stress_test(
     req: RegimeStressRequest,
     background_tasks: BackgroundTasks,
@@ -705,7 +723,8 @@ async def run_regime_stress_test(
     async def _run():
         try:
             from backtesting.replay_connector import (
-                RegimeShiftStressTester, STRESS_REGIMES
+                RegimeShiftStressTester,
+                STRESS_REGIMES,
             )
             from datetime import datetime, timezone
 
@@ -717,39 +736,41 @@ async def run_regime_stress_test(
                 regimes = [r for r in STRESS_REGIMES if r.name in req.regimes]
 
             tester = RegimeShiftStressTester(
-                strategy_fn     = strategy_fn,
-                strategy_name   = req.strategy,
-                initial_capital = req.initial_capital,
-                regimes         = regimes,
+                strategy_fn=strategy_fn,
+                strategy_name=req.strategy,
+                initial_capital=req.initial_capital,
+                regimes=regimes,
             )
             report = await tester.run_all_regimes()
 
             _results[run_id] = {
-                "run_id":          run_id,
-                "type":            "regime_stress",
-                "strategy":        req.strategy,
-                "status":          "completed",
-                "regimes_run":     report.regimes_run,
-                "regimes_passed":  report.regimes_passed,
-                "regimes_failed":  report.regimes_failed,
-                "worst_drawdown":  report.worst_drawdown(),
-                "best_sharpe":     report.best_sharpe(),
-                "worst_sharpe":    report.worst_sharpe(),
-                "summary":         tester.summary(report),
+                "run_id": run_id,
+                "type": "regime_stress",
+                "strategy": req.strategy,
+                "status": "completed",
+                "regimes_run": report.regimes_run,
+                "regimes_passed": report.regimes_passed,
+                "regimes_failed": report.regimes_failed,
+                "worst_drawdown": report.worst_drawdown(),
+                "best_sharpe": report.best_sharpe(),
+                "worst_sharpe": report.worst_sharpe(),
+                "summary": tester.summary(report),
                 "results": [
                     {
-                        "regime":      r.regime.name,
+                        "regime": r.regime.name,
                         "description": r.regime.description,
-                        "passed":      r.passed,
-                        "tick_count":  r.tick_count,
-                        "error":       r.error,
+                        "passed": r.passed,
+                        "tick_count": r.tick_count,
+                        "error": r.error,
                         "metrics": {
-                            "total_return":  getattr(r.metrics, "total_return",  None),
-                            "sharpe_ratio":  getattr(r.metrics, "sharpe_ratio",  None),
-                            "max_drawdown":  getattr(r.metrics, "max_drawdown",  None),
-                            "win_rate":      getattr(r.metrics, "win_rate",      None),
-                            "total_trades":  getattr(r.metrics, "total_trades",  None),
-                        } if r.metrics else None,
+                            "total_return": getattr(r.metrics, "total_return", None),
+                            "sharpe_ratio": getattr(r.metrics, "sharpe_ratio", None),
+                            "max_drawdown": getattr(r.metrics, "max_drawdown", None),
+                            "win_rate": getattr(r.metrics, "win_rate", None),
+                            "total_trades": getattr(r.metrics, "total_trades", None),
+                        }
+                        if r.metrics
+                        else None,
                     }
                     for r in report.results
                 ],
@@ -757,26 +778,28 @@ async def run_regime_stress_test(
             }
         except Exception as exc:
             logger.error("Regime stress %s failed: %s", run_id, exc, exc_info=True)
-            _results[run_id] = {
-                "run_id": run_id, "status": "error", "error": str(exc)
-            }
+            _results[run_id] = {"run_id": run_id, "status": "error", "error": str(exc)}
 
     _results[run_id] = {"run_id": run_id, "status": "running"}
     background_tasks.add_task(_run)
-    return {"run_id": run_id, "status": "running",
-            "message": f"Poll /api/backtest/results/{run_id} for completion"}
+    return {
+        "run_id": run_id,
+        "status": "running",
+        "message": f"Poll /api/backtest/results/{run_id} for completion",
+    }
 
 
 @router.get("/replay/regimes", summary="List available stress regimes")
 async def list_stress_regimes() -> List[Dict[str, Any]]:
     """Return all built-in stress regime definitions."""
     from backtesting.replay_connector import STRESS_REGIMES
+
     return [
         {
-            "name":              r.name,
-            "start":             r.start.isoformat(),
-            "end":               r.end.isoformat(),
-            "description":       r.description,
+            "name": r.name,
+            "start": r.start.isoformat(),
+            "end": r.end.isoformat(),
+            "description": r.description,
             "expected_vol_mult": r.expected_vol_mult,
         }
         for r in STRESS_REGIMES
@@ -790,9 +813,8 @@ def _resolve_strategy(strategy_name: str) -> Any:
     Falls back to a microstructure heuristic if the named strategy
     is not found in the registry.
     """
-    def _microstructure_heuristic(
-        timestamp, symbol, tick, positions, capital, history
-    ):
+
+    def _microstructure_heuristic(timestamp, symbol, tick, positions, capital, history):
         """Minimal OFI-based strategy for testing the replay pipeline."""
         from backtesting.engine import Order, OrderSide, OrderType
         import uuid as _uuid
@@ -810,14 +832,16 @@ def _resolve_strategy(strategy_name: str) -> Any:
         current_mid = (tick.bid + tick.ask) / 2
 
         if current_mid > avg * 1.001:
-            return [Order(
-                order_id   = str(_uuid.uuid4()),
-                timestamp  = timestamp,
-                symbol     = symbol,
-                side       = OrderSide.BUY,
-                order_type = OrderType.MARKET,
-                quantity   = 0.01,
-            )]
+            return [
+                Order(
+                    order_id=str(_uuid.uuid4()),
+                    timestamp=timestamp,
+                    symbol=symbol,
+                    side=OrderSide.BUY,
+                    order_type=OrderType.MARKET,
+                    quantity=0.01,
+                )
+            ]
         return []
 
     # Strategy registry lookup

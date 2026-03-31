@@ -255,7 +255,9 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
         )
 
 
-@router.get("/status", summary="Current broker connection status, balance, and data feed")
+@router.get(
+    "/status", summary="Current broker connection status, balance, and data feed"
+)
 async def broker_status():
     """
     Return the current broker type, connection state, account balance, and
@@ -295,11 +297,13 @@ async def broker_status():
             _raw_type = getattr(broker, "broker_type", None)
             if not _raw_type:
                 _raw_type = (
-                    type(broker).__name__.lower()
+                    type(broker)
+                    .__name__.lower()
                     .replace("tradingbroker", "")
                     .replace("broker", "")
                     .replace("trading", "")
-                    .strip("_") or "unknown"
+                    .strip("_")
+                    or "unknown"
                 )
             broker_type = _raw_type
             balance = None
@@ -310,6 +314,7 @@ async def broker_status():
             try:
                 if hasattr(broker, "get_account_info"):
                     import inspect as _inspect
+
                     if _inspect.iscoroutinefunction(broker.get_account_info):
                         info = await broker.get_account_info()
                     else:
@@ -318,10 +323,14 @@ async def broker_status():
                     if hasattr(info, "__dict__"):
                         info = info.__dict__
                     if isinstance(info, dict):
-                        balance = info.get("balance") or info.get("equity") or info.get("nav")
+                        balance = (
+                            info.get("balance") or info.get("equity") or info.get("nav")
+                        )
                         currency = info.get("currency", "USD")
                     else:
-                        balance = getattr(info, "balance", None) or getattr(info, "equity", None)
+                        balance = getattr(info, "balance", None) or getattr(
+                            info, "equity", None
+                        )
                         currency = getattr(info, "currency", "USD")
                 elif hasattr(broker, "get_account_balance"):
                     balance = broker.get_account_balance()
@@ -336,7 +345,7 @@ async def broker_status():
                     positions = await broker.get_positions()
                     open_positions = len(positions) if positions else 0
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
             broker_section = {
                 "connected": True,
@@ -377,7 +386,9 @@ async def broker_status():
                     "active": rest_status.get("active", False),
                     "primary_active": rest_status.get("primary_active", False),
                     "fallback_active": rest_status.get("fallback_active", False),
-                } if rest_status else {"active": False},
+                }
+                if rest_status
+                else {"active": False},
             }
         elif price_engine is not None and hasattr(price_engine, "get_status"):
             # Fallback only: RealTimePriceEngine REST polling
@@ -394,7 +405,11 @@ async def broker_status():
                     "note": "NuclearStreamer not active — no streaming API keys set",
                 }
             except Exception as exc:
-                data_feed = {"active": False, "error": str(exc), "source": "RealTimePriceEngine"}
+                data_feed = {
+                    "active": False,
+                    "error": str(exc),
+                    "source": "RealTimePriceEngine",
+                }
         elif price_engine is not None:
             data_feed = {
                 "active": getattr(price_engine, "active", False),
@@ -414,14 +429,14 @@ async def broker_status():
 
         # ── Signal engine status ──────────────────────────────────────────────
         signal_engine_running = any(
-            not t.done()
-            for t in getattr(app_state, "background_tasks", [])
+            not t.done() for t in getattr(app_state, "background_tasks", [])
         )
 
         # ── ML engine status ──────────────────────────────────────────────────
         ml_engine: dict = {"status": "unavailable", "model_available": False}
         try:
             from ml.inference_engine import get_inference_engine
+
             eng = get_inference_engine()
             h = eng.health()
             ml_engine = {
@@ -470,10 +485,12 @@ async def paper_clock_status():
     """
     try:
         from brokers.oanda_paper_clock import get_clock
+
         return get_clock().status()
     except Exception as exc:
         logger.warning("paper_clock_status: %s", exc)
         from datetime import datetime, timezone
+
         return {
             "started": False,
             "elapsed_days": 0.0,
@@ -513,10 +530,12 @@ async def stamp_oanda_clock(req: StampOandaRequest):
     # Inline auth check — admin only
     if not req.account_id:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=422, detail="account_id is required")
 
     try:
         from brokers.oanda_paper_clock import get_clock
+
         clock = get_clock()
         updated = clock.maybe_start(
             account_id=req.account_id,
@@ -535,4 +554,5 @@ async def stamp_oanda_clock(req: StampOandaRequest):
     except Exception as exc:
         logger.exception("stamp_oanda_clock: %s", exc)
         from fastapi import HTTPException
+
         raise HTTPException(status_code=500, detail=str(exc))

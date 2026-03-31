@@ -54,6 +54,7 @@ from sklearn.preprocessing import StandardScaler
 
 try:
     import xgboost as xgb
+
     _XGB_AVAILABLE = True
 except ImportError:
     _XGB_AVAILABLE = False
@@ -63,9 +64,11 @@ logger = logging.getLogger(__name__)
 
 # ── Prometheus metrics (optional) ────────────────────────────────────────────
 
+
 def _init_prometheus():
     try:
         from prometheus_client import Counter, Gauge, Histogram
+
         class _M:
             predict_total = Counter(
                 "hopefx_regime_conditional_predict_total",
@@ -93,15 +96,27 @@ def _init_prometheus():
                 "Fraction of recent bars in each regime",
                 ["regime"],
             )
+
         return _M()
     except Exception:
+
         class _Noop:
             class _C:
-                def labels(self, **_kw): return self
-                def inc(self, *a, **kw): pass
-                def observe(self, *a, **kw): pass
-                def set(self, *a, **kw): pass
-            def __getattr__(self, _): return self._C()
+                def labels(self, **_kw):
+                    return self
+
+                def inc(self, *a, **kw):
+                    pass
+
+                def observe(self, *a, **kw):
+                    pass
+
+                def set(self, *a, **kw):
+                    pass
+
+            def __getattr__(self, _):
+                return self._C()
+
         return _Noop()
 
 
@@ -201,8 +216,10 @@ def add_regime_features(
     X = X.copy()
 
     if "close" not in X.columns:
-        logger.warning("add_regime_features: 'close' column missing — regime features set to 0.5")
-        X["regime_hurst"]     = 0.5
+        logger.warning(
+            "add_regime_features: 'close' column missing — regime features set to 0.5"
+        )
+        X["regime_hurst"] = 0.5
         X["regime_trend_str"] = 0.25
         return X
 
@@ -226,30 +243,31 @@ def add_regime_features(
                 rs_vals.append(np.log(r / s))
         if len(rs_vals) < 2:
             return 0.5
-        log_lags = np.log(list(lags[:len(rs_vals)]))
+        log_lags = np.log(list(lags[: len(rs_vals)]))
         return float(np.clip(np.polyfit(log_lags, rs_vals, 1)[0], 0.0, 1.0))
 
     X["regime_hurst"] = (
-        close.rolling(hurst_window)
-             .apply(_hurst_rs, raw=True)
-             .shift(1)          # no lookahead
+        close.rolling(hurst_window).apply(_hurst_rs, raw=True).shift(1)  # no lookahead
     )
 
     # ── ADX (normalised to [0, 1]) ────────────────────────────────────────────
     if all(c in X.columns for c in ["high", "low"]):
-        high  = X["high"].astype(float)
-        low   = X["low"].astype(float)
-        tr    = pd.concat([
-            high - low,
-            (high - close.shift(1)).abs(),
-            (low  - close.shift(1)).abs(),
-        ], axis=1).max(axis=1)
-        plus_dm  = (high - high.shift(1)).clip(lower=0)
+        high = X["high"].astype(float)
+        low = X["low"].astype(float)
+        tr = pd.concat(
+            [
+                high - low,
+                (high - close.shift(1)).abs(),
+                (low - close.shift(1)).abs(),
+            ],
+            axis=1,
+        ).max(axis=1)
+        plus_dm = (high - high.shift(1)).clip(lower=0)
         minus_dm = (low.shift(1) - low).clip(lower=0)
-        tr_s     = tr.rolling(adx_window).mean()
-        plus_di  = 100 * plus_dm.rolling(adx_window).mean()  / (tr_s + 1e-9)
+        tr_s = tr.rolling(adx_window).mean()
+        plus_di = 100 * plus_dm.rolling(adx_window).mean() / (tr_s + 1e-9)
         minus_di = 100 * minus_dm.rolling(adx_window).mean() / (tr_s + 1e-9)
-        dx       = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
+        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
         X["regime_trend_str"] = (dx.rolling(adx_window).mean() / 100.0).shift(1)
     else:
         # Fallback: use rolling slope of close as trend proxy
@@ -260,13 +278,11 @@ def add_regime_features(
             return float(np.clip(abs(coef) / (np.std(x) + 1e-9), 0.0, 1.0))
 
         X["regime_trend_str"] = (
-            close.rolling(adx_window)
-                 .apply(_slope, raw=True)
-                 .shift(1)
+            close.rolling(adx_window).apply(_slope, raw=True).shift(1)
         )
 
     # Fill NaN from rolling windows with neutral values
-    X["regime_hurst"]     = X["regime_hurst"].fillna(0.5)
+    X["regime_hurst"] = X["regime_hurst"].fillna(0.5)
     X["regime_trend_str"] = X["regime_trend_str"].fillna(0.25)
 
     logger.debug(
@@ -602,27 +618,33 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
             X = extra_features.copy()
         else:
             # Minimal feature set from OHLCV
-            X = ohlcv[["open", "high", "low", "close", "volume"]].copy() \
-                if all(c in ohlcv.columns for c in ["open", "high", "low", "close", "volume"]) \
+            X = (
+                ohlcv[["open", "high", "low", "close", "volume"]].copy()
+                if all(
+                    c in ohlcv.columns
+                    for c in ["open", "high", "low", "close", "volume"]
+                )
                 else ohlcv.copy()
+            )
 
         # Ensure regime columns are present
         if self.hurst_col not in X.columns or self.adx_col not in X.columns:
             X = add_regime_features(X)
 
         # ── Step 2: Orchestrator feature injection ────────────────────────────
-        data_quality   = 1.0
+        data_quality = 1.0
         sentiment_score = 0.0
-        macro_impact    = 0.0
+        macro_impact = 0.0
 
         try:
             from data_layer.orchestrator import orchestrator
+
             tick = orchestrator.get_latest_tick()
             if tick is not None:
                 data_quality = float(tick.confidence)
             feats = orchestrator.get_ml_features()
-            sentiment_score = float(feats.get("news_sentiment_score",   0.0))
-            macro_impact    = float(feats.get("macro_impact_score_now", 0.0))
+            sentiment_score = float(feats.get("news_sentiment_score", 0.0))
+            macro_impact = float(feats.get("macro_impact_score_now", 0.0))
 
             # Inject orchestrator features as extra columns
             for key, val in feats.items():
@@ -637,19 +659,20 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
             _PROM.quality_gate_blocked.labels(symbol=symbol).inc()
             logger.warning(
                 "RegimeConditionalModel.predict_live: data quality %.3f < %.3f — neutral",
-                data_quality, min_data_quality,
+                data_quality,
+                min_data_quality,
             )
             return {
-                "direction":           "neutral",
-                "probability":         0.5,
-                "regime":              "unknown",
-                "data_quality":        data_quality,
-                "sentiment_score":     sentiment_score,
-                "macro_impact":        macro_impact,
-                "sentiment_scale":     1.0,
+                "direction": "neutral",
+                "probability": 0.5,
+                "regime": "unknown",
+                "data_quality": data_quality,
+                "sentiment_score": sentiment_score,
+                "macro_impact": macro_impact,
+                "sentiment_scale": 1.0,
                 "quality_gate_passed": False,
-                "model_used":          "none",
-                "latency_ms":          round((time.perf_counter() - t0) * 1000, 2),
+                "model_used": "none",
+                "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
             }
 
         # ── Step 4: Align feature columns to training schema ──────────────────
@@ -671,12 +694,14 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
 
         # ── Step 5: Regime-conditional prediction ─────────────────────────────
         last_row = X_aligned.iloc[[-1]]
-        labels   = detect_regime_labels(last_row, self.hurst_col, self.adx_col)
+        labels = detect_regime_labels(last_row, self.hurst_col, self.adx_col)
         regime_id = int(labels.iloc[0])
         regime_name = REGIME_NAMES.get(regime_id, "unknown")
 
         model = self._regime_models.get(regime_id, self._global_model)
-        model_used = "regime_specific" if regime_id in self._regime_models else "global_fallback"
+        model_used = (
+            "regime_specific" if regime_id in self._regime_models else "global_fallback"
+        )
 
         try:
             proba = model.predict_proba(last_row)
@@ -709,21 +734,27 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         logger.debug(
             "RegimeConditionalModel.predict_live: %s dir=%s prob=%.3f "
             "regime=%s quality=%.3f sentiment=%.3f scale=%.3f latency=%.1fms",
-            symbol, direction, scaled_prob, regime_name,
-            data_quality, sentiment_score, sentiment_scale, latency_ms,
+            symbol,
+            direction,
+            scaled_prob,
+            regime_name,
+            data_quality,
+            sentiment_score,
+            sentiment_scale,
+            latency_ms,
         )
 
         return {
-            "direction":           direction,
-            "probability":         round(scaled_prob, 4),
-            "regime":              regime_name,
-            "data_quality":        round(data_quality, 4),
-            "sentiment_score":     round(sentiment_score, 4),
-            "macro_impact":        round(macro_impact, 4),
-            "sentiment_scale":     round(sentiment_scale, 4),
+            "direction": direction,
+            "probability": round(scaled_prob, 4),
+            "regime": regime_name,
+            "data_quality": round(data_quality, 4),
+            "sentiment_score": round(sentiment_score, 4),
+            "macro_impact": round(macro_impact, 4),
+            "sentiment_scale": round(sentiment_scale, 4),
             "quality_gate_passed": True,
-            "model_used":          model_used,
-            "latency_ms":          latency_ms,
+            "model_used": model_used,
+            "latency_ms": latency_ms,
         }
 
     # ── Prometheus-instrumented predict_proba ─────────────────────────────────
@@ -794,6 +825,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
 
         try:
             from data_layer.orchestrator import orchestrator
+
             tick = orchestrator.get_latest_tick()
             if tick is not None:
                 data_quality = float(tick.confidence)
@@ -807,7 +839,8 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         if data_quality < min_data_quality:
             logger.warning(
                 "predict_with_orchestrator: data quality %.3f < %.3f — returning neutral",
-                data_quality, min_data_quality,
+                data_quality,
+                min_data_quality,
             )
             neutral_proba = np.full((len(X), 2), 0.5)
             return {
@@ -832,7 +865,10 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
 
         logger.debug(
             "predict_with_orchestrator: quality=%.3f sentiment=%.3f impact=%.3f scale=%.3f",
-            data_quality, sentiment_score, macro_impact, sentiment_scale,
+            data_quality,
+            sentiment_score,
+            macro_impact,
+            sentiment_scale,
         )
 
         return {

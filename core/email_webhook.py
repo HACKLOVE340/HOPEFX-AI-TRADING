@@ -42,7 +42,10 @@ def _verify_sendgrid_signature(
     """
     try:
         import base64
-        from cryptography.hazmat.primitives.asymmetric.ec import ECDSA, EllipticCurvePublicKey
+        from cryptography.hazmat.primitives.asymmetric.ec import (
+            ECDSA,
+            EllipticCurvePublicKey,
+        )
         from cryptography.hazmat.primitives.hashes import SHA256
         from cryptography.hazmat.primitives.serialization import load_der_public_key
         from cryptography.exceptions import InvalidSignature
@@ -119,7 +122,12 @@ def register_email_webhook(app: FastAPI) -> None:
         if not isinstance(events, list):
             events = [events]
 
-        suppression_events = {"bounce", "spam_report", "unsubscribe", "group_unsubscribe"}
+        suppression_events = {
+            "bounce",
+            "spam_report",
+            "unsubscribe",
+            "group_unsubscribe",
+        }
         suppressed: List[str] = []
 
         for event in events:
@@ -137,16 +145,22 @@ def register_email_webhook(app: FastAPI) -> None:
                     _Session = sessionmaker(bind=app_state.db_engine)
                     with _Session() as session:
                         exists = (
-                            session.query(EmailSuppression).filter_by(email=email).first()
+                            session.query(EmailSuppression)
+                            .filter_by(email=email)
+                            .first()
                         )
                         if not exists:
-                            session.add(EmailSuppression(email=email, reason=event_type))
+                            session.add(
+                                EmailSuppression(email=email, reason=event_type)
+                            )
                             session.commit()
                             suppressed.append(email)
                             logger.info(
                                 "Email suppressed: %s (reason: %s)", email, event_type
                             )
             except Exception as exc:
-                logger.error("Failed to record email suppression for %s: %s", email, exc)
+                logger.error(
+                    "Failed to record email suppression for %s: %s", email, exc
+                )
 
         return {"suppressed": suppressed, "processed": len(events)}

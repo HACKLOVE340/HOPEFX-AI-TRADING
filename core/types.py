@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 import sys
+
 if sys.version_info >= (3, 11):
     from enum import StrEnum
 else:
@@ -17,6 +18,8 @@ else:
 
     class StrEnum(str, Enum):  # type: ignore[no-redef]
         """Backport of StrEnum for Python < 3.11."""
+
+
 from typing import Literal, NewType
 
 from pydantic import BaseModel, Field, field_validator

@@ -371,6 +371,7 @@ async def init_broker(s: Any) -> Any:
                 # placeholder overwrite and gate sync correctly.
                 try:
                     from brokers.oanda_paper_clock import get_clock as _get_clock
+
                     _get_clock().maybe_start(
                         account_id=oanda_account,
                         environment="practice" if oanda_practice else "live",
@@ -416,6 +417,7 @@ async def init_broker(s: Any) -> Any:
     # This runs regardless of broker type so the warning is always visible.
     try:
         from brokers.oanda_paper_clock import validate_oanda_account_at_startup
+
         validation = validate_oanda_account_at_startup()
         s.oanda_account_validation = validation
         for w in validation.get("warnings", []):
@@ -471,6 +473,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     if started_utc_str:
         try:
             from datetime import datetime as _dt
+
             started_utc = _dt.fromisoformat(started_utc_str)
         except Exception:
             started_utc = now
@@ -524,11 +527,13 @@ async def init_price_engine(s: Any) -> Any:
     ]
 
     # ── Primary: NuclearStreamer WebSocket feed ────────────────────────────────
-    has_nuclear_key = any([
-        os.getenv("FINNHUB_API_KEY"),
-        os.getenv("TWELVE_API_KEY"),
-        os.getenv("POLYGON_API_KEY"),
-    ])
+    has_nuclear_key = any(
+        [
+            os.getenv("FINNHUB_API_KEY"),
+            os.getenv("TWELVE_API_KEY"),
+            os.getenv("POLYGON_API_KEY"),
+        ]
+    )
 
     if has_nuclear_key:
         try:
@@ -545,7 +550,9 @@ async def init_price_engine(s: Any) -> Any:
 
             class _PriceEngineBridge:
                 async def on_new_price(self, price: float) -> None:
-                    if broker_ref is not None and hasattr(broker_ref, "update_market_price"):
+                    if broker_ref is not None and hasattr(
+                        broker_ref, "update_market_price"
+                    ):
                         try:
                             broker_ref.update_market_price(primary_symbol, price)
                         except Exception as _exc:
@@ -566,7 +573,8 @@ async def init_price_engine(s: Any) -> Any:
             )
         except Exception as exc:
             logger.warning(
-                "init_price_engine: NuclearStreamer failed to start (non-fatal): %s", exc
+                "init_price_engine: NuclearStreamer failed to start (non-fatal): %s",
+                exc,
             )
     else:
         logger.info(
@@ -610,7 +618,7 @@ async def init_prop_enforcer(s: Any) -> Any:
         if ks is not None:
             kill_fn = lambda reason: ks.activate(reason)  # noqa: E731
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
 
     enforcer = PropEnforcer(kill_switch_fn=kill_fn)
     # Expose on app_state so brokers and signal engine can access it
@@ -664,6 +672,7 @@ async def init_secrets_manager(s: Any) -> Any:
             return
         try:
             import api.auth as _auth
+
             if hasattr(_auth, "reload_jwt_secret"):
                 _auth.reload_jwt_secret(new_key)
                 logger.info("SecretsManager: JWT secret rotated and reloaded")
@@ -682,7 +691,9 @@ async def init_secrets_manager(s: Any) -> Any:
         try:
             if s.db_engine:
                 s.db_engine.dispose()
-                logger.info("SecretsManager: DB engine disposed for credential rotation")
+                logger.info(
+                    "SecretsManager: DB engine disposed for credential rotation"
+                )
         except Exception as exc:
             logger.warning("SecretsManager: DB engine dispose failed: %s", exc)
 
@@ -827,6 +838,7 @@ async def init_macro_store(s: Any) -> Any:
     fred_loaded = 0
     try:
         from data_layer.orchestrator import orchestrator
+
         macro_store_bridge = orchestrator._macro_bridge
 
         await macro_store_bridge.start()
@@ -891,6 +903,7 @@ async def init_inference_engine(s: Any) -> Any:
     try:
         from api.admin import log_activity  # noqa: PLC0415
     except Exception:
+
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
 
@@ -1343,6 +1356,7 @@ async def init_daily_online_learner(s: Any) -> Any:
     try:
         from api.admin import log_activity
     except Exception:
+
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
 
@@ -1370,9 +1384,7 @@ async def init_daily_online_learner(s: Any) -> Any:
             learner._update_count,
         )
 
-    s.daily_online_learners = {
-        sym: get_online_learner(sym) for sym in symbols
-    }
+    s.daily_online_learners = {sym: get_online_learner(sym) for sym in symbols}
 
     # ── 2. Schedule daily EWC regime-adaptation loop ──────────────────────────
     async def _daily_ewc_loop() -> None:
@@ -1506,29 +1518,65 @@ def build_component_registry(app, feature_flags):
         .register("database", F.init_database, required=True, deps=["config"])
         .register("cache", F.init_cache, required=False, deps=["config"])
         .register("hot_standby", F.init_hot_standby, required=False, deps=["cache"])
-        .register("chaos_controller", F.init_chaos_controller, required=False, deps=["config"])
+        .register(
+            "chaos_controller", F.init_chaos_controller, required=False, deps=["config"]
+        )
         # ── Background services ───────────────────────────────────────────────
-        .register("data_scheduler", F.init_data_scheduler, required=False, deps=["config"])
+        .register(
+            "data_scheduler", F.init_data_scheduler, required=False, deps=["config"]
+        )
         .register("websocket", _app(F.init_websocket), required=False, deps=["config"])
-        .register("alert_engine", _app(F.init_alert_engine), required=False, deps=["config"])
+        .register(
+            "alert_engine", _app(F.init_alert_engine), required=False, deps=["config"]
+        )
         # ── Analysis / data routers ───────────────────────────────────────────
-        .register("order_flow", _app(F.init_order_flow), required=False, deps=["config"])
-        .register("time_and_sales", _app(F.init_time_and_sales), required=False, deps=["config"])
-        .register("market_scanner", _app(F.init_market_scanner), required=False, deps=["config"])
+        .register(
+            "order_flow", _app(F.init_order_flow), required=False, deps=["config"]
+        )
+        .register(
+            "time_and_sales",
+            _app(F.init_time_and_sales),
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "market_scanner",
+            _app(F.init_market_scanner),
+            required=False,
+            deps=["config"],
+        )
         .register("dom", _app(F.init_dom), required=False, deps=["config"])
-        .register("signals_router", _app(F.init_signals_router), required=False, deps=["config"])
-        .register("news_router", _app(F.init_news_router), required=False, deps=["config"])
+        .register(
+            "signals_router",
+            _app(F.init_signals_router),
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "news_router", _app(F.init_news_router), required=False, deps=["config"]
+        )
         # ── Auth / risk / trading ─────────────────────────────────────────────
         .register("auth_service", F.init_auth, required=False, deps=["database"])
         .register("risk_manager", F.init_risk_manager, required=False, deps=["config"])
         .register("broker", F.init_broker, required=False, deps=["database"])
         .register("price_engine", F.init_price_engine, required=False, deps=["broker"])
-        .register("compliance_manager", F.init_compliance, required=False, deps=["database"])
-        .register("prop_enforcer", F.init_prop_enforcer, required=False, deps=["compliance_manager"])
+        .register(
+            "compliance_manager", F.init_compliance, required=False, deps=["database"]
+        )
+        .register(
+            "prop_enforcer",
+            F.init_prop_enforcer,
+            required=False,
+            deps=["compliance_manager"],
+        )
         .register("aml", F.init_aml, required=False, deps=["database"])
-        .register("strategy_brain", F.init_strategy_brain, required=False, deps=["config"])
+        .register(
+            "strategy_brain", F.init_strategy_brain, required=False, deps=["config"]
+        )
         .register("event_store", F.init_event_store, required=False, deps=["config"])
-        .register("position_tracker", F.init_position_tracker, required=False, deps=["config"])
+        .register(
+            "position_tracker", F.init_position_tracker, required=False, deps=["config"]
+        )
         .register(
             "trade_executor",
             F.init_trade_executor,
@@ -1540,17 +1588,29 @@ def build_component_registry(app, feature_flags):
             F.init_hopefx_brain,
             required=False,
             deps=[
-                "price_engine", "risk_manager", "broker", "strategy_brain",
-                "alert_engine", "position_tracker", "trade_executor",
+                "price_engine",
+                "risk_manager",
+                "broker",
+                "strategy_brain",
+                "alert_engine",
+                "position_tracker",
+                "trade_executor",
             ],
         )
         # ── Payments / social ─────────────────────────────────────────────────
         .register("wallet_manager", F.init_wallet, required=False, deps=["database"])
         .register("social", F.init_social, required=False, deps=["config"])
-        .register("regime_router", F.init_regime_router, required=False, deps=["strategy_brain"])
+        .register(
+            "regime_router",
+            F.init_regime_router,
+            required=False,
+            deps=["strategy_brain"],
+        )
         # ── Macro / MTF / ML pipeline ─────────────────────────────────────────
         .register("macro_store", F.init_macro_store, required=False, deps=["config"])
-        .register("mtf_store", F.init_mtf_store, required=False, deps=["data_scheduler"])
+        .register(
+            "mtf_store", F.init_mtf_store, required=False, deps=["data_scheduler"]
+        )
         .register(
             "inference_engine",
             F.init_inference_engine,
@@ -1563,7 +1623,12 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["risk_manager", "broker", "macro_store", "mtf_store"],
         )
-        .register("hourly_trainer", F.init_hourly_trainer, required=False, deps=["data_scheduler"])
+        .register(
+            "hourly_trainer",
+            F.init_hourly_trainer,
+            required=False,
+            deps=["data_scheduler"],
+        )
         .register(
             "online_learner_store",
             F.init_online_learner_store,
@@ -1576,19 +1641,51 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["hourly_trainer"],
         )
-        .register("outbox_relay", F.init_outbox_relay, required=False, deps=["database"])
-        .register("ml_performance_monitor", F.init_performance_monitor, required=False, deps=["hourly_trainer"])
-        .register("reconciler", F.init_reconciler, required=False, deps=["database", "broker"])
-        .register("telegram_bot", F.init_telegram_bot, required=False, deps=["alert_engine"])
+        .register(
+            "outbox_relay", F.init_outbox_relay, required=False, deps=["database"]
+        )
+        .register(
+            "ml_performance_monitor",
+            F.init_performance_monitor,
+            required=False,
+            deps=["hourly_trainer"],
+        )
+        .register(
+            "reconciler", F.init_reconciler, required=False, deps=["database", "broker"]
+        )
+        .register(
+            "telegram_bot", F.init_telegram_bot, required=False, deps=["alert_engine"]
+        )
         .register("mobile", _app(F.init_mobile), required=False, deps=["config"])
         .register("hyperopt", _app(F.init_hyperopt), required=False, deps=["config"])
         # ── Feature-flagged ───────────────────────────────────────────────────
-        .register("research_engine", _app_flags(F.init_research), required=False, deps=["config"])
-        .register("explainer", _app_flags(F.init_explainability), required=False, deps=["config"])
-        .register("transparency_engine", _app_flags(F.init_transparency), required=False, deps=["config"])
-        .register("teams_manager", _app_flags(F.init_teams), required=False, deps=["config"])
-        .register("nocode_builder", _app_flags(F.init_nocode), required=False, deps=["config"])
-        .register("replay_engine", _app_flags(F.init_replay), required=False, deps=["config"])
+        .register(
+            "research_engine",
+            _app_flags(F.init_research),
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "explainer",
+            _app_flags(F.init_explainability),
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "transparency_engine",
+            _app_flags(F.init_transparency),
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "teams_manager", _app_flags(F.init_teams), required=False, deps=["config"]
+        )
+        .register(
+            "nocode_builder", _app_flags(F.init_nocode), required=False, deps=["config"]
+        )
+        .register(
+            "replay_engine", _app_flags(F.init_replay), required=False, deps=["config"]
+        )
         .register(
             "ml_feature_engineer",
             _app_flags(F.init_ml_predictions),
@@ -1623,8 +1720,7 @@ async def init_chaos_controller(s: Any) -> Optional[Any]:
         s.mutation_runner = runner
 
         logger.info(
-            "ChaosController + MutationTestRunner initialised "
-            "(orchestrator=%s)",
+            "ChaosController + MutationTestRunner initialised (orchestrator=%s)",
             "wired" if orchestrator else "not available",
         )
         return controller
@@ -1661,7 +1757,8 @@ async def init_hot_standby(s: Any) -> Optional[Any]:
             """Restore engine state after standby promotion."""
             logger.warning(
                 "HOT-STANDBY PROMOTED: restoring %d positions equity=%.2f",
-                len(snapshot.positions), snapshot.equity,
+                len(snapshot.positions),
+                snapshot.equity,
             )
             # Restore open positions into the execution engine if available
             engine = getattr(s, "hopefx_engine", None)
@@ -1671,15 +1768,13 @@ async def init_hot_standby(s: Any) -> Optional[Any]:
                 engine._dd_tracker.update(equity=snapshot.equity)
                 engine._intra_monitor.update_equity(snapshot.equity)
                 logger.info(
-                    "HOT-STANDBY: engine state restored — "
-                    "positions=%d equity=%.2f",
-                    len(snapshot.positions), snapshot.equity,
+                    "HOT-STANDBY: engine state restored — positions=%d equity=%.2f",
+                    len(snapshot.positions),
+                    snapshot.equity,
                 )
 
         async def _on_demote() -> None:
-            logger.critical(
-                "HOT-STANDBY DEMOTED: this pod lost the leader key"
-            )
+            logger.critical("HOT-STANDBY DEMOTED: this pod lost the leader key")
 
         replicator = HotStandbyReplicator(
             redis_client=redis_client,
@@ -1690,7 +1785,8 @@ async def init_hot_standby(s: Any) -> Optional[Any]:
         s.hot_standby = replicator
         logger.info(
             "HotStandbyReplicator started role=%s pod=%s",
-            replicator._role.value, replicator._pod_id,
+            replicator._role.value,
+            replicator._pod_id,
         )
         return replicator
 
@@ -1710,8 +1806,16 @@ def run_startup_stress_tests(risk_manager) -> None:
         AdvancedRiskAnalytics()
 
         scenarios = [
-            {"name": "2008 Financial Crisis", "equity_shock": -0.38, "vol_multiplier": 3.5},
-            {"name": "COVID-19 March 2020", "equity_shock": -0.34, "vol_multiplier": 4.0},
+            {
+                "name": "2008 Financial Crisis",
+                "equity_shock": -0.38,
+                "vol_multiplier": 3.5,
+            },
+            {
+                "name": "COVID-19 March 2020",
+                "equity_shock": -0.34,
+                "vol_multiplier": 4.0,
+            },
             {"name": "Gold Flash Crash", "equity_shock": -0.15, "vol_multiplier": 2.5},
             {"name": "USD Spike +10%", "equity_shock": -0.12, "vol_multiplier": 2.0},
             {"name": "Liquidity Crunch", "equity_shock": -0.20, "vol_multiplier": 3.0},

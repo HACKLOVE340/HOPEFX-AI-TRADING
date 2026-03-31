@@ -150,7 +150,11 @@ class BrokerFactory:
         resolved = (name or _DEFAULT_BROKER).lower()
         broker_class = cls._brokers.get(resolved)
         if broker_class is None:
-            logger.warning("Unknown broker: %s (available: %s)", resolved, list(cls._brokers.keys()))
+            logger.warning(
+                "Unknown broker: %s (available: %s)",
+                resolved,
+                list(cls._brokers.keys()),
+            )
             return None
         logger.info("Creating broker: %s (%s)", resolved, broker_class.__name__)
         return broker_class(config or {})
@@ -205,9 +209,7 @@ class BrokerFactory:
 
         brokers_section: Dict = cfg.get("brokers", {})
         resolved_name = (
-            name
-            or os.getenv("BROKER")
-            or brokers_section.get("default", "prop_mt5")
+            name or os.getenv("BROKER") or brokers_section.get("default", "prop_mt5")
         )
 
         broker_cfg = brokers_section.get(resolved_name)
@@ -225,16 +227,19 @@ class BrokerFactory:
         try:
             if broker_type == "mt5":
                 from brokers.mt5_broker import MT5Broker
+
                 logger.info("Creating MT5Broker for profile '%s'", resolved_name)
                 return MT5Broker(broker_cfg)
 
             if broker_type == "oanda":
                 from brokers.oanda_broker import OandaBroker
+
                 logger.info("Creating OandaBroker for profile '%s'", resolved_name)
                 return OandaBroker(broker_cfg)
 
             if broker_type == "ibkr":
                 from brokers.ibkr_broker import IBKRBroker
+
                 logger.info("Creating IBKRBroker for profile '%s'", resolved_name)
                 return IBKRBroker(broker_cfg)
 

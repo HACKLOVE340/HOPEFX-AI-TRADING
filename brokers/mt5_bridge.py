@@ -192,7 +192,6 @@ class EX5SignalExporter:
         This prevents race conditions when the MT5 EA and Python both
         read/write the same signal file simultaneously.
         """
-        import sys
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload, indent=2))
 
@@ -208,6 +207,7 @@ class EX5SignalExporter:
                 logger.warning("Atomic rename failed for %s: %s", path, exc)
                 tmp.write_text(json.dumps(payload, indent=2))
                 import shutil
+
                 shutil.copy2(str(tmp), str(path))
                 tmp.unlink(missing_ok=True)
 
@@ -275,7 +275,13 @@ class EX5SignalExporter:
         }
         path = self.signal_dir / f"{signal_id}.json"
         self._write_json_locked(path, payload)
-        logger.info("ex5_modify ticket=%d SL=%s TP=%s path=%s", ticket, stop_loss, take_profit, path)
+        logger.info(
+            "ex5_modify ticket=%d SL=%s TP=%s path=%s",
+            ticket,
+            stop_loss,
+            take_profit,
+            path,
+        )
         return path
 
     def export_cancel(self, ticket: int, symbol: str) -> Path:
@@ -310,7 +316,9 @@ class EX5SignalExporter:
                     return MT5FillResult(
                         ticket=int(data.get("ticket", 0)),
                         status=FillStatus.FILLED,
-                        filled_volume=float(data.get("fill_volume", data.get("volume", 0))),
+                        filled_volume=float(
+                            data.get("fill_volume", data.get("volume", 0))
+                        ),
                         fill_price=float(data.get("fill_price", 0)),
                         commission=float(data.get("commission", 0)),
                         swap=float(data.get("swap", 0)),
@@ -326,7 +334,7 @@ class EX5SignalExporter:
             except RuntimeError:
                 raise
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
             time.sleep(0.5)
         raise TimeoutError(
             f"Signal {signal_path.name} not filled within {timeout_sec}s"
@@ -775,7 +783,10 @@ class MT5Bridge:
             )
             logger.info(
                 "mt5_bridge.modify_order (signal): ticket=%d SL=%s TP=%s path=%s",
-                ticket, stop_loss, take_profit, path,
+                ticket,
+                stop_loss,
+                take_profit,
+                path,
             )
             return True
 
@@ -798,7 +809,10 @@ class MT5Bridge:
             )
         logger.info(
             "mt5_bridge.modify_order: ticket=%d SL=%s TP=%s retcode=%d",
-            ticket, stop_loss, take_profit, result.retcode,
+            ticket,
+            stop_loss,
+            take_profit,
+            result.retcode,
         )
         return True
 

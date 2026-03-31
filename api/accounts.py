@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -47,7 +47,7 @@ router = APIRouter(prefix="/api/accounts", tags=["Accounts"])
 #       "accounts:teams:{team_id}" → {team_id, name, members, ...}
 #       "accounts:team_index:{user_id}" → [team_id, ...]
 
-_SUB_KEY  = "accounts:sub:{uid}"
+_SUB_KEY = "accounts:sub:{uid}"
 _TEAM_KEY = "accounts:team:{tid}"
 _TIDX_KEY = "accounts:team_index:{uid}"
 
@@ -55,37 +55,48 @@ _TIDX_KEY = "accounts:team_index:{uid}"
 def _load_sub_accounts(user_id: str) -> Dict[str, Any]:
     """Load sub-accounts for a user from DB; return empty dict on miss."""
     from api.db_store import db_get
+
     return db_get(_SUB_KEY.format(uid=user_id)) or {}
 
 
 def _save_sub_accounts(user_id: str, accounts: Dict[str, Any]) -> None:
     from api.db_store import db_set
+
     db_set(_SUB_KEY.format(uid=user_id), accounts, changed_by=user_id)
 
 
 def _load_team(team_id: str) -> Optional[Dict[str, Any]]:
     from api.db_store import db_get
+
     return db_get(_TEAM_KEY.format(tid=team_id))
 
 
 def _save_team(team: Dict[str, Any]) -> None:
     from api.db_store import db_set
-    db_set(_TEAM_KEY.format(tid=team["team_id"]), team, changed_by=team.get("creator_id", "system"))
+
+    db_set(
+        _TEAM_KEY.format(tid=team["team_id"]),
+        team,
+        changed_by=team.get("creator_id", "system"),
+    )
 
 
 def _delete_team(team_id: str) -> None:
     from api.db_store import db_delete
+
     db_delete(_TEAM_KEY.format(tid=team_id))
 
 
 def _load_team_index(user_id: str) -> list:
     """Return list of team_ids the user belongs to."""
     from api.db_store import db_get
+
     return db_get(_TIDX_KEY.format(uid=user_id)) or []
 
 
 def _add_to_team_index(user_id: str, team_id: str) -> None:
     from api.db_store import db_get, db_set
+
     idx = db_get(_TIDX_KEY.format(uid=user_id)) or []
     if team_id not in idx:
         idx.append(team_id)
@@ -94,23 +105,29 @@ def _add_to_team_index(user_id: str, team_id: str) -> None:
 
 def _remove_from_team_index(user_id: str, team_id: str) -> None:
     from api.db_store import db_get, db_set
+
     idx = db_get(_TIDX_KEY.format(uid=user_id)) or []
     idx = [t for t in idx if t != team_id]
     db_set(_TIDX_KEY.format(uid=user_id), idx, changed_by=user_id)
 
+
 # ── Schemas ───────────────────────────────────────────────────────────────────
+
 
 class CreateSubAccountRequest(BaseModel):
     label: str = Field(..., min_length=1, max_length=64)
     broker: str = Field(default="oanda_paper")
     initial_balance: float = Field(default=10_000.0, ge=0)
 
+
 class UpdateSubAccountRequest(BaseModel):
     label: Optional[str] = Field(None, min_length=1, max_length=64)
     active: Optional[bool] = None
 
+
 class CreateTeamRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
+
 
 class InviteMemberRequest(BaseModel):
     user_id: str
@@ -118,13 +135,18 @@ class InviteMemberRequest(BaseModel):
     email: str
     role: str = Field(default="trader", pattern="^(admin|manager|trader|viewer)$")
 
+
 class UpdateMemberRoleRequest(BaseModel):
     role: str = Field(..., pattern="^(admin|manager|trader|viewer)$")
 
+
 # ── Sub-account endpoints ─────────────────────────────────────────────────────
 
+
 @router.get("/sub-accounts")
-async def list_sub_accounts(user: TokenPayload = Depends(get_current_user)) -> Dict[str, Any]:
+async def list_sub_accounts(
+    user: TokenPayload = Depends(get_current_user),
+) -> Dict[str, Any]:
     """List all sub-accounts owned by the current user."""
     accounts = list(_load_sub_accounts(user.sub).values())
     return {"accounts": accounts, "total": len(accounts)}
@@ -200,7 +222,9 @@ async def delete_sub_account(
     del existing[account_id]
     _save_sub_accounts(user.sub, existing)
 
+
 # ── Team endpoints ────────────────────────────────────────────────────────────
+
 
 @router.get("/teams")
 async def list_teams(user: TokenPayload = Depends(get_current_user)) -> Dict[str, Any]:
@@ -294,7 +318,9 @@ async def update_member_role(
     return member
 
 
-@router.delete("/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def remove_member(
     team_id: str,
     member_id: str,
@@ -310,7 +336,9 @@ async def remove_member(
         raise HTTPException(status_code=403, detail="Not a team member")
 
     if caller["role"] != "admin" and user.sub != member_id:
-        raise HTTPException(status_code=403, detail="Admin role required to remove others")
+        raise HTTPException(
+            status_code=403, detail="Admin role required to remove others"
+        )
 
     team["members"] = [m for m in team["members"] if m["user_id"] != member_id]
     _save_team(team)

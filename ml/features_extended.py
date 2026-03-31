@@ -174,7 +174,9 @@ def _rolling_hfd(series: pd.Series, window: int, k_max: int) -> pd.Series:
     # Build strided matrix (n_windows, window)
     stride = arr.strides[0]
     n_win = n - window + 1
-    mat = np.lib.stride_tricks.as_strided(arr, shape=(n_win, window), strides=(stride, stride)).copy()
+    mat = np.lib.stride_tricks.as_strided(
+        arr, shape=(n_win, window), strides=(stride, stride)
+    ).copy()
     for wi in range(n_win):
         x = mat[wi]
         lk = []
@@ -240,12 +242,12 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
         # Residual = y - t*(t·y)/(t·t) - mean(y - t*(t·y)/(t·t))
         # Simplified: project out the linear component
         t_norm = t - t.mean()
-        t_sq = (t_norm ** 2).sum()
+        t_sq = (t_norm**2).sum()
 
         # Collect all segments across all windows: shape (n_win * segs, s)
         seg_list = []
         for i in range(segs):
-            seg_list.append(y_mat[:, i * s:(i + 1) * s])
+            seg_list.append(y_mat[:, i * s : (i + 1) * s])
         segs_mat = np.concatenate(seg_list, axis=0)  # (n_win*segs, s)
 
         # Vectorized linear detrend
@@ -255,7 +257,7 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
             residual = seg_c - slope * t_norm[np.newaxis, :]
         else:
             residual = seg_c
-        rms_all = np.sqrt((residual ** 2).mean(axis=1))  # (n_win*segs,)
+        rms_all = np.sqrt((residual**2).mean(axis=1))  # (n_win*segs,)
 
         # Average RMS per window
         rms_per_win = rms_all.reshape(segs, n_win).mean(axis=0)  # (n_win,)
@@ -273,13 +275,13 @@ def _rolling_dfa(series: pd.Series, window: int) -> pd.Series:
     # Vectorized polyfit: slope = (n * Σxy - Σx*Σy) / (n * Σx² - (Σx)²)
     ns = len(log_s)
     sx = log_s.sum()
-    sx2 = (log_s ** 2).sum()
+    sx2 = (log_s**2).sum()
     sy = log_f.sum(axis=0)
     sxy = (log_s[:, np.newaxis] * log_f).sum(axis=0)
-    denom = ns * sx2 - sx ** 2
+    denom = ns * sx2 - sx**2
     if abs(denom) > 1e-12:
         slopes = (ns * sxy - sx * sy) / denom
-        out[window - 1:] = np.clip(slopes, -2.0, 2.0)
+        out[window - 1 :] = np.clip(slopes, -2.0, 2.0)
 
     return pd.Series(out, index=series.index)
 
@@ -293,13 +295,15 @@ def _rolling_lyapunov(series: pd.Series, window: int) -> pd.Series:
         return pd.Series(out, index=series.index)
     stride = arr.strides[0]
     n_win = n - window + 1
-    mat = np.lib.stride_tricks.as_strided(arr, shape=(n_win, window), strides=(stride, stride)).copy()
+    mat = np.lib.stride_tricks.as_strided(
+        arr, shape=(n_win, window), strides=(stride, stride)
+    ).copy()
     half = window // 2
     for wi in range(n_win):
         x = mat[wi]
         divs = []
         for i in range(half):
-            diffs = np.abs(x[i + 1:] - x[i])
+            diffs = np.abs(x[i + 1 :] - x[i])
             pos = diffs[diffs > 0]
             if len(pos):
                 divs.append(np.log(pos.min() + 1e-10))
@@ -316,7 +320,9 @@ def _rolling_apen(series: pd.Series, window: int, m: int, r_factor: float) -> pd
         return pd.Series(out, index=series.index)
     stride = arr.strides[0]
     n_win = n - window + 1
-    mat = np.lib.stride_tricks.as_strided(arr, shape=(n_win, window), strides=(stride, stride)).copy()
+    mat = np.lib.stride_tricks.as_strided(
+        arr, shape=(n_win, window), strides=(stride, stride)
+    ).copy()
 
     def _phi_vec(x: np.ndarray, m_: int, r: float) -> float:
         """Vectorized phi computation using broadcasting."""
@@ -348,6 +354,7 @@ def _rolling_apen(series: pd.Series, window: int, m: int, r_factor: float) -> pd
 def _rolling_perm_entropy(series: pd.Series, window: int, order: int) -> pd.Series:
     """Permutation entropy — vectorized using argsort on strided windows."""
     import math
+
     arr = series.values.astype(float)
     n = len(arr)
     out = np.full(n, 0.0)
@@ -356,7 +363,9 @@ def _rolling_perm_entropy(series: pd.Series, window: int, order: int) -> pd.Seri
     max_ent = math.log(math.factorial(order) + 1e-10)
     stride = arr.strides[0]
     n_win = n - window + 1
-    mat = np.lib.stride_tricks.as_strided(arr, shape=(n_win, window), strides=(stride, stride)).copy()
+    mat = np.lib.stride_tricks.as_strided(
+        arr, shape=(n_win, window), strides=(stride, stride)
+    ).copy()
     for wi in range(n_win):
         x = mat[wi]
         nm = window - order + 1
@@ -368,7 +377,7 @@ def _rolling_perm_entropy(series: pd.Series, window: int, order: int) -> pd.Seri
         )
         perms = np.argsort(sub, axis=1)  # (nm, order)
         # Hash each permutation to an integer
-        keys = np.ravel_multi_index(perms.T, dims=[order] * order, mode='clip')
+        keys = np.ravel_multi_index(perms.T, dims=[order] * order, mode="clip")
         counts = np.bincount(keys)
         counts = counts[counts > 0]
         p = counts / counts.sum()
@@ -386,7 +395,9 @@ def _rolling_recurrence(series: pd.Series, window: int, eps_factor: float) -> pd
         return pd.Series(out, index=series.index)
     stride = arr.strides[0]
     n_win = n - window + 1
-    mat = np.lib.stride_tricks.as_strided(arr, shape=(n_win, window), strides=(stride, stride)).copy()
+    mat = np.lib.stride_tricks.as_strided(
+        arr, shape=(n_win, window), strides=(stride, stride)
+    ).copy()
     for wi in range(n_win):
         x = mat[wi]
         eps = eps_factor * x.std()
@@ -408,16 +419,18 @@ def _rolling_wavelet_ratio(series: pd.Series, window: int) -> pd.Series:
         return pd.Series(out, index=series.index)
     stride = arr.strides[0]
     n_win = n - window + 1
-    mat = np.lib.stride_tricks.as_strided(arr, shape=(n_win, window), strides=(stride, stride)).copy()
+    mat = np.lib.stride_tricks.as_strided(
+        arr, shape=(n_win, window), strides=(stride, stride)
+    ).copy()
     # Haar: use even-length portion
     w2 = (window // 2) * 2
-    x_even = mat[:, :w2:2]   # (n_win, w2//2)
-    x_odd  = mat[:, 1:w2:2]  # (n_win, w2//2)
+    x_even = mat[:, :w2:2]  # (n_win, w2//2)
+    x_odd = mat[:, 1:w2:2]  # (n_win, w2//2)
     approx = (x_even + x_odd) * 0.5
     detail = (x_even - x_odd) * 0.5
-    e_approx = (approx ** 2).sum(axis=1) + 1e-10
-    e_detail = (detail ** 2).sum(axis=1) + 1e-10
-    out[window - 1:] = e_detail / e_approx
+    e_approx = (approx**2).sum(axis=1) + 1e-10
+    e_detail = (detail**2).sum(axis=1) + 1e-10
+    out[window - 1 :] = e_detail / e_approx
     return pd.Series(out, index=series.index)
 
 
@@ -430,7 +443,9 @@ def _rolling_corr_dim(series: pd.Series, window: int) -> pd.Series:
         return pd.Series(out, index=series.index)
     stride = arr.strides[0]
     n_win = n - window + 1
-    mat = np.lib.stride_tricks.as_strided(arr, shape=(n_win, window), strides=(stride, stride)).copy()
+    mat = np.lib.stride_tricks.as_strided(
+        arr, shape=(n_win, window), strides=(stride, stride)
+    ).copy()
     for wi in range(n_win):
         x = mat[wi]
         diffs = np.abs(np.diff(x))
@@ -445,7 +460,7 @@ def _rolling_corr_dim(series: pd.Series, window: int) -> pd.Series:
                 continue
             c_vals.append((dist < eps).sum() / max(window * (window - 1), 1))
         if len(c_vals) >= 2:
-            log_eps = np.log(eps_vals[:len(c_vals)] + 1e-10)
+            log_eps = np.log(eps_vals[: len(c_vals)] + 1e-10)
             log_c = np.log(np.array(c_vals) + 1e-10)
             try:
                 out[wi + window - 1] = float(np.polyfit(log_eps, log_c, 1)[0])
@@ -663,8 +678,8 @@ def add_institutional_edge_features(df: pd.DataFrame) -> pd.DataFrame:
     bar_range = (h - l).replace(0, np.nan)
     buy_pct = ((c - l) / bar_range).fillna(0.5).clip(0, 1)
     sell_pct = 1.0 - buy_pct
-    buy_vol = (buy_pct * v.fillna(0))
-    sell_vol = (sell_pct * v.fillna(0))
+    buy_vol = buy_pct * v.fillna(0)
+    sell_vol = sell_pct * v.fillna(0)
     delta = buy_vol - sell_vol
 
     # ── Cumulative delta and divergence ───────────────────────────────────────
@@ -721,20 +736,18 @@ def add_institutional_edge_features(df: pd.DataFrame) -> pd.DataFrame:
     price_move = (c - o).abs().replace(0, np.nan)
     vol_ma20 = v.rolling(20).mean().replace(0, np.nan)
     d["inst_absorption_ratio"] = (
-        (v / vol_ma20) / (price_move / c.replace(0, np.nan))
-    ).fillna(0.0).clip(0, 100)
+        ((v / vol_ma20) / (price_move / c.replace(0, np.nan))).fillna(0.0).clip(0, 100)
+    )
     d["inst_absorption_z"] = _zscore(d["inst_absorption_ratio"], 20)
     # High absorption = large vol, small move (institutional accumulation/distribution)
-    d["inst_high_absorption"] = (
-        d["inst_absorption_z"] > 1.5
-    ).astype(int)
+    d["inst_high_absorption"] = (d["inst_absorption_z"] > 1.5).astype(int)
 
     # ── Smart Money Index (SMI) ───────────────────────────────────────────────
     # SMI = close - open (first 30 min proxy) + close - open (last 30 min proxy)
     # On H1 bars: first bar of session = dumb money, last bar = smart money
     # Proxy: (close - open) of current bar vs (close - open) of 8 bars ago
-    early_move = (o - o.shift(1)).fillna(0.0)   # gap open = retail reaction
-    late_move = (c - o).fillna(0.0)              # intrabar close = smart money
+    early_move = (o - o.shift(1)).fillna(0.0)  # gap open = retail reaction
+    late_move = (c - o).fillna(0.0)  # intrabar close = smart money
     d["inst_smi"] = (late_move - early_move).fillna(0.0)
     d["inst_smi_z20"] = _zscore(d["inst_smi"], 20)
     d["inst_smi_ma10"] = d["inst_smi"].rolling(10).mean().fillna(0.0)
@@ -789,7 +802,9 @@ def _rolling_volume_profile(
     h_arr = high.values.astype(float)
     l_arr = low.values.astype(float)
     c_arr = close.values.astype(float)
-    v_arr = np.where(np.isnan(volume.values) | (volume.values <= 0), 0.0, volume.values.astype(float))
+    v_arr = np.where(
+        np.isnan(volume.values) | (volume.values <= 0), 0.0, volume.values.astype(float)
+    )
 
     # Rolling high/low for each window endpoint
     roll_high = high.rolling(window, min_periods=window).max().values
@@ -814,8 +829,8 @@ def _rolling_volume_profile(
     )
 
     # Rolling range for each window (shape: n_windows)
-    rh = roll_high[window - 1:]
-    rl = roll_low[window - 1:]
+    rh = roll_high[window - 1 :]
+    rl = roll_low[window - 1 :]
     price_range = rh - rl
 
     # Mask degenerate windows
@@ -823,7 +838,7 @@ def _rolling_volume_profile(
 
     # Normalised position of each bar within its window's price range
     # Shape: (n_windows, window)
-    rh_col = rh[:, np.newaxis]
+    _rh_col = rh[:, np.newaxis]
     rl_col = rl[:, np.newaxis]
     pr_col = np.where(price_range[:, np.newaxis] > 0, price_range[:, np.newaxis], 1.0)
 
@@ -833,15 +848,22 @@ def _rolling_volume_profile(
     # Build bucket volume matrix: shape (n_windows, n_buckets)
     # Use one-hot encoding then dot with volume
     # one_hot shape: (n_windows, window, n_buckets)
-    one_hot = (bucket_idx[:, :, np.newaxis] == np.arange(n_buckets)[np.newaxis, np.newaxis, :])
-    bucket_vol_mat = (one_hot * vol_strided[:, :, np.newaxis]).sum(axis=1)  # (n_windows, n_buckets)
+    one_hot = (
+        bucket_idx[:, :, np.newaxis] == np.arange(n_buckets)[np.newaxis, np.newaxis, :]
+    )
+    bucket_vol_mat = (one_hot * vol_strided[:, :, np.newaxis]).sum(
+        axis=1
+    )  # (n_windows, n_buckets)
 
     # POC: argmax per window
     poc_idx_arr = np.argmax(bucket_vol_mat, axis=1)  # (n_windows,)
 
     # Bucket midpoints per window: shape (n_windows, n_buckets)
     bucket_step = price_range / n_buckets
-    bucket_mid_mat = rl_col + (np.arange(n_buckets)[np.newaxis, :] + 0.5) * bucket_step[:, np.newaxis]
+    bucket_mid_mat = (
+        rl_col
+        + (np.arange(n_buckets)[np.newaxis, :] + 0.5) * bucket_step[:, np.newaxis]
+    )
 
     poc_prices = bucket_mid_mat[np.arange(n_windows), poc_idx_arr]
 
@@ -883,14 +905,14 @@ def _rolling_volume_profile(
         val_prices[w] = bm[lo]
 
     # Write results back (offset by window-1)
-    poc_vals[window - 1:] = poc_prices
-    vah_vals[window - 1:] = vah_prices
-    val_vals[window - 1:] = val_prices
+    poc_vals[window - 1 :] = poc_prices
+    vah_vals[window - 1 :] = vah_prices
+    val_vals[window - 1 :] = val_prices
 
     # Mark pre-window bars as NaN so ffill works correctly
-    poc_vals[:window - 1] = np.nan
-    vah_vals[:window - 1] = np.nan
-    val_vals[:window - 1] = np.nan
+    poc_vals[: window - 1] = np.nan
+    vah_vals[: window - 1] = np.nan
+    val_vals[: window - 1] = np.nan
 
     return (
         pd.Series(poc_vals, index=idx).ffill().fillna(close),
@@ -1043,40 +1065,42 @@ def add_data_layer_features(
     All columns are forward-filled and NaN-filled with neutral values.
     """
     d = df.copy()
-    n = len(d)
+    _n = len(d)
 
     # ── Pull features from orchestrator ──────────────────────────────────────
     features: Dict[str, float] = {}
     try:
         from data_layer.orchestrator import orchestrator
+
         features = orchestrator.get_ml_features(as_of=as_of)
     except Exception as exc:
         logger.debug("add_data_layer_features: orchestrator unavailable: %s", exc)
 
     # ── Microstructure features (keys match orchestrator.get_ml_features()) ──
-    spread          = features.get("micro_spread",           0.0)
-    spread_pct      = features.get("micro_spread_pct",       0.0)
-    ofi             = features.get("micro_ofi",              0.0)
-    trade_pressure  = features.get("micro_trade_pressure",   0.0)
-    buy_pressure    = features.get("micro_buy_pressure",     0.5)
-    sell_pressure   = features.get("micro_sell_pressure",    0.5)
-    cum_delta       = features.get("micro_cumulative_delta", 0.0)
-    vol_delta       = features.get("micro_volume_delta",     0.0)
-    vwap            = features.get("micro_vwap_dev",         0.0)
+    spread = features.get("micro_spread", 0.0)
+    spread_pct = features.get("micro_spread_pct", 0.0)
+    ofi = features.get("micro_ofi", 0.0)
+    trade_pressure = features.get("micro_trade_pressure", 0.0)
+    buy_pressure = features.get("micro_buy_pressure", 0.5)
+    sell_pressure = features.get("micro_sell_pressure", 0.5)
+    cum_delta = features.get("micro_cumulative_delta", 0.0)
+    vol_delta = features.get("micro_volume_delta", 0.0)
+    vwap = features.get("micro_vwap_dev", 0.0)
     # ── L2 order book features (populated from OrderBookFeed when available) ──
-    bid_depth       = features.get("micro_bid_depth",        0.0)
-    ask_depth       = features.get("micro_ask_depth",        0.0)
-    depth_imbalance = features.get("micro_depth_imbalance",  0.0)
+    bid_depth = features.get("micro_bid_depth", 0.0)
+    ask_depth = features.get("micro_ask_depth", 0.0)
+    depth_imbalance = features.get("micro_depth_imbalance", 0.0)
     # Supplement with live L2 feed if orchestrator didn't provide depth data
     if bid_depth == 0.0 and ask_depth == 0.0:
         try:
             from market_data.order_book import get_order_book_feed
+
             _l2_feed = get_order_book_feed()
             # Derive symbol from DataFrame index or use default
             _symbol = getattr(df, "_hopefx_symbol", "XAU_USD")
             _l2_features = _l2_feed.get_ml_features(_symbol)
-            bid_depth       = _l2_features.get("micro_bid_depth",       0.0)
-            ask_depth       = _l2_features.get("micro_ask_depth",       0.0)
+            bid_depth = _l2_features.get("micro_bid_depth", 0.0)
+            ask_depth = _l2_features.get("micro_ask_depth", 0.0)
             depth_imbalance = _l2_features.get("micro_depth_imbalance", depth_imbalance)
             # Also update OFI and pressure from L2 if available
             if _l2_features.get("micro_obi", 0.0) != 0.0:
@@ -1087,79 +1111,79 @@ def add_data_layer_features(
     tick_count = min(features.get("micro_tick_count", 0.0) / 500.0, 1.0)
 
     # Derived microstructure
-    spread_z20   = features.get("micro_spread_z",          0.0)
-    ofi_ema5     = features.get("micro_ofi",               ofi)   # EMA already in engine
+    spread_z20 = features.get("micro_spread_z", 0.0)
+    ofi_ema5 = features.get("micro_ofi", ofi)  # EMA already in engine
     pressure_div = buy_pressure - sell_pressure
 
     # ── Sentiment features ────────────────────────────────────────────────────
-    news_sentiment  = features.get("news_sentiment_score",    0.0)
-    news_momentum   = features.get("news_sentiment_momentum", 0.0)
-    news_count_1h   = features.get("news_article_count_1h",   0.0)
-    news_bull_ratio = features.get("news_bullish_ratio",       0.5)
+    news_sentiment = features.get("news_sentiment_score", 0.0)
+    news_momentum = features.get("news_sentiment_momentum", 0.0)
+    news_count_1h = features.get("news_article_count_1h", 0.0)
+    news_bull_ratio = features.get("news_bullish_ratio", 0.5)
 
     # ── Macro calendar features ───────────────────────────────────────────────
-    macro_impact      = features.get("macro_impact_score_now",      0.0)
-    hours_to_next     = features.get("macro_hours_to_next_high",    48.0)
-    hours_since_last  = features.get("macro_hours_since_last_high", 48.0)
-    macro_surprise    = features.get("macro_surprise_last",          0.0)
-    high_count_24h    = features.get("macro_high_event_count_24h",   0.0)
-    is_blackout       = features.get("macro_is_blackout",            0.0)
+    macro_impact = features.get("macro_impact_score_now", 0.0)
+    hours_to_next = features.get("macro_hours_to_next_high", 48.0)
+    hours_since_last = features.get("macro_hours_since_last_high", 48.0)
+    macro_surprise = features.get("macro_surprise_last", 0.0)
+    high_count_24h = features.get("macro_high_event_count_24h", 0.0)
+    is_blackout = features.get("macro_is_blackout", 0.0)
 
     # ── Tick quality / confidence ─────────────────────────────────────────────
-    tick_confidence  = features.get("tick_confidence",   1.0)
-    tick_spread_pct  = features.get("tick_spread_pct",   0.0)
-    tick_src_count   = features.get("tick_source_count", 1.0)
+    tick_confidence = features.get("tick_confidence", 1.0)
+    tick_spread_pct = features.get("tick_spread_pct", 0.0)
+    tick_src_count = features.get("tick_source_count", 1.0)
 
     # ── FRED macro features (injected by MacroStoreBridge) ────────────────────
-    macro_dxy        = features.get("macro_dxy",    0.0)
-    macro_us10y      = features.get("macro_us10y",  0.0)
-    macro_us2y       = features.get("macro_us2y",   0.0)
-    macro_vix        = features.get("macro_vix",    0.0)
-    macro_cpi        = features.get("macro_cpi",    0.0)
-    macro_pce        = features.get("macro_pce",    0.0)
-    macro_yield_curve = macro_us10y - macro_us2y   # 10y-2y spread
+    macro_dxy = features.get("macro_dxy", 0.0)
+    macro_us10y = features.get("macro_us10y", 0.0)
+    macro_us2y = features.get("macro_us2y", 0.0)
+    macro_vix = features.get("macro_vix", 0.0)
+    macro_cpi = features.get("macro_cpi", 0.0)
+    macro_pce = features.get("macro_pce", 0.0)
+    macro_yield_curve = macro_us10y - macro_us2y  # 10y-2y spread
 
     # ── Broadcast scalars to full DataFrame length ────────────────────────────
     # For live inference: all rows get the same current value (latest snapshot)
     # For backtesting with as_of: caller should iterate and call per-bar
-    d["dl_spread"]              = spread
-    d["dl_spread_pct"]          = spread_pct
-    d["dl_ofi"]                 = ofi
-    d["dl_trade_pressure"]      = trade_pressure
-    d["dl_buy_pressure"]        = buy_pressure
-    d["dl_sell_pressure"]       = sell_pressure
-    d["dl_cumulative_delta"]    = cum_delta
-    d["dl_volume_delta"]        = vol_delta
-    d["dl_vwap"]                = vwap
-    d["dl_bid_depth"]           = bid_depth
-    d["dl_ask_depth"]           = ask_depth
-    d["dl_depth_imbalance"]     = depth_imbalance
-    d["dl_tick_count"]          = tick_count
-    d["dl_spread_z20"]          = spread_z20
-    d["dl_ofi_ema5"]            = ofi_ema5
+    d["dl_spread"] = spread
+    d["dl_spread_pct"] = spread_pct
+    d["dl_ofi"] = ofi
+    d["dl_trade_pressure"] = trade_pressure
+    d["dl_buy_pressure"] = buy_pressure
+    d["dl_sell_pressure"] = sell_pressure
+    d["dl_cumulative_delta"] = cum_delta
+    d["dl_volume_delta"] = vol_delta
+    d["dl_vwap"] = vwap
+    d["dl_bid_depth"] = bid_depth
+    d["dl_ask_depth"] = ask_depth
+    d["dl_depth_imbalance"] = depth_imbalance
+    d["dl_tick_count"] = tick_count
+    d["dl_spread_z20"] = spread_z20
+    d["dl_ofi_ema5"] = ofi_ema5
     d["dl_pressure_divergence"] = pressure_div
-    d["dl_news_sentiment"]      = news_sentiment
-    d["dl_news_momentum"]       = news_momentum
-    d["dl_news_count_1h"]       = news_count_1h
-    d["dl_news_bullish_ratio"]  = news_bull_ratio
-    d["dl_macro_impact"]        = macro_impact
-    d["dl_hours_to_next_high"]  = hours_to_next
+    d["dl_news_sentiment"] = news_sentiment
+    d["dl_news_momentum"] = news_momentum
+    d["dl_news_count_1h"] = news_count_1h
+    d["dl_news_bullish_ratio"] = news_bull_ratio
+    d["dl_macro_impact"] = macro_impact
+    d["dl_hours_to_next_high"] = hours_to_next
     d["dl_hours_since_last_high"] = hours_since_last
-    d["dl_macro_surprise"]      = macro_surprise
+    d["dl_macro_surprise"] = macro_surprise
     d["dl_high_event_count_24h"] = high_count_24h
-    d["dl_is_blackout"]         = is_blackout
+    d["dl_is_blackout"] = is_blackout
     # Tick quality
-    d["dl_tick_confidence"]     = tick_confidence
-    d["dl_tick_spread_pct"]     = tick_spread_pct
-    d["dl_tick_source_count"]   = tick_src_count
+    d["dl_tick_confidence"] = tick_confidence
+    d["dl_tick_spread_pct"] = tick_spread_pct
+    d["dl_tick_source_count"] = tick_src_count
     # FRED macro
-    d["dl_macro_dxy"]           = macro_dxy
-    d["dl_macro_us10y"]         = macro_us10y
-    d["dl_macro_us2y"]          = macro_us2y
-    d["dl_macro_vix"]           = macro_vix
-    d["dl_macro_cpi"]           = macro_cpi
-    d["dl_macro_pce"]           = macro_pce
-    d["dl_macro_yield_curve"]   = macro_yield_curve
+    d["dl_macro_dxy"] = macro_dxy
+    d["dl_macro_us10y"] = macro_us10y
+    d["dl_macro_us2y"] = macro_us2y
+    d["dl_macro_vix"] = macro_vix
+    d["dl_macro_cpi"] = macro_cpi
+    d["dl_macro_pce"] = macro_pce
+    d["dl_macro_yield_curve"] = macro_yield_curve
 
     # Ensure no NaN/inf leaks
     dl_cols = [c for c in d.columns if c.startswith("dl_")]
@@ -1168,7 +1192,11 @@ def add_data_layer_features(
     logger.debug(
         "add_data_layer_features: injected %d features, "
         "ofi=%.3f sent=%.3f impact=%.3f tick_conf=%.2f",
-        len(dl_cols), ofi, news_sentiment, macro_impact, tick_confidence,
+        len(dl_cols),
+        ofi,
+        news_sentiment,
+        macro_impact,
+        tick_confidence,
     )
     return d
 

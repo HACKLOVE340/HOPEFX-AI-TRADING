@@ -47,7 +47,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 _TIMEFRAME = os.getenv("OHLCV_STORE_TIMEFRAME", "H1")
-_MAX_BARS  = int(os.getenv("OHLCV_STORE_MAX_BARS", "500"))
+_MAX_BARS = int(os.getenv("OHLCV_STORE_MAX_BARS", "500"))
 _REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 
@@ -71,14 +71,16 @@ def _bars_to_df(bars: List[Dict[str, Any]]) -> Optional[pd.DataFrame]:
                 ts = datetime.fromtimestamp(float(ts_raw), tz=timezone.utc)
             else:
                 ts = pd.to_datetime(ts_raw, utc=True)
-            rows.append({
-                "ts":     ts,
-                "open":   float(b.get("open",   b.get("o", 0.0))),
-                "high":   float(b.get("high",   b.get("h", 0.0))),
-                "low":    float(b.get("low",    b.get("l", 0.0))),
-                "close":  float(b.get("close",  b.get("c", 0.0))),
-                "volume": float(b.get("volume", b.get("v", 0.0))),
-            })
+            rows.append(
+                {
+                    "ts": ts,
+                    "open": float(b.get("open", b.get("o", 0.0))),
+                    "high": float(b.get("high", b.get("h", 0.0))),
+                    "low": float(b.get("low", b.get("l", 0.0))),
+                    "close": float(b.get("close", b.get("c", 0.0))),
+                    "volume": float(b.get("volume", b.get("v", 0.0))),
+                }
+            )
         if not rows:
             return None
         df = pd.DataFrame(rows).set_index("ts").sort_index()
@@ -99,7 +101,7 @@ class OHLCVStore:
 
     def __init__(self, timeframe: str = _TIMEFRAME, max_bars: int = _MAX_BARS) -> None:
         self._timeframe = timeframe
-        self._max_bars  = max_bars
+        self._max_bars = max_bars
         # Per-symbol in-memory ring buffers
         self._buffers: Dict[str, Deque[Dict[str, Any]]] = {}
         # Redis cache (lazy-connected)
@@ -115,6 +117,7 @@ class OHLCVStore:
         try:
             import redis as _redis_lib
             from market_data.redis_cache import MarketDataCache
+
             r = _redis_lib.from_url(
                 _REDIS_URL,
                 socket_connect_timeout=1,
@@ -194,10 +197,10 @@ class OHLCVStore:
 
     def health(self) -> Dict[str, Any]:
         return {
-            "redis_ok":  self._redis_ok,
+            "redis_ok": self._redis_ok,
             "timeframe": self._timeframe,
-            "max_bars":  self._max_bars,
-            "symbols":   {s: self.buffer_size(s) for s in self.symbols()},
+            "max_bars": self._max_bars,
+            "symbols": {s: self.buffer_size(s) for s in self.symbols()},
         }
 
 

@@ -153,7 +153,7 @@ async def stripe_webhook(request: Request):
         mgr = _get_subscription_manager()
         mgr.handle_stripe_webhook(payload, sig)
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
 
     return {"received": True, "event_type": event.get("type"), "result": result}
 
@@ -165,6 +165,7 @@ async def stripe_config():
     Used by the checkout page to initialise Stripe.js.
     """
     from monetization.stripe_live import get_stripe_client
+
     return get_stripe_client().get_config()
 
 
@@ -402,13 +403,19 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
     # Try trading account balance first (most accurate for paper accounts)
     try:
         from core.app_state import app_state
+
         broker = getattr(app_state, "broker", None)
         if broker is not None:
             import asyncio
+
             account = await asyncio.wait_for(broker.get_account(), timeout=3.0)
             if account:
-                balance = float(getattr(account, "balance", 0) or account.get("balance", 0))
-                margin_used = float(getattr(account, "margin_used", 0) or account.get("margin_used", 0))
+                balance = float(
+                    getattr(account, "balance", 0) or account.get("balance", 0)
+                )
+                margin_used = float(
+                    getattr(account, "margin_used", 0) or account.get("margin_used", 0)
+                )
                 frozen = margin_used
     except Exception as exc:
         logger.debug("Broker balance unavailable: %s", exc)
@@ -420,7 +427,7 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
         if sub and hasattr(sub, "wallet_balance"):
             balance = float(sub.wallet_balance)
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
 
     return {
         "balance": round(balance, 2),
@@ -451,20 +458,26 @@ async def get_transactions(
     # ── Stripe payment history ────────────────────────────────────────────────
     try:
         from monetization.stripe_live import get_stripe_client
+
         client = get_stripe_client()
         if hasattr(client, "list_customer_charges"):
             charges = client.list_customer_charges(user.sub, limit=limit)
             for charge in charges:
-                transactions.append({
-                    "id": charge.get("id"),
-                    "type": "deposit" if charge.get("amount", 0) > 0 else "refund",
-                    "amount": charge.get("amount", 0) / 100,  # Stripe amounts are in cents
-                    "currency": charge.get("currency", "usd").upper(),
-                    "status": charge.get("status", "unknown"),
-                    "date": charge.get("created_at") or charge.get("created"),
-                    "method": charge.get("payment_method_details", {}).get("type", "card"),
-                    "description": charge.get("description", ""),
-                })
+                transactions.append(
+                    {
+                        "id": charge.get("id"),
+                        "type": "deposit" if charge.get("amount", 0) > 0 else "refund",
+                        "amount": charge.get("amount", 0)
+                        / 100,  # Stripe amounts are in cents
+                        "currency": charge.get("currency", "usd").upper(),
+                        "status": charge.get("status", "unknown"),
+                        "date": charge.get("created_at") or charge.get("created"),
+                        "method": charge.get("payment_method_details", {}).get(
+                            "type", "card"
+                        ),
+                        "description": charge.get("description", ""),
+                    }
+                )
     except Exception as exc:
         logger.debug("Stripe transaction history unavailable: %s", exc)
 
@@ -473,17 +486,19 @@ async def get_transactions(
         mgr = _get_subscription_manager()
         sub = mgr.get_user_subscription(user.sub)
         if sub and hasattr(sub, "payment_history"):
-            for event in (sub.payment_history or []):
-                transactions.append({
-                    "id": event.get("id", ""),
-                    "type": "subscription",
-                    "amount": -abs(float(event.get("amount", 0))),
-                    "currency": "USD",
-                    "status": event.get("status", "completed"),
-                    "date": event.get("date") or event.get("created_at"),
-                    "method": event.get("plan", "subscription"),
-                    "description": event.get("description", "Subscription payment"),
-                })
+            for event in sub.payment_history or []:
+                transactions.append(
+                    {
+                        "id": event.get("id", ""),
+                        "type": "subscription",
+                        "amount": -abs(float(event.get("amount", 0))),
+                        "currency": "USD",
+                        "status": event.get("status", "completed"),
+                        "date": event.get("date") or event.get("created_at"),
+                        "method": event.get("plan", "subscription"),
+                        "description": event.get("description", "Subscription payment"),
+                    }
+                )
     except Exception as exc:
         logger.debug("Subscription payment history unavailable: %s", exc)
 
@@ -494,11 +509,12 @@ async def get_transactions(
             return ""
         if isinstance(d, (int, float)):
             from datetime import datetime, timezone
+
             return datetime.fromtimestamp(d, tz=timezone.utc).isoformat()
         return str(d)
 
     transactions.sort(key=_sort_key, reverse=True)
-    page = transactions[offset: offset + limit]
+    page = transactions[offset : offset + limit]
 
     return {
         "transactions": page,

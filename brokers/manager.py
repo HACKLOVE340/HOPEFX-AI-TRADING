@@ -590,7 +590,7 @@ class BrokerManager:
                                 level="critical",
                             )
                         except Exception as _exc:
-                            logger.debug('Suppressed exception: %s', _exc)
+                            logger.debug("Suppressed exception: %s", _exc)
 
     def _reset_failures(self) -> None:
         """Reset failure counter for active broker on success."""
@@ -611,7 +611,7 @@ class BrokerManager:
             try:
                 sentry_sdk.capture_exception(exc)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
     # ------------------------------------------------------------------
     # Context manager

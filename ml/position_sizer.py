@@ -45,20 +45,22 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 # ── Configuration (env-tunable) ───────────────────────────────────────────────
-_RISK_PCT = float(os.getenv("POSITION_RISK_PCT", "0.01"))          # 1% risk per trade
-_MAX_POSITION_PCT = float(os.getenv("MAX_POSITION_PCT", "0.05"))   # 5% max position
-_KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.25"))       # quarter-Kelly
-_ATR_MULT = float(os.getenv("SL_ATR_MULT", "1.5"))                 # ATR multiplier for SL
+_RISK_PCT = float(os.getenv("POSITION_RISK_PCT", "0.01"))  # 1% risk per trade
+_MAX_POSITION_PCT = float(os.getenv("MAX_POSITION_PCT", "0.05"))  # 5% max position
+_KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.25"))  # quarter-Kelly
+_ATR_MULT = float(os.getenv("SL_ATR_MULT", "1.5"))  # ATR multiplier for SL
 _MIN_LOTS = float(os.getenv("MIN_LOTS", "0.01"))
 _MAX_LOTS = float(os.getenv("MAX_LOTS", "10.0"))
-_SIZING_METHOD = os.getenv("POSITION_SIZING_METHOD", "volatility")  # volatility|kelly|fixed
+_SIZING_METHOD = os.getenv(
+    "POSITION_SIZING_METHOD", "volatility"
+)  # volatility|kelly|fixed
 
 
 class PositionSizer:
@@ -121,7 +123,11 @@ class PositionSizer:
 
         logger.debug(
             "PositionSizer[%s]: method=%s size=%.4f lots entry=%.2f equity=%.0f",
-            symbol, method, size, entry_price, account_equity,
+            symbol,
+            method,
+            size,
+            entry_price,
+            account_equity,
         )
         return round(size, 4)
 
@@ -178,6 +184,7 @@ class PositionSizer:
         """
         try:
             from ml.signal_filter import get_signal_filter
+
             stats = get_signal_filter().ev_stats(symbol)
         except Exception:
             stats = {}
@@ -221,7 +228,7 @@ class PositionSizer:
                 if len(tr) >= 14:
                     return float(np.mean(tr[-14:])) * _ATR_MULT
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
         return entry * 0.008 * _ATR_MULT  # 0.8% × multiplier fallback
 
 

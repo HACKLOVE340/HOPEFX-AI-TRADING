@@ -52,11 +52,11 @@ _VOL_LOOKBACK_BARS: int = int(os.getenv("TCA_VOL_LOOKBACK_BARS", "20"))
 
 
 class BenchmarkType(Enum):
-    ARRIVAL = "arrival"   # Price at order creation
-    VWAP = "vwap"         # Volume-weighted average price
-    TWAP = "twap"         # Time-weighted average price
-    CLOSE = "close"       # Previous close
-    OPEN = "open"         # Opening price
+    ARRIVAL = "arrival"  # Price at order creation
+    VWAP = "vwap"  # Volume-weighted average price
+    TWAP = "twap"  # Time-weighted average price
+    CLOSE = "close"  # Previous close
+    OPEN = "open"  # Opening price
 
 
 @dataclass
@@ -237,12 +237,16 @@ class MarketContextProvider:
             try:
                 bars = cache.get_bars(symbol, "1d", n=_ADV_LOOKBACK_BARS)
                 if bars and len(bars) >= 5:
-                    volumes = [float(b.get("volume", 0)) for b in bars if b.get("volume")]
+                    volumes = [
+                        float(b.get("volume", 0)) for b in bars if b.get("volume")
+                    ]
                     if volumes and sum(volumes) > 0:
                         adv = sum(volumes) / len(volumes)
                         return adv, "redis_ohlcv"
             except Exception as exc:
-                logger.debug("TCA: Redis OHLCV ADV lookup failed for %s: %s", symbol, exc)
+                logger.debug(
+                    "TCA: Redis OHLCV ADV lookup failed for %s: %s", symbol, exc
+                )
 
         # 3. In-memory tick accumulator
         ticks = self._tick_volumes.get(symbol, [])
@@ -251,9 +255,7 @@ class MarketContextProvider:
             if total_vol > 0:
                 # Estimate daily volume from accumulated ticks
                 if len(ticks) >= 2:
-                    span_hours = (
-                        ticks[-1][0] - ticks[0][0]
-                    ).total_seconds() / 3600
+                    span_hours = (ticks[-1][0] - ticks[0][0]).total_seconds() / 3600
                     if span_hours > 0:
                         daily_vol = total_vol * (24.0 / span_hours)
                         return daily_vol, "tick_accumulator"
@@ -293,7 +295,9 @@ class MarketContextProvider:
                             vol = float(np.std(log_returns))
                             return vol, "redis_ohlcv"
             except Exception as exc:
-                logger.debug("TCA: Redis OHLCV vol lookup failed for %s: %s", symbol, exc)
+                logger.debug(
+                    "TCA: Redis OHLCV vol lookup failed for %s: %s", symbol, exc
+                )
 
         # 3. Global fallback
         return _DEFAULT_VOL, "default"
@@ -402,7 +406,9 @@ class TCAEngine:
             else Decimal("0")
         )
         total_commission = sum(f.commission for f in fills)
-        total_slippage = sum(getattr(f, "slippage", None) or Decimal("0") for f in fills)
+        total_slippage = sum(
+            getattr(f, "slippage", None) or Decimal("0") for f in fills
+        )
 
         last_fill = fills[-1]
         exec_time_ms = (
@@ -426,7 +432,11 @@ class TCAEngine:
 
         logger.debug(
             "TCA impact context: symbol=%s adv=%.0f(%s) vol=%.4f(%s)",
-            symbol, adv, adv_source, vol, vol_source,
+            symbol,
+            adv,
+            adv_source,
+            vol,
+            vol_source,
         )
 
         # Market impact estimate with real context
@@ -438,7 +448,9 @@ class TCAEngine:
         )
 
         # Opportunity cost (unfilled portion)
-        fill_rate = float(total_qty / order["quantity"]) if order["quantity"] > 0 else 0.0
+        fill_rate = (
+            float(total_qty / order["quantity"]) if order["quantity"] > 0 else 0.0
+        )
         opp_cost = Decimal("0")
         if fill_rate < 1.0:
             opp_cost = (
@@ -482,7 +494,10 @@ class TCAEngine:
         if metrics.total_cost_bps > Decimal("20"):
             logger.warning(
                 "TCA: high-cost trade order_id=%s cost=%.2fbps adv_source=%s vol_source=%s",
-                order_id, float(metrics.total_cost_bps), adv_source, vol_source,
+                order_id,
+                float(metrics.total_cost_bps),
+                adv_source,
+                vol_source,
             )
             for cb in self._cost_callbacks:
                 cb(metrics)
@@ -493,7 +508,9 @@ class TCAEngine:
             logger.error(
                 "TCA: costs exceed expected alpha order_id=%s "
                 "cost=%.2fbps expected=%.2fbps",
-                order_id, float(metrics.total_cost_bps), float(expected),
+                order_id,
+                float(metrics.total_cost_bps),
+                float(expected),
             )
 
         return metrics

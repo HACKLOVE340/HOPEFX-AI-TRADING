@@ -302,6 +302,7 @@ class AccountEvent:
 def _get_broker_state():
     try:
         from app import app as _app
+
         return getattr(_app.state, "app_state", None)
     except Exception:
         return None
@@ -326,9 +327,15 @@ def _live_account() -> AccountInfo:
         except Exception as exc:
             logger.debug("Live account fetch failed: %s", exc)
     return AccountInfo(
-        balance=10000, equity=10420, margin=200, free_margin=9820,
-        margin_level=5210, unrealized_pnl=420, realized_pnl_today=120,
-        open_positions=1, currency="USD",
+        balance=10000,
+        equity=10420,
+        margin=200,
+        free_margin=9820,
+        margin_level=5210,
+        unrealized_pnl=420,
+        realized_pnl_today=120,
+        open_positions=1,
+        currency="USD",
     )
 
 
@@ -337,7 +344,6 @@ def _live_account() -> AccountInfo:
 
 @strawberry.type
 class Query:
-
     @strawberry.field(description="Recent price ticks for a symbol")
     def trading_data(
         self,
@@ -354,13 +360,19 @@ class Query:
                 if tick:
                     mid = float(tick.get("mid", tick.get("price", 0)))
                     spread = float(tick.get("spread", 0.0002))
-                    return [TradingData(
-                        id="live-1", symbol=symbol,
-                        price=mid, bid=mid - spread / 2, ask=mid + spread / 2,
-                        spread=spread, volume=int(tick.get("volume", 0)),
-                        timestamp=datetime.utcnow().isoformat(),
-                        change_pct=float(tick.get("change_pct", 0)),
-                    )]
+                    return [
+                        TradingData(
+                            id="live-1",
+                            symbol=symbol,
+                            price=mid,
+                            bid=mid - spread / 2,
+                            ask=mid + spread / 2,
+                            spread=spread,
+                            volume=int(tick.get("volume", 0)),
+                            timestamp=datetime.utcnow().isoformat(),
+                            change_pct=float(tick.get("change_pct", 0)),
+                        )
+                    ]
             except Exception as exc:
                 logger.debug("Live price fetch failed: %s", exc)
         # Broker unavailable — return empty; no synthetic prices
@@ -384,7 +396,9 @@ class Query:
                         unrealized_pnl=float(p.get("unrealized_pnl", 0)),
                         stop_loss=p.get("stop_loss"),
                         take_profit=p.get("take_profit"),
-                        opened_at=str(p.get("opened_at", datetime.utcnow().isoformat())),
+                        opened_at=str(
+                            p.get("opened_at", datetime.utcnow().isoformat())
+                        ),
                     )
                     for p in (raw or [])
                 ]
@@ -425,24 +439,29 @@ class Query:
         # Pull from the live ML predictor signal history
         try:
             from ml.advanced_predictor import get_predictor
+
             pred = get_predictor()
             history = getattr(pred, "signal_history", None) or []
             results: List[Signal] = []
             for sig in history[: min(limit, len(history))]:
-                results.append(Signal(
-                    signal_id=str(sig.get("signal_id", uuid.uuid4()))[:8],
-                    symbol=str(sig.get("symbol", "XAU/USD")),
-                    direction=str(sig.get("direction", "neutral")),
-                    confidence=float(sig.get("confidence", 0.0)),
-                    probability=float(sig.get("probability", 0.5)),
-                    high_confidence=bool(sig.get("high_confidence", False)),
-                    abstain=bool(sig.get("abstain", False)),
-                    entry_price=float(sig.get("entry_price", 0.0)),
-                    stop_loss=float(sig.get("stop_loss", 0.0)),
-                    take_profit=float(sig.get("take_profit", 0.0)),
-                    model_version=str(sig.get("model_version", pred.version)),
-                    created_at=str(sig.get("created_at", datetime.utcnow().isoformat())),
-                ))
+                results.append(
+                    Signal(
+                        signal_id=str(sig.get("signal_id", uuid.uuid4()))[:8],
+                        symbol=str(sig.get("symbol", "XAU/USD")),
+                        direction=str(sig.get("direction", "neutral")),
+                        confidence=float(sig.get("confidence", 0.0)),
+                        probability=float(sig.get("probability", 0.5)),
+                        high_confidence=bool(sig.get("high_confidence", False)),
+                        abstain=bool(sig.get("abstain", False)),
+                        entry_price=float(sig.get("entry_price", 0.0)),
+                        stop_loss=float(sig.get("stop_loss", 0.0)),
+                        take_profit=float(sig.get("take_profit", 0.0)),
+                        model_version=str(sig.get("model_version", pred.version)),
+                        created_at=str(
+                            sig.get("created_at", datetime.utcnow().isoformat())
+                        ),
+                    )
+                )
             return results
         except Exception as exc:
             logger.debug("Signal history fetch failed: %s", exc)
@@ -459,6 +478,7 @@ class Query:
         _require_auth(info)
         try:
             from ml.advanced_predictor import get_predictor
+
             pred = get_predictor()
             s = pred.stats
             m = pred.meta
@@ -481,10 +501,19 @@ class Query:
         except Exception as exc:
             logger.warning("ML metrics fetch failed: %s", exc)
             return MLMetrics(
-                model_version="unknown", oos_accuracy=0, oos_auc=0, oos_f1=0,
-                sharpe=0, sharpe_gate_passed=False, n_oos_bars=0,
-                predict_count=0, abstain_count=0, abstain_rate=0,
-                adapter_updates=0, online_learning_enabled=False, trained_at="",
+                model_version="unknown",
+                oos_accuracy=0,
+                oos_auc=0,
+                oos_f1=0,
+                sharpe=0,
+                sharpe_gate_passed=False,
+                n_oos_bars=0,
+                predict_count=0,
+                abstain_count=0,
+                abstain_rate=0,
+                adapter_updates=0,
+                online_learning_enabled=False,
+                trained_at="",
             )
 
     @strawberry.field(description="Performance summary")
@@ -510,9 +539,11 @@ class Query:
                     avg_dur = sum(durations) / len(durations) if durations else 0.0
                     # Sharpe: mean / std of per-trade PnL (simplified)
                     import statistics
+
                     sharpe = (
                         statistics.mean(pnls) / statistics.stdev(pnls)
-                        if len(pnls) > 1 else 0.0
+                        if len(pnls) > 1
+                        else 0.0
                     )
                     # Max drawdown from cumulative PnL curve
                     cum = 0.0
@@ -544,9 +575,15 @@ class Query:
                 logger.debug("Performance fetch failed: %s", exc)
         # No trade history available — return zeros
         return PerformanceSummary(
-            total_trades=0, win_rate=0.0, total_pnl=0.0,
-            sharpe_ratio=0.0, max_drawdown=0.0, profit_factor=0.0,
-            avg_win=0.0, avg_loss=0.0, avg_duration_minutes=0.0,
+            total_trades=0,
+            win_rate=0.0,
+            total_pnl=0.0,
+            sharpe_ratio=0.0,
+            max_drawdown=0.0,
+            profit_factor=0.0,
+            avg_win=0.0,
+            avg_loss=0.0,
+            avg_duration_minutes=0.0,
             best_symbol="XAU/USD",
         )
 
@@ -555,6 +592,7 @@ class Query:
         _require_auth(info)
         try:
             from risk.manager import RiskManager
+
             rm = RiskManager()
             acct = _live_account()
             assessment = rm.assess_risk(
@@ -565,12 +603,13 @@ class Query:
             )
             import json as _json
             from pathlib import Path
+
             prop_cfg = {}
             try:
                 with open(Path(__file__).parent.parent / "prop_firm_mode.json") as f:
                     prop_cfg = _json.load(f)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
             return RiskStatus(
                 can_trade=assessment.can_trade,
                 daily_pnl=assessment.daily_pnl,
@@ -586,9 +625,15 @@ class Query:
         except Exception as exc:
             logger.debug("Risk status fetch failed: %s", exc)
             return RiskStatus(
-                can_trade=True, daily_pnl=0, daily_pnl_pct=0,
-                current_drawdown=0, margin_used_pct=0, total_exposure_pct=0,
-                risk_level="low", messages=[], prop_firm_enabled=False,
+                can_trade=True,
+                daily_pnl=0,
+                daily_pnl_pct=0,
+                current_drawdown=0,
+                margin_used_pct=0,
+                total_exposure_pct=0,
+                risk_level="low",
+                messages=[],
+                prop_firm_enabled=False,
                 prop_firm_name="none",
             )
 
@@ -598,7 +643,6 @@ class Query:
 
 @strawberry.type
 class Mutation:
-
     @strawberry.mutation(description="Place a market or limit order")
     def place_order(
         self,
@@ -623,8 +667,11 @@ class Mutation:
         if state and hasattr(state, "broker"):
             try:
                 result = state.broker.place_order(
-                    symbol=symbol, side=side.upper(), lots=lots,
-                    order_type=order_type, stop_loss=stop_loss,
+                    symbol=symbol,
+                    side=side.upper(),
+                    lots=lots,
+                    order_type=order_type,
+                    stop_loss=stop_loss,
                     take_profit=take_profit,
                 )
                 order_id = str(result.get("order_id", order_id))
@@ -634,11 +681,19 @@ class Mutation:
 
         logger.info(
             "GraphQL placeOrder user=%s: %s %s %s lots %s",
-            user.get("sub", "?"), order_id, side, lots, symbol,
+            user.get("sub", "?"),
+            order_id,
+            side,
+            lots,
+            symbol,
         )
         return OrderResult(
-            placed=True, order_id=order_id, symbol=symbol,
-            side=side, lots=lots, fill_price=fill_price,
+            placed=True,
+            order_id=order_id,
+            symbol=symbol,
+            side=side,
+            lots=lots,
+            fill_price=fill_price,
             message=f"Order placed: {side} {lots} lots of {symbol}",
         )
 
@@ -653,11 +708,14 @@ class Mutation:
                 logger.warning("Broker cancel_order failed: %s", exc)
         logger.info("GraphQL cancelOrder user=%s: %s", user.get("sub", "?"), order_id)
         return CancelResult(
-            cancelled=True, order_id=order_id,
+            cancelled=True,
+            order_id=order_id,
             message=f"Order {order_id} cancelled",
         )
 
-    @strawberry.mutation(description="Modify stop-loss or take-profit on an open position")
+    @strawberry.mutation(
+        description="Modify stop-loss or take-profit on an open position"
+    )
     def modify_order(
         self,
         info: Info,
@@ -673,18 +731,25 @@ class Mutation:
         if state and hasattr(state, "broker"):
             try:
                 state.broker.modify_order(
-                    order_id, stop_loss=stop_loss, take_profit=take_profit,
+                    order_id,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
                 )
             except Exception as exc:
                 logger.warning("Broker modify_order failed: %s", exc)
 
         logger.info(
             "GraphQL modifyOrder user=%s: %s SL=%s TP=%s",
-            user.get("sub", "?"), order_id, stop_loss, take_profit,
+            user.get("sub", "?"),
+            order_id,
+            stop_loss,
+            take_profit,
         )
         return ModifyResult(
-            modified=True, order_id=order_id,
-            new_stop_loss=stop_loss, new_take_profit=take_profit,
+            modified=True,
+            order_id=order_id,
+            new_stop_loss=stop_loss,
+            new_take_profit=take_profit,
             message=f"Order {order_id} modified",
         )
 
@@ -703,11 +768,20 @@ class Mutation:
         alert_id = str(uuid.uuid4())[:8]
         logger.info(
             "GraphQL createAlert user=%s: %s %s %s @ %.5f via %s",
-            user.get("sub", "?"), alert_id, symbol, condition, price, channel,
+            user.get("sub", "?"),
+            alert_id,
+            symbol,
+            condition,
+            price,
+            channel,
         )
         return AlertResult(
-            created=True, alert_id=alert_id, symbol=symbol,
-            condition=condition, price=price, channel=channel,
+            created=True,
+            alert_id=alert_id,
+            symbol=symbol,
+            condition=condition,
+            price=price,
+            channel=channel,
             message=f"Alert created: {symbol} {condition} {price}",
         )
 
@@ -717,7 +791,6 @@ class Mutation:
 
 @strawberry.type
 class Subscription:
-
     @strawberry.subscription(description="Real-time price ticks for a symbol")
     async def price_ticks(
         self,
@@ -750,7 +823,7 @@ class Subscription:
                         mid = float(tick.get("mid", tick.get("price", 0))) or None
                         spread = float(tick.get("spread", spread))
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Suppressed exception: %s", _exc)
 
             if mid is not None:
                 yield PriceTick(

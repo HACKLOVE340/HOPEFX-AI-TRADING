@@ -27,10 +27,9 @@ Usage
     await broker.disconnect()
 """
 
-import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import aiohttp
 
@@ -115,12 +114,17 @@ class OandaBroker:
                     self.connected = True
                     logger.info(
                         "OandaBroker connected | account=%s | server=%s | balance=%s %s",
-                        self._account_id, server, balance, currency,
+                        self._account_id,
+                        server,
+                        balance,
+                        currency,
                     )
                     return True
                 body = await resp.text()
                 logger.error(
-                    "OandaBroker connect failed | status=%s | body=%s", resp.status, body
+                    "OandaBroker connect failed | status=%s | body=%s",
+                    resp.status,
+                    body,
                 )
                 await self._session.close()
                 return False
@@ -178,14 +182,16 @@ class OandaBroker:
             for p in data.get("positions", []):
                 long_units = float(p.get("long", {}).get("units", 0))
                 short_units = float(p.get("short", {}).get("units", 0))
-                positions.append({
-                    "instrument": p.get("instrument"),
-                    "long_units": long_units,
-                    "short_units": short_units,
-                    "net_units": long_units + short_units,
-                    "unrealized_pl": float(p.get("unrealizedPL", 0)),
-                    "pl": float(p.get("pl", 0)),
-                })
+                positions.append(
+                    {
+                        "instrument": p.get("instrument"),
+                        "long_units": long_units,
+                        "short_units": short_units,
+                        "net_units": long_units + short_units,
+                        "unrealized_pl": float(p.get("unrealizedPL", 0)),
+                        "pl": float(p.get("pl", 0)),
+                    }
+                )
             return positions
 
     async def get_orders(self) -> List[Dict]:
@@ -243,7 +249,9 @@ class OandaBroker:
         price = order_params.get("price")
         sl_distance = order_params.get("sl_distance")
         tp_price = order_params.get("tp_price")
-        time_in_force = order_params.get("time_in_force", "FOK" if order_type == "MARKET" else "GTC")
+        time_in_force = order_params.get(
+            "time_in_force", "FOK" if order_type == "MARKET" else "GTC"
+        )
         client_id = order_params.get("client_id")
 
         order_body: Dict = {
@@ -287,7 +295,10 @@ class OandaBroker:
                     fill_price = fill.get("price")
                     logger.info(
                         "OANDA order placed | instrument=%s | units=%s | order_id=%s | trade_id=%s",
-                        instrument, units, order_id, trade_id,
+                        instrument,
+                        units,
+                        order_id,
+                        trade_id,
                     )
                     return {
                         "success": True,
@@ -324,7 +335,9 @@ class OandaBroker:
             ) as resp:
                 data = await resp.json()
                 if resp.status == 200:
-                    logger.info("OANDA trade closed | trade_id=%s | units=%s", trade_id, units)
+                    logger.info(
+                        "OANDA trade closed | trade_id=%s | units=%s", trade_id, units
+                    )
                     return {"success": True, "comment": "OK", "data": data}
                 error_msg = data.get("errorMessage", str(data))
                 return {"success": False, "comment": error_msg}
@@ -343,7 +356,10 @@ class OandaBroker:
                     logger.info("OANDA order cancelled | order_id=%s", order_id)
                     return {"success": True, "comment": "OK"}
                 data = await resp.json()
-                return {"success": False, "comment": data.get("errorMessage", str(data))}
+                return {
+                    "success": False,
+                    "comment": data.get("errorMessage", str(data)),
+                }
         except aiohttp.ClientError as exc:
             return {"success": False, "comment": str(exc)}
 

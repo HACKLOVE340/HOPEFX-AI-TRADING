@@ -44,7 +44,7 @@ import json
 import logging
 import os
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -81,9 +81,10 @@ except ImportError:
 @dataclass
 class HedgePosition:
     """Tracks an open hedge position."""
+
     symbol: str
     units: float
-    direction: str          # "short" or "long"
+    direction: str  # "short" or "long"
     opened_at: float = field(default_factory=time.time)
     order_id: Optional[str] = None
 
@@ -91,6 +92,7 @@ class HedgePosition:
 @dataclass
 class RiskSnapshot:
     """Point-in-time risk state."""
+
     max_risk_fraction: float
     current_exposure: float
     hedge_active: bool
@@ -136,7 +138,7 @@ class RiskOrchestrator:
         self._hedge_positions: List[HedgePosition] = []
         self._trading_allowed: bool = True
         self._lock = asyncio.Lock()
-        self._history: List[Dict[str, Any]] = []   # last 200 risk events
+        self._history: List[Dict[str, Any]] = []  # last 200 risk events
         self._state_file: Path = (
             Path(state_file) if state_file is not None else self._DEFAULT_STATE_FILE
         )
@@ -147,7 +149,9 @@ class RiskOrchestrator:
 
         logger.info(
             "RiskOrchestrator initialised | max_risk=%.2f hedge_units=%.0f state_file=%s",
-            self._max_risk, self._hedge_units, self._state_file,
+            self._max_risk,
+            self._hedge_units,
+            self._state_file,
         )
 
     # ── State persistence ─────────────────────────────────────────────────────
@@ -197,7 +201,9 @@ class RiskOrchestrator:
             logger.info(
                 "RiskOrchestrator state restored | max_risk=%.2f hedge_active=%s "
                 "hedge_positions=%d",
-                self._max_risk, self._hedge_active, len(self._hedge_positions),
+                self._max_risk,
+                self._hedge_active,
+                len(self._hedge_positions),
             )
         except Exception as exc:
             logger.warning("RiskOrchestrator: could not restore state: %s", exc)
@@ -222,9 +228,9 @@ class RiskOrchestrator:
         if self._broker is not None:
             return self._broker
         try:
-            from hopefx_engine import HopeFXEngine
             # Access the module-level engine instance if available
             import hopefx_engine as _eng
+
             engine = getattr(_eng, "_engine_instance", None)
             if engine is not None:
                 broker = getattr(engine, "_broker", None)
@@ -232,7 +238,7 @@ class RiskOrchestrator:
                     self._broker = broker
                     return broker
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
         return None
 
     # ── Core risk controls ────────────────────────────────────────────────────
@@ -254,15 +260,20 @@ class RiskOrchestrator:
             self._max_risk = fraction
             self._trading_allowed = fraction > 0.0
 
-            self._record_event("set_max_risk", {
-                "old_fraction": old,
-                "new_fraction": fraction,
-                "trading_allowed": self._trading_allowed,
-            })
+            self._record_event(
+                "set_max_risk",
+                {
+                    "old_fraction": old,
+                    "new_fraction": fraction,
+                    "trading_allowed": self._trading_allowed,
+                },
+            )
 
             logger.warning(
                 "RiskOrchestrator: max_risk %.2f → %.2f | trading_allowed=%s",
-                old, fraction, self._trading_allowed,
+                old,
+                fraction,
+                self._trading_allowed,
             )
 
             if _PROM_ORCH_AVAILABLE:
@@ -281,10 +292,15 @@ class RiskOrchestrator:
         """Push the new max-risk fraction into RiskManager."""
         try:
             from risk.manager import risk_manager
+
             if hasattr(risk_manager, "config"):
                 # RiskConfig.max_risk_per_trade is the primary lever
-                risk_manager.config.max_risk_per_trade = fraction * 0.02  # 2% base × fraction
-                risk_manager.config.max_portfolio_risk = fraction * 0.06  # 6% base × fraction
+                risk_manager.config.max_risk_per_trade = (
+                    fraction * 0.02
+                )  # 2% base × fraction
+                risk_manager.config.max_portfolio_risk = (
+                    fraction * 0.06
+                )  # 6% base × fraction
                 logger.debug(
                     "RiskManager updated: max_risk_per_trade=%.4f max_portfolio_risk=%.4f",
                     risk_manager.config.max_risk_per_trade,
@@ -317,11 +333,15 @@ class RiskOrchestrator:
                 try:
                     result = await broker.place_order(
                         symbol=symbol,
-                        units=-self._hedge_units,   # negative = short
+                        units=-self._hedge_units,  # negative = short
                         order_type="MARKET",
                         label="NUCLEAR_HEDGE",
                     )
-                    order_id = str(result.get("id", "")) if isinstance(result, dict) else str(result)
+                    order_id = (
+                        str(result.get("id", ""))
+                        if isinstance(result, dict)
+                        else str(result)
+                    )
                     logger.info("Hedge order placed: %s", order_id)
                 except Exception as exc:
                     logger.error("Hedge order failed: %s", exc)
@@ -329,7 +349,8 @@ class RiskOrchestrator:
                 logger.warning(
                     "No broker available — hedge position NOT placed. "
                     "Manual hedge required on %s (%.0f units short)",
-                    symbol, self._hedge_units,
+                    symbol,
+                    self._hedge_units,
                 )
 
             pos = HedgePosition(
@@ -339,11 +360,14 @@ class RiskOrchestrator:
                 order_id=order_id,
             )
             self._hedge_positions.append(pos)
-            self._record_event("activate_hedge", {
-                "symbol": symbol,
-                "units": self._hedge_units,
-                "order_id": order_id,
-            })
+            self._record_event(
+                "activate_hedge",
+                {
+                    "symbol": symbol,
+                    "units": self._hedge_units,
+                    "order_id": order_id,
+                },
+            )
 
             if _PROM_ORCH_AVAILABLE:
                 try:
@@ -367,9 +391,9 @@ class RiskOrchestrator:
                 if broker is not None:
                     try:
                         # Close by placing opposite order
-                        result = await broker.place_order(
+                        await broker.place_order(
                             symbol=pos.symbol,
-                            units=pos.units,   # positive = buy back short
+                            units=pos.units,  # positive = buy back short
                             order_type="MARKET",
                             label="NUCLEAR_HEDGE_CLOSE",
                         )
@@ -408,18 +432,20 @@ class RiskOrchestrator:
         """
         try:
             from risk.manager import risk_manager
+
             if hasattr(risk_manager, "get_current_exposure"):
                 return float(risk_manager.get_current_exposure())
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         try:
             from data_layer.orchestrator import orchestrator
+
             tick = orchestrator.get_latest_tick()
             if tick and hasattr(tick, "exposure"):
                 return float(tick.exposure)
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         # Derive from max_risk as a proxy
         exposure = min(1.0, 1.0 - self._max_risk + 0.1)
@@ -427,7 +453,7 @@ class RiskOrchestrator:
             try:
                 _ORCH_EXPOSURE_GAUGE.set(exposure)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
         return exposure
 
     # ── Status ────────────────────────────────────────────────────────────────
@@ -464,16 +490,19 @@ class RiskOrchestrator:
 
     def _record_event(self, event_type: str, data: Dict[str, Any]) -> None:
         """Append to internal audit history (capped at 200 entries)."""
-        self._history.append({
-            "ts": time.time(),
-            "type": event_type,
-            **data,
-        })
+        self._history.append(
+            {
+                "ts": time.time(),
+                "type": event_type,
+                **data,
+            }
+        )
         if len(self._history) > 200:
             self._history.pop(0)
 
 
 # ── FastAPI router (optional) ─────────────────────────────────────────────────
+
 
 def create_orchestrator_router(orchestrator_instance: RiskOrchestrator):
     """
@@ -484,7 +513,7 @@ def create_orchestrator_router(orchestrator_instance: RiskOrchestrator):
                            prefix="/risk/orchestrator", tags=["risk"])
     """
     try:
-        from fastapi import APIRouter, HTTPException
+        from fastapi import APIRouter, HTTPException  # noqa: F401
         from pydantic import BaseModel, Field
     except ImportError:
         return None

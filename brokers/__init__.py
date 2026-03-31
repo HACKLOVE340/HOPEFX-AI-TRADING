@@ -1240,18 +1240,21 @@ try:
     from brokers.mt5_broker import MT5Broker  # noqa: F401
 except Exception as _exc:
     import logging as _logging
+
     _logging.getLogger(__name__).debug("MT5Broker unavailable: %s", _exc)
 
 try:
     from brokers.oanda_broker import OandaBroker as OandaBrokerYaml  # noqa: F401
 except Exception as _exc:
     import logging as _logging
+
     _logging.getLogger(__name__).debug("OandaBroker (yaml) unavailable: %s", _exc)
 
 try:
     from brokers.ibkr_broker import IBKRBroker  # noqa: F401
 except Exception as _exc:
     import logging as _logging
+
     _logging.getLogger(__name__).debug("IBKRBroker unavailable: %s", _exc)
 
 __version__ = "1.0.0"

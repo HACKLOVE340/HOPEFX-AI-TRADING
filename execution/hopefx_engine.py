@@ -26,6 +26,7 @@ Latency budget
   signal → broker submission : <10 ms
   total end-to-end target    : <15 ms
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -37,7 +38,6 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -51,60 +51,62 @@ from resilience.hot_standby import HotStandbyReplicator
 logger = logging.getLogger(__name__)
 
 # ── env config ────────────────────────────────────────────────────────────────
-_MIN_CONFIDENCE       = float(os.getenv("ENGINE_MIN_CONFIDENCE",      "0.55"))
-_MIN_DATA_QUALITY     = float(os.getenv("ENGINE_MIN_DATA_QUALITY",    "0.40"))
-_MAX_SPREAD_USD       = float(os.getenv("ENGINE_MAX_SPREAD_USD",      "2.00"))
-_TICK_LOOP_HZ         = float(os.getenv("ENGINE_TICK_LOOP_HZ",        "1.0"))
-_MAX_POSITION_USD     = float(os.getenv("ENGINE_MAX_POSITION_USD",    "100000"))
-_SIGNAL_COOLDOWN_S    = float(os.getenv("ENGINE_SIGNAL_COOLDOWN_S",   "30.0"))
-_STALE_TICK_THRESHOLD = float(os.getenv("ENGINE_STALE_TICK_S",        "10.0"))
+_MIN_CONFIDENCE = float(os.getenv("ENGINE_MIN_CONFIDENCE", "0.55"))
+_MIN_DATA_QUALITY = float(os.getenv("ENGINE_MIN_DATA_QUALITY", "0.40"))
+_MAX_SPREAD_USD = float(os.getenv("ENGINE_MAX_SPREAD_USD", "2.00"))
+_TICK_LOOP_HZ = float(os.getenv("ENGINE_TICK_LOOP_HZ", "1.0"))
+_MAX_POSITION_USD = float(os.getenv("ENGINE_MAX_POSITION_USD", "100000"))
+_SIGNAL_COOLDOWN_S = float(os.getenv("ENGINE_SIGNAL_COOLDOWN_S", "30.0"))
+_STALE_TICK_THRESHOLD = float(os.getenv("ENGINE_STALE_TICK_S", "10.0"))
 
 
 class EngineState(str, Enum):
-    IDLE       = "idle"
-    RUNNING    = "running"
-    PAUSED     = "paused"
-    HALTED     = "halted"
+    IDLE = "idle"
+    RUNNING = "running"
+    PAUSED = "paused"
+    HALTED = "halted"
 
 
 @dataclass
 class ExecutionSignal:
     """Fully-attributed signal ready for routing and risk gating."""
-    signal_id:      str
-    symbol:         str
-    direction:      str          # "long" | "short" | "neutral"
-    confidence:     float
-    probability:    float
-    tick_mid:       float
-    tick_bid:       float
-    tick_ask:       float
-    tick_spread:    float
+
+    signal_id: str
+    symbol: str
+    direction: str  # "long" | "short" | "neutral"
+    confidence: float
+    probability: float
+    tick_mid: float
+    tick_bid: float
+    tick_ask: float
+    tick_spread: float
     tick_timestamp: datetime
-    features:       Dict[str, float]
-    features_hash:  str
-    data_quality:   float        # orchestrator confidence at signal time
+    features: Dict[str, float]
+    features_hash: str
+    data_quality: float  # orchestrator confidence at signal time
     sentiment_score: float
-    impact_score:   float
-    lineage_id:     str
-    created_at:     datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    impact_score: float
+    lineage_id: str
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
 class FillRecord:
     """Immutable fill record written to lineage on every execution."""
-    fill_id:        str
-    order_id:       str
-    signal_id:      str
-    symbol:         str
-    direction:      str
-    quantity:       float
-    fill_price:     float
+
+    fill_id: str
+    order_id: str
+    signal_id: str
+    symbol: str
+    direction: str
+    quantity: float
+    fill_price: float
     expected_price: float
-    slippage_bps:   float
-    broker:         str
-    latency_ms:     float
-    filled_at:      datetime
-    lineage_id:     str
+    slippage_bps: float
+    broker: str
+    latency_ms: float
+    filled_at: datetime
+    lineage_id: str
 
 
 class HopeFXEngine:
@@ -148,12 +150,12 @@ class HopeFXEngine:
         hot_standby: Optional[HotStandbyReplicator] = None,
         initial_equity: float = float(os.getenv("ENGINE_INITIAL_EQUITY", "100000")),
     ) -> None:
-        self._orch        = orchestrator
-        self._router      = smart_router
-        self._risk        = risk_manager
-        self._gate        = gatekeeper
-        self._lineage     = lineage_store
-        self._infer       = ml_inference_fn   # callable(features) → (direction, conf, prob)
+        self._orch = orchestrator
+        self._router = smart_router
+        self._risk = risk_manager
+        self._gate = gatekeeper
+        self._lineage = lineage_store
+        self._infer = ml_inference_fn  # callable(features) → (direction, conf, prob)
 
         # ── Multi-layer risk components ────────────────────────────────────
         # Instantiate defaults if not injected — all three layers are mandatory
@@ -163,8 +165,8 @@ class HopeFXEngine:
         self._post_analyzer: PostTradeAnalyzer = (
             post_trade_analyzer or PostTradeAnalyzer(lineage_store=lineage_store)
         )
-        self._dd_tracker: DrawdownTracker = (
-            drawdown_tracker or DrawdownTracker(initial_balance=initial_equity)
+        self._dd_tracker: DrawdownTracker = drawdown_tracker or DrawdownTracker(
+            initial_balance=initial_equity
         )
         self._current_equity: float = initial_equity
 
@@ -172,8 +174,8 @@ class HopeFXEngine:
         # ShadowTradingEngine: paper-executes every live signal in parallel.
         # ShadowDataValidator: compares production vs shadow feed on every tick.
         # Both are optional — if not injected, defaults are created.
-        self._shadow: ShadowTradingEngine = (
-            shadow_engine or ShadowTradingEngine(initial_balance=initial_equity)
+        self._shadow: ShadowTradingEngine = shadow_engine or ShadowTradingEngine(
+            initial_balance=initial_equity
         )
         self._shadow_validator: ShadowDataValidator = (
             shadow_validator or ShadowDataValidator()
@@ -185,17 +187,17 @@ class HopeFXEngine:
         # can take over without replaying the full order book.
         self._standby: Optional[HotStandbyReplicator] = hot_standby
 
-        self._state       = EngineState.IDLE
-        self._tick_count  = 0
+        self._state = EngineState.IDLE
+        self._tick_count = 0
         self._signal_count = 0
-        self._fill_count  = 0
+        self._fill_count = 0
         self._reject_count = 0
-        self._last_signal_ts: float = 0.0     # monotonic, for cooldown
+        self._last_signal_ts: float = 0.0  # monotonic, for cooldown
         self._last_tick_epoch: float = 0.0
         self._open_positions: Dict[str, Dict] = {}
-        self._fill_history:   List[FillRecord] = []
-        self._start_time:     Optional[float] = None
-        self._loop_task:      Optional[asyncio.Task] = None
+        self._fill_history: List[FillRecord] = []
+        self._start_time: Optional[float] = None
+        self._loop_task: Optional[asyncio.Task] = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -219,7 +221,9 @@ class HopeFXEngine:
         )
         logger.info(
             "HopeFXEngine started — min_conf=%.2f min_quality=%.2f max_spread=%.2f",
-            _MIN_CONFIDENCE, _MIN_DATA_QUALITY, _MAX_SPREAD_USD,
+            _MIN_CONFIDENCE,
+            _MIN_DATA_QUALITY,
+            _MAX_SPREAD_USD,
         )
 
     async def stop(self) -> None:
@@ -241,7 +245,10 @@ class HopeFXEngine:
 
         logger.info(
             "HopeFXEngine stopped — ticks=%d signals=%d fills=%d rejects=%d",
-            self._tick_count, self._signal_count, self._fill_count, self._reject_count,
+            self._tick_count,
+            self._signal_count,
+            self._fill_count,
+            self._reject_count,
         )
 
     def pause(self) -> None:
@@ -298,8 +305,8 @@ class HopeFXEngine:
 
         # ── Step 2: Staleness check ────────────────────────────────────────
         tick_epoch = tick.timestamp.timestamp()
-        now_epoch  = time.time()
-        age_s      = now_epoch - tick_epoch
+        now_epoch = time.time()
+        age_s = now_epoch - tick_epoch
         if age_s > _STALE_TICK_THRESHOLD:
             logger.warning(
                 "Stale tick rejected: age=%.1fs symbol=%s", age_s, tick.symbol
@@ -335,7 +342,10 @@ class HopeFXEngine:
         for unwind in unwind_signals:
             logger.critical(
                 "INTRA-TRADE UNWIND position=%s symbol=%s reason=%s mtm_pnl=%.2f",
-                unwind.position_id, unwind.symbol, unwind.reason, unwind.mtm_pnl,
+                unwind.position_id,
+                unwind.symbol,
+                unwind.reason,
+                unwind.mtm_pnl,
             )
             await self._close_position_for_unwind(unwind)
 
@@ -351,8 +361,12 @@ class HopeFXEngine:
             logger.critical(
                 "DRAWDOWN BREACH type=%s pct=%.2f%% — halting engine",
                 breach_type,
-                (dd_result.total_drawdown_pct if dd_result.total_breach
-                 else dd_result.daily_drawdown_pct) * 100,
+                (
+                    dd_result.total_drawdown_pct
+                    if dd_result.total_breach
+                    else dd_result.daily_drawdown_pct
+                )
+                * 100,
             )
             self.halt(f"drawdown_breach:{breach_type}")
             return
@@ -369,7 +383,8 @@ class HopeFXEngine:
         if data_quality < _MIN_DATA_QUALITY:
             logger.warning(
                 "Data quality below threshold: %.3f < %.3f — skipping",
-                data_quality, _MIN_DATA_QUALITY,
+                data_quality,
+                _MIN_DATA_QUALITY,
             )
             return
 
@@ -399,38 +414,38 @@ class HopeFXEngine:
 
         # ── Step 9: Build signal ───────────────────────────────────────────
         sentiment_score = float(features.get("news_sentiment_score", 0.0))
-        impact_score    = float(features.get("macro_impact_score", 0.0))
-        features_hash   = _hash_features(features)
-        signal_id       = str(uuid.uuid4())
+        impact_score = float(features.get("macro_impact_score", 0.0))
+        features_hash = _hash_features(features)
+        signal_id = str(uuid.uuid4())
 
         signal = ExecutionSignal(
-            signal_id       = signal_id,
-            symbol          = tick.symbol,
-            direction       = direction,
-            confidence      = confidence,
-            probability     = probability,
-            tick_mid        = tick.mid,
-            tick_bid        = tick.bid,
-            tick_ask        = tick.ask,
-            tick_spread     = tick.spread,
-            tick_timestamp  = tick.timestamp,
-            features        = features,
-            features_hash   = features_hash,
-            data_quality    = data_quality,
-            sentiment_score = sentiment_score,
-            impact_score    = impact_score,
-            lineage_id      = tick.lineage_id,
+            signal_id=signal_id,
+            symbol=tick.symbol,
+            direction=direction,
+            confidence=confidence,
+            probability=probability,
+            tick_mid=tick.mid,
+            tick_bid=tick.bid,
+            tick_ask=tick.ask,
+            tick_spread=tick.spread,
+            tick_timestamp=tick.timestamp,
+            features=features,
+            features_hash=features_hash,
+            data_quality=data_quality,
+            sentiment_score=sentiment_score,
+            impact_score=impact_score,
+            lineage_id=tick.lineage_id,
         )
 
         # ── Step 10: Record signal to lineage ──────────────────────────────
         self._lineage.record_signal(
-            direction     = direction,
-            confidence    = confidence,
-            probability   = probability,
-            features_hash = features_hash,
-            model_version = "hopefx_engine_v3",
-            lineage_id    = signal_id,
-            symbol        = tick.symbol,
+            direction=direction,
+            confidence=confidence,
+            probability=probability,
+            features_hash=features_hash,
+            model_version="hopefx_engine_v3",
+            lineage_id=signal_id,
+            symbol=tick.symbol,
         )
         self._signal_count += 1
 
@@ -456,9 +471,7 @@ class HopeFXEngine:
 
     # ── Inference ─────────────────────────────────────────────────────────────
 
-    def _run_inference(
-        self, features: Dict[str, float]
-    ) -> Tuple[str, float, float]:
+    def _run_inference(self, features: Dict[str, float]) -> Tuple[str, float, float]:
         """
         Run ML inference. Returns (direction, confidence, probability).
 
@@ -473,13 +486,13 @@ class HopeFXEngine:
                 return "neutral", 0.0, 0.5
 
         # Fallback: microstructure pressure heuristic
-        ofi   = features.get("order_flow_imbalance", 0.0)
+        ofi = features.get("order_flow_imbalance", 0.0)
         press = features.get("trade_pressure", 0.0)
-        sent  = features.get("news_sentiment_score", 0.0)
+        sent = features.get("news_sentiment_score", 0.0)
         score = 0.5 * ofi + 0.3 * press + 0.2 * sent
 
         if score > 0.15:
-            return "long",  min(0.5 + abs(score), 0.95), 0.5 + abs(score) * 0.5
+            return "long", min(0.5 + abs(score), 0.95), 0.5 + abs(score) * 0.5
         if score < -0.15:
             return "short", min(0.5 + abs(score), 0.95), 0.5 + abs(score) * 0.5
         return "neutral", 0.0, 0.5
@@ -494,36 +507,44 @@ class HopeFXEngine:
         # Paper-execute the same signal so we can compare shadow vs live PnL.
         try:
             self._shadow.on_signal(
-                signal_id   = signal.signal_id,
-                symbol      = signal.symbol,
-                side        = signal.direction,
-                lots        = sized.quantity,
-                mid         = signal.tick_mid,
-                stop_loss   = float(signal.features.get(
-                    "stop_loss", signal.tick_mid * (0.99 if signal.direction == "long" else 1.01)
-                )),
-                take_profit = float(signal.features.get(
-                    "take_profit", signal.tick_mid * (1.01 if signal.direction == "long" else 0.99)
-                )),
+                signal_id=signal.signal_id,
+                symbol=signal.symbol,
+                side=signal.direction,
+                lots=sized.quantity,
+                mid=signal.tick_mid,
+                stop_loss=float(
+                    signal.features.get(
+                        "stop_loss",
+                        signal.tick_mid
+                        * (0.99 if signal.direction == "long" else 1.01),
+                    )
+                ),
+                take_profit=float(
+                    signal.features.get(
+                        "take_profit",
+                        signal.tick_mid
+                        * (1.01 if signal.direction == "long" else 0.99),
+                    )
+                ),
             )
         except Exception as exc:
             logger.debug("ShadowTradingEngine.on_signal error: %s", exc)
 
         order_request = {
-            "order_id":   str(uuid.uuid4()),
-            "signal_id":  signal.signal_id,
-            "symbol":     signal.symbol,
-            "direction":  signal.direction,
-            "quantity":   sized.quantity,
+            "order_id": str(uuid.uuid4()),
+            "signal_id": signal.signal_id,
+            "symbol": signal.symbol,
+            "direction": signal.direction,
+            "quantity": sized.quantity,
             "order_type": "MARKET",
-            "mid_price":  signal.tick_mid,
-            "bid":        signal.tick_bid,
-            "ask":        signal.tick_ask,
-            "spread":     signal.tick_spread,
+            "mid_price": signal.tick_mid,
+            "bid": signal.tick_bid,
+            "ask": signal.tick_ask,
+            "spread": signal.tick_spread,
             "confidence": signal.confidence,
-            "sentiment":  signal.sentiment_score,
-            "impact":     signal.impact_score,
-            "features":   signal.features,
+            "sentiment": signal.sentiment_score,
+            "impact": signal.impact_score,
+            "features": signal.features,
             "lineage_id": signal.lineage_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -531,9 +552,7 @@ class HopeFXEngine:
         try:
             fill = await self._router.route_and_execute(order_request)
         except Exception as exc:
-            logger.error(
-                "Order routing failed signal_id=%s: %s", signal.signal_id, exc
-            )
+            logger.error("Order routing failed signal_id=%s: %s", signal.signal_id, exc)
             self._record_rejection(signal, f"routing_error:{exc}")
             return
 
@@ -554,8 +573,8 @@ class HopeFXEngine:
     ) -> None:
         """Handle confirmed fill: lineage, position tracking, orchestrator notify."""
         fill_price = float(fill.get("fill_price", signal.tick_mid))
-        quantity   = float(fill.get("quantity",   order["quantity"]))
-        broker     = fill.get("broker", "unknown")
+        quantity = float(fill.get("quantity", order["quantity"]))
+        broker = fill.get("broker", "unknown")
 
         # Slippage in bps
         if signal.direction == "long":
@@ -564,19 +583,21 @@ class HopeFXEngine:
             slippage_bps = (signal.tick_bid - fill_price) / signal.tick_bid * 10000
 
         fill_record = FillRecord(
-            fill_id        = str(uuid.uuid4()),
-            order_id       = order["order_id"],
-            signal_id      = signal.signal_id,
-            symbol         = signal.symbol,
-            direction      = signal.direction,
-            quantity       = quantity,
-            fill_price     = fill_price,
-            expected_price = signal.tick_ask if signal.direction == "long" else signal.tick_bid,
-            slippage_bps   = slippage_bps,
-            broker         = broker,
-            latency_ms     = latency_ms,
-            filled_at      = datetime.now(timezone.utc),
-            lineage_id     = signal.lineage_id,
+            fill_id=str(uuid.uuid4()),
+            order_id=order["order_id"],
+            signal_id=signal.signal_id,
+            symbol=signal.symbol,
+            direction=signal.direction,
+            quantity=quantity,
+            fill_price=fill_price,
+            expected_price=signal.tick_ask
+            if signal.direction == "long"
+            else signal.tick_bid,
+            slippage_bps=slippage_bps,
+            broker=broker,
+            latency_ms=latency_ms,
+            filled_at=datetime.now(timezone.utc),
+            lineage_id=signal.lineage_id,
         )
 
         self._fill_count += 1
@@ -586,37 +607,37 @@ class HopeFXEngine:
         position_id = fill_record.fill_id
         self._open_positions[signal.symbol] = {
             "position_id": position_id,
-            "direction":   signal.direction,
-            "quantity":    quantity,
+            "direction": signal.direction,
+            "quantity": quantity,
             "entry_price": fill_price,
-            "signal_id":   signal.signal_id,
-            "opened_at":   fill_record.filled_at.isoformat(),
-            "mtm_pnl":     0.0,
+            "signal_id": signal.signal_id,
+            "opened_at": fill_record.filled_at.isoformat(),
+            "mtm_pnl": 0.0,
         }
 
         # ── Register with IntraTradeMonitor ───────────────────────────────
         intra_pos = IntraPosition(
-            position_id  = position_id,
-            symbol       = signal.symbol,
-            side         = signal.direction,
-            lots         = quantity,
-            entry_price  = fill_price,
-            stop_loss    = float(order.get("stop_loss", fill_price * 0.99)),
-            take_profit  = float(order.get("take_profit", fill_price * 1.01)),
-            opened_at    = fill_record.filled_at,
+            position_id=position_id,
+            symbol=signal.symbol,
+            side=signal.direction,
+            lots=quantity,
+            entry_price=fill_price,
+            stop_loss=float(order.get("stop_loss", fill_price * 0.99)),
+            take_profit=float(order.get("take_profit", fill_price * 1.01)),
+            opened_at=fill_record.filled_at,
         )
         self._intra_monitor.on_open(intra_pos)
 
         # ── Post-trade fill analysis ───────────────────────────────────────
         self._post_analyzer.record_fill(
-            trade_id       = fill_record.fill_id,
-            symbol         = signal.symbol,
-            side           = signal.direction,
-            lots           = quantity,
-            decision_price = signal.tick_mid,
-            fill_price     = fill_price,
-            mid_at_fill    = signal.tick_mid,
-            spread_at_fill = signal.tick_spread,
+            trade_id=fill_record.fill_id,
+            symbol=signal.symbol,
+            side=signal.direction,
+            lots=quantity,
+            decision_price=signal.tick_mid,
+            fill_price=fill_price,
+            mid_at_fill=signal.tick_mid,
+            spread_at_fill=signal.tick_spread,
         )
 
         # ── Update drawdown tracker with new balance ───────────────────────
@@ -629,15 +650,17 @@ class HopeFXEngine:
                 equity=self._current_equity,
                 balance=self._current_equity,
             )
-            self._standby.record_fill({
-                "fill_id":    fill_record.fill_id,
-                "symbol":     signal.symbol,
-                "direction":  signal.direction,
-                "quantity":   quantity,
-                "fill_price": fill_price,
-                "broker":     broker,
-                "filled_at":  fill_record.filled_at.isoformat(),
-            })
+            self._standby.record_fill(
+                {
+                    "fill_id": fill_record.fill_id,
+                    "symbol": signal.symbol,
+                    "direction": signal.direction,
+                    "quantity": quantity,
+                    "fill_price": fill_price,
+                    "broker": broker,
+                    "filled_at": fill_record.filled_at.isoformat(),
+                }
+            )
 
         # ── Close any existing shadow position on the same symbol ─────────
         # If we already had an open position on this symbol and are now
@@ -646,7 +669,7 @@ class HopeFXEngine:
         existing = self._open_positions.get(signal.symbol)
         if existing and existing.get("direction") != signal.direction:
             prev_entry = existing.get("entry_price", fill_price)
-            prev_qty   = existing.get("quantity", quantity)
+            prev_qty = existing.get("quantity", quantity)
             if existing["direction"] == "long":
                 prev_pnl = (fill_price - prev_entry) * prev_qty * 100.0
             else:
@@ -655,9 +678,13 @@ class HopeFXEngine:
                 # Compute live slippage for the closing leg so shadow engine
                 # can calibrate its slippage model via R² tracking.
                 if existing["direction"] == "long":
-                    live_slip = (fill_price - prev_entry) / max(prev_entry, 1e-9) * 10_000
+                    live_slip = (
+                        (fill_price - prev_entry) / max(prev_entry, 1e-9) * 10_000
+                    )
                 else:
-                    live_slip = (prev_entry - fill_price) / max(prev_entry, 1e-9) * 10_000
+                    live_slip = (
+                        (prev_entry - fill_price) / max(prev_entry, 1e-9) * 10_000
+                    )
                 self._shadow.on_live_close(
                     signal_id=existing.get("signal_id", ""),
                     live_pnl=prev_pnl,
@@ -671,27 +698,27 @@ class HopeFXEngine:
 
         # Write fill to lineage store
         self._lineage.record_signal(
-            direction     = f"FILL:{signal.direction}",
-            confidence    = signal.confidence,
-            probability   = signal.probability,
-            features_hash = signal.features_hash,
-            model_version = f"fill@{broker}",
-            lineage_id    = fill_record.fill_id,
-            symbol        = signal.symbol,
+            direction=f"FILL:{signal.direction}",
+            confidence=signal.confidence,
+            probability=signal.probability,
+            features_hash=signal.features_hash,
+            model_version=f"fill@{broker}",
+            lineage_id=fill_record.fill_id,
+            symbol=signal.symbol,
         )
 
         # Notify orchestrator — updates replay engine and Redis cache
         if hasattr(self._orch, "notify_fill"):
             try:
                 self._orch.notify_fill(
-                    symbol     = signal.symbol,
-                    direction  = signal.direction,
-                    quantity   = quantity,
-                    fill_price = fill_price,
-                    fill_id    = fill_record.fill_id,
-                    signal_id  = signal.signal_id,
-                    broker     = broker,
-                    latency_ms = latency_ms,
+                    symbol=signal.symbol,
+                    direction=signal.direction,
+                    quantity=quantity,
+                    fill_price=fill_price,
+                    fill_id=fill_record.fill_id,
+                    signal_id=signal.signal_id,
+                    broker=broker,
+                    latency_ms=latency_ms,
                 )
             except Exception as exc:
                 logger.error("orchestrator.notify_fill failed: %s", exc)
@@ -699,8 +726,13 @@ class HopeFXEngine:
         logger.info(
             "FILL symbol=%s dir=%s qty=%.4f price=%.4f slippage=%.2fbps "
             "broker=%s latency=%.1fms",
-            signal.symbol, signal.direction, quantity, fill_price,
-            slippage_bps, broker, latency_ms,
+            signal.symbol,
+            signal.direction,
+            quantity,
+            fill_price,
+            slippage_bps,
+            broker,
+            latency_ms,
         )
 
     async def _close_position_for_unwind(self, unwind) -> None:
@@ -723,22 +755,22 @@ class HopeFXEngine:
 
         close_direction = "short" if pos["direction"] == "long" else "long"
         close_request = {
-            "order_id":   str(uuid.uuid4()),
-            "signal_id":  pos["signal_id"],
-            "symbol":     unwind.symbol,
-            "direction":  close_direction,
-            "quantity":   pos["quantity"],
+            "order_id": str(uuid.uuid4()),
+            "signal_id": pos["signal_id"],
+            "symbol": unwind.symbol,
+            "direction": close_direction,
+            "quantity": pos["quantity"],
             "order_type": "MARKET",
-            "mid_price":  0.0,   # router will use live price from broker
-            "bid":        0.0,
-            "ask":        0.0,
-            "spread":     0.0,
-            "confidence": 1.0,   # unwind is unconditional
-            "sentiment":  0.0,
-            "impact":     0.0,
-            "features":   {},
+            "mid_price": 0.0,  # router will use live price from broker
+            "bid": 0.0,
+            "ask": 0.0,
+            "spread": 0.0,
+            "confidence": 1.0,  # unwind is unconditional
+            "sentiment": 0.0,
+            "impact": 0.0,
+            "features": {},
             "lineage_id": unwind.position_id,
-            "is_unwind":  True,
+            "is_unwind": True,
             "unwind_reason": unwind.reason,
         }
 
@@ -747,7 +779,9 @@ class HopeFXEngine:
         except Exception as exc:
             logger.critical(
                 "UNWIND ROUTING FAILED symbol=%s reason=%s: %s",
-                unwind.symbol, unwind.reason, exc,
+                unwind.symbol,
+                unwind.reason,
+                exc,
             )
             return
 
@@ -767,14 +801,14 @@ class HopeFXEngine:
 
         # Post-trade analysis on the close leg
         self._post_analyzer.record_fill(
-            trade_id       = str(uuid.uuid4()),
-            symbol         = unwind.symbol,
-            side           = close_direction,
-            lots           = pos["quantity"],
-            decision_price = pos["entry_price"],
-            fill_price     = close_price,
-            mid_at_fill    = close_price,
-            spread_at_fill = 0.0,
+            trade_id=str(uuid.uuid4()),
+            symbol=unwind.symbol,
+            side=close_direction,
+            lots=pos["quantity"],
+            decision_price=pos["entry_price"],
+            fill_price=close_price,
+            mid_at_fill=close_price,
+            spread_at_fill=0.0,
         )
 
         # Update equity and drawdown tracker
@@ -808,20 +842,23 @@ class HopeFXEngine:
 
         logger.warning(
             "UNWIND COMPLETE symbol=%s reason=%s pnl=%.2f close_price=%.4f",
-            unwind.symbol, unwind.reason, realised_pnl, close_price,
+            unwind.symbol,
+            unwind.reason,
+            realised_pnl,
+            close_price,
         )
 
     def _record_rejection(self, signal: ExecutionSignal, reason: str) -> None:
         """Write rejection event to lineage."""
         try:
             self._lineage.record_signal(
-                direction     = f"REJECT:{signal.direction}",
-                confidence    = signal.confidence,
-                probability   = signal.probability,
-                features_hash = signal.features_hash,
-                model_version = f"reject:{reason}",
-                lineage_id    = signal.signal_id,
-                symbol        = signal.symbol,
+                direction=f"REJECT:{signal.direction}",
+                confidence=signal.confidence,
+                probability=signal.probability,
+                features_hash=signal.features_hash,
+                model_version=f"reject:{reason}",
+                lineage_id=signal.signal_id,
+                symbol=signal.symbol,
             )
         except Exception as exc:
             logger.debug("Lineage rejection record failed: %s", exc)
@@ -830,13 +867,9 @@ class HopeFXEngine:
 
     def metrics(self) -> Dict[str, Any]:
         uptime = time.monotonic() - self._start_time if self._start_time else 0
-        fills  = self._fill_history[-20:]
-        avg_slip = (
-            sum(f.slippage_bps for f in fills) / len(fills) if fills else 0.0
-        )
-        avg_lat = (
-            sum(f.latency_ms for f in fills) / len(fills) if fills else 0.0
-        )
+        fills = self._fill_history[-20:]
+        avg_slip = sum(f.slippage_bps for f in fills) / len(fills) if fills else 0.0
+        avg_lat = sum(f.latency_ms for f in fills) / len(fills) if fills else 0.0
 
         # Drawdown snapshot
         floating_pnl = sum(
@@ -852,28 +885,28 @@ class HopeFXEngine:
         intra_summary = self._intra_monitor.snapshot()
 
         return {
-            "state":            self._state.value,
-            "uptime_s":         round(uptime, 1),
-            "tick_count":       self._tick_count,
-            "signal_count":     self._signal_count,
-            "fill_count":       self._fill_count,
-            "reject_count":     self._reject_count,
-            "fill_rate":        self._fill_count / max(self._signal_count, 1),
+            "state": self._state.value,
+            "uptime_s": round(uptime, 1),
+            "tick_count": self._tick_count,
+            "signal_count": self._signal_count,
+            "fill_count": self._fill_count,
+            "reject_count": self._reject_count,
+            "fill_rate": self._fill_count / max(self._signal_count, 1),
             "avg_slippage_bps": round(avg_slip, 3),
-            "avg_latency_ms":   round(avg_lat, 2),
-            "open_positions":   len(self._open_positions),
-            "current_equity":   round(self._current_equity, 2),
-            "floating_equity":  round(floating_equity, 2),
+            "avg_latency_ms": round(avg_lat, 2),
+            "open_positions": len(self._open_positions),
+            "current_equity": round(self._current_equity, 2),
+            "floating_equity": round(floating_equity, 2),
             "drawdown": {
-                "total_pct":   round(dd_result.total_drawdown_pct * 100, 3),
-                "daily_pct":   round(dd_result.daily_drawdown_pct * 100, 3),
-                "hwm":         round(dd_result.total_hwm, 2),
+                "total_pct": round(dd_result.total_drawdown_pct * 100, 3),
+                "daily_pct": round(dd_result.daily_drawdown_pct * 100, 3),
+                "hwm": round(dd_result.total_hwm, 2),
                 "total_alert": dd_result.total_alert,
                 "daily_alert": dd_result.daily_alert,
             },
-            "post_trade":  pt_summary,
+            "post_trade": pt_summary,
             "intra_trade": intra_summary,
-            "shadow":      self._shadow.health(),
+            "shadow": self._shadow.health(),
             "shadow_comparison": self._shadow.get_comparison_report(),
             "hot_standby": self._standby.stats() if self._standby else None,
         }
@@ -881,8 +914,9 @@ class HopeFXEngine:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _hash_features(features: Dict[str, float]) -> str:
     """SHA-256 of sorted feature dict for lineage deduplication."""
     clean = {k: v for k, v in features.items() if not k.startswith("__")}
-    blob  = json.dumps(clean, sort_keys=True, default=str).encode()
+    blob = json.dumps(clean, sort_keys=True, default=str).encode()
     return hashlib.sha256(blob).hexdigest()[:16]

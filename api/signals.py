@@ -702,7 +702,9 @@ class RealTimeSignalService:
         channels.append("alerts")
         return channels
 
-    def ingest_engine_signal(self, payload: Dict[str, Any]) -> Optional["TradingSignal"]:
+    def ingest_engine_signal(
+        self, payload: Dict[str, Any]
+    ) -> Optional["TradingSignal"]:
         """
         Ingest a signal dict produced by core/signal_engine.py and store it in
         the ring buffer so /api/signals/latest reflects engine-generated signals.
@@ -729,17 +731,28 @@ class RealTimeSignalService:
 
             # Derive SL/TP from entry if not provided (0.5% conservative default)
             if sl is None:
-                sl = round(entry * 0.995, 5) if direction == SignalDirection.BUY else round(entry * 1.005, 5)
+                sl = (
+                    round(entry * 0.995, 5)
+                    if direction == SignalDirection.BUY
+                    else round(entry * 1.005, 5)
+                )
             if tp is None:
-                tp = round(entry * 1.015, 5) if direction == SignalDirection.BUY else round(entry * 0.985, 5)
+                tp = (
+                    round(entry * 1.015, 5)
+                    if direction == SignalDirection.BUY
+                    else round(entry * 0.985, 5)
+                )
 
             rr = abs(float(tp) - entry) / max(abs(entry - float(sl)), 1e-9)
 
             strength = (
-                SignalStrength.VERY_STRONG if confidence >= 0.8 else
-                SignalStrength.STRONG if confidence >= 0.6 else
-                SignalStrength.MODERATE if confidence >= 0.4 else
-                SignalStrength.WEAK
+                SignalStrength.VERY_STRONG
+                if confidence >= 0.8
+                else SignalStrength.STRONG
+                if confidence >= 0.6
+                else SignalStrength.MODERATE
+                if confidence >= 0.4
+                else SignalStrength.WEAK
             )
 
             signal = TradingSignal(
@@ -758,9 +771,9 @@ class RealTimeSignalService:
                 total_strategies=1,
                 regime=payload.get("regime", "unknown"),
                 session="live",
-                expiry=datetime.now(timezone.utc).replace(
-                    second=0, microsecond=0
-                ).__class__.fromtimestamp(
+                expiry=datetime.now(timezone.utc)
+                .replace(second=0, microsecond=0)
+                .__class__.fromtimestamp(
                     datetime.now(timezone.utc).timestamp() + 1800, tz=timezone.utc
                 ),
                 metadata={
@@ -1008,6 +1021,7 @@ def create_signals_router():
         """
         try:
             from core.signal_engine import get_signal_engine_status  # noqa: PLC0415
+
             engine_status = get_signal_engine_status()
         except Exception as exc:
             engine_status = {"error": str(exc)}
@@ -1016,8 +1030,7 @@ def create_signals_router():
         svc = _get_signal_service()
         recent = svc.get_signal_history(hours=1)
         engine_signals = [
-            s.to_dict() for s in recent
-            if s.metadata.get("source") == "signal_engine"
+            s.to_dict() for s in recent if s.metadata.get("source") == "signal_engine"
         ][:10]
 
         return {
@@ -1054,6 +1067,7 @@ def create_signals_router():
         Call this once after completing an OOS backtest.
         """
         from ml.signal_validator import SignalRecord, get_validator  # noqa: PLC0415
+
         validator = get_validator()
         records = [
             SignalRecord(
@@ -1078,6 +1092,7 @@ def create_signals_router():
         - failed: PSI > 0.25 or major drift — retrain required
         """
         from ml.signal_validator import SignalRecord, get_validator  # noqa: PLC0415
+
         validator = get_validator()
 
         live_records = None
@@ -1098,22 +1113,30 @@ def create_signals_router():
     async def add_live_signal(body: LiveSignalItem):
         """Append a single live signal to the validation buffer."""
         from ml.signal_validator import SignalRecord, get_validator  # noqa: PLC0415
+
         validator = get_validator()
-        validator.add_live_signal(SignalRecord(
-            direction=body.direction,
-            confidence=body.confidence,
-            raw_score=body.raw_score,
-        ))
+        validator.add_live_signal(
+            SignalRecord(
+                direction=body.direction,
+                confidence=body.confidence,
+                raw_score=body.raw_score,
+            )
+        )
         return {"buffered": True, "buffer_size": len(validator._live_signals)}
 
     @signals_router.get("/distribution/status")
     async def signal_distribution_status():
         """Return current validation buffer sizes and last validation result."""
         from ml.signal_validator import get_validator  # noqa: PLC0415
+
         validator = get_validator()
-        report = validator.validate() if (
-            len(validator._oos_signals) >= 30 and len(validator._live_signals) >= 30
-        ) else None
+        report = (
+            validator.validate()
+            if (
+                len(validator._oos_signals) >= 30 and len(validator._live_signals) >= 30
+            )
+            else None
+        )
         return {
             "oos_sample_size": len(validator._oos_signals),
             "live_buffer_size": len(validator._live_signals),

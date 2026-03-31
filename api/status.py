@@ -559,6 +559,7 @@ async def sharpe_progress():
     """
     try:
         from monitoring.trade_logger import get_trade_logger
+
         tl = get_trade_logger()
         return tl.sharpe_progress()
     except Exception as exc:

@@ -36,8 +36,11 @@ try:
     from auth.router import router  # noqa: F401  (re-export)
 except Exception as _router_import_err:  # pragma: no cover
     from fastapi import APIRouter as _APIRouter
+
     router = _APIRouter(prefix="/api/auth", tags=["Authentication"])
-    logger.warning("auth.router unavailable, using empty fallback router: %s", _router_import_err)
+    logger.warning(
+        "auth.router unavailable, using empty fallback router: %s", _router_import_err
+    )
 
 # Role hierarchy: higher index = more privileged
 _ROLE_RANK: dict = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
@@ -158,6 +161,7 @@ def require_role(minimum_role: str):
             ...
     """
     import sys as _sys
+
     _canonical = _sys.modules.get("api.auth")
     # If a canonical instance exists and it's not us, delegate to it so the
     # returned callable is always from the canonical module.

@@ -78,7 +78,7 @@ class ConfigStore:
             if app_state and app_state.db_session_factory:
                 return app_state.db_session_factory()
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
         return None
 
     def _db_get(self, key: str) -> Optional[Any]:
@@ -142,9 +142,7 @@ class ConfigStore:
         try:
             from database.models import ConfigStore as ConfigStoreModel
 
-            session.query(ConfigStoreModel).filter(
-                ConfigStoreModel.key == key
-            ).delete()
+            session.query(ConfigStoreModel).filter(ConfigStoreModel.key == key).delete()
             session.commit()
             return True
         except Exception as exc:
@@ -182,7 +180,7 @@ class ConfigStore:
                 try:
                     r.set(self._redis_key(key), json.dumps(value))
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Suppressed exception: %s", _exc)
             return value
 
         return default

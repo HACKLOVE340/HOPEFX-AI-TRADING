@@ -328,9 +328,7 @@ class ModelRegistry:
         entry = manifest["versions"][name]
         passed, reason = self._gate_check(entry)
         if not passed:
-            raise RuntimeError(
-                f"Promotion gate BLOCKED for '{name}': {reason}"
-            )
+            raise RuntimeError(f"Promotion gate BLOCKED for '{name}': {reason}")
 
         # Retire the current production model
         prev_active = manifest.get("active_version")
@@ -369,7 +367,9 @@ class ModelRegistry:
                 previous_version=prev_active,
             )
         except Exception as _mon_exc:
-            logger.debug("ModelRegistry: performance monitor notify failed: %s", _mon_exc)
+            logger.debug(
+                "ModelRegistry: performance monitor notify failed: %s", _mon_exc
+            )
 
         return entry
 
@@ -393,9 +393,7 @@ class ModelRegistry:
                 tmp_link.unlink()
             tmp_link.symlink_to(abs_target)
             tmp_link.replace(symlink)
-            logger.info(
-                "ModelRegistry: symlink %s → %s", symlink.name, abs_target.name
-            )
+            logger.info("ModelRegistry: symlink %s → %s", symlink.name, abs_target.name)
         except (OSError, NotImplementedError) as exc:
             logger.warning(
                 "ModelRegistry: symlink update failed (%s); skipping symlink", exc

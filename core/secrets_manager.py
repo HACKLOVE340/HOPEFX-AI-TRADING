@@ -155,7 +155,9 @@ class SecretsManager:
             "backend": _BACKEND,
             "refresh_enabled": _REFRESH_ENABLED,
             "refresh_interval_seconds": _REFRESH_INTERVAL,
-            "last_refresh": self._last_refresh.isoformat() if self._last_refresh else None,
+            "last_refresh": self._last_refresh.isoformat()
+            if self._last_refresh
+            else None,
             "refresh_count": self._refresh_count,
             "error_count": self._error_count,
             "cached_keys": sorted(self._cache.keys()),
@@ -171,7 +173,9 @@ class SecretsManager:
         the last successfully fetched values remain in cache.
         """
         if not _REFRESH_ENABLED:
-            logger.info("SecretsManager: background refresh disabled (SECRETS_REFRESH_ENABLED=false)")
+            logger.info(
+                "SecretsManager: background refresh disabled (SECRETS_REFRESH_ENABLED=false)"
+            )
             return
 
         self._running = True
@@ -218,7 +222,10 @@ class SecretsManager:
                 # Notify registered rotation callbacks
                 await self._notify_rotation(changed)
             else:
-                logger.debug("SecretsManager: refreshed %d secrets (no changes)", len(new_secrets))
+                logger.debug(
+                    "SecretsManager: refreshed %d secrets (no changes)",
+                    len(new_secrets),
+                )
 
     def stop(self) -> None:
         self._running = False
@@ -311,11 +318,15 @@ class SecretsManager:
                 ),
             )
             secrets_data = data["data"]["data"]
-            logger.debug("SecretsManager: fetched %d keys from Vault", len(secrets_data))
+            logger.debug(
+                "SecretsManager: fetched %d keys from Vault", len(secrets_data)
+            )
             return {k.lower(): str(v) for k, v in secrets_data.items()}
 
         except Exception as exc:
-            logger.error("SecretsManager: Vault fetch failed: %s — using cached/env values", exc)
+            logger.error(
+                "SecretsManager: Vault fetch failed: %s — using cached/env values", exc
+            )
             return self._fetch_env()
 
     async def _fetch_aws(self) -> Dict[str, str]:
@@ -343,7 +354,10 @@ class SecretsManager:
 
             raw = await loop.run_in_executor(None, _get_secret)
             secrets_data = _json.loads(raw)
-            logger.debug("SecretsManager: fetched %d keys from AWS Secrets Manager", len(secrets_data))
+            logger.debug(
+                "SecretsManager: fetched %d keys from AWS Secrets Manager",
+                len(secrets_data),
+            )
             return {k.lower(): str(v) for k, v in secrets_data.items()}
 
         except Exception as exc:

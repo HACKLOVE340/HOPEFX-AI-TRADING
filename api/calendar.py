@@ -462,7 +462,9 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
     try:
         from core.config_store import config_store
 
-        config_store.set("fomc_regime_override", _fomc_regime_override, changed_by="fomc_api")
+        config_store.set(
+            "fomc_regime_override", _fomc_regime_override, changed_by="fomc_api"
+        )
     except Exception as exc:
         logger.warning("FOMC regime persist failed (non-fatal): %s", exc)
 
@@ -486,7 +488,9 @@ async def get_fomc_regime() -> FomcRegimeStatus:
             if stored:
                 _fomc_regime_override.update(stored)
         except Exception as exc:
-            logger.warning("FOMC regime load from config_store failed (non-fatal): %s", exc)
+            logger.warning(
+                "FOMC regime load from config_store failed (non-fatal): %s", exc
+            )
 
     # Auto-expire
     if _fomc_regime_override.get("active") and _fomc_regime_override.get("expires_at"):

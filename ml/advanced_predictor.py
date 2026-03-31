@@ -257,6 +257,7 @@ class AdvancedPredictor:
         # ── Compute actual digest ─────────────────────────────────────────────
         try:
             from ml.model_registry import sha256_file as _sha256
+
             actual = _sha256(self._model_path)
         except Exception as exc:
             self._integrity_ok = False
@@ -277,18 +278,18 @@ class AdvancedPredictor:
             # Fire Sentry alert if available
             try:
                 import sentry_sdk
+
                 sentry_sdk.capture_message(
                     f"Model integrity failure: {self._integrity_msg}",
                     level="fatal",
                 )
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
             return False
 
         self._integrity_ok = True
         self._integrity_msg = (
-            f"Integrity OK ({source}): {self._model_path.name} "
-            f"sha256={actual[:16]}…"
+            f"Integrity OK ({source}): {self._model_path.name} sha256={actual[:16]}…"
         )
         logger.info("AdvancedPredictor: %s", self._integrity_msg)
         return True
@@ -406,11 +407,13 @@ class AdvancedPredictor:
             # Inject data layer features (microstructure, sentiment, macro calendar)
             try:
                 from ml.features_extended import add_data_layer_features
+
                 X = add_data_layer_features(X, as_of=as_of)
             except Exception as exc:
                 logger.debug(
                     "AdvancedPredictor: data layer feature injection failed "
-                    "(non-fatal): %s", exc
+                    "(non-fatal): %s",
+                    exc,
                 )
 
             return X.iloc[[-1]]
@@ -510,9 +513,7 @@ class AdvancedPredictor:
         # ── Base model probability ────────────────────────────────────────────
         try:
             proba = self._model.predict_proba(X)
-            base_prob = float(
-                proba[0][1] if proba.shape[1] > 1 else proba[0][0]
-            )
+            base_prob = float(proba[0][1] if proba.shape[1] > 1 else proba[0][0])
             base_prob = float(np.clip(base_prob, 0.0, 1.0))
         except Exception as exc:
             logger.warning("Model predict_proba failed: %s", exc)
@@ -576,7 +577,7 @@ class AdvancedPredictor:
         try:
             last_close = float(ohlcv.iloc[-1].get("close", ohlcv.iloc[-1].iloc[-1]))
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
         latency_ms = (time.perf_counter() - t0) * 1000.0
         return {
             "direction": "neutral",
@@ -677,6 +678,7 @@ def get_predictor() -> AdvancedPredictor:
 
 # ── Hybrid Ensemble: XGBoost + LSTM + RL ─────────────────────────────────────
 
+
 class HybridEnsemblePredictor:
     """
     Three-model ensemble: XGBoost (tabular) + LSTM (sequential) + RL agent.
@@ -729,6 +731,7 @@ class HybridEnsemblePredictor:
         """Probe which components are available without loading models."""
         try:
             import xgboost  # noqa: F401
+
             self._has_xgb = True
         except ImportError:
             self._has_xgb = False
@@ -736,6 +739,7 @@ class HybridEnsemblePredictor:
 
         try:
             import torch  # noqa: F401
+
             self._has_lstm = True
         except ImportError:
             self._has_lstm = False
@@ -743,10 +747,13 @@ class HybridEnsemblePredictor:
 
         try:
             import stable_baselines3  # noqa: F401
+
             self._has_rl = True
         except ImportError:
             self._has_rl = False
-            logger.debug("HybridEnsemble: stable_baselines3 not available — RL disabled")
+            logger.debug(
+                "HybridEnsemble: stable_baselines3 not available — RL disabled"
+            )
 
     def _effective_weights(self) -> tuple:
         """Redistribute weights for unavailable components."""
@@ -766,7 +773,9 @@ class HybridEnsemblePredictor:
                 pred._load()
             if pred._model is None:
                 return 0.5
-            X_df = pd.DataFrame(X, columns=pred._feature_names or [f"f{i}" for i in range(X.shape[1])])
+            X_df = pd.DataFrame(
+                X, columns=pred._feature_names or [f"f{i}" for i in range(X.shape[1])]
+            )
             X_df = pred._align_features(X_df)
             X_df = X_df.replace([np.inf, -np.inf], np.nan).fillna(0.0)
             proba = pred._model.predict_proba(X_df)
@@ -781,8 +790,8 @@ class HybridEnsemblePredictor:
             return 0.5
         try:
             from research.pipeline.models_deep import DeepPredictor
-            from ml.saved_models import _LSTM_MODEL_PATH  # type: ignore[import]
             import torch  # noqa: F401
+
             model_path = Path(__file__).parent / "saved_models" / "lstm_predictor.pt"
             if not model_path.exists():
                 return 0.5
@@ -799,6 +808,7 @@ class HybridEnsemblePredictor:
             return 0.5
         try:
             from ml.rl_agent import get_rl_agent
+
             agent = get_rl_agent()
             if agent is None:
                 return 0.5
@@ -829,7 +839,9 @@ class HybridEnsemblePredictor:
         w_xgb, w_lstm, w_rl = self._effective_weights()
 
         p_xgb = self._xgb_predict(X) if w_xgb > 0 else 0.5
-        p_lstm = self._lstm_predict(X_seq if X_seq is not None else X) if w_lstm > 0 else 0.5
+        p_lstm = (
+            self._lstm_predict(X_seq if X_seq is not None else X) if w_lstm > 0 else 0.5
+        )
         p_rl = self._rl_predict(X.flatten()) if w_rl > 0 else 0.5
 
         if self._meta_blend and self._meta_trained and self._meta is not None:
@@ -874,9 +886,7 @@ class HybridEnsemblePredictor:
             self._meta = meta
             self._meta_scaler = scaler
             self._meta_trained = True
-        logger.info(
-            "HybridEnsemble meta-blender trained on %d samples", len(y)
-        )
+        logger.info("HybridEnsemble meta-blender trained on %d samples", len(y))
 
     @property
     def component_status(self) -> Dict[str, Any]:
@@ -885,7 +895,11 @@ class HybridEnsemblePredictor:
             "xgb_available": self._has_xgb,
             "lstm_available": self._has_lstm,
             "rl_available": self._has_rl,
-            "effective_weights": {"xgb": round(w_xgb, 3), "lstm": round(w_lstm, 3), "rl": round(w_rl, 3)},
+            "effective_weights": {
+                "xgb": round(w_xgb, 3),
+                "lstm": round(w_lstm, 3),
+                "rl": round(w_rl, 3),
+            },
             "meta_trained": self._meta_trained,
             "predict_count": self._predict_count,
         }

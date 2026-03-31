@@ -96,11 +96,13 @@ class CircuitState:
     """Per-model circuit breaker state."""
 
     model_version: str
-    pnl_window: Deque[float] = field(default_factory=lambda: collections.deque(maxlen=WINDOW_TRADES))
+    pnl_window: Deque[float] = field(
+        default_factory=lambda: collections.deque(maxlen=WINDOW_TRADES)
+    )
     total_trades: int = 0
     consecutive_bad_windows: int = 0
     is_open: bool = False
-    opened_at: Optional[float] = None   # monotonic time
+    opened_at: Optional[float] = None  # monotonic time
     last_sharpe: Optional[float] = None
     last_evaluated_at: Optional[datetime] = None
     trip_reason: str = ""
@@ -130,7 +132,7 @@ class CircuitState:
         if std == 0:
             # All trades identical — sign of mean determines direction
             if mean > 0:
-                return float(ANNUALISE_FACTOR * 1e6)   # perfect wins
+                return float(ANNUALISE_FACTOR * 1e6)  # perfect wins
             elif mean < 0:
                 return float(-ANNUALISE_FACTOR * 1e6)  # perfect losses
             return 0.0
@@ -199,9 +201,7 @@ class SharpeCircuitBreaker:
             state.opened_at = None
             state.consecutive_bad_windows = 0
             state.trip_reason = ""
-            logger.info(
-                "SharpeCircuitBreaker: manually reset for '%s'", model_version
-            )
+            logger.info("SharpeCircuitBreaker: manually reset for '%s'", model_version)
 
     def get_status(self) -> Dict[str, dict]:
         """Return current state for all tracked model versions."""
@@ -213,7 +213,9 @@ class SharpeCircuitBreaker:
                 "total_trades": s.total_trades,
                 "window_trades": len(s.pnl_window),
                 "trip_reason": s.trip_reason,
-                "opened_at": datetime.fromtimestamp(s.opened_at, tz=timezone.utc).isoformat()
+                "opened_at": datetime.fromtimestamp(
+                    s.opened_at, tz=timezone.utc
+                ).isoformat()
                 if s.opened_at
                 else None,
                 "last_evaluated_at": s.last_evaluated_at.isoformat()

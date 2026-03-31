@@ -40,11 +40,13 @@ async def nuclear_price_bridge(state: Any) -> None:
     so the paper broker and any downstream consumers see live prices without
     polling OANDA or any other broker endpoint.
     """
-    has_key = any([
-        os.getenv("FINNHUB_API_KEY"),
-        os.getenv("TWELVE_API_KEY"),
-        os.getenv("POLYGON_API_KEY"),
-    ])
+    has_key = any(
+        [
+            os.getenv("FINNHUB_API_KEY"),
+            os.getenv("TWELVE_API_KEY"),
+            os.getenv("POLYGON_API_KEY"),
+        ]
+    )
     if not has_key:
         logger.info(
             "nuclear_price_bridge disabled — set FINNHUB_API_KEY, TWELVE_API_KEY, "

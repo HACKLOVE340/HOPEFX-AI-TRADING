@@ -161,12 +161,15 @@ async def chat_status(user: TokenPayload = Depends(get_current_user)):
     llm_error: Optional[str] = None
     try:
         from brain.llm_agent import LLMAgent  # noqa: F401
+
         llm_available = True
     except ImportError as exc:
         llm_error = str(exc)
 
     # Count active sessions for this user
-    user_sessions = [k for k in _agents if k.startswith(f"{user.sub}:") or k == user.sub]
+    user_sessions = [
+        k for k in _agents if k.startswith(f"{user.sub}:") or k == user.sub
+    ]
 
     ready = api_key_set and llm_available
 

@@ -103,8 +103,11 @@ async def push_status(user: TokenPayload = Depends(get_current_user)):
 # The React Native app sends Expo push tokens (not raw FCM tokens).
 # This endpoint accepts the Expo token format and stores it alongside FCM tokens.
 
+
 class ExpoPushTokenBody(BaseModel):
-    token: str = Field(..., min_length=10, description="Expo push token (ExponentPushToken[...])")
+    token: str = Field(
+        ..., min_length=10, description="Expo push token (ExponentPushToken[...])"
+    )
     platform: str = Field("android", description="'ios' or 'android'")
     device_id: str = Field("unknown", description="Device model ID")
 
@@ -121,7 +124,9 @@ async def register_expo_push_token(
     push_manager.register_device(user.sub, body.token)
     logger.info(
         "Expo push token registered: user=%s platform=%s device=%s",
-        user.sub, body.platform, body.device_id,
+        user.sub,
+        body.platform,
+        body.device_id,
     )
     return {
         "registered": True,
@@ -148,11 +153,13 @@ _DEFAULT_PREFS = {
 
 def _load_notif_prefs(user_id: str) -> dict:
     from api.db_store import db_get
+
     return db_get(_NOTIF_PREFS_KEY.format(uid=user_id)) or _DEFAULT_PREFS.copy()
 
 
 def _save_notif_prefs(user_id: str, prefs: dict) -> None:
     from api.db_store import db_set
+
     db_set(_NOTIF_PREFS_KEY.format(uid=user_id), prefs, changed_by=user_id)
 
 

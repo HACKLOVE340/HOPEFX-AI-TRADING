@@ -67,24 +67,27 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DrawdownResult:
     """Result of a single equity update."""
+
     equity: float
     balance: float
 
     # All-time trailing HWM drawdown
-    total_drawdown_pct: float       # current DD from all-time HWM (0–1)
-    total_hwm: float                # all-time peak equity
-    total_breach: bool              # True if total_drawdown_pct >= max_total_dd_pct
-    total_alert: bool               # True if >= alert threshold (e.g. 80% of limit)
+    total_drawdown_pct: float  # current DD from all-time HWM (0–1)
+    total_hwm: float  # all-time peak equity
+    total_breach: bool  # True if total_drawdown_pct >= max_total_dd_pct
+    total_alert: bool  # True if >= alert threshold (e.g. 80% of limit)
 
     # Daily drawdown
-    daily_drawdown_pct: float       # current DD from day-open anchor (0–1)
-    daily_open: float               # equity/balance at day open
-    daily_breach: bool              # True if daily_drawdown_pct >= max_daily_dd_pct
-    daily_alert: bool               # True if >= alert threshold
+    daily_drawdown_pct: float  # current DD from day-open anchor (0–1)
+    daily_open: float  # equity/balance at day open
+    daily_breach: bool  # True if daily_drawdown_pct >= max_daily_dd_pct
+    daily_alert: bool  # True if >= alert threshold
 
     # Metadata
-    drawdown_mode: str              # "equity" or "balance"
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    drawdown_mode: str  # "equity" or "balance"
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
 
 class DrawdownTracker:
@@ -160,7 +163,8 @@ class DrawdownTracker:
             self._day = today
             logger.info(
                 "DrawdownTracker: day rollover — daily_open=%.2f mode=%s",
-                self._daily_open, self.drawdown_mode,
+                self._daily_open,
+                self.drawdown_mode,
             )
 
         # ── Trailing HWM update ───────────────────────────────────────────────
@@ -199,25 +203,32 @@ class DrawdownTracker:
         if total_breach:
             logger.critical(
                 "TOTAL DRAWDOWN BREACH: %.2f%% >= %.2f%% (HWM=%.2f equity=%.2f)",
-                total_dd * 100, self.max_total_dd_pct * 100,
-                self._total_hwm, equity,
+                total_dd * 100,
+                self.max_total_dd_pct * 100,
+                self._total_hwm,
+                equity,
             )
         elif total_alert:
             logger.warning(
                 "Total drawdown alert: %.2f%% approaching %.2f%% limit",
-                total_dd * 100, self.max_total_dd_pct * 100,
+                total_dd * 100,
+                self.max_total_dd_pct * 100,
             )
 
         if daily_breach:
             logger.critical(
                 "DAILY DRAWDOWN BREACH: %.2f%% >= %.2f%% (open=%.2f %s=%.2f)",
-                daily_dd * 100, self.max_daily_dd_pct * 100,
-                anchor, self.drawdown_mode, measure,
+                daily_dd * 100,
+                self.max_daily_dd_pct * 100,
+                anchor,
+                self.drawdown_mode,
+                measure,
             )
         elif daily_alert:
             logger.warning(
                 "Daily drawdown alert: %.2f%% approaching %.2f%% limit",
-                daily_dd * 100, self.max_daily_dd_pct * 100,
+                daily_dd * 100,
+                self.max_daily_dd_pct * 100,
             )
 
         return DrawdownResult(
@@ -256,7 +267,8 @@ class DrawdownTracker:
             self._last_balance = balance_after
         logger.debug(
             "DrawdownTracker.record_fill: pnl=%.2f daily_realised=%.2f",
-            pnl, self._daily_realised_pnl,
+            pnl,
+            self._daily_realised_pnl,
         )
 
     # ── Modify-order risk re-check ────────────────────────────────────────────
@@ -302,9 +314,15 @@ class DrawdownTracker:
         # Also check that we're not already in a daily breach
         result = self.update(current_equity)
         if result.daily_breach:
-            return False, f"Daily drawdown already breached ({result.daily_drawdown_pct:.2%})"
+            return (
+                False,
+                f"Daily drawdown already breached ({result.daily_drawdown_pct:.2%})",
+            )
         if result.total_breach:
-            return False, f"Total drawdown already breached ({result.total_drawdown_pct:.2%})"
+            return (
+                False,
+                f"Total drawdown already breached ({result.total_drawdown_pct:.2%})",
+            )
 
         return True, "OK"
 
@@ -333,7 +351,9 @@ class DrawdownTracker:
     def current_daily_dd(self) -> float:
         """Current daily drawdown fraction from day-open anchor."""
         anchor = self._daily_open
-        measure = self._last_balance if self.drawdown_mode == "balance" else self._last_equity
+        measure = (
+            self._last_balance if self.drawdown_mode == "balance" else self._last_equity
+        )
         if anchor <= 0:
             return 0.0
         return max(0.0, (anchor - measure) / anchor)

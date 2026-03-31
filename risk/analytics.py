@@ -35,7 +35,7 @@ from __future__ import annotations
 import logging
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 from scipy import stats
@@ -140,10 +140,10 @@ class MultiDayVaRResult:
 
     confidence: float
     horizon_days: int
-    var_historical: float   # overlapping-returns historical VaR
-    var_parametric: float   # parametric scaled by overlapping-returns vol
+    var_historical: float  # overlapping-returns historical VaR
+    var_parametric: float  # parametric scaled by overlapping-returns vol
     var_cornish_fisher: float
-    n_overlapping: int      # number of overlapping h-day windows used
+    n_overlapping: int  # number of overlapping h-day windows used
 
     @property
     def var(self) -> float:
@@ -162,9 +162,9 @@ class EWMAVaRResult:
 
     confidence: float
     horizon_days: int
-    ewma_vol_daily: float   # current EWMA daily vol estimate
+    ewma_vol_daily: float  # current EWMA daily vol estimate
     ewma_vol_scaled: float  # scaled to horizon (sqrt(h) * daily_vol — valid for EWMA)
-    var_ewma: float         # parametric VaR from EWMA vol
+    var_ewma: float  # parametric VaR from EWMA vol
     lambda_: float = 0.94
 
 
@@ -184,8 +184,8 @@ class GARCHVaRResult:
     alpha: float
     beta: float
     sigma2_forecast: float  # h-day ahead conditional variance
-    var_garch: float        # parametric VaR from GARCH forecast
-    converged: bool         # whether MLE converged
+    var_garch: float  # parametric VaR from GARCH forecast
+    converged: bool  # whether MLE converged
 
 
 @dataclass

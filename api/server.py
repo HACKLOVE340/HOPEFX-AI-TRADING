@@ -27,6 +27,7 @@ except ImportError:
 from infrastructure.health import HealthStatus, get_health_checker
 from infrastructure.logging import get_logger
 from infrastructure.metrics import get_metrics_registry
+
 logger = logging.getLogger(__name__)
 
 logger = get_logger(__name__)
@@ -66,6 +67,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         "localhost" in o or "127." in o for o in _allowed_origins
     ):
         import sys as _sys
+
         logger.critical(
             "STARTUP BLOCKED: ALLOWED_ORIGINS is localhost-only in production. "
             "Set ALLOWED_ORIGINS=https://app.yourdomain.com before deploying."
@@ -99,11 +101,13 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         # must be set for live ticks.  If none are set the stream is skipped
         # gracefully and the WebSocket falls back to no_live_feed.
         _nuclear_stream_task = None
-        _has_any_stream_key = any([
-            os.getenv("FINNHUB_API_KEY"),
-            os.getenv("TWELVE_API_KEY"),
-            os.getenv("POLYGON_API_KEY"),
-        ])
+        _has_any_stream_key = any(
+            [
+                os.getenv("FINNHUB_API_KEY"),
+                os.getenv("TWELVE_API_KEY"),
+                os.getenv("POLYGON_API_KEY"),
+            ]
+        )
 
         if _has_any_stream_key:
             try:
@@ -112,11 +116,16 @@ def create_api_app(trading_app=None) -> Optional[Any]:
 
                 class _EventBusSubscriber:
                     """Bridge: forwards NuclearStreamer ticks onto the EventBus."""
+
                     async def on_new_price(self, price: float) -> None:
                         try:
-                            await bus.publish(CH_TICK, {"price": price, "symbol": "XAUUSD"})
+                            await bus.publish(
+                                CH_TICK, {"price": price, "symbol": "XAUUSD"}
+                            )
                         except Exception as _exc:
-                            logger.debug("NuclearStreamer EventBus forward error: %s", _exc)
+                            logger.debug(
+                                "NuclearStreamer EventBus forward error: %s", _exc
+                            )
 
                 _streamer = NuclearStreamer()
                 _streamer.subscribe(_EventBusSubscriber())
@@ -159,7 +168,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
             try:
                 _scheduler.shutdown(wait=False)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
         if _nuclear_stream_task and not _nuclear_stream_task.done():
             _nuclear_stream_task.cancel()
             try:
@@ -436,7 +445,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         import json as _json
         from pathlib import Path as _Path
 
-        log_dir  = _os.getenv("LOG_DIR", "logs")
+        log_dir = _os.getenv("LOG_DIR", "logs")
         app_name = _os.getenv("APP_NAME", "hopefx")
         log_path = _Path(log_dir) / f"{app_name}.log"
 
@@ -445,7 +454,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
                 "logs": [],
                 "source": str(log_path),
                 "error": f"Log file not found: {log_path}. "
-                         "Ensure LOG_DIR and APP_NAME env vars match the logging setup.",
+                "Ensure LOG_DIR and APP_NAME env vars match the logging setup.",
             }
 
         try:
@@ -458,7 +467,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
                 fh.seek(seek_pos)
                 raw = fh.read().decode("utf-8", errors="replace")
 
-            all_lines = [l for l in raw.splitlines() if l.strip()]
+            all_lines = [line for line in raw.splitlines() if line.strip()]
             tail = all_lines[-lines:] if len(all_lines) > lines else all_lines
 
             # Attempt JSON parse (structured logging format)

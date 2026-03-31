@@ -87,7 +87,9 @@ def _probe_components(app_state: Any, kill_switch: Any) -> dict:
     _pe = getattr(app_state, "prop_enforcer", None)
     if _pe is not None:
         _pe_status = _pe.status()
-        components["prop_enforcer"] = "halted" if _pe_status.get("halted") else "healthy"
+        components["prop_enforcer"] = (
+            "halted" if _pe_status.get("halted") else "healthy"
+        )
     else:
         components["prop_enforcer"] = "unavailable"
 
@@ -112,7 +114,9 @@ def _probe_components(app_state: Any, kill_switch: Any) -> dict:
             if hasattr(_broker, "connected"):
                 components["broker"] = "healthy" if _broker.connected else "degraded"
             elif hasattr(_broker, "health_check"):
-                components["broker"] = "healthy" if _broker.health_check() else "degraded"
+                components["broker"] = (
+                    "healthy" if _broker.health_check() else "degraded"
+                )
             else:
                 components["broker"] = "healthy"
         except Exception as _be:
@@ -204,6 +208,7 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
         if app_state.db_engine:
             try:
                 from sqlalchemy import text as _text
+
                 with app_state.db_engine.connect() as _conn:
                     _conn.execute(_text("SELECT 1"))
             except Exception as _dbe:
@@ -216,6 +221,7 @@ def register_health_routes(app: FastAPI, app_state: Any, kill_switch: Any) -> No
         # 3. Lockdown active? Remove pod from LB during nuclear response.
         try:
             import redis as _redis_sync
+
             _r = _redis_sync.from_url(
                 os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                 socket_connect_timeout=1,

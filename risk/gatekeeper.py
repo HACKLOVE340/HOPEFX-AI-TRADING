@@ -32,6 +32,7 @@ On any breach
 - Logs at WARNING with structured fields.
 - Writes rejection to DataLineageStore.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -41,38 +42,40 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-from core.event_bus import bus, CH_SIGNAL, CH_ORDER, CH_BREACH
+from core.event_bus import bus, CH_SIGNAL, CH_BREACH
 
 logger = logging.getLogger(__name__)
 
 # ── config ────────────────────────────────────────────────────────────────────
-_DAILY_DD_LIMIT:       float = float(os.getenv("RISK_MAX_DAILY_LOSS_PCT",    "0.05"))
-_MAX_DD_LIMIT:         float = float(os.getenv("RISK_MAX_DRAWDOWN_PCT",      "0.10"))
-_MIN_CONFIDENCE:       float = float(os.getenv("GATEKEEPER_MIN_CONF",        "0.55"))
-_MAX_DAILY_TRADES:     int   = int(os.getenv("GATEKEEPER_MAX_DAILY_TRADES",  "20"))
-_PAUSE_AFTER_BREACH_S: float = float(os.getenv("GATEKEEPER_PAUSE_S",         "60"))
-_MIN_DATA_QUALITY:     float = float(os.getenv("GATEKEEPER_MIN_DATA_QUALITY","0.40"))
-_MAX_SPREAD_USD:       float = float(os.getenv("GATEKEEPER_MAX_SPREAD_USD",  "2.00"))
-_SENT_BLACKOUT_THRESH: float = float(os.getenv("GATEKEEPER_SENT_BLACKOUT",   "0.85"))
-_IMPACT_BLACKOUT:      float = float(os.getenv("GATEKEEPER_IMPACT_BLACKOUT", "0.75"))
+_DAILY_DD_LIMIT: float = float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05"))
+_MAX_DD_LIMIT: float = float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10"))
+_MIN_CONFIDENCE: float = float(os.getenv("GATEKEEPER_MIN_CONF", "0.55"))
+_MAX_DAILY_TRADES: int = int(os.getenv("GATEKEEPER_MAX_DAILY_TRADES", "20"))
+_PAUSE_AFTER_BREACH_S: float = float(os.getenv("GATEKEEPER_PAUSE_S", "60"))
+_MIN_DATA_QUALITY: float = float(os.getenv("GATEKEEPER_MIN_DATA_QUALITY", "0.40"))
+_MAX_SPREAD_USD: float = float(os.getenv("GATEKEEPER_MAX_SPREAD_USD", "2.00"))
+_SENT_BLACKOUT_THRESH: float = float(os.getenv("GATEKEEPER_SENT_BLACKOUT", "0.85"))
+_IMPACT_BLACKOUT: float = float(os.getenv("GATEKEEPER_IMPACT_BLACKOUT", "0.75"))
 
 # Public aliases used by tests and external callers
-MAX_DAILY_TRADES:    int   = _MAX_DAILY_TRADES
-DAILY_DD_LIMIT_PCT:  float = _DAILY_DD_LIMIT
+MAX_DAILY_TRADES: int = _MAX_DAILY_TRADES
+DAILY_DD_LIMIT_PCT: float = _DAILY_DD_LIMIT
 
 
 # ── Gate result ───────────────────────────────────────────────────────────────
 
+
 @dataclass
 class GateResult:
-    passed:   bool
-    reason:   str = ""
+    passed: bool
+    reason: str = ""
     failures: List[Dict] = field(default_factory=list)
 
 
 # ── News calendar ─────────────────────────────────────────────────────────────
+
 
 class _NewsCalendar:
     """Lightweight news-event calendar for pre-trade blackout checks.
@@ -96,7 +99,9 @@ class _NewsCalendar:
 
     def is_blackout(self, window_minutes: int = None) -> bool:
         """Return True if any registered event is within *window_minutes* of now."""
-        window = window_minutes if window_minutes is not None else self._BLACKOUT_MINUTES
+        window = (
+            window_minutes if window_minutes is not None else self._BLACKOUT_MINUTES
+        )
         now = datetime.now(timezone.utc)
         cutoff = timedelta(minutes=window)
         for ev in self._events:
@@ -113,19 +118,20 @@ class _NewsCalendar:
 
 # ── Equity tracker ────────────────────────────────────────────────────────────
 
+
 class _EquityTracker:
     def __init__(self, initial: float) -> None:
-        self._initial  = initial
-        self._peak     = initial
-        self._current  = initial
+        self._initial = initial
+        self._peak = initial
+        self._current = initial
         self._day_open = initial
-        self._day      = datetime.now(timezone.utc).day
+        self._day = datetime.now(timezone.utc).day
 
     def update(self, equity: float) -> None:
         today = datetime.now(timezone.utc).day
         if today != self._day:
             self._day_open = equity
-            self._day      = today
+            self._day = today
         self._current = equity
         if equity > self._peak:
             self._peak = equity
@@ -145,6 +151,7 @@ class _EquityTracker:
 
 # ── Gatekeeper ────────────────────────────────────────────────────────────────
 
+
 class Gatekeeper:
     """
     Pre-trade signal filter.
@@ -159,18 +166,18 @@ class Gatekeeper:
     """
 
     def __init__(self, orchestrator=None, lineage_store=None) -> None:
-        initial_balance    = float(os.getenv("INITIAL_BALANCE", "100000"))
-        self._orch         = orchestrator
-        self._lineage      = lineage_store
-        self._equity       = _EquityTracker(initial_balance)
-        self._calendar     = _NewsCalendar()
-        self._kill_active: bool  = False
+        initial_balance = float(os.getenv("INITIAL_BALANCE", "100000"))
+        self._orch = orchestrator
+        self._lineage = lineage_store
+        self._equity = _EquityTracker(initial_balance)
+        self._calendar = _NewsCalendar()
+        self._kill_active: bool = False
         self._paused_until: float = 0.0
-        self._daily_trades: int  = 0
-        self._trade_day:    int  = datetime.now(timezone.utc).day
-        self._running:      bool = False
-        self._pass_count:   int  = 0
-        self._block_count:  int  = 0
+        self._daily_trades: int = 0
+        self._trade_day: int = datetime.now(timezone.utc).day
+        self._running: bool = False
+        self._pass_count: int = 0
+        self._block_count: int = 0
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -179,7 +186,9 @@ class Gatekeeper:
         self._running = True
         logger.info(
             "Gatekeeper starting — daily_dd=%.1f%% max_dd=%.1f%% min_conf=%.2f",
-            _DAILY_DD_LIMIT * 100, _MAX_DD_LIMIT * 100, _MIN_CONFIDENCE,
+            _DAILY_DD_LIMIT * 100,
+            _MAX_DD_LIMIT * 100,
+            _MIN_CONFIDENCE,
         )
         asyncio.create_task(self._breach_listener(), name="gatekeeper_breach_listener")
         await self._signal_consumer()
@@ -188,7 +197,8 @@ class Gatekeeper:
         self._running = False
         logger.info(
             "Gatekeeper stopped — passed=%d blocked=%d",
-            self._pass_count, self._block_count,
+            self._pass_count,
+            self._block_count,
         )
 
     # ── Direct evaluation (called by HopeFXEngine) ────────────────────────────
@@ -204,7 +214,7 @@ class Gatekeeper:
         failures = self._run_checks_on_signal(signal)
 
         if not failures:
-            self._pass_count   += 1
+            self._pass_count += 1
             self._daily_trades += 1
             return GateResult(passed=True)
 
@@ -256,20 +266,21 @@ class Gatekeeper:
         failures = self._run_checks_on_dict(signal)
 
         if not failures:
-            self._pass_count   += 1
+            self._pass_count += 1
             self._daily_trades += 1
             order_request = {
-                "type":       "order_request",
-                "symbol":     signal.get("symbol"),
-                "direction":  signal.get("direction"),
+                "type": "order_request",
+                "symbol": signal.get("symbol"),
+                "direction": signal.get("direction"),
                 "confidence": signal.get("confidence"),
-                "mid":        signal.get("mid"),
-                "timestamp":  datetime.now(timezone.utc).isoformat(),
+                "mid": signal.get("mid"),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "signal_ref": signal.get("tick_seq"),
             }
             logger.info(
                 "GATE PASS  %s %s  conf=%.4f",
-                signal.get("direction"), signal.get("symbol"),
+                signal.get("direction"),
+                signal.get("symbol"),
                 signal.get("confidence", 0),
             )
             await bus.publish_order(order_request)
@@ -277,13 +288,13 @@ class Gatekeeper:
             self._block_count += 1
             primary = failures[0]["reason"]
             breach = {
-                "type":          "breach",
-                "reason":        primary,
+                "type": "breach",
+                "reason": primary,
                 "checks_failed": failures,
-                "signal":        signal,
-                "daily_dd":      round(self._equity.daily_dd * 100, 4),
-                "max_dd":        round(self._equity.max_dd * 100, 4),
-                "timestamp":     datetime.now(timezone.utc).isoformat(),
+                "signal": signal,
+                "daily_dd": round(self._equity.daily_dd * 100, 4),
+                "max_dd": round(self._equity.max_dd * 100, 4),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             await bus.publish_breach(breach)
             if primary != "kill_switch_active":
@@ -295,34 +306,34 @@ class Gatekeeper:
         """Run checks against an ExecutionSignal object (direct mode)."""
         equity = getattr(self, "_equity", _EquityTracker(0))
         return self._run_checks_params(
-            kill_active    = getattr(self, "_kill_active", False),
-            paused_until   = getattr(self, "_paused_until", 0.0),
-            daily_dd       = equity.daily_dd,
-            max_dd         = equity.max_dd,
-            data_quality   = self._get_data_quality(signal),
-            is_blackout    = self._get_blackout(),
-            impact_score   = self._get_impact_score(signal),
-            sentiment_score= self._get_sentiment(signal),
-            daily_trades   = getattr(self, "_daily_trades", 0),
-            confidence     = getattr(signal, "confidence", 0.0),
-            spread         = getattr(signal, "tick_spread", 0.0),
+            kill_active=getattr(self, "_kill_active", False),
+            paused_until=getattr(self, "_paused_until", 0.0),
+            daily_dd=equity.daily_dd,
+            max_dd=equity.max_dd,
+            data_quality=self._get_data_quality(signal),
+            is_blackout=self._get_blackout(),
+            impact_score=self._get_impact_score(signal),
+            sentiment_score=self._get_sentiment(signal),
+            daily_trades=getattr(self, "_daily_trades", 0),
+            confidence=getattr(signal, "confidence", 0.0),
+            spread=getattr(signal, "tick_spread", 0.0),
         )
 
     def _run_checks_on_dict(self, signal: dict) -> List[Dict]:
         """Run checks against a signal dict (event-bus mode)."""
         equity = getattr(self, "_equity", _EquityTracker(0))
         return self._run_checks_params(
-            kill_active    = getattr(self, "_kill_active", False),
-            paused_until   = getattr(self, "_paused_until", 0.0),
-            daily_dd       = equity.daily_dd,
-            max_dd         = equity.max_dd,
-            data_quality   = self._get_data_quality_from_orch(),
-            is_blackout    = self._get_blackout(),
-            impact_score   = self._get_impact_score_from_orch(),
-            sentiment_score= self._get_sentiment_from_orch(),
-            daily_trades   = getattr(self, "_daily_trades", 0),
-            confidence     = float(signal.get("confidence", 0.0)),
-            spread         = float(signal.get("spread", 0.0)),
+            kill_active=getattr(self, "_kill_active", False),
+            paused_until=getattr(self, "_paused_until", 0.0),
+            daily_dd=equity.daily_dd,
+            max_dd=equity.max_dd,
+            data_quality=self._get_data_quality_from_orch(),
+            is_blackout=self._get_blackout(),
+            impact_score=self._get_impact_score_from_orch(),
+            sentiment_score=self._get_sentiment_from_orch(),
+            daily_trades=getattr(self, "_daily_trades", 0),
+            confidence=float(signal.get("confidence", 0.0)),
+            spread=float(signal.get("spread", 0.0)),
         )
 
     def _run_checks(self, signal) -> List[Dict]:
@@ -338,17 +349,17 @@ class Gatekeeper:
 
     @staticmethod
     def _run_checks_params(
-        kill_active:     bool,
-        paused_until:    float,
-        daily_dd:        float,
-        max_dd:          float,
-        data_quality:    float,
-        is_blackout:     bool,
-        impact_score:    float,
+        kill_active: bool,
+        paused_until: float,
+        daily_dd: float,
+        max_dd: float,
+        data_quality: float,
+        is_blackout: bool,
+        impact_score: float,
         sentiment_score: float,
-        daily_trades:    int,
-        confidence:      float,
-        spread:          float,
+        daily_trades: int,
+        confidence: float,
+        spread: float,
     ) -> List[Dict]:
         failures: List[Dict] = []
 
@@ -360,70 +371,90 @@ class Gatekeeper:
         _paused = paused_until if paused_until is not None else 0.0
         if time.monotonic() < _paused:
             remaining = _paused - time.monotonic()
-            return [{"reason": "post_breach_pause", "detail": f"{remaining:.0f}s remaining"}]
+            return [
+                {"reason": "post_breach_pause", "detail": f"{remaining:.0f}s remaining"}
+            ]
 
         # 3. Daily drawdown
         if daily_dd >= _DAILY_DD_LIMIT:
-            failures.append({
-                "reason": "daily_dd_limit",
-                "detail": f"Daily DD {daily_dd*100:.2f}% >= {_DAILY_DD_LIMIT*100:.1f}%",
-            })
+            failures.append(
+                {
+                    "reason": "daily_dd_limit",
+                    "detail": f"Daily DD {daily_dd * 100:.2f}% >= {_DAILY_DD_LIMIT * 100:.1f}%",
+                }
+            )
 
         # 4. Max drawdown
         if max_dd >= _MAX_DD_LIMIT:
-            failures.append({
-                "reason": "max_dd_limit",
-                "detail": f"Max DD {max_dd*100:.2f}% >= {_MAX_DD_LIMIT*100:.1f}%",
-            })
+            failures.append(
+                {
+                    "reason": "max_dd_limit",
+                    "detail": f"Max DD {max_dd * 100:.2f}% >= {_MAX_DD_LIMIT * 100:.1f}%",
+                }
+            )
 
         # 5. Data quality (orchestrator authoritative)
         if data_quality < _MIN_DATA_QUALITY:
-            failures.append({
-                "reason": "data_quality_low",
-                "detail": f"Quality {data_quality:.3f} < {_MIN_DATA_QUALITY}",
-            })
+            failures.append(
+                {
+                    "reason": "data_quality_low",
+                    "detail": f"Quality {data_quality:.3f} < {_MIN_DATA_QUALITY}",
+                }
+            )
 
         # 6. News blackout (orchestrator MacroCalendarEngine)
         if is_blackout:
-            failures.append({
-                "reason": "news_blackout",
-                "detail": "High-impact news event within blackout window.",
-            })
+            failures.append(
+                {
+                    "reason": "news_blackout",
+                    "detail": "High-impact news event within blackout window.",
+                }
+            )
 
         # 7. Macro impact blackout
         if impact_score > _IMPACT_BLACKOUT:
-            failures.append({
-                "reason": "macro_impact_blackout",
-                "detail": f"Impact {impact_score:.3f} > {_IMPACT_BLACKOUT}",
-            })
+            failures.append(
+                {
+                    "reason": "macro_impact_blackout",
+                    "detail": f"Impact {impact_score:.3f} > {_IMPACT_BLACKOUT}",
+                }
+            )
 
         # 8. Extreme sentiment blackout
         if abs(sentiment_score) > _SENT_BLACKOUT_THRESH:
-            failures.append({
-                "reason": "sentiment_blackout",
-                "detail": f"Sentiment {sentiment_score:.3f} exceeds ±{_SENT_BLACKOUT_THRESH}",
-            })
+            failures.append(
+                {
+                    "reason": "sentiment_blackout",
+                    "detail": f"Sentiment {sentiment_score:.3f} exceeds ±{_SENT_BLACKOUT_THRESH}",
+                }
+            )
 
         # 9. Daily trade cap
         if daily_trades >= _MAX_DAILY_TRADES:
-            failures.append({
-                "reason": "daily_trade_cap",
-                "detail": f"Trades {daily_trades} >= cap {_MAX_DAILY_TRADES}",
-            })
+            failures.append(
+                {
+                    "reason": "daily_trade_cap",
+                    "detail": f"Trades {daily_trades} >= cap {_MAX_DAILY_TRADES}",
+                }
+            )
 
         # 10. Confidence floor
         if confidence < _MIN_CONFIDENCE:
-            failures.append({
-                "reason": "low_confidence",
-                "detail": f"Confidence {confidence:.4f} < floor {_MIN_CONFIDENCE}",
-            })
+            failures.append(
+                {
+                    "reason": "low_confidence",
+                    "detail": f"Confidence {confidence:.4f} < floor {_MIN_CONFIDENCE}",
+                }
+            )
 
         # 11. Spread gate
         if spread > _MAX_SPREAD_USD:
-            failures.append({
-                "reason": "spread_too_wide",
-                "detail": f"Spread ${spread:.4f} > max ${_MAX_SPREAD_USD}",
-            })
+            failures.append(
+                {
+                    "reason": "spread_too_wide",
+                    "detail": f"Spread ${spread:.4f} > max ${_MAX_SPREAD_USD}",
+                }
+            )
 
         return failures
 
@@ -498,7 +529,7 @@ class Gatekeeper:
         today = datetime.now(timezone.utc).day
         if today != self._trade_day:
             self._daily_trades = 0
-            self._trade_day    = today
+            self._trade_day = today
 
     def _write_rejection_lineage(
         self, signal, reason: str, failures: List[Dict]
@@ -507,13 +538,13 @@ class Gatekeeper:
             return
         try:
             self._lineage.record_signal(
-                direction     = f"GATE_BLOCK:{getattr(signal, 'direction', '?')}",
-                confidence    = getattr(signal, "confidence", 0.0),
-                probability   = 0.0,
-                features_hash = "",
-                model_version = f"gatekeeper:{reason}",
-                lineage_id    = getattr(signal, "signal_id", str(uuid.uuid4())),
-                symbol        = getattr(signal, "symbol", "XAU_USD"),
+                direction=f"GATE_BLOCK:{getattr(signal, 'direction', '?')}",
+                confidence=getattr(signal, "confidence", 0.0),
+                probability=0.0,
+                features_hash="",
+                model_version=f"gatekeeper:{reason}",
+                lineage_id=getattr(signal, "signal_id", str(uuid.uuid4())),
+                symbol=getattr(signal, "symbol", "XAU_USD"),
             )
         except Exception as exc:
             logger.debug("Gatekeeper lineage write failed: %s", exc)
@@ -535,13 +566,13 @@ class Gatekeeper:
 
     def metrics(self) -> dict:
         return {
-            "pass_count":    self._pass_count,
-            "block_count":   self._block_count,
-            "daily_trades":  self._daily_trades,
-            "daily_dd_pct":  round(self._equity.daily_dd * 100, 4),
-            "max_dd_pct":    round(self._equity.max_dd * 100, 4),
-            "kill_active":   self._kill_active,
-            "paused":        time.monotonic() < self._paused_until,
+            "pass_count": self._pass_count,
+            "block_count": self._block_count,
+            "daily_trades": self._daily_trades,
+            "daily_dd_pct": round(self._equity.daily_dd * 100, 4),
+            "max_dd_pct": round(self._equity.max_dd * 100, 4),
+            "kill_active": self._kill_active,
+            "paused": time.monotonic() < self._paused_until,
         }
 
 
@@ -553,9 +584,10 @@ def _make_gatekeeper() -> Gatekeeper:
     # Never import data_layer.lineage.store directly from outside data_layer/.
     try:
         from data_layer.orchestrator import orchestrator
+
         return Gatekeeper(
-            orchestrator  = orchestrator,
-            lineage_store = orchestrator._lineage,
+            orchestrator=orchestrator,
+            lineage_store=orchestrator._lineage,
         )
     except Exception:
         return Gatekeeper()

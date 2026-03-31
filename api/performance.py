@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/performance", tags=["Performance"])
 
-import asyncio as _asyncio  # noqa: E402
 from pathlib import Path as _Path  # noqa: E402
 
 
@@ -182,7 +181,6 @@ async def generate_weekly_report():
         from reports.weekly_report import (
             WeeklyReportGenerator,
             _load_trade_data,
-            _render_text,
         )
 
         trades, equity_curve, starting_equity = await _load_trade_data()
@@ -206,6 +204,7 @@ async def generate_weekly_report():
     except Exception as exc:
         logger.error("Weekly report generation failed: %s", exc)
         from fastapi import HTTPException
+
         raise HTTPException(status_code=500, detail=str(exc))
 
 

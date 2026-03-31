@@ -34,8 +34,10 @@ router = APIRouter()
 
 # ── Request / response models ─────────────────────────────────────────────────
 
+
 class NuclearResumeRequest(BaseModel):
     """Body for POST /nuclear/resume."""
+
     deactivation_token: Optional[str] = Field(
         default=None,
         description=(
@@ -47,22 +49,28 @@ class NuclearResumeRequest(BaseModel):
 
 class NuclearSetRiskRequest(BaseModel):
     """Body for POST /nuclear/set_risk."""
+
     fraction: float = Field(
-        ..., ge=0.0, le=1.0,
+        ...,
+        ge=0.0,
+        le=1.0,
         description="Max-risk fraction [0, 1]. 0 = no new positions.",
     )
 
 
 class NuclearHedgeRequest(BaseModel):
     """Body for POST /nuclear/hedge/activate."""
+
     symbol: str = Field(default="XAU_USD", description="Symbol to hedge.")
 
 
 # ── Lazy dependency helpers ───────────────────────────────────────────────────
 
+
 def _get_supervisor():
     try:
         from brain.nuclear_supervisor import get_nuclear_supervisor
+
         return get_nuclear_supervisor()
     except Exception as exc:
         raise HTTPException(
@@ -74,6 +82,7 @@ def _get_supervisor():
 def _get_orchestrator():
     try:
         from risk.orchestrator import risk_orchestrator
+
         return risk_orchestrator
     except Exception as exc:
         raise HTTPException(
@@ -85,6 +94,7 @@ def _get_orchestrator():
 def _get_kill_switch():
     try:
         from kill_switch import kill_switch
+
         return kill_switch
     except Exception as exc:
         raise HTTPException(
@@ -94,6 +104,7 @@ def _get_kill_switch():
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/status",

@@ -68,19 +68,17 @@ router = APIRouter(tags=["Platform"])
 # PostgreSQL. The structures are intentionally simple so they can be swapped
 # without changing the API surface.
 
-_sessions: Dict[str, dict] = {}           # session_id → session info
-_audit_log: List[dict] = []               # append-only audit events
-_api_keys: Dict[str, dict] = {}           # key_id → key metadata
-_api_key_hashes: Dict[str, str] = {}      # sha256(raw_key) → key_id
-_users_admin: Dict[str, dict] = {}        # user_id → admin view
+_sessions: Dict[str, dict] = {}  # session_id → session info
+_audit_log: List[dict] = []  # append-only audit events
+_api_keys: Dict[str, dict] = {}  # key_id → key metadata
+_api_key_hashes: Dict[str, str] = {}  # sha256(raw_key) → key_id
+_users_admin: Dict[str, dict] = {}  # user_id → admin view
 _flag_overrides: Dict[str, Dict[str, bool]] = {}  # flag_name → {user_id: bool}
 
 # ── Admin role guard ──────────────────────────────────────────────────────────
 
 _ADMIN_USERS: set = set(
-    u.strip()
-    for u in os.getenv("ADMIN_USER_IDS", "admin").split(",")
-    if u.strip()
+    u.strip() for u in os.getenv("ADMIN_USER_IDS", "admin").split(",") if u.strip()
 )
 
 
@@ -222,11 +220,19 @@ def _get_users_from_subscriptions() -> Dict[str, dict]:
                 _users_admin[uid] = {
                     "user_id": uid,
                     "email": getattr(sub, "email", f"{uid}@unknown"),
-                    "status": sub.status.value if hasattr(sub.status, "value") else str(sub.status),
-                    "tier": sub.tier.value if hasattr(sub.tier, "value") else str(sub.tier),
+                    "status": sub.status.value
+                    if hasattr(sub.status, "value")
+                    else str(sub.status),
+                    "tier": sub.tier.value
+                    if hasattr(sub.tier, "value")
+                    else str(sub.tier),
                     "subscription_id": sub.subscription_id,
-                    "created_at": sub.created_at.isoformat() if hasattr(sub, "created_at") else "",
-                    "expires_at": sub.end_date.isoformat() if hasattr(sub, "end_date") and sub.end_date else None,
+                    "created_at": sub.created_at.isoformat()
+                    if hasattr(sub, "created_at")
+                    else "",
+                    "expires_at": sub.end_date.isoformat()
+                    if hasattr(sub, "end_date") and sub.end_date
+                    else None,
                 }
     except Exception as exc:
         logger.debug("_get_users_from_subscriptions fallback: %s", exc)
@@ -247,7 +253,7 @@ async def list_users(
         users = [u for u in users if u.get("status") == status_filter]
     start = (page - 1) * limit
     return {
-        "users": users[start: start + limit],
+        "users": users[start : start + limit],
         "total": len(users),
         "page": page,
         "pages": max(1, (len(users) + limit - 1) // limit),
@@ -265,6 +271,7 @@ async def ban_user(user_id: str, admin: TokenPayload = Depends(get_current_user)
     # Cancel subscription so they lose platform access immediately
     try:
         from monetization.subscription import subscription_manager
+
         sub_id = users[user_id].get("subscription_id", "")
         if sub_id:
             subscription_manager.cancel_subscription(sub_id)
@@ -292,19 +299,22 @@ async def reset_password(user_id: str, admin: TokenPayload = Depends(get_current
     _require_admin(admin)
     try:
         from notifications.email_triggers import send_risk_halt_email
+
         users = _get_users_from_subscriptions()
         recipient = users.get(user_id, {}).get("email", "")
         if recipient:
             send_risk_halt_email(
                 reason="A password reset was requested by an administrator. "
-                       "If you did not request this, contact support@hopefx.io immediately.",
+                "If you did not request this, contact support@hopefx.io immediately.",
                 drawdown_pct=0.0,
                 limit_pct=0.0,
                 to=recipient,
             )
     except Exception as exc:
         logger.warning("reset_password.email_failed: %s", exc)
-    _log_audit(admin.sub, "user.password_reset", f"Password reset triggered for {user_id}")
+    _log_audit(
+        admin.sub, "user.password_reset", f"Password reset triggered for {user_id}"
+    )
     return {"reset_triggered": True, "user_id": user_id}
 
 
@@ -319,9 +329,16 @@ async def get_user_trades(
     try:
         from database.models import Trade
         from database.connection import get_db
+
         # Query real trades if DB is available
         db = next(get_db())
-        rows = db.query(Trade).filter(Trade.user_id == user_id).order_by(Trade.created_at.desc()).limit(100).all()
+        rows = (
+            db.query(Trade)
+            .filter(Trade.user_id == user_id)
+            .order_by(Trade.created_at.desc())
+            .limit(100)
+            .all()
+        )
         trades = [
             {
                 "trade_id": str(r.id),
@@ -330,7 +347,9 @@ async def get_user_trades(
                 "lots": float(r.quantity),
                 "pnl": float(r.pnl) if r.pnl is not None else None,
                 "opened_at": r.created_at.isoformat() if r.created_at else None,
-                "closed_at": r.closed_at.isoformat() if hasattr(r, "closed_at") and r.closed_at else None,
+                "closed_at": r.closed_at.isoformat()
+                if hasattr(r, "closed_at") and r.closed_at
+                else None,
             }
             for r in rows
         ]
@@ -352,11 +371,14 @@ async def impersonate_user(
     Admin only. Token expires in 5 minutes.
     """
     _require_admin(admin)
-    _log_audit(admin.sub, "user.impersonated", f"Admin {admin.sub} impersonating {user_id}")
+    _log_audit(
+        admin.sub, "user.impersonated", f"Admin {admin.sub} impersonating {user_id}"
+    )
 
     try:
         import time
         import jwt as _jwt
+
         jwt_secret = os.getenv("SECURITY_JWT_SECRET", "")
         if not jwt_secret:
             raise ValueError("SECURITY_JWT_SECRET not set")
@@ -376,7 +398,9 @@ async def impersonate_user(
         }
     except Exception as exc:
         logger.error("impersonate_user.jwt_failed: %s", exc)
-        raise HTTPException(status_code=500, detail="Could not generate impersonation token")
+        raise HTTPException(
+            status_code=500, detail="Could not generate impersonation token"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

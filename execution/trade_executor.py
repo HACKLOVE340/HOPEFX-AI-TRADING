@@ -202,7 +202,8 @@ class TradeExecutor:
         if blocked:
             logger.warning(
                 "ORDER BLOCKED [DRAWDOWN_CIRCUIT_BREAKER] symbol=%s %s",
-                symbol, dd_msg,
+                symbol,
+                dd_msg,
             )
             return ExecutionResult(
                 success=False,
@@ -220,7 +221,8 @@ class TradeExecutor:
         if blocked:
             logger.warning(
                 "ORDER BLOCKED [STREAK_CIRCUIT_BREAKER] symbol=%s %s",
-                symbol, streak_msg,
+                symbol,
+                streak_msg,
             )
             return ExecutionResult(
                 success=False,
@@ -272,7 +274,11 @@ class TradeExecutor:
             logger.warning(
                 "ORDER BLOCKED by pre-trade gate | symbol=%s side=%s qty=%.4f "
                 "reason_code=%s detail=%s",
-                symbol, side, size, exc.reason_code, exc.detail,
+                symbol,
+                side,
+                size,
+                exc.reason_code,
+                exc.detail,
             )
             return ExecutionResult(
                 success=False,
@@ -288,13 +294,17 @@ class TradeExecutor:
             logger.critical(
                 "RISK MANAGER ERROR — order blocked as safety measure | "
                 "symbol=%s side=%s qty=%.4f error=%s",
-                symbol, side, size, exc,
+                symbol,
+                side,
+                size,
+                exc,
             )
             try:
                 import sentry_sdk  # noqa: PLC0415
+
                 sentry_sdk.capture_exception(exc)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
             return ExecutionResult(
                 success=False,
                 order_id=None,
@@ -422,9 +432,7 @@ class TradeExecutor:
                     _pnl_pct = realized_pnl / _entry_px if _entry_px > 0 else 0.0
                     _side = getattr(closed_position, "side", "buy")
                     _direction = 1 if str(_side).lower() in ("buy", "long") else -1
-                    _conf = float(
-                        getattr(closed_position, "signal_confidence", 0.6)
-                    )
+                    _conf = float(getattr(closed_position, "signal_confidence", 0.6))
                     _sym = getattr(closed_position, "symbol", position_id)
 
                     get_signal_filter().record_outcome(
@@ -436,7 +444,10 @@ class TradeExecutor:
                     logger.debug(
                         "SignalFilter close outcome: symbol=%s pnl_pct=%.5f "
                         "dir=%d conf=%.3f",
-                        _sym, _pnl_pct, _direction, _conf,
+                        _sym,
+                        _pnl_pct,
+                        _direction,
+                        _conf,
                     )
                 except Exception as _sf_exc:
                     logger.debug(
@@ -497,7 +508,7 @@ class TradeExecutor:
                     self.risk_manager._trading_halted = True
                     self.risk_manager._halt_reason = reason
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Suppressed exception: %s", _exc)
 
     def _check_streak_circuit_breaker(self) -> tuple:
         """
@@ -544,7 +555,8 @@ class TradeExecutor:
             self._consecutive_losses += 1
             logger.debug(
                 "Consecutive losses: %d / %d",
-                self._consecutive_losses, STREAK_HALT_LOSSES,
+                self._consecutive_losses,
+                STREAK_HALT_LOSSES,
             )
             if self._consecutive_losses >= STREAK_HALT_LOSSES:
                 cooldown_secs = STREAK_COOLDOWN_MINUTES * 60
@@ -552,7 +564,8 @@ class TradeExecutor:
                 logger.warning(
                     "STREAK CIRCUIT BREAKER: %d consecutive losses — "
                     "halting new entries for %.0f min",
-                    self._consecutive_losses, STREAK_COOLDOWN_MINUTES,
+                    self._consecutive_losses,
+                    STREAK_COOLDOWN_MINUTES,
                 )
 
     def _clamp_size_to_risk_cap(self, signal: Dict, size: float) -> float:
@@ -588,7 +601,10 @@ class TradeExecutor:
                         logger.info(
                             "Risk cap applied: size %.4f → %.4f "
                             "(equity=%.2f, sl_pct=%.3f%%, max_risk=%.1f%%)",
-                            size, max_size, equity, sl_pct * 100,
+                            size,
+                            max_size,
+                            equity,
+                            sl_pct * 100,
                             MAX_RISK_PCT_PER_TRADE * 100,
                         )
                         return round(max_size, 8)
@@ -600,7 +616,8 @@ class TradeExecutor:
                     if max_size_notional < size:
                         logger.info(
                             "Risk cap (notional fallback): size %.4f → %.4f",
-                            size, max_size_notional,
+                            size,
+                            max_size_notional,
                         )
                         return round(max_size_notional, 8)
         except Exception as exc:
@@ -625,7 +642,10 @@ class TradeExecutor:
             except Exception as exc:
                 logger.error("Callback error: %s", exc)
 
-        if result.success and result.status in (OrderStatus.FILLED, OrderStatus.PARTIAL):
+        if result.success and result.status in (
+            OrderStatus.FILLED,
+            OrderStatus.PARTIAL,
+        ):
             await self._notify_inference_engine_fill(result, signal)
 
     async def _notify_inference_engine_fill(
@@ -674,7 +694,9 @@ class TradeExecutor:
             engine.update_online(features, label)
             logger.debug(
                 "InferenceEngine fill notify: symbol=%s pnl=%.4f label=%d",
-                signal.get("symbol", "?"), pnl, label,
+                signal.get("symbol", "?"),
+                pnl,
+                label,
             )
 
             # ── SignalFilter EV update (fill path) ────────────────────────────
@@ -694,7 +716,10 @@ class TradeExecutor:
                 logger.debug(
                     "SignalFilter outcome (fill): symbol=%s pnl_pct=%.5f "
                     "dir=%d conf=%.3f",
-                    _sym, _pnl_pct, _direction, _confidence,
+                    _sym,
+                    _pnl_pct,
+                    _direction,
+                    _confidence,
                 )
             except Exception as _sf_exc:
                 logger.debug(

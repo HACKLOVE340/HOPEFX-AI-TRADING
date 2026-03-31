@@ -41,13 +41,14 @@ Usage
         bar_close=2350.8,
     )
 """
+
 from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -57,15 +58,21 @@ logger = logging.getLogger(__name__)
 try:
     from prometheus_client import Counter, Gauge, Histogram
 
-    _prom_fills        = Counter("hopefx_post_trade_fills_total", "Total fills analyzed")
-    _prom_slippage     = Histogram(
+    _prom_fills = Counter("hopefx_post_trade_fills_total", "Total fills analyzed")
+    _prom_slippage = Histogram(
         "hopefx_post_trade_slippage_bps",
         "Fill slippage in bps",
         buckets=[0, 1, 2, 5, 10, 20, 50, 100],
     )
-    _prom_is           = Gauge("hopefx_post_trade_impl_shortfall_bps", "Avg implementation shortfall bps")
-    _prom_fill_quality = Gauge("hopefx_post_trade_fill_quality",       "Rolling avg fill quality score")
-    _prom_adverse_sel  = Counter("hopefx_post_trade_adverse_selection_total", "Adverse selection events")
+    _prom_is = Gauge(
+        "hopefx_post_trade_impl_shortfall_bps", "Avg implementation shortfall bps"
+    )
+    _prom_fill_quality = Gauge(
+        "hopefx_post_trade_fill_quality", "Rolling avg fill quality score"
+    )
+    _prom_adverse_sel = Counter(
+        "hopefx_post_trade_adverse_selection_total", "Adverse selection events"
+    )
     _PROM_OK = True
 except Exception:
     _PROM_OK = False
@@ -74,27 +81,28 @@ except Exception:
 @dataclass
 class FillRecord:
     """Complete post-trade record for a single fill."""
-    trade_id:          str
-    symbol:            str
-    side:              str
-    lots:              float
-    decision_price:    float
-    fill_price:        float
-    mid_at_fill:       float
-    spread_at_fill:    float
-    bar_open:          float
-    bar_high:          float
-    bar_low:           float
-    bar_close:         float
-    filled_at:         datetime
+
+    trade_id: str
+    symbol: str
+    side: str
+    lots: float
+    decision_price: float
+    fill_price: float
+    mid_at_fill: float
+    spread_at_fill: float
+    bar_open: float
+    bar_high: float
+    bar_low: float
+    bar_close: float
+    filled_at: datetime
 
     # Computed fields
-    slippage_bps:      float = 0.0
+    slippage_bps: float = 0.0
     impl_shortfall_bps: float = 0.0
     market_impact_bps: float = 0.0
-    fill_quality:      float = 0.0
-    adverse_selection: bool  = False
-    timing_score:      float = 0.0   # 0=worst, 1=best timing in bar
+    fill_quality: float = 0.0
+    adverse_selection: bool = False
+    timing_score: float = 0.0  # 0=worst, 1=best timing in bar
     execution_cost_usd: float = 0.0
 
     def __post_init__(self) -> None:
@@ -113,15 +121,21 @@ class FillRecord:
 
         # Implementation shortfall: fill vs decision price
         if self.side == "long":
-            self.impl_shortfall_bps = (self.fill_price - self.decision_price) / self.decision_price * 10_000
+            self.impl_shortfall_bps = (
+                (self.fill_price - self.decision_price) / self.decision_price * 10_000
+            )
         else:
-            self.impl_shortfall_bps = (self.decision_price - self.fill_price) / self.decision_price * 10_000
+            self.impl_shortfall_bps = (
+                (self.decision_price - self.fill_price) / self.decision_price * 10_000
+            )
 
         # Market impact: half-spread proxy
         self.market_impact_bps = self.spread_at_fill / mid * 10_000 / 2
 
         # Execution cost in USD
-        self.execution_cost_usd = abs(self.slippage_bps) / 10_000 * mid * self.lots * 100.0
+        self.execution_cost_usd = (
+            abs(self.slippage_bps) / 10_000 * mid * self.lots * 100.0
+        )
 
         # Fill quality: 1 = filled at best price in bar, 0 = worst
         bar_range = self.bar_high - self.bar_low
@@ -157,40 +171,40 @@ class PostTradeAnalyzer:
     """
 
     def __init__(self, lineage_store: Any = None) -> None:
-        self._lineage  = lineage_store
-        self._fills:   List[FillRecord] = []
+        self._lineage = lineage_store
+        self._fills: List[FillRecord] = []
         self._start_ts = time.time()
 
     def record_fill(
         self,
-        trade_id:       str,
-        symbol:         str,
-        side:           str,
-        lots:           float,
+        trade_id: str,
+        symbol: str,
+        side: str,
+        lots: float,
         decision_price: float,
-        fill_price:     float,
-        mid_at_fill:    float,
+        fill_price: float,
+        mid_at_fill: float,
         spread_at_fill: float,
-        bar_open:       float = 0.0,
-        bar_high:       float = 0.0,
-        bar_low:        float = 0.0,
-        bar_close:      float = 0.0,
+        bar_open: float = 0.0,
+        bar_high: float = 0.0,
+        bar_low: float = 0.0,
+        bar_close: float = 0.0,
     ) -> FillRecord:
         """Record a fill and compute all execution quality metrics."""
         record = FillRecord(
-            trade_id       = trade_id,
-            symbol         = symbol,
-            side           = side,
-            lots           = lots,
-            decision_price = decision_price,
-            fill_price     = fill_price,
-            mid_at_fill    = mid_at_fill,
-            spread_at_fill = spread_at_fill,
-            bar_open       = bar_open or fill_price,
-            bar_high       = bar_high or fill_price,
-            bar_low        = bar_low  or fill_price,
-            bar_close      = bar_close or fill_price,
-            filled_at      = datetime.now(timezone.utc),
+            trade_id=trade_id,
+            symbol=symbol,
+            side=side,
+            lots=lots,
+            decision_price=decision_price,
+            fill_price=fill_price,
+            mid_at_fill=mid_at_fill,
+            spread_at_fill=spread_at_fill,
+            bar_open=bar_open or fill_price,
+            bar_high=bar_high or fill_price,
+            bar_low=bar_low or fill_price,
+            bar_close=bar_close or fill_price,
+            filled_at=datetime.now(timezone.utc),
         )
         self._fills.append(record)
 
@@ -201,18 +215,18 @@ class PostTradeAnalyzer:
                 _prom_adverse_sel.inc()
             # Update rolling averages
             recent = self._fills[-50:]
-            _prom_is.set(
-                sum(r.impl_shortfall_bps for r in recent) / len(recent)
-            )
-            _prom_fill_quality.set(
-                sum(r.fill_quality for r in recent) / len(recent)
-            )
+            _prom_is.set(sum(r.impl_shortfall_bps for r in recent) / len(recent))
+            _prom_fill_quality.set(sum(r.fill_quality for r in recent) / len(recent))
 
         logger.info(
             "POST-TRADE %s %s lots=%.3f slip=%.2fbps IS=%.2fbps quality=%.2f adverse=%s",
-            side, symbol, lots,
-            record.slippage_bps, record.impl_shortfall_bps,
-            record.fill_quality, record.adverse_selection,
+            side,
+            symbol,
+            lots,
+            record.slippage_bps,
+            record.impl_shortfall_bps,
+            record.fill_quality,
+            record.adverse_selection,
         )
 
         # Write to lineage
@@ -225,13 +239,13 @@ class PostTradeAnalyzer:
             return
         try:
             self._lineage.record_signal(
-                direction     = f"FILL:{record.side}",
-                confidence    = record.fill_quality,
-                probability   = 0.0,
-                features_hash = "",
-                model_version = f"post_trade:slip={record.slippage_bps:.2f}bps",
-                lineage_id    = record.trade_id,
-                symbol        = record.symbol,
+                direction=f"FILL:{record.side}",
+                confidence=record.fill_quality,
+                probability=0.0,
+                features_hash="",
+                model_version=f"post_trade:slip={record.slippage_bps:.2f}bps",
+                lineage_id=record.trade_id,
+                symbol=record.symbol,
             )
         except Exception as exc:
             logger.debug("PostTradeAnalyzer lineage write failed: %s", exc)
@@ -244,35 +258,35 @@ class PostTradeAnalyzer:
         if not recent:
             return {}
         slippages = [r.slippage_bps for r in recent]
-        is_vals   = [r.impl_shortfall_bps for r in recent]
+        is_vals = [r.impl_shortfall_bps for r in recent]
         qualities = [r.fill_quality for r in recent]
-        costs     = [r.execution_cost_usd for r in recent]
-        adverse   = [r.adverse_selection for r in recent]
+        costs = [r.execution_cost_usd for r in recent]
+        adverse = [r.adverse_selection for r in recent]
         return {
-            "count":              len(recent),
-            "avg_slippage_bps":   round(float(np.mean(slippages)), 3),
-            "p95_slippage_bps":   round(float(np.percentile(slippages, 95)), 3),
+            "count": len(recent),
+            "avg_slippage_bps": round(float(np.mean(slippages)), 3),
+            "p95_slippage_bps": round(float(np.percentile(slippages, 95)), 3),
             "avg_impl_shortfall": round(float(np.mean(is_vals)), 3),
-            "avg_fill_quality":   round(float(np.mean(qualities)), 3),
+            "avg_fill_quality": round(float(np.mean(qualities)), 3),
             "total_exec_cost_usd": round(float(sum(costs)), 2),
-            "adverse_sel_rate":   round(sum(adverse) / len(adverse), 3),
+            "adverse_sel_rate": round(sum(adverse) / len(adverse), 3),
         }
 
     def get_fills(self, limit: int = 100) -> List[Dict[str, Any]]:
         return [
             {
-                "trade_id":          r.trade_id,
-                "symbol":            r.symbol,
-                "side":              r.side,
-                "lots":              r.lots,
-                "fill_price":        r.fill_price,
-                "slippage_bps":      round(r.slippage_bps, 3),
+                "trade_id": r.trade_id,
+                "symbol": r.symbol,
+                "side": r.side,
+                "lots": r.lots,
+                "fill_price": r.fill_price,
+                "slippage_bps": round(r.slippage_bps, 3),
                 "impl_shortfall_bps": round(r.impl_shortfall_bps, 3),
-                "fill_quality":      round(r.fill_quality, 3),
+                "fill_quality": round(r.fill_quality, 3),
                 "adverse_selection": r.adverse_selection,
-                "timing_score":      round(r.timing_score, 3),
+                "timing_score": round(r.timing_score, 3),
                 "execution_cost_usd": round(r.execution_cost_usd, 4),
-                "filled_at":         r.filled_at.isoformat(),
+                "filled_at": r.filled_at.isoformat(),
             }
             for r in self._fills[-limit:]
         ]

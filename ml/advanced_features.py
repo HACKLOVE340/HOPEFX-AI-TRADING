@@ -483,7 +483,9 @@ def add_cot_proxy_features(
         oi_mom_mean = d["cot_oi_momentum_5"].rolling(60).mean()
         oi_mom_std = d["cot_oi_momentum_5"].rolling(60).std().replace(0, np.nan)
         oi_z = ((d["cot_oi_momentum_5"] - oi_mom_mean) / oi_mom_std).fillna(0.0)
-        d["cot_demand_surge"] = ((oi_z > 1.0) & (d["close"].pct_change(fill_method=None) > 0)).astype(
+        d["cot_demand_surge"] = (
+            (oi_z > 1.0) & (d["close"].pct_change(fill_method=None) > 0)
+        ).astype(
             float,
         )
     else:
@@ -677,7 +679,7 @@ def build_advanced_features(
 
             d = add_regime_features(d, lookback=60)
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
     # ── Target ────────────────────────────────────────────────────────────────
     if use_filtered_target:

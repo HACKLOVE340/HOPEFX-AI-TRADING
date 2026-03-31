@@ -157,7 +157,6 @@ class OrderGateway:
 
             if loop is not None and loop.is_running():
                 # Running inside an async context — use thread-safe future.
-                import concurrent.futures
                 future = asyncio.run_coroutine_threadsafe(
                     self.executor.execute_signal(signal), loop
                 )
@@ -274,9 +273,7 @@ class OrderGateway:
             return
         order.is_rejected = True
         order.rejection_reason = reason
-        logger.warning(
-            "OrderGateway: order %s rejected — reason: %s", order_id, reason
-        )
+        logger.warning("OrderGateway: order %s rejected — reason: %s", order_id, reason)
 
     def track_commissions(self) -> float:
         """Return total commissions paid across all orders."""

@@ -35,25 +35,33 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from core.event_bus import bus, CH_ORDER, CH_BREACH
-from execution.fix_adapter import FIXAdapter, FIXOrder, FIXSide, FIXOrdType, FIXFillReport, FIXExecType
+from execution.fix_adapter import (
+    FIXAdapter,
+    FIXOrder,
+    FIXSide,
+    FIXOrdType,
+    FIXFillReport,
+    FIXExecType,
+)
 
 logger = logging.getLogger(__name__)
 
 # ── config ────────────────────────────────────────────────────────────────────
-FIX_CONFIG_FILE:   str   = os.environ.get("FIX_CONFIG_FILE",   "fix.cfg")
-FIX_SENDER_ID:     str   = os.environ.get("FIX_SENDER_COMP_ID", "HOPEFX")
-FIX_TARGET_ID:     str   = os.environ.get("FIX_TARGET_COMP_ID", "BROKER")
-FIX_HOST:          str   = os.environ.get("FIX_HOST",           "127.0.0.1")
-FIX_PORT:          int   = int(os.environ.get("FIX_PORT",       "9876"))
-FIX_USERNAME:      str   = os.environ.get("FIX_USERNAME",       "")
-FIX_PASSWORD:      str   = os.environ.get("FIX_PASSWORD",       "")
-DEFAULT_UNITS:     float = float(os.environ.get("FIX_DEFAULT_UNITS", "1000"))
-LATENCY_WARN_MS:   float = float(os.environ.get("FIX_LATENCY_WARN_MS", "50"))
+FIX_CONFIG_FILE: str = os.environ.get("FIX_CONFIG_FILE", "fix.cfg")
+FIX_SENDER_ID: str = os.environ.get("FIX_SENDER_COMP_ID", "HOPEFX")
+FIX_TARGET_ID: str = os.environ.get("FIX_TARGET_COMP_ID", "BROKER")
+FIX_HOST: str = os.environ.get("FIX_HOST", "127.0.0.1")
+FIX_PORT: int = int(os.environ.get("FIX_PORT", "9876"))
+FIX_USERNAME: str = os.environ.get("FIX_USERNAME", "")
+FIX_PASSWORD: str = os.environ.get("FIX_PASSWORD", "")
+DEFAULT_UNITS: float = float(os.environ.get("FIX_DEFAULT_UNITS", "1000"))
+LATENCY_WARN_MS: float = float(os.environ.get("FIX_LATENCY_WARN_MS", "50"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OANDA REST fallback sender
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class _OandaFallback:
     """
@@ -63,11 +71,11 @@ class _OandaFallback:
     """
 
     def __init__(self) -> None:
-        self._api_key    = os.environ.get("OANDA_API_KEY", "")
+        self._api_key = os.environ.get("OANDA_API_KEY", "")
         self._account_id = os.environ.get("OANDA_ACCOUNT_ID", "")
-        self._practice   = os.environ.get("OANDA_PRACTICE", "true").lower() != "false"
-        env_prefix       = "practice" if self._practice else "trade"
-        self._base_url   = f"https://{env_prefix}-api.oanda.com"
+        self._practice = os.environ.get("OANDA_PRACTICE", "true").lower() != "false"
+        env_prefix = "practice" if self._practice else "trade"
+        self._base_url = f"https://{env_prefix}-api.oanda.com"
 
     async def send(self, symbol: str, direction: str, units: float) -> dict:
         """Place a market order; return fill dict."""
@@ -75,23 +83,25 @@ class _OandaFallback:
 
         # OANDA uses negative units for SELL
         oanda_units = units if direction == "BUY" else -units
-        instrument  = symbol.replace("/", "_")
-        url         = f"{self._base_url}/v3/accounts/{self._account_id}/orders"
-        headers     = {
+        instrument = symbol.replace("/", "_")
+        url = f"{self._base_url}/v3/accounts/{self._account_id}/orders"
+        headers = {
             "Authorization": f"Bearer {self._api_key}",
-            "Content-Type":  "application/json",
+            "Content-Type": "application/json",
         }
         body = {
             "order": {
-                "type":       "MARKET",
+                "type": "MARKET",
                 "instrument": instrument,
-                "units":      str(int(oanda_units)),
+                "units": str(int(oanda_units)),
             }
         }
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                url, json=body, headers=headers,
+                url,
+                json=body,
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 data = await resp.json()
@@ -103,13 +113,13 @@ class _OandaFallback:
         fill = data.get("orderFillTransaction", {})
         price = float(fill.get("price", 0))
         return {
-            "type":      "fill_confirmation",
-            "source":    "oanda_rest_fallback",
-            "symbol":    symbol,
+            "type": "fill_confirmation",
+            "source": "oanda_rest_fallback",
+            "symbol": symbol,
             "direction": direction,
-            "units":     units,
-            "price":     price,
-            "order_id":  fill.get("orderID", ""),
+            "units": units,
+            "price": price,
+            "order_id": fill.get("orderID", ""),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -117,6 +127,7 @@ class _OandaFallback:
 # ─────────────────────────────────────────────────────────────────────────────
 # FIX Router
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class FIXRouter:
     """
@@ -136,7 +147,7 @@ class FIXRouter:
         self._halted: bool = False
         self._running: bool = False
         self._order_count: int = 0
-        self._fill_count:  int = 0
+        self._fill_count: int = 0
         self._reject_count: int = 0
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
@@ -164,7 +175,9 @@ class FIXRouter:
                 logger.warning("FIXRouter: adapter stop error: %s", exc)
         logger.info(
             "FIXRouter stopped. orders=%d fills=%d rejects=%d",
-            self._order_count, self._fill_count, self._reject_count,
+            self._order_count,
+            self._fill_count,
+            self._reject_count,
         )
 
     def _init_fix(self) -> bool:
@@ -184,7 +197,8 @@ class FIXRouter:
             return True
         except Exception as exc:  # noqa: BLE001
             logger.warning(
-                "FIXRouter: FIX session unavailable (%s) — will use OANDA REST fallback.", exc
+                "FIXRouter: FIX session unavailable (%s) — will use OANDA REST fallback.",
+                exc,
             )
             return False
 
@@ -231,14 +245,17 @@ class FIXRouter:
             logger.warning("FIXRouter: order rejected — router is halted.")
             return
 
-        symbol    = order_request.get("symbol", "XAU/USD")
+        symbol = order_request.get("symbol", "XAU/USD")
         direction = order_request.get("direction", "BUY").upper()
-        units     = float(order_request.get("units", DEFAULT_UNITS))
+        units = float(order_request.get("units", DEFAULT_UNITS))
         self._order_count += 1
 
         logger.info(
             "FIXRouter routing  #%d  %s %s  units=%.0f",
-            self._order_count, direction, symbol, units,
+            self._order_count,
+            direction,
+            symbol,
+            units,
         )
 
         # Attempt FIX first
@@ -251,10 +268,13 @@ class FIXRouter:
                     return
                 except Exception as exc:  # noqa: BLE001
                     logger.warning(
-                        "FIXRouter: FIX send failed (%s) — falling back to OANDA REST.", exc
+                        "FIXRouter: FIX send failed (%s) — falling back to OANDA REST.",
+                        exc,
                     )
             else:
-                logger.warning("FIXRouter: FIX circuit-breaker OPEN — using OANDA REST fallback.")
+                logger.warning(
+                    "FIXRouter: FIX circuit-breaker OPEN — using OANDA REST fallback."
+                )
 
         # OANDA REST fallback
         try:
@@ -262,20 +282,25 @@ class FIXRouter:
             await self._on_fill(fill)
         except Exception as exc:  # noqa: BLE001
             self._reject_count += 1
-            logger.error("FIXRouter: all routes failed for order #%d: %s", self._order_count, exc)
-            await bus.publish_breach({
-                "reason":    "order_route_failure",
-                "order_seq": self._order_count,
-                "symbol":    symbol,
-                "direction": direction,
-                "error":     str(exc),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
+            logger.error(
+                "FIXRouter: all routes failed for order #%d: %s", self._order_count, exc
+            )
+            await bus.publish_breach(
+                {
+                    "reason": "order_route_failure",
+                    "order_seq": self._order_count,
+                    "symbol": symbol,
+                    "direction": direction,
+                    "error": str(exc),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
 
     # ── FIX send ──────────────────────────────────────────────────────────────
 
-    async def _send_fix(self, symbol: str, direction: str,
-                        units: float, order_request: dict) -> dict:
+    async def _send_fix(
+        self, symbol: str, direction: str, units: float, order_request: dict
+    ) -> dict:
         """
         Format and send a FIX NewOrderSingle; await ExecutionReport.
 
@@ -300,23 +325,27 @@ class FIXRouter:
 
         latency_ms = (time.monotonic() - t0) * 1000
         if latency_ms > LATENCY_WARN_MS:
-            logger.warning("FIXRouter: high latency %.1f ms for order %s", latency_ms, fix_order.cl_ord_id)
+            logger.warning(
+                "FIXRouter: high latency %.1f ms for order %s",
+                latency_ms,
+                fix_order.cl_ord_id,
+            )
 
         # Log fill details
         self._log_fill(report, latency_ms, order_request)
 
         return {
-            "type":       "fill_confirmation",
-            "source":     "fix",
-            "cl_ord_id":  report.cl_ord_id,
-            "order_id":   report.order_id,
-            "symbol":     symbol,
-            "direction":  direction,
-            "units":      report.cum_qty,
-            "price":      report.avg_px,
-            "exec_type":  report.exec_type.name,
+            "type": "fill_confirmation",
+            "source": "fix",
+            "cl_ord_id": report.cl_ord_id,
+            "order_id": report.order_id,
+            "symbol": symbol,
+            "direction": direction,
+            "units": report.cum_qty,
+            "price": report.avg_px,
+            "exec_type": report.exec_type.name,
             "latency_ms": round(latency_ms, 2),
-            "timestamp":  datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     # ── fill handler ──────────────────────────────────────────────────────────
@@ -327,16 +356,19 @@ class FIXRouter:
         logger.info(
             "FILL #%d  %s %s  price=%.5f  units=%.0f  source=%s",
             self._fill_count,
-            fill.get("direction"), fill.get("symbol"),
-            fill.get("price", 0), fill.get("units", 0),
+            fill.get("direction"),
+            fill.get("symbol"),
+            fill.get("price", 0),
+            fill.get("units", 0),
             fill.get("source"),
         )
         await bus.publish_order(fill)
 
     # ── fill logger ───────────────────────────────────────────────────────────
 
-    def _log_fill(self, report: FIXFillReport, latency_ms: float,
-                  order_request: dict) -> None:
+    def _log_fill(
+        self, report: FIXFillReport, latency_ms: float, order_request: dict
+    ) -> None:
         """Log fill with slippage calculation."""
         expected_price = float(order_request.get("mid", report.avg_px))
         slippage = abs(report.avg_px - expected_price) if expected_price else 0.0
@@ -345,23 +377,27 @@ class FIXRouter:
             self._reject_count += 1
             logger.error(
                 "FIX REJECT  cl_ord_id=%s  text=%s",
-                report.cl_ord_id, report.text,
+                report.cl_ord_id,
+                report.text,
             )
         else:
             logger.info(
                 "FIX FILL  cl_ord_id=%s  qty=%.0f  avg_px=%.5f  "
                 "slippage=%.5f  latency=%.1f ms",
-                report.cl_ord_id, report.cum_qty, report.avg_px,
-                slippage, latency_ms,
+                report.cl_ord_id,
+                report.cum_qty,
+                report.avg_px,
+                slippage,
+                latency_ms,
             )
 
     # ── metrics ───────────────────────────────────────────────────────────────
 
     def metrics(self) -> dict:
         return {
-            "order_count":  self._order_count,
-            "fill_count":   self._fill_count,
+            "order_count": self._order_count,
+            "fill_count": self._fill_count,
             "reject_count": self._reject_count,
-            "halted":       self._halted,
+            "halted": self._halted,
             "fix_available": self._fix_available,
         }

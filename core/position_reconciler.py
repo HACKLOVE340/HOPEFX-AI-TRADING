@@ -196,7 +196,7 @@ class PositionReconciler:
                     },
                 )
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
     async def _trigger_drift_halt(
         self,
@@ -292,7 +292,7 @@ class PositionReconciler:
             if not hist.empty:
                 return float(hist["Close"].iloc[-1])
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
         return None
 
     @staticmethod

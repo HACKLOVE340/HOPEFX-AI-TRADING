@@ -334,8 +334,12 @@ class GPUInferenceEngine:
     """
 
     # Default search paths relative to the project root (parent of core/).
-    _DEFAULT_ONNX = _Path(__file__).parent.parent.parent / "ml" / "saved_models" / "hopefx.onnx"
-    _DEFAULT_PT   = _Path(__file__).parent.parent.parent / "ml" / "saved_models" / "hopefx.pt"
+    _DEFAULT_ONNX = (
+        _Path(__file__).parent.parent.parent / "ml" / "saved_models" / "hopefx.onnx"
+    )
+    _DEFAULT_PT = (
+        _Path(__file__).parent.parent.parent / "ml" / "saved_models" / "hopefx.pt"
+    )
 
     def __init__(
         self,
@@ -350,8 +354,8 @@ class GPUInferenceEngine:
             )
             self.device = "cpu"
 
-        self._ort_session = None   # onnxruntime.InferenceSession
-        self._torch_model = None   # torch.jit.ScriptModule
+        self._ort_session = None  # onnxruntime.InferenceSession
+        self._torch_model = None  # torch.jit.ScriptModule
         self._input_name: str = "input"
 
         # Resolve model path
@@ -417,7 +421,9 @@ class GPUInferenceEngine:
         map_location = _torch.device(self.device)
         self._torch_model = _torch.jit.load(str(path), map_location=map_location)
         self._torch_model.eval()
-        _gpu_logger.info("TorchScript model loaded from %s (device=%s)", path, self.device)
+        _gpu_logger.info(
+            "TorchScript model loaded from %s (device=%s)", path, self.device
+        )
 
     def load_model(self, model_path: str) -> None:
         """Load or replace the inference model at runtime."""

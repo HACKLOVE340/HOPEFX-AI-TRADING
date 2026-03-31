@@ -78,7 +78,9 @@ class ABTestRequest(BaseModel):
     initial_capital: float = 10000.0
 
 
-def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, initial_capital: float) -> dict:
+def _run_real_backtest(
+    strategy_name: str, symbol: str, duration_days: int, initial_capital: float
+) -> dict:
     """
     Run a real backtest for a named strategy using the backtesting engine.
 
@@ -87,6 +89,7 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
     """
     try:
         from backtesting.engine_config import BacktestEngine  # noqa: PLC0415
+
         engine = BacktestEngine()
         result = engine.run(
             strategy=strategy_name,
@@ -96,7 +99,9 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
         )
         return {
             "strategy": strategy_name,
-            "final_equity": round(float(result.get("final_equity", initial_capital)), 2),
+            "final_equity": round(
+                float(result.get("final_equity", initial_capital)), 2
+            ),
             "total_return": round(float(result.get("total_return_pct", 0.0)), 2),
             "sharpe_ratio": round(float(result.get("sharpe_ratio", 0.0)), 3),
             "max_drawdown": round(float(result.get("max_drawdown_pct", 0.0)), 2),
@@ -126,13 +131,21 @@ async def start_ab_test(
     historical data is unavailable for the requested period.
     """
     try:
-        result_a = _run_real_backtest(req.strategy_a, req.symbol, req.duration_days, req.initial_capital)
-        result_b = _run_real_backtest(req.strategy_b, req.symbol, req.duration_days, req.initial_capital)
+        result_a = _run_real_backtest(
+            req.strategy_a, req.symbol, req.duration_days, req.initial_capital
+        )
+        result_b = _run_real_backtest(
+            req.strategy_b, req.symbol, req.duration_days, req.initial_capital
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
     # Winner by Sharpe ratio (risk-adjusted)
-    winner = req.strategy_a if result_a["sharpe_ratio"] >= result_b["sharpe_ratio"] else req.strategy_b
+    winner = (
+        req.strategy_a
+        if result_a["sharpe_ratio"] >= result_b["sharpe_ratio"]
+        else req.strategy_b
+    )
     best_sharpe = max(result_a["sharpe_ratio"], result_b["sharpe_ratio"])
 
     test_id = str(uuid.uuid4())[:12]
@@ -147,8 +160,7 @@ async def start_ab_test(
         "strategy_b": result_b,
         "winner": winner,
         "recommendation": (
-            f"Deploy {winner} — higher risk-adjusted returns "
-            f"(Sharpe {best_sharpe:.2f})"
+            f"Deploy {winner} — higher risk-adjusted returns (Sharpe {best_sharpe:.2f})"
         ),
     }
     return _ab_tests[test_id]
@@ -259,11 +271,13 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
                 df = pd.read_csv(csv_path).tail(periods + 50)
                 if len(df) >= 20:
                     return {
-                        "close":  df["close"].tolist(),
-                        "open":   df["open"].tolist(),
-                        "high":   df["high"].tolist(),
-                        "low":    df["low"].tolist(),
-                        "volume": df["volume"].tolist() if "volume" in df.columns else [0.0] * len(df),
+                        "close": df["close"].tolist(),
+                        "open": df["open"].tolist(),
+                        "high": df["high"].tolist(),
+                        "low": df["low"].tolist(),
+                        "volume": df["volume"].tolist()
+                        if "volume" in df.columns
+                        else [0.0] * len(df),
                     }
             except Exception as exc:
                 logger.debug("Indicator CSV load failed (%s): %s", csv_path, exc)
@@ -271,17 +285,19 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     # Paper broker fallback
     try:
         from app import app_state  # noqa: PLC0415
+
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_market_data"):
             raw = broker.get_market_data(sym_key.replace("_", ""), "1h", periods + 50)
             if raw and len(raw) >= 20:
                 import pandas as pd
+
                 df = pd.DataFrame(raw)
                 return {
-                    "close":  df["close"].tolist(),
-                    "open":   df["open"].tolist(),
-                    "high":   df["high"].tolist(),
-                    "low":    df["low"].tolist(),
+                    "close": df["close"].tolist(),
+                    "open": df["open"].tolist(),
+                    "high": df["high"].tolist(),
+                    "low": df["low"].tolist(),
                     "volume": df.get("volume", pd.Series([0.0] * len(df))).tolist(),
                 }
     except Exception as exc:
@@ -316,15 +332,26 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
         {"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"}
     )
     _ALLOWED_NODES = (
-        ast.Module, ast.Expr, ast.Expression,
+        ast.Module,
+        ast.Expr,
+        ast.Expression,
         # Literals
         ast.Constant,
         # Arithmetic
-        ast.BinOp, ast.UnaryOp,
-        ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.FloorDiv, ast.Mod,
-        ast.UAdd, ast.USub,
+        ast.BinOp,
+        ast.UnaryOp,
+        ast.Add,
+        ast.Sub,
+        ast.Mult,
+        ast.Div,
+        ast.Pow,
+        ast.FloorDiv,
+        ast.Mod,
+        ast.UAdd,
+        ast.USub,
         # Names and calls (validated separately)
-        ast.Name, ast.Load,
+        ast.Name,
+        ast.Load,
         ast.Call,
         # Needed for multi-arg calls
         ast.arguments,
@@ -344,13 +371,21 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
         if isinstance(node, ast.Call):
             # Function must be a bare Name, not an attribute or subscript
             if not isinstance(node.func, ast.Name):
-                raise ValueError("Only direct function calls are allowed (e.g. EMA(...))")
+                raise ValueError(
+                    "Only direct function calls are allowed (e.g. EMA(...))"
+                )
             if node.func.id not in {"EMA", "SMA", "RSI"}:
                 raise ValueError(
                     f"Unknown function '{node.func.id}'. Allowed: EMA, SMA, RSI"
                 )
-            if node.keywords or node.starargs if hasattr(node, "starargs") else node.keywords:
-                raise ValueError("Keyword arguments are not allowed in indicator formulas")
+            if (
+                node.keywords or node.starargs
+                if hasattr(node, "starargs")
+                else node.keywords
+            ):
+                raise ValueError(
+                    "Keyword arguments are not allowed in indicator formulas"
+                )
         for child in ast.iter_child_nodes(node):
             _check_node(child)
 
@@ -368,10 +403,10 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
 
     # ── Build data namespace ──────────────────────────────────────────────────
     ohlcv = _load_ohlcv_for_indicator(symbol, periods)
-    closes  = ohlcv["close"]
-    opens   = ohlcv["open"]
-    highs   = ohlcv["high"]
-    lows    = ohlcv["low"]
+    closes = ohlcv["close"]
+    opens = ohlcv["open"]
+    highs = ohlcv["high"]
+    lows = ohlcv["low"]
     volumes = ohlcv["volume"]
 
     def sma(data: List[float], n: int) -> List[float]:
@@ -407,8 +442,11 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
     # ── AST interpreter (no eval/exec) ────────────────────────────────────────
     _fn_map = {"EMA": ema, "SMA": sma, "RSI": rsi}
     _name_map = {
-        "close": closes, "open": opens, "high": highs,
-        "low": lows, "volume": volumes,
+        "close": closes,
+        "open": opens,
+        "high": highs,
+        "low": lows,
+        "volume": volumes,
         **_fn_map,
     }
 
@@ -420,27 +458,40 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
         if isinstance(node, ast.UnaryOp):
             operand = _interp(node.operand)
             if isinstance(node.op, ast.USub):
-                return [-v if v is not None else None for v in operand] \
-                    if isinstance(operand, list) else -operand
+                return (
+                    [-v if v is not None else None for v in operand]
+                    if isinstance(operand, list)
+                    else -operand
+                )
             return operand
         if isinstance(node, ast.BinOp):
             left = _interp(node.left)
             right = _interp(node.right)
             op = node.op
+
             # Scalar × list or list × scalar
             def _apply(a, b):
-                if isinstance(op, ast.Add):      return a + b
-                if isinstance(op, ast.Sub):      return a - b
-                if isinstance(op, ast.Mult):     return a * b
-                if isinstance(op, ast.Div):      return a / b if b != 0 else None
-                if isinstance(op, ast.Pow):      return a ** b
-                if isinstance(op, ast.FloorDiv): return a // b
-                if isinstance(op, ast.Mod):      return a % b
+                if isinstance(op, ast.Add):
+                    return a + b
+                if isinstance(op, ast.Sub):
+                    return a - b
+                if isinstance(op, ast.Mult):
+                    return a * b
+                if isinstance(op, ast.Div):
+                    return a / b if b != 0 else None
+                if isinstance(op, ast.Pow):
+                    return a**b
+                if isinstance(op, ast.FloorDiv):
+                    return a // b
+                if isinstance(op, ast.Mod):
+                    return a % b
                 raise ValueError(f"Unsupported operator {type(op).__name__}")
 
             if isinstance(left, list) and isinstance(right, list):
-                return [_apply(a, b) if a is not None and b is not None else None
-                        for a, b in zip(left, right)]
+                return [
+                    _apply(a, b) if a is not None and b is not None else None
+                    for a, b in zip(left, right)
+                ]
             if isinstance(left, list):
                 return [_apply(a, right) if a is not None else None for a in left]
             if isinstance(right, list):
@@ -555,12 +606,18 @@ async def get_correlation(
         for sym in sym_list:
             try:
                 import asyncio
+
                 ohlcv = pe.get_ohlcv(sym, "1d", window + 5)
                 if asyncio.iscoroutine(ohlcv):
                     ohlcv = await ohlcv
                 if ohlcv and len(ohlcv) >= 5:
                     closes = [
-                        float(bar.get("close", bar[-2] if isinstance(bar, (list, tuple)) else 0))
+                        float(
+                            bar.get(
+                                "close",
+                                bar[-2] if isinstance(bar, (list, tuple)) else 0,
+                            )
+                        )
                         for bar in ohlcv
                     ]
                     returns = [
@@ -588,6 +645,7 @@ async def get_correlation(
             if csv_path.exists():
                 try:
                     import pandas as _pd
+
                     df = _pd.read_csv(csv_path, usecols=["close"]).tail(window + 5)
                     closes = df["close"].tolist()
                     returns = [
@@ -816,7 +874,9 @@ async def run_monte_carlo(
             ),
         )
 
-    mc = _run_monte_carlo(win_rate, avg_win, avg_loss, n_trades, capital, req.simulations)
+    mc = _run_monte_carlo(
+        win_rate, avg_win, avg_loss, n_trades, capital, req.simulations
+    )
     mc["run_id"] = run_id
     mc["computed_at"] = datetime.now(timezone.utc).isoformat()
     _mc_cache[run_id] = mc

@@ -103,9 +103,7 @@ def write_outbox_event_standalone(
     """
     session = _get_db_session()
     if session is None:
-        logger.warning(
-            "outbox: DB unavailable — event %s not persisted", event_type
-        )
+        logger.warning("outbox: DB unavailable — event %s not persisted", event_type)
         return False
     try:
         from database.models import OutboxEvent
@@ -241,7 +239,7 @@ def _get_db_session():
         if app_state and app_state.db_session_factory:
             return app_state.db_session_factory()
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
     return None
 
 
