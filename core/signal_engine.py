@@ -447,6 +447,134 @@ def _fetch_mtf_df(
         return None
 
 
+def _apply_anomaly_weighting(prob: float, ohlcv_df: Any, symbol: str) -> float:
+    """
+    Phase 2: blend probability toward neutral when the bar is anomalous.
+
+    Returns the adjusted probability unchanged when the store is unavailable
+    or the anomaly weight is 1.0 (no anomaly detected).
+    """
+    store = _get_anomaly_store()
+    if store is None:
+        return prob
+    try:
+        weight = store.update_and_score(ohlcv_df)
+        if weight < 1.0:
+            adjusted = 0.5 + (prob - 0.5) * weight
+            logger.debug(
+                "Phase2 anomaly: weight=%.2f %s %.4f→%.4f", weight, symbol, prob, adjusted
+            )
+            return adjusted
+    except Exception as exc:
+        logger.debug("Anomaly weighting failed (non-fatal): %s", exc)
+    return prob
+
+
+def _apply_online_blend(prob: float, ohlcv_df: Any, symbol: str) -> float:
+    """Phase 3: incremental XGBoost blend on confirmed fills."""
+    store = _get_online_learner_store()
+    if store is None or not store.is_ready:
+        return prob
+    try:
+        blended = store.blend(prob, ohlcv_df)
+        logger.debug("Phase3 online blend: %s → %.4f", symbol, blended)
+        return blended
+    except Exception as exc:
+        logger.debug("Online learner blend failed (non-fatal): %s", exc)
+    return prob
+
+
+def _apply_deep_ensemble_blend(prob: float, ohlcv_df: Any, symbol: str) -> float:
+    """Phase 4: LSTM/Transformer/TCN stacking blend."""
+    store = _get_deep_ensemble_store()
+    if store is None or not store.is_active:
+        return prob
+    try:
+        blended = store.blend(prob, ohlcv_df)
+        logger.debug("Phase4 deep blend: %s → %.4f", symbol, blended)
+        return blended
+    except Exception as exc:
+        logger.debug("Deep ensemble blend failed (non-fatal): %s", exc)
+    return prob
+
+
+def _predict_advanced(
+    adv_predictor: Any,
+    data: Dict[str, Any],
+    symbol: str,
+    app_state: Any,
+) -> tuple:
+    """
+    Run the full advanced ML chain (Phases 1–4) and return (prob, version).
+
+    Phase 1: advanced_oos.pkl with macro + MTF features (122+ features, 68% OOS).
+    Phase 2: anomaly weighting — down-weight on anomalous bars.
+    Phase 3: online learning blend — incremental XGBoost.
+    Phase 4: deep ensemble blend — LSTM/Transformer/TCN stacking.
+    """
+    ohlcv_df = _build_ohlcv_df(data)
+    macro_df = _fetch_macro_df(ohlcv_df, symbol)
+    mtf_df   = _fetch_mtf_df(ohlcv_df, app_state=app_state)
+
+    prob = adv_predictor.predict_proba(
+        ohlcv_df, macro_df=macro_df, symbol=symbol, mtf_df=mtf_df,
+    )
+    prob = _apply_anomaly_weighting(prob, ohlcv_df, symbol)
+    prob = _apply_online_blend(prob, ohlcv_df, symbol)
+    prob = _apply_deep_ensemble_blend(prob, ohlcv_df, symbol)
+
+    logger.debug(
+        "ML chain (%s) %s: final=%.4f [macro=%s mtf=%s]",
+        adv_predictor.version, symbol, prob,
+        "yes" if macro_df is not None else "no",
+        "yes" if mtf_df is not None else "no",
+    )
+    return float(prob), adv_predictor.version
+
+
+def _predict_basic(
+    active_model: Any,
+    model_ver: str,
+    data: Dict[str, Any],
+    symbol: str,
+    base_confidence: float,
+) -> tuple:
+    """
+    Run the basic fallback model (~50% OOS, stationary OHLCV features).
+
+    Returns (prob, model_ver).
+    """
+    import pandas as pd
+
+    prices = data.get("prices", [data["close"]])
+    closes = pd.Series(prices)
+    feat = {
+        "close":  data["close"],
+        "open":   data["open"],
+        "high":   data["high"],
+        "low":    data["low"],
+        "volume": data.get("volume", 0),
+        "ret_1":  closes.pct_change(1).iloc[-1]  if len(closes) > 1  else 0,
+        "ret_5":  closes.pct_change(5).iloc[-1]  if len(closes) > 5  else 0,
+        "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
+        "vol_20": (
+            closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0
+        ),
+    }
+    X = pd.DataFrame([feat])
+
+    if hasattr(active_model, "predict_proba"):
+        proba = active_model.predict_proba(X)
+        prob  = float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
+    elif hasattr(active_model, "predict"):
+        prob = float(active_model.predict(X)[0])
+    else:
+        prob = base_confidence
+
+    logger.debug("Basic ML (%s) prob for %s: %.4f", model_ver, symbol, prob)
+    return prob, model_ver
+
+
 def _compute_ml_probability(
     data: Dict[str, Any],
     symbol: str,
@@ -458,122 +586,25 @@ def _compute_ml_probability(
 
     Returns (ml_probability: float, model_version: str).
 
-    Path 1 (preferred): advanced_oos.pkl with full macro + MTF feature set.
-    Path 2 (fallback):  basic xgb_macro.pkl with stationary OHLCV features.
+    Path 1 (preferred): advanced_oos.pkl — full macro + MTF feature set.
+    Path 2 (fallback):  basic xgb_macro.pkl — stationary OHLCV features.
     Path 3 (no model):  returns base_confidence unchanged.
     """
     if not _ML_AVAILABLE:
         return base_confidence, "none"
 
     try:
-        import pandas as pd
-
-        # ── Path 1: Advanced predictor (122+ features, 68% OOS) ──────────────
         adv_predictor = get_advanced_predictor()
         if adv_predictor is not None and adv_predictor.is_available:
-            ohlcv_df = _build_ohlcv_df(data)
-            macro_df = _fetch_macro_df(ohlcv_df, symbol)
-            mtf_df = _fetch_mtf_df(ohlcv_df, app_state=app_state)
-            prob = adv_predictor.predict_proba(
-                ohlcv_df,
-                macro_df=macro_df,
-                symbol=symbol,
-                mtf_df=mtf_df,
-            )
+            return _predict_advanced(adv_predictor, data, symbol, app_state)
 
-            # ── Phase 2: anomaly weighting ────────────────────────────────────
-            anomaly_weight = 1.0
-            anomaly_store = _get_anomaly_store()
-            if anomaly_store is not None:
-                try:
-                    anomaly_weight = anomaly_store.update_and_score(ohlcv_df)
-                    if anomaly_weight < 1.0:
-                        # Blend probability toward neutral (0.5) by the weight
-                        prob_before = prob
-                        prob = 0.5 + (prob - 0.5) * anomaly_weight
-                        logger.debug(
-                            "Phase2 anomaly: weight=%.2f %s %.4f→%.4f",
-                            anomaly_weight,
-                            symbol,
-                            prob_before,
-                            prob,
-                        )
-                except Exception as aw_exc:
-                    logger.debug("Anomaly weighting failed (non-fatal): %s", aw_exc)
-
-            # ── Phase 3: online learning blend ────────────────────────────────
-            # Store the post-anomaly prob as primary_prob for adaptive weight updates
-            float(prob)
-            online_store = _get_online_learner_store()
-            if online_store is not None and online_store.is_ready:
-                try:
-                    prob = online_store.blend(prob, ohlcv_df)
-                    logger.debug(
-                        "Phase3 online blend: %s → %.4f",
-                        symbol,
-                        prob,
-                    )
-                except Exception as ol_exc:
-                    logger.debug("Online learner blend failed (non-fatal): %s", ol_exc)
-
-            # ── Phase 4: deep ensemble blend ──────────────────────────────────
-            deep_store = _get_deep_ensemble_store()
-            if deep_store is not None and deep_store.is_active:
-                try:
-                    prob = deep_store.blend(prob, ohlcv_df)
-                    logger.debug(
-                        "Phase4 deep blend: %s → %.4f",
-                        symbol,
-                        prob,
-                    )
-                except Exception as de_exc:
-                    logger.debug("Deep ensemble blend failed (non-fatal): %s", de_exc)
-
-            logger.debug(
-                "ML chain (%s) %s: final=%.4f [macro=%s mtf=%s anomaly_w=%.2f]",
-                adv_predictor.version,
-                symbol,
-                prob,
-                "yes" if macro_df is not None else "no",
-                "yes" if mtf_df is not None else "no",
-                anomaly_weight,
-            )
-            return float(prob), adv_predictor.version
-
-        # ── Path 2: Basic fallback model (~50% OOS, stationary features) ─────
         active_model = get_active_model()
-        model_ver = get_model_version()
+        model_ver    = get_model_version()
         if active_model is not None:
-            prices = data.get("prices", [data["close"]])
-            closes = pd.Series(prices)
-            feat = {
-                "close": data["close"],
-                "open": data["open"],
-                "high": data["high"],
-                "low": data["low"],
-                "volume": data.get("volume", 0),
-                "ret_1": closes.pct_change(1).iloc[-1] if len(closes) > 1 else 0,
-                "ret_5": closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,
-                "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
-                "vol_20": (
-                    closes.pct_change().rolling(20).std().iloc[-1]
-                    if len(closes) > 20
-                    else 0
-                ),
-            }
-            X = pd.DataFrame([feat])
-            if hasattr(active_model, "predict_proba"):
-                proba = active_model.predict_proba(X)
-                prob = float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
-            elif hasattr(active_model, "predict"):
-                prob = float(active_model.predict(X)[0])
-            else:
-                prob = base_confidence
-            logger.debug("Basic ML (%s) prob for %s: %.4f", model_ver, symbol, prob)
-            return prob, model_ver
+            return _predict_basic(active_model, model_ver, data, symbol, base_confidence)
 
-    except Exception as ml_exc:
-        logger.debug("ML enrichment failed for %s: %s", symbol, ml_exc)
+    except Exception as exc:
+        logger.debug("ML enrichment failed for %s: %s", symbol, exc)
 
     return base_confidence, "none"
 
@@ -1097,15 +1128,99 @@ async def _execute_if_approved(
         logger.error("Auto-trade order failed for %s: %s", symbol, order_exc)
 
 
+_SL_ATR_MULT_DEFAULT = 1.5
+_TP_ATR_MULT_DEFAULT = 3.0
+_ATR_FALLBACK_FRAC   = 0.008   # fraction of entry price when ATR unavailable
+_SL_FALLBACK_FRAC    = 0.015   # 1.5% fixed fallback stop distance
+_TP_FALLBACK_FRAC    = 0.030   # 3.0% fixed fallback take-profit distance
+_ATR_MIN_BARS        = 14      # minimum bars required for ATR calculation
+
+
+def _compute_atr(highs: list, lows: list, closes: list, entry_price: float) -> float:
+    """
+    Compute 14-period ATR from bar lists.
+
+    Returns entry_price * _ATR_FALLBACK_FRAC when fewer than _ATR_MIN_BARS
+    are available — callers must not treat this as a real ATR value.
+    """
+    import numpy as np
+
+    if len(highs) < _ATR_MIN_BARS or len(lows) < _ATR_MIN_BARS:
+        return entry_price * _ATR_FALLBACK_FRAC
+
+    h  = np.array(highs[-(_ATR_MIN_BARS + 1):], dtype=float)
+    lo = np.array(lows[-(_ATR_MIN_BARS + 1):], dtype=float)
+    c  = np.array(closes[-(_ATR_MIN_BARS + 1):], dtype=float)
+    tr = np.maximum(
+        h[1:] - lo[1:],
+        np.maximum(np.abs(h[1:] - c[:-1]), np.abs(lo[1:] - c[:-1])),
+    )
+    return float(np.mean(tr[-_ATR_MIN_BARS:])) if len(tr) >= _ATR_MIN_BARS else entry_price * _ATR_FALLBACK_FRAC
+
+
+def _resolve_sl_tp(
+    signal: Any,
+    data: Dict[str, Any],
+    direction: str,
+    entry_price: float,
+) -> tuple:
+    """
+    Return (stop_loss, take_profit) for a signal.
+
+    Uses strategy-provided values when present; falls back to ATR-based
+    levels computed from the OHLCV bar list.  A fixed-percentage fallback
+    is used when ATR computation fails.
+
+    Every published signal must carry real SL/TP values so downstream
+    consumers (ws_live.py, event bus, execution path) see consistent data.
+    """
+    sl_raw = getattr(signal, "stop_loss", None)
+    tp_raw = getattr(signal, "take_profit", None)
+
+    if sl_raw is not None and tp_raw is not None:
+        return sl_raw, tp_raw
+
+    is_long   = direction.upper() == "BUY"
+    sl_mult   = float(os.getenv("SL_ATR_MULT", str(_SL_ATR_MULT_DEFAULT)))
+    tp_mult   = float(os.getenv("TP_ATR_MULT", str(_TP_ATR_MULT_DEFAULT)))
+
+    try:
+        atr = _compute_atr(
+            data.get("highs", []),
+            data.get("lows", []),
+            data.get("prices", [entry_price]),
+            entry_price,
+        )
+        sl = sl_raw if sl_raw is not None else (
+            entry_price - atr * sl_mult if is_long else entry_price + atr * sl_mult
+        )
+        tp = tp_raw if tp_raw is not None else (
+            entry_price + atr * tp_mult if is_long else entry_price - atr * tp_mult
+        )
+        return sl, tp
+
+    except Exception as exc:
+        logger.debug("ATR SL/TP computation failed (using fixed fallback): %s", exc)
+        sl = sl_raw or (
+            entry_price * (1 - _SL_FALLBACK_FRAC) if is_long
+            else entry_price * (1 + _SL_FALLBACK_FRAC)
+        )
+        tp = tp_raw or (
+            entry_price * (1 + _TP_FALLBACK_FRAC) if is_long
+            else entry_price * (1 - _TP_FALLBACK_FRAC)
+        )
+        return sl, tp
+
+
 async def _tick(app_state: Any) -> None:
     """
     Process one tick for all watched symbols.
 
     Orchestrates four focused sub-functions:
-      _compute_signal()        — StrategyBrain consensus
+      _compute_signal()         — StrategyBrain consensus
       _compute_ml_probability() — advanced/fallback ML enrichment with macro
-      _publish_and_broadcast() — event bus + WebSocket
-      _execute_if_approved()   — risk filter + auto-trade execution
+      _publish_and_broadcast()  — event bus + WebSocket
+      _execute_if_approved()    — risk filter + auto-trade execution
     """
     brain: Any = getattr(app_state, "strategy_brain", None)
     if brain is None:
@@ -1114,110 +1229,37 @@ async def _tick(app_state: Any) -> None:
     for sym in _SYMBOLS:
         symbol: str = sym.strip().upper()
 
-        # 1. Fetch OHLCV
-        data: Optional[Dict[str, Any]] = await _fetch_market_data(
-            symbol,
-            app_state=app_state,
-        )
+        data: Optional[Dict[str, Any]] = await _fetch_market_data(symbol, app_state=app_state)
         if not data:
             continue
 
-        # 2. StrategyBrain consensus
         sig_info = _compute_signal(brain, data, symbol)
         if sig_info is None:
             continue
 
-        direction = sig_info["direction"]
+        direction       = sig_info["direction"]
         base_confidence = sig_info["base_confidence"]
-        signal = sig_info["signal"]
+        signal          = sig_info["signal"]
 
-        # 3. ML probability enrichment (advanced model with macro + MTF features)
         ml_probability, model_ver = _compute_ml_probability(
-            data,
-            symbol,
-            base_confidence,
-            app_state=app_state,
+            data, symbol, base_confidence, app_state=app_state,
         )
 
-        # 4. Build signal payload
-        entry_price = getattr(signal, "entry_price", data["close"])
-        sl_raw = getattr(signal, "stop_loss", None)
-        tp_raw = getattr(signal, "take_profit", None)
-
-        # Compute ATR-based SL/TP at publish time when strategy didn't provide them.
-        # This ensures every published signal carries real risk levels — not None —
-        # so ws_live.py, the event bus, and the execution path all see consistent data.
-        if sl_raw is None or tp_raw is None:
-            try:
-                highs = data.get("highs", [])
-                lows = data.get("lows", [])
-                closes_list = data.get("prices", [entry_price])
-                import numpy as _np_sl
-
-                sl_mult = float(os.getenv("SL_ATR_MULT", "1.5"))
-                tp_mult = float(os.getenv("TP_ATR_MULT", "3.0"))
-                if len(highs) >= 14 and len(lows) >= 14:
-                    h = _np_sl.array(highs[-15:], dtype=float)
-                    l = _np_sl.array(lows[-15:], dtype=float)  # noqa: E741
-                    c = _np_sl.array(closes_list[-15:], dtype=float)
-                    tr = _np_sl.maximum(
-                        h[1:] - l[1:],
-                        _np_sl.maximum(abs(h[1:] - c[:-1]), abs(l[1:] - c[:-1])),
-                    )
-                    atr = (
-                        float(_np_sl.mean(tr[-14:]))
-                        if len(tr) >= 14
-                        else entry_price * 0.008
-                    )
-                else:
-                    atr = entry_price * 0.008
-                is_long = direction.upper() == "BUY"
-                sl_raw = (
-                    sl_raw
-                    if sl_raw is not None
-                    else (
-                        entry_price - atr * sl_mult
-                        if is_long
-                        else entry_price + atr * sl_mult
-                    )
-                )
-                tp_raw = (
-                    tp_raw
-                    if tp_raw is not None
-                    else (
-                        entry_price + atr * tp_mult
-                        if is_long
-                        else entry_price - atr * tp_mult
-                    )
-                )
-            except Exception as _sl_exc:
-                logger.debug("Signal payload ATR SL/TP failed: %s", _sl_exc)
-                sl_raw = sl_raw or (
-                    entry_price * 0.985
-                    if direction.upper() == "BUY"
-                    else entry_price * 1.015
-                )
-                tp_raw = tp_raw or (
-                    entry_price * 1.03
-                    if direction.upper() == "BUY"
-                    else entry_price * 0.97
-                )
+        entry_price      = getattr(signal, "entry_price", data["close"])
+        sl_raw, tp_raw   = _resolve_sl_tp(signal, data, direction, entry_price)
 
         signal_payload: Dict[str, Any] = {
-            "symbol": symbol,
-            "direction": direction,
-            "confidence": base_confidence,
-            "probability": ml_probability,
+            "symbol":        symbol,
+            "direction":     direction,
+            "confidence":    base_confidence,
+            "probability":   ml_probability,
             "model_version": model_ver,
-            "entry_price": entry_price,
-            "stop_loss": round(sl_raw, 5) if sl_raw is not None else None,
-            "take_profit": round(tp_raw, 5) if tp_raw is not None else None,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "source": "strategy_brain",
+            "entry_price":   entry_price,
+            "stop_loss":     round(sl_raw, 5) if sl_raw is not None else None,
+            "take_profit":   round(tp_raw, 5) if tp_raw is not None else None,
+            "timestamp":     datetime.now(timezone.utc).isoformat(),
+            "source":        "strategy_brain",
         }
 
-        # 5. Publish to event bus + WebSocket
         await _publish_and_broadcast(app_state, symbol, signal_payload)
-
-        # 6. Auto-trade if enabled and risk approved
         await _execute_if_approved(app_state, symbol, signal_payload, data=data)
