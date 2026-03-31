@@ -38,6 +38,7 @@ Slippage model
 
   All parameters env-overridable (SHADOW_HALF_SPREAD_BPS etc.)
 """
+
 from __future__ import annotations
 
 import logging
@@ -45,7 +46,7 @@ import math
 import os
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -53,18 +54,22 @@ logger = logging.getLogger(__name__)
 
 # ── slippage model params ─────────────────────────────────────────────────────
 _HALF_SPREAD_BPS = float(os.getenv("SHADOW_HALF_SPREAD_BPS", "3.0"))
-_IMPACT_BPS      = float(os.getenv("SHADOW_IMPACT_BPS",      "2.0"))
-_NOISE_BPS       = float(os.getenv("SHADOW_NOISE_BPS",       "1.0"))
-_ADV_LOTS        = float(os.getenv("SHADOW_ADV_LOTS",        "100.0"))
+_IMPACT_BPS = float(os.getenv("SHADOW_IMPACT_BPS", "2.0"))
+_NOISE_BPS = float(os.getenv("SHADOW_NOISE_BPS", "1.0"))
+_ADV_LOTS = float(os.getenv("SHADOW_ADV_LOTS", "100.0"))
 
 # ── Prometheus ────────────────────────────────────────────────────────────────
 try:
     from prometheus_client import Counter, Gauge
 
-    _prom_shadow_trades  = Counter("hopefx_shadow_trades_total",  "Shadow trades executed")
-    _prom_shadow_pnl     = Gauge("hopefx_shadow_pnl_usd",         "Shadow cumulative PnL USD")
-    _prom_shadow_equity  = Gauge("hopefx_shadow_equity_usd",      "Shadow equity USD")
-    _prom_live_gap       = Gauge("hopefx_shadow_live_pnl_gap_usd","Shadow vs live PnL gap USD")
+    _prom_shadow_trades = Counter(
+        "hopefx_shadow_trades_total", "Shadow trades executed"
+    )
+    _prom_shadow_pnl = Gauge("hopefx_shadow_pnl_usd", "Shadow cumulative PnL USD")
+    _prom_shadow_equity = Gauge("hopefx_shadow_equity_usd", "Shadow equity USD")
+    _prom_live_gap = Gauge(
+        "hopefx_shadow_live_pnl_gap_usd", "Shadow vs live PnL gap USD"
+    )
     _PROM_OK = True
 except Exception:
     _PROM_OK = False
@@ -73,31 +78,33 @@ except Exception:
 @dataclass
 class ShadowFill:
     """A simulated paper fill."""
-    signal_id:        str
-    symbol:           str
-    side:             str
-    lots:             float
-    requested:        float
-    fill_price:       float
-    slippage_bps:     float
-    timestamp:        datetime
-    pnl:              float = 0.0
-    closed:           bool  = False
-    close_price:      float = 0.0
-    live_slippage_bps: Optional[float] = None   # set when live fill is reported
+
+    signal_id: str
+    symbol: str
+    side: str
+    lots: float
+    requested: float
+    fill_price: float
+    slippage_bps: float
+    timestamp: datetime
+    pnl: float = 0.0
+    closed: bool = False
+    close_price: float = 0.0
+    live_slippage_bps: Optional[float] = None  # set when live fill is reported
 
 
 @dataclass
 class ShadowPosition:
     """Open shadow position."""
-    symbol:      str
-    side:        str
-    lots:        float
+
+    symbol: str
+    side: str
+    lots: float
     entry_price: float
-    stop_loss:   float
+    stop_loss: float
     take_profit: float
-    opened_at:   datetime
-    signal_id:   str
+    opened_at: datetime
+    signal_id: str
 
 
 class PaperFillSimulator:
@@ -118,9 +125,11 @@ class PaperFillSimulator:
 
         side: "long" | "short"
         """
-        half_spread   = mid * _HALF_SPREAD_BPS / 10_000
-        market_impact = mid * _IMPACT_BPS / 10_000 * math.sqrt(lots / max(_ADV_LOTS, 0.01))
-        noise         = mid * _NOISE_BPS / 10_000 * random.gauss(0, 1)
+        half_spread = mid * _HALF_SPREAD_BPS / 10_000
+        market_impact = (
+            mid * _IMPACT_BPS / 10_000 * math.sqrt(lots / max(_ADV_LOTS, 0.01))
+        )
+        noise = mid * _NOISE_BPS / 10_000 * random.gauss(0, 1)
 
         total_cost = half_spread + market_impact + abs(noise)
         if side == "long":
@@ -154,19 +163,19 @@ class ShadowTradingEngine:
     """
 
     def __init__(self, initial_balance: float = 10_000.0) -> None:
-        self._balance:    float = initial_balance
-        self._equity:     float = initial_balance
-        self._peak:       float = initial_balance
-        self._pnl:        float = 0.0
-        self._fills:      List[ShadowFill]    = []
-        self._positions:  List[ShadowPosition] = []
-        self._simulator   = PaperFillSimulator()
-        self._started:    bool  = False
-        self._start_ts:   float = time.time()
+        self._balance: float = initial_balance
+        self._equity: float = initial_balance
+        self._peak: float = initial_balance
+        self._pnl: float = 0.0
+        self._fills: List[ShadowFill] = []
+        self._positions: List[ShadowPosition] = []
+        self._simulator = PaperFillSimulator()
+        self._started: bool = False
+        self._start_ts: float = time.time()
 
         # Live comparison
-        self._live_pnl:   float = 0.0
-        self._live_fills: int   = 0
+        self._live_pnl: float = 0.0
+        self._live_fills: int = 0
 
     async def start(self) -> None:
         self._started = True
@@ -176,7 +185,8 @@ class ShadowTradingEngine:
         self._started = False
         logger.info(
             "ShadowTradingEngine: stopped — trades=%d pnl=%.2f",
-            len(self._fills), self._pnl,
+            len(self._fills),
+            self._pnl,
         )
 
     def on_signal(
@@ -197,33 +207,39 @@ class ShadowTradingEngine:
 
         fill_price, slippage_bps = self._simulator.simulate(side, mid, lots)
         fill = ShadowFill(
-            signal_id    = signal_id,
-            symbol       = symbol,
-            side         = side,
-            lots         = lots,
-            requested    = mid,
-            fill_price   = fill_price,
-            slippage_bps = slippage_bps,
-            timestamp    = datetime.now(timezone.utc),
+            signal_id=signal_id,
+            symbol=symbol,
+            side=side,
+            lots=lots,
+            requested=mid,
+            fill_price=fill_price,
+            slippage_bps=slippage_bps,
+            timestamp=datetime.now(timezone.utc),
         )
         self._fills.append(fill)
-        self._positions.append(ShadowPosition(
-            symbol      = symbol,
-            side        = side,
-            lots        = lots,
-            entry_price = fill_price,
-            stop_loss   = stop_loss,
-            take_profit = take_profit,
-            opened_at   = datetime.now(timezone.utc),
-            signal_id   = signal_id,
-        ))
+        self._positions.append(
+            ShadowPosition(
+                symbol=symbol,
+                side=side,
+                lots=lots,
+                entry_price=fill_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                opened_at=datetime.now(timezone.utc),
+                signal_id=signal_id,
+            )
+        )
 
         if _PROM_OK:
             _prom_shadow_trades.inc()
 
         logger.debug(
             "Shadow OPEN %s %s lots=%.3f fill=%.4f slip=%.2fbps",
-            side, symbol, lots, fill_price, slippage_bps,
+            side,
+            symbol,
+            lots,
+            fill_price,
+            slippage_bps,
         )
         return fill
 
@@ -233,33 +249,38 @@ class ShadowTradingEngine:
             return
         closed = []
         for pos in self._positions:
-            hit_sl = (pos.side == "long"  and mid <= pos.stop_loss) or \
-                     (pos.side == "short" and mid >= pos.stop_loss)
-            hit_tp = (pos.side == "long"  and mid >= pos.take_profit) or \
-                     (pos.side == "short" and mid <= pos.take_profit)
+            hit_sl = (pos.side == "long" and mid <= pos.stop_loss) or (
+                pos.side == "short" and mid >= pos.stop_loss
+            )
+            hit_tp = (pos.side == "long" and mid >= pos.take_profit) or (
+                pos.side == "short" and mid <= pos.take_profit
+            )
             if hit_sl or hit_tp:
                 if pos.side == "long":
                     pnl = (mid - pos.entry_price) * pos.lots * 100.0
                 else:
                     pnl = (pos.entry_price - mid) * pos.lots * 100.0
 
-                self._pnl     += pnl
+                self._pnl += pnl
                 self._balance += pnl
-                self._equity   = self._balance
-                self._peak     = max(self._peak, self._equity)
+                self._equity = self._balance
+                self._peak = max(self._peak, self._equity)
 
                 # Mark fill as closed
                 for f in self._fills:
                     if f.signal_id == pos.signal_id and not f.closed:
-                        f.pnl         = pnl
-                        f.closed      = True
+                        f.pnl = pnl
+                        f.closed = True
                         f.close_price = mid
                         break
 
                 closed.append(pos)
                 logger.debug(
                     "Shadow CLOSE %s %s pnl=%.2f reason=%s",
-                    pos.side, pos.symbol, pnl, "TP" if hit_tp else "SL",
+                    pos.side,
+                    pos.symbol,
+                    pnl,
+                    "TP" if hit_tp else "SL",
                 )
 
         for pos in closed:
@@ -288,7 +309,7 @@ class ShadowTradingEngine:
                             When provided, enables _slippage_accuracy() R²
                             computation comparing shadow model vs reality.
         """
-        self._live_pnl   += live_pnl
+        self._live_pnl += live_pnl
         self._live_fills += 1
 
         # Attach live slippage to the matching shadow fill for R² computation
@@ -303,28 +324,31 @@ class ShadowTradingEngine:
             _prom_live_gap.set(gap)
         logger.info(
             "Shadow vs Live: shadow_pnl=%.2f live_pnl=%.2f gap=%.2f slip_r2=%.3f",
-            self._pnl, self._live_pnl, gap, self._slippage_accuracy(),
+            self._pnl,
+            self._live_pnl,
+            gap,
+            self._slippage_accuracy(),
         )
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
     def health(self) -> Dict[str, Any]:
         closed_fills = [f for f in self._fills if f.closed]
-        wins  = [f for f in closed_fills if f.pnl > 0]
-        now   = time.time()
-        dd    = (self._peak - self._equity) / max(self._peak, 1) * 100
+        wins = [f for f in closed_fills if f.pnl > 0]
+        now = time.time()
+        dd = (self._peak - self._equity) / max(self._peak, 1) * 100
         return {
-            "started":         self._started,
-            "uptime_s":        round(now - self._start_ts, 1),
-            "balance":         round(self._balance, 2),
-            "equity":          round(self._equity, 2),
-            "pnl":             round(self._pnl, 2),
-            "drawdown_pct":    round(dd, 3),
-            "total_trades":    len(self._fills),
-            "open_positions":  len(self._positions),
-            "win_rate":        round(len(wins) / max(len(closed_fills), 1), 4),
-            "live_pnl":        round(self._live_pnl, 2),
-            "live_gap_usd":    round(self._pnl - self._live_pnl, 2),
+            "started": self._started,
+            "uptime_s": round(now - self._start_ts, 1),
+            "balance": round(self._balance, 2),
+            "equity": round(self._equity, 2),
+            "pnl": round(self._pnl, 2),
+            "drawdown_pct": round(dd, 3),
+            "total_trades": len(self._fills),
+            "open_positions": len(self._positions),
+            "win_rate": round(len(wins) / max(len(closed_fills), 1), 4),
+            "live_pnl": round(self._live_pnl, 2),
+            "live_gap_usd": round(self._pnl - self._live_pnl, 2),
             "avg_slippage_bps": round(
                 sum(f.slippage_bps for f in self._fills) / max(len(self._fills), 1), 3
             ),
@@ -334,11 +358,11 @@ class ShadowTradingEngine:
         """Paper-vs-live comparison report."""
         closed = [f for f in self._fills if f.closed]
         return {
-            "shadow_trades":    len(closed),
-            "shadow_pnl":       round(self._pnl, 2),
-            "live_trades":      self._live_fills,
-            "live_pnl":         round(self._live_pnl, 2),
-            "pnl_gap":          round(self._pnl - self._live_pnl, 2),
+            "shadow_trades": len(closed),
+            "shadow_pnl": round(self._pnl, 2),
+            "live_trades": self._live_fills,
+            "live_pnl": round(self._live_pnl, 2),
+            "pnl_gap": round(self._pnl - self._live_pnl, 2),
             "avg_slippage_bps": round(
                 sum(f.slippage_bps for f in self._fills) / max(len(self._fills), 1), 3
             ),
@@ -368,12 +392,12 @@ class ShadowTradingEngine:
         if len(paired) < 2:
             return 0.0
 
-        shadow_vals = [p[0] for p in paired]
-        live_vals   = [p[1] for p in paired]
-        mean_live   = sum(live_vals) / len(live_vals)
+        _shadow_vals = [p[0] for p in paired]
+        live_vals = [p[1] for p in paired]
+        mean_live = sum(live_vals) / len(live_vals)
 
-        ss_res = sum((s - l) ** 2 for s, l in paired)
-        ss_tot = sum((l - mean_live) ** 2 for l in live_vals)
+        ss_res = sum((s - lv) ** 2 for s, lv in paired)
+        ss_tot = sum((lv - mean_live) ** 2 for lv in live_vals)
 
         if ss_tot < 1e-12:
             return 1.0  # perfect prediction (zero variance in live)

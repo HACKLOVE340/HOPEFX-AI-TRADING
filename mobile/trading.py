@@ -119,7 +119,11 @@ class MobileTradingEngine:
             order_id = result.get("order_id") or str(uuid.uuid4())
             logger.info(
                 "MobileTradingEngine: order placed user=%s symbol=%s side=%s qty=%s id=%s",
-                user_id, symbol, side, quantity, order_id,
+                user_id,
+                symbol,
+                side,
+                quantity,
+                order_id,
             )
             return {
                 "order_id": order_id,
@@ -133,7 +137,9 @@ class MobileTradingEngine:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as exc:
-            logger.error("MobileTradingEngine.place_order_async: %s", exc, exc_info=True)
+            logger.error(
+                "MobileTradingEngine.place_order_async: %s", exc, exc_info=True
+            )
             return {
                 "order_id": None,
                 "status": "error",
@@ -225,24 +231,42 @@ class MobileTradingEngine:
         """Close a specific position via the real broker (async)."""
         broker = self._get_broker()
         if broker is None:
-            return {"status": "rejected", "error": "Broker not available", "position_id": position_id}
+            return {
+                "status": "rejected",
+                "error": "Broker not available",
+                "position_id": position_id,
+            }
 
         try:
             fn = getattr(broker, "close_position", None)
             if fn is None:
-                return {"status": "rejected", "error": "Broker does not support close_position", "position_id": position_id}
+                return {
+                    "status": "rejected",
+                    "error": "Broker does not support close_position",
+                    "position_id": position_id,
+                }
 
-            result = await fn(user_id=user_id, position_id=position_id, quantity=quantity)
-            logger.info("MobileTradingEngine: position closed user=%s id=%s", user_id, position_id)
+            result = await fn(
+                user_id=user_id, position_id=position_id, quantity=quantity
+            )
+            logger.info(
+                "MobileTradingEngine: position closed user=%s id=%s",
+                user_id,
+                position_id,
+            )
             return {
                 "status": "closed",
                 "position_id": position_id,
-                "close_price": result.get("close_price") if isinstance(result, dict) else None,
+                "close_price": result.get("close_price")
+                if isinstance(result, dict)
+                else None,
                 "pnl": result.get("pnl") if isinstance(result, dict) else None,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as exc:
-            logger.error("MobileTradingEngine.close_position_async: %s", exc, exc_info=True)
+            logger.error(
+                "MobileTradingEngine.close_position_async: %s", exc, exc_info=True
+            )
             return {"status": "error", "error": str(exc), "position_id": position_id}
 
     async def close_all_positions_async(
@@ -252,17 +276,25 @@ class MobileTradingEngine:
         """Close all open positions via the real broker (async)."""
         broker = self._get_broker()
         if broker is None:
-            return {"status": "rejected", "error": "Broker not available", "positions_closed": 0}
+            return {
+                "status": "rejected",
+                "error": "Broker not available",
+                "positions_closed": 0,
+            }
 
         # Fetch open positions first
         positions: List[Dict[str, Any]] = []
         try:
-            fn = getattr(broker, "get_positions", None) or getattr(broker, "get_open_trades", None)
+            fn = getattr(broker, "get_positions", None) or getattr(
+                broker, "get_open_trades", None
+            )
             if fn:
                 raw = await fn(user_id)
                 positions = raw if isinstance(raw, list) else []
         except Exception as exc:
-            logger.warning("MobileTradingEngine.close_all: get_positions failed: %s", exc)
+            logger.warning(
+                "MobileTradingEngine.close_all: get_positions failed: %s", exc
+            )
 
         closed = 0
         errors: List[str] = []
@@ -278,7 +310,9 @@ class MobileTradingEngine:
 
         logger.info(
             "MobileTradingEngine.close_all: user=%s closed=%d errors=%d",
-            user_id, closed, len(errors),
+            user_id,
+            closed,
+            len(errors),
         )
         return {
             "action": "close_all",
@@ -305,7 +339,9 @@ class MobileTradingEngine:
         try:
             return self._run(self.close_all_positions_async(user_id))
         except Exception as exc:
-            logger.error("MobileTradingEngine.close_all_positions: %s", exc, exc_info=True)
+            logger.error(
+                "MobileTradingEngine.close_all_positions: %s", exc, exc_info=True
+            )
             return {
                 "action": "close_all",
                 "user_id": user_id,
@@ -320,21 +356,33 @@ class MobileTradingEngine:
         """Cancel a pending order via the real broker (async)."""
         broker = self._get_broker()
         if broker is None:
-            return {"status": "rejected", "error": "Broker not available", "order_id": order_id}
+            return {
+                "status": "rejected",
+                "error": "Broker not available",
+                "order_id": order_id,
+            }
 
         try:
             fn = getattr(broker, "cancel_order", None)
             if fn is None:
-                return {"status": "rejected", "error": "Broker does not support cancel_order", "order_id": order_id}
-            result = await fn(user_id=user_id, order_id=order_id)
-            logger.info("MobileTradingEngine: order cancelled user=%s id=%s", user_id, order_id)
+                return {
+                    "status": "rejected",
+                    "error": "Broker does not support cancel_order",
+                    "order_id": order_id,
+                }
+            _result = await fn(user_id=user_id, order_id=order_id)
+            logger.info(
+                "MobileTradingEngine: order cancelled user=%s id=%s", user_id, order_id
+            )
             return {
                 "status": "cancelled",
                 "order_id": order_id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as exc:
-            logger.error("MobileTradingEngine.cancel_order_async: %s", exc, exc_info=True)
+            logger.error(
+                "MobileTradingEngine.cancel_order_async: %s", exc, exc_info=True
+            )
             return {"status": "error", "error": str(exc), "order_id": order_id}
 
     # ── Position / order queries ──────────────────────────────────────────────
@@ -345,7 +393,9 @@ class MobileTradingEngine:
         if broker is None:
             return []
         try:
-            fn = getattr(broker, "get_positions", None) or getattr(broker, "get_open_trades", None)
+            fn = getattr(broker, "get_positions", None) or getattr(
+                broker, "get_open_trades", None
+            )
             if fn is None:
                 return []
             raw = await fn(user_id)
@@ -360,7 +410,9 @@ class MobileTradingEngine:
         if broker is None:
             return []
         try:
-            fn = getattr(broker, "get_orders", None) or getattr(broker, "get_pending_orders", None)
+            fn = getattr(broker, "get_orders", None) or getattr(
+                broker, "get_pending_orders", None
+            )
             if fn is None:
                 return []
             raw = await fn(user_id)

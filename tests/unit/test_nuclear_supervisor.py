@@ -9,20 +9,21 @@ All tests run without real brokers, RL models, or external services.
 
 from __future__ import annotations
 
-import asyncio
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
+os.environ.setdefault(
+    "SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!"
+)
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_event(text: str = "", severity_hint: int = 0) -> dict:
     """Build a minimal nuclear event dict."""
@@ -38,6 +39,7 @@ def _make_event(text: str = "", severity_hint: int = 0) -> dict:
 # NuclearHopeFXSupervisor
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestNuclearHopeFXSupervisor:
     """Tests for NuclearHopeFXSupervisor (rule-based fallback path)."""
 
@@ -45,11 +47,12 @@ class TestNuclearHopeFXSupervisor:
     def supervisor(self):
         """Supervisor with no RL model (rule-based fallback)."""
         from brain.nuclear_supervisor import NuclearHopeFXSupervisor
+
         sup = NuclearHopeFXSupervisor(
             model_path="nonexistent_model.zip",
             wordmap_path=None,
-            cooldown_seconds=0,       # disable cooldown for tests
-            auto_resume_seconds=0,    # disable auto-resume for tests
+            cooldown_seconds=0,  # disable cooldown for tests
+            auto_resume_seconds=0,  # disable auto-resume for tests
         )
         assert sup.rl_agent is None, "Expected rule-based fallback (no RL model)"
         return sup
@@ -96,7 +99,9 @@ class TestNuclearHopeFXSupervisor:
             )
             with patch("brain.nuclear_supervisor._get_notifications") as mock_notif:
                 mock_notif.return_value = MagicMock(send_critical_alert=AsyncMock())
-                result = await supervisor.on_new_event(_make_event("geopolitical tension"))
+                result = await supervisor.on_new_event(
+                    _make_event("geopolitical tension")
+                )
 
         assert result["action_taken"] == "hedge"
         assert supervisor.nuclear_level == 2
@@ -116,7 +121,9 @@ class TestNuclearHopeFXSupervisor:
                 mock_ro.return_value = MagicMock(set_max_risk=AsyncMock())
                 with patch("brain.nuclear_supervisor._get_notifications") as mock_notif:
                     mock_notif.return_value = MagicMock(send_critical_alert=AsyncMock())
-                    result = await supervisor.on_new_event(_make_event("nuclear strike alert"))
+                    result = await supervisor.on_new_event(
+                        _make_event("nuclear strike alert")
+                    )
 
         assert result["action_taken"] == "nuclear"
         assert supervisor.nuclear_level == 3
@@ -155,11 +162,18 @@ class TestNuclearHopeFXSupervisor:
         """get_status() returns all expected keys."""
         status = supervisor.get_status()
         required_keys = {
-            "nuclear_level", "trading_paused", "monitoring_only",
-            "monitoring_loop_running", "kill_switch_active",
-            "rl_agent_loaded", "vecnorm_loaded", "model_path",
-            "cooldown_remaining", "pause_elapsed",
-            "event_history_count", "last_event",
+            "nuclear_level",
+            "trading_paused",
+            "monitoring_only",
+            "monitoring_loop_running",
+            "kill_switch_active",
+            "rl_agent_loaded",
+            "vecnorm_loaded",
+            "model_path",
+            "cooldown_remaining",
+            "pause_elapsed",
+            "event_history_count",
+            "last_event",
         }
         assert required_keys.issubset(set(status.keys()))
 
@@ -176,6 +190,7 @@ class TestNuclearHopeFXSupervisor:
     def test_normalize_obs_passthrough_without_vecnorm(self, supervisor):
         """_normalize_obs returns raw obs when no VecNormalize is loaded."""
         import numpy as np
+
         obs = np.array([0.5, 1.0, 0.0, 0.5, 0.5, 0.0, 0.0], dtype=np.float32)
         result = supervisor._normalize_obs(obs)
         assert (result == obs).all()
@@ -199,7 +214,9 @@ class TestNuclearHopeFXSupervisor:
         )
 
         mock_ro = MagicMock(set_max_risk=AsyncMock(), activate_hedge_mode=AsyncMock())
-        mock_notif = MagicMock(send_critical_alert=AsyncMock(), send_warning=AsyncMock())
+        mock_notif = MagicMock(
+            send_critical_alert=AsyncMock(), send_warning=AsyncMock()
+        )
 
         original_ro = _ns_mod._risk_orchestrator
         original_notif = _ns_mod._notifications
@@ -208,9 +225,9 @@ class TestNuclearHopeFXSupervisor:
         try:
             # Trigger while in cooldown — severity 7 < 9 → suppressed
             result = await supervisor.on_new_event(_make_event("geopolitical tension"))
-            assert result["action_taken"] == "hedge_cooldown_suppressed", (
-                f"Expected cooldown suppression, got {result['action_taken']}"
-            )
+            assert (
+                result["action_taken"] == "hedge_cooldown_suppressed"
+            ), f"Expected cooldown suppression, got {result['action_taken']}"
             # Orchestrator should NOT have been called (suppressed)
             mock_ro.set_max_risk.assert_not_called()
         finally:
@@ -222,12 +239,14 @@ class TestNuclearHopeFXSupervisor:
 # RiskOrchestrator
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestRiskOrchestrator:
     """Tests for RiskOrchestrator including persistence."""
 
     @pytest.fixture
     def orchestrator(self, tmp_path):
         from risk.orchestrator import RiskOrchestrator
+
         return RiskOrchestrator(
             default_max_risk=1.0,
             hedge_units=1000.0,
@@ -242,7 +261,7 @@ class TestRiskOrchestrator:
 
     @pytest.mark.asyncio
     async def test_set_max_risk_clamps_to_range(self, orchestrator):
-        await orchestrator.set_max_risk(1.5)   # above 1.0 → clamped to 1.0
+        await orchestrator.set_max_risk(1.5)  # above 1.0 → clamped to 1.0
         assert orchestrator.get_max_risk() == 1.0
 
         await orchestrator.set_max_risk(-0.5)  # below 0.0 → clamped to 0.0
@@ -260,6 +279,7 @@ class TestRiskOrchestrator:
         state_file = tmp_path / "orch_state.json"
         assert state_file.exists()
         import json
+
         data = json.loads(state_file.read_text())
         assert abs(data["max_risk"] - 0.15) < 1e-6
 
@@ -289,6 +309,7 @@ class TestRiskOrchestrator:
     async def test_hedge_persistence_across_restart(self, tmp_path):
         """Hedge positions survive a simulated process restart."""
         from risk.orchestrator import RiskOrchestrator
+
         sf = tmp_path / "orch_state.json"
 
         ro1 = RiskOrchestrator(state_file=sf)
@@ -314,8 +335,13 @@ class TestRiskOrchestrator:
 
     def test_get_status_keys(self, orchestrator):
         status = orchestrator.get_status()
-        for key in ("max_risk_fraction", "trading_allowed", "hedge_active",
-                    "hedge_positions", "event_count"):
+        for key in (
+            "max_risk_fraction",
+            "trading_allowed",
+            "hedge_active",
+            "hedge_positions",
+            "event_count",
+        ):
             assert key in status
 
     @pytest.mark.asyncio
@@ -327,12 +353,13 @@ class TestRiskOrchestrator:
         mock_broker.place_order.assert_called_once()
         call_kwargs = mock_broker.place_order.call_args.kwargs
         assert call_kwargs["symbol"] == "XAU_USD"
-        assert call_kwargs["units"] < 0   # short = negative units
+        assert call_kwargs["units"] < 0  # short = negative units
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Engine hooks — kill switch + orchestrator blocking
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestEngineKillSwitchHooks:
     """Tests for the engine's kill switch and orchestrator order-blocking logic."""
@@ -341,10 +368,12 @@ class TestEngineKillSwitchHooks:
     def engine(self):
         """Minimal HopeFXEngine with no broker or brain wired."""
         import os
+
         os.environ["APP_ENV"] = "test"
         os.environ["BROKER"] = "paper"
         os.environ["TRADING_MODE"] = "paper"
         from hopefx_engine import HopeFXEngine
+
         eng = HopeFXEngine()
         # Stub out components not needed for hook tests
         eng._broker = MagicMock()
@@ -374,6 +403,7 @@ class TestEngineKillSwitchHooks:
             trading_blocked = False
             try:
                 from kill_switch import kill_switch as _ks
+
                 if _ks.is_active():
                     trading_blocked = True
             except Exception:
@@ -387,6 +417,7 @@ class TestEngineKillSwitchHooks:
     async def test_orchestrator_blocks_when_trading_not_allowed(self):
         """RiskOrchestrator.is_trading_allowed() == False blocks orders."""
         from risk.orchestrator import RiskOrchestrator
+
         with tempfile.TemporaryDirectory() as d:
             ro = RiskOrchestrator(state_file=Path(d) / "state.json")
             await ro.set_max_risk(0.0)
@@ -396,6 +427,7 @@ class TestEngineKillSwitchHooks:
     async def test_orchestrator_allows_when_risk_restored(self):
         """After manual_resume, orchestrator allows trading again."""
         from risk.orchestrator import RiskOrchestrator
+
         with tempfile.TemporaryDirectory() as d:
             ro = RiskOrchestrator(state_file=Path(d) / "state.json")
             await ro.set_max_risk(0.0)
@@ -406,9 +438,13 @@ class TestEngineKillSwitchHooks:
     def test_validate_startup_environment_test_mode(self):
         """validate_startup_environment() does not raise in APP_ENV=test."""
         import os
+
         os.environ["APP_ENV"] = "test"
-        os.environ["SECURITY_JWT_SECRET"] = "test-only-jwt-secret-key-minimum-32-chars!!"
+        os.environ["SECURITY_JWT_SECRET"] = (
+            "test-only-jwt-secret-key-minimum-32-chars!!"
+        )
         from hopefx_engine import validate_startup_environment
+
         # Should not raise even with missing broker credentials
         issues = validate_startup_environment()
         # May have warnings but no RuntimeError
@@ -417,29 +453,34 @@ class TestEngineKillSwitchHooks:
     def test_validate_startup_environment_short_jwt_warns(self):
         """Short JWT secret is flagged as an error."""
         import os
+
         original = os.environ.get("SECURITY_JWT_SECRET")
         try:
             os.environ["APP_ENV"] = "test"
             os.environ["SECURITY_JWT_SECRET"] = "short"
             from hopefx_engine import validate_startup_environment
+
             issues = validate_startup_environment()
             error_issues = [i for i in issues if i.startswith("ERROR:")]
             assert any("SECURITY_JWT_SECRET" in i for i in error_issues)
         finally:
             # Always restore a valid secret regardless of test outcome
             os.environ["SECURITY_JWT_SECRET"] = (
-                original if original and len(original) >= 32
+                original
+                if original and len(original) >= 32
                 else "test-only-jwt-secret-key-minimum-32-chars!!"
             )
 
     def test_validate_startup_environment_oanda_missing_key(self):
         """BROKER=oanda without OANDA_API_KEY is flagged."""
         import os
+
         os.environ["APP_ENV"] = "test"
         os.environ["BROKER"] = "oanda"
         os.environ.pop("OANDA_API_KEY", None)
         os.environ.pop("OANDA_ACCOUNT_ID", None)
         from hopefx_engine import validate_startup_environment
+
         issues = validate_startup_environment()
         error_issues = [i for i in issues if i.startswith("ERROR:")]
         assert any("OANDA_API_KEY" in i for i in error_issues)
@@ -451,11 +492,13 @@ class TestEngineKillSwitchHooks:
 # KillSwitch reset_for_testing
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestKillSwitchReset:
     """Verify the test-isolation helper works correctly."""
 
     def test_reset_clears_active_state(self):
         from kill_switch import KillSwitch
+
         ks = KillSwitch()
         ks.activate("test activation")
         assert ks.is_active()
@@ -465,6 +508,7 @@ class TestKillSwitchReset:
 
     def test_reset_clears_callbacks(self):
         from kill_switch import KillSwitch
+
         ks = KillSwitch()
         ks.register_callback(lambda r: None)
         assert len(ks._callbacks) == 1
@@ -474,8 +518,9 @@ class TestKillSwitchReset:
     def test_reset_does_not_touch_files(self, tmp_path):
         """reset_for_testing() must not write or delete any files."""
         from kill_switch import KillSwitch
+
         flag = tmp_path / "ks.flag"
-        state = tmp_path / "ks.state.json"
+        _state = tmp_path / "ks.state.json"
         ks = KillSwitch(flag_file=flag)
         ks.activate("test")
         assert flag.exists()
