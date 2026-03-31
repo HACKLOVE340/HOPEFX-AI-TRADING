@@ -507,8 +507,9 @@ class AdvancedRiskAnalytics:
         mean_return = np.mean(returns)
         std_return = np.std(returns)
 
-        # Use a local Generator so we do not corrupt the global numpy RNG state.
-        rng = np.random.default_rng()
+        # Use a local Generator seeded from OS entropy so we do not corrupt the
+        # global numpy RNG state. Reproducibility is not required for Monte Carlo VaR.
+        rng = np.random.default_rng(seed=int.from_bytes(os.urandom(4), "little"))
 
         if use_historical_bootstrap and len(returns) >= time_horizon:
             # Bootstrap: resample 1-day returns and sum t draws per path.
@@ -1275,6 +1276,41 @@ class AdvancedRiskAnalytics:
 
         return annual_return / max_dd
 
+    @staticmethod
+    def _garch_current_variance(
+        arr: NDArray[np.float64],
+        omega: float,
+        alpha: float,
+        beta: float,
+    ) -> float:
+        """Iterate GARCH(1,1) recursion to obtain the current conditional variance."""
+        sigma2 = omega / max(1 - alpha - beta, 1e-10)
+        for t in range(1, len(arr)):
+            sigma2 = omega + alpha * arr[t - 1] ** 2 + beta * sigma2
+            sigma2 = max(sigma2, 1e-10)
+        return sigma2
+
+    @staticmethod
+    def _garch_hstep_variance(
+        sigma2_t: float,
+        omega: float,
+        alpha: float,
+        beta: float,
+        time_horizon: int,
+    ) -> float:
+        """Return the sum of h-step-ahead GARCH(1,1) conditional variance forecasts."""
+        if time_horizon == 1:
+            return sigma2_t
+        persistence = alpha + beta
+        long_run_var = omega / max(1 - persistence, 1e-10)
+        total = 0.0
+        sigma2_i = sigma2_t
+        for _ in range(time_horizon):
+            total += sigma2_i
+            sigma2_i = long_run_var + persistence * (sigma2_i - long_run_var)
+            sigma2_i = max(sigma2_i, 1e-10)
+        return total
+
     def calculate_var_garch(
         self,
         returns: NDArray[np.float64],
@@ -1348,25 +1384,12 @@ class AdvancedRiskAnalytics:
         omega, alpha, beta = result.x if converged else x0
 
         # ── Compute current conditional variance ─────────────────────────────
-        n = len(arr)
-        sigma2_t = omega / max(1 - alpha - beta, 1e-10)
-        for t in range(1, n):
-            sigma2_t = omega + alpha * arr[t - 1] ** 2 + beta * sigma2_t
-            sigma2_t = max(sigma2_t, 1e-10)
+        sigma2_t = self._garch_current_variance(arr, omega, alpha, beta)
 
         # ── h-step ahead variance forecast (sum of conditional variances) ────
-        persistence = alpha + beta
-        long_run_var = omega / max(1 - persistence, 1e-10)
-
-        if time_horizon == 1:
-            sigma2_forecast = sigma2_t
-        else:
-            sigma2_forecast = 0.0
-            sigma2_i = sigma2_t
-            for _ in range(time_horizon):
-                sigma2_forecast += sigma2_i
-                sigma2_i = long_run_var + persistence * (sigma2_i - long_run_var)
-                sigma2_i = max(sigma2_i, 1e-10)
+        sigma2_forecast = self._garch_hstep_variance(
+            sigma2_t, omega, alpha, beta, time_horizon
+        )
 
         sigma_forecast = float(np.sqrt(sigma2_forecast))
         alpha_level = 1.0 - confidence_level
@@ -1483,7 +1506,6 @@ class AdvancedRiskAnalytics:
         returns: Any,
         confidence: Optional[float] = None,
         confidence_level: Optional[float] = None,
-        **kw: Any,
     ) -> float:
         """Return VaR as a negative number (loss). Uses historical simulation."""
         cl: float = confidence or confidence_level or self.var_confidence
@@ -1494,7 +1516,6 @@ class AdvancedRiskAnalytics:
         self,
         returns: Any,
         risk_free_rate: Optional[float] = None,
-        annualize: bool = True,
     ) -> float:
         """Alias for calculate_sharpe_ratio with optional risk_free_rate override."""
         old_rfr = self.risk_free_rate

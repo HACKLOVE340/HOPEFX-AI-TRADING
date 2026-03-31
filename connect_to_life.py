@@ -79,8 +79,8 @@ def _get_chart_engine():
             from charting.nuclear_ai_chart_engine import get_chart_engine
 
             _chart_engine = get_chart_engine()
-        except Exception:
-            pass  # chart engine is optional
+        except Exception as _exc:  # noqa: BLE001
+            logger.debug("Chart engine unavailable (optional): %s", _exc)
     return _chart_engine
 
 
@@ -503,8 +503,8 @@ class LifeSupervisor:
             equity = status.get("equity", self._initial_bal)
             balance = status.get("balance", self._initial_bal)
             self._chart_engine.record_equity_point(equity, balance, self._nuclear_annotation())
-        except Exception:  # noqa: BLE001
-            pass  # chart engine errors must never crash the supervisor
+        except Exception as _exc:  # noqa: BLE001
+            logger.debug(_SUPPRESSED_EXC_MSG, _exc)  # chart engine errors must never crash the supervisor
 
     def _nuclear_info_str(self) -> str:
         """Return a formatted nuclear supervisor status string for heartbeat logs."""
