@@ -29,6 +29,26 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "fastapi"
         update-types: ["version-update:semver-major"]
+      # Optional deps in requirements-optional.txt — all entries are commented
+      # out and not installed in CI. Ignore Dependabot alerts for these until
+      # they are promoted to requirements.txt with a supported version.
+      - dependency-name: "tensorflow"
+      - dependency-name: "torch"
+      - dependency-name: "ta-lib"
+      - dependency-name: "TA-Lib"
+      - dependency-name: "vectorbt"
+      - dependency-name: "MetaTrader5"
+      - dependency-name: "mlflow"
+      - dependency-name: "alpaca-trade-api"
+      - dependency-name: "binance-connector"
+      - dependency-name: "celery"
+      - dependency-name: "asyncio-mqtt"
+      - dependency-name: "kaleido"
+      - dependency-name: "pandas-ta"
+      - dependency-name: "fastapi-offline"
+      - dependency-name: "hiredis"
+      - dependency-name: "polars"
+      - dependency-name: "zipline-reloaded"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
