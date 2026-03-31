@@ -63,7 +63,9 @@ def _run(
     if dry_run:
         logger.info("  [dry-run] skipped")
         return subprocess.CompletedProcess(cmd, returncode=0, stdout=b"", stderr=b"")
-    return subprocess.run(  # nosec B603 B607 - list-form calls with fixed tool names; no shell=True, no user inputcmd, check=check, capture_output=False)
+    return subprocess.run(  # nosec B603 B607 - list-form calls with fixed tool names; no shell=True, no user input
+        cmd, check=check, capture_output=False
+    )
 
 
 class DeploymentManager:

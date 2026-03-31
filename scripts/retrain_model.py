@@ -333,7 +333,9 @@ Examples:
             yf_sym = _YF_MAP.get(args.symbol, args.symbol)
             cmd += ["--symbol", yf_sym]
         logger.info("Running advanced training: %s", " ".join(cmd))
-        result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user inputcmd, check=False)
+        result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
+            cmd, check=False
+        )
         sys.exit(result.returncode)
 
     symbols = [args.symbol] if args.symbol else _DEFAULT_SYMBOLS
