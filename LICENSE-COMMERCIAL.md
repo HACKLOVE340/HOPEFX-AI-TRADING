@@ -50,8 +50,8 @@ Commercial licensing is negotiated individually based on:
 
 To obtain a Commercial License, contact:
 
-**Email:** jeffmartin66V@gmail.com  
-**GitHub:** https://github.com/HACKLOVE340  
+**Email:** jeffmartin66V@gmail.com
+**GitHub:** https://github.com/HACKLOVE340
 **Subject line:** `HOPEFX Commercial License Request`
 
 Include a brief description of your intended use case and deployment scale.
