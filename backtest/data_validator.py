@@ -80,27 +80,30 @@ MAX_SPIKE_PCT: float = float(os.getenv("BACKTEST_MAX_SPIKE_PCT", "0.10"))
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class BarValidationResult:
     """Validation result for a single OHLCV bar."""
-    timestamp: int          # Unix ms
+
+    timestamp: int  # Unix ms
     accepted: bool
     sources_agreed: int
     sources_total: int
-    prices: Dict[str, float]   # source_name → close price
+    prices: Dict[str, float]  # source_name → close price
     flags: List[str] = field(default_factory=list)
 
 
 @dataclass
 class ValidationReport:
     """Summary of multi-source validation for a full OHLCV dataset."""
+
     symbol: str
     timeframe: str
     total_bars: int
     accepted_bars: int
     rejected_bars: int
     sources_used: List[str]
-    rejection_reasons: Dict[str, int]   # flag → count
+    rejection_reasons: Dict[str, int]  # flag → count
     coverage_pct: float
 
     def summary(self) -> str:
@@ -114,6 +117,7 @@ class ValidationReport:
 
 
 # ── Source fetchers ───────────────────────────────────────────────────────────
+
 
 async def _fetch_ccxt(
     exchange_id: str,
@@ -138,7 +142,9 @@ async def _fetch_ccxt(
         all_bars = []
         since = since_ms
         while True:
-            bars = await exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
+            bars = await exchange.fetch_ohlcv(
+                symbol, timeframe, since=since, limit=limit
+            )
             if not bars:
                 break
             all_bars.extend(bars)
@@ -150,7 +156,9 @@ async def _fetch_ccxt(
         if not all_bars:
             return None
 
-        df = pd.DataFrame(all_bars, columns=["timestamp", "open", "high", "low", "close", "volume"])
+        df = pd.DataFrame(
+            all_bars, columns=["timestamp", "open", "high", "low", "close", "volume"]
+        )
         df["timestamp"] = df["timestamp"].astype(int)
         df = df.set_index("timestamp").sort_index()
         logger.info("ccxt/%s: fetched %d bars for %s", exchange_id, len(df), symbol)
@@ -163,7 +171,7 @@ async def _fetch_ccxt(
             try:
                 await exchange.close()
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
 
 async def _fetch_yfinance(
@@ -180,7 +188,7 @@ async def _fetch_yfinance(
 
     # Map ccxt symbol to yfinance ticker
     _ticker_map = {
-        "XAU/USDT": "GC=F",    # Gold futures
+        "XAU/USDT": "GC=F",  # Gold futures
         "XAU/USD": "GC=F",
         "BTC/USDT": "BTC-USD",
         "ETH/USDT": "ETH-USD",
@@ -189,8 +197,11 @@ async def _fetch_yfinance(
 
     # Map ccxt timeframe to yfinance interval
     _interval_map = {
-        "1h": "1h", "4h": "1h", "1d": "1d",
-        "15m": "15m", "30m": "30m",
+        "1h": "1h",
+        "4h": "1h",
+        "1d": "1d",
+        "15m": "15m",
+        "30m": "30m",
     }
     interval = _interval_map.get(timeframe, "1h")
 
@@ -200,8 +211,13 @@ async def _fetch_yfinance(
         loop = asyncio.get_event_loop()
         data = await loop.run_in_executor(
             None,
-            lambda: yf.download(ticker, start=since_dt, interval=interval,
-                                 progress=False, auto_adjust=True),
+            lambda: yf.download(
+                ticker,
+                start=since_dt,
+                interval=interval,
+                progress=False,
+                auto_adjust=True,
+            ),
         )
         if data is None or data.empty:
             return None
@@ -230,8 +246,10 @@ async def _fetch_alpha_vantage(
 
     # Map symbol to Alpha Vantage format
     _av_map = {
-        "XAU/USDT": "XAUUSD", "XAU/USD": "XAUUSD",
-        "BTC/USDT": "BTCUSD", "ETH/USDT": "ETHUSD",
+        "XAU/USDT": "XAUUSD",
+        "XAU/USD": "XAUUSD",
+        "BTC/USDT": "BTCUSD",
+        "ETH/USDT": "ETHUSD",
     }
     av_symbol = _av_map.get(symbol, symbol.replace("/", ""))
 
@@ -247,13 +265,20 @@ async def _fetch_alpha_vantage(
 
     try:
         import aiohttp
+
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
                 if resp.status != 200:
                     return None
                 data = await resp.json()
 
-        key = f"Time Series FX ({interval})" if interval != "daily" else "Time Series FX (Daily)"
+        key = (
+            f"Time Series FX ({interval})"
+            if interval != "daily"
+            else "Time Series FX (Daily)"
+        )
         ts = data.get(key, {})
         if not ts:
             return None
@@ -261,15 +286,19 @@ async def _fetch_alpha_vantage(
         rows = []
         for dt_str, vals in ts.items():
             try:
-                dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-                rows.append({
-                    "timestamp": int(dt.timestamp() * 1000),
-                    "open": float(vals["1. open"]),
-                    "high": float(vals["2. high"]),
-                    "low": float(vals["3. low"]),
-                    "close": float(vals["4. close"]),
-                    "volume": 0.0,
-                })
+                dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(
+                    tzinfo=timezone.utc
+                )
+                rows.append(
+                    {
+                        "timestamp": int(dt.timestamp() * 1000),
+                        "open": float(vals["1. open"]),
+                        "high": float(vals["2. high"]),
+                        "low": float(vals["3. low"]),
+                        "close": float(vals["4. close"]),
+                        "volume": 0.0,
+                    }
+                )
             except (KeyError, ValueError):
                 continue
 
@@ -285,6 +314,7 @@ async def _fetch_alpha_vantage(
 
 
 # ── Validation engine ─────────────────────────────────────────────────────────
+
 
 class MultiSourceValidator:
     """
@@ -333,7 +363,10 @@ class MultiSourceValidator:
 
         logger.info(
             "MultiSourceValidator: %d/%d sources available for %s: %s",
-            len(sources), len(tasks), symbol, list(sources.keys()),
+            len(sources),
+            len(tasks),
+            symbol,
+            list(sources.keys()),
         )
         return sources
 
@@ -358,15 +391,19 @@ class MultiSourceValidator:
             logger.warning(
                 "MultiSourceValidator: only %d source(s) available for %s "
                 "(need %d) — using single source with OHLC sanity checks only",
-                len(sources), symbol, self.min_sources,
+                len(sources),
+                symbol,
+                self.min_sources,
             )
             # Fall back to single-source with OHLC sanity only
             if sources:
                 primary = next(iter(sources.values()))
                 validated = self._ohlc_sanity_filter(primary)
                 report = ValidationReport(
-                    symbol=symbol, timeframe=timeframe,
-                    total_bars=len(primary), accepted_bars=len(validated),
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    total_bars=len(primary),
+                    accepted_bars=len(validated),
                     rejected_bars=len(primary) - len(validated),
                     sources_used=list(sources.keys()),
                     rejection_reasons={"ohlc_sanity": len(primary) - len(validated)},
@@ -374,8 +411,13 @@ class MultiSourceValidator:
                 )
                 return validated, report
             return pd.DataFrame(), ValidationReport(
-                symbol=symbol, timeframe=timeframe, total_bars=0, accepted_bars=0,
-                rejected_bars=0, sources_used=[], rejection_reasons={},
+                symbol=symbol,
+                timeframe=timeframe,
+                total_bars=0,
+                accepted_bars=0,
+                rejected_bars=0,
+                sources_used=[],
+                rejection_reasons={},
                 coverage_pct=0.0,
             )
 
@@ -410,7 +452,8 @@ class MultiSourceValidator:
             close_values = list(prices.values())
             mid = np.median(close_values)
             agreeing = sum(
-                1 for p in close_values
+                1
+                for p in close_values
                 if mid > 0 and abs(p - mid) / mid <= self.max_price_dev
             )
 
@@ -418,8 +461,13 @@ class MultiSourceValidator:
                 flags.append("PRICE_DISAGREEMENT")
 
             # ── OHLC sanity ───────────────────────────────────────────────────
-            o, h, l, c = float(row["open"]), float(row["high"]), float(row["low"]), float(row["close"])
-            if not (h >= o and h >= c and l <= o and l <= c and h >= l):
+            o, h, lo, c = (
+                float(row["open"]),
+                float(row["high"]),
+                float(row["low"]),
+                float(row["close"]),
+            )
+            if not (h >= o and h >= c and lo <= o and lo <= c and h >= lo):
                 flags.append("OHLC_INVALID")
 
             # ── Gap detection ─────────────────────────────────────────────────
@@ -430,7 +478,7 @@ class MultiSourceValidator:
 
             # ── Spike detection ───────────────────────────────────────────────
             if c > 0:
-                spike = (h - l) / c
+                spike = (h - lo) / c
                 if spike > self.max_spike_pct:
                     flags.append(f"SPIKE_{spike:.1%}")
 
@@ -439,14 +487,16 @@ class MultiSourceValidator:
                 for f in flags:
                     rejection_reasons[f] = rejection_reasons.get(f, 0) + 1
 
-            bar_results.append(BarValidationResult(
-                timestamp=int(ts),
-                accepted=accepted,
-                sources_agreed=agreeing,
-                sources_total=len(prices),
-                prices=prices,
-                flags=flags,
-            ))
+            bar_results.append(
+                BarValidationResult(
+                    timestamp=int(ts),
+                    accepted=accepted,
+                    sources_agreed=agreeing,
+                    sources_total=len(prices),
+                    prices=prices,
+                    flags=flags,
+                )
+            )
             prev_close = c
 
         # Build validated DataFrame
@@ -469,24 +519,32 @@ class MultiSourceValidator:
     def _ohlc_sanity_filter(self, df: pd.DataFrame) -> pd.DataFrame:
         """Filter bars that fail basic OHLC sanity checks."""
         mask = (
-            (df["high"] >= df["open"]) &
-            (df["high"] >= df["close"]) &
-            (df["low"] <= df["open"]) &
-            (df["low"] <= df["close"]) &
-            (df["high"] >= df["low"]) &
-            (df["close"] > 0)
+            (df["high"] >= df["open"])
+            & (df["high"] >= df["close"])
+            & (df["low"] <= df["open"])
+            & (df["low"] <= df["close"])
+            & (df["high"] >= df["low"])
+            & (df["close"] > 0)
         )
         return df[mask]
 
     @staticmethod
     def _bar_ms(timeframe: str) -> int:
         """Return bar duration in milliseconds."""
-        _map = {"1m": 60_000, "5m": 300_000, "15m": 900_000, "30m": 1_800_000,
-                "1h": 3_600_000, "4h": 14_400_000, "1d": 86_400_000}
+        _map = {
+            "1m": 60_000,
+            "5m": 300_000,
+            "15m": 900_000,
+            "30m": 1_800_000,
+            "1h": 3_600_000,
+            "4h": 14_400_000,
+            "1d": 86_400_000,
+        }
         return _map.get(timeframe, 3_600_000)
 
 
 # ── Convenience function ──────────────────────────────────────────────────────
+
 
 async def fetch_validated_ohlcv(
     symbol: str,
@@ -515,6 +573,7 @@ async def fetch_validated_ohlcv(
     if since_ms is None:
         # Default: 3 years of history
         import time as _time
+
         since_ms = int((_time.time() - 3 * 365 * 24 * 3600) * 1000)
 
     validator = MultiSourceValidator(min_sources=min_sources)

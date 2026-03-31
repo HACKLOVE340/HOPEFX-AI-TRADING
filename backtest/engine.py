@@ -24,7 +24,7 @@ warnings.warn(
     stacklevel=2,
 )
 
-from backtesting.engine_config import (  # noqa: F401
+from backtesting.engine_config import (  # noqa: F401, E402
     BacktestConfig,
     BacktestEngine,
     BacktestResult,
