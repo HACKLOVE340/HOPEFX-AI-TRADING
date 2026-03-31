@@ -295,7 +295,7 @@ spec:
 {{- end }}
 """
 
-SECRET_YAML = """\
+SECRET_YAML = """\  # nosec B105 - Helm template string, not a hardcoded secret
 # helm/hopefx/templates/secret.yaml
 # Values are base64-encoded by Helm from the plain-text --set flags.
 # Never commit real secrets to source control.

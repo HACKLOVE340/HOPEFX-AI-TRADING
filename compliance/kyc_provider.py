@@ -312,7 +312,7 @@ class OnfidoProvider(KYCProvider):
                 applicant_id = data["id"]
 
         # Create workflow run for SDK token
-        sdk_token = ""
+        sdk_token = ""  # nosec B105 - empty init, populated from API response
         if self._workflow_id:
             wf_body = json.dumps(
                 {

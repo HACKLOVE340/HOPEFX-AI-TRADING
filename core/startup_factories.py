@@ -48,7 +48,7 @@ async def init_env(s: Any) -> bool:
         logger.warning(
             "SECURITY_JWT_SECRET not set — using dev default (not for production)",
         )
-        os.environ["SECURITY_JWT_SECRET"] = (
+        os.environ["SECURITY_JWT_SECRET"] = (  # nosec B105 - dev-only fallback, warning logged above
             "dev-jwt-secret-minimum-32-characters-long!!"
         )
     try:

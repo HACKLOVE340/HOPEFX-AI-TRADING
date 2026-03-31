@@ -319,7 +319,7 @@ class AuthService:
         token_dict = {
             "access_token": str,
             "refresh_token": str,
-            "token_type": "bearer",
+            "token_type": "bearer",  # nosec B105 - OAuth2 token_type value, not a credential
             "expires_in": int (seconds),
             "user": {id, email, username, role}
         }
@@ -420,7 +420,7 @@ class AuthService:
                 {
                     "access_token": access_token,
                     "refresh_token": raw_refresh,
-                    "token_type": "bearer",
+                    "token_type": "bearer",  # nosec B105 - OAuth2 token_type value, not a credential
                     "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
                     "user": {
                         "id": user.id,
@@ -483,7 +483,7 @@ class AuthService:
                 {
                     "access_token": access_token,
                     "refresh_token": raw_new,
-                    "token_type": "bearer",
+                    "token_type": "bearer",  # nosec B105 - OAuth2 token_type value, not a credential
                     "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
                 },
             )
