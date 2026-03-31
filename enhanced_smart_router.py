@@ -11,6 +11,7 @@ Multi-Venue Execution | AI-Powered Routing | Market Impact Optimization
 
 import asyncio
 import numpy as np
+_ROUTER_RNG = np.random.default_rng()
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Set
 from datetime import datetime, timezone
@@ -319,7 +320,7 @@ class TWAPStrategy(ExecutionStrategy):
 
         # Simulate price with slippage
         base_price = 100.0  # Would be market price
-        slippage = np.random.normal(0, 0.0001)  # 1 bps std
+        slippage = _ROUTER_RNG.normal(0, 0.0001)  # 1 bps std
 
         fill_price = base_price * (1 + slippage)
         if order.side == OrderSide.SELL:
