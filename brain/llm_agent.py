@@ -328,7 +328,7 @@ def _run_backtest(
             if signal is not None:
                 sig_type = signal.signal_type
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         # close on opposite signal
         if position != 0:
@@ -555,7 +555,7 @@ class LLMAgent:
         # ── History trimming — keep system prompt + last N turns ──────────────
         max_msgs = 1 + _CHAT_MAX_HISTORY_TURNS * 2  # system + (user+assistant)*N
         if len(self._history) > max_msgs:
-            self._history = [self._history[0]] + self._history[-(max_msgs - 1):]
+            self._history = [self._history[0]] + self._history[-(max_msgs - 1) :]
 
         # ── Live market context injection ─────────────────────────────────────
         live_context = self._build_live_context()
@@ -576,7 +576,9 @@ class LLMAgent:
                 {"role": "system", "content": ephemeral_msg},
                 {"role": "user", "content": message},
             ]
-            response_text, error = await self._call_llm_with_messages(messages_with_context)
+            response_text, error = await self._call_llm_with_messages(
+                messages_with_context
+            )
             if not error:
                 # Persist the exchange without the ephemeral context
                 self._history.append({"role": "user", "content": message})
@@ -624,7 +626,7 @@ class LLMAgent:
                         f"fallbacks={h.get('fallback_count',0)}"
                     )
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
             return "\n".join(lines)
         except Exception:
@@ -654,7 +656,7 @@ class LLMAgent:
                 try:
                     candles = await self.candle_fetcher("XAU_USD", "H1", 60)
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Suppressed exception: %s", _exc)
 
             if not candles:
                 # Try loading from local CSV as fallback
@@ -768,6 +770,7 @@ def create_agent(
         )
     """
     import logging as _logging
+
     _log = _logging.getLogger(__name__)
 
     # Resolve deprecated alias.
@@ -780,6 +783,7 @@ def create_agent(
 
     fetcher = None
     if candle_source is not None:
+
         async def fetcher(symbol: str, timeframe: str, count: int) -> List[Dict]:
             return await candle_source.get_candles(symbol, timeframe, count)
 

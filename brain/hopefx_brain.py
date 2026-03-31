@@ -70,6 +70,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import numpy as np
+
     _NP = True
 except ImportError:
     _NP = False
@@ -79,11 +80,11 @@ except ImportError:
 
 
 class Regime(str, Enum):
-    TRENDING_UP   = "trending_up"
+    TRENDING_UP = "trending_up"
     TRENDING_DOWN = "trending_down"
-    RANGING       = "ranging"
-    VOLATILE      = "volatile"
-    UNKNOWN       = "unknown"
+    RANGING = "ranging"
+    VOLATILE = "volatile"
+    UNKNOWN = "unknown"
 
 
 # ── Strategy routing table ────────────────────────────────────────────────────
@@ -91,11 +92,16 @@ class Regime(str, Enum):
 # The brain picks the first available strategy from the list.
 
 _REGIME_STRATEGY_MAP: Dict[Regime, List[str]] = {
-    Regime.TRENDING_UP:   ["smc_ict", "ema_crossover", "ma_crossover", "breakout"],
-    Regime.TRENDING_DOWN: ["smc_ict", "ema_crossover", "ma_crossover", "mean_reversion"],
-    Regime.RANGING:       ["mean_reversion", "bollinger_bands", "stochastic", "rsi_strategy"],
-    Regime.VOLATILE:      ["breakout", "smc_ict", "bollinger_bands"],
-    Regime.UNKNOWN:       ["smc_ict", "ema_crossover"],
+    Regime.TRENDING_UP: ["smc_ict", "ema_crossover", "ma_crossover", "breakout"],
+    Regime.TRENDING_DOWN: [
+        "smc_ict",
+        "ema_crossover",
+        "ma_crossover",
+        "mean_reversion",
+    ],
+    Regime.RANGING: ["mean_reversion", "bollinger_bands", "stochastic", "rsi_strategy"],
+    Regime.VOLATILE: ["breakout", "smc_ict", "bollinger_bands"],
+    Regime.UNKNOWN: ["smc_ict", "ema_crossover"],
 }
 
 # Minimum ML confidence to act on a signal (overridable via env)
@@ -115,16 +121,17 @@ _STRATEGY_WEIGHT: float = 1.0 - _ML_WEIGHT
 @dataclass
 class BrainDecision:
     """Output of HOPEFXBrain.process_bar()."""
-    action: str                    # "long" | "short" | "hold"
-    confidence: float              # 0.0 – 1.0
-    regime: str                    # Regime.value
-    strategy: str                  # strategy name used
-    ml_probability: float          # raw ML probability
-    ml_confidence: float           # |prob - 0.5| * 2
-    ml_abstain: bool               # True if ML abstained
-    strategy_signal: str           # raw strategy signal
-    strategy_confidence: float     # strategy confidence
-    reason: str                    # human-readable explanation
+
+    action: str  # "long" | "short" | "hold"
+    confidence: float  # 0.0 – 1.0
+    regime: str  # Regime.value
+    strategy: str  # strategy name used
+    ml_probability: float  # raw ML probability
+    ml_confidence: float  # |prob - 0.5| * 2
+    ml_abstain: bool  # True if ML abstained
+    strategy_signal: str  # raw strategy signal
+    strategy_confidence: float  # strategy confidence
+    reason: str  # human-readable explanation
     symbol: str
     timestamp: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
@@ -168,8 +175,8 @@ class HOPEFXBrain:
         self._risk_manager = None
         self._broker = None
         self._strategy_manager = None
-        self._ml_predictor = None   # lazy-loaded (XGBoost, primary signal)
-        self._lstm_layer = None     # lazy-loaded (LSTM, optional secondary signal)
+        self._ml_predictor = None  # lazy-loaded (XGBoost, primary signal)
+        self._lstm_layer = None  # lazy-loaded (LSTM, optional secondary signal)
 
         # Regime state per symbol
         self._regimes: Dict[str, Regime] = {}
@@ -196,7 +203,9 @@ class HOPEFXBrain:
         logger.info(
             "HOPEFXBrain initialised — ml_weight=%.2f strategy_weight=%.2f "
             "min_confidence=%.2f",
-            _ML_WEIGHT, _STRATEGY_WEIGHT, _MIN_CONFIDENCE,
+            _ML_WEIGHT,
+            _STRATEGY_WEIGHT,
+            _MIN_CONFIDENCE,
         )
 
     # ── Dependency injection ──────────────────────────────────────────────────
@@ -246,6 +255,7 @@ class HOPEFXBrain:
             return self._ml_predictor
         try:
             from ml.advanced_predictor import get_predictor
+
             self._ml_predictor = get_predictor()
             return self._ml_predictor
         except Exception as exc:
@@ -265,9 +275,11 @@ class HOPEFXBrain:
             return self._lstm_layer
         try:
             from config.feature_flags import flags
+
             if not getattr(flags, "LSTM_SIGNAL_ENABLED", False):
                 return None
             from ml.lstm_signal_layer import get_lstm_signal_layer, LSTM_SIGNAL_WEIGHT
+
             if LSTM_SIGNAL_WEIGHT <= 0.0:
                 return None
             self._lstm_layer = get_lstm_signal_layer()
@@ -318,8 +330,8 @@ class HOPEFXBrain:
                 return Regime.UNKNOWN
 
             closes = ohlcv["close"].values.astype(float)
-            highs  = ohlcv["high"].values.astype(float)
-            lows   = ohlcv["low"].values.astype(float)
+            highs = ohlcv["high"].values.astype(float)
+            lows = ohlcv["low"].values.astype(float)
 
             if len(closes) < 20:
                 return Regime.UNKNOWN
@@ -328,7 +340,7 @@ class HOPEFXBrain:
             tr1 = highs[1:] - lows[1:]
             tr2 = np.abs(highs[1:] - closes[:-1])
             tr3 = np.abs(lows[1:] - closes[:-1])
-            tr  = np.maximum(np.maximum(tr1, tr2), tr3)
+            tr = np.maximum(np.maximum(tr1, tr2), tr3)
             atr = float(np.mean(tr[-14:])) if len(tr) >= 14 else float(np.mean(tr))
 
             current_price = float(closes[-1])
@@ -358,16 +370,21 @@ class HOPEFXBrain:
             # Track regime changes
             old = self._regimes.get(symbol)
             if old != regime:
-                self._regime_history.append({
-                    "symbol": symbol,
-                    "from": old.value if old else None,
-                    "to": regime.value,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                })
+                self._regime_history.append(
+                    {
+                        "symbol": symbol,
+                        "from": old.value if old else None,
+                        "to": regime.value,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
                 logger.info(
                     "Regime change [%s]: %s → %s  (slope=%.5f vol=%.2f%%)",
-                    symbol, old.value if old else "?", regime.value,
-                    norm_slope, volatility_pct,
+                    symbol,
+                    old.value if old else "?",
+                    regime.value,
+                    norm_slope,
+                    volatility_pct,
                 )
 
             with self._lock:
@@ -469,9 +486,9 @@ class HOPEFXBrain:
             return "neutral", 0.0
 
         try:
-            strategy = getattr(
-                self._strategy_manager, "get_strategy", lambda n: None
-            )(strategy_name)
+            strategy = getattr(self._strategy_manager, "get_strategy", lambda n: None)(
+                strategy_name
+            )
             if strategy is None:
                 return "neutral", 0.0
 
@@ -533,7 +550,11 @@ class HOPEFXBrain:
         # Both have opinions
         if ml_direction == strategy_direction:
             # Agreement — boost confidence
-            combined = min(1.0, (_ML_WEIGHT * ml_confidence + _STRATEGY_WEIGHT * strategy_confidence) * 1.1)
+            combined = min(
+                1.0,
+                (_ML_WEIGHT * ml_confidence + _STRATEGY_WEIGHT * strategy_confidence)
+                * 1.1,
+            )
             return ml_direction, combined, "ml_strategy_agree"
 
         # Disagreement — hold
@@ -543,11 +564,11 @@ class HOPEFXBrain:
 
     def process_bar(
         self,
-        ohlcv,           # pd.DataFrame H1 OHLCV
+        ohlcv,  # pd.DataFrame H1 OHLCV
         symbol: str = "XAUUSD",
-        macro_df=None,   # optional macro features
-        d1_ohlcv=None,   # optional D1 OHLCV for MTF
-        h4_ohlcv=None,   # optional H4 OHLCV for MTF
+        macro_df=None,  # optional macro features
+        d1_ohlcv=None,  # optional D1 OHLCV for MTF
+        h4_ohlcv=None,  # optional H4 OHLCV for MTF
     ) -> BrainDecision:
         """
         Full intelligence pipeline for one bar.
@@ -569,10 +590,15 @@ class HOPEFXBrain:
         # ── Kill switch ───────────────────────────────────────────────────────
         if self._killed:
             return BrainDecision(
-                action="hold", confidence=0.0,
-                regime=Regime.UNKNOWN.value, strategy="none",
-                ml_probability=0.5, ml_confidence=0.0, ml_abstain=True,
-                strategy_signal="neutral", strategy_confidence=0.0,
+                action="hold",
+                confidence=0.0,
+                regime=Regime.UNKNOWN.value,
+                strategy="none",
+                ml_probability=0.5,
+                ml_confidence=0.0,
+                ml_abstain=True,
+                strategy_signal="neutral",
+                strategy_confidence=0.0,
                 reason=f"kill_switch:{self._kill_reason}",
                 symbol=symbol,
                 latency_ms=(time.perf_counter() - t0) * 1000,
@@ -594,9 +620,9 @@ class HOPEFXBrain:
         if predictor is not None:
             try:
                 ml_result = predictor.predict(ohlcv, macro_df=macro_df, symbol=symbol)
-                ml_prob      = float(ml_result.get("probability", 0.5))
-                ml_conf      = float(ml_result.get("confidence", 0.0))
-                ml_abstain   = bool(ml_result.get("abstain", True))
+                ml_prob = float(ml_result.get("probability", 0.5))
+                ml_conf = float(ml_result.get("confidence", 0.0))
+                ml_abstain = bool(ml_result.get("abstain", True))
                 ml_direction = str(ml_result.get("direction", "neutral"))
             except Exception as exc:
                 logger.warning("ML predictor failed for %s: %s", symbol, exc)
@@ -609,8 +635,15 @@ class HOPEFXBrain:
         lstm_layer = self._get_lstm_layer()
         if lstm_layer is not None and lstm_layer.is_available():
             try:
-                from ml.lstm_signal_layer import LSTM_SIGNAL_WEIGHT, LSTM_ABSTAIN_LOW, LSTM_ABSTAIN_HIGH
-                lstm_result = lstm_layer.predict(ohlcv, macro_df=macro_df, symbol=symbol)
+                from ml.lstm_signal_layer import (
+                    LSTM_SIGNAL_WEIGHT,
+                    LSTM_ABSTAIN_LOW,
+                    LSTM_ABSTAIN_HIGH,
+                )
+
+                lstm_result = lstm_layer.predict(
+                    ohlcv, macro_df=macro_df, symbol=symbol
+                )
                 lstm_prob = float(lstm_result.get("probability", 0.5))
                 lstm_abstain = bool(lstm_result.get("abstain", True))
 
@@ -619,7 +652,9 @@ class HOPEFXBrain:
                     w = float(LSTM_SIGNAL_WEIGHT)
                     blended_prob = (1.0 - w) * ml_prob + w * lstm_prob
                     blended_conf = abs(blended_prob - 0.5) * 2.0
-                    blended_abstain = LSTM_ABSTAIN_LOW <= blended_prob <= LSTM_ABSTAIN_HIGH
+                    blended_abstain = (
+                        LSTM_ABSTAIN_LOW <= blended_prob <= LSTM_ABSTAIN_HIGH
+                    )
 
                     if not blended_abstain:
                         ml_prob = blended_prob
@@ -634,7 +669,11 @@ class HOPEFXBrain:
                             ml_abstain = True
                         logger.debug(
                             "LSTM blend [%s]: xgb=%.3f lstm=%.3f blended=%.3f dir=%s",
-                            symbol, ml_prob, lstm_prob, blended_prob, ml_direction,
+                            symbol,
+                            ml_prob,
+                            lstm_prob,
+                            blended_prob,
+                            ml_direction,
                         )
             except Exception as exc:
                 logger.debug("LSTM blend failed for %s: %s", symbol, exc)
@@ -711,8 +750,13 @@ class HOPEFXBrain:
 
         logger.debug(
             "Brain[%s]: action=%s conf=%.3f regime=%s strategy=%s ml_prob=%.3f reason=%s",
-            symbol, action, final_confidence, regime.value,
-            strategy_name, ml_prob, reason,
+            symbol,
+            action,
+            final_confidence,
+            regime.value,
+            strategy_name,
+            ml_prob,
+            reason,
         )
 
         return decision
@@ -726,8 +770,7 @@ class HOPEFXBrain:
             "signal_count": self._signal_count,
             "hold_count": self._hold_count,
             "signal_rate": (
-                self._signal_count / self._bar_count
-                if self._bar_count > 0 else 0.0
+                self._signal_count / self._bar_count if self._bar_count > 0 else 0.0
             ),
             "regimes": {k: v.value for k, v in self._regimes.items()},
             "killed": self._killed,

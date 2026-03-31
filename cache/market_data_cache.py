@@ -314,7 +314,9 @@ class MarketDataCache:
                 self._using_fallback = False
                 return self._redis_client
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)  # Connection lost, will retry
+                logger.debug(
+                    "Suppressed exception: %s", _exc
+                )  # Connection lost, will retry
 
         # Try to connect
         for attempt in range(self.max_retries):
@@ -438,7 +440,9 @@ class MarketDataCache:
             logger.error(f"Error caching OHLCV: {e}")
             return False
 
-    def get_ohlcv(self, symbol: str, timeframe, limit: Optional[int] = None) -> Optional[List]:
+    def get_ohlcv(
+        self, symbol: str, timeframe, limit: Optional[int] = None
+    ) -> Optional[List]:
         """Retrieve OHLCV data from cache.
 
         Args:

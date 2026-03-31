@@ -37,31 +37,33 @@ Usage
 
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 
 # ─── Data classes ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class FeatureScore:
     """SHAP-style feature importance entry."""
+
     name: str
     value: float
-    importance: float       # 0–1 normalised contribution to final score
-    direction: str          # "bullish" | "bearish" | "neutral"
-    description: str        # human-readable explanation of this feature
+    importance: float  # 0–1 normalised contribution to final score
+    direction: str  # "bullish" | "bearish" | "neutral"
+    description: str  # human-readable explanation of this feature
 
 
 @dataclass
 class ExplainResult:
     """Full explainability output for one nuclear decision."""
-    summary: str                          # one-sentence decision summary
-    feature_scores: List[FeatureScore]    # SHAP-style importance list
-    decision_trace: List[str]             # step-by-step reasoning chain
-    risk_narrative: str                   # plain-English risk assessment
-    action_advice: str                    # what the operator should do now
+
+    summary: str  # one-sentence decision summary
+    feature_scores: List[FeatureScore]  # SHAP-style importance list
+    decision_trace: List[str]  # step-by-step reasoning chain
+    risk_narrative: str  # plain-English risk assessment
+    action_advice: str  # what the operator should do now
     confidence_breakdown: Dict[str, float]  # sub-scores that built confidence
     severity: int
     action: str
@@ -131,6 +133,7 @@ _ACTION_ADVICE: Dict[str, str] = {
 
 # ─── Engine ───────────────────────────────────────────────────────────────────
 
+
 class NuclearExplainabilityEngine:
     """
     Produces structured, SHAP-style explanations for nuclear AI decisions.
@@ -162,27 +165,39 @@ class NuclearExplainabilityEngine:
         price       : current XAUUSD mid price
         """
         rl_labels = {0: "NORMAL", 1: "PAUSE", 2: "HEDGE", 3: "NUCLEAR"}
-        rl_label  = rl_labels.get(rl_action, "NORMAL")
+        rl_label = rl_labels.get(rl_action, "NORMAL")
 
-        matched_terms   = meta.get("matched_terms", [])
+        matched_terms = meta.get("matched_terms", [])
         category_scores = meta.get("category_scores", {})
-        base_score      = meta.get("base_score", 0.0)
-        vol_factor      = meta.get("vol_factor", 1.0)
+        base_score = meta.get("base_score", 0.0)
+        vol_factor = meta.get("vol_factor", 1.0)
         sentiment_factor = meta.get("sentiment_factor", 0.0)
-        confidence      = meta.get("confidence", 0.0)
+        confidence = meta.get("confidence", 0.0)
 
         # ── Feature scores (SHAP-style) ───────────────────────────────────────
         feature_scores = self._build_feature_scores(
-            severity, matched_terms, category_scores,
-            base_score, vol_factor, sentiment_factor,
+            severity,
+            matched_terms,
+            category_scores,
+            base_score,
+            vol_factor,
+            sentiment_factor,
             risk_data or {},
         )
 
         # ── Decision trace ────────────────────────────────────────────────────
         trace = self._build_trace(
-            severity, action, rl_action, rl_label, rl_loaded,
-            matched_terms, category_scores, vol_factor, sentiment_factor,
-            confidence, risk_data or {},
+            severity,
+            action,
+            rl_action,
+            rl_label,
+            rl_loaded,
+            matched_terms,
+            category_scores,
+            vol_factor,
+            sentiment_factor,
+            confidence,
+            risk_data or {},
         )
 
         # ── Summary ───────────────────────────────────────────────────────────
@@ -197,10 +212,10 @@ class NuclearExplainabilityEngine:
         # ── Confidence breakdown ──────────────────────────────────────────────
         conf_breakdown = {
             "wordmap_keyword_score": round(base_score / 10.0, 4),
-            "volatility_amplifier":  round(vol_factor - 1.0, 4),
-            "sentiment_penalty":     round(sentiment_factor / 0.5, 4),
-            "category_coverage":     round(min(1.0, len(category_scores) / 4.0), 4),
-            "overall_confidence":    round(confidence, 4),
+            "volatility_amplifier": round(vol_factor - 1.0, 4),
+            "sentiment_penalty": round(sentiment_factor / 0.5, 4),
+            "category_coverage": round(min(1.0, len(category_scores) / 4.0), 4),
+            "overall_confidence": round(confidence, 4),
         }
 
         return ExplainResult(
@@ -232,61 +247,71 @@ class NuclearExplainabilityEngine:
         total = max(base_score * vol_factor + sentiment_factor, 0.001)
 
         # Top matched keywords
-        top_terms = sorted(matched_terms, key=lambda x: x.get("contribution", 0), reverse=True)[:5]
+        top_terms = sorted(
+            matched_terms, key=lambda x: x.get("contribution", 0), reverse=True
+        )[:5]
         for t in top_terms:
             contrib = t.get("contribution", 0.0)
-            scores.append(FeatureScore(
-                name=f'keyword: "{t["term"]}"',
-                value=round(contrib, 3),
-                importance=round(contrib / total, 4),
-                direction="bearish",
-                description=(
-                    f'WORDMAP keyword "{t["term"]}" in category '
-                    f'"{t["category"]}" matched {t.get("count", 1)}× '
-                    f'(weight={t["weight"]:.1f}, contribution={contrib:.2f})'
-                ),
-            ))
+            scores.append(
+                FeatureScore(
+                    name=f'keyword: "{t["term"]}"',
+                    value=round(contrib, 3),
+                    importance=round(contrib / total, 4),
+                    direction="bearish",
+                    description=(
+                        f'WORDMAP keyword "{t["term"]}" in category '
+                        f'"{t["category"]}" matched {t.get("count", 1)}× '
+                        f'(weight={t["weight"]:.1f}, contribution={contrib:.2f})'
+                    ),
+                )
+            )
 
         # Volatility amplifier
         vol_contrib = base_score * (vol_factor - 1.0)
         if vol_contrib > 0:
-            scores.append(FeatureScore(
-                name="volatility_amplifier",
-                value=round(vol_contrib, 3),
-                importance=round(vol_contrib / total, 4),
-                direction="bearish",
-                description=(
-                    f"Market volatility is {vol_factor:.2f}× normal. "
-                    f"Elevated vol amplifies WORDMAP severity by {(vol_factor-1)*100:.0f}%."
-                ),
-            ))
+            scores.append(
+                FeatureScore(
+                    name="volatility_amplifier",
+                    value=round(vol_contrib, 3),
+                    importance=round(vol_contrib / total, 4),
+                    direction="bearish",
+                    description=(
+                        f"Market volatility is {vol_factor:.2f}× normal. "
+                        f"Elevated vol amplifies WORDMAP severity by {(vol_factor-1)*100:.0f}%."
+                    ),
+                )
+            )
 
         # Sentiment penalty
         if sentiment_factor > 0:
-            scores.append(FeatureScore(
-                name="sentiment_penalty",
-                value=round(sentiment_factor, 3),
-                importance=round(sentiment_factor / total, 4),
-                direction="bearish",
-                description=(
-                    f"Negative news sentiment adds +{sentiment_factor:.2f} to severity score. "
-                    f"Bearish/fearful news context increases geopolitical risk."
-                ),
-            ))
+            scores.append(
+                FeatureScore(
+                    name="sentiment_penalty",
+                    value=round(sentiment_factor, 3),
+                    importance=round(sentiment_factor / total, 4),
+                    direction="bearish",
+                    description=(
+                        f"Negative news sentiment adds +{sentiment_factor:.2f} to severity score. "
+                        f"Bearish/fearful news context increases geopolitical risk."
+                    ),
+                )
+            )
 
         # Risk exposure
         exposure = risk_data.get("current_exposure", 0.0)
         if exposure > 0.3:
-            scores.append(FeatureScore(
-                name="portfolio_exposure",
-                value=round(exposure, 3),
-                importance=round(min(0.2, exposure * 0.3), 4),
-                direction="bearish",
-                description=(
-                    f"Current portfolio exposure is {exposure*100:.1f}%. "
-                    f"High exposure increases urgency of protective action."
-                ),
-            ))
+            scores.append(
+                FeatureScore(
+                    name="portfolio_exposure",
+                    value=round(exposure, 3),
+                    importance=round(min(0.2, exposure * 0.3), 4),
+                    direction="bearish",
+                    description=(
+                        f"Current portfolio exposure is {exposure*100:.1f}%. "
+                        f"High exposure increases urgency of protective action."
+                    ),
+                )
+            )
 
         # Sort by importance descending
         scores.sort(key=lambda x: x.importance, reverse=True)
@@ -360,10 +385,10 @@ class NuclearExplainabilityEngine:
 
         # Step 7: Final action
         action_desc = {
-            "nuclear_mode":      "Full liquidation + trading halt activated.",
-            "hedge_mode":        "Hedge mode activated: max risk → 15%, inverse hedges opened.",
+            "nuclear_mode": "Full liquidation + trading halt activated.",
+            "hedge_mode": "Hedge mode activated: max risk → 15%, inverse hedges opened.",
             "pause_new_entries": "New entries paused. Existing positions held.",
-            "normal":            "No action taken. Normal trading continues.",
+            "normal": "No action taken. Normal trading continues.",
         }.get(action, action)
         trace.append(f"[7] DECISION: {action_desc}")
 

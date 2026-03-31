@@ -42,11 +42,11 @@ Configuration (env vars)
     MUTATION_REPORT_PATH    — output JSON path (default: reports/mutation_report.json)
     MUTATION_MIN_SCORE      — minimum acceptable score, 0–1 (default: 0.70)
 """
+
 from __future__ import annotations
 
 import ast
 import asyncio
-import copy
 import json
 import logging
 import os
@@ -56,22 +56,23 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-_DEFAULT_MODULES  = os.getenv("MUTATION_MODULES",     "risk,execution,shadow").split(",")
-_TIMEOUT_S        = float(os.getenv("MUTATION_TIMEOUT_S",   "300"))
-_REPORT_PATH      = Path(os.getenv("MUTATION_REPORT_PATH",  "reports/mutation_report.json"))
-_MIN_SCORE        = float(os.getenv("MUTATION_MIN_SCORE",   "0.70"))
+_DEFAULT_MODULES = os.getenv("MUTATION_MODULES", "risk,execution,shadow").split(",")
+_TIMEOUT_S = float(os.getenv("MUTATION_TIMEOUT_S", "300"))
+_REPORT_PATH = Path(os.getenv("MUTATION_REPORT_PATH", "reports/mutation_report.json"))
+_MIN_SCORE = float(os.getenv("MUTATION_MIN_SCORE", "0.70"))
 
 # ── Prometheus ────────────────────────────────────────────────────────────────
 try:
     from prometheus_client import Gauge
-    _prom_score   = Gauge("hopefx_mutation_score",   "Mutation test score (0–1)")
-    _prom_killed  = Gauge("hopefx_mutation_killed",  "Mutants killed by tests")
-    _prom_total   = Gauge("hopefx_mutation_total",   "Total mutants generated")
+
+    _prom_score = Gauge("hopefx_mutation_score", "Mutation test score (0–1)")
+    _prom_killed = Gauge("hopefx_mutation_killed", "Mutants killed by tests")
+    _prom_total = Gauge("hopefx_mutation_total", "Total mutants generated")
     _PROM_OK = True
 except Exception:
     _PROM_OK = False
@@ -80,28 +81,30 @@ except Exception:
 @dataclass
 class MutantResult:
     """Result for a single mutant."""
-    mutant_id:   str
-    module:      str
-    line:        int
+
+    mutant_id: str
+    module: str
+    line: int
     description: str
-    status:      str   # "killed" | "survived" | "timeout" | "error"
+    status: str  # "killed" | "survived" | "timeout" | "error"
 
 
 @dataclass
 class MutationReport:
     """Full mutation testing report."""
-    modules:      List[str]
-    total:        int
-    killed:       int
-    survived:     int
-    timeouts:     int
-    errors:       int
-    score:        float          # killed / (killed + survived), 0–1
-    passed:       bool           # score >= MIN_SCORE
-    min_score:    float
-    duration_s:   float
-    engine:       str            # "mutmut" | "builtin_ast"
-    mutants:      List[MutantResult] = field(default_factory=list)
+
+    modules: List[str]
+    total: int
+    killed: int
+    survived: int
+    timeouts: int
+    errors: int
+    score: float  # killed / (killed + survived), 0–1
+    passed: bool  # score >= MIN_SCORE
+    min_score: float
+    duration_s: float
+    engine: str  # "mutmut" | "builtin_ast"
+    mutants: List[MutantResult] = field(default_factory=list)
     generated_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -129,9 +132,9 @@ class MutationTestRunner:
         min_score: float = _MIN_SCORE,
         report_path: Path = _REPORT_PATH,
     ) -> None:
-        self._modules    = [m.strip() for m in (modules or _DEFAULT_MODULES)]
-        self._timeout_s  = timeout_s
-        self._min_score  = min_score
+        self._modules = [m.strip() for m in (modules or _DEFAULT_MODULES)]
+        self._timeout_s = timeout_s
+        self._min_score = min_score
         self._report_path = report_path
         self._last_report: Optional[MutationReport] = None
 
@@ -164,7 +167,8 @@ class MutationTestRunner:
             logger.warning(
                 "Mutation score %.1f%% below minimum %.1f%% — "
                 "add tests to cover surviving mutants",
-                report.score * 100, self._min_score * 100,
+                report.score * 100,
+                self._min_score * 100,
             )
 
         return report
@@ -175,7 +179,8 @@ class MutationTestRunner:
         try:
             result = subprocess.run(
                 [sys.executable, "-m", "mutmut", "--version"],
-                capture_output=True, timeout=5,
+                capture_output=True,
+                timeout=5,
             )
             return result.returncode == 0
         except Exception:
@@ -183,18 +188,20 @@ class MutationTestRunner:
 
     async def _run_mutmut(self) -> MutationReport:
         """Run mutmut against target modules and parse results."""
-        paths = " ".join(
-            str(Path(m)) for m in self._modules
-            if Path(m).exists()
-        )
+        paths = " ".join(str(Path(m)) for m in self._modules if Path(m).exists())
         if not paths:
             logger.warning("No valid module paths found for mutmut")
             return self._empty_report("mutmut")
 
         cmd = [
-            sys.executable, "-m", "mutmut", "run",
-            "--paths-to-mutate", paths,
-            "--runner", f"{sys.executable} -m pytest tests/ -x -q --tb=no",
+            sys.executable,
+            "-m",
+            "mutmut",
+            "run",
+            "--paths-to-mutate",
+            paths,
+            "--runner",
+            f"{sys.executable} -m pytest tests/ -x -q --tb=no",
             "--no-progress",
         ]
 
@@ -225,31 +232,34 @@ class MutationTestRunner:
         """Parse mutmut result database via `mutmut results`."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "mutmut", "results",
+                sys.executable,
+                "-m",
+                "mutmut",
+                "results",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
             output = stdout.decode()
 
-            killed   = output.count("Killed")
+            killed = output.count("Killed")
             survived = output.count("Survived")
             timeouts = output.count("Timeout")
-            total    = killed + survived + timeouts
+            total = killed + survived + timeouts
 
             score = killed / max(killed + survived, 1)
             return MutationReport(
-                modules   = self._modules,
-                total     = total,
-                killed    = killed,
-                survived  = survived,
-                timeouts  = timeouts,
-                errors    = 0,
-                score     = round(score, 4),
-                passed    = score >= self._min_score,
-                min_score = self._min_score,
-                duration_s = 0.0,
-                engine    = "mutmut",
+                modules=self._modules,
+                total=total,
+                killed=killed,
+                survived=survived,
+                timeouts=timeouts,
+                errors=0,
+                score=round(score, 4),
+                passed=score >= self._min_score,
+                min_score=self._min_score,
+                duration_s=0.0,
+                engine="mutmut",
             )
         except Exception as exc:
             logger.error("mutmut results parse failed: %s", exc)
@@ -287,11 +297,11 @@ class MutationTestRunner:
                 for mutant in file_mutants:
                     status = await self._test_mutant(py_file, mutant)
                     result = MutantResult(
-                        mutant_id   = f"{py_file}:{mutant['line']}:{mutant['op']}",
-                        module      = str(py_file),
-                        line        = mutant["line"],
-                        description = mutant["description"],
-                        status      = status,
+                        mutant_id=f"{py_file}:{mutant['line']}:{mutant['op']}",
+                        module=str(py_file),
+                        line=mutant["line"],
+                        description=mutant["description"],
+                        status=status,
                     )
                     mutants.append(result)
                     if status == "killed":
@@ -307,25 +317,25 @@ class MutationTestRunner:
         score = killed / max(killed + survived, 1)
 
         return MutationReport(
-            modules   = self._modules,
-            total     = total,
-            killed    = killed,
-            survived  = survived,
-            timeouts  = timeouts,
-            errors    = errors,
-            score     = round(score, 4),
-            passed    = score >= self._min_score,
-            min_score = self._min_score,
-            duration_s = 0.0,
-            engine    = "builtin_ast",
-            mutants   = mutants,
+            modules=self._modules,
+            total=total,
+            killed=killed,
+            survived=survived,
+            timeouts=timeouts,
+            errors=errors,
+            score=round(score, 4),
+            passed=score >= self._min_score,
+            min_score=self._min_score,
+            duration_s=0.0,
+            engine="builtin_ast",
+            mutants=mutants,
         )
 
     def _generate_mutants(self, py_file: Path) -> List[Dict[str, Any]]:
         """Parse a Python file and generate mutation descriptors."""
         try:
             source = py_file.read_text()
-            tree   = ast.parse(source)
+            tree = ast.parse(source)
         except Exception:
             return []
 
@@ -336,58 +346,65 @@ class MutationTestRunner:
                 for op in node.ops:
                     orig = type(op).__name__
                     flips = {
-                        "Gt": "GtE", "GtE": "Gt",
-                        "Lt": "LtE", "LtE": "Lt",
-                        "Eq": "NotEq", "NotEq": "Eq",
+                        "Gt": "GtE",
+                        "GtE": "Gt",
+                        "Lt": "LtE",
+                        "LtE": "Lt",
+                        "Eq": "NotEq",
+                        "NotEq": "Eq",
                     }
                     if orig in flips:
-                        mutants.append({
-                            "line":        node.lineno,
-                            "op":          f"cmp_{orig}_to_{flips[orig]}",
-                            "node_type":   "Compare",
-                            "original":    orig,
-                            "replacement": flips[orig],
-                            "description": f"line {node.lineno}: {orig} → {flips[orig]}",
-                        })
+                        mutants.append(
+                            {
+                                "line": node.lineno,
+                                "op": f"cmp_{orig}_to_{flips[orig]}",
+                                "node_type": "Compare",
+                                "original": orig,
+                                "replacement": flips[orig],
+                                "description": f"line {node.lineno}: {orig} → {flips[orig]}",
+                            }
+                        )
 
             # Boolean operator mutations
             elif isinstance(node, ast.BoolOp):
                 orig = type(node.op).__name__
                 flip = "Or" if orig == "And" else "And"
-                mutants.append({
-                    "line":        node.lineno,
-                    "op":          f"bool_{orig}_to_{flip}",
-                    "node_type":   "BoolOp",
-                    "original":    orig,
-                    "replacement": flip,
-                    "description": f"line {node.lineno}: {orig} → {flip}",
-                })
+                mutants.append(
+                    {
+                        "line": node.lineno,
+                        "op": f"bool_{orig}_to_{flip}",
+                        "node_type": "BoolOp",
+                        "original": orig,
+                        "replacement": flip,
+                        "description": f"line {node.lineno}: {orig} → {flip}",
+                    }
+                )
 
             # Off-by-one on small integer literals
             elif isinstance(node, ast.Constant) and isinstance(node.value, int):
                 if 0 < abs(node.value) <= 100:
-                    mutants.append({
-                        "line":        node.lineno,
-                        "op":          f"const_{node.value}_to_{node.value + 1}",
-                        "node_type":   "Constant",
-                        "original":    node.value,
-                        "replacement": node.value + 1,
-                        "description": f"line {node.lineno}: {node.value} → {node.value + 1}",
-                    })
+                    mutants.append(
+                        {
+                            "line": node.lineno,
+                            "op": f"const_{node.value}_to_{node.value + 1}",
+                            "node_type": "Constant",
+                            "original": node.value,
+                            "replacement": node.value + 1,
+                            "description": f"line {node.lineno}: {node.value} → {node.value + 1}",
+                        }
+                    )
 
         # Cap per-file mutants to avoid combinatorial explosion
         return mutants[:20]
 
-    async def _test_mutant(
-        self, py_file: Path, mutant: Dict[str, Any]
-    ) -> str:
+    async def _test_mutant(self, py_file: Path, mutant: Dict[str, Any]) -> str:
         """
         Apply a single mutation, run pytest, restore original, return status.
 
         Returns: "killed" | "survived" | "timeout" | "error"
         """
         original_source = py_file.read_text()
-        mutated_source  = self._apply_mutation(original_source, mutant)
+        mutated_source = self._apply_mutation(original_source, mutant)
 
         if mutated_source == original_source:
             return "error"  # mutation had no effect
@@ -395,8 +412,14 @@ class MutationTestRunner:
         try:
             py_file.write_text(mutated_source)
             proc = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "pytest", "tests/",
-                "-x", "-q", "--tb=no", "--no-header",
+                sys.executable,
+                "-m",
+                "pytest",
+                "tests/",
+                "-x",
+                "-q",
+                "--tb=no",
+                "--no-header",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -417,14 +440,18 @@ class MutationTestRunner:
     def _apply_mutation(self, source: str, mutant: Dict[str, Any]) -> str:
         """Apply a single mutation to source text via token replacement."""
         op_map = {
-            "Gt":    ">",  "GtE":   ">=",
-            "Lt":    "<",  "LtE":   "<=",
-            "Eq":    "==", "NotEq": "!=",
-            "And":   "and", "Or":   "or",
+            "Gt": ">",
+            "GtE": ">=",
+            "Lt": "<",
+            "LtE": "<=",
+            "Eq": "==",
+            "NotEq": "!=",
+            "And": "and",
+            "Or": "or",
         }
         node_type = mutant.get("node_type")
-        orig      = mutant.get("original")
-        repl      = mutant.get("replacement")
+        orig = mutant.get("original")
+        repl = mutant.get("replacement")
 
         if node_type in ("Compare", "BoolOp"):
             orig_tok = op_map.get(str(orig), str(orig))
@@ -433,18 +460,14 @@ class MutationTestRunner:
             lines = source.splitlines()
             target_line = mutant.get("line", 1) - 1
             if 0 <= target_line < len(lines):
-                lines[target_line] = lines[target_line].replace(
-                    orig_tok, repl_tok, 1
-                )
+                lines[target_line] = lines[target_line].replace(orig_tok, repl_tok, 1)
             return "\n".join(lines)
 
         elif node_type == "Constant":
             lines = source.splitlines()
             target_line = mutant.get("line", 1) - 1
             if 0 <= target_line < len(lines):
-                lines[target_line] = lines[target_line].replace(
-                    str(orig), str(repl), 1
-                )
+                lines[target_line] = lines[target_line].replace(str(orig), str(repl), 1)
             return "\n".join(lines)
 
         return source
@@ -453,35 +476,42 @@ class MutationTestRunner:
 
     def _empty_report(self, engine: str, error: str = "") -> MutationReport:
         return MutationReport(
-            modules=self._modules, total=0, killed=0, survived=0,
-            timeouts=0, errors=1 if error else 0,
-            score=0.0, passed=False, min_score=self._min_score,
-            duration_s=0.0, engine=engine,
+            modules=self._modules,
+            total=0,
+            killed=0,
+            survived=0,
+            timeouts=0,
+            errors=1 if error else 0,
+            score=0.0,
+            passed=False,
+            min_score=self._min_score,
+            duration_s=0.0,
+            engine=engine,
         )
 
     def _save_report(self, report: MutationReport) -> None:
         try:
             self._report_path.parent.mkdir(parents=True, exist_ok=True)
             data = {
-                "modules":      report.modules,
-                "total":        report.total,
-                "killed":       report.killed,
-                "survived":     report.survived,
-                "timeouts":     report.timeouts,
-                "errors":       report.errors,
-                "score":        report.score,
-                "passed":       report.passed,
-                "min_score":    report.min_score,
-                "duration_s":   round(report.duration_s, 2),
-                "engine":       report.engine,
+                "modules": report.modules,
+                "total": report.total,
+                "killed": report.killed,
+                "survived": report.survived,
+                "timeouts": report.timeouts,
+                "errors": report.errors,
+                "score": report.score,
+                "passed": report.passed,
+                "min_score": report.min_score,
+                "duration_s": round(report.duration_s, 2),
+                "engine": report.engine,
                 "generated_at": report.generated_at,
                 "mutants": [
                     {
-                        "id":          m.mutant_id,
-                        "module":      m.module,
-                        "line":        m.line,
+                        "id": m.mutant_id,
+                        "module": m.module,
+                        "line": m.line,
                         "description": m.description,
-                        "status":      m.status,
+                        "status": m.status,
                     }
                     for m in report.mutants
                 ],
@@ -502,16 +532,21 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run mutation testing")
     parser.add_argument(
-        "--modules", nargs="+",
+        "--modules",
+        nargs="+",
         default=_DEFAULT_MODULES,
         help="Module directories to mutate (default: risk execution shadow)",
     )
     parser.add_argument(
-        "--timeout", type=float, default=_TIMEOUT_S,
+        "--timeout",
+        type=float,
+        default=_TIMEOUT_S,
         help="Max seconds for full run",
     )
     parser.add_argument(
-        "--min-score", type=float, default=_MIN_SCORE,
+        "--min-score",
+        type=float,
+        default=_MIN_SCORE,
         help="Minimum acceptable mutation score (0–1)",
     )
     args = parser.parse_args()

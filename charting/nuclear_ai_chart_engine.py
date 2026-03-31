@@ -75,17 +75,17 @@ NuclearChartState JSON schema (sent to frontend every tick):
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 from collections import deque
-from datetime import datetime, timezone
-from typing import Any, Callable, Deque, Dict, List, Optional
+from typing import Callable, Deque, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-TICK_INTERVAL_S: float = float(__import__("os").environ.get("CHART_TICK_INTERVAL", "1.0"))
+TICK_INTERVAL_S: float = float(
+    __import__("os").environ.get("CHART_TICK_INTERVAL", "1.0")
+)
 MAX_BARS: int = 500
 MAX_EQUITY_PTS: int = 500
 MAX_SIGNALS: int = 50
@@ -96,20 +96,20 @@ RL_ACTION_LABELS = {0: "NORMAL", 1: "PAUSE", 2: "HEDGE", 3: "NUCLEAR"}
 
 # Geopolitical gauge thresholds
 _GAUGE_LEVELS = [
-    (90, "CRITICAL",  "#ff0033", True),
-    (70, "HIGH",      "#ff6600", True),
-    (50, "ELEVATED",  "#ffaa00", False),
-    (0,  "NORMAL",    "#00ff88", False),
+    (90, "CRITICAL", "#ff0033", True),
+    (70, "HIGH", "#ff6600", True),
+    (50, "ELEVATED", "#ffaa00", False),
+    (0, "NORMAL", "#00ff88", False),
 ]
 
 # Historical analog database (severity → analog description)
 _HISTORICAL_ANALOGS: Dict[int, str] = {
     10: "Similar to 2022 Russia-Ukraine invasion: Gold +12% in 48h, then -8% reversal. Expected drawdown: -28% if long.",
-    9:  "Similar to 2003 Iraq War start: Gold +6% spike, high volatility for 72h. CVaR elevated 3x.",
-    8:  "Similar to 2019 Iran-US escalation: Gold +4%, USD safe-haven bid. Pause recommended.",
-    7:  "Similar to 2022 Taiwan Strait tensions: Gold +2.5%, vol spike. Hedge positions advised.",
-    6:  "Similar to 2023 Middle East flare-up: Gold +1.5%, short-term uncertainty. Reduce size.",
-    5:  "Elevated geopolitical noise. Historical average: Gold +0.8% over 24h. Monitor closely.",
+    9: "Similar to 2003 Iraq War start: Gold +6% spike, high volatility for 72h. CVaR elevated 3x.",
+    8: "Similar to 2019 Iran-US escalation: Gold +4%, USD safe-haven bid. Pause recommended.",
+    7: "Similar to 2022 Taiwan Strait tensions: Gold +2.5%, vol spike. Hedge positions advised.",
+    6: "Similar to 2023 Middle East flare-up: Gold +1.5%, short-term uncertainty. Reduce size.",
+    5: "Elevated geopolitical noise. Historical average: Gold +0.8% over 24h. Monitor closely.",
 }
 
 
@@ -117,9 +117,11 @@ _HISTORICAL_ANALOGS: Dict[int, str] = {
 # Lazy imports — avoid circular deps at module load
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _get_data_orchestrator():
     try:
         from data_layer.orchestrator import orchestrator
+
         return orchestrator
     except Exception as exc:
         logger.debug("data_layer.orchestrator unavailable: %s", exc)
@@ -129,6 +131,7 @@ def _get_data_orchestrator():
 def _get_nuclear_supervisor():
     try:
         from brain.nuclear_supervisor import get_nuclear_supervisor
+
         return get_nuclear_supervisor()
     except Exception as exc:
         logger.debug("nuclear_supervisor unavailable: %s", exc)
@@ -138,6 +141,7 @@ def _get_nuclear_supervisor():
 def _get_risk_orchestrator():
     try:
         from risk.orchestrator import risk_orchestrator
+
         return risk_orchestrator
     except Exception as exc:
         logger.debug("risk_orchestrator unavailable: %s", exc)
@@ -147,6 +151,7 @@ def _get_risk_orchestrator():
 def _get_wordmap_scorer():
     try:
         from news.nuclear_wordmap_scorer import NuclearWordMapScorer
+
         return NuclearWordMapScorer()
     except Exception as exc:
         logger.debug("NuclearWordMapScorer unavailable: %s", exc)
@@ -156,6 +161,7 @@ def _get_wordmap_scorer():
 def _get_explainer():
     try:
         from charting.nuclear_explainability import get_explainer
+
         return get_explainer()
     except Exception as exc:
         logger.debug("NuclearExplainabilityEngine unavailable: %s", exc)
@@ -165,6 +171,7 @@ def _get_explainer():
 # ─────────────────────────────────────────────────────────────────────────────
 # NuclearChartState builder
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class NuclearAIChartEngine:
     """
@@ -181,9 +188,9 @@ class NuclearAIChartEngine:
         self._broadcast_callbacks: List[Callable[[Dict], None]] = []
 
         # Ring buffers
-        self._bars_1m:  Deque[Dict] = deque(maxlen=MAX_BARS)
-        self._bars_5m:  Deque[Dict] = deque(maxlen=MAX_BARS)
-        self._bars_1h:  Deque[Dict] = deque(maxlen=MAX_BARS)
+        self._bars_1m: Deque[Dict] = deque(maxlen=MAX_BARS)
+        self._bars_5m: Deque[Dict] = deque(maxlen=MAX_BARS)
+        self._bars_1h: Deque[Dict] = deque(maxlen=MAX_BARS)
         self._equity_curve: Deque[Dict] = deque(maxlen=MAX_EQUITY_PTS)
         self._signals: Deque[Dict] = deque(maxlen=MAX_SIGNALS)
         self._nuclear_events: Deque[Dict] = deque(maxlen=100)
@@ -208,7 +215,9 @@ class NuclearAIChartEngine:
         self._broadcast_callbacks.append(fn)
 
     def remove_broadcast_callback(self, fn: Callable[[Dict], None]) -> None:
-        self._broadcast_callbacks = [c for c in self._broadcast_callbacks if c is not fn]
+        self._broadcast_callbacks = [
+            c for c in self._broadcast_callbacks if c is not fn
+        ]
 
     async def start(self) -> None:
         """Start the tick loop. Runs until stop() is called."""
@@ -235,7 +244,9 @@ class NuclearAIChartEngine:
         """Return the latest chart state synchronously (for HTTP polling)."""
         return self._build_state()
 
-    def inject_news_event(self, text: str, volatility: float = 1.0, sentiment: float = 0.0) -> Dict:
+    def inject_news_event(
+        self, text: str, volatility: float = 1.0, sentiment: float = 0.0
+    ) -> Dict:
         """
         Score a news event immediately and return the nuclear assessment.
         Called by connect_to_life.py when a news item arrives.
@@ -243,7 +254,11 @@ class NuclearAIChartEngine:
         if self._wordmap_scorer is None:
             self._wordmap_scorer = _get_wordmap_scorer()
         if self._wordmap_scorer is None:
-            return {"severity": 0, "action": "normal", "explanation": "Scorer unavailable"}
+            return {
+                "severity": 0,
+                "action": "normal",
+                "explanation": "Scorer unavailable",
+            }
 
         severity, action, raw_score, meta = self._wordmap_scorer.score_event(
             text, volatility, sentiment
@@ -252,13 +267,15 @@ class NuclearAIChartEngine:
         self._last_nuclear = nuclear_state
 
         # Record event in history
-        self._nuclear_events.append({
-            "ts": int(time.time() * 1000),
-            "text": text[:200],
-            "severity": severity,
-            "action": action,
-            "explanation": nuclear_state.get("explanation", ""),
-        })
+        self._nuclear_events.append(
+            {
+                "ts": int(time.time() * 1000),
+                "text": text[:200],
+                "severity": severity,
+                "action": action,
+                "explanation": nuclear_state.get("explanation", ""),
+            }
+        )
 
         # Broadcast immediately on high-severity events
         if severity >= NUCLEAR_ALERT_SEVERITY:
@@ -348,7 +365,14 @@ class NuclearAIChartEngine:
 
         # Fallback: return last known price
         p = self._last_price or 2650.0
-        return {"bid": p - 0.15, "ask": p + 0.15, "mid": p, "spread": 0.30, "change_pct": 0.0, "source": "cached"}
+        return {
+            "bid": p - 0.15,
+            "ask": p + 0.15,
+            "mid": p,
+            "spread": 0.30,
+            "change_pct": 0.0,
+            "source": "cached",
+        }
 
     # ── OHLCV bars ────────────────────────────────────────────────────────────
 
@@ -412,8 +436,16 @@ class NuclearAIChartEngine:
         if self._last_nuclear and self._last_nuclear.get("severity", 0) > severity:
             return self._last_nuclear
 
-        return self._build_nuclear_state(severity, action, raw_score, meta,
-                                          nuclear_level, trading_paused, rl_loaded, sup_status)
+        return self._build_nuclear_state(
+            severity,
+            action,
+            raw_score,
+            meta,
+            nuclear_level,
+            trading_paused,
+            rl_loaded,
+            sup_status,
+        )
 
     def _build_nuclear_state(
         self,
@@ -436,19 +468,26 @@ class NuclearAIChartEngine:
         # Determine RL action — prefer action string over nuclear_level
         # so inject_news_event() produces the correct label even without a live supervisor
         _action_to_rl = {
-            "normal":            0,
+            "normal": 0,
             "pause_new_entries": 1,
-            "hedge_mode":        2,
-            "nuclear_mode":      3,
+            "hedge_mode": 2,
+            "nuclear_mode": 3,
         }
         rl_action = _action_to_rl.get(action, min(nuclear_level, 3))
         rl_action_label = RL_ACTION_LABELS.get(rl_action, "NORMAL")
 
         # Build human-readable explanation — use explainability engine if available
         explanation = self._build_explanation(
-            severity, action, rl_action_label, matched_terms,
-            category_scores, confidence, vol_factor, sentiment_factor,
-            trading_paused, rl_loaded,
+            severity,
+            action,
+            rl_action_label,
+            matched_terms,
+            category_scores,
+            confidence,
+            vol_factor,
+            sentiment_factor,
+            trading_paused,
+            rl_loaded,
         )
 
         # Enrich with structured explainability engine output
@@ -505,7 +544,7 @@ class NuclearAIChartEngine:
             "feature_scores": explain_detail.get("feature_scores", []),
             "decision_trace": explain_detail.get("decision_trace", []),
             "risk_narrative": explain_detail.get("risk_narrative", ""),
-            "action_advice":  explain_detail.get("action_advice", ""),
+            "action_advice": explain_detail.get("action_advice", ""),
             "confidence_breakdown": explain_detail.get("confidence_breakdown", {}),
         }
 
@@ -524,7 +563,9 @@ class NuclearAIChartEngine:
     ) -> str:
         """Generate a human-readable co-pilot explanation."""
         if severity == 0 and not trading_paused:
-            return "All clear. No geopolitical risk detected. Normal trading conditions."
+            return (
+                "All clear. No geopolitical risk detected. Normal trading conditions."
+            )
 
         parts: List[str] = []
 
@@ -534,8 +575,12 @@ class NuclearAIChartEngine:
 
         # Top matched terms
         if matched_terms:
-            top = sorted(matched_terms, key=lambda x: x.get("contribution", 0), reverse=True)[:3]
-            terms_str = ", ".join(f'"{t["term"]}" ({t["category"]}, w={t["weight"]:.1f})' for t in top)
+            top = sorted(
+                matched_terms, key=lambda x: x.get("contribution", 0), reverse=True
+            )[:3]
+            terms_str = ", ".join(
+                f'"{t["term"]}" ({t["category"]}, w={t["weight"]:.1f})' for t in top
+            )
             parts.append(f"WORDMAP matched: {terms_str}.")
 
         # Category breakdown
@@ -574,35 +619,48 @@ class NuclearAIChartEngine:
             self._risk_orch = _get_risk_orchestrator()
 
         defaults = {
-            "cvar_95": 0.0, "cvar_99": 0.0, "var_95": 0.0,
-            "exposure": 0.0, "max_risk": 1.0,
-            "kill_switch_active": False, "kill_switch_reason": None,
-            "daily_pnl": 0.0, "drawdown_pct": 0.0,
-            "equity": 0.0, "balance": 0.0,
+            "cvar_95": 0.0,
+            "cvar_99": 0.0,
+            "var_95": 0.0,
+            "exposure": 0.0,
+            "max_risk": 1.0,
+            "kill_switch_active": False,
+            "kill_switch_reason": None,
+            "daily_pnl": 0.0,
+            "drawdown_pct": 0.0,
+            "equity": 0.0,
+            "balance": 0.0,
         }
 
         try:
             if self._risk_orch:
-                status = self._risk_orch.get_status() if hasattr(self._risk_orch, "get_status") else {}
-                defaults.update({
-                    "exposure": round(status.get("current_exposure", 0.0), 4),
-                    "max_risk": round(status.get("max_risk_fraction", 1.0), 4),
-                    "kill_switch_active": status.get("kill_switch_active", False),
-                    "kill_switch_reason": status.get("kill_switch_reason"),
-                })
+                status = (
+                    self._risk_orch.get_status()
+                    if hasattr(self._risk_orch, "get_status")
+                    else {}
+                )
+                defaults.update(
+                    {
+                        "exposure": round(status.get("current_exposure", 0.0), 4),
+                        "max_risk": round(status.get("max_risk_fraction", 1.0), 4),
+                        "kill_switch_active": status.get("kill_switch_active", False),
+                        "kill_switch_reason": status.get("kill_switch_reason"),
+                    }
+                )
         except Exception as exc:
             logger.debug("Risk data error: %s", exc)
 
         # Merge engine status if available
         try:
             from data_layer.orchestrator import orchestrator as dl
+
             if dl and hasattr(dl, "get_ml_features"):
                 feats = dl.get_ml_features()
                 if feats:
                     defaults["cvar_95"] = round(feats.get("cvar_95", 0.0), 4)
                     defaults["cvar_99"] = round(feats.get("cvar_99", 0.0), 4)
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         self._last_risk = defaults
         return defaults
@@ -614,8 +672,14 @@ class NuclearAIChartEngine:
             if self._data_orch and hasattr(self._data_orch, "get_ml_features"):
                 feats = self._data_orch.get_ml_features()
                 if feats:
-                    direction = "long" if feats.get("signal_direction", 0) > 0 else (
-                        "short" if feats.get("signal_direction", 0) < 0 else "neutral"
+                    direction = (
+                        "long"
+                        if feats.get("signal_direction", 0) > 0
+                        else (
+                            "short"
+                            if feats.get("signal_direction", 0) < 0
+                            else "neutral"
+                        )
                     )
                     confidence = feats.get("signal_confidence", 0.5)
                     price = self._last_price or 2650.0
@@ -625,8 +689,12 @@ class NuclearAIChartEngine:
                         "confidence": round(confidence, 4),
                         "model": "XGBoost+RL",
                         "entry": round(price, 3),
-                        "sl": round(price * (0.998 if direction == "long" else 1.002), 3),
-                        "tp": round(price * (1.004 if direction == "long" else 0.996), 3),
+                        "sl": round(
+                            price * (0.998 if direction == "long" else 1.002), 3
+                        ),
+                        "tp": round(
+                            price * (1.004 if direction == "long" else 0.996), 3
+                        ),
                         "reason": feats.get("signal_reason", "ML ensemble signal"),
                         "ts": int(time.time() * 1000),
                     }
@@ -638,7 +706,9 @@ class NuclearAIChartEngine:
 
     # ── Prediction path ───────────────────────────────────────────────────────
 
-    def _build_prediction_path(self, price_data: Dict, nuclear_data: Dict) -> List[Dict]:
+    def _build_prediction_path(
+        self, price_data: Dict, nuclear_data: Dict
+    ) -> List[Dict]:
         """
         Build a forward price prediction path with confidence cones.
         Under nuclear conditions, shows expected drawdown scenarios.
@@ -667,14 +737,16 @@ class NuclearAIChartEngine:
             t = now_s + i * 60
             # Base path: flat (no directional bias in nuclear mode)
             base = mid
-            cone_width = vol * (i ** 0.5)  # sqrt-time scaling
-            path.append({
-                "time": t,
-                "price": round(base, 3),
-                "low": round(base - cone_width, 3),
-                "high": round(base + cone_width, 3),
-                "scenario": "nuclear" if severity >= 7 else "normal",
-            })
+            cone_width = vol * (i**0.5)  # sqrt-time scaling
+            path.append(
+                {
+                    "time": t,
+                    "price": round(base, 3),
+                    "low": round(base - cone_width, 3),
+                    "high": round(base + cone_width, 3),
+                    "scenario": "nuclear" if severity >= 7 else "normal",
+                }
+            )
 
         return path
 
@@ -700,17 +772,21 @@ class NuclearAIChartEngine:
 
     # ── Equity curve update ───────────────────────────────────────────────────
 
-    def record_equity_point(self, equity: float, balance: float, annotation: Optional[str] = None) -> None:
+    def record_equity_point(
+        self, equity: float, balance: float, annotation: Optional[str] = None
+    ) -> None:
         """Called by connect_to_life.py on each status poll to record equity."""
         drawdown = 0.0
         if balance > 0:
             drawdown = round((equity - balance) / balance * 100, 4)
-        self._equity_curve.append({
-            "time": int(time.time()),
-            "equity": round(equity, 2),
-            "drawdown": drawdown,
-            "annotation": annotation,
-        })
+        self._equity_curve.append(
+            {
+                "time": int(time.time()),
+                "equity": round(equity, 2),
+                "drawdown": drawdown,
+                "annotation": annotation,
+            }
+        )
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

@@ -827,14 +827,16 @@ class HOPEFXBrain:
             if not symbol or action not in ("buy", "sell"):
                 return
 
-            direction = (
-                SignalDirection.BUY if action == "buy" else SignalDirection.SELL
-            )
+            direction = SignalDirection.BUY if action == "buy" else SignalDirection.SELL
 
             # Derive SL/TP from signal dict or use conservative defaults
             entry = float(signal.get("entry_price", price) or price)
-            sl = float(signal.get("stop_loss", entry * (0.995 if action == "buy" else 1.005)))
-            tp = float(signal.get("take_profit", entry * (1.015 if action == "buy" else 0.985)))
+            sl = float(
+                signal.get("stop_loss", entry * (0.995 if action == "buy" else 1.005))
+            )
+            tp = float(
+                signal.get("take_profit", entry * (1.015 if action == "buy" else 0.985))
+            )
 
             svc = _get_signal_service()
             svc.generate_signal(
@@ -848,9 +850,7 @@ class HOPEFXBrain:
                 timeframe=signal.get("timeframe", "1h"),
                 strategies_agreeing=[strategy_name],
                 total_strategies=1,
-                regime=str(
-                    self.state.market_regime.get(symbol, "unknown")
-                ),
+                regime=str(self.state.market_regime.get(symbol, "unknown")),
                 session="brain",
                 metadata={"source": "brain", "size": signal.get("size", 0)},
             )
