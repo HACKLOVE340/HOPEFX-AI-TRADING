@@ -22,6 +22,7 @@ import uuid
 
 import aiohttp
 import numpy as np
+_ENGINE_RNG = np.random.default_rng()
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +224,7 @@ class AsyncExecutionEngine:
 
                 return True
 
-            except Exception as e:
+            except (OSError, ValueError, RuntimeError, AttributeError) as e:
                 logger.error(f"Cancel failed for {order_id}: {e}")
                 return False
 
@@ -306,7 +307,7 @@ class AsyncExecutionEngine:
                     p["venue"] = venue
                     self.position_cache[p["symbol"]] = p
                     positions.append(p)
-            except Exception as e:
+            except (OSError, ValueError, RuntimeError, AttributeError) as e:
                 logger.error(f"Failed to get positions from {venue}: {e}")
 
         self._position_cache_time = time.time()
@@ -367,7 +368,7 @@ class AsyncExecutionEngine:
         volatility = market.get("volatility", 0.001)
         size_factor = min(order.quantity / 100, 1.0)  # Larger orders = more slippage
 
-        slippage = np.random.normal(0, volatility * size_factor)
+        slippage = _ENGINE_RNG.normal(0, volatility * size_factor)
 
         if order.order_type == OrderType.MARKET:
             fill_price = base_price * (1 + slippage)
@@ -378,7 +379,7 @@ class AsyncExecutionEngine:
                 fill_price = order.price
             else:
                 # Limit not hit - simulate partial fill probability
-                if np.random.random() < 0.3:  # 30% chance of no fill
+                if _ENGINE_RNG.random() < 0.3:  # 30% chance of no fill
                     order.status = OrderStatus.SUBMITTED
                     asyncio.create_task(self._delayed_fill_simulation(order))
                     return
@@ -389,14 +390,14 @@ class AsyncExecutionEngine:
         fills = []
 
         while remaining > 0 and len(fills) < 5:  # Max 5 partial fills
-            fill_qty = min(remaining, np.random.uniform(0.1, 0.5) * order.quantity)
+            fill_qty = min(remaining, _ENGINE_RNG.uniform(0.1, 0.5) * order.quantity)
             fill_qty = min(fill_qty, remaining)
 
             fill = Fill(
                 order_id=order.id,
                 symbol=order.symbol,
                 quantity=fill_qty,
-                price=fill_price * (1 + np.random.normal(0, 0.0001)),
+                price=fill_price * (1 + _ENGINE_RNG.normal(0, 0.0001)),
                 timestamp=datetime.now(timezone.utc),
                 side=order.side,
                 fees=fill_qty * fill_price * 0.0005,  # 5bps fee
@@ -405,7 +406,7 @@ class AsyncExecutionEngine:
             remaining -= fill_qty
 
             # Delay between partial fills
-            await asyncio.sleep(np.random.exponential(0.5))
+            await asyncio.sleep(_ENGINE_RNG.exponential(0.5))
 
         # Apply fills
         for fill in fills:
@@ -418,7 +419,7 @@ class AsyncExecutionEngine:
                 "_delayed_fill_simulation called in live mode. "
                 "Live orders must be routed through the real broker API."
             )
-        await asyncio.sleep(np.random.exponential(5))  # Mean 5s delay
+        await asyncio.sleep(_ENGINE_RNG.exponential(5))  # Mean 5s delay
 
         if order.status != OrderStatus.SUBMITTED:
             return
@@ -436,7 +437,7 @@ class AsyncExecutionEngine:
             order.side == "sell" and current >= order.price
         )
 
-        if would_fill or np.random.random() < 0.1:  # 10% chance of fill anyway
+        if would_fill or _ENGINE_RNG.random() < 0.1:  # 10% chance of fill anyway
             fill = Fill(
                 order_id=order.id,
                 symbol=order.symbol,
@@ -471,13 +472,13 @@ class AsyncExecutionEngine:
             if self.on_fill:
                 try:
                     self.on_fill(fill)
-                except Exception as e:
+                except (RuntimeError, ValueError, AttributeError) as e:
                     logger.error(f"Fill callback error: {e}")
 
             if self.on_order_update:
                 try:
                     self.on_order_update(order)
-                except Exception as e:
+                except (RuntimeError, ValueError, AttributeError) as e:
                     logger.error(f"Order update callback error: {e}")
 
     async def _monitor_fills(self, order: Order):
@@ -518,7 +519,7 @@ class AsyncExecutionEngine:
                     )
                     await self._apply_fill(order, fill)
 
-            except Exception as e:
+            except (OSError, ValueError, RuntimeError, AttributeError) as e:
                 logger.error(f"Fill monitoring error: {e}")
 
             await asyncio.sleep(check_interval)
@@ -545,7 +546,7 @@ class AsyncExecutionEngine:
 
                         # Random walk
                         mid = self.price_cache[symbol]["mid"]
-                        move = np.random.normal(0, 0.0001)
+                        move = _ENGINE_RNG.normal(0, 0.0001)
                         new_mid = mid * (1 + move)
 
                         spread = 0.0002
@@ -620,7 +621,7 @@ class AsyncExecutionEngine:
 
                 await asyncio.sleep(0.1)  # 10Hz update
 
-            except Exception as e:
+            except (OSError, ValueError, RuntimeError, AttributeError) as e:
                 logger.error(f"Price feed error: {e}")
                 await asyncio.sleep(1)
 
