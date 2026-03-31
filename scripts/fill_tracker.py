@@ -52,6 +52,7 @@ from typing import Any, Dict, List, Optional
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -134,18 +135,22 @@ class OANDATransactionClient:
             for txn in transactions:
                 if txn.get("type") != "ORDER_FILL":
                     continue
-                fills.append({
-                    "id": int(txn["id"]),
-                    "time": txn.get("time", ""),
-                    "instrument": txn.get("instrument", ""),
-                    "units": txn.get("units", "0"),
-                    "price": txn.get("price", "0"),
-                    "pl": txn.get("pl", "0"),
-                    "account_balance": txn.get("accountBalance", "0"),
-                    "order_id": txn.get("orderID", ""),
-                    "trade_id": txn.get("tradeID", txn.get("tradeOpened", {}).get("tradeID", "")),
-                    "reason": txn.get("reason", ""),
-                })
+                fills.append(
+                    {
+                        "id": int(txn["id"]),
+                        "time": txn.get("time", ""),
+                        "instrument": txn.get("instrument", ""),
+                        "units": txn.get("units", "0"),
+                        "price": txn.get("price", "0"),
+                        "pl": txn.get("pl", "0"),
+                        "account_balance": txn.get("accountBalance", "0"),
+                        "order_id": txn.get("orderID", ""),
+                        "trade_id": txn.get(
+                            "tradeID", txn.get("tradeOpened", {}).get("tradeID", "")
+                        ),
+                        "reason": txn.get("reason", ""),
+                    }
+                )
 
             # Pagination: OANDA returns a 'pages' list or a 'lastTransactionID'
             pages = data.get("pages", [])
@@ -208,7 +213,7 @@ def _update_gate_file(ledger: Dict[str, Any]) -> None:
         try:
             existing = json.loads(GATE_FILE.read_text())
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
     gate = {
         **existing,

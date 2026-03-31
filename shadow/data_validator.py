@@ -32,6 +32,7 @@ Divergence thresholds (env-overridable)
   SHADOW_LATENCY_DIVERGE_MS  — max acceptable latency gap in ms (default 500)
   SHADOW_ALERT_COOLDOWN_S    — min seconds between repeated alerts (default 60)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -45,15 +46,15 @@ from typing import Any, Callable, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # ── thresholds ────────────────────────────────────────────────────────────────
-_PRICE_DIVERGE_BPS  = float(os.getenv("SHADOW_PRICE_DIVERGE_BPS",  "20.0"))
+_PRICE_DIVERGE_BPS = float(os.getenv("SHADOW_PRICE_DIVERGE_BPS", "20.0"))
 _SPREAD_DIVERGE_BPS = float(os.getenv("SHADOW_SPREAD_DIVERGE_BPS", "30.0"))
 _LATENCY_DIVERGE_MS = float(os.getenv("SHADOW_LATENCY_DIVERGE_MS", "500.0"))
-_ALERT_COOLDOWN_S   = float(os.getenv("SHADOW_ALERT_COOLDOWN_S",   "60.0"))
-_WINDOW_SIZE        = int(os.getenv("SHADOW_WINDOW_SIZE",           "200"))
+_ALERT_COOLDOWN_S = float(os.getenv("SHADOW_ALERT_COOLDOWN_S", "60.0"))
+_WINDOW_SIZE = int(os.getenv("SHADOW_WINDOW_SIZE", "200"))
 
 # ── Prometheus (optional) ─────────────────────────────────────────────────────
 try:
-    from prometheus_client import Counter, Gauge, Histogram
+    from prometheus_client import Counter, Gauge
 
     _prom_divergences = Counter(
         "hopefx_shadow_divergences_total",
@@ -80,20 +81,22 @@ except Exception:
 @dataclass
 class DivergenceEvent:
     """A detected divergence between shadow and production feeds."""
-    timestamp:       datetime
-    divergence_type: str          # "price" | "spread" | "latency" | "stale"
-    production_val:  float
-    shadow_val:      float
-    gap_bps:         float
-    symbol:          str
-    severity:        str          # "warn" | "critical"
+
+    timestamp: datetime
+    divergence_type: str  # "price" | "spread" | "latency" | "stale"
+    production_val: float
+    shadow_val: float
+    gap_bps: float
+    symbol: str
+    severity: str  # "warn" | "critical"
 
 
 @dataclass
 class ShadowTickBuffer:
     """Rolling buffer of recent ticks for a single feed."""
-    ticks:      List[Dict] = field(default_factory=list)
-    max_size:   int = _WINDOW_SIZE
+
+    ticks: List[Dict] = field(default_factory=list)
+    max_size: int = _WINDOW_SIZE
 
     def push(self, tick: Dict) -> None:
         self.ticks.append(tick)
@@ -132,19 +135,19 @@ class ShadowDataValidator:
     """
 
     def __init__(self) -> None:
-        self._prod_buffer:   ShadowTickBuffer = ShadowTickBuffer()
+        self._prod_buffer: ShadowTickBuffer = ShadowTickBuffer()
         self._shadow_buffer: ShadowTickBuffer = ShadowTickBuffer()
-        self._divergences:   List[DivergenceEvent] = []
-        self._handlers:      List[Callable[[DivergenceEvent], None]] = []
+        self._divergences: List[DivergenceEvent] = []
+        self._handlers: List[Callable[[DivergenceEvent], None]] = []
         self._last_alert_ts: float = 0.0
-        self._started:       bool = False
+        self._started: bool = False
         self._lock = asyncio.Lock()
 
         # Stats
-        self._prod_ticks:    int = 0
-        self._shadow_ticks:  int = 0
+        self._prod_ticks: int = 0
+        self._shadow_ticks: int = 0
         self._total_diverge: int = 0
-        self._start_ts:      float = time.time()
+        self._start_ts: float = time.time()
 
         self._init_prometheus()
 
@@ -164,19 +167,21 @@ class ShadowDataValidator:
         self._started = False
         logger.info(
             "ShadowDataValidator: stopped — prod=%d shadow=%d divergences=%d",
-            self._prod_ticks, self._shadow_ticks, self._total_diverge,
+            self._prod_ticks,
+            self._shadow_ticks,
+            self._total_diverge,
         )
 
     def on_production_tick(self, tick: Any) -> None:
         """Receive a production tick (from orchestrator.subscribe_ticks)."""
         self._prod_ticks += 1
         entry = {
-            "mid":        getattr(tick, "mid", 0.0),
-            "bid":        getattr(tick, "bid", 0.0),
-            "ask":        getattr(tick, "ask", 0.0),
-            "spread":     getattr(tick, "spread", 0.0),
+            "mid": getattr(tick, "mid", 0.0),
+            "bid": getattr(tick, "bid", 0.0),
+            "ask": getattr(tick, "ask", 0.0),
+            "spread": getattr(tick, "spread", 0.0),
             "received_at": time.time(),
-            "ts":         getattr(tick, "timestamp", datetime.now(timezone.utc)),
+            "ts": getattr(tick, "timestamp", datetime.now(timezone.utc)),
         }
         self._prod_buffer.push(entry)
         self._maybe_compare()
@@ -187,12 +192,12 @@ class ShadowDataValidator:
         if _PROM_OK:
             _prom_shadow_ticks.inc()
         entry = {
-            "mid":        getattr(tick, "mid", 0.0),
-            "bid":        getattr(tick, "bid", 0.0),
-            "ask":        getattr(tick, "ask", 0.0),
-            "spread":     getattr(tick, "spread", 0.0),
+            "mid": getattr(tick, "mid", 0.0),
+            "bid": getattr(tick, "bid", 0.0),
+            "ask": getattr(tick, "ask", 0.0),
+            "spread": getattr(tick, "spread", 0.0),
             "received_at": time.time(),
-            "ts":         getattr(tick, "timestamp", datetime.now(timezone.utc)),
+            "ts": getattr(tick, "timestamp", datetime.now(timezone.utc)),
         }
         self._shadow_buffer.push(entry)
         self._maybe_compare()
@@ -204,7 +209,7 @@ class ShadowDataValidator:
     # ── Comparison logic ──────────────────────────────────────────────────────
 
     def _maybe_compare(self) -> None:
-        prod   = self._prod_buffer.latest
+        prod = self._prod_buffer.latest
         shadow = self._shadow_buffer.latest
         if prod is None or shadow is None:
             return
@@ -221,15 +226,19 @@ class ShadowDataValidator:
             _prom_price_gap.set(price_gap_bps)
 
         if price_gap_bps > _PRICE_DIVERGE_BPS:
-            self._emit(DivergenceEvent(
-                timestamp       = datetime.now(timezone.utc),
-                divergence_type = "price",
-                production_val  = mid_p,
-                shadow_val      = mid_s,
-                gap_bps         = price_gap_bps,
-                symbol          = "XAU_USD",
-                severity        = "critical" if price_gap_bps > _PRICE_DIVERGE_BPS * 3 else "warn",
-            ))
+            self._emit(
+                DivergenceEvent(
+                    timestamp=datetime.now(timezone.utc),
+                    divergence_type="price",
+                    production_val=mid_p,
+                    shadow_val=mid_s,
+                    gap_bps=price_gap_bps,
+                    symbol="XAU_USD",
+                    severity="critical"
+                    if price_gap_bps > _PRICE_DIVERGE_BPS * 3
+                    else "warn",
+                )
+            )
 
         # ── Spread divergence ─────────────────────────────────────────────
         spread_p = prod["spread"]
@@ -237,15 +246,17 @@ class ShadowDataValidator:
         if mid_p > 0:
             spread_gap_bps = abs(spread_p - spread_s) / mid_p * 10_000
             if spread_gap_bps > _SPREAD_DIVERGE_BPS:
-                self._emit(DivergenceEvent(
-                    timestamp       = datetime.now(timezone.utc),
-                    divergence_type = "spread",
-                    production_val  = spread_p,
-                    shadow_val      = spread_s,
-                    gap_bps         = spread_gap_bps,
-                    symbol          = "XAU_USD",
-                    severity        = "warn",
-                ))
+                self._emit(
+                    DivergenceEvent(
+                        timestamp=datetime.now(timezone.utc),
+                        divergence_type="spread",
+                        production_val=spread_p,
+                        shadow_val=spread_s,
+                        gap_bps=spread_gap_bps,
+                        symbol="XAU_USD",
+                        severity="warn",
+                    )
+                )
 
         # ── Latency divergence ────────────────────────────────────────────
         lat_gap_ms = abs(prod["received_at"] - shadow["received_at"]) * 1000
@@ -253,28 +264,32 @@ class ShadowDataValidator:
             _prom_latency_gap.set(lat_gap_ms)
 
         if lat_gap_ms > _LATENCY_DIVERGE_MS:
-            self._emit(DivergenceEvent(
-                timestamp       = datetime.now(timezone.utc),
-                divergence_type = "latency",
-                production_val  = prod["received_at"] * 1000,
-                shadow_val      = shadow["received_at"] * 1000,
-                gap_bps         = lat_gap_ms,
-                symbol          = "XAU_USD",
-                severity        = "warn",
-            ))
+            self._emit(
+                DivergenceEvent(
+                    timestamp=datetime.now(timezone.utc),
+                    divergence_type="latency",
+                    production_val=prod["received_at"] * 1000,
+                    shadow_val=shadow["received_at"] * 1000,
+                    gap_bps=lat_gap_ms,
+                    symbol="XAU_USD",
+                    severity="warn",
+                )
+            )
 
         # ── Stale shadow feed ─────────────────────────────────────────────
         shadow_age_s = now - shadow["received_at"]
         if shadow_age_s > 30.0:
-            self._emit(DivergenceEvent(
-                timestamp       = datetime.now(timezone.utc),
-                divergence_type = "stale",
-                production_val  = now,
-                shadow_val      = shadow["received_at"],
-                gap_bps         = shadow_age_s * 1000,
-                symbol          = "XAU_USD",
-                severity        = "critical",
-            ))
+            self._emit(
+                DivergenceEvent(
+                    timestamp=datetime.now(timezone.utc),
+                    divergence_type="stale",
+                    production_val=now,
+                    shadow_val=shadow["received_at"],
+                    gap_bps=shadow_age_s * 1000,
+                    symbol="XAU_USD",
+                    severity="critical",
+                )
+            )
 
     def _emit(self, event: DivergenceEvent) -> None:
         self._total_diverge += 1
@@ -290,8 +305,11 @@ class ShadowDataValidator:
             self._last_alert_ts = now
             logger.warning(
                 "SHADOW DIVERGENCE [%s/%s] prod=%.4f shadow=%.4f gap=%.2fbps",
-                event.divergence_type, event.severity,
-                event.production_val, event.shadow_val, event.gap_bps,
+                event.divergence_type,
+                event.severity,
+                event.production_val,
+                event.shadow_val,
+                event.gap_bps,
             )
             for handler in self._handlers:
                 try:
@@ -302,23 +320,23 @@ class ShadowDataValidator:
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
     def health(self) -> Dict[str, Any]:
-        prod   = self._prod_buffer.latest
+        prod = self._prod_buffer.latest
         shadow = self._shadow_buffer.latest
-        now    = time.time()
+        now = time.time()
         return {
-            "started":          self._started,
-            "uptime_s":         round(now - self._start_ts, 1),
-            "prod_ticks":       self._prod_ticks,
-            "shadow_ticks":     self._shadow_ticks,
+            "started": self._started,
+            "uptime_s": round(now - self._start_ts, 1),
+            "prod_ticks": self._prod_ticks,
+            "shadow_ticks": self._shadow_ticks,
             "total_divergences": self._total_diverge,
-            "prod_age_s":       round(now - prod["received_at"], 2) if prod else None,
-            "shadow_age_s":     round(now - shadow["received_at"], 2) if shadow else None,
+            "prod_age_s": round(now - prod["received_at"], 2) if prod else None,
+            "shadow_age_s": round(now - shadow["received_at"], 2) if shadow else None,
             "recent_divergences": [
                 {
-                    "type":     d.divergence_type,
+                    "type": d.divergence_type,
                     "severity": d.severity,
-                    "gap_bps":  round(d.gap_bps, 2),
-                    "ts":       d.timestamp.isoformat(),
+                    "gap_bps": round(d.gap_bps, 2),
+                    "ts": d.timestamp.isoformat(),
                 }
                 for d in self._divergences[-5:]
             ],
@@ -327,10 +345,7 @@ class ShadowDataValidator:
     def get_divergence_rate(self, window_s: float = 300.0) -> float:
         """Return divergences per minute over the last window_s seconds."""
         cutoff = time.time() - window_s
-        recent = [
-            d for d in self._divergences
-            if d.timestamp.timestamp() >= cutoff
-        ]
+        recent = [d for d in self._divergences if d.timestamp.timestamp() >= cutoff]
         return len(recent) / (window_s / 60.0)
 
 

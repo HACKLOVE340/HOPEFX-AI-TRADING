@@ -10,6 +10,7 @@ Public API
 ----------
   from shadow import ShadowDataValidator, ShadowTradingEngine
 """
+
 from shadow.data_validator import ShadowDataValidator
 from shadow.trading_engine import ShadowTradingEngine
 

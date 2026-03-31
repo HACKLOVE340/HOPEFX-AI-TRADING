@@ -180,7 +180,9 @@ class AnomalyWeighter:
                 lof_norm = lof_scores - self._lof_threshold
                 return self.if_weight * if_norm + (1.0 - self.if_weight) * lof_norm
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)  # fall through to IF-only
+                logger.debug(
+                    "Suppressed exception: %s", _exc
+                )  # fall through to IF-only
 
         return if_scores - self._threshold
 

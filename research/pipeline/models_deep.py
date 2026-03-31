@@ -484,7 +484,11 @@ class DeepPredictor:
             self.model.parameters(), lr=self.lr, weight_decay=1e-4
         )
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,
+            self.optimizer,
+            mode="min",
+            factor=0.5,
+            patience=5,
+            min_lr=1e-6,
         )
         if self.task == "binary":
             self.criterion = _LabelSmoothBCE(

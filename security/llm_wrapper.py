@@ -57,6 +57,7 @@ async def call_llm(prompt: str) -> str:
 
 # ── Anthropic backend ─────────────────────────────────────────────────────────
 
+
 async def _call_anthropic(prompt: str) -> str:
     """Call Anthropic Messages API (async via httpx)."""
     import httpx
@@ -83,6 +84,7 @@ async def _call_anthropic(prompt: str) -> str:
 
 
 # ── OpenAI backend ────────────────────────────────────────────────────────────
+
 
 async def _call_openai(prompt: str) -> str:
     """Call OpenAI Chat Completions API (async via httpx)."""
@@ -115,5 +117,3 @@ async def _call_openai(prompt: str) -> str:
         resp.raise_for_status()
         data = resp.json()
         return data["choices"][0]["message"]["content"].strip()
-
-
