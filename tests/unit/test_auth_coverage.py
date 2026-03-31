@@ -21,7 +21,7 @@ from datetime import datetime, timezone, timedelta
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _make_jwt(
+def _make_jwt(  # nosec B107 - test file
     sub: str = "user123", role: str = "trader", secret: str = "test-secret"
 ) -> str:
     import jwt
@@ -57,7 +57,7 @@ class TestAuthService:
         """JWT encode → decode must preserve sub and role."""
         import jwt
 
-        secret = "test-secret-key"
+        secret = "test-secret-key"  # nosec B105 - test file
         token = _make_jwt("alice", "admin", secret)
         payload = jwt.decode(token, secret, algorithms=["HS256"])
         assert payload["sub"] == "alice"
@@ -67,7 +67,7 @@ class TestAuthService:
         """Expired JWT must raise DecodeError / ExpiredSignatureError."""
         import jwt
 
-        secret = "test-secret-key"
+        secret = "test-secret-key"  # nosec B105 - test file
         payload = {
             "sub": "bob",
             "exp": datetime.now(timezone.utc) - timedelta(seconds=1),
@@ -80,7 +80,7 @@ class TestAuthService:
         """JWT signed with wrong secret must fail verification."""
         import jwt
 
-        token = _make_jwt("carol", secret="correct-secret")
+        token = _make_jwt("carol", secret="correct-secret")  # nosec B106 - test file
         with pytest.raises(jwt.InvalidSignatureError):
             jwt.decode(token, "wrong-secret", algorithms=["HS256"])
 
@@ -217,7 +217,7 @@ class TestAuthApiEndpoints:
             json={
                 "email": "new@example.com",
                 "username": "newtrader",
-                "password": "SecurePass123!",
+                "password": "SecurePass123!",  # nosec B105 - test file
             },
         )
         assert res.status_code == 201
@@ -231,7 +231,7 @@ class TestAuthApiEndpoints:
             "/api/auth/login",
             json={
                 "username": "testuser",
-                "password": "SecurePass123!",
+                "password": "SecurePass123!",  # nosec B105 - test file
             },
         )
         # 200 or 422 depending on mock wiring — just ensure no 500

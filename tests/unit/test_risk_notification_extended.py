@@ -260,7 +260,7 @@ class TestNotificationManagerExtended:
 
         config = {
             "discord_webhook_url": None,
-            "telegram_bot_token": None,
+            "telegram_bot_token": None,  # nosec B105 - test file
             "telegram_chat_id": None,
             "email_smtp_host": None,
         }
@@ -357,7 +357,7 @@ class TestNotificationManagerExtended:
                 # Should not raise; either uses urllib fallback or logs an error
                 try:
                     mgr._send_discord("Test", NotificationLevel.INFO, None)
-                except Exception:
+                except Exception:  # nosec B110 - test file
                     pass  # Error logging is acceptable for this code path
 
     def test_send_discord_http_scheme_rejected(self, mgr, caplog):

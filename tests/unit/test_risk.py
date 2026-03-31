@@ -60,8 +60,8 @@ def test_kill_switch_trigger(tmp_path):
         ks.deactivate(token=None)
 
     # Deactivation with the correct token should succeed
-    ks._deactivation_token = "test-secret"
-    ks.deactivate(token="test-secret")
+    ks._deactivation_token = "test-secret"  # nosec B105 - test file
+    ks.deactivate(token="test-secret")  # nosec B106 - test file
     assert not ks.is_active()
 
 

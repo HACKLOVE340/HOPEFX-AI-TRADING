@@ -471,14 +471,14 @@ class TestKillSwitch:
         from kill_switch import KillSwitch
 
         flag = tmp_path / "ks.flag"
-        ks1 = KillSwitch(flag_file=flag, deactivation_token="test-token-abc")
+        ks1 = KillSwitch(flag_file=flag, deactivation_token="test-token-abc")  # nosec B106 - test file
         assert not ks1.is_active()
 
         ks1.activate("test: drawdown exceeded")
         assert ks1.is_active()
 
         # New instance reads persisted state
-        ks2 = KillSwitch(flag_file=flag, deactivation_token="test-token-abc")
+        ks2 = KillSwitch(flag_file=flag, deactivation_token="test-token-abc")  # nosec B106 - test file
         assert ks2.is_active(), "Kill switch state must persist across restarts"
 
     def test_deactivate_requires_token(self, tmp_path):
@@ -486,7 +486,7 @@ class TestKillSwitch:
         from kill_switch import KillSwitch
 
         flag = tmp_path / "ks2.flag"
-        ks = KillSwitch(flag_file=flag, deactivation_token="correct-token")
+        ks = KillSwitch(flag_file=flag, deactivation_token="correct-token")  # nosec B106 - test file
         ks.activate("test")
 
         # Wrong token must raise PermissionError or return falsy — never silently deactivate

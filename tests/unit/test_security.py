@@ -87,7 +87,7 @@ class TestLogSanitizer:
 
         data = {
             "username": "john",
-            "password": "secret123",
+            "password": "secret123",  # nosec B105 - test file
             "api_key": "sk_test_123456",
             "message": "Hello world",
         }
@@ -103,7 +103,7 @@ class TestLogSanitizer:
         """Test nested dictionary sanitization"""
         sanitizer = LogSanitizer()
 
-        data = {"credentials": {"api_secret": "verysecret", "token": "mytoken123"}}
+        data = {"credentials": {"api_secret": "verysecret", "token": "mytoken123"}}  # nosec B105 - test file
 
         result = sanitizer.sanitize_dict(data)
 
@@ -170,7 +170,7 @@ class TestSecurityAuditor:
             event_type=AuditEventType.CREDENTIAL_ACCESS,
             resource="api_key",
             action="read",
-            details={"password": "supersecret", "api_key": "sk_test_123"},
+            details={"password": "supersecret", "api_key": "sk_test_123"},  # nosec B105 - test file
         )
 
         # Details should be sanitized

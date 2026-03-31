@@ -54,7 +54,7 @@ def risk(tmp_path):
 def ks(tmp_path):
     return KillSwitch(
         flag_file=tmp_path / "ks.flag",
-        deactivation_token="e2e-token",
+        deactivation_token="e2e-token",  # nosec B106 - test file
     )
 
 
@@ -126,7 +126,7 @@ async def test_kill_switch_prevents_new_orders(broker, ks):
     ks.activate("e2e test: drawdown limit")
     assert ks.is_active() is True
 
-    ks.deactivate(token="e2e-token")
+    ks.deactivate(token="e2e-token")  # nosec B106 - test file
     assert ks.is_active() is False
 
     await broker.disconnect()

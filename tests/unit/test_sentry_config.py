@@ -31,7 +31,7 @@ def _make_event(transaction: str = "/api/signals") -> Dict[str, Any]:
     return {
         "transaction": transaction,
         "request": {
-            "data": {"username": "alice", "password": "s3cr3t"},
+            "data": {"username": "alice", "password": "s3cr3t"},  # nosec B105 - test file
             "headers": {"Authorization": "Bearer tok123"},
         },
         "extra": {"api_key": "key_abc", "note": "ok"},
@@ -77,7 +77,7 @@ class TestScrubDict:
         self._scrub = _scrub_dict
 
     def test_scrubs_password(self):
-        out = self._scrub({"password": "hunter2", "username": "alice"})
+        out = self._scrub({"password": "hunter2", "username": "alice"})  # nosec B105 - test file
         assert out["password"] == "[Filtered]"
         assert out["username"] == "alice"
 
@@ -90,12 +90,12 @@ class TestScrubDict:
         assert out["authorization"] == "[Filtered]"
 
     def test_scrubs_nested_dict(self):
-        out = self._scrub({"outer": {"token": "t", "safe": "yes"}})
+        out = self._scrub({"outer": {"token": "t", "safe": "yes"}})  # nosec B105 - test file
         assert out["outer"]["token"] == "[Filtered]"
         assert out["outer"]["safe"] == "yes"
 
     def test_scrubs_list_of_dicts(self):
-        out = self._scrub({"items": [{"secret": "x"}, {"safe": "y"}]})
+        out = self._scrub({"items": [{"secret": "x"}, {"safe": "y"}]})  # nosec B105 - test file
         assert out["items"][0]["secret"] == "[Filtered]"
         assert out["items"][1]["safe"] == "y"
 

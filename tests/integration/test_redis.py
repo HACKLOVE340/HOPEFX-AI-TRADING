@@ -232,7 +232,7 @@ class TestMarketDataCacheLive:
             for key in r.scan_iter(b"hopefx:*"):
                 r.delete(key)
             r.close()
-        except Exception:
+        except Exception:  # nosec B110 - test file
             pass
 
     def test_cache_initialises(self) -> None:
