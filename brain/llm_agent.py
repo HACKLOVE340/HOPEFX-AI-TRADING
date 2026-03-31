@@ -79,7 +79,7 @@ def _load_recent_candles_from_csv(
                 }
             )
         return candles
-    except Exception:
+    except (OSError, ValueError, KeyError, RuntimeError):
         return []
 
 
@@ -275,7 +275,7 @@ def _compile_strategy(code: str) -> Tuple[Optional[Any], Optional[str]]:
             return None, "No class named 'GeneratedStrategy' found"
         instance = cls()
         return instance, None
-    except Exception as exc:
+    except (ImportError, AttributeError, SyntaxError, RuntimeError) as exc:
         return None, f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
     finally:
         try:
@@ -327,7 +327,7 @@ def _run_backtest(
             signal = strategy.generate_signal(analysis)
             if signal is not None:
                 sig_type = signal.signal_type
-        except Exception as _exc:
+        except (AttributeError, ValueError, RuntimeError) as _exc:
             logger.debug("Suppressed exception: %s", _exc)
 
         # close on opposite signal
@@ -448,7 +448,7 @@ class LLMAgent:
                 logger.info(
                     "Fetched %d candles for %s %s", len(candles), symbol, timeframe
                 )
-            except Exception as exc:
+            except (OSError, ValueError, RuntimeError, AttributeError) as exc:
                 logger.warning("Candle fetch failed: %s — backtesting disabled", exc)
 
         # reset conversation
@@ -625,11 +625,11 @@ class LLMAgent:
                         f"predictions={h.get('predict_count',0)} "
                         f"fallbacks={h.get('fallback_count',0)}"
                     )
-            except Exception as _exc:
+            except (AttributeError, RuntimeError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
 
             return "\n".join(lines)
-        except Exception:
+        except (OSError, ValueError, AttributeError, RuntimeError):
             return ""
 
     async def _fetch_rag_context(self) -> str:
@@ -655,7 +655,7 @@ class LLMAgent:
             if self.candle_fetcher:
                 try:
                     candles = await self.candle_fetcher("XAU_USD", "H1", 60)
-                except Exception as _exc:
+                except (OSError, ValueError, RuntimeError) as _exc:
                     logger.debug("Suppressed exception: %s", _exc)
 
             if not candles:
@@ -676,7 +676,7 @@ class LLMAgent:
                 "current market conditions or trade decisions."
             )
 
-        except Exception as exc:
+        except (OSError, ValueError, RuntimeError) as exc:
             logger.debug("RAG context fetch failed (non-fatal): %s", exc)
             return ""
 
@@ -704,7 +704,7 @@ class LLMAgent:
             return "", "OpenAI rate limit exceeded"
         except openai.APIConnectionError as exc:
             return "", f"OpenAI connection error: {exc}"
-        except Exception as exc:
+        except (OSError, ValueError, RuntimeError) as exc:
             return "", f"LLM call failed: {exc}"
 
     async def _call_llm(self) -> Tuple[str, Optional[str]]:
@@ -729,7 +729,7 @@ class LLMAgent:
             return "", "OpenAI rate limit exceeded"
         except openai.APIConnectionError as exc:
             return "", f"OpenAI connection error: {exc}"
-        except Exception as exc:
+        except (OSError, ValueError, RuntimeError) as exc:
             return "", f"LLM call failed: {exc}"
 
 
