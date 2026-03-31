@@ -1,9 +1,9 @@
-# Disabled — no environment.yml in this project (pip-based, not conda).
-# Re-enable if conda environment is added.
+# This project uses pip, not conda. This workflow is a no-op placeholder.
+# Re-enable and populate if a conda environment.yml is ever added.
 name: Python Package using Conda
 
 on:
-  workflow_dispatch:  # manual only
+  workflow_dispatch:
 
 jobs:
   build-linux:
@@ -13,6 +13,8 @@ jobs:
       - name: Check for environment.yml
         run: |
           if [ ! -f environment.yml ]; then
-            echo "No environment.yml found — skipping Conda build."
+            echo "No environment.yml found — conda build not applicable for this project."
             exit 0
           fi
+          echo "environment.yml found — running conda build."
+          conda env create -f environment.yml
