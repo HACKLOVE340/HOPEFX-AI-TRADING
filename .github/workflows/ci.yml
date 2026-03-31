@@ -79,13 +79,17 @@ jobs:
           pip install -r requirements-ci.txt
           pip install mypy pandas-stubs types-redis types-pyyaml
 
-      # Strict gate: only the two files already fully typed
+      # Strict gate: only the two files already fully typed.
+      # --follow-imports=silent: check only these two files strictly;
+      # transitive imports (charting/, core/, etc.) are silenced so their
+      # pre-existing type errors don't block this gate.
       - name: mypy strict — risk/analytics.py + risk/advanced_analytics.py
         run: |
           mypy risk/analytics.py risk/advanced_analytics.py \
             --strict \
             --ignore-missing-imports \
             --allow-untyped-decorators \
+            --follow-imports=silent \
             --no-error-summary
 
       # Non-strict gates: surface regressions but don't block CI
