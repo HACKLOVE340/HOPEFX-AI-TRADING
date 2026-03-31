@@ -176,7 +176,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     generated: List[str] = []
     skipped: List[str] = []
 
-    for var, desc, gen_kind in REQUIRED_SECRETS:
+    for var, _desc, gen_kind in REQUIRED_SECRETS:
         current = env.get(var, "")
         if current and not _is_placeholder(current):
             skipped.append(var)

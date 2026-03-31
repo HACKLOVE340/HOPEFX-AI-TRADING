@@ -334,7 +334,7 @@ class EnsembleLSTMPredictor:
         y_val: np.ndarray,
     ):
         """Train ensemble of models"""
-        for i in range(self.num_models):
+        for _i in range(self.num_models):
             model = LSTMPredictor()
             model.build_model()
             model.train(X_train, y_train, X_val, y_val, epochs=100, verbose=0)

@@ -259,7 +259,7 @@ class TestMarketDataCacheBasics:
         mock_redis = MagicMock()
         mock_connect.return_value = mock_redis
 
-        cache = MarketDataCache(host="redis.example.com", port=6380, password="secret")
+        cache = MarketDataCache(host="redis.example.com", port=6380, password="secret")  # noqa: S106
 
         assert cache.host == "redis.example.com"
         assert cache.port == 6380

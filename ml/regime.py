@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import joblib
+import pickle  # noqa: S301
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
@@ -82,10 +83,10 @@ class RegimeDetector:
         """Load or train model."""
         if self.model_path.exists():
             saved = joblib.load(self.model_path)
-                self.hmm = saved["hmm"]
-                self.vol_gmm = saved["vol_gmm"]
-                self._regime_map = saved["regime_map"]
-                self._is_fitted = True
+            self.hmm = saved["hmm"]
+            self.vol_gmm = saved["vol_gmm"]
+            self._regime_map = saved["regime_map"]
+            self._is_fitted = True
             logger.info("Regime model loaded")
         else:
             logger.warning("No regime model found, will train on first data")
@@ -172,7 +173,7 @@ class RegimeDetector:
         means = self.hmm.means_
         covars = self.hmm.covars_
 
-        for i, (mean, cov) in enumerate(zip(means, covars)):
+        for i, (mean, cov) in enumerate(zip(means, covars, strict=False)):
             ret_mean = mean[0]
             vol = np.sqrt(cov[0, 0])
 

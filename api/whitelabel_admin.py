@@ -144,7 +144,7 @@ async def list_tenants(
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid status: {status_filter}",
-            )
+            ) from None
     tenants = _manager.list_tenants(status=status_enum)
     return {"tenants": [_tenant_to_dict(t) for t in tenants], "total": len(tenants)}
 
@@ -255,7 +255,7 @@ async def enable_feature(
     try:
         flag = FeatureFlag(feature)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Unknown feature: {feature}")
+        raise HTTPException(status_code=400, detail=f"Unknown feature: {feature}") from None
     if not _manager.enable_feature(tenant_id, flag):
         raise HTTPException(status_code=404, detail="Tenant not found")
     return {"enabled": True, "feature": feature, "tenant_id": tenant_id}
@@ -270,7 +270,7 @@ async def disable_feature(
     try:
         flag = FeatureFlag(feature)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Unknown feature: {feature}")
+        raise HTTPException(status_code=400, detail=f"Unknown feature: {feature}") from None
     if not _manager.disable_feature(tenant_id, flag):
         raise HTTPException(status_code=404, detail="Tenant not found")
     return {"disabled": True, "feature": feature, "tenant_id": tenant_id}

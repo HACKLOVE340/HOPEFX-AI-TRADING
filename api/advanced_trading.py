@@ -113,9 +113,9 @@ def _run_real_backtest(
         raise ValueError(
             "BacktestEngine is not available. "
             "Ensure the backtest module is installed and configured."
-        )
+        ) from None
     except Exception as exc:
-        raise ValueError(f"Backtest failed for strategy '{strategy_name}': {exc}")
+        raise ValueError(f"Backtest failed for strategy '{strategy_name}': {exc}") from exc
 
 
 @router.post("/api/ab-test/start", status_code=201)
@@ -138,7 +138,7 @@ async def start_ab_test(
             req.strategy_b, req.symbol, req.duration_days, req.initial_capital
         )
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     # Winner by Sharpe ratio (risk-adjusted)
     winner = (
@@ -490,7 +490,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
             if isinstance(left, list) and isinstance(right, list):
                 return [
                     _apply(a, b) if a is not None and b is not None else None
-                    for a, b in zip(left, right)
+                    for a, b in zip(left, right, strict=False)
                 ]
             if isinstance(left, list):
                 return [_apply(a, right) if a is not None else None for a in left]
@@ -536,7 +536,7 @@ async def preview_indicator(
             "points": len(data),
         }
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/api/indicators")
@@ -735,8 +735,8 @@ async def get_cot_gold():
 
         # CFTC public data API — gold futures (COMEX, code 088691)
         url = "https://publicreporting.cftc.gov/api/explore/dataset/com_disagg_txt_2024/records/?where=cftc_commodity_code%3D%22088691%22&limit=1&sort=-report_date_as_yyyy_mm_dd"
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - hardcoded https:// CFTC public API URL
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})  # noqa: S310
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - hardcoded https:// CFTC public API URL  # noqa: S310
             data = json.loads(resp.read())
             if data.get("records"):
                 rec = data["records"][0]["record"]["fields"]
@@ -766,7 +766,7 @@ async def get_cot_gold():
                     "Data is published weekly — retry after the next report release."
                 ),
             },
-        )
+        ) from exc
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -788,7 +788,7 @@ def _run_monte_carlo(
     simulations: int,
 ) -> dict:
     # Use OS entropy so each run produces independent results
-    rng = random.Random()  # nosec B311 - Monte Carlo simulation, not cryptographic use
+    rng = random.Random()  # nosec B311 - Monte Carlo simulation, not cryptographic use  # noqa: S311
     final_equities = []
     ruin_count = 0
     ruin_threshold = initial_capital * 0.5  # 50% drawdown = ruin

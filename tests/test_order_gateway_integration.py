@@ -20,7 +20,6 @@ and risk manager dependencies.
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -165,7 +164,7 @@ class TestBrokerException:
     def test_broker_timeout_returns_error_result(self, gateway, mock_executor):
         """When TradeExecutor raises asyncio.TimeoutError, send_order returns ERROR."""
         order = _make_order()
-        mock_executor.execute_signal.side_effect = asyncio.TimeoutError(
+        mock_executor.execute_signal.side_effect = TimeoutError(
             "broker timeout"
         )
 
@@ -211,7 +210,7 @@ class TestBrokerException:
     ):
         """send_order_async() handles broker timeout without raising."""
         order = _make_order()
-        mock_executor.execute_signal.side_effect = asyncio.TimeoutError("async timeout")
+        mock_executor.execute_signal.side_effect = TimeoutError("async timeout")
 
         result = await gateway.send_order_async(order)
 

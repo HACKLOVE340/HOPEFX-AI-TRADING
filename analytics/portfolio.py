@@ -214,7 +214,7 @@ class PortfolioAnalytics:
 
             return {
                 "success": True,
-                "weights": dict(zip(self.assets, optimal_weights.round(4))),
+                "weights": dict(zip(self.assets, optimal_weights.round(4), strict=False)),
                 "expected_return": ret,
                 "volatility": vol,
                 "sharpe_ratio": sharpe,
@@ -252,7 +252,7 @@ class PortfolioAnalytics:
                     "return": ret,
                     "volatility": vol,
                     "sharpe": sharpe,
-                    **dict(zip(self.assets, weights)),
+                    **dict(zip(self.assets, weights, strict=False)),
                 }
             )
 
@@ -412,7 +412,7 @@ class PortfolioAnalytics:
         report = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "assets": self.assets,
-            "weights": dict(zip(self.assets, weights.round(4))),
+            "weights": dict(zip(self.assets, weights.round(4), strict=False)),
             "performance": {
                 "expected_return": perf[0],
                 "volatility": perf[1],

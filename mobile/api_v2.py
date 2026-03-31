@@ -61,7 +61,7 @@ class AuthToken(BaseModel):
     access_token: str
     refresh_token: str
     expires_in: int
-    token_type: str = "Bearer"
+    token_type: str = "Bearer"  # noqa: S105
 
 
 class Account(BaseModel):
@@ -161,7 +161,7 @@ class MobileAPIServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",  # nosec B104 - host configurable via parameter
+        host: str = "0.0.0.0",  # nosec B104 - host configurable via parameter  # noqa: S104
         port: int = 8001,
         jwt_secret: str = None,
         broker=None,
@@ -293,7 +293,7 @@ class MobileAPIServer:
                 raise
             except Exception as e:
                 logger.error(f"Registration failed: {e}")
-                raise HTTPException(status_code=500, detail="Registration failed")
+                raise HTTPException(status_code=500, detail="Registration failed") from e
 
         @self.app.post("/api/v2/auth/login", response_model=AuthToken, tags=["Auth"])
         async def login(email: str, password: str):
@@ -332,7 +332,7 @@ class MobileAPIServer:
                 raise
             except Exception as e:
                 logger.error(f"Login failed: {e}")
-                raise HTTPException(status_code=500, detail="Login failed")
+                raise HTTPException(status_code=500, detail="Login failed") from e
 
         @self.app.post("/api/v2/auth/refresh", response_model=AuthToken, tags=["Auth"])
         async def refresh_token(refresh_token: str):
@@ -354,9 +354,9 @@ class MobileAPIServer:
                 )
 
             except jwt.ExpiredSignatureError:
-                raise HTTPException(status_code=401, detail="Refresh token expired")
+                raise HTTPException(status_code=401, detail="Refresh token expired") from None
             except jwt.DecodeError:
-                raise HTTPException(status_code=401, detail="Invalid refresh token")
+                raise HTTPException(status_code=401, detail="Invalid refresh token") from None
 
     # ── Account ───────────────────────────────────────────────────────────────
 
@@ -400,7 +400,7 @@ class MobileAPIServer:
                 raise
             except Exception as e:
                 logger.error(f"Failed to fetch account: {e}")
-                raise HTTPException(status_code=500, detail="Failed to fetch account")
+                raise HTTPException(status_code=500, detail="Failed to fetch account") from e
 
     # ── Trading ───────────────────────────────────────────────────────────────
 
@@ -431,7 +431,7 @@ class MobileAPIServer:
                 raise
             except Exception as e:
                 logger.error(f"Failed to fetch quote: {e}")
-                raise HTTPException(status_code=500, detail="Failed to fetch quote")
+                raise HTTPException(status_code=500, detail="Failed to fetch quote") from e
 
         @self.app.post(
             "/api/v2/orders", response_model=Dict[str, Any], tags=["Trading"]
@@ -496,12 +496,12 @@ class MobileAPIServer:
                 }
 
             except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                raise HTTPException(status_code=400, detail=str(e)) from e
             except HTTPException:
                 raise
             except Exception as e:
                 logger.error(f"Order placement failed: {e}")
-                raise HTTPException(status_code=500, detail="Order placement failed")
+                raise HTTPException(status_code=500, detail="Order placement failed") from e
 
         @self.app.get(
             "/api/v2/trades", response_model=List[TradeData], tags=["Trading"]
@@ -541,7 +541,7 @@ class MobileAPIServer:
                 raise
             except Exception as e:
                 logger.error(f"Failed to fetch trades: {e}")
-                raise HTTPException(status_code=500, detail="Failed to fetch trades")
+                raise HTTPException(status_code=500, detail="Failed to fetch trades") from e
 
         @self.app.post("/api/v2/trades/{trade_id}/close", tags=["Trading"])
         async def close_trade(
@@ -577,7 +577,7 @@ class MobileAPIServer:
                 raise
             except Exception as e:
                 logger.error(f"Failed to close trade: {e}")
-                raise HTTPException(status_code=500, detail="Failed to close trade")
+                raise HTTPException(status_code=500, detail="Failed to close trade") from e
 
     # ── Performance ───────────────────────────────────────────────────────────
 
@@ -616,7 +616,7 @@ class MobileAPIServer:
                 logger.error(f"Failed to fetch performance: {e}")
                 raise HTTPException(
                     status_code=500, detail="Failed to fetch performance"
-                )
+                ) from e
 
     # ── News ──────────────────────────────────────────────────────────────────
 
@@ -634,7 +634,7 @@ class MobileAPIServer:
 
             except Exception as e:
                 logger.error(f"Failed to fetch news: {e}")
-                raise HTTPException(status_code=500, detail="Failed to fetch news")
+                raise HTTPException(status_code=500, detail="Failed to fetch news") from e
 
     # ── Notifications ─────────────────────────────────────────────────────────
 
@@ -660,7 +660,7 @@ class MobileAPIServer:
                 logger.error(f"Failed to fetch preferences: {e}")
                 raise HTTPException(
                     status_code=500, detail="Failed to fetch preferences"
-                )
+                ) from e
 
         @self.app.post("/api/v2/notifications/preferences", tags=["Notifications"])
         async def update_notification_preferences(
@@ -679,7 +679,7 @@ class MobileAPIServer:
                 logger.error(f"Failed to update preferences: {e}")
                 raise HTTPException(
                     status_code=500, detail="Failed to update preferences"
-                )
+                ) from e
 
     # ── WebSocket ─────────────────────────────────────────────────────────────
 
@@ -771,16 +771,16 @@ class MobileAPIServer:
         except jwt.ExpiredSignatureError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
-            )
+            ) from None
         except jwt.DecodeError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-            )
+            ) from None
         except Exception as e:
             logger.error(f"Token verification failed: {e}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed"
-            )
+            ) from e
 
     def run(self, reload: bool = False):
         """Run the API server"""

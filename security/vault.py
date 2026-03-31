@@ -107,7 +107,7 @@ class HSMVault:
         if hardware_token:
             # Bind to hardware (e.g., CPU serial, MAC address hash)
             hardware_salt = hashlib.sha256(hardware_token.encode()).digest()
-            salt = bytes(a ^ b for a, b in zip(salt, hardware_salt))
+            salt = bytes(a ^ b for a, b in zip(salt, hardware_salt, strict=False))
 
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
@@ -136,7 +136,7 @@ class HSMVault:
             # Generate key in HSM, export encrypted
             return session.get_pseudo_random(32)
         except ImportError:
-            raise RuntimeError("YubiKey HSM library not installed")
+            raise RuntimeError("YubiKey HSM library not installed") from None
 
     def _derive_key_cloud(self, credential: Optional[str]) -> bytes:
         """Cloud HSM key derivation — AWS KMS or Azure Key Vault.
@@ -198,7 +198,7 @@ class HSMVault:
             raise RuntimeError(
                 "boto3 is required for AWS KMS integration. "
                 "Install it with: pip install boto3"
-            )
+            ) from None
 
         key_id = os.getenv("AWS_KMS_KEY_ID")
         region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
@@ -254,7 +254,7 @@ class HSMVault:
             raise RuntimeError(
                 "azure-keyvault-keys and azure-identity are required for Azure Key Vault "
                 "integration. Install with: pip install azure-keyvault-keys azure-identity"
-            )
+            ) from None
 
         vault_url = os.getenv("AZURE_KEY_VAULT_URL")
         key_name = os.getenv("AZURE_KEY_NAME")

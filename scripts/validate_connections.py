@@ -313,7 +313,7 @@ def check_graphql():
 
         return "GraphQL router importable"
     except ImportError as e:
-        raise AssertionError(f"GraphQL optional dep missing: {e}")
+        raise AssertionError(f"GraphQL optional dep missing: {e}") from e
 
 
 def check_notifications():
@@ -415,13 +415,13 @@ def run_checks(strict: bool = False) -> int:
 
     if crit_reds:
         print("  ❌ CRITICAL FAILURES:")
-        for name, (status, msg, _) in crit_reds:
+        for name, (_status, msg, _) in crit_reds:
             print(f"     • {name}: {msg}")
         print()
 
     if crit_yellows:
         print("  ⚠️  CRITICAL WARNINGS:")
-        for name, (status, msg, _) in crit_yellows:
+        for name, (_status, msg, _) in crit_yellows:
             print(f"     • {name}: {msg}")
         print()
 

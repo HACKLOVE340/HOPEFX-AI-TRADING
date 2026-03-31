@@ -59,7 +59,7 @@ class CopyTradingEngine:
     def sync_trade(self, trade_id: str, leader_id: str) -> Dict[str, str]:
         """Propagate a leader trade to all active followers. Returns {copy_id: follower_id}."""
         result = {}
-        for key, rel in self.relationships.items():
+        for _key, rel in self.relationships.items():
             if rel.leader_id == leader_id and rel.is_active:
                 copy_id = f"COPY_{trade_id}_{rel.follower_id}"
                 result[copy_id] = rel.follower_id

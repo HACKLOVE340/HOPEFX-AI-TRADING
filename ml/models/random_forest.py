@@ -256,7 +256,7 @@ class RandomForestTradingClassifier(BaseMLModel):
         importances = self.model.feature_importances_
 
         if self.feature_names:
-            return dict(zip(self.feature_names, importances))
+            return dict(zip(self.feature_names, importances, strict=False))
         else:
             return dict(enumerate(importances))
 

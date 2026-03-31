@@ -557,7 +557,7 @@ class DataLayerRedisStore:
                 pipe.get(fk)
             results = pipe.execute()
             out: Dict[str, Any] = {}
-            for suffix, raw in zip(keys, results):
+            for suffix, raw in zip(keys, results, strict=False):
                 if raw is not None:
                     try:
                         out[suffix] = json.loads(raw)

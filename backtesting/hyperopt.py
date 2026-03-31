@@ -159,7 +159,7 @@ class HyperoptEngine:
 
             optuna.logging.set_verbosity(optuna.logging.WARNING)
         except ImportError:
-            raise ImportError("optuna is required for hyperopt. pip install optuna")
+            raise ImportError("optuna is required for hyperopt. pip install optuna") from None
 
         import optuna
 

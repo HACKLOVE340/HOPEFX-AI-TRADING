@@ -108,12 +108,12 @@ class IBKRFIXConfig:
     # Path for FIX session store (sequence numbers)
     store_path: str = field(
         default_factory=lambda: os.environ.get(
-            "IBKR_FIX_STORE_PATH", "/tmp/ibkr_fix_store"
+            "IBKR_FIX_STORE_PATH", "/tmp/ibkr_fix_store"  # noqa: S108
         ),
     )
     log_path: str = field(
         default_factory=lambda: os.environ.get(
-            "IBKR_FIX_LOG_PATH", "/tmp/ibkr_fix_logs"
+            "IBKR_FIX_LOG_PATH", "/tmp/ibkr_fix_logs"  # noqa: S108
         ),
     )
 
@@ -194,7 +194,7 @@ class IBKRFIXBridge:
         )
 
     @classmethod
-    def from_env(cls, kill_switch=None) -> "IBKRFIXBridge":
+    def from_env(cls, kill_switch=None) -> IBKRFIXBridge:
         """Construct from environment variables."""
         return cls(config=IBKRFIXConfig(), kill_switch=kill_switch)
 
@@ -361,7 +361,7 @@ class IBKRFIXBridge:
     # Context manager
     # ------------------------------------------------------------------
 
-    def __enter__(self) -> "IBKRFIXBridge":
+    def __enter__(self) -> IBKRFIXBridge:
         self.start()
         return self
 

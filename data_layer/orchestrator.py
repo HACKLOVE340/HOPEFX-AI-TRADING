@@ -344,8 +344,8 @@ class MarketDataOrchestrator:
                         _r = self._redis_store._r
                         await asyncio.get_running_loop().run_in_executor(
                             None,
-                            lambda: _r.setex(
-                                "hopefx:dl:orchestrator_health", 30, payload
+                            lambda: _r.setex(  # noqa: B023
+                                "hopefx:dl:orchestrator_health", 30, payload  # noqa: B023
                             ),
                         )
                     except Exception as _exc:
@@ -601,7 +601,7 @@ class MarketDataOrchestrator:
         symbol: str = "XAU_USD",
         bars: int = 150,
         timeframe: str = "H1",
-    ) -> Optional["pd.DataFrame"]:
+    ) -> Optional[pd.DataFrame]:
         """
         Return the last ``bars`` closed OHLCV bars as a DataFrame.
 
@@ -616,7 +616,7 @@ class MarketDataOrchestrator:
             logger.debug("Orchestrator.get_ohlcv: %s", exc)
             return None
 
-    def get_macro_features(self) -> Optional["pd.DataFrame"]:
+    def get_macro_features(self) -> Optional[pd.DataFrame]:
         """
         Return the MacroStore as a DataFrame aligned to the current time.
 
@@ -688,7 +688,7 @@ class MarketDataOrchestrator:
         symbol: str = "XAU_USD",
         timeframe_minutes: int = 60,
         max_ticks: int = 5000,
-    ) -> Optional["pd.DataFrame"]:
+    ) -> Optional[pd.DataFrame]:
         """
         Build an OHLCV DataFrame from the tick history in Redis.
 
@@ -726,7 +726,7 @@ class MarketDataOrchestrator:
                             lineage_id=r.get("lineage_id", ""),
                         )
                     )
-                except Exception:  # nosec B112 - skip malformed tick record during replay
+                except Exception:  # nosec B112 - skip malformed tick record during replay  # noqa: S112
                     continue
 
             if len(ticks) < 2:
@@ -778,7 +778,7 @@ class MarketDataOrchestrator:
         symbol: str = "XAU_USD",
         bars: int = 200,
         timeframe: str = "H1",
-    ) -> Optional["pd.DataFrame"]:
+    ) -> Optional[pd.DataFrame]:
         """
         Return up to ``bars`` OHLCV bars, trying OHLCVStore first then
         falling back to tick-based reconstruction from Redis.

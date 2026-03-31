@@ -401,7 +401,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
 
     # ── Fitting ───────────────────────────────────────────────────────────────
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "RegimeConditionalModel":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> RegimeConditionalModel:
         """
         Train regime-specific models and a global fallback model.
 
@@ -551,7 +551,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         return path
 
     @classmethod
-    def load(cls, path: str) -> "RegimeConditionalModel":
+    def load(cls, path: str) -> RegimeConditionalModel:
         """Load a previously saved RegimeConditionalModel."""
         payload = joblib.load(path)
         obj = cls(

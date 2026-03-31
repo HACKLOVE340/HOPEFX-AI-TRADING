@@ -136,7 +136,7 @@ def _accuracy_pnl_correlation(trades: List[Dict]) -> Dict[str, Any]:
 
     corr = float(np.corrcoef(directions, pnl_signs)[0, 1])
     # Fraction where direction sign matches P&L sign
-    matches = sum(1 for d, p in zip(directions, pnl_signs) if d == p)
+    matches = sum(1 for d, p in zip(directions, pnl_signs, strict=False) if d == p)
     match_rate = matches / len(directions)
 
     return {

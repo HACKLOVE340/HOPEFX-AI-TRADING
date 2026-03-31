@@ -497,7 +497,7 @@ class DeepPredictor:
         else:
             self.criterion = nn.MSELoss()
 
-    def _build_model(self, n_features: int, seq_len: int, **kwargs) -> "nn.Module":
+    def _build_model(self, n_features: int, seq_len: int, **kwargs) -> nn.Module:
         arch = self.architecture.lower()
         if arch == "lstm":
             return _LSTMNet(n_features, **kwargs)
@@ -513,7 +513,7 @@ class DeepPredictor:
                 f"Choose from: {list(self.ARCHITECTURES)}"
             )
 
-    def _to_loader(self, X: np.ndarray, y: np.ndarray, shuffle: bool) -> "DataLoader":
+    def _to_loader(self, X: np.ndarray, y: np.ndarray, shuffle: bool) -> DataLoader:
         X_t = torch.tensor(X, dtype=torch.float32)
         y_t = torch.tensor(y, dtype=torch.float32)
         return DataLoader(
@@ -716,7 +716,7 @@ class DeepPredictor:
         logger.info("DeepPredictor saved → %s", path)
 
     @classmethod
-    def load(cls, path: str | Path, device: str = "auto") -> "DeepPredictor":
+    def load(cls, path: str | Path, device: str = "auto") -> DeepPredictor:
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"DeepPredictor model not found: {path}")

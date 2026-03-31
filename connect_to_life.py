@@ -594,7 +594,7 @@ class LifeSupervisor:
                 self._engine_task.cancel()
                 try:
                     await self._engine_task
-                except (asyncio.CancelledError, Exception):
+                except (asyncio.CancelledError, Exception):  # noqa: S110
                     pass
         logger.info("Engine stopped.")
 

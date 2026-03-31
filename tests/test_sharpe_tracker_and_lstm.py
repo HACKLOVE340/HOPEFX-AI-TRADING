@@ -239,7 +239,7 @@ class TestLSTMSignalLayerNoModel:
 
         # Point at a path that definitely does not exist
         self.layer = LSTMSignalLayer(
-            model_path="/tmp/nonexistent_lstm_signal.pt",
+            model_path="/tmp/nonexistent_lstm_signal.pt",  # noqa: S108
             seq_len=10,
             min_bars=20,
         )

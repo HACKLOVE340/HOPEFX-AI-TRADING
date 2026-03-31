@@ -558,7 +558,7 @@ def compute_pooled_metrics(symbol_results: List[Dict], target_n: int = 600) -> D
         honest_stats = _sharpe_stats(pnls_honest, n_honest, target_n)
         honest_stats["excluded_symbols"] = outlier_syms
         honest_stats["exclusion_reasons"] = {
-            sym: reason for sym, reason in zip(outlier_syms, outlier_reasons)
+            sym: reason for sym, reason in zip(outlier_syms, outlier_reasons, strict=False)
         }
     else:
         honest_stats = None
@@ -580,7 +580,7 @@ def compute_pooled_metrics(symbol_results: List[Dict], target_n: int = 600) -> D
     result["_validation"] = {
         "outlier_symbols": outlier_syms,
         "outlier_reasons": {
-            sym: reason for sym, reason in zip(outlier_syms, outlier_reasons)
+            sym: reason for sym, reason in zip(outlier_syms, outlier_reasons, strict=False)
         },
         "honest_pooled": honest_stats,
         "gate_uses_honest_pool": bool(outlier_syms),

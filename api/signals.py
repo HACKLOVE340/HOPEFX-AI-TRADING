@@ -896,7 +896,7 @@ def create_signals_router():
                 raise HTTPException(
                     status_code=422,
                     detail=f"Invalid direction: '{req.direction}'. Use 'buy' or 'sell'.",
-                )
+                ) from None
 
             entry = req.entry_price if req.entry_price is not None else req.price
             # Default SL/TP: 0.5% away (conservative if not provided)
@@ -953,7 +953,7 @@ def create_signals_router():
             raise HTTPException(
                 status_code=500,
                 detail=f"Signal generation failed: {e}",
-            )
+            ) from e
 
     @signals_router.get("/analytics")
     async def get_signal_analytics():
@@ -973,7 +973,7 @@ def create_signals_router():
             )
             return {"alert_id": alert.id, "status": "created"}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Alert creation failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Alert creation failed: {e}") from e
 
     @signals_router.get("/alerts")
     async def list_alerts(symbol: Optional[str] = None):

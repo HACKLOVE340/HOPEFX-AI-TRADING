@@ -66,7 +66,7 @@ class KeyManager:
             if len(decoded) < 32:
                 raise SecurityError("Key must be at least 32 bytes")
         except Exception as e:
-            raise SecurityError(f"Invalid key format: {e}")
+            raise SecurityError(f"Invalid key format: {e}") from e
 
     def _generate_temporary_key(self) -> str:
         """Generate temporary key for development (with clear warnings)"""

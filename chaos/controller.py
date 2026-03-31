@@ -48,10 +48,10 @@ from chaos.injector import FaultInjector, FaultType, fault_injector
 logger = logging.getLogger(__name__)
 
 # ── SLA bounds ────────────────────────────────────────────────────────────────
-_FAILOVER_SLA_S = float(5.0)  # feed failover must complete in 5s
-_STALE_DETECT_SLA = float(35.0)  # stale tick must be detected in 35s
-_REDIS_RECOVER_SLA = float(10.0)  # Redis must reconnect in 10s
-_SPIKE_REJECT_SLA = float(2.0)  # DQE must reject spike within 2 ticks
+_FAILOVER_SLA_S = 5.0  # feed failover must complete in 5s
+_STALE_DETECT_SLA = 35.0  # stale tick must be detected in 35s
+_REDIS_RECOVER_SLA = 10.0  # Redis must reconnect in 10s
+_SPIKE_REJECT_SLA = 2.0  # DQE must reject spike within 2 ticks
 
 
 @dataclass

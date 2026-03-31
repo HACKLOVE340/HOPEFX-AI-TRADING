@@ -96,7 +96,7 @@ class TestRedisPackage:
     def test_connection_refused_raises(self) -> None:
         """Connecting to a closed port raises a Redis ConnectionError."""
         r = redis_lib.Redis(host="localhost", port=19999, socket_connect_timeout=0.2)
-        with pytest.raises(Exception):
+        with pytest.raises((ConnectionError, OSError)):
             r.ping()
 
 
@@ -110,7 +110,7 @@ class TestRedisLive:
     """Integration tests against a real Redis server."""
 
     @pytest.fixture(autouse=True)
-    def _client(self) -> "redis_lib.Redis":  # type: ignore[name-defined]
+    def _client(self) -> redis_lib.Redis:  # type: ignore[name-defined]
         """Provide a clean Redis client and flush a test namespace."""
         self.r = redis_lib.Redis(host="localhost", port=6379, decode_responses=True)
         # Remove any keys we might leave behind
@@ -232,7 +232,7 @@ class TestMarketDataCacheLive:
             for key in r.scan_iter(b"hopefx:*"):
                 r.delete(key)
             r.close()
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     def test_cache_initialises(self) -> None:

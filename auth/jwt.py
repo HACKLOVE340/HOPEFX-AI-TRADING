@@ -129,7 +129,7 @@ def verify_token(token: str, credentials_exception):
             raise credentials_exception
         return username
     except jwt.InvalidTokenError:
-        raise credentials_exception
+        raise credentials_exception from None
 
 
 def decode_access_token(token: str) -> dict:

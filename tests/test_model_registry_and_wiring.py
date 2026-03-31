@@ -366,11 +366,11 @@ class TestAdvancedPredictorIntegrity:
         return AdvancedPredictor(model_path=pathlib.Path(path))
 
     def test_integrity_unchecked_before_load(self, tmp_path):
-        p = self._make_predictor("/tmp/nonexistent_model.pkl")
+        p = self._make_predictor("/tmp/nonexistent_model.pkl")  # noqa: S108
         assert p._integrity_ok is None
 
     def test_integrity_fails_for_missing_file(self, tmp_path):
-        p = self._make_predictor("/tmp/nonexistent_model.pkl")
+        p = self._make_predictor("/tmp/nonexistent_model.pkl")  # noqa: S108
         ok = p._verify_integrity()
         assert ok is False
         assert "missing" in p._integrity_msg.lower() or "Artifact" in p._integrity_msg
@@ -455,7 +455,7 @@ class TestAdvancedPredictorIntegrity:
         mr._registry = original
 
     def test_integrity_result_in_stats(self, tmp_path):
-        p = self._make_predictor("/tmp/nonexistent_model.pkl")
+        p = self._make_predictor("/tmp/nonexistent_model.pkl")  # noqa: S108
         p._verify_integrity()
         s = p.stats
         assert "integrity_ok" in s

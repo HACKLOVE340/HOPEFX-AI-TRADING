@@ -736,7 +736,7 @@ class FIXAdapter:
         self._pyfixmsg_sock = sock
         self._pyfixmsg_seq = 1  # outbound MsgSeqNum
 
-        # Send Logon (MsgType=A)
+        # Send Logon (MsgType=A) from exc
         logon = self._build_pyfixmsg_logon()
         sock.sendall(logon)
         logger.info(
@@ -915,12 +915,12 @@ class FIXAdapter:
 
             return await asyncio.wait_for(future, timeout=30.0)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             with self._pending_lock:
                 self._pending.pop(order.cl_ord_id, None)
             raise TimeoutError(
                 f"FIX ExecutionReport not received within 30 s for {order.cl_ord_id}",
-            )
+            ) from None
 
     def _send_quickfix(self, order: FIXOrder) -> None:
         """Build and send a FIX 4.4 NewOrderSingle via quickfix."""

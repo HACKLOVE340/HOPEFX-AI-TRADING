@@ -69,7 +69,7 @@ class AuthToken(BaseModel):
     access_token: str
     refresh_token: str
     expires_in: int
-    token_type: str = "Bearer"
+    token_type: str = "Bearer"  # noqa: S105
 
 
 class Account(BaseModel):
@@ -155,7 +155,7 @@ class MobileAPIServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",  # nosec B104 - host configurable via parameter
+        host: str = "0.0.0.0",  # nosec B104 - host configurable via parameter  # noqa: S104
         port: int = 8001,
         jwt_secret: str | None = None,
         broker=None,
@@ -234,11 +234,11 @@ class MobileAPIServer:
         except jwt.ExpiredSignatureError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
-            )
+            ) from None
         except jwt.DecodeError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-            )
+            ) from None
 
         if payload.get("type") != expected_type:
             raise HTTPException(
@@ -327,7 +327,7 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error("Registration failed: %s", exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Registration failed")
+                raise HTTPException(status_code=500, detail="Registration failed") from exc
 
         @self.app.post("/api/v2/auth/login", response_model=AuthToken, tags=["Auth"])
         async def login(email: str, password: str):
@@ -351,7 +351,7 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error("Login failed: %s", exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Login failed")
+                raise HTTPException(status_code=500, detail="Login failed") from exc
 
         @self.app.post("/api/v2/auth/refresh", response_model=AuthToken, tags=["Auth"])
         async def refresh_token(refresh_token: str):
@@ -399,7 +399,7 @@ class MobileAPIServer:
                 logger.error(
                     "Failed to fetch account for %s: %s", user_id, exc, exc_info=True
                 )
-                raise HTTPException(status_code=500, detail="Failed to fetch account")
+                raise HTTPException(status_code=500, detail="Failed to fetch account") from exc
 
 
     # ── Trading ──────────────────────────────────────────────────────────────
@@ -428,7 +428,7 @@ class MobileAPIServer:
                 logger.error(
                     "Failed to fetch quote for %s: %s", symbol, exc, exc_info=True
                 )
-                raise HTTPException(status_code=500, detail="Failed to fetch quote")
+                raise HTTPException(status_code=500, detail="Failed to fetch quote") from exc
 
         @self.app.post(
             "/api/v2/orders", response_model=Dict[str, Any], tags=["Trading"]
@@ -463,7 +463,7 @@ class MobileAPIServer:
                         raise HTTPException(
                             status_code=503,
                             detail="Risk service unavailable — order blocked",
-                        )
+                        ) from risk_exc
                     if not is_ok:
                         raise HTTPException(
                             status_code=400, detail=f"Risk check failed: {reason}"
@@ -503,7 +503,7 @@ class MobileAPIServer:
                 logger.error(
                     "Order placement failed for %s: %s", user_id, exc, exc_info=True
                 )
-                raise HTTPException(status_code=500, detail="Order placement failed")
+                raise HTTPException(status_code=500, detail="Order placement failed") from exc
 
         @self.app.get(
             "/api/v2/trades", response_model=List[TradeData], tags=["Trading"]
@@ -540,7 +540,7 @@ class MobileAPIServer:
                 logger.error(
                     "Failed to fetch trades for %s: %s", user_id, exc, exc_info=True
                 )
-                raise HTTPException(status_code=500, detail="Failed to fetch trades")
+                raise HTTPException(status_code=500, detail="Failed to fetch trades") from exc
 
         @self.app.post("/api/v2/trades/{trade_id}/close", tags=["Trading"])
         async def close_trade(
@@ -572,7 +572,7 @@ class MobileAPIServer:
                 logger.error(
                     "Failed to close trade %s: %s", trade_id, exc, exc_info=True
                 )
-                raise HTTPException(status_code=500, detail="Failed to close trade")
+                raise HTTPException(status_code=500, detail="Failed to close trade") from exc
 
 
     # ── Performance ──────────────────────────────────────────────────────────
@@ -603,7 +603,7 @@ class MobileAPIServer:
                 )
                 raise HTTPException(
                     status_code=500, detail="Failed to fetch performance"
-                )
+                ) from exc
 
 
     # ── News ─────────────────────────────────────────────────────────────────
@@ -618,7 +618,7 @@ class MobileAPIServer:
                 return []
             except Exception as exc:
                 logger.error("Failed to fetch news: %s", exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Failed to fetch news")
+                raise HTTPException(status_code=500, detail="Failed to fetch news") from exc
 
 
     # ── Notifications ────────────────────────────────────────────────────────
@@ -645,7 +645,7 @@ class MobileAPIServer:
                 )
                 raise HTTPException(
                     status_code=500, detail="Failed to fetch preferences"
-                )
+                ) from exc
 
         @self.app.post("/api/v2/notifications/preferences", tags=["Notifications"])
         async def update_notification_preferences(
@@ -666,7 +666,7 @@ class MobileAPIServer:
                 )
                 raise HTTPException(
                     status_code=500, detail="Failed to update preferences"
-                )
+                ) from exc
 
 
     # ── WebSocket ────────────────────────────────────────────────────────────

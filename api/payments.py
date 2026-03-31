@@ -203,7 +203,7 @@ async def generate_deposit_address(req: AddressRequest):
             raise ValueError(f"No rate for {currency}")
     except Exception as exc:
         logger.error("Rate fetch failed: %s", exc)
-        raise HTTPException(status_code=503, detail="Exchange rate service unavailable")
+        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from exc
 
     amount_crypto = req.amount_usd / rate_usd
     network = (req.network or currency).upper()
@@ -217,7 +217,7 @@ async def generate_deposit_address(req: AddressRequest):
         raise HTTPException(
             status_code=503,
             detail=f"Address generation unavailable: {exc}",
-        )
+        ) from exc
 
     payment_id = f"PAY_{req.user_id}_{currency}_{int(time.time())}"
     payment = {
@@ -288,7 +288,7 @@ async def get_rates_endpoint():
         rates = await get_rates()
     except Exception as exc:
         logger.error("Rate fetch failed: %s", exc)
-        raise HTTPException(status_code=503, detail="Exchange rate service unavailable")
+        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from exc
 
     return {
         "rates": {
@@ -369,7 +369,7 @@ async def payment_webhook(
     try:
         payload = json.loads(raw_body)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from None
 
     payment_id = payload.get("payment_id")
     if not payment_id:

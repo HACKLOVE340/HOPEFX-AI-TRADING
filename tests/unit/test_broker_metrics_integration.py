@@ -221,7 +221,7 @@ class TestKillSwitchIntegration:
         if tmp_path is None:
             tmp_path = Path(tempfile.mkdtemp())
         flag = tmp_path / "ks_test.flag"
-        return KillSwitch(flag_file=flag, deactivation_token="test-token-123")
+        return KillSwitch(flag_file=flag, deactivation_token="test-token-123")  # noqa: S106
 
     def test_inactive_by_default(self):
         ks = self._make_ks()
@@ -235,7 +235,7 @@ class TestKillSwitchIntegration:
     def test_deactivate_restores_state(self):
         ks = self._make_ks()
         ks.activate("test")
-        ks.deactivate(token="test-token-123")
+        ks.deactivate(token="test-token-123")  # noqa: S106
         assert ks.is_active() is False
 
     def test_status_dict_structure(self):

@@ -138,7 +138,7 @@ def create_news_router():
             logger.error(f"Geopolitical signal error: {exc}")
             raise HTTPException(
                 status_code=500, detail=f"Geopolitical signal unavailable: {exc}"
-            )
+            ) from exc
 
     @news_router.get("/geopolitical/events")
     async def get_geopolitical_events(force_refresh: bool = Query(False)):
@@ -161,7 +161,7 @@ def create_news_router():
             }
         except Exception as exc:
             logger.error(f"Geopolitical events error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Events unavailable: {exc}")
+            raise HTTPException(status_code=500, detail=f"Events unavailable: {exc}") from exc
 
     @news_router.get("/geopolitical/assessment")
     async def get_risk_assessment():
@@ -177,7 +177,7 @@ def create_news_router():
             logger.error(f"Risk assessment error: {exc}")
             raise HTTPException(
                 status_code=500, detail=f"Assessment unavailable: {exc}"
-            )
+            ) from exc
 
     @news_router.get("/geopolitical/world-monitor")
     async def get_world_monitor_urls():
@@ -196,7 +196,7 @@ def create_news_router():
             logger.error(f"World Monitor URLs error: {exc}")
             raise HTTPException(
                 status_code=500, detail=f"World Monitor integration error: {exc}"
-            )
+            ) from exc
 
     # ── Economic calendar endpoint ─────────────────────────────────────────
 
@@ -244,7 +244,7 @@ def create_news_router():
             logger.error(f"Economic calendar error: {exc}")
             raise HTTPException(
                 status_code=500, detail=f"Economic calendar unavailable: {exc}"
-            )
+            ) from exc
 
     # ── Sentiment endpoint ──────────────────────────────────────────────────
 
@@ -281,7 +281,7 @@ def create_news_router():
             }
         except Exception as exc:
             logger.error(f"Sentiment analysis error for {symbol}: {exc}")
-            raise HTTPException(status_code=500, detail=f"Sentiment unavailable: {exc}")
+            raise HTTPException(status_code=500, detail=f"Sentiment unavailable: {exc}") from exc
 
     return news_router
 

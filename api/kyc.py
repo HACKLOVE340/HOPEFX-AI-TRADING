@@ -87,7 +87,7 @@ def _require_auth(request: Request) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=str(exc))
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 def _require_admin(request: Request) -> Dict[str, Any]:
@@ -132,10 +132,10 @@ async def create_applicant(
             },
         )
     except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("KYC create_applicant error: %s", exc)
-        raise HTTPException(status_code=502, detail="KYC provider error")
+        raise HTTPException(status_code=502, detail="KYC provider error") from exc
 
     return ApplicantResponse(
         applicant_id=applicant.applicant_id,
@@ -157,7 +157,7 @@ async def get_applicant_status(
         status_val = await gateway.check_status(applicant_id)
     except Exception as exc:
         logger.error("KYC check_status error: %s", exc)
-        raise HTTPException(status_code=502, detail="KYC provider error")
+        raise HTTPException(status_code=502, detail="KYC provider error") from exc
     return {"applicant_id": applicant_id, "status": status_val.value}
 
 
@@ -182,7 +182,7 @@ async def get_my_kyc_status(request: Request) -> Dict[str, str]:
         return {"user_id": user_id, "kyc_status": kyc_status.value}
     except Exception as exc:
         logger.error("KYC status lookup error: %s", exc)
-        raise HTTPException(status_code=500, detail="Status lookup failed")
+        raise HTTPException(status_code=500, detail="Status lookup failed") from exc
 
 
 @router.post("/webhooks/sumsub", status_code=200)
@@ -202,7 +202,7 @@ async def sumsub_webhook(
 
         raw = json.loads(payload_bytes)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from None
 
     gateway = _get_gateway()
     ok = await gateway.webhook_event(payload_bytes, x_payload_digest, raw)
@@ -228,7 +228,7 @@ async def onfido_webhook(
 
         raw = json.loads(payload_bytes)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from None
 
     gateway = _get_gateway()
     ok = await gateway.webhook_event(payload_bytes, x_sha2_signature, raw)
@@ -259,7 +259,7 @@ async def screen_sanctions(
         )
     except Exception as exc:
         logger.error("Sanctions screen error: %s", exc)
-        raise HTTPException(status_code=502, detail="Sanctions screening error")
+        raise HTTPException(status_code=502, detail="Sanctions screening error") from exc
 
     return SanctionsScreenResponse(
         screened=result.screened,

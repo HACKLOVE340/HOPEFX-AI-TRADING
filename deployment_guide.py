@@ -142,7 +142,7 @@ def check_ml_model() -> None:
             import pickle  # nosec B403
 
             with open(model_path, "rb") as fh:
-                model = pickle.load(fh)  # nosec B301 - joblib failed; legacy pickle fallback for deployment check only
+                model = pickle.load(fh)  # nosec B301 - joblib failed; legacy pickle fallback for deployment check only  # noqa: S301
         _good(f"advanced_oos.pkl loads cleanly ({type(model).__name__})")
     except Exception as exc:
         _err(
@@ -292,7 +292,7 @@ def check_port_availability() -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            sock.bind(("0.0.0.0", port))  # nosec B104 - port availability check only, socket closed immediately
+            sock.bind(("0.0.0.0", port))  # nosec B104 - port availability check only, socket closed immediately  # noqa: S104
             _good(f"Port {port} ({label}) is free")
         except OSError:
             _err(

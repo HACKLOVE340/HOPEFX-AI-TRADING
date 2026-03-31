@@ -95,7 +95,7 @@ class TestEncryptionManager:
         """Test password hashing."""
         manager = EncryptionManager()
 
-        password = "my_secure_password_123"
+        password = "my_secure_password_123"  # noqa: S105
         hashed = manager.hash_password(password)
 
         assert hashed is not None
@@ -106,7 +106,7 @@ class TestEncryptionManager:
         """Test correct password verification."""
         manager = EncryptionManager()
 
-        password = "my_secure_password_123"
+        password = "my_secure_password_123"  # noqa: S105
         hashed = manager.hash_password(password)
 
         assert manager.verify_password(password, hashed) is True
@@ -115,7 +115,7 @@ class TestEncryptionManager:
         """Test incorrect password verification."""
         manager = EncryptionManager()
 
-        password = "my_secure_password_123"
+        password = "my_secure_password_123"  # noqa: S105
         hashed = manager.hash_password(password)
 
         assert manager.verify_password("wrong_password", hashed) is False
@@ -146,16 +146,16 @@ class TestAPIConfig:
     def test_api_config_creation(self):
         """Test APIConfig creation."""
         config = APIConfig(
-            provider="OANDA", api_key="test-api-key", api_secret="test-api-secret"
+            provider="OANDA", api_key="test-api-key", api_secret="test-api-secret"  # noqa: S106
         )
 
         assert config.provider == "OANDA"
         assert config.api_key == "test-api-key"
-        assert config.api_secret == "test-api-secret"
+        assert config.api_secret == "test-api-secret"  # noqa: S105
 
     def test_api_config_defaults(self):
         """Test APIConfig default values."""
-        config = APIConfig(provider="Binance", api_key="key", api_secret="secret")
+        config = APIConfig(provider="Binance", api_key="key", api_secret="secret")  # noqa: S106
 
         assert config.sandbox_mode is True  # Default should be sandbox
         assert config.timeout == 30
@@ -163,7 +163,7 @@ class TestAPIConfig:
 
     def test_api_config_validate(self):
         """Test APIConfig validation."""
-        config = APIConfig(provider="OANDA", api_key="key", api_secret="secret")
+        config = APIConfig(provider="OANDA", api_key="key", api_secret="secret")  # noqa: S106
 
         assert config.validate() is True
 
@@ -207,7 +207,7 @@ class TestDatabaseConfig:
             host="localhost",
             port=5432,
             username="user",
-            password="pass",
+            password="pass",  # noqa: S106
             database="mydb",
         )
 

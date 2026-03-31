@@ -747,7 +747,7 @@ async def ws_live(websocket: WebSocket) -> None:
                 },
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await _manager.send(
                 cid,
                 {

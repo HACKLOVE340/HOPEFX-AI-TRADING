@@ -108,7 +108,7 @@ class ArbitrageDetector:
     async def update_prices(self):
         """Fetch prices from all exchanges"""
         tasks = []
-        for name, ex in self.exchanges.items():
+        for _name, ex in self.exchanges.items():
             for symbol in ["BTCUSD", "ETHUSD", "XAUUSD"]:
                 tasks.append(self._fetch_price(ex, symbol))
 

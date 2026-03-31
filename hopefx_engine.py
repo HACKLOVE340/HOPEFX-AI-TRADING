@@ -79,7 +79,6 @@ def validate_startup_environment() -> list[str]:
     - Kill switch is NOT already active at startup (warns if it is)
     - Python version >= 3.10
     """
-    import sys as _sys
 
     warnings: list[str] = []
     errors: list[str] = []
@@ -87,11 +86,6 @@ def validate_startup_environment() -> list[str]:
     is_test = os.environ.get("APP_ENV", "") == "test"
 
     # Python version
-    if _sys.version_info < (3, 10):
-        errors.append(
-            f"Python {_sys.version_info.major}.{_sys.version_info.minor} detected; "
-            "HOPEFX requires Python >= 3.10"
-        )
 
     # JWT secret
     jwt_secret = os.environ.get("SECURITY_JWT_SECRET", "")
@@ -603,7 +597,7 @@ class HopeFXEngine:
                         _real_ask = dl_tick.ask
                         spread = dl_tick.spread
                         mid = dl_tick.mid
-            except Exception:  # nosec B110 - intentional fallback to NuclearStreamer price
+            except Exception:  # nosec B110 - intentional fallback to NuclearStreamer price  # noqa: S110
                 pass  # fall back to NuclearStreamer price
 
         # Build OHLCV bar: use spread to give high/low realistic range.

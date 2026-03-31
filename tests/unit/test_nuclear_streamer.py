@@ -634,7 +634,7 @@ class TestRunNoKeys:
         with patch("asyncio.create_task", side_effect=_spy_create_task):
             try:
                 await asyncio.wait_for(streamer.run(), timeout=1.0)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 pass
 
         assert len(tasks_created) >= 1

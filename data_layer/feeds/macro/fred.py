@@ -135,7 +135,7 @@ class FREDFeed:
             if not records:
                 return pd.Series(dtype=float)
 
-            idx, vals = zip(*records)
+            idx, vals = zip(*records, strict=False)
             return pd.Series(vals, index=pd.DatetimeIndex(idx), dtype=float)
 
         except Exception as exc:

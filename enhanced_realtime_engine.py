@@ -462,7 +462,7 @@ class PolygonProvider(DataProvider):
 
                         yield tick
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Polygon heartbeat timeout")
                 raise
             except Exception as e:
@@ -648,7 +648,7 @@ class MockProvider(DataProvider):
         # Initialize any missing prices
         for sym in symbols:
             if sym not in self.prices:
-                self.prices[sym] = 100.0 + random.random() * 900  # nosec B311 - mock provider initial price, not cryptographic
+                self.prices[sym] = 100.0 + random.random() * 900  # nosec B311 - mock provider initial price, not cryptographic  # noqa: S311
         return True
 
     async def stream(self) -> AsyncIterator[MarketTick]:

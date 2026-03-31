@@ -334,7 +334,7 @@ class RevenueAnalytics:
 
         # Create metrics
         metrics = []
-        for period_key, period_entries in sorted(grouped.items()):
+        for _period_key, period_entries in sorted(grouped.items()):
             total_amount = sum(e.amount for e in period_entries)
             source_breakdown = {}
             for e in period_entries:

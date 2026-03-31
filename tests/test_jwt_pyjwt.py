@@ -18,6 +18,7 @@ import pathlib
 import time
 
 import pytest
+from fastapi import HTTPException
 
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-that-is-long-enough-for-hs256")
 
@@ -85,14 +86,14 @@ def test_expired_token_raises():
     secret = os.environ["JWT_SECRET_KEY"]
     expired_payload = {"sub": "user-exp", "exp": int(time.time()) - 10}
     token = pyjwt.encode(expired_payload, secret, algorithm="HS256")
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException):
         verify_token(token, _CRED_EXC)
 
 
 def test_tampered_token_raises():
     token = create_access_token({"sub": "user-tamper"})
     bad_token = token[:-4] + "XXXX"
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException):
         verify_token(bad_token, _CRED_EXC)
 
 
@@ -102,7 +103,7 @@ def test_missing_sub_raises():
 
     secret = os.environ["JWT_SECRET_KEY"]
     token = pyjwt.encode({"exp": int(time.time()) + 3600}, secret, algorithm="HS256")
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException):
         verify_token(token, _CRED_EXC)
 
 

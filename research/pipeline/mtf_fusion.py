@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 # Module-level singleton — populated by init_mtf_store() at startup.
 # signal_engine._fetch_mtf_df() reads this when app_state.mtf_store is absent.
-_MTF_STORE_SINGLETON: Optional["MTFFusionStore"] = None
+_MTF_STORE_SINGLETON: Optional[MTFFusionStore] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -343,7 +343,7 @@ class MTFFusionStore:
 
     # ── Bootstrap ─────────────────────────────────────────────────────────────
 
-    async def bootstrap(self) -> "MTFFusionStore":
+    async def bootstrap(self) -> MTFFusionStore:
         """
         Load H4 and D1 OHLCV data.  Non-blocking — runs in a thread executor.
         Falls back gracefully when data is unavailable.

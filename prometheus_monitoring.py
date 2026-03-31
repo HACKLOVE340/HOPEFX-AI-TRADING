@@ -271,7 +271,7 @@ def _sync_trading_gauges() -> None:
         logger.debug("risk_manager gauge sync failed: %s", _exc)
 
 
-def setup_prometheus_monitoring(app: "FastAPI") -> None:
+def setup_prometheus_monitoring(app: FastAPI) -> None:
     """
     Mount /metrics on *app* and start the background sync task.
 

@@ -29,7 +29,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
-from api.db_store import db_delete, db_get, db_keys_prefix, db_set
+from api.db_store import db_get, db_keys_prefix, db_set
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/backtest", tags=["Backtesting"])
@@ -165,10 +165,10 @@ def _load_strategy(name: str, params: Optional[dict] = None):
         cls = getattr(mod, class_name)
         return cls(**(params or {}))
     except Exception as exc:
-        raise ValueError(f"Failed to load strategy '{name}': {exc}")
+        raise ValueError(f"Failed to load strategy '{name}': {exc}") from exc
 
 
-def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> "pd.DataFrame":
+def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
     """
     Fetch OHLCV data for backtesting.
 
@@ -503,7 +503,7 @@ async def run_multi_symbol_backtest(
         raise HTTPException(
             status_code=503,
             detail=f"multi_symbol_backtest module unavailable: {exc}",
-        )
+        ) from exc
 
     loop = asyncio.get_event_loop()
     try:
@@ -520,7 +520,7 @@ async def run_multi_symbol_backtest(
         )
     except Exception as exc:
         logger.exception("Multi-symbol backtest failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Backtest failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Backtest failed: {exc}") from exc
 
     pooled = report.get("pooled", {})
     report_filename = (
@@ -581,7 +581,7 @@ async def get_latest_multi_symbol_report(
     try:
         report = json.loads(report_path.read_text())
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not read report: {exc}")
+        raise HTTPException(status_code=500, detail=f"Could not read report: {exc}") from exc
 
     return report
 
@@ -629,7 +629,7 @@ async def get_reconciled_investigation(
         raise HTTPException(
             status_code=500,
             detail=f"Investigation failed: {exc}. Ensure data/reconciled_backtest.json exists.",
-        )
+        ) from exc
 
 
 @router.post(
@@ -938,7 +938,7 @@ def _build_pdf(result: dict) -> bytes:
         raise HTTPException(
             status_code=503,
             detail=f"PDF generation unavailable: reportlab not installed ({exc})",
-        )
+        ) from exc
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(

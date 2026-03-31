@@ -277,7 +277,7 @@ class HeartbeatService:
 
         logger.info("HeartbeatService stopped after %d pings", self._ping_count)
 
-    def start(self) -> "HeartbeatService":
+    def start(self) -> HeartbeatService:
         """Start the heartbeat daemon thread. Returns self for chaining."""
         if not _HEARTBEAT_ENABLED:
             logger.info("HeartbeatService disabled (HEARTBEAT_ENABLED=false)")

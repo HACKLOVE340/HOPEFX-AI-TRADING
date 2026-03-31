@@ -59,7 +59,7 @@ os.chdir(_PROJECT_ROOT)
 
 # ── Result tracking ───────────────────────────────────────────────────────────
 
-PASS = "\033[92m✓\033[0m"
+PASS = "\033[92m✓\033[0m"  # noqa: S105
 FAIL = "\033[91m✗\033[0m"
 WARN = "\033[93m⚠\033[0m"
 BOLD = "\033[1m"
@@ -593,7 +593,7 @@ def check_prometheus() -> str:
         try:
             cls()
         except Exception as exc:
-            raise AssertionError(f"{cls_name} second instantiation raised: {exc}")
+            raise AssertionError(f"{cls_name} second instantiation raised: {exc}") from exc
     return f"{len(components)} components survive second instantiation"
 
 
@@ -662,7 +662,7 @@ async def check_orchestrator_start_stop() -> None:
     finally:
         try:
             await orch.stop()
-        except Exception:  # nosec B110 - orchestrator stop failure during cleanup is non-fatal
+        except Exception:  # nosec B110 - orchestrator stop failure during cleanup is non-fatal  # noqa: S110
             pass
 
 

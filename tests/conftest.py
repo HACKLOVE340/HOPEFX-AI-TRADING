@@ -114,7 +114,7 @@ def _reset_global_kill_switch():
             if ks is not None:
                 ks._active = False
                 ks._reason = ""
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
 
@@ -249,7 +249,7 @@ def _reset_kill_switch():
         from kill_switch import kill_switch as _ks
 
         _ks.reset_for_testing()
-    except Exception:
+    except Exception:  # noqa: S110
         pass
     yield
     # Also reset after the test in case it activated the switch
@@ -257,7 +257,7 @@ def _reset_kill_switch():
         from kill_switch import kill_switch as _ks
 
         _ks.reset_for_testing()
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
 

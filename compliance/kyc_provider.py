@@ -168,7 +168,7 @@ class SumsubProvider(KYCProvider):
         try:
             import aiohttp
         except ImportError:
-            raise RuntimeError("aiohttp required for Sumsub integration")
+            raise RuntimeError("aiohttp required for Sumsub integration") from None
 
         path = "/resources/applicants?levelName=basic-kyc-level"
         body = json.dumps(
@@ -288,7 +288,7 @@ class OnfidoProvider(KYCProvider):
         try:
             import aiohttp
         except ImportError:
-            raise RuntimeError("aiohttp required for Onfido integration")
+            raise RuntimeError("aiohttp required for Onfido integration") from None
 
         # Create applicant
         body = json.dumps(

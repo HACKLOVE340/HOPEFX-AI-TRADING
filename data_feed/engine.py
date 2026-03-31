@@ -235,7 +235,7 @@ class ProductionDataEngine:
                 logger.debug(
                     "Provider '%s' returned out-of-range price: %s", provider, price
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(
                     "Provider '%s' timed out (attempt %d/%d)",
                     provider,
@@ -320,7 +320,7 @@ class ProductionDataEngine:
                 tasks.append(asyncio.create_task(sub.on_new_price(price)))
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            for sub, result in zip(self.subscribers, results):
+            for sub, result in zip(self.subscribers, results, strict=False):
                 if isinstance(result, Exception):
                     logger.error(
                         "Subscriber %s raised during on_new_price: %s",

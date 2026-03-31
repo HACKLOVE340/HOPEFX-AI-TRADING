@@ -18,7 +18,6 @@ Enterprise-grade implementations with:
 - Payout management
 """
 
-import asyncio
 import hashlib
 import hmac
 import json
@@ -316,9 +315,9 @@ class FTMOBroker(BasePropFirmBroker):
                     remaining_monthly_loss=float(data.get("remainingMonthlyLoss", 0)),
                 )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("FTMO API timeout")
-            raise RuntimeError("FTMO API request timed out")
+            raise RuntimeError("FTMO API request timed out") from None
         except Exception as e:
             logger.error(f"Failed to fetch FTMO metrics: {e}")
             raise

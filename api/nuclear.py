@@ -76,7 +76,7 @@ def _get_supervisor():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Nuclear supervisor unavailable: {exc}",
-        )
+        ) from exc
 
 
 def _get_orchestrator():
@@ -88,7 +88,7 @@ def _get_orchestrator():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Risk orchestrator unavailable: {exc}",
-        )
+        ) from exc
 
 
 def _get_kill_switch():
@@ -100,7 +100,7 @@ def _get_kill_switch():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Kill switch unavailable: {exc}",
-        )
+        ) from exc
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -154,13 +154,13 @@ async def manual_resume(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
-        )
+        ) from exc
     except Exception as exc:
         logger.error("manual_resume failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Resume failed: {exc}",
-        )
+        ) from exc
 
     return {
         "status": "resumed",
@@ -279,5 +279,5 @@ async def deactivate_kill_switch(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
-        )
+        ) from exc
     return {"status": "deactivated", "kill_switch": ks.status()}

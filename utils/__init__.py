@@ -283,7 +283,7 @@ def calculate_correlation(x: List[float], y: List[float]) -> float:
     sum_y = sum(y)
     sum_x_sq = sum(xi**2 for xi in x)
     sum_y_sq = sum(yi**2 for yi in y)
-    sum_xy = sum(xi * yi for xi, yi in zip(x, y))
+    sum_xy = sum(xi * yi for xi, yi in zip(x, y, strict=False))
 
     numerator = sum_xy - (sum_x * sum_y / n)
     denominator = ((sum_x_sq - sum_x**2 / n) * (sum_y_sq - sum_y**2 / n)) ** 0.5

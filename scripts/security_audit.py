@@ -39,10 +39,10 @@ def scan_file(filepath: Path) -> list[tuple[int, str, str]]:
     issues = []
 
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             content = f.read()
             lines = content.split("\n")
-    except (UnicodeDecodeError, IOError):
+    except (OSError, UnicodeDecodeError):
         return issues
 
     for line_num, line in enumerate(lines, 1):

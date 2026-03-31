@@ -27,8 +27,8 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-_VALID_SECRET = "a-valid-secret-that-is-at-least-32-chars-long!"
-_OTHER_SECRET = "another-valid-secret-that-is-32-chars-long!!"
+_VALID_SECRET = "a-valid-secret-that-is-at-least-32-chars-long!"  # noqa: S105
+_OTHER_SECRET = "another-valid-secret-that-is-32-chars-long!!"  # noqa: S105
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ _OTHER_SECRET = "another-valid-secret-that-is-32-chars-long!!"
 def _make_token(
     secret: str,
     sub: str = "user-123",
-    token_type: str = "access",
+    token_type: str = "access",  # noqa: S107
     exp_offset: int = 3600,
 ) -> str:
     payload = {
@@ -85,7 +85,7 @@ class TestJWTSecretMisconfiguration:
 
     def test_short_secret_returns_503(self, monkeypatch):
         monkeypatch.setenv("SECURITY_JWT_SECRET", "tooshort")
-        forged = _make_token(secret="tooshort")
+        forged = _make_token(secret="tooshort")  # noqa: S106
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
         assert (
@@ -145,7 +145,7 @@ class TestTokenClaimsValidation:
 
     def test_refresh_token_type_rejected(self, monkeypatch):
         monkeypatch.setenv("SECURITY_JWT_SECRET", _VALID_SECRET)
-        token = _make_token(secret=_VALID_SECRET, token_type="refresh")
+        token = _make_token(secret=_VALID_SECRET, token_type="refresh")  # noqa: S106
         with pytest.raises(HTTPException) as exc_info:
             _call(token)
         assert exc_info.value.status_code == 401

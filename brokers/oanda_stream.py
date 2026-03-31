@@ -150,7 +150,7 @@ class OANDAStream:
 
     # ── Context manager ───────────────────────────────────────────────────────
 
-    async def __aenter__(self) -> "OANDAStream":
+    async def __aenter__(self) -> OANDAStream:
         self._session = aiohttp.ClientSession(headers=self._headers)
         return self
 

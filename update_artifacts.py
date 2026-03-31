@@ -84,7 +84,7 @@ def _font(size: int, bold: bool = True):
         if os.path.exists(path):
             try:
                 return ImageFont.truetype(path, size)
-            except Exception:  # nosec B112 - skip unreadable font file, try next path
+            except Exception:  # nosec B112 - skip unreadable font file, try next path  # noqa: S112
                 continue
     return ImageFont.load_default()
 

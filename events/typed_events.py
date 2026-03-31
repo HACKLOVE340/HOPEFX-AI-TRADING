@@ -76,7 +76,7 @@ class EventEnvelope(BaseModel, Generic[T]):
         source: str,
         payload: T,
         model_version: Optional[str] = None,
-    ) -> "EventEnvelope[T]":
+    ) -> EventEnvelope[T]:
         """Convenience constructor — derives event_type from payload class."""
         return cls(
             source=source,

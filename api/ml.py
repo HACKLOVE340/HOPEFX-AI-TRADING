@@ -127,7 +127,7 @@ def _get_predictor():
     return None
 
 
-def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> "pd.DataFrame":
+def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
     """
     Load real OHLCV data for a symbol.
 
@@ -210,7 +210,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> "pd.DataFrame":
 
 
 def _compute_atr_sl_tp(
-    ohlcv: "pd.DataFrame",
+    ohlcv: pd.DataFrame,
     entry_price: float,
     direction: str,
     sl_atr_mult: float = 1.5,
@@ -745,7 +745,7 @@ async def get_feature_importances(user: TokenPayload = Depends(require_role("adm
                 names = list(names)
 
             pairs = sorted(
-                zip(names, importances),
+                zip(names, importances, strict=False),
                 key=lambda x: x[1],
                 reverse=True,
             )[:20]
@@ -851,7 +851,7 @@ async def signal_filter_stats(
             },
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get(
@@ -1190,10 +1190,10 @@ async def rl_train(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"RL dependencies not installed: {exc}",
-        )
+        ) from exc
     except Exception as exc:
         logger.error("rl_train failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/rl/walk-forward", tags=["ML Models"])
@@ -1233,10 +1233,10 @@ async def rl_walk_forward(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"RL dependencies not installed: {exc}",
-        )
+        ) from exc
     except Exception as exc:
         logger.error("rl_walk_forward failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/rl/status", tags=["ML Models"])

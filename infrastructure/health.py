@@ -137,7 +137,7 @@ class HealthChecker:
             self._last_results[name] = result
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             result = HealthCheck(
                 name=name,
                 status=HealthStatus.UNHEALTHY,
@@ -500,7 +500,7 @@ class HealthChecker:
 
 # HTTP Server for health checks
 async def start_health_server(
-    host: str = "0.0.0.0", port: int = 8080, checker: Optional[HealthChecker] = None  # nosec B104 - host configurable via parameter
+    host: str = "0.0.0.0", port: int = 8080, checker: Optional[HealthChecker] = None  # nosec B104 - host configurable via parameter  # noqa: S104
 ):
     """Start HTTP health check server"""
     if not AIOHTTP_AVAILABLE:

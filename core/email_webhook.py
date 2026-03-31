@@ -117,7 +117,7 @@ def register_email_webhook(app: FastAPI) -> None:
         try:
             events = _json.loads(raw_body)
         except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+            raise HTTPException(status_code=400, detail="Invalid JSON payload") from None
 
         if not isinstance(events, list):
             events = [events]

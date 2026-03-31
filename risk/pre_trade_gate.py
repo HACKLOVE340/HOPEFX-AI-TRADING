@@ -152,7 +152,7 @@ class PreTradeGate:
     RiskManagerError is raised (which also blocks the trade).
     """
 
-    def __init__(self, risk_manager: "RiskManager") -> None:
+    def __init__(self, risk_manager: RiskManager) -> None:
         self._rm = risk_manager
 
     # ------------------------------------------------------------------

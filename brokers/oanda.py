@@ -360,7 +360,7 @@ class OANDABroker:
                             "broker": "oanda",
                         }
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = "timeout"
                 logger.warning(
                     "OANDABroker: order timeout (attempt %d/%d)", attempt, _MAX_RETRIES
@@ -636,12 +636,12 @@ class OANDAConnector:
     def place_order(
         self,
         symbol: str,
-        side: "_OrderSide",
+        side: _OrderSide,
         quantity: float,
-        order_type: "_OrderType" = _OrderType.MARKET,
+        order_type: _OrderType = _OrderType.MARKET,
         price: Optional[float] = None,
         stop_price: Optional[float] = None,
-    ) -> Optional["_Order"]:
+    ) -> Optional[_Order]:
         """Place a market or limit order. Returns None when not connected."""
         if not self.connected or not self.session:
             return None
@@ -705,7 +705,7 @@ class OANDAConnector:
 
     # ── Positions ─────────────────────────────────────────────────────────────
 
-    def get_positions(self) -> List["_Position"]:
+    def get_positions(self) -> List[_Position]:
         """Return all open positions."""
         if not self.connected or not self.session:
             return []
@@ -768,7 +768,7 @@ class OANDAConnector:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    def get_account_info(self) -> Optional["_AccountInfo"]:
+    def get_account_info(self) -> Optional[_AccountInfo]:
         """Return account balance and margin info."""
         if not self.connected or not self.session:
             return None
@@ -825,7 +825,7 @@ class OANDAConnector:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
-    def _parse_order_status(self, raw: str) -> "_OrderStatus":
+    def _parse_order_status(self, raw: str) -> _OrderStatus:
         mapping = {
             "FILLED": _OrderStatus.FILLED,
             "CANCELLED": _OrderStatus.CANCELLED,

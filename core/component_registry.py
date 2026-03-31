@@ -84,7 +84,7 @@ class ComponentRegistry:
         factory: Callable,
         required: bool = False,
         deps: Optional[List[str]] = None,
-    ) -> "ComponentRegistry":
+    ) -> ComponentRegistry:
         """
         Register a component.
 

@@ -218,7 +218,7 @@ async def _fetch_oanda(
                     )
                     return []
                 data = await resp.json()
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error("OANDA fetch timed out for %s/%s", symbol, granularity)
         return []
     except Exception as exc:

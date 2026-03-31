@@ -105,7 +105,7 @@ class TestMarketDataCacheInit:
             host="redis.example.com",
             port=6380,
             db=2,
-            password="secret",
+            password="secret",  # noqa: S106
             socket_timeout=10,
             max_retries=5,
             retry_delay=0.5,
@@ -696,7 +696,7 @@ class TestAPIConfigExtended:
     """Extended APIConfig tests."""
 
     def test_validate_missing_api_key(self):
-        cfg = APIConfig(provider="p", api_key="", api_secret="s")
+        cfg = APIConfig(provider="p", api_key="", api_secret="s")  # noqa: S106
         assert cfg.validate() is False
 
     def test_validate_missing_api_secret(self):
@@ -704,19 +704,19 @@ class TestAPIConfigExtended:
         assert cfg.validate() is False
 
     def test_validate_missing_provider(self):
-        cfg = APIConfig(provider="", api_key="k", api_secret="s")
+        cfg = APIConfig(provider="", api_key="k", api_secret="s")  # noqa: S106
         assert cfg.validate() is False
 
     def test_validate_valid_config(self):
-        cfg = APIConfig(provider="binance", api_key="key", api_secret="secret")
+        cfg = APIConfig(provider="binance", api_key="key", api_secret="secret")  # noqa: S106
         assert cfg.validate() is True
 
     def test_defaults_sandbox_true(self):
-        cfg = APIConfig(provider="p", api_key="k", api_secret="s")
+        cfg = APIConfig(provider="p", api_key="k", api_secret="s")  # noqa: S106
         assert cfg.sandbox_mode is True
 
     def test_rate_limit_default(self):
-        cfg = APIConfig(provider="p", api_key="k", api_secret="s")
+        cfg = APIConfig(provider="p", api_key="k", api_secret="s")  # noqa: S106
         assert cfg.rate_limit == 100
 
 
@@ -740,7 +740,7 @@ class TestDatabaseConfigExtended:
             host="localhost",
             port=5432,
             username="user",
-            password="pass",
+            password="pass",  # noqa: S106
             database="hopefx",
         )
 
@@ -756,7 +756,7 @@ class TestDatabaseConfigExtended:
             host="h",
             port=1521,
             username="u",
-            password="p",
+            password="p",  # noqa: S106
             database="d",
         )
         assert cfg.validate() is False
@@ -784,7 +784,7 @@ class TestDatabaseConfigExtended:
             host="localhost",
             port=3306,
             username="user",
-            password="pass",
+            password="pass",  # noqa: S106
             database="mydb",
             ssl_enabled=False,
         )
@@ -797,7 +797,7 @@ class TestDatabaseConfigExtended:
             host="localhost",
             port=3306,
             username="user",
-            password="pass",
+            password="pass",  # noqa: S106
             database="mydb",
             ssl_enabled=True,
         )
@@ -810,7 +810,7 @@ class TestDatabaseConfigExtended:
             host="h",
             port=9042,
             username="u",
-            password="p",
+            password="p",  # noqa: S106
             database="d",
         )
         with pytest.raises(ValueError):
@@ -887,7 +887,7 @@ class TestAppConfigValidation:
     def test_validate_with_valid_api_config(self):
         cfg = AppConfig()
         cfg.api_configs["binance"] = APIConfig(
-            provider="binance", api_key="k", api_secret="s"
+            provider="binance", api_key="k", api_secret="s"  # noqa: S106
         )
         assert cfg.validate() is True
 
@@ -1041,7 +1041,7 @@ class TestConfigManagerSaveConfig:
         mgr = ConfigManager(config_dir=str(tmp_path))
         cfg = AppConfig(environment="enc_test")
         cfg.api_configs["binance"] = APIConfig(
-            provider="binance", api_key="myapikey", api_secret="mysecret"
+            provider="binance", api_key="myapikey", api_secret="mysecret"  # noqa: S106
         )
         mgr.save_config(cfg)
 
@@ -1089,7 +1089,7 @@ class TestConfigManagerAPICredentials:
         mgr.update_api_credential("binance", "newkey", "newsecret")
         cfg = mgr.get_api_config("binance")
         assert cfg.api_key == "newkey"
-        assert cfg.api_secret == "newsecret"
+        assert cfg.api_secret == "newsecret"  # noqa: S105
 
     def test_update_api_credential_creates_new_provider(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
@@ -1223,14 +1223,14 @@ class TestEncryptDecryptIntegration:
         mgr = ConfigManager(config_dir=str(tmp_path))
         cfg = AppConfig(environment="creds_test")
         cfg.api_configs["alpaca"] = APIConfig(
-            provider="alpaca", api_key="real_api_key", api_secret="real_api_secret"
+            provider="alpaca", api_key="real_api_key", api_secret="real_api_secret"  # noqa: S106
         )
         mgr.save_config(cfg)
 
         mgr2 = ConfigManager(config_dir=str(tmp_path))
         loaded = mgr2.load_config("creds_test")
         assert loaded.api_configs["alpaca"].api_key == "real_api_key"
-        assert loaded.api_configs["alpaca"].api_secret == "real_api_secret"
+        assert loaded.api_configs["alpaca"].api_secret == "real_api_secret"  # noqa: S105
 
     def test_database_password_survives_save_load(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
@@ -1240,12 +1240,12 @@ class TestEncryptDecryptIntegration:
             host="db.example.com",
             port=5432,
             username="admin",
-            password="s3cr3t",
+            password="s3cr3t",  # noqa: S106
             database="hopefx",
         )
         mgr.save_config(cfg)
 
         mgr2 = ConfigManager(config_dir=str(tmp_path))
         loaded = mgr2.load_config("db_test")
-        assert loaded.database.password == "s3cr3t"
+        assert loaded.database.password == "s3cr3t"  # noqa: S105
         assert loaded.database.username == "admin"

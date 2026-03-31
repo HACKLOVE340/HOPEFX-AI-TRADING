@@ -107,7 +107,7 @@ class SHAPFeatureSelector:
         self.selected_features_: Optional[List[str]] = None
         self.importances_: Optional[pd.Series] = None
 
-    def fit(self, model, X: pd.DataFrame, y: np.ndarray) -> "SHAPFeatureSelector":
+    def fit(self, model, X: pd.DataFrame, y: np.ndarray) -> SHAPFeatureSelector:
         if SHAP_AVAILABLE:
             try:
                 explainer = shap.TreeExplainer(model)
@@ -343,7 +343,7 @@ class EnsemblePredictor:
 
         return estimators
 
-    def fit(self, X: pd.DataFrame, y: np.ndarray) -> "EnsemblePredictor":
+    def fit(self, X: pd.DataFrame, y: np.ndarray) -> EnsemblePredictor:
         self._feature_cols = list(X.columns)
 
         # Scale
@@ -431,7 +431,7 @@ class EnsemblePredictor:
         logger.info("Ensemble saved → %s", path)
 
     @classmethod
-    def load(cls, path: str | Path) -> "EnsemblePredictor":
+    def load(cls, path: str | Path) -> EnsemblePredictor:
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"EnsemblePredictor not found: {path}")
@@ -439,7 +439,7 @@ class EnsemblePredictor:
             obj = joblib.load(path)
         except Exception:
             with open(path, "rb") as f:
-                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
+                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback  # noqa: S301
         if not isinstance(obj, cls):
             raise TypeError(f"Expected EnsemblePredictor, got {type(obj)}")
         logger.info("Ensemble loaded ← %s", path)
@@ -575,7 +575,7 @@ class DeepEnsembleStore:
                         self._scaler = joblib.load(self.scaler_path)
                     except Exception:
                         with open(self.scaler_path, "rb") as f:
-                            self._scaler = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
+                            self._scaler = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback  # noqa: S301
                     logger.debug(
                         "DeepEnsembleStore: scaler loaded ← %s", self.scaler_path
                     )
@@ -646,7 +646,7 @@ class DeepEnsembleStore:
     def blend(
         self,
         advanced_prob: float,
-        ohlcv_df: "pd.DataFrame",
+        ohlcv_df: pd.DataFrame,
     ) -> float:
         """
         Blend the deep model probability with the advanced model probability.
@@ -700,7 +700,7 @@ class DeepEnsembleStore:
             return advanced_prob
 
     @staticmethod
-    def _extract_features(ohlcv_df: "pd.DataFrame") -> Optional["np.ndarray"]:
+    def _extract_features(ohlcv_df: pd.DataFrame) -> Optional[np.ndarray]:
         """
         Extract a 6-feature stationary matrix from OHLCV for deep model input.
 

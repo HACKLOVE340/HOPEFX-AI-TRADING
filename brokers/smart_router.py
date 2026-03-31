@@ -50,7 +50,7 @@ class SmartOrderRouter:
     """
 
     def __init__(self):
-        self.brokers: Dict[str, "BrokerConnector"] = {}
+        self.brokers: Dict[str, BrokerConnector] = {}
         self.scores: Dict[str, BrokerScore] = {}
         self.order_history: List[Dict] = []
         self.routing_rules = {
@@ -199,7 +199,7 @@ class SmartOrderRouter:
                     continue
 
             # All failed
-            raise Exception("All brokers failed to execute order")
+            raise Exception("All brokers failed to execute order") from None
 
     async def _execute_with_timeout(
         self,

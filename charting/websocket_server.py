@@ -210,7 +210,7 @@ def mount_nuclear_routes(
                     raw = await asyncio.wait_for(ws.receive_text(), timeout=60.0)
                     msg = json.loads(raw)
                     await _handle_client_message(ws, msg, chart_engine)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Client silent for 60s — send ping
                     await _manager.send_to(
                         ws, {"type": "ping", "ts": int(time.time() * 1000)}
@@ -263,7 +263,7 @@ def mount_nuclear_routes(
             )
             return JSONResponse({"status": "resumed"})
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=str(exc))
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.get("/api/nuclear/history")
     async def nuclear_history(n: int = 20):
@@ -420,4 +420,4 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
     standalone_app = create_standalone_app()
-    uvicorn.run(standalone_app, host="0.0.0.0", port=NUCLEAR_WS_PORT, log_level="info")  # nosec B104 - container/K8s deployment requires 0.0.0.0
+    uvicorn.run(standalone_app, host="0.0.0.0", port=NUCLEAR_WS_PORT, log_level="info")  # nosec B104 - container/K8s deployment requires 0.0.0.0  # noqa: S104

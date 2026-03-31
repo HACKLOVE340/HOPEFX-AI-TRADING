@@ -148,7 +148,7 @@ class IBKRBroker:
                 self._account,
             )
             return True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(
                 "IBKRBroker connect timed out after %ss — is TWS/Gateway running on %s:%s?",
                 _CONNECT_TIMEOUT,

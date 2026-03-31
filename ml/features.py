@@ -322,7 +322,7 @@ class FeatureEngineer:
                 and len(self.feature_names) == len(importances)
                 else [str(i) for i in range(len(importances))]
             )
-            return dict(zip(names, importances.tolist()))
+            return dict(zip(names, importances.tolist(), strict=False))
 
         raise ValueError(
             f"Model of type {type(model).__name__!r} does not expose "

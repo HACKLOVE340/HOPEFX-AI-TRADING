@@ -291,7 +291,7 @@ class RegimeSynthesizer:
         lr: float = 1e-3,
         n_critic: int = 3,
         log_every: int = 50,
-    ) -> "RegimeSynthesizer":
+    ) -> RegimeSynthesizer:
         """
         Train the synthesiser on historical sequences.
 
@@ -503,7 +503,7 @@ class RegimeSynthesizer:
         logger.info("RegimeSynthesizer saved → %s", path)
 
     @classmethod
-    def load(cls, path: str | Path, device: str = "auto") -> "RegimeSynthesizer":
+    def load(cls, path: str | Path, device: str = "auto") -> RegimeSynthesizer:
         ckpt = torch.load(path, map_location="cpu")
         obj = cls(
             seq_len=ckpt["seq_len"],

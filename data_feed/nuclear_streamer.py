@@ -438,7 +438,7 @@ class NuclearStreamer:
         ]
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            for sub, result in zip(self._subscribers, results):
+            for sub, result in zip(self._subscribers, results, strict=False):
                 if isinstance(result, Exception):
                     logger.error(
                         "Subscriber %s raised in on_new_price: %s",
@@ -477,7 +477,7 @@ class NuclearStreamer:
             while self._running:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Send a ping to keep the connection alive.
                     await ws.ping()
                     continue
@@ -533,7 +533,7 @@ class NuclearStreamer:
             while self._running:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     await ws.ping()
                     continue
 
@@ -612,7 +612,7 @@ class NuclearStreamer:
             while self._running:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     await ws.ping()
                     continue
 

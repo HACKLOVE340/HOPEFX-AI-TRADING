@@ -860,7 +860,7 @@ class KillSwitch:
 # ---------------------------------------------------------------------------
 
 
-def create_kill_switch_router(ks: "KillSwitch"):
+def create_kill_switch_router(ks: KillSwitch):
     """
     Create a FastAPI router exposing the kill switch via REST.
 
@@ -908,7 +908,7 @@ def create_kill_switch_router(ks: "KillSwitch"):
             raise HTTPException(
                 status_code=503,
                 detail="Authentication service error — access denied",
-            )
+            ) from exc
 
         _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
         if _ROLE_RANK.get(getattr(user, "role", "user"), -1) < _ROLE_RANK["admin"]:
@@ -1014,7 +1014,7 @@ def create_kill_switch_router(ks: "KillSwitch"):
                 request.client.host if request.client else "unknown",
                 exc,
             )
-            raise HTTPException(status_code=403, detail=str(exc))
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
 
         logger.warning(
             "AUDIT: Kill switch DEACTIVATED via API | user=%s | ip=%s",

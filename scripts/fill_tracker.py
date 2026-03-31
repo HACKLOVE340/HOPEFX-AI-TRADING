@@ -104,9 +104,9 @@ class OANDATransactionClient:
         import urllib.request
 
         url = f"{self.base_url}{path}"
-        req = urllib.request.Request(url, headers=self._headers)
+        req = urllib.request.Request(url, headers=self._headers)  # noqa: S310
         try:
-            with urllib.request.urlopen(req, timeout=20) as resp:  # nosec B310 - API URL is always https://
+            with urllib.request.urlopen(req, timeout=20) as resp:  # nosec B310 - API URL is always https://  # noqa: S310
                 return json.loads(resp.read())
         except Exception as exc:
             raise RuntimeError(f"OANDA API error on {path}: {exc}") from exc

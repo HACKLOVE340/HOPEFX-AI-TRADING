@@ -310,7 +310,7 @@ class TestLSTMPricePredictor:
 
     def test_scale_data_raises_if_not_fitted(self):
         lstm = LSTMPricePredictor()
-        with pytest.raises(Exception):
+        with pytest.raises((ValueError, RuntimeError)):
             lstm._scale_data(np.array([1.0, 2.0]), np.array([1.0, 2.0]), fit=False)
 
     def test_predict_with_mocked_model_and_scalers(self):

@@ -322,7 +322,7 @@ class APIGateway:
                 raise HTTPException(
                     status_code=500,
                     detail=f"Order execution failed: {exc}",
-                )
+                ) from exc
 
         # WebSocket for real-time data
         @self.app.websocket("/ws/v1/stream")
@@ -375,11 +375,11 @@ class APIGateway:
 
         except jwt.ExpiredSignatureError:
             if raise_exception:
-                raise HTTPException(status_code=401, detail="Token expired")
+                raise HTTPException(status_code=401, detail="Token expired") from None
             return False
         except jwt.InvalidTokenError:
             if raise_exception:
-                raise HTTPException(status_code=401, detail="Invalid token")
+                raise HTTPException(status_code=401, detail="Invalid token") from None
             return False
 
     def generate_token(self, user_id: str, role: str, expires_hours: int = 24) -> str:
@@ -395,7 +395,7 @@ class APIGateway:
 
         return jwt.encode(payload, self.auth_secret, algorithm="HS256")
 
-    def run(self, host: str = "0.0.0.0", port: int = 8443):  # nosec B104 - host configurable via parameter
+    def run(self, host: str = "0.0.0.0", port: int = 8443):  # nosec B104 - host configurable via parameter  # noqa: S104
         """Run with SSL/TLS"""
         import uvicorn
 

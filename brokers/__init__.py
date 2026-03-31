@@ -466,7 +466,7 @@ class PaperTradingBroker(BaseBroker):
         if self.slippage_model == "gaussian":
             slippage = random.gauss(base_slippage * size_factor, 0.2)
         else:
-            slippage = random.uniform(0, base_slippage * size_factor * 2)  # nosec B311 - paper trading slippage simulation
+            slippage = random.uniform(0, base_slippage * size_factor * 2)  # nosec B311 - paper trading slippage simulation  # noqa: S311
 
         return max(0, slippage)
 
@@ -477,9 +477,9 @@ class PaperTradingBroker(BaseBroker):
 
         fill_prob = min(0.95, 0.5 + (self.partial_fill_threshold / quantity))
 
-        if random.random() > fill_prob:  # nosec B311 - paper trading fill simulation
+        if random.random() > fill_prob:  # nosec B311 - paper trading fill simulation  # noqa: S311
             # Partial fill
-            return quantity * random.uniform(0.6, 0.95)  # nosec B311 - paper trading partial fill simulation
+            return quantity * random.uniform(0.6, 0.95)  # nosec B311 - paper trading partial fill simulation  # noqa: S311
 
         return quantity
 
@@ -961,7 +961,7 @@ class OANDABroker(BaseBroker):
                 else:
                     raise ConnectionError(
                         f"Failed to connect after {self.max_retries} attempts",
-                    )
+                    ) from None
 
         return False
 
@@ -1001,7 +1001,7 @@ class OANDABroker(BaseBroker):
                                 f"OANDA API error {resp.status}: {error_text}",
                             )
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.error(f"Request timeout (attempt {attempt + 1})")
                     if attempt < self.max_retries - 1:
                         await asyncio.sleep(1)

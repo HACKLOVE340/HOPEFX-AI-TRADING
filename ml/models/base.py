@@ -199,7 +199,7 @@ class BaseMLModel(ABC):
                 raise ValueError(
                     f"Model path '{resolved}' is outside the allowed model directory "
                     f"'{self._MODEL_BASE_DIR}'. Refusing to load.",
-                )
+                ) from None
 
         data = joblib.load(resolved)  # nosec B301 - path validated above; file written by this app
 
@@ -211,7 +211,7 @@ class BaseMLModel(ABC):
         # Load metadata if exists
         metadata_path = Path(filepath).parent / f"{Path(filepath).stem}_metadata.json"
         if metadata_path.exists():
-            with open(metadata_path, "r") as f:
+            with open(metadata_path) as f:
                 self.metadata = json.load(f)
 
         self.logger.info(f"Model loaded from {filepath}")

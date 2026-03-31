@@ -891,7 +891,7 @@ def create_scanner_router(scanner: MarketScanner):
             try:
                 criteria = [ScanCriteriaType(c) for c in request.criteria]
             except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
+                raise HTTPException(status_code=400, detail=str(e)) from e
 
         results = scanner.scan(
             request.market_data, criteria=criteria, min_strength=request.min_strength
@@ -940,7 +940,7 @@ def create_scanner_router(scanner: MarketScanner):
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid criteria type: {request.criteria_type}",
-            )
+            ) from None
 
         scanner.add_criteria(
             criteria_type, request.parameters, request.weight, request.required

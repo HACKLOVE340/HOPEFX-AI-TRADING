@@ -456,7 +456,7 @@ class VectorRAGNewsSentiment:
         total_weight = 0.0
         similar: list[str] = []
 
-        for sim, idx in zip(sims, idxs):
+        for sim, idx in zip(sims, idxs, strict=False):
             if idx < 0:
                 continue
             weight = float(sim)
@@ -638,7 +638,7 @@ class AdvancedAIEnsemble:
         self,
         obs: np.ndarray,
         news_item: Optional[NewsItem] = None,
-    ) -> "AdvancedAIEnsemble.Signal":
+    ) -> AdvancedAIEnsemble.Signal:
         """
         Produce a blended trading signal.
 

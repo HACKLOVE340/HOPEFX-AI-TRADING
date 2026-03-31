@@ -84,7 +84,7 @@ class NotificationManager:
             try:
                 notification = await asyncio.wait_for(self.queue.get(), timeout=1.0)
                 await self._dispatch(notification)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except Exception as e:
                 logger.error(f"Notification processing error: {e}")

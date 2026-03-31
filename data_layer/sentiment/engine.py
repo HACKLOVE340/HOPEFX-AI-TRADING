@@ -213,7 +213,7 @@ class NewsSentimentEngine:
 
     # ── Article ingestion ─────────────────────────────────────────────────────
 
-    def _url_fingerprint(self, article: "NewsArticle") -> str:
+    def _url_fingerprint(self, article: NewsArticle) -> str:
         """
         Stable cross-feed fingerprint for deduplication.
 

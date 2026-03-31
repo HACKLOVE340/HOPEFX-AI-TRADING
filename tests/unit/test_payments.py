@@ -198,7 +198,7 @@ class TestPaymentsWebhook:
     def test_verify_webhook_hmac_valid_signature(self):
         """Valid HMAC signature passes verification."""
 
-        secret = "test-webhook-secret-abc123"
+        secret = "test-webhook-secret-abc123"  # noqa: S105
         body = b'{"payment_id":"PAY_1","status":"complete"}'
         sig = self._make_signature(secret, body)
 
@@ -215,7 +215,7 @@ class TestPaymentsWebhook:
         """Invalid HMAC signature fails verification."""
         import api.payments as pm
 
-        pm._WEBHOOK_SECRET = "correct-secret"
+        pm._WEBHOOK_SECRET = "correct-secret"  # noqa: S105
         body = b'{"payment_id":"PAY_1","status":"complete"}'
         bad_sig = "deadbeef" * 8  # wrong signature
 

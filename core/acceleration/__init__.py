@@ -125,7 +125,7 @@ class GPUInferenceEngine:
                 future,
                 timeout=self.config.max_latency_ms / 1000,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {"error": "timeout", "direction": 0.5, "confidence": 0}
 
     async def batch_processor(self):
@@ -147,7 +147,7 @@ class GPUInferenceEngine:
                     )
                     batch.append(feat)
                     ids.append(req_id)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
 
             if batch:

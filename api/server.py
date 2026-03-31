@@ -53,7 +53,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
 
     import os
 
-    from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+    from fastapi.security import HTTPBearer
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.requests import Request as StarletteRequest
 
@@ -173,7 +173,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
             _nuclear_stream_task.cancel()
             try:
                 await asyncio.wait_for(_nuclear_stream_task, timeout=3.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
+            except (TimeoutError, asyncio.CancelledError):
                 pass
         logger.info("API server shutting down...")
         health_checker.stop_monitoring()
@@ -251,7 +251,7 @@ def _build_auth_deps(bearer):
                 status_code=401,
                 detail="Invalid or expired token",
                 headers={"WWW-Authenticate": "Bearer"},
-            )
+            ) from exc
 
     def _require_trader(credentials=Depends(bearer)):
         user = _get_current_user(credentials)
@@ -311,7 +311,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             return await trading_app.broker.get_account_info()
         except Exception as exc:
             logger.error("Error getting account info: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc))
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.get("/api/v1/positions")
     async def get_positions(user=Depends(get_current_user)):
@@ -322,7 +322,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             return {"positions": [p.to_dict() for p in positions], "count": len(positions)}
         except Exception as exc:
             logger.error("Error getting positions: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc))
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.post("/api/v1/orders", status_code=201)
     async def place_order(
@@ -348,7 +348,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             return {"order_id": order.id, "status": order.status.value, "filled_quantity": order.filled_quantity, "average_price": order.average_fill_price}
         except Exception as exc:
             logger.error("Order error for user=%s: %s", user.sub, exc)
-            raise HTTPException(status_code=400, detail=str(exc))
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.delete("/api/v1/positions/{position_id}")
     async def close_position(position_id: str, user=Depends(require_trader)):
@@ -364,7 +364,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             raise
         except Exception as exc:
             logger.error("Error closing position: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc))
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def _register_brain_routes(app, trading_app, get_current_user, require_admin):
@@ -447,7 +447,7 @@ def _register_system_routes(app, trading_app, require_admin):
 
 
 # Standalone server starter
-async def start_api_server(host: str = "0.0.0.0", port: int = 8000, trading_app=None):  # nosec B104 - host configurable via parameter
+async def start_api_server(host: str = "0.0.0.0", port: int = 8000, trading_app=None):  # nosec B104 - host configurable via parameter  # noqa: S104
     """Start API server"""
     if not FASTAPI_AVAILABLE:
         logger.error(

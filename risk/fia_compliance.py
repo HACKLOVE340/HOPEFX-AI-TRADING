@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class RiskControlStatus(Enum):
-    PASS = "pass"
+    PASS = "pass"  # noqa: S105
     WARNING = "warning"
     BLOCK = "block"
     KILL_SWITCH = "kill_switch"

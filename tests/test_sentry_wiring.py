@@ -231,7 +231,7 @@ class TestScrubDict:
 
     def test_scrubs_password(self):
         result = self.scrub({"password": "secret123", "username": "alice"})
-        assert result["password"] == "[Filtered]"
+        assert result["password"] == "[Filtered]"  # noqa: S105
         assert result["username"] == "alice"
 
     def test_scrubs_api_key(self):
@@ -242,7 +242,7 @@ class TestScrubDict:
     def test_scrubs_token(self):
         # user_id is in _SCRUB_FIELDS (account IDs are PII); use a safe field instead
         result = self.scrub({"token": "Bearer xyz", "request_id": 42})
-        assert result["token"] == "[Filtered]"
+        assert result["token"] == "[Filtered]"  # noqa: S105
         assert result["request_id"] == 42
 
     def test_scrubs_nested_dict(self):
@@ -252,7 +252,7 @@ class TestScrubDict:
 
     def test_scrubs_list_of_dicts(self):
         result = self.scrub({"items": [{"password": "pw1"}, {"name": "bob"}]})
-        assert result["items"][0]["password"] == "[Filtered]"
+        assert result["items"][0]["password"] == "[Filtered]"  # noqa: S105
         assert result["items"][1]["name"] == "bob"
 
     def test_case_insensitive_key_matching(self):
@@ -306,7 +306,7 @@ class TestBeforeSend:
             "request": {"data": {"password": "secret", "username": "alice"}},
         }
         result = self.before_send(event, {})
-        assert result["request"]["data"]["password"] == "[Filtered]"
+        assert result["request"]["data"]["password"] == "[Filtered]"  # noqa: S105
         assert result["request"]["data"]["username"] == "alice"
 
     def test_scrubs_request_headers(self):

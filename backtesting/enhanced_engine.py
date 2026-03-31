@@ -26,15 +26,15 @@ License: Proprietary - Institutional Use Only
 
 import numpy as np
 _ENGINE_RNG = np.random.default_rng()
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Callable, Tuple, Any
-from enum import Enum, IntEnum, auto
-from datetime import datetime, timedelta, timezone
-from collections import deque, defaultdict
-import logging
-import json
-import gzip
-import warnings
+from dataclasses import dataclass, field  # noqa: E402
+from typing import Dict, List, Optional, Callable, Tuple, Any  # noqa: E402
+from enum import Enum, IntEnum, auto  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
+from collections import deque, defaultdict  # noqa: E402
+import logging  # noqa: E402
+import json  # noqa: E402
+import gzip  # noqa: E402
+import warnings  # noqa: E402
 
 # Performance libraries
 try:
@@ -44,7 +44,7 @@ try:
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
-    warnings.warn("Numba unavailable - performance degraded")
+    warnings.warn("Numba unavailable - performance degraded", stacklevel=2)
 
 try:
     import cupy as cp  # noqa: F401
@@ -240,7 +240,7 @@ class TickData:
             raise ValueError(f"Negative spread: bid={self.bid} >= ask={self.ask}")
         if self.ask - self.bid > self.mid * 0.1:  # >10% spread
             warnings.warn(
-                f"Extreme spread detected: {(self.ask-self.bid)/self.mid:.2%}"
+                f"Extreme spread detected: {(self.ask-self.bid)/self.mid:.2%}", stacklevel=2
             )
 
     @property

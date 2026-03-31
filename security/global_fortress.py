@@ -255,7 +255,7 @@ class HOPEFXBrain:
             except json.JSONDecodeError:
                 continue
 
-            ip: str = log.get("ip", "0.0.0.0")  # nosec B104 - default value for missing IP in log entry, not a bind address
+            ip: str = log.get("ip", "0.0.0.0")  # nosec B104 - default value for missing IP in log entry, not a bind address  # noqa: S104
             data: str = str(log.get("data", ""))
 
             geo = await self._geo_lookup(ip)
@@ -575,7 +575,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
         fix_record: Optional[Dict[str, Any]] = None
         if redis:
             raw_list = await redis.lrange("fixes:queue", 0, 99)
-            for i, raw in enumerate(raw_list):
+            for _i, raw in enumerate(raw_list):
                 try:
                     rec = json.loads(raw)
                     if (

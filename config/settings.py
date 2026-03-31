@@ -146,7 +146,7 @@ class Settings(BaseSettings):
     log_dir: Path = Path("./logs")
 
     @model_validator(mode="after")
-    def validate_paths(self) -> "Settings":
+    def validate_paths(self) -> Settings:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.ml.model_path.mkdir(parents=True, exist_ok=True)

@@ -64,7 +64,7 @@ class ParameterOptimizer:
         best_params = None
 
         for combination in combinations:
-            params = dict(zip(param_names, combination))
+            params = dict(zip(param_names, combination, strict=False))
 
             try:
                 # Create strategy with these parameters

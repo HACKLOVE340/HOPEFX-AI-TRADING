@@ -65,7 +65,7 @@ def _get_agent(session_id: Optional[str] = None):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"LLM agent module unavailable: {exc}",
-        )
+        ) from exc
 
     key = session_id or "__default__"
     if key not in _agents:
@@ -113,7 +113,7 @@ async def ai_chat(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"AI response failed: {exc}",
-        )
+        ) from exc
 
     return ChatResponse(response=response_text, session_id=key)
 
