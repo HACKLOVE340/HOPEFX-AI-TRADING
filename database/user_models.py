@@ -14,7 +14,12 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow() -> datetime:
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 from database.models import Base
 
@@ -77,8 +82,8 @@ class User(Base):
     )  # unverified/pending/approved/rejected
 
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
     last_login_at = Column(DateTime, nullable=True)
     last_login_ip = Column(String(45), nullable=True)
 
@@ -121,7 +126,7 @@ class UserSession(Base):
     )  # SHA-256 of raw token
     device_info = Column(String(255), nullable=True)
     ip_address = Column(String(45), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
     expires_at = Column(DateTime, nullable=False)
     revoked_at = Column(DateTime, nullable=True)
     is_revoked = Column(Boolean, default=False)
@@ -147,7 +152,7 @@ class LoginAttempt(Base):
     ip_address = Column(String(45), nullable=False, index=True)
     success = Column(Boolean, default=False)
     failure_reason = Column(String(100), nullable=True)
-    attempted_at = Column(DateTime, default=datetime.utcnow, index=True)
+    attempted_at = Column(DateTime, default=_utcnow, index=True)
 
     user = relationship("User", back_populates="login_attempts")
 
