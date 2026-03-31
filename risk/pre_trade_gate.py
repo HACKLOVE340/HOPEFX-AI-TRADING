@@ -18,12 +18,12 @@ Design invariants (non-negotiable):
 5. All checks are additive — a trade must pass ALL checks to proceed.
 
 Usage:
-    from risk.pre_trade_gate import PreTradeGate, TradeBlocked
+    from risk.pre_trade_gate import PreTradeGate, TradeBlockedError
 
     gate = PreTradeGate(risk_manager)
     try:
-        gate.check(order)          # raises TradeBlocked if any check fails
-    except TradeBlocked as e:
+        gate.check(order)          # raises TradeBlockedError if any check fails
+    except TradeBlockedError as e:
         logger.warning("Order blocked: %s", e)
         return  # do NOT submit order
 """
@@ -61,7 +61,7 @@ _MAX_RISK_PCT_PER_TRADE: float = float(os.getenv("MAX_RISK_PCT_PER_TRADE", "0.01
 # ---------------------------------------------------------------------------
 
 
-class TradeBlocked(Exception):
+class TradeBlockedError(Exception):
     """
     Raised by PreTradeGate.check() when a trade must not proceed.
 
@@ -145,7 +145,7 @@ class PreTradeGate:
     """
     Mandatory pre-trade risk gate.
 
-    All checks run in sequence.  The first failure raises TradeBlocked
+    All checks run in sequence.  The first failure raises TradeBlockedError
     immediately — subsequent checks are skipped (fail-fast).
 
     If the risk manager raises an unexpected exception during any check,
@@ -167,7 +167,7 @@ class PreTradeGate:
             GateResult — only if ALL checks pass.
 
         Raises:
-            TradeBlocked — if any check fails (normal risk block).
+            TradeBlockedError — if any check fails (normal risk block).
             RiskManagerError — if the risk manager itself throws unexpectedly.
             ValueError — if order fields are invalid (caller bug).
         """
@@ -281,14 +281,14 @@ class PreTradeGate:
         checks_passed: list[str],
     ) -> None:
         """
-        Execute a check function.  On TradeBlocked, re-raise.
+        Execute a check function.  On TradeBlockedError, re-raise.
         On any other exception, wrap in RiskManagerError and raise
         (which also blocks the trade — no fallback).
         """
         try:
             fn()
             checks_passed.append(name)
-        except TradeBlocked:
+        except TradeBlockedError:
             raise
         except Exception as exc:
             tb = traceback.format_exc()
@@ -316,7 +316,7 @@ class PreTradeGate:
             value = fn()
             checks_passed.append(name)
             return value
-        except TradeBlocked:
+        except TradeBlockedError:
             raise
         except Exception as exc:
             tb = traceback.format_exc()
@@ -343,7 +343,7 @@ class PreTradeGate:
         if ks is not None and ks.is_active():
             reason = getattr(ks, "_reason", "kill switch active")
             logger.warning("PRE-TRADE BLOCKED [KILL_SWITCH_ACTIVE] reason=%s", reason)
-            raise TradeBlocked(
+            raise TradeBlockedError(
                 reason_code="KILL_SWITCH_ACTIVE",
                 detail=f"System kill switch is active: {reason}",
                 checks_failed=["kill_switch"],
@@ -359,7 +359,7 @@ class PreTradeGate:
             if halt_until:
                 detail += f" (until {halt_until.isoformat()})"
             logger.warning("PRE-TRADE BLOCKED [TRADING_HALTED] %s", detail)
-            raise TradeBlocked(
+            raise TradeBlockedError(
                 reason_code="TRADING_HALTED",
                 detail=detail,
                 checks_failed=["trading_halted"],
@@ -383,7 +383,7 @@ class PreTradeGate:
                 f"(pnl={daily_pnl:.2f})"
             )
             logger.warning("PRE-TRADE BLOCKED [DAILY_LOSS_LIMIT] %s", detail)
-            raise TradeBlocked(
+            raise TradeBlockedError(
                 reason_code="DAILY_LOSS_LIMIT",
                 detail=detail,
                 checks_failed=["daily_loss_limit"],
@@ -399,7 +399,7 @@ class PreTradeGate:
         if current_dd >= limit:
             detail = f"Drawdown {current_dd:.2%} >= limit {limit:.2%}"
             logger.warning("PRE-TRADE BLOCKED [MAX_DRAWDOWN] %s", detail)
-            raise TradeBlocked(
+            raise TradeBlockedError(
                 reason_code="MAX_DRAWDOWN",
                 detail=detail,
                 checks_failed=["max_drawdown"],
@@ -418,7 +418,7 @@ class PreTradeGate:
         allowed, reason = rm.check_cvar_pre_trade()
         if not allowed:
             logger.warning("PRE-TRADE BLOCKED [CVAR_LIMIT] %s", reason)
-            raise TradeBlocked(
+            raise TradeBlockedError(
                 reason_code="CVAR_LIMIT",
                 detail=reason,
                 checks_failed=["cvar_pre_trade"],
@@ -463,7 +463,7 @@ class PreTradeGate:
                     f"({getattr(config, 'max_position_size_pct', 0.02):.2%} of balance {balance:.2f})"
                 )
                 logger.warning("PRE-TRADE BLOCKED [POSITION_SIZE] %s", detail)
-                raise TradeBlocked(
+                raise TradeBlockedError(
                     reason_code="POSITION_SIZE",
                     detail=detail,
                     checks_failed=["position_size"],
@@ -479,7 +479,7 @@ class PreTradeGate:
         if len(open_positions) >= max_pos:
             detail = f"Open positions {len(open_positions)} >= limit {max_pos}"
             logger.warning("PRE-TRADE BLOCKED [MAX_OPEN_POSITIONS] %s", detail)
-            raise TradeBlocked(
+            raise TradeBlockedError(
                 reason_code="MAX_OPEN_POSITIONS",
                 detail=detail,
                 checks_failed=["max_open_positions"],
@@ -498,7 +498,7 @@ class PreTradeGate:
         )
         if not ok:
             logger.warning("PRE-TRADE BLOCKED [VALIDATE_TRADE] %s", reason)
-            raise TradeBlocked(
+            raise TradeBlockedError(
                 reason_code="VALIDATE_TRADE",
                 detail=reason,
                 checks_failed=["validate_trade"],
@@ -557,7 +557,7 @@ class PreTradeGate:
                 f"Reduce size or widen stop."
             )
             logger.warning("PRE-TRADE BLOCKED [RISK_PER_TRADE_CAP] %s", detail)
-            raise TradeBlocked(
+            raise TradeBlockedError(
                 reason_code="RISK_PER_TRADE_CAP",
                 detail=detail,
                 checks_failed=["risk_per_trade_cap"],
@@ -584,7 +584,7 @@ class PreTradeGate:
                 "Wait for cooldown to expire before placing new entries."
             )
             logger.warning("PRE-TRADE BLOCKED [LOSS_STREAK] %s", detail)
-            raise TradeBlocked(
+            raise TradeBlockedError(
                 reason_code="LOSS_STREAK",
                 detail=detail,
                 checks_failed=["loss_streak"],

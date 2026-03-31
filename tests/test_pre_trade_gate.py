@@ -17,7 +17,7 @@ from risk.pre_trade_gate import (
     GateOrder,
     PreTradeGate,
     RiskManagerError,
-    TradeBlocked,
+    TradeBlockedError,
 )
 
 
@@ -108,7 +108,7 @@ class TestKillSwitch:
         ks._reason = "daily drawdown exceeded"
         rm._kill_switch = ks
         gate = PreTradeGate(rm)
-        with pytest.raises(TradeBlocked) as exc_info:
+        with pytest.raises(TradeBlockedError) as exc_info:
             gate.check(_make_order())
         assert exc_info.value.reason_code == "KILL_SWITCH_ACTIVE"
 
@@ -131,7 +131,7 @@ class TestTradingHalted:
     def test_halted_blocks(self):
         rm = _make_risk_manager(_trading_halted=True, _halt_reason="max drawdown")
         gate = PreTradeGate(rm)
-        with pytest.raises(TradeBlocked) as exc_info:
+        with pytest.raises(TradeBlockedError) as exc_info:
             gate.check(_make_order())
         assert exc_info.value.reason_code == "TRADING_HALTED"
         assert "max drawdown" in exc_info.value.detail
@@ -157,7 +157,7 @@ class TestDailyLossLimit:
             daily_loss_limit_pct=0.05,
         )
         gate = PreTradeGate(rm)
-        with pytest.raises(TradeBlocked) as exc_info:
+        with pytest.raises(TradeBlockedError) as exc_info:
             gate.check(_make_order())
         assert exc_info.value.reason_code == "DAILY_LOSS_LIMIT"
 
@@ -181,7 +181,7 @@ class TestMaxDrawdown:
     def test_drawdown_exceeded_blocks(self):
         rm = _make_risk_manager(current_drawdown=0.11, max_drawdown_pct=0.10)
         gate = PreTradeGate(rm)
-        with pytest.raises(TradeBlocked) as exc_info:
+        with pytest.raises(TradeBlockedError) as exc_info:
             gate.check(_make_order())
         assert exc_info.value.reason_code == "MAX_DRAWDOWN"
 
@@ -202,7 +202,7 @@ class TestCVaRGate:
         rm = _make_risk_manager()
         rm.check_cvar_pre_trade.return_value = (False, "CVaR 0.05 > limit 0.03")
         gate = PreTradeGate(rm)
-        with pytest.raises(TradeBlocked) as exc_info:
+        with pytest.raises(TradeBlockedError) as exc_info:
             gate.check(_make_order())
         assert exc_info.value.reason_code == "CVAR_LIMIT"
 
@@ -225,7 +225,7 @@ class TestPositionSize:
         rm = _make_risk_manager(current_balance=100_000.0, max_position_size_pct=0.02)
         gate = PreTradeGate(rm)
         order = _make_order(quantity=100.0, price=1950.0)
-        with pytest.raises(TradeBlocked) as exc_info:
+        with pytest.raises(TradeBlockedError) as exc_info:
             gate.check(order)
         assert exc_info.value.reason_code == "POSITION_SIZE"
 
@@ -250,7 +250,7 @@ class TestMaxOpenPositions:
             max_open_positions=5,
         )
         gate = PreTradeGate(rm)
-        with pytest.raises(TradeBlocked) as exc_info:
+        with pytest.raises(TradeBlockedError) as exc_info:
             gate.check(_make_order())
         assert exc_info.value.reason_code == "MAX_OPEN_POSITIONS"
 

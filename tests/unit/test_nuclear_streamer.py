@@ -19,8 +19,8 @@ Coverage
   - Redis publish: payload shape, error tolerance
   - Finnhub / Twelve Data / Polygon message parsing (via process_tick path)
   - status() snapshot
-  - Architectural boundary: OANDAStream.stream_prices raises StreamingForbidden
-  - Architectural boundary: OANDAStreamAdapter.start raises StreamingForbidden
+  - Architectural boundary: OANDAStream.stream_prices raises StreamingForbiddenError
+  - Architectural boundary: OANDAStreamAdapter.start raises StreamingForbiddenError
 """
 
 from __future__ import annotations
@@ -478,21 +478,21 @@ class TestStatus:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Architectural boundary — OANDAStream.stream_prices raises StreamingForbidden
+# Architectural boundary — OANDAStream.stream_prices raises StreamingForbiddenError
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 class TestOANDAStreamArchitecturalBoundary:
     @pytest.mark.asyncio
     async def test_stream_prices_raises_streaming_forbidden(self):
-        from brokers.oanda_stream import OANDAStream, StreamingForbidden
+        from brokers.oanda_stream import OANDAStream, StreamingForbiddenError
 
         broker = OANDAStream(
             api_key="test-key",
             account_id="test-account",
             instruments=["XAU_USD"],
         )
-        with pytest.raises(StreamingForbidden):
+        with pytest.raises(StreamingForbiddenError):
             await broker.stream_prices()
 
     def test_on_tick_callback_ignored_with_warning(self, caplog):
@@ -536,26 +536,26 @@ class TestOANDAStreamArchitecturalBoundary:
 class TestOANDAStreamAdapterTombstone:
     @pytest.mark.asyncio
     async def test_start_raises_streaming_forbidden(self):
-        from brokers.oanda_ws import OANDAStreamAdapter, StreamingForbidden
+        from brokers.oanda_ws import OANDAStreamAdapter, StreamingForbiddenError
 
         adapter = OANDAStreamAdapter()
-        with pytest.raises(StreamingForbidden):
+        with pytest.raises(StreamingForbiddenError):
             await adapter.start()
 
     @pytest.mark.asyncio
     async def test_stop_raises_streaming_forbidden(self):
-        from brokers.oanda_ws import OANDAStreamAdapter, StreamingForbidden
+        from brokers.oanda_ws import OANDAStreamAdapter, StreamingForbiddenError
 
         adapter = OANDAStreamAdapter()
-        with pytest.raises(StreamingForbidden):
+        with pytest.raises(StreamingForbiddenError):
             await adapter.stop()
 
     @pytest.mark.asyncio
     async def test_poll_rest_raises_streaming_forbidden(self):
-        from brokers.oanda_ws import OANDAStreamAdapter, StreamingForbidden
+        from brokers.oanda_ws import OANDAStreamAdapter, StreamingForbiddenError
 
         adapter = OANDAStreamAdapter()
-        with pytest.raises(StreamingForbidden):
+        with pytest.raises(StreamingForbiddenError):
             await adapter.poll_rest()
 
     def test_instantiation_logs_error(self, caplog):

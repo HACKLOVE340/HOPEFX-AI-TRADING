@@ -23,7 +23,7 @@ This module NEVER:
 
 ALL market data flows exclusively through data_layer.orchestrator.
 Any attempt to call get_market_data() or stream_prices() raises
-MarketDataForbidden to enforce the architectural boundary at runtime.
+MarketDataForbiddenError to enforce the architectural boundary at runtime.
 
 Region routing
 --------------
@@ -63,7 +63,7 @@ _RETRY_BACKOFF = float(os.getenv("OANDA_RETRY_BACKOFF_S", "0.5"))
 # ── Architectural boundary enforcement ───────────────────────────────────────
 
 
-class MarketDataForbidden(RuntimeError):
+class MarketDataForbiddenError(RuntimeError):
     """
     Raised when code attempts to fetch market data through a broker connector.
 
@@ -508,25 +508,25 @@ class OANDABroker:
     # ── FORBIDDEN: market data methods ───────────────────────────────────────
 
     def get_market_data(self, *args, **kwargs):
-        raise MarketDataForbidden("get_market_data")
+        raise MarketDataForbiddenError("get_market_data")
 
     async def stream_prices(self, *args, **kwargs):
-        raise MarketDataForbidden("stream_prices")
+        raise MarketDataForbiddenError("stream_prices")
 
     async def get_candles(self, *args, **kwargs):
-        raise MarketDataForbidden("get_candles")
+        raise MarketDataForbiddenError("get_candles")
 
     async def get_ohlcv(self, *args, **kwargs):
-        raise MarketDataForbidden("get_ohlcv")
+        raise MarketDataForbiddenError("get_ohlcv")
 
     async def get_bid_ask(self, *args, **kwargs):
-        raise MarketDataForbidden("get_bid_ask")
+        raise MarketDataForbiddenError("get_bid_ask")
 
     async def get_current_price(self, *args, **kwargs):
-        raise MarketDataForbidden("get_current_price")
+        raise MarketDataForbiddenError("get_current_price")
 
     async def get_pricing(self, *args, **kwargs):
-        raise MarketDataForbidden("get_pricing")
+        raise MarketDataForbiddenError("get_pricing")
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 

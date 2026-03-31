@@ -235,7 +235,7 @@ def _configure_middleware(app, allowed_origins, BaseHTTPMiddleware, StarletteReq
 
 def _build_auth_deps(bearer):
     """Return (get_current_user, require_trader, require_admin) dependency callables."""
-    _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
+    _role_rank = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
 
     def _get_current_user(credentials=Depends(bearer)):
         try:
@@ -251,13 +251,13 @@ def _build_auth_deps(bearer):
 
     def _require_trader(credentials=Depends(bearer)):
         user = _get_current_user(credentials)
-        if _ROLE_RANK.get(user.role, -1) < _ROLE_RANK["trader"]:
+        if _role_rank.get(user.role, -1) < _role_rank["trader"]:
             raise HTTPException(status_code=403, detail="Role 'trader' required")
         return user
 
     def _require_admin(credentials=Depends(bearer)):
         user = _get_current_user(credentials)
-        if _ROLE_RANK.get(user.role, -1) < _ROLE_RANK["admin"]:
+        if _role_rank.get(user.role, -1) < _role_rank["admin"]:
             raise HTTPException(status_code=403, detail="Role 'admin' required")
         return user
 

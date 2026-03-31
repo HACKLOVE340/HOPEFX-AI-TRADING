@@ -989,11 +989,11 @@ def _build_pdf(result: dict) -> bytes:
     )
 
     # ── Colour palette ────────────────────────────────────────────────────────
-    BLUE = colors.HexColor("#3b82f6")
-    LIGHT = colors.HexColor("#eff6ff")
-    BORDER = colors.HexColor("#cbd5e1")
-    GREEN = colors.HexColor("#16a34a")
-    RED = colors.HexColor("#dc2626")
+    _blue = colors.HexColor("#3b82f6")
+    _light = colors.HexColor("#eff6ff")
+    _border = colors.HexColor("#cbd5e1")
+    _green = colors.HexColor("#16a34a")
+    _red = colors.HexColor("#dc2626")
 
     story = []
 
@@ -1007,7 +1007,7 @@ def _build_pdf(result: dict) -> bytes:
             subtitle_style,
         ),
     )
-    story.append(HRFlowable(width="100%", thickness=1, color=BORDER, spaceAfter=12))
+    story.append(HRFlowable(width="100%", thickness=1, color=_border, spaceAfter=12))
 
     # ── Parameters table ──────────────────────────────────────────────────────
     story.append(Paragraph("Backtest Parameters", section_style))
@@ -1025,13 +1025,13 @@ def _build_pdf(result: dict) -> bytes:
     params_table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), BLUE),
+                ("BACKGROUND", (0, 0), (-1, 0), _blue),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("BACKGROUND", (0, 1), (-1, -1), LIGHT),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
-                ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+                ("BACKGROUND", (0, 1), (-1, -1), _light),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, _light]),
+                ("GRID", (0, 0), (-1, -1), 0.5, _border),
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 8),
                 ("TOPPADDING", (0, 0), (-1, -1), 5),
@@ -1046,7 +1046,7 @@ def _build_pdf(result: dict) -> bytes:
     story.append(Paragraph("Performance Summary", section_style))
 
     ret_pct = result.get("total_return_pct", 0)
-    ret_color = GREEN if ret_pct >= 0 else RED
+    ret_color = _green if ret_pct >= 0 else _red
 
     perf_data = [
         ["Metric", "Value"],
@@ -1061,13 +1061,13 @@ def _build_pdf(result: dict) -> bytes:
     perf_table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), BLUE),
+                ("BACKGROUND", (0, 0), (-1, 0), _blue),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
-                ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, _light]),
+                ("GRID", (0, 0), (-1, -1), 0.5, _border),
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 8),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
@@ -1104,7 +1104,7 @@ def _build_pdf(result: dict) -> bytes:
     story.append(Spacer(1, 20))
 
     # ── Disclaimer ────────────────────────────────────────────────────────────
-    story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER, spaceAfter=8))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=_border, spaceAfter=8))
     story.append(
         Paragraph(
             "DISCLAIMER: Past performance is not indicative of future results. "

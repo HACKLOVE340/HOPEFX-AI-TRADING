@@ -42,7 +42,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -50,6 +50,7 @@ import pandas as pd
 from sklearn.decomposition import PCA
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -421,16 +422,16 @@ class FactorAttributionEngine:
             logger.warning("FactorAttribution: factor matrix unavailable: %s", exc)
             return FactorAttribution(
                 total_pnl=total_pnl,
-                factor_pnl={f: 0.0 for f in FACTOR_NAMES},
+                factor_pnl=dict.fromkeys(FACTOR_NAMES, 0.0),
                 residual_pnl=total_pnl,
-                factor_pct={f: 0.0 for f in FACTOR_NAMES},
+                factor_pct=dict.fromkeys(FACTOR_NAMES, 0.0),
             )
 
         # Latest factor returns (most recent row)
         latest_factors = factor_df.iloc[-1]
 
-        factor_pnl: Dict[str, float] = {f: 0.0 for f in FACTOR_NAMES}
-        total_weight = sum(abs(v) for v in positions.values())
+        factor_pnl: Dict[str, float] = dict.fromkeys(FACTOR_NAMES, 0.0)
+        _total_weight = sum(abs(v) for v in positions.values())
 
         for symbol, dollar_value in positions.items():
             exposure = self._model.get_exposure(symbol)
@@ -471,7 +472,7 @@ class FactorAttributionEngine:
         try:
             factor_df = self._library.get_factor_matrix()
         except RuntimeError:
-            return {f: 0.0 for f in FACTOR_NAMES}
+            return dict.fromkeys(FACTOR_NAMES, 0.0)
 
         if factor_cov is None:
             factor_cov = factor_df.cov()
@@ -479,7 +480,7 @@ class FactorAttributionEngine:
         # Aggregate portfolio beta vector: beta_port_k = sum_i(w_i * beta_ik)
         total_value = sum(abs(v) for v in positions.values())
         if total_value == 0:
-            return {f: 0.0 for f in FACTOR_NAMES}
+            return dict.fromkeys(FACTOR_NAMES, 0.0)
 
         beta_port = np.zeros(len(FACTOR_NAMES))
         for symbol, dollar_value in positions.items():
@@ -549,10 +550,8 @@ class LiveFactorEngine:
         self._running = False
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         logger.info("LiveFactorEngine stopped")
 
     # ── public API ────────────────────────────────────────────────────────────

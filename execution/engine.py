@@ -548,7 +548,7 @@ class ExecutionEngine:
             GateOrder,
             PreTradeGate,
             RiskManagerError,
-            TradeBlocked,
+            TradeBlockedError,
         )
 
         gate = PreTradeGate(self._risk)
@@ -565,7 +565,7 @@ class ExecutionEngine:
         try:
             gate.check(gate_order)
             return None  # all checks passed
-        except TradeBlocked as exc:
+        except TradeBlockedError as exc:
             logger.warning(
                 "ExecutionEngine: trade blocked | request_id=%s reason=%s detail=%s",
                 request.request_id,
