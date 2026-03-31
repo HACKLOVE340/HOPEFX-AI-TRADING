@@ -57,6 +57,13 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 10
+    groups:
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # Docker
   - package-ecosystem: "docker"
@@ -74,8 +81,9 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
     groups:
-      dev-dependencies:
-        dependency-type: "development"
+      frontend-deps:
+        patterns:
+          - "*"
         update-types:
           - "minor"
           - "patch"
@@ -87,3 +95,10 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 10
+    groups:
+      dashboard-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
