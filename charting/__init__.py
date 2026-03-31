@@ -40,9 +40,11 @@ from .templates import TemplateManager
 # Imported lazily so the module loads even when optional deps (FastAPI, SB3)
 # are not installed.
 
+
 def get_chart_engine():
     """Return the NuclearAIChartEngine module-level singleton."""
     from .nuclear_ai_chart_engine import get_chart_engine as _get
+
     return _get()
 
 
@@ -59,16 +61,17 @@ def mount_nuclear_routes(app, engine=None):
       GET  /api/nuclear/status      — supervisor status + WS count
     """
     from .websocket_server import mount_nuclear_routes as _mount
+
     _mount(app, engine)
 
 
 # ── Standard singletons ───────────────────────────────────────────────────────
 
-chart_engine       = ChartEngine()
-indicator_library  = IndicatorLibrary()
-drawing_toolkit    = DrawingToolkit()
-timeframe_manager  = TimeframeManager()
-template_manager   = TemplateManager()
+chart_engine = ChartEngine()
+indicator_library = IndicatorLibrary()
+drawing_toolkit = DrawingToolkit()
+timeframe_manager = TimeframeManager()
+template_manager = TemplateManager()
 
 __all__ = [
     # Standard charting

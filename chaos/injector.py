@@ -43,11 +43,11 @@ Usage
     # Clear all faults
     injector.clear_all()
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-import random
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -75,25 +75,25 @@ except Exception:
 
 
 class FaultType(str, Enum):
-    FEED_DROP       = "feed_drop"
-    TICK_DELAY      = "tick_delay"
-    PRICE_SPIKE     = "price_spike"
-    SPREAD_WIDEN    = "spread_widen"
-    STALE_FEED      = "stale_feed"
-    REDIS_TIMEOUT   = "redis_timeout"
-    PARTIAL_FILL    = "partial_fill"
-    CORRUPT_TICK    = "corrupt_tick"
-    CLOCK_SKEW      = "clock_skew"
+    FEED_DROP = "feed_drop"
+    TICK_DELAY = "tick_delay"
+    PRICE_SPIKE = "price_spike"
+    SPREAD_WIDEN = "spread_widen"
+    STALE_FEED = "stale_feed"
+    REDIS_TIMEOUT = "redis_timeout"
+    PARTIAL_FILL = "partial_fill"
+    CORRUPT_TICK = "corrupt_tick"
+    CLOCK_SKEW = "clock_skew"
     CONSENSUS_SPLIT = "consensus_split"
 
 
 @dataclass
 class ActiveFault:
-    fault_type:  FaultType
+    fault_type: FaultType
     injected_at: float
-    duration_s:  float
-    magnitude:   float
-    metadata:    Dict[str, Any] = field(default_factory=dict)
+    duration_s: float
+    magnitude: float
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_expired(self) -> bool:
@@ -140,20 +140,22 @@ class FaultInjector:
         **metadata : Additional fault-specific parameters.
         """
         fault = ActiveFault(
-            fault_type  = fault_type,
-            injected_at = time.monotonic(),
-            duration_s  = duration_s,
-            magnitude   = magnitude,
-            metadata    = dict(metadata),
+            fault_type=fault_type,
+            injected_at=time.monotonic(),
+            duration_s=duration_s,
+            magnitude=magnitude,
+            metadata=dict(metadata),
         )
         self._active[fault_type] = fault
-        self._history.append({
-            "fault_type":  fault_type.value,
-            "injected_at": datetime.now(timezone.utc).isoformat(),
-            "duration_s":  duration_s,
-            "magnitude":   magnitude,
-            **metadata,
-        })
+        self._history.append(
+            {
+                "fault_type": fault_type.value,
+                "injected_at": datetime.now(timezone.utc).isoformat(),
+                "duration_s": duration_s,
+                "magnitude": magnitude,
+                **metadata,
+            }
+        )
 
         if _PROM_OK:
             _prom_faults_injected.labels(fault_type=fault_type.value).inc()
@@ -161,7 +163,9 @@ class FaultInjector:
 
         logger.warning(
             "CHAOS: injecting %s duration=%.1fs magnitude=%.3f",
-            fault_type.value, duration_s, magnitude,
+            fault_type.value,
+            duration_s,
+            magnitude,
         )
 
         # Fire callbacks
@@ -247,7 +251,7 @@ class FaultInjector:
         # SPREAD_WIDEN — multiply spread by magnitude
         if self.is_active(FaultType.SPREAD_WIDEN):
             fault = self._active[FaultType.SPREAD_WIDEN]
-            mid    = getattr(tick, "mid", 0.0)
+            mid = getattr(tick, "mid", 0.0)
             spread = getattr(tick, "spread", 0.5)
             new_spread = spread * fault.magnitude
             try:
@@ -262,7 +266,9 @@ class FaultInjector:
             fault = self._active[FaultType.STALE_FEED]
             frozen_ts = fault.metadata.get("frozen_ts")
             if frozen_ts is None:
-                fault.metadata["frozen_ts"] = getattr(tick, "timestamp", datetime.now(timezone.utc))
+                fault.metadata["frozen_ts"] = getattr(
+                    tick, "timestamp", datetime.now(timezone.utc)
+                )
             try:
                 object.__setattr__(tick, "timestamp", fault.metadata["frozen_ts"])
             except (AttributeError, TypeError):
@@ -273,6 +279,7 @@ class FaultInjector:
         if self.is_active(FaultType.CLOCK_SKEW):
             fault = self._active[FaultType.CLOCK_SKEW]
             from datetime import timedelta
+
             skew_s = fault.magnitude * fault.metadata.get("direction_sign", 1)
             ts = getattr(tick, "timestamp", datetime.now(timezone.utc))
             try:
@@ -317,8 +324,8 @@ class FaultInjector:
             "active_faults": {
                 ft.value: {
                     "remaining_s": round(f.remaining_s, 1),
-                    "magnitude":   f.magnitude,
-                    "metadata":    f.metadata,
+                    "magnitude": f.magnitude,
+                    "metadata": f.metadata,
                 }
                 for ft, f in self._active.items()
             },

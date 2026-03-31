@@ -10,6 +10,7 @@ Public API
 ----------
   from chaos import ChaosController, FaultInjector
 """
+
 from chaos.controller import ChaosController
 from chaos.injector import FaultInjector
 
