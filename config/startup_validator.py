@@ -51,6 +51,10 @@ def _jwt_secret_value() -> str:
     )
 
 
+def _env(name: str) -> str:
+    return os.getenv(name, "").strip()
+
+
 # ---------------------------------------------------------------------------
 # Public exception
 # ---------------------------------------------------------------------------
@@ -61,7 +65,241 @@ class StartupValidationError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
-# Validator
+# Private section validators — each appends to the errors list
+# ---------------------------------------------------------------------------
+
+
+def _validate_jwt(errors: List[str]) -> None:
+    jwt_val = _jwt_secret_value()
+    if not jwt_val:
+        errors.append(
+            "MISSING  SECURITY_JWT_SECRET: JWT signing key — "
+            'generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
+        )
+    elif len(jwt_val) < 32:
+        errors.append(
+            f"TOO_SHORT SECURITY_JWT_SECRET (got {len(jwt_val)} chars, need >=32)",
+        )
+    elif jwt_val.startswith("CHANGE_ME"):
+        errors.append(
+            "INSECURE SECURITY_JWT_SECRET: placeholder value detected — "
+            "replace with a real random secret before deploying",
+        )
+
+
+def _validate_database(errors: List[str]) -> None:
+    db_url = _env("DATABASE_URL")
+    db_host = _env("DB_HOST")
+    db_pass = _env("DB_PASSWORD")
+
+    if not db_url and not db_host:
+        errors.append(
+            "MISSING  DATABASE_URL or DB_HOST: "
+            "set DATABASE_URL=postgresql://user:pass@host:5432/db",
+        )
+    if not db_url and db_host and not db_pass:
+        errors.append(
+            "MISSING  DB_PASSWORD: required when DB_HOST is set without DATABASE_URL",
+        )
+    if db_pass and len(db_pass) < 12:
+        errors.append(
+            f"TOO_SHORT DB_PASSWORD (got {len(db_pass)} chars, need >=12)",
+        )
+
+
+def _validate_redis(errors: List[str]) -> None:
+    redis_url = _env("REDIS_URL")
+    redis_host = _env("REDIS_HOST")
+
+    if not redis_url:
+        if redis_host:
+            redis_port = _env("REDIS_PORT") or "6379"
+            errors.append(
+                f"MISSING  REDIS_URL: found REDIS_HOST={redis_host} — "
+                f"set REDIS_URL=redis://{redis_host}:{redis_port}/0",
+            )
+        else:
+            errors.append(
+                "MISSING  REDIS_URL: Redis connection URL — "
+                "set REDIS_URL=redis://localhost:6379/0",
+            )
+    elif not redis_url.startswith(("redis://", "rediss://")):
+        errors.append(
+            f"INVALID  REDIS_URL={redis_url!r}: must start with redis:// or rediss://",
+        )
+
+
+def _validate_encryption_key(errors: List[str]) -> None:
+    enc_key = _env("CONFIG_ENCRYPTION_KEY")
+    if not enc_key:
+        errors.append(
+            "MISSING  CONFIG_ENCRYPTION_KEY: required for encrypting stored credentials. "
+            'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
+        )
+    elif len(enc_key) < 32:
+        errors.append(
+            f"TOO_SHORT CONFIG_ENCRYPTION_KEY (got {len(enc_key)} chars, need >=32)",
+        )
+    elif enc_key.startswith("CHANGE_ME"):
+        errors.append(
+            "INSECURE CONFIG_ENCRYPTION_KEY: placeholder value — replace before deploying",
+        )
+
+
+def _validate_broker(errors: List[str], dev_mode: bool) -> None:
+    broker_type = _env("BROKER_TYPE") or "paper"
+    broker_type = broker_type.lower()
+    valid_broker_types = {"paper", "oanda", "ibkr", "ccxt", "fix"}
+
+    if broker_type not in valid_broker_types:
+        errors.append(
+            f"INVALID  BROKER_TYPE={broker_type!r}: must be one of {sorted(valid_broker_types)}",
+        )
+
+    auto_trade = (_env("SIGNAL_ENGINE_AUTO_TRADE") or "false").lower()
+    if auto_trade == "true" and broker_type == "paper" and not dev_mode:
+        errors.append(
+            "CONFLICT SIGNAL_ENGINE_AUTO_TRADE=true with BROKER_TYPE=paper in production — "
+            "set BROKER_TYPE to a live broker or disable auto-trading",
+        )
+
+    if broker_type == "oanda":
+        _validate_oanda_credentials(errors)
+
+
+def _validate_oanda_credentials(errors: List[str]) -> None:
+    oanda_key = _env("BROKER_OANDA_TOKEN") or _env("OANDA_API_KEY")
+    oanda_acct = _env("BROKER_OANDA_ACCOUNT") or _env("OANDA_ACCOUNT_ID")
+    if not oanda_key:
+        errors.append(
+            "MISSING  BROKER_OANDA_TOKEN (or OANDA_API_KEY): required when BROKER_TYPE=oanda",
+        )
+    if not oanda_acct:
+        errors.append(
+            "MISSING  BROKER_OANDA_ACCOUNT (or OANDA_ACCOUNT_ID): required when BROKER_TYPE=oanda",
+        )
+
+
+def _validate_kill_switch_token(errors: List[str]) -> None:
+    ks_token = _env("HOPEFX_KILL_SWITCH_TOKEN")
+    if not ks_token:
+        errors.append(
+            "MISSING  HOPEFX_KILL_SWITCH_TOKEN: required to deactivate trading halts "
+            'via API. Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
+        )
+    elif len(ks_token) < 32:
+        errors.append(
+            f"TOO_SHORT HOPEFX_KILL_SWITCH_TOKEN (got {len(ks_token)} chars, need >=32)",
+        )
+    elif ks_token.startswith("CHANGE_ME"):
+        errors.append(
+            "INSECURE HOPEFX_KILL_SWITCH_TOKEN: placeholder value — replace before deploying",
+        )
+
+
+def _validate_llm_backend(errors: List[str]) -> None:
+    """Validate LLM backend config; warn (not error) when API key is absent."""
+    llm_backend = (_env("LLM_BACKEND") or "anthropic").lower()
+    valid_backends = {"anthropic", "openai"}
+
+    if llm_backend not in valid_backends:
+        errors.append(
+            f"INVALID  LLM_BACKEND={llm_backend!r}: must be one of "
+            f"{sorted(valid_backends)}. "
+            "Set LLM_BACKEND=anthropic (default) or LLM_BACKEND=openai."
+        )
+        return
+
+    key_map = {
+        "anthropic": ("ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys"),
+        "openai": ("OPENAI_API_KEY", "https://platform.openai.com/api-keys"),
+    }
+    env_name, url = key_map[llm_backend]
+    api_key = _env(env_name)
+
+    if not api_key:
+        logger.warning(
+            "HOPEFXBrain: %s not set — brain will use stub responses "
+            "(no real attack analysis). Get a key at %s",
+            env_name,
+            url,
+        )
+    elif api_key.startswith("CHANGE_ME"):
+        errors.append(
+            f"INSECURE {env_name}: placeholder value detected — "
+            f"replace with a real key from {url}"
+        )
+
+
+def _validate_argocd_webhook(errors: List[str]) -> None:
+    argocd_webhook = _env("ARGOCD_ROLLBACK_WEBHOOK")
+    if not argocd_webhook:
+        logger.warning(
+            "HOPEFXBrain: ARGOCD_ROLLBACK_WEBHOOK not set — nuclear lockdown "
+            "will block IPs and set Redis flag but cannot trigger auto-rollback. "
+            "Set to: https://<argocd-server>/api/v1/applications/hopefx/sync"
+        )
+    elif not argocd_webhook.startswith("https://"):
+        errors.append(
+            f"INVALID  ARGOCD_ROLLBACK_WEBHOOK={argocd_webhook[:60]!r}: "
+            "must be an https:// URL"
+        )
+
+
+def _validate_optional_vars(errors: List[str]) -> None:
+    sentry_dsn = _env("SENTRY_DSN")
+    if sentry_dsn and not sentry_dsn.startswith("https://"):
+        errors.append(
+            f"INVALID  SENTRY_DSN={sentry_dsn[:40]!r}: must be a valid https:// Sentry DSN",
+        )
+
+    _validate_mobile_cors(errors)
+    _validate_ibkr_port(errors)
+
+
+def _validate_mobile_cors(errors: List[str]) -> None:
+    mobile_cors = _env("MOBILE_CORS_ORIGINS")
+    if not mobile_cors:
+        return
+    bad = [
+        o.strip()
+        for o in mobile_cors.split(",")
+        if o.strip()
+        and not o.strip().startswith(("https://", "http://localhost", "http://127."))
+    ]
+    if bad:
+        errors.append(
+            f"INVALID  MOBILE_CORS_ORIGINS: non-https origins: {bad} — "
+            "all origins must start with https:// (or http://localhost for dev)",
+        )
+
+
+def _validate_ibkr_port(errors: List[str]) -> None:
+    ibkr_port = _env("IBKR_PORT")
+    if not ibkr_port:
+        return
+    valid_ports = {4001, 4002, 7496, 7497}
+    if not ibkr_port.isdigit() or int(ibkr_port) not in valid_ports:
+        errors.append(
+            f"INVALID  IBKR_PORT={ibkr_port!r}: "
+            "must be one of 4001 (gateway-live), 4002 (gateway-paper), "
+            "7496 (tws-live), 7497 (tws-paper)",
+        )
+
+
+def _validate_cors_wildcard(errors: List[str]) -> None:
+    allowed_origins = _env("ALLOWED_ORIGINS")
+    origins = [o.strip() for o in allowed_origins.split(",") if o.strip()]
+    if "*" in origins:
+        errors.append(
+            "INSECURE ALLOWED_ORIGINS contains '*' in production — "
+            "set ALLOWED_ORIGINS to a comma-separated list of explicit "
+            "https:// origins (e.g. https://app.example.com)",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
 # ---------------------------------------------------------------------------
 
 
@@ -79,258 +317,42 @@ def validate_environment(*, strict: bool = True) -> None:
     errors: List[str] = []
     dev_mode = _is_dev()
 
-    # ── JWT secret ────────────────────────────────────────────────────────────
-    jwt_val = _jwt_secret_value()
-    if not jwt_val:
-        errors.append(
-            "MISSING  SECURITY_JWT_SECRET: JWT signing key — "
-            'generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
-        )
-    elif len(jwt_val) < 32:
-        errors.append(
-            f"TOO_SHORT SECURITY_JWT_SECRET (got {len(jwt_val)} chars, need >=32)",
-        )
-    elif jwt_val.startswith("CHANGE_ME"):
-        errors.append(
-            "INSECURE SECURITY_JWT_SECRET: placeholder value detected — "
-            "replace with a real random secret before deploying",
-        )
+    _validate_jwt(errors)
 
-    # ── Database ──────────────────────────────────────────────────────────────
     if not dev_mode:
-        db_url = os.getenv("DATABASE_URL", "").strip()
-        db_host = os.getenv("DB_HOST", "").strip()
-        db_pass = os.getenv("DB_PASSWORD", "").strip()
+        _validate_database(errors)
+        _validate_redis(errors)
+        _validate_encryption_key(errors)
+        _validate_kill_switch_token(errors)
+        _validate_argocd_webhook(errors)
+        _validate_cors_wildcard(errors)
 
-        if not db_url and not db_host:
-            errors.append(
-                "MISSING  DATABASE_URL or DB_HOST: "
-                "set DATABASE_URL=postgresql://user:pass@host:5432/db",
-            )
-        if not db_url and db_host and not db_pass:
-            errors.append(
-                "MISSING  DB_PASSWORD: required when DB_HOST is set without DATABASE_URL",
-            )
-        if db_pass and len(db_pass) < 12:
-            errors.append(
-                f"TOO_SHORT DB_PASSWORD (got {len(db_pass)} chars, need >=12)",
-            )
+    _validate_broker(errors, dev_mode)
+    _validate_llm_backend(errors)
+    _validate_optional_vars(errors)
 
-    # ── Redis ─────────────────────────────────────────────────────────────────
-    if not dev_mode:
-        redis_url = os.getenv("REDIS_URL", "").strip()
-        redis_host = os.getenv("REDIS_HOST", "").strip()
-
-        if not redis_url:
-            if redis_host:
-                redis_port = os.getenv("REDIS_PORT", "6379")
-                errors.append(
-                    f"MISSING  REDIS_URL: found REDIS_HOST={redis_host} — "
-                    f"set REDIS_URL=redis://{redis_host}:{redis_port}/0",
-                )
-            else:
-                errors.append(
-                    "MISSING  REDIS_URL: Redis connection URL — "
-                    "set REDIS_URL=redis://localhost:6379/0",
-                )
-        elif not redis_url.startswith(("redis://", "rediss://")):
-            errors.append(
-                f"INVALID  REDIS_URL={redis_url!r}: must start with redis:// or rediss://",
-            )
-
-    # ── Config encryption key ─────────────────────────────────────────────────
-    enc_key = os.getenv("CONFIG_ENCRYPTION_KEY", "").strip()
-    if not dev_mode:
-        if not enc_key:
-            errors.append(
-                "MISSING  CONFIG_ENCRYPTION_KEY: required for encrypting stored credentials. "
-                'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
-            )
-        elif len(enc_key) < 32:
-            errors.append(
-                f"TOO_SHORT CONFIG_ENCRYPTION_KEY (got {len(enc_key)} chars, need >=32)",
-            )
-        elif enc_key.startswith("CHANGE_ME"):
-            errors.append(
-                "INSECURE CONFIG_ENCRYPTION_KEY: placeholder value — replace before deploying",
-            )
-
-    # ── Broker type + live trading guard ─────────────────────────────────────
-    broker_type = os.getenv("BROKER_TYPE", "paper").strip().lower()
-    valid_broker_types = {"paper", "oanda", "ibkr", "ccxt", "fix"}
-    if broker_type not in valid_broker_types:
-        errors.append(
-            f"INVALID  BROKER_TYPE={broker_type!r}: must be one of {sorted(valid_broker_types)}",
+    if not errors:
+        n_optional = sum(1 for v in ("SENTRY_DSN", "MOBILE_CORS_ORIGINS", "IBKR_PORT") if _env(v))
+        logger.info(
+            "Startup validation passed (mode=%s, %d optional vars checked).",
+            "production" if not dev_mode else "development",
+            n_optional,
         )
+        return
 
-    # Prevent accidental live auto-trading: SIGNAL_ENGINE_AUTO_TRADE=true
-    # requires BROKER_TYPE != paper in production.
-    auto_trade = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").strip().lower()
-    if auto_trade == "true" and broker_type == "paper" and not dev_mode:
-        errors.append(
-            "CONFLICT SIGNAL_ENGINE_AUTO_TRADE=true with BROKER_TYPE=paper in production — "
-            "set BROKER_TYPE to a live broker or disable auto-trading",
-        )
-
-    # OANDA credentials required when BROKER_TYPE=oanda
-    if broker_type == "oanda":
-        oanda_key = os.getenv(
-            "BROKER_OANDA_TOKEN", os.getenv("OANDA_API_KEY", "")
-        ).strip()
-        oanda_acct = os.getenv(
-            "BROKER_OANDA_ACCOUNT", os.getenv("OANDA_ACCOUNT_ID", "")
-        ).strip()
-        if not oanda_key:
-            errors.append(
-                "MISSING  BROKER_OANDA_TOKEN (or OANDA_API_KEY): required when BROKER_TYPE=oanda",
-            )
-        if not oanda_acct:
-            errors.append(
-                "MISSING  BROKER_OANDA_ACCOUNT (or OANDA_ACCOUNT_ID): required when BROKER_TYPE=oanda",
-            )
-
-    # ── Kill switch deactivation token ───────────────────────────────────────
-    # Required in production: without it the kill switch can never be
-    # deactivated via the API after a drawdown-triggered halt.
-    ks_token = os.getenv("HOPEFX_KILL_SWITCH_TOKEN", "").strip()
-    if not dev_mode:
-        if not ks_token:
-            errors.append(
-                "MISSING  HOPEFX_KILL_SWITCH_TOKEN: required to deactivate trading halts "
-                'via API. Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
-            )
-        elif len(ks_token) < 32:
-            errors.append(
-                f"TOO_SHORT HOPEFX_KILL_SWITCH_TOKEN (got {len(ks_token)} chars, need >=32)",
-            )
-        elif ks_token.startswith("CHANGE_ME"):
-            errors.append(
-                "INSECURE HOPEFX_KILL_SWITCH_TOKEN: placeholder value — replace before deploying",
-            )
-
-    # ── HOPEFXBrain — LLM backend ─────────────────────────────────────────────
-    # Validated in both dev and prod: a misconfigured backend silently falls
-    # back to stubs, which is safe but means no real threat analysis.
-    llm_backend = os.getenv("LLM_BACKEND", "anthropic").strip().lower()
-    valid_backends = {"anthropic", "openai"}
-    if llm_backend not in valid_backends:
-        errors.append(
-            f"INVALID  LLM_BACKEND={llm_backend!r}: must be one of "
-            f"{sorted(valid_backends)}. "
-            "Set LLM_BACKEND=anthropic (default) or LLM_BACKEND=openai."
-        )
-    else:
-        # Warn (not error) when the matching key is absent — brain degrades to stub
-        if llm_backend == "anthropic":
-            anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-            if not anthropic_key:
-                logger.warning(
-                    "HOPEFXBrain: ANTHROPIC_API_KEY not set — brain will use stub "
-                    "responses (no real attack analysis). "
-                    "Get a key at https://console.anthropic.com/settings/keys"
-                )
-            elif anthropic_key.startswith("CHANGE_ME"):
-                errors.append(
-                    "INSECURE ANTHROPIC_API_KEY: placeholder value detected — "
-                    "replace with a real key from https://console.anthropic.com/settings/keys"
-                )
-        elif llm_backend == "openai":
-            openai_key = os.getenv("OPENAI_API_KEY", "").strip()
-            if not openai_key:
-                logger.warning(
-                    "HOPEFXBrain: OPENAI_API_KEY not set — brain will use stub "
-                    "responses (no real attack analysis). "
-                    "Get a key at https://platform.openai.com/api-keys"
-                )
-            elif openai_key.startswith("CHANGE_ME"):
-                errors.append(
-                    "INSECURE OPENAI_API_KEY: placeholder value detected — "
-                    "replace with a real key from https://platform.openai.com/api-keys"
-                )
-
-    # ArgoCD rollback webhook — warn if missing in production (non-fatal)
-    if not dev_mode:
-        argocd_webhook = os.getenv("ARGOCD_ROLLBACK_WEBHOOK", "").strip()
-        if not argocd_webhook:
-            logger.warning(
-                "HOPEFXBrain: ARGOCD_ROLLBACK_WEBHOOK not set — nuclear lockdown "
-                "will block IPs and set Redis flag but cannot trigger auto-rollback. "
-                "Set to: https://<argocd-server>/api/v1/applications/hopefx/sync"
-            )
-        elif argocd_webhook and not argocd_webhook.startswith("https://"):
-            errors.append(
-                f"INVALID  ARGOCD_ROLLBACK_WEBHOOK={argocd_webhook[:60]!r}: "
-                "must be an https:// URL"
-            )
-
-    # ── Optional validated vars ───────────────────────────────────────────────
-    sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
-    if sentry_dsn and not sentry_dsn.startswith("https://"):
-        errors.append(
-            f"INVALID  SENTRY_DSN={sentry_dsn[:40]!r}: must be a valid https:// Sentry DSN",
-        )
-
-    mobile_cors = os.getenv("MOBILE_CORS_ORIGINS", "").strip()
-    if mobile_cors:
-        bad = [
-            o.strip()
-            for o in mobile_cors.split(",")
-            if o.strip()
-            and not o.strip().startswith(
-                ("https://", "http://localhost", "http://127.")
-            )
-        ]
-        if bad:
-            errors.append(
-                f"INVALID  MOBILE_CORS_ORIGINS: non-https origins: {bad} — "
-                "all origins must start with https:// (or http://localhost for dev)",
-            )
-
-    ibkr_port = os.getenv("IBKR_PORT", "").strip()
-    if ibkr_port:
-        if not ibkr_port.isdigit() or int(ibkr_port) not in (4001, 4002, 7496, 7497):
-            errors.append(
-                f"INVALID  IBKR_PORT={ibkr_port!r}: "
-                "must be one of 4001 (gateway-live), 4002 (gateway-paper), "
-                "7496 (tws-live), 7497 (tws-paper)",
-            )
-
-    # ── CORS wildcard guard ───────────────────────────────────────────────────
-    # A wildcard ALLOWED_ORIGINS in production means any origin can call the
-    # API — this is a security misconfiguration. Deployers who forget to set
-    # this often fall back to "*" as a workaround for CORS errors.
-    if not dev_mode:
-        allowed_origins = os.getenv("ALLOWED_ORIGINS", "").strip()
-        if "*" in [o.strip() for o in allowed_origins.split(",") if o.strip()]:
-            errors.append(
-                "INSECURE ALLOWED_ORIGINS contains '*' in production — "
-                "set ALLOWED_ORIGINS to a comma-separated list of explicit "
-                "https:// origins (e.g. https://app.example.com)",
-            )
-
-    if errors:
-        env_label = "PRODUCTION" if not dev_mode else "DEVELOPMENT"
-        msg = (
-            "\n\n"
-            f"╔══════════════════════════════════════════════════════════════╗\n"
-            f"║  STARTUP VALIDATION FAILED [{env_label}]                     ║\n"
-            f"╚══════════════════════════════════════════════════════════════╝\n\n"
-            + "\n".join(f"  x {e}" for e in errors)
-            + "\n\nFix the above environment variables and restart.\n"
-        )
-        logger.critical(msg)
-        if strict:
-            sys.exit(1)
-        raise StartupValidationError(msg)
-
-    n_optional = sum(
-        1 for v in ("SENTRY_DSN", "MOBILE_CORS_ORIGINS", "IBKR_PORT") if os.getenv(v)
+    env_label = "PRODUCTION" if not dev_mode else "DEVELOPMENT"
+    msg = (
+        "\n\n"
+        f"╔══════════════════════════════════════════════════════════════╗\n"
+        f"║  STARTUP VALIDATION FAILED [{env_label}]                     ║\n"
+        f"╚══════════════════════════════════════════════════════════════╝\n\n"
+        + "\n".join(f"  x {e}" for e in errors)
+        + "\n\nFix the above environment variables and restart.\n"
     )
-    logger.info(
-        "Startup validation passed (mode=%s, %d optional vars checked).",
-        "production" if not dev_mode else "development",
-        n_optional,
-    )
+    logger.critical(msg)
+    if strict:
+        sys.exit(1)
+    raise StartupValidationError(msg)
 
 
 def validate_environment_or_raise() -> None:
