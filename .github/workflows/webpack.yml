@@ -9,8 +9,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Check for webpack config
         run: |
           if [ ! -f webpack.config.js ] && [ ! -f webpack.config.ts ]; then
