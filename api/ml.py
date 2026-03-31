@@ -235,9 +235,9 @@ def _compute_atr_sl_tp(
 
     try:
         if ohlcv is not None and len(ohlcv) >= 15:
-            highs = ohlcv["high"].values[-15:].astype(float)
-            lows = ohlcv["low"].values[-15:].astype(float)
-            closes = ohlcv["close"].values[-15:].astype(float)
+            highs = ohlcv["high"].to_numpy(dtype=float)[-15:]
+            lows = ohlcv["low"].to_numpy(dtype=float)[-15:]
+            closes = ohlcv["close"].to_numpy(dtype=float)[-15:]
             tr = _np.maximum(
                 highs[1:] - lows[1:],
                 _np.maximum(

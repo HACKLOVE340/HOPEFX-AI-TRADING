@@ -600,7 +600,7 @@ class MultiTimeframeAnalyzer:
         self, data: pd.DataFrame, num_levels: int = 3
     ) -> List[float]:
         """Find support levels using swing lows."""
-        lows = data["low"].values
+        lows = data["low"].to_numpy()
         levels = []
 
         for i in range(2, len(lows) - 2):
@@ -619,7 +619,7 @@ class MultiTimeframeAnalyzer:
         self, data: pd.DataFrame, num_levels: int = 3
     ) -> List[float]:
         """Find resistance levels using swing highs."""
-        highs = data["high"].values
+        highs = data["high"].to_numpy()
         levels = []
 
         for i in range(2, len(highs) - 2):

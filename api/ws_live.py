@@ -450,9 +450,9 @@ def _compute_atr_sl_tp(
             if csv_path.exists():
                 df = _pd.read_csv(csv_path, usecols=["high", "low", "close"]).tail(20)
                 if len(df) >= 15:
-                    highs = df["high"].values.astype(float)
-                    lows = df["low"].values.astype(float)
-                    closes = df["close"].values.astype(float)
+                    highs = df["high"].to_numpy(dtype=float)
+                    lows = df["low"].to_numpy(dtype=float)
+                    closes = df["close"].to_numpy(dtype=float)
                     import numpy as _np
 
                     tr = _np.maximum(
