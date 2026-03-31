@@ -43,10 +43,13 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +100,15 @@ ZERO_DECIMAL_CURRENCIES = {
     "XOF",
 }
 
-# Static exchange rates vs USD (updated periodically — use a live FX API in production)
-_FX_RATES_VS_USD: Dict[str, float] = {
+# ── Live FX rate feed ─────────────────────────────────────────────────────────
+#
+# Primary:  Open Exchange Rates  (OPEN_EXCHANGE_RATES_APP_ID env var)
+# Fallback: Fixer.io             (FIXER_API_KEY env var)
+# Emergency: stale hardcoded rates — used ONLY when both live feeds fail and
+#            the in-process cache is empty.  These are intentionally stale;
+#            never rely on them for production billing.
+
+_FX_EMERGENCY_FALLBACK: Dict[str, float] = {
     "USD": 1.0,
     "EUR": 0.92,
     "GBP": 0.79,
@@ -111,10 +121,108 @@ _FX_RATES_VS_USD: Dict[str, float] = {
     "SGD": 1.34,
 }
 
+# In-process TTL cache — avoids hammering the FX API on every charge
+_FX_CACHE: Dict[str, float] = {}
+_FX_CACHE_TS: float = 0.0
+_FX_CACHE_TTL: int = int(os.getenv("FX_RATE_TTL_SECONDS", "3600"))  # 1 hour default
+
+
+def _fetch_rates_openexchangerates() -> Optional[Dict[str, float]]:
+    """Fetch USD-base rates from Open Exchange Rates."""
+    app_id = os.getenv("OPEN_EXCHANGE_RATES_APP_ID", "").strip()
+    if not app_id:
+        return None
+    try:
+        resp = requests.get(
+            "https://openexchangerates.org/api/latest.json",
+            params={"app_id": app_id, "symbols": ",".join(SUPPORTED_CURRENCIES)},
+            timeout=5,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        rates: Dict[str, float] = data.get("rates", {})
+        rates["USD"] = 1.0
+        logger.debug("FX rates refreshed from Open Exchange Rates")
+        return rates
+    except Exception as exc:
+        logger.warning("Open Exchange Rates fetch failed: %s", exc)
+        return None
+
+
+def _fetch_rates_fixer() -> Optional[Dict[str, float]]:
+    """Fetch EUR-base rates from Fixer.io and convert to USD base."""
+    api_key = os.getenv("FIXER_API_KEY", "").strip()
+    if not api_key:
+        return None
+    try:
+        resp = requests.get(
+            "https://data.fixer.io/api/latest",
+            params={
+                "access_key": api_key,
+                "symbols": ",".join(SUPPORTED_CURRENCIES | {"USD"}),
+            },
+            timeout=5,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not data.get("success"):
+            logger.warning("Fixer.io error: %s", data.get("error"))
+            return None
+        eur_rates: Dict[str, float] = data.get("rates", {})
+        usd_per_eur = eur_rates.get("USD", 1.0)
+        if usd_per_eur == 0:
+            return None
+        # Convert EUR-base to USD-base
+        usd_rates: Dict[str, float] = {
+            ccy: rate / usd_per_eur
+            for ccy, rate in eur_rates.items()
+        }
+        usd_rates["USD"] = 1.0
+        logger.debug("FX rates refreshed from Fixer.io")
+        return usd_rates
+    except Exception as exc:
+        logger.warning("Fixer.io fetch failed: %s", exc)
+        return None
+
+
+def _get_fx_rates() -> Dict[str, float]:
+    """
+    Return USD-base FX rates, refreshing from live APIs when the TTL expires.
+
+    Priority: Open Exchange Rates → Fixer.io → cached rates → emergency fallback.
+    Logs a warning whenever the emergency fallback is used.
+    """
+    global _FX_CACHE, _FX_CACHE_TS
+
+    now = time.monotonic()
+    if _FX_CACHE and (now - _FX_CACHE_TS) < _FX_CACHE_TTL:
+        return _FX_CACHE
+
+    rates = _fetch_rates_openexchangerates() or _fetch_rates_fixer()
+
+    if rates:
+        _FX_CACHE = rates
+        _FX_CACHE_TS = now
+        return _FX_CACHE
+
+    if _FX_CACHE:
+        logger.warning(
+            "All live FX feeds failed — using stale cached rates (age=%.0fs)",
+            now - _FX_CACHE_TS,
+        )
+        return _FX_CACHE
+
+    logger.error(
+        "All live FX feeds failed and cache is empty — using emergency fallback rates. "
+        "Set OPEN_EXCHANGE_RATES_APP_ID or FIXER_API_KEY for live rates."
+    )
+    return _FX_EMERGENCY_FALLBACK
+
 
 def usd_to_currency(usd_amount: Decimal, currency: str) -> int:
     """
-    Convert a USD amount to the target currency's smallest unit (cents/kobo/etc.).
+    Convert a USD amount to the target currency's smallest unit (cents/kobo/etc.)
+    using live FX rates fetched from Open Exchange Rates or Fixer.io.
 
     Args:
         usd_amount: Amount in USD.
@@ -124,13 +232,13 @@ def usd_to_currency(usd_amount: Decimal, currency: str) -> int:
         Integer amount in smallest currency unit.
     """
     currency = currency.upper()
-    rate = _FX_RATES_VS_USD.get(currency, 1.0)
+    rates = _get_fx_rates()
+    rate = rates.get(currency, _FX_EMERGENCY_FALLBACK.get(currency, 1.0))
     converted = usd_amount * Decimal(str(rate))
 
     if currency in ZERO_DECIMAL_CURRENCIES:
         return int(converted.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    else:
-        return int((converted * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    return int((converted * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
 # ── Stripe mode detection ─────────────────────────────────────────────────────
