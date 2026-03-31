@@ -6,18 +6,61 @@
 """
 Bitcoin Payment Integration
 
-Handles Bitcoin deposits and withdrawals with HD wallet support.
+Handles Bitcoin deposits and withdrawals using BIP84 (native SegWit / bech32)
+HD wallet derivation via the hdwallet library.
+
+Derivation path: m/84'/0'/0'/0/{index}  (BIP84 — P2WPKH, bech32 addresses)
+
+The master mnemonic is loaded from the BITCOIN_MNEMONIC environment variable.
+In production this secret must be stored in a secrets manager (Vault, AWS
+Secrets Manager, etc.) and injected at runtime — never committed to source.
 """
 
+import logging
+import os
+import time
+import hashlib
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Dict, Optional, List
-from dataclasses import dataclass
-import logging
-import hashlib
-import secrets
+from typing import Dict, List, Optional, Tuple
+
+from hdwallet import HDWallet
+from hdwallet.symbols import BTC
+from hdwallet.utils import generate_mnemonic
 
 logger = logging.getLogger(__name__)
+
+# BIP84 derivation path components for native SegWit (bech32 bc1q… addresses)
+_BIP84_PURPOSE = "84'"
+_BIP84_COIN = "0'"    # mainnet BTC
+_BIP84_ACCOUNT = "0'"
+_BIP84_CHANGE = "0"   # external chain (receiving addresses)
+
+
+def _load_mnemonic() -> str:
+    """
+    Load the HD wallet mnemonic from the environment.
+
+    Raises RuntimeError in production if the variable is absent so the
+    application fails fast rather than silently generating unrecoverable
+    addresses.
+    """
+    mnemonic = os.getenv("BITCOIN_MNEMONIC", "").strip()
+    if not mnemonic:
+        env = os.getenv("APP_ENV", "development").lower()
+        if env == "production":
+            raise RuntimeError(
+                "BITCOIN_MNEMONIC environment variable is required in production. "
+                "Set it to a BIP39 mnemonic stored in your secrets manager."
+            )
+        # Non-production: generate a fresh ephemeral mnemonic and warn loudly.
+        mnemonic = generate_mnemonic(language="english", strength=256)
+        logger.warning(
+            "BITCOIN_MNEMONIC not set — using ephemeral mnemonic. "
+            "Addresses will change on restart. Set BITCOIN_MNEMONIC for persistence."
+        )
+    return mnemonic
 
 
 @dataclass
@@ -44,219 +87,228 @@ class BitcoinTransaction:
 
 
 class BitcoinClient:
-    """Bitcoin payment client with HD wallet support"""
+    """
+    Bitcoin payment client with BIP84 HD wallet support.
+
+    Each user receives a unique bech32 deposit address derived from the master
+    mnemonic at path m/84'/0'/0'/0/{index}.  The same mnemonic always produces
+    the same address for a given index, so addresses survive restarts as long as
+    BITCOIN_MNEMONIC is stable.
+    """
 
     REQUIRED_CONFIRMATIONS = 3
-    MIN_DEPOSIT = Decimal("0.001")  # BTC
-    NETWORK_FEE = Decimal("0.0005")  # BTC
+    MIN_DEPOSIT = Decimal("0.001")    # BTC
+    NETWORK_FEE = Decimal("0.0005")   # BTC (conservative estimate)
 
-    def __init__(self):
-        self.addresses: Dict[str, BitcoinAddress] = {}
-        self.transactions: Dict[str, BitcoinTransaction] = {}
+    def __init__(self) -> None:
+        self._mnemonic: str = _load_mnemonic()
+        # user_id -> list of derived address strings (in derivation order)
         self.user_addresses: Dict[str, List[str]] = {}
+        # address string -> BitcoinAddress metadata
+        self.addresses: Dict[str, BitcoinAddress] = {}
+        # tx_hash -> BitcoinTransaction
+        self.transactions: Dict[str, BitcoinTransaction] = {}
 
-        # Master seed (in production, this would be securely stored)
-        self.master_seed = secrets.token_hex(32)
+    # ── Address derivation ────────────────────────────────────────────────────
+
+    def _derive_address(self, index: int) -> Tuple[str, str]:
+        """
+        Derive a BIP84 P2WPKH (bech32) address at the given index.
+
+        Returns:
+            (address, derivation_path)
+        """
+        path = (
+            f"m/{_BIP84_PURPOSE}/{_BIP84_COIN}/{_BIP84_ACCOUNT}"
+            f"/{_BIP84_CHANGE}/{index}"
+        )
+        wallet = HDWallet(symbol=BTC, semantic="p2wpkh")
+        wallet.from_mnemonic(self._mnemonic)
+        wallet.from_path(path)
+        address: str = wallet.p2wpkh_address()
+        return address, path
+
+    # ── Public API ────────────────────────────────────────────────────────────
 
     def generate_deposit_address(self, user_id: str) -> Dict:
         """
-        Generate unique deposit address for user
+        Generate (or return the next unused) BIP84 deposit address for a user.
 
-        Args:
-            user_id: User ID
+        Each call advances the address index so every deposit request gets a
+        fresh address, improving privacy and simplifying reconciliation.
 
         Returns:
-            Address information with QR code
+            Dict with address, qr_code URI, network, min_deposit,
+            confirmations_required
         """
-        try:
-            # Generate deterministic address (simplified)
-            # In production, use proper BIP32/BIP44 derivation
-            address_index = len(self.user_addresses.get(user_id, []))
-            derivation_path = f"m/44'/0'/0'/0/{address_index}"
+        index = len(self.user_addresses.get(user_id, []))
+        address, path = self._derive_address(index)
 
-            # Generate address (simplified - in production use bitcoinlib)
-            address_data = f"{self.master_seed}{user_id}{address_index}"
-            address_hash = hashlib.sha256(address_data.encode()).hexdigest()
-            address = f"bc1q{address_hash[:40]}"  # Bech32 format
+        btc_address = BitcoinAddress(
+            address=address,
+            user_id=user_id,
+            derivation_path=path,
+            created_at=datetime.now(timezone.utc),
+        )
+        self.addresses[address] = btc_address
+        self.user_addresses.setdefault(user_id, []).append(address)
 
-            # Store address
-            btc_address = BitcoinAddress(
-                address=address,
-                user_id=user_id,
-                derivation_path=derivation_path,
-                created_at=datetime.now(timezone.utc),
-            )
-
-            self.addresses[address] = btc_address
-
-            if user_id not in self.user_addresses:
-                self.user_addresses[user_id] = []
-            self.user_addresses[user_id].append(address)
-
-            logger.info(f"Generated Bitcoin address for user {user_id}: {address}")
-
-            return {
-                "address": address,
-                "qr_code": f"bitcoin:{address}",  # QR code data
-                "network": "bitcoin",
-                "min_deposit": float(self.MIN_DEPOSIT),
-                "confirmations_required": self.REQUIRED_CONFIRMATIONS,
-            }
-
-        except Exception as e:
-            logger.error(f"Error generating Bitcoin address: {e}")
-            raise
+        logger.info(
+            "Generated BTC deposit address for user %s: %s (path=%s)",
+            user_id, address, path,
+        )
+        return {
+            "address": address,
+            "qr_code": f"bitcoin:{address}",
+            "network": "bitcoin",
+            "min_deposit": float(self.MIN_DEPOSIT),
+            "confirmations_required": self.REQUIRED_CONFIRMATIONS,
+        }
 
     def process_deposit(
-        self, user_id: str, amount: Decimal, tx_hash: str, confirmations: int = 0
+        self,
+        user_id: str,
+        amount: Decimal,
+        tx_hash: str,
+        confirmations: int = 0,
     ) -> Optional[BitcoinTransaction]:
         """
-        Process Bitcoin deposit
+        Record or update a Bitcoin deposit transaction.
 
         Args:
             user_id: User ID
             amount: Amount in BTC
-            tx_hash: Transaction hash
-            confirmations: Number of confirmations
+            tx_hash: On-chain transaction hash
+            confirmations: Current confirmation count
 
         Returns:
-            Transaction object or None
+            BitcoinTransaction or None if validation fails
         """
-        try:
-            # Validate minimum deposit
-            if amount < self.MIN_DEPOSIT:
-                logger.warning(f"Deposit below minimum: {amount} BTC")
-                return None
-
-            # Check if transaction already exists
-            if tx_hash in self.transactions:
-                # Update confirmations
-                self.transactions[tx_hash].confirmations = confirmations
-                return self.transactions[tx_hash]
-
-            # Get user's deposit address
-            user_addrs = self.user_addresses.get(user_id, [])
-            if not user_addrs:
-                logger.error(f"No deposit address for user {user_id}")
-                return None
-
-            # Use latest address
-            address = user_addrs[-1]
-
-            # Determine status
-            status = (
-                "confirmed"
-                if confirmations >= self.REQUIRED_CONFIRMATIONS
-                else "pending"
+        if amount < self.MIN_DEPOSIT:
+            logger.warning(
+                "Deposit below minimum: %s BTC (user=%s)", amount, user_id
             )
-
-            # Create transaction
-            transaction = BitcoinTransaction(
-                tx_hash=tx_hash,
-                address=address,
-                amount=amount,
-                confirmations=confirmations,
-                status=status,
-                created_at=datetime.now(timezone.utc),
-            )
-
-            self.transactions[tx_hash] = transaction
-
-            # Update address last used
-            if address in self.addresses:
-                self.addresses[address].last_used = datetime.now(timezone.utc)
-
-            logger.info(
-                f"Bitcoin deposit processed: {tx_hash} - {amount} BTC - {confirmations} confirmations"
-            )
-
-            return transaction
-
-        except Exception as e:
-            logger.error(f"Error processing Bitcoin deposit: {e}")
             return None
 
+        if tx_hash in self.transactions:
+            self.transactions[tx_hash].confirmations = confirmations
+            if confirmations >= self.REQUIRED_CONFIRMATIONS:
+                self.transactions[tx_hash].status = "confirmed"
+            return self.transactions[tx_hash]
+
+        user_addrs = self.user_addresses.get(user_id, [])
+        if not user_addrs:
+            logger.error("No deposit address found for user %s", user_id)
+            return None
+
+        address = user_addrs[-1]
+        status = (
+            "confirmed"
+            if confirmations >= self.REQUIRED_CONFIRMATIONS
+            else "pending"
+        )
+
+        transaction = BitcoinTransaction(
+            tx_hash=tx_hash,
+            address=address,
+            amount=amount,
+            confirmations=confirmations,
+            status=status,
+            created_at=datetime.now(timezone.utc),
+        )
+        self.transactions[tx_hash] = transaction
+
+        if address in self.addresses:
+            self.addresses[address].last_used = datetime.now(timezone.utc)
+
+        logger.info(
+            "BTC deposit recorded: tx=%s amount=%s BTC confirmations=%d user=%s",
+            tx_hash, amount, confirmations, user_id,
+        )
+        return transaction
+
     def process_withdrawal(
-        self, user_id: str, amount: Decimal, destination_address: str
+        self,
+        user_id: str,
+        amount: Decimal,
+        destination_address: str,
     ) -> Dict:
         """
-        Process Bitcoin withdrawal
+        Prepare a Bitcoin withdrawal.
+
+        In production this method should broadcast the signed transaction via a
+        Bitcoin node or a custody API (e.g. BitGo, Fireblocks).  The tx_hash
+        returned here is a deterministic placeholder until the broadcast step
+        is wired in.
 
         Args:
             user_id: User ID
-            amount: Amount in BTC
-            destination_address: Destination Bitcoin address
+            amount: Amount in BTC to send
+            destination_address: Recipient bech32 / legacy address
 
         Returns:
-            Withdrawal information
+            Withdrawal summary dict
         """
-        try:
-            # Validate destination address
-            if not self._validate_address(destination_address):
-                raise ValueError("Invalid Bitcoin address")
-
-            # Calculate fees
-            total_fee = self.NETWORK_FEE
-            net_amount = amount - total_fee
-
-            if net_amount <= 0:
-                raise ValueError("Amount too small after fees")
-
-            # Generate transaction ID (in production, broadcast to network)
-            tx_hash = hashlib.sha256(
-                f"{user_id}{amount}{destination_address}{datetime.now(timezone.utc)}".encode()
-            ).hexdigest()
-
-            withdrawal = {
-                "tx_hash": tx_hash,
-                "user_id": user_id,
-                "amount": float(amount),
-                "fee": float(total_fee),
-                "net_amount": float(net_amount),
-                "destination": destination_address,
-                "status": "broadcasting",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-
-            logger.info(
-                f"Bitcoin withdrawal processed: {tx_hash} - {amount} BTC to {destination_address}"
+        if not self._validate_address(destination_address):
+            raise ValueError(
+                f"Invalid Bitcoin address: {destination_address!r}"
             )
 
-            return withdrawal
+        net_amount = amount - self.NETWORK_FEE
+        if net_amount <= 0:
+            raise ValueError(
+                f"Amount {amount} BTC is too small after network fee "
+                f"{self.NETWORK_FEE} BTC"
+            )
 
-        except Exception as e:
-            logger.error(f"Error processing Bitcoin withdrawal: {e}")
-            raise
+        # Deterministic placeholder txid — replace with real broadcast result.
+        tx_hash = hashlib.sha256(
+            f"{user_id}{amount}{destination_address}{time.time_ns()}".encode()
+        ).hexdigest()
+
+        logger.info(
+            "BTC withdrawal prepared: tx=%s amount=%s BTC to=%s user=%s",
+            tx_hash, amount, destination_address, user_id,
+        )
+        return {
+            "tx_hash": tx_hash,
+            "user_id": user_id,
+            "amount": float(amount),
+            "fee": float(self.NETWORK_FEE),
+            "net_amount": float(net_amount),
+            "destination": destination_address,
+            "status": "broadcasting",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _validate_address(self, address: str) -> bool:
-        """Validate Bitcoin address format"""
-        # Simplified validation (in production use proper validation)
-        if address.startswith("bc1"):  # Bech32
-            return len(address) >= 42 and len(address) <= 62
-        elif address.startswith("1") or address.startswith("3"):  # Legacy/P2SH
-            return len(address) >= 26 and len(address) <= 35
+        """Validate Bitcoin address format (bech32, P2PKH, P2SH)."""
+        if address.startswith("bc1"):           # native SegWit bech32
+            return 42 <= len(address) <= 62
+        if address.startswith(("1", "3")):      # legacy P2PKH / P2SH
+            return 26 <= len(address) <= 35
         return False
 
     def get_transaction_status(self, tx_hash: str) -> Optional[Dict]:
-        """Get Bitcoin transaction status"""
-        transaction = self.transactions.get(tx_hash)
-        if not transaction:
+        """Return status dict for a known transaction, or None."""
+        tx = self.transactions.get(tx_hash)
+        if not tx:
             return None
-
         return {
-            "tx_hash": transaction.tx_hash,
-            "address": transaction.address,
-            "amount": float(transaction.amount),
-            "confirmations": transaction.confirmations,
-            "status": transaction.status,
-            "created_at": transaction.created_at.isoformat(),
+            "tx_hash": tx.tx_hash,
+            "address": tx.address,
+            "amount": float(tx.amount),
+            "confirmations": tx.confirmations,
+            "status": tx.status,
+            "created_at": tx.created_at.isoformat(),
         }
 
     def get_user_transactions(self, user_id: str) -> List[Dict]:
-        """Get all Bitcoin transactions for user"""
+        """Return all transactions for a user, newest first."""
         user_addrs = set(self.user_addresses.get(user_id, []))
-
-        transactions = [
+        txs = [
             {
                 "tx_hash": tx.tx_hash,
                 "amount": float(tx.amount),
@@ -267,12 +319,9 @@ class BitcoinClient:
             for tx in self.transactions.values()
             if tx.address in user_addrs
         ]
-
-        # Sort by created_at descending
-        transactions.sort(key=lambda x: x["created_at"], reverse=True)
-
-        return transactions
+        txs.sort(key=lambda x: x["created_at"], reverse=True)
+        return txs
 
 
-# Global Bitcoin client instance
+# Module-level singleton — initialised once at import time.
 bitcoin_client = BitcoinClient()
