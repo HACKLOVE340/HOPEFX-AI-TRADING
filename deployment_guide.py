@@ -292,7 +292,7 @@ def check_port_availability() -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            sock.bind(("0.0.0.0", port))
+            sock.bind(("0.0.0.0", port))  # nosec B104 - port availability check only, socket closed immediately
             _good(f"Port {port} ({label}) is free")
         except OSError:
             _err(

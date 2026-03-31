@@ -420,4 +420,4 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
     standalone_app = create_standalone_app()
-    uvicorn.run(standalone_app, host="0.0.0.0", port=NUCLEAR_WS_PORT, log_level="info")
+    uvicorn.run(standalone_app, host="0.0.0.0", port=NUCLEAR_WS_PORT, log_level="info")  # nosec B104 - container/K8s deployment requires 0.0.0.0

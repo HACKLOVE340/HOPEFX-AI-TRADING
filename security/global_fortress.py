@@ -255,7 +255,7 @@ class HOPEFXBrain:
             except json.JSONDecodeError:
                 continue
 
-            ip: str = log.get("ip", "0.0.0.0")
+            ip: str = log.get("ip", "0.0.0.0")  # nosec B104 - default value for missing IP in log entry, not a bind address
             data: str = str(log.get("data", ""))
 
             geo = await self._geo_lookup(ip)

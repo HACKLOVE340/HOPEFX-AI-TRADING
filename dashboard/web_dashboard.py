@@ -211,7 +211,7 @@ class DashboardDataSource:
         )
 
 
-def create_dashboard_app(trading_app, host: str = "0.0.0.0", port: int = 8081):
+def create_dashboard_app(trading_app, host: str = "0.0.0.0", port: int = 8081):  # nosec B104 - host configurable via parameter
     """Create and configure dashboard web application"""
     if not AIOHTTP_AVAILABLE:
         logger.error("aiohttp required for dashboard")
@@ -847,7 +847,7 @@ async def chart_data_handler(request):
     )
 
 
-async def start_dashboard(trading_app, host: str = "0.0.0.0", port: int = 8081):
+async def start_dashboard(trading_app, host: str = "0.0.0.0", port: int = 8081):  # nosec B104 - host configurable via parameter
     """Start dashboard server"""
     app, host, port = create_dashboard_app(trading_app, host, port)
 

@@ -395,7 +395,7 @@ class APIGateway:
 
         return jwt.encode(payload, self.auth_secret, algorithm="HS256")
 
-    def run(self, host: str = "0.0.0.0", port: int = 8443):
+    def run(self, host: str = "0.0.0.0", port: int = 8443):  # nosec B104 - host configurable via parameter
         """Run with SSL/TLS"""
         import uvicorn
 
