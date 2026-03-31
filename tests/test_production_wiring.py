@@ -46,7 +46,6 @@ from __future__ import annotations
 
 import os
 import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -146,14 +145,16 @@ class TestSharpeGate:
 
 
 class TestOandaPaperClock:
-    def _make_clock(self):
+    def _make_clock(self, tmp_path: Path):
         from brokers.oanda_paper_clock import OandaPaperClock
 
-        tmp = Path(tempfile.mktemp(suffix=".json"))
-        return OandaPaperClock(stamp_path=tmp)
+        # Use a path inside pytest's tmp_path — avoids the TOCTOU race of
+        # tempfile.mktemp() which returns a name without creating the file.
+        stamp = tmp_path / "paper_clock_stamp.json"
+        return OandaPaperClock(stamp_path=stamp)
 
-    def test_status_shape_without_stamp(self):
-        clock = self._make_clock()
+    def test_status_shape_without_stamp(self, tmp_path):
+        clock = self._make_clock(tmp_path)
         s = clock.status()
         assert "started" in s
         assert "elapsed_days" in s
@@ -162,8 +163,8 @@ class TestOandaPaperClock:
         assert s["started"] is False
         assert s["complete"] is False
 
-    def test_maybe_start_writes_stamp(self):
-        clock = self._make_clock()
+    def test_maybe_start_writes_stamp(self, tmp_path):
+        clock = self._make_clock(tmp_path)
         started = clock.maybe_start(account_id="test-123", environment="practice")
         assert started is True
         assert clock._stamp_path.exists()
@@ -171,19 +172,19 @@ class TestOandaPaperClock:
         assert s["started"] is True
         assert s["elapsed_days"] >= 0.0
 
-    def test_maybe_start_idempotent(self):
-        clock = self._make_clock()
+    def test_maybe_start_idempotent(self, tmp_path):
+        clock = self._make_clock(tmp_path)
         clock.maybe_start(account_id="test-123", environment="practice")
         started_again = clock.maybe_start(account_id="test-456", environment="live")
         assert started_again is False  # already started — no overwrite
 
-    def test_is_complete_false_before_30_days(self):
-        clock = self._make_clock()
+    def test_is_complete_false_before_30_days(self, tmp_path):
+        clock = self._make_clock(tmp_path)
         clock.maybe_start(account_id="test", environment="practice")
         assert clock.is_complete() is False  # just started
 
-    def test_reset_clears_stamp(self):
-        clock = self._make_clock()
+    def test_reset_clears_stamp(self, tmp_path):
+        clock = self._make_clock(tmp_path)
         clock.maybe_start()
         clock.reset()
         assert not clock._stamp_path.exists()
