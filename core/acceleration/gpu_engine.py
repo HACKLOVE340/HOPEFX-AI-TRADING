@@ -43,9 +43,18 @@ class GARCHModel:
     def fit(self, returns: np.ndarray):
         """Fit GARCH parameters via MLE"""
 
+        def _garch_params_invalid(omega, alpha, beta, nu) -> bool:
+            """Return True when GARCH(1,1)-t parameters are outside the stationarity region."""
+            non_positive_omega = omega <= 0
+            negative_alpha = alpha < 0
+            negative_beta = beta < 0
+            non_stationary = alpha + beta >= 1
+            invalid_df = nu <= 2  # Student-t requires df > 2 for finite variance
+            return non_positive_omega or negative_alpha or negative_beta or non_stationary or invalid_df
+
         def neg_log_likelihood(params):
             omega, alpha, beta, nu = params
-            if omega <= 0 or alpha < 0 or beta < 0 or alpha + beta >= 1 or nu <= 2:
+            if _garch_params_invalid(omega, alpha, beta, nu):
                 return 1e10
 
             variance = np.zeros(len(returns))
