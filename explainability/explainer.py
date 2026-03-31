@@ -6,7 +6,6 @@
 """explainability/explainer.py — AIExplainer: SHAP-based signal explanation."""
 
 from typing import Dict, List, Optional, Any, Tuple
-import numpy as np
 from datetime import datetime, timezone
 import logging
 
@@ -214,16 +213,24 @@ class AIExplainer:
                     contribution = impact * (0.5 - value) * 2 * (1 if bullish else -1)
             elif "volume_ratio" in name:
                 # Above-average volume (>1) amplifies the current direction
-                contribution = impact * (1 if value >= 1.0 else -1) * (1 if bullish else -1)
+                contribution = (
+                    impact * (1 if value >= 1.0 else -1) * (1 if bullish else -1)
+                )
             elif "support_distance" in name:
                 # Close to support (small value) → bullish
-                contribution = impact * (1 if value < 0.5 else -1) * (1 if bullish else -1)
+                contribution = (
+                    impact * (1 if value < 0.5 else -1) * (1 if bullish else -1)
+                )
             elif "resistance_distance" in name:
                 # Far from resistance (large value) → bullish
-                contribution = impact * (1 if value > 0.5 else -1) * (1 if bullish else -1)
+                contribution = (
+                    impact * (1 if value > 0.5 else -1) * (1 if bullish else -1)
+                )
             else:
                 # Unknown feature: use sign of (value - 0.5) as a neutral heuristic
-                contribution = impact * (1 if value >= 0.5 else -1) * (1 if bullish else -1)
+                contribution = (
+                    impact * (1 if value >= 0.5 else -1) * (1 if bullish else -1)
+                )
 
             contributions.append(
                 FeatureContribution(
@@ -317,7 +324,7 @@ class AIExplainer:
             if hasattr(model, "predict_proba"):
                 return 0.75  # Simulated probability
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         # Default confidence based on prediction strength
         return abs(prediction - 0.5) * 2 * 0.8 + 0.2
@@ -383,6 +390,7 @@ class AIExplainer:
 
         try:
             from ml.advanced_predictor import get_predictor
+
             pred = get_predictor()
             meta = pred.meta or {}
             stats = pred.stats or {}

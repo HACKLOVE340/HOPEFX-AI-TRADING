@@ -531,6 +531,7 @@ class KillSwitch:
                 return
             except RuntimeError:
                 import inspect as _inspect
+
                 result = _redis_bus.publish_breach(payload)
                 if _inspect.iscoroutine(result):
                     result.close()
@@ -558,11 +559,14 @@ class KillSwitch:
                     loop.create_task(self._event_bus.publish(event))
                 except RuntimeError:
                     import inspect as _inspect
+
                     result = self._event_bus.publish(event)
                     if _inspect.iscoroutine(result):
                         result.close()
             except Exception as exc:
-                logger.warning("Could not publish kill-switch event (fallback): %s", exc)
+                logger.warning(
+                    "Could not publish kill-switch event (fallback): %s", exc
+                )
 
         # ── Step 4: K8s ConfigMap write — ensures cross-pod propagation ───────
         # When Redis is down, all pods watch the ConfigMap and will activate
@@ -582,14 +586,19 @@ class KillSwitch:
         try:
             from core.event_bus import bus as _redis_bus, CH_BREACH  # noqa: PLC0415
         except ImportError:
-            logger.warning("Kill switch: could not import Redis EventBus — cross-pod propagation disabled")
+            logger.warning(
+                "Kill switch: could not import Redis EventBus — cross-pod propagation disabled"
+            )
             return
 
         # Ensure the bus is connected before subscribing
         try:
             await _redis_bus.connect()
         except Exception as exc:
-            logger.warning("Kill switch: Redis EventBus connect failed (%s) — cross-pod propagation disabled", exc)
+            logger.warning(
+                "Kill switch: Redis EventBus connect failed (%s) — cross-pod propagation disabled",
+                exc,
+            )
             return
 
         logger.info("Kill switch: listening for breach events on Redis CH_BREACH")
@@ -611,11 +620,15 @@ class KillSwitch:
                         # we are already in the activated state from the remote pod.
                         self._activate_internal(f"[remote] {reason}")
                 except Exception as exc:
-                    logger.warning("Kill switch: error processing breach message: %s", exc)
+                    logger.warning(
+                        "Kill switch: error processing breach message: %s", exc
+                    )
         except asyncio.CancelledError:
             pass
         except Exception as exc:
-            logger.error("Kill switch: Redis breach listener exited unexpectedly: %s", exc)
+            logger.error(
+                "Kill switch: Redis breach listener exited unexpectedly: %s", exc
+            )
 
     # ── K8s ConfigMap fallback ────────────────────────────────────────────────
 
@@ -658,6 +671,7 @@ class KillSwitch:
 
         try:
             from kubernetes_asyncio import client as k8s_client, config as k8s_config
+
             await k8s_config.load_incluster_config()
             v1 = k8s_client.CoreV1Api()
         except ImportError:
@@ -677,7 +691,9 @@ class KillSwitch:
         logger.info(
             "Kill switch K8s ConfigMap watcher started "
             "(namespace=%s, configmap=%s, interval=%.0fs)",
-            namespace, cm_name, poll_interval,
+            namespace,
+            cm_name,
+            poll_interval,
         )
 
         while self._running:
@@ -690,7 +706,8 @@ class KillSwitch:
                 if active_flag == "true" and not self._active:
                     logger.critical(
                         "Kill switch K8s watcher: ConfigMap flag set — activating. "
-                        "Reason: %s", reason,
+                        "Reason: %s",
+                        reason,
                     )
                     self._activate_internal(f"[k8s-configmap] {reason}")
 
@@ -699,7 +716,8 @@ class KillSwitch:
             except Exception as exc:
                 logger.debug(
                     "Kill switch K8s watcher: poll error (%s) — will retry in %.0fs",
-                    exc, poll_interval,
+                    exc,
+                    poll_interval,
                 )
 
             await asyncio.sleep(poll_interval)
@@ -731,13 +749,19 @@ class KillSwitch:
 
         async def _async_patch() -> None:
             try:
-                from kubernetes_asyncio import client as k8s_client, config as k8s_config
+                from kubernetes_asyncio import (
+                    client as k8s_client,
+                    config as k8s_config,
+                )
+
                 await k8s_config.load_incluster_config()
                 v1 = k8s_client.CoreV1Api()
                 await v1.patch_namespaced_config_map(cm_name, namespace, patch_body)
                 logger.info(
                     "Kill switch: K8s ConfigMap '%s/%s' patched (reason=%s)",
-                    namespace, cm_name, reason,
+                    namespace,
+                    cm_name,
+                    reason,
                 )
             except Exception as exc:
                 logger.error(
@@ -753,17 +777,18 @@ class KillSwitch:
             # No running loop — use sync kubernetes client
             try:
                 from kubernetes import client as k8s_sync, config as k8s_sync_config
+
                 k8s_sync_config.load_incluster_config()
                 v1 = k8s_sync.CoreV1Api()
                 v1.patch_namespaced_config_map(cm_name, namespace, patch_body)
                 logger.info(
                     "Kill switch: K8s ConfigMap '%s/%s' patched (sync, reason=%s)",
-                    namespace, cm_name, reason,
+                    namespace,
+                    cm_name,
+                    reason,
                 )
             except Exception as exc:
-                logger.error(
-                    "Kill switch: K8s ConfigMap sync patch failed: %s", exc
-                )
+                logger.error("Kill switch: K8s ConfigMap sync patch failed: %s", exc)
 
     def set_event_bus(self, event_bus) -> None:
         """
