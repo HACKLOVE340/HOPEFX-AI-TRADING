@@ -22,7 +22,6 @@ import uuid
 
 import aiohttp
 import numpy as np
-_ENGINE_RNG = np.random.default_rng()
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +86,16 @@ class AsyncExecutionEngine:
     - Fill simulation for backtesting
     """
 
-    def __init__(self, broker_configs: List[Dict], paper_mode: bool = True):
+    def __init__(
+        self,
+        broker_configs: List[Dict],
+        paper_mode: bool = True,
+        paper_rng_seed: Optional[int] = 42,
+    ):
         self.paper_mode = paper_mode
+        # Per-instance RNG for paper-mode fill simulation; seeded for
+        # reproducibility.  Pass paper_rng_seed=None for non-deterministic runs.
+        self._rng = np.random.default_rng(seed=paper_rng_seed)
         self.brokers: Dict[str, Any] = {}  # name -> broker client
         self.sessions: Dict[str, aiohttp.ClientSession] = {}
 
@@ -342,7 +349,7 @@ class AsyncExecutionEngine:
 
                 else:
                     error = await resp.text()
-                    raise Exception(f"Submit failed: {error}")
+                    raise RuntimeError(f"Submit failed (HTTP {resp.status}): {error}")
 
     async def _simulate_fill(self, order: Order):
         """Fill simulation for paper trading only — never called in live mode."""
@@ -368,7 +375,7 @@ class AsyncExecutionEngine:
         volatility = market.get("volatility", 0.001)
         size_factor = min(order.quantity / 100, 1.0)  # Larger orders = more slippage
 
-        slippage = _ENGINE_RNG.normal(0, volatility * size_factor)
+        slippage = self._rng.normal(0, volatility * size_factor)
 
         if order.order_type == OrderType.MARKET:
             fill_price = base_price * (1 + slippage)
@@ -379,7 +386,7 @@ class AsyncExecutionEngine:
                 fill_price = order.price
             else:
                 # Limit not hit - simulate partial fill probability
-                if _ENGINE_RNG.random() < 0.3:  # 30% chance of no fill
+                if self._rng.random() < 0.3:  # 30% chance of no fill
                     order.status = OrderStatus.SUBMITTED
                     asyncio.create_task(self._delayed_fill_simulation(order))
                     return
@@ -390,14 +397,14 @@ class AsyncExecutionEngine:
         fills = []
 
         while remaining > 0 and len(fills) < 5:  # Max 5 partial fills
-            fill_qty = min(remaining, _ENGINE_RNG.uniform(0.1, 0.5) * order.quantity)
+            fill_qty = min(remaining, self._rng.uniform(0.1, 0.5) * order.quantity)
             fill_qty = min(fill_qty, remaining)
 
             fill = Fill(
                 order_id=order.id,
                 symbol=order.symbol,
                 quantity=fill_qty,
-                price=fill_price * (1 + _ENGINE_RNG.normal(0, 0.0001)),
+                price=fill_price * (1 + self._rng.normal(0, 0.0001)),
                 timestamp=datetime.now(timezone.utc),
                 side=order.side,
                 fees=fill_qty * fill_price * 0.0005,  # 5bps fee
@@ -406,7 +413,7 @@ class AsyncExecutionEngine:
             remaining -= fill_qty
 
             # Delay between partial fills
-            await asyncio.sleep(_ENGINE_RNG.exponential(0.5))
+            await asyncio.sleep(self._rng.exponential(0.5))
 
         # Apply fills
         for fill in fills:
@@ -419,7 +426,7 @@ class AsyncExecutionEngine:
                 "_delayed_fill_simulation called in live mode. "
                 "Live orders must be routed through the real broker API."
             )
-        await asyncio.sleep(_ENGINE_RNG.exponential(5))  # Mean 5s delay
+        await asyncio.sleep(self._rng.exponential(5))  # Mean 5s delay
 
         if order.status != OrderStatus.SUBMITTED:
             return
@@ -437,7 +444,7 @@ class AsyncExecutionEngine:
             order.side == "sell" and current >= order.price
         )
 
-        if would_fill or _ENGINE_RNG.random() < 0.1:  # 10% chance of fill anyway
+        if would_fill or self._rng.random() < 0.1:  # 10% chance of fill anyway
             fill = Fill(
                 order_id=order.id,
                 symbol=order.symbol,
@@ -546,7 +553,7 @@ class AsyncExecutionEngine:
 
                         # Random walk
                         mid = self.price_cache[symbol]["mid"]
-                        move = _ENGINE_RNG.normal(0, 0.0001)
+                        move = self._rng.normal(0, 0.0001)
                         new_mid = mid * (1 + move)
 
                         spread = 0.0002
