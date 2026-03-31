@@ -59,8 +59,8 @@ logger = logging.getLogger("audit_symbol_sharpe")
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 # PSI thresholds (industry standard)
-PSI_STABLE   = 0.10   # < 0.10 → stable
-PSI_MONITOR  = 0.25   # 0.10–0.25 → monitor
+PSI_STABLE = 0.10  # < 0.10 → stable
+PSI_MONITOR = 0.25  # 0.10–0.25 → monitor
 # > 0.25 → major shift / likely artefact
 
 # KS p-value threshold
@@ -129,6 +129,7 @@ def compute_ks(
     """
     try:
         from scipy import stats as _stats
+
         result = _stats.ks_2samp(reference, comparison)
         return round(float(result.statistic), 6), round(float(result.pvalue), 6)
     except ImportError:
@@ -251,6 +252,7 @@ def _load_predictions_csv(csv_dir: Path, symbol: str) -> Optional[np.ndarray]:
     for csv_path in candidates:
         try:
             import csv as _csv
+
             with open(csv_path, newline="") as f:
                 reader = _csv.DictReader(f)
                 rows = list(reader)
@@ -287,8 +289,6 @@ def _implied_win_rate_from_sharpe(symbol: str) -> Optional[float]:
     x = ratio / math.sqrt(1 + ratio**2)
     win_rate = (x + 1) / 2
     return min(0.99, max(0.51, win_rate))
-
-    return probs
 
 
 # ── Per-symbol audit ──────────────────────────────────────────────────────────
@@ -332,10 +332,10 @@ def audit_symbol(
     result["ks_verdict"] = "DIFFERENT" if ks_p < KS_P_THRESHOLD else "SAME_DIST"
 
     # Distribution stats
-    result["ref_mean"]  = round(float(np.mean(reference_dist)), 4)
-    result["ref_std"]   = round(float(np.std(reference_dist)), 4)
-    result["cmp_mean"]  = round(float(np.mean(comparison_dist)), 4)
-    result["cmp_std"]   = round(float(np.std(comparison_dist)), 4)
+    result["ref_mean"] = round(float(np.mean(reference_dist)), 4)
+    result["ref_std"] = round(float(np.std(reference_dist)), 4)
+    result["cmp_mean"] = round(float(np.mean(comparison_dist)), 4)
+    result["cmp_std"] = round(float(np.std(comparison_dist)), 4)
     result["mean_drift_sigma"] = round(
         abs(result["cmp_mean"] - result["ref_mean"]) / max(result["ref_std"], 1e-10), 3
     )
@@ -343,9 +343,9 @@ def audit_symbol(
     # Look-ahead bias detection (on comparison returns)
     # Convert probabilities to signed returns: r = sign(p - 0.5) * 2 * |p - 0.5|
     # No noise added — the signal is in the probabilities themselves.
-    signed_returns = (2 * (comparison_dist > 0.5).astype(float) - 1) * (
-        comparison_dist - 0.5
-    ) * 2
+    signed_returns = (
+        (2 * (comparison_dist > 0.5).astype(float) - 1) * (comparison_dist - 0.5) * 2
+    )
     result["lookahead_checks"] = detect_lookahead_bias(signed_returns)
 
     # Sharpe plausibility
@@ -460,12 +460,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             implied_wr = _implied_win_rate_from_sharpe(symbol)
             wr_note = (
                 f" (implied win-rate from known Sharpe: {implied_wr:.1%})"
-                if implied_wr is not None else ""
+                if implied_wr is not None
+                else ""
             )
             logger.warning(
                 "%s: no predictions CSV found in %s%s — skipping. "
                 "Run the ML pipeline to generate evaluation CSVs.",
-                symbol, csv_dir, wr_note,
+                symbol,
+                csv_dir,
+                wr_note,
             )
             continue
 
@@ -488,7 +491,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"  Known Sharpe:          {known_sharpe}")
         print(f"  Sharpe upper bound:    {result['sharpe_upper_bound']}")
         print(f"  PSI:                   {result['psi']} ({result['psi_verdict']})")
-        print(f"  KS p-value:            {result['ks_p_value']} ({result['ks_verdict']})")
+        print(
+            f"  KS p-value:            {result['ks_p_value']} ({result['ks_verdict']})"
+        )
         print(f"  Mean drift (sigma):    {result['mean_drift_sigma']}")
         la = result.get("lookahead_checks", {})
         if isinstance(la, dict):
@@ -524,7 +529,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     report_path.write_text(json.dumps(report, indent=2, default=str))
 
     print(f"\n{'='*60}")
-    print(f"Audit complete: {report['summary']['passed']}/{report['summary']['total']} passed")
+    print(
+        f"Audit complete: {report['summary']['passed']}/{report['summary']['total']} passed"
+    )
     print(f"Report saved:   {report_path}")
 
     if any_failed:
@@ -532,7 +539,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("  1. Re-examined for look-ahead bias in feature construction")
         print("  2. Re-backtested with walk-forward validation")
         print("  3. Excluded from live trading until Sharpe is confirmed OOS")
-        print("\nRun signal_validator.py against live fills to confirm distribution match.")
+        print(
+            "\nRun signal_validator.py against live fills to confirm distribution match."
+        )
 
     return 1 if (args.strict and any_failed) else 0
 
