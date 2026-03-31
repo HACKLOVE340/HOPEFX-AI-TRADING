@@ -77,15 +77,18 @@ def setup_tracing(app=None) -> bool:
             "pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-grpc "
             "opentelemetry-instrumentation-fastapi opentelemetry-instrumentation-sqlalchemy "
             "opentelemetry-instrumentation-redis opentelemetry-instrumentation-aiohttp-client. "
-            "Error: %s", exc,
+            "Error: %s",
+            exc,
         )
         return False
 
-    resource = Resource.create({
-        "service.name": _SERVICE_NAME,
-        "service.version": os.getenv("APP_VERSION", "2.0.0"),
-        "deployment.environment": os.getenv("APP_ENV", "development"),
-    })
+    resource = Resource.create(
+        {
+            "service.name": _SERVICE_NAME,
+            "service.version": os.getenv("APP_VERSION", "2.0.0"),
+            "deployment.environment": os.getenv("APP_ENV", "development"),
+        }
+    )
 
     sampler = ParentBased(root=TraceIdRatioBased(_SAMPLE_RATE))
     provider = TracerProvider(resource=resource, sampler=sampler)
@@ -99,7 +102,9 @@ def setup_tracing(app=None) -> bool:
 
     logger.info(
         "OpenTelemetry tracing configured: service=%s exporter=%s sample_rate=%.2f",
-        _SERVICE_NAME, _EXPORTER, _SAMPLE_RATE,
+        _SERVICE_NAME,
+        _EXPORTER,
+        _SAMPLE_RATE,
     )
 
     if app is not None:
@@ -116,6 +121,7 @@ def _build_exporter():
     if _EXPORTER == "console":
         try:
             from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+
             logger.info("OTel: ConsoleSpanExporter (dev)")
             return ConsoleSpanExporter()
         except ImportError:
@@ -136,7 +142,10 @@ def _build_exporter():
 
     # Default: OTLP gRPC
     try:
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+            OTLPSpanExporter,
+        )
+
         logger.info("OTel: OTLPSpanExporter (gRPC) → %s", _OTLP_ENDPOINT)
         return OTLPSpanExporter(endpoint=_OTLP_ENDPOINT, insecure=True)
     except ImportError:
@@ -144,7 +153,10 @@ def _build_exporter():
 
     # OTLP HTTP fallback
     try:
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHttp
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+            OTLPSpanExporter as OTLPHttp,
+        )
+
         http_ep = _OTLP_ENDPOINT.replace(":4317", ":4318") + "/v1/traces"
         logger.info("OTel: OTLPSpanExporter (HTTP) → %s", http_ep)
         return OTLPHttp(endpoint=http_ep)
@@ -161,7 +173,10 @@ def _build_exporter():
 def _instrument_fastapi(app) -> None:
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-        FastAPIInstrumentor.instrument_app(app, excluded_urls="/health,/metrics,/favicon.ico")
+
+        FastAPIInstrumentor.instrument_app(
+            app, excluded_urls="/health,/metrics,/favicon.ico"
+        )
         logger.info("OTel: FastAPI instrumented")
     except ImportError:
         logger.debug("OTel: FastAPI instrumentation not available")
@@ -172,6 +187,7 @@ def _instrument_fastapi(app) -> None:
 def _instrument_sqlalchemy() -> None:
     try:
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
         SQLAlchemyInstrumentor().instrument()
         logger.info("OTel: SQLAlchemy instrumented")
     except ImportError:
@@ -183,6 +199,7 @@ def _instrument_sqlalchemy() -> None:
 def _instrument_redis() -> None:
     try:
         from opentelemetry.instrumentation.redis import RedisInstrumentor
+
         RedisInstrumentor().instrument()
         logger.info("OTel: Redis instrumented")
     except ImportError:
@@ -193,7 +210,10 @@ def _instrument_redis() -> None:
 
 def _instrument_aiohttp() -> None:
     try:
-        from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
+        from opentelemetry.instrumentation.aiohttp_client import (
+            AioHttpClientInstrumentor,
+        )
+
         AioHttpClientInstrumentor().instrument()
         logger.info("OTel: aiohttp client instrumented")
     except ImportError:
@@ -219,6 +239,7 @@ def inject_trace_context() -> Dict[str, str]:
         return headers
     try:
         from opentelemetry import propagate
+
         propagate.inject(headers)
     except Exception as exc:
         logger.debug("inject_trace_context failed: %s", exc)
@@ -238,6 +259,7 @@ def extract_trace_context(carrier: Dict[str, str]) -> Any:
         return None
     try:
         from opentelemetry import propagate
+
         return propagate.extract(carrier)
     except Exception as exc:
         logger.debug("extract_trace_context failed: %s", exc)
@@ -252,6 +274,7 @@ def get_tracer(name: str = "hopefx"):
     """
     try:
         from opentelemetry import trace
+
         return trace.get_tracer(name)
     except ImportError:
         return _NoOpTracer()
@@ -261,11 +284,20 @@ class _NoOpTracer:
     """Minimal no-op tracer — used when opentelemetry-sdk is not installed."""
 
     class _Span:
-        def set_attribute(self, *a, **kw): pass
-        def record_exception(self, *a, **kw): pass
-        def set_status(self, *a, **kw): pass
-        def __enter__(self): return self
-        def __exit__(self, *a): pass
+        def set_attribute(self, *a, **kw):
+            pass
+
+        def record_exception(self, *a, **kw):
+            pass
+
+        def set_status(self, *a, **kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
 
     def start_as_current_span(self, name, **kw):
         return self._Span()

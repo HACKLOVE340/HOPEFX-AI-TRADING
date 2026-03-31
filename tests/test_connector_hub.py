@@ -33,9 +33,11 @@ import pytest
 # connect_to_life — DrawdownMonitor
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestDrawdownMonitor:
     def _make(self, balance: float = 100_000):
         from connect_to_life import DrawdownMonitor
+
         return DrawdownMonitor(balance)
 
     def test_no_drawdown_on_flat_equity(self):
@@ -45,13 +47,13 @@ class TestDrawdownMonitor:
 
     def test_drawdown_calculated_correctly(self):
         dd = self._make(100_000)
-        dd.update(100_000)   # peak = 100k
+        dd.update(100_000)  # peak = 100k
         result = dd.update(97_000)
         assert abs(result - 0.03) < 1e-6
 
     def test_peak_updates_on_new_high(self):
         dd = self._make(100_000)
-        dd.update(110_000)   # new peak
+        dd.update(110_000)  # new peak
         result = dd.update(110_000)
         assert result == 0.0
 
@@ -65,6 +67,7 @@ class TestDrawdownMonitor:
 # ─────────────────────────────────────────────────────────────────────────────
 # core/event_bus — EventBus
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestEventBus:
     @pytest.mark.asyncio
@@ -127,9 +130,11 @@ class TestEventBus:
 # data/market_ingest — tick validation
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestTickValidation:
     def _validate(self, bid, ask):
         from data.market_ingest import _validate_tick
+
         return _validate_tick(bid, ask, "XAU/USD")
 
     def test_valid_tick_passes(self):
@@ -153,6 +158,7 @@ class TestStalenessGuard:
     @pytest.mark.asyncio
     async def test_no_breach_when_fresh(self):
         from data.market_ingest import _StalenessGuard
+
         guard = _StalenessGuard()
         guard.touch()
 
@@ -165,6 +171,7 @@ class TestStalenessGuard:
     async def test_breach_fires_when_stale(self):
         import time
         from data.market_ingest import _StalenessGuard, STALE_TIMEOUT_S
+
         guard = _StalenessGuard()
         # Wind back the last tick time past the timeout
         guard._last_tick_ts = time.monotonic() - STALE_TIMEOUT_S - 1
@@ -181,14 +188,17 @@ class TestStalenessGuard:
 # strategy/engine — OHLCV buffer
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestOHLCVBuffer:
     def _make(self):
         from strategy.engine import _OHLCVBuffer
+
         return _OHLCVBuffer()
 
     def test_bar_not_closed_before_ticks_per_bar(self):
         buf = self._make()
         from strategy.engine import TICKS_PER_BAR
+
         for _ in range(TICKS_PER_BAR - 1):
             closed = buf.push(1920.0, 0.5, "2025-01-01T00:00:00Z")
         assert closed is False
@@ -197,6 +207,7 @@ class TestOHLCVBuffer:
     def test_bar_closes_on_nth_tick(self):
         buf = self._make()
         from strategy.engine import TICKS_PER_BAR
+
         closed = False
         for _ in range(TICKS_PER_BAR):
             closed = buf.push(1920.0, 0.5, "2025-01-01T00:00:00Z")
@@ -206,13 +217,14 @@ class TestOHLCVBuffer:
     def test_ohlcv_values_correct(self):
         buf = self._make()
         from strategy.engine import TICKS_PER_BAR
+
         prices = [1900.0, 1950.0, 1880.0, 1920.0] + [1920.0] * (TICKS_PER_BAR - 4)
         for p in prices:
             buf.push(p, 0.5, "2025-01-01T00:00:00Z")
         df = buf.to_dataframe()
-        assert df.iloc[0]["open"]  == 1900.0
-        assert df.iloc[0]["high"]  == 1950.0
-        assert df.iloc[0]["low"]   == 1880.0
+        assert df.iloc[0]["open"] == 1900.0
+        assert df.iloc[0]["high"] == 1950.0
+        assert df.iloc[0]["low"] == 1880.0
         assert df.iloc[0]["close"] == prices[-1]
 
     def test_not_ready_below_min_bars(self):
@@ -222,6 +234,7 @@ class TestOHLCVBuffer:
     def test_ema_cross_sign(self):
         buf = self._make()
         from strategy.engine import TICKS_PER_BAR
+
         # Feed rising prices — fast EMA should be above slow EMA
         for i in range(TICKS_PER_BAR * 30):
             buf.push(1900.0 + i * 0.1, 0.5, "2025-01-01T00:00:00Z")
@@ -232,14 +245,17 @@ class TestOHLCVBuffer:
 # strategy/engine — ML predictor fallback
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestMLPredictorFallback:
     def test_ema_buy_when_cross_positive(self):
         from strategy.engine import _MLPredictor
+
         pred = _MLPredictor.__new__(_MLPredictor)
         pred._predictor = None
         pred._available = False
 
         import pandas as pd
+
         df = pd.DataFrame()  # empty — won't be used
         direction, confidence = pred.predict(df, ema_cross=0.5, symbol="XAU/USD")
         assert direction == "BUY"
@@ -247,21 +263,27 @@ class TestMLPredictorFallback:
 
     def test_ema_sell_when_cross_negative(self):
         from strategy.engine import _MLPredictor
+
         pred = _MLPredictor.__new__(_MLPredictor)
         pred._predictor = None
         pred._available = False
 
         import pandas as pd
-        direction, confidence = pred.predict(pd.DataFrame(), ema_cross=-0.5, symbol="XAU/USD")
+
+        direction, confidence = pred.predict(
+            pd.DataFrame(), ema_cross=-0.5, symbol="XAU/USD"
+        )
         assert direction == "SELL"
 
     def test_hold_when_cross_zero(self):
         from strategy.engine import _MLPredictor
+
         pred = _MLPredictor.__new__(_MLPredictor)
         pred._predictor = None
         pred._available = False
 
         import pandas as pd
+
         direction, _ = pred.predict(pd.DataFrame(), ema_cross=0.0, symbol="XAU/USD")
         assert direction == "HOLD"
 
@@ -270,20 +292,23 @@ class TestMLPredictorFallback:
 # risk/gatekeeper — prop checks
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestGatekeeperChecks:
     def _make_gk(self):
         from risk.gatekeeper import Gatekeeper
+
         gk = Gatekeeper.__new__(Gatekeeper)
         from risk.gatekeeper import _EquityTracker, _NewsCalendar
-        gk._equity       = _EquityTracker(100_000)
-        gk._calendar     = _NewsCalendar()
-        gk._kill_active  = False
+
+        gk._equity = _EquityTracker(100_000)
+        gk._calendar = _NewsCalendar()
+        gk._kill_active = False
         gk._paused_until = None
         gk._daily_trades = 0
-        gk._trade_day    = datetime.now(timezone.utc).day
-        gk._running      = True
-        gk._pass_count   = 0
-        gk._block_count  = 0
+        gk._trade_day = datetime.now(timezone.utc).day
+        gk._running = True
+        gk._pass_count = 0
+        gk._block_count = 0
         return gk
 
     def _signal(self, confidence=0.65, direction="BUY"):
@@ -309,10 +334,11 @@ class TestGatekeeperChecks:
 
     def test_daily_dd_breach_blocks(self):
         from risk.gatekeeper import DAILY_DD_LIMIT_PCT
+
         gk = self._make_gk()
         # Simulate daily DD at limit
         gk._equity._day_open = 100_000
-        gk._equity._current  = 100_000 * (1 - DAILY_DD_LIMIT_PCT)
+        gk._equity._current = 100_000 * (1 - DAILY_DD_LIMIT_PCT)
         failures = gk._run_checks(self._signal())
         assert any(f["reason"] == "daily_dd_limit" for f in failures)
 
@@ -323,6 +349,7 @@ class TestGatekeeperChecks:
 
     def test_daily_trade_cap_blocks(self):
         from risk.gatekeeper import MAX_DAILY_TRADES
+
         gk = self._make_gk()
         gk._daily_trades = MAX_DAILY_TRADES
         failures = gk._run_checks(self._signal())
@@ -340,9 +367,11 @@ class TestGatekeeperChecks:
 # utils/fault_guard — circuit breaker
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestFaultGuard:
     def _make(self):
         from utils.fault_guard import FaultGuard
+
         fg = FaultGuard()
         fg.register("test_module")
         return fg
@@ -356,6 +385,7 @@ class TestFaultGuard:
     @pytest.mark.asyncio
     async def test_trips_after_threshold_failures(self):
         from utils.fault_guard import FAILURE_THRESHOLD
+
         fg = self._make()
 
         with patch("utils.fault_guard.bus") as mock_bus:
@@ -402,6 +432,7 @@ class TestFaultGuard:
 
     def test_heartbeat_resets_age(self):
         import time
+
         fg = self._make()
         fg._modules["test_module"].last_heartbeat = time.monotonic() - 100
         fg.heartbeat("test_module")
@@ -431,14 +462,36 @@ class TestFaultGuard:
 # data/news_calendar_feed — parser + Redis writer
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestNewsCalendarFeed:
     def test_parse_forexfactory_filters_low_impact(self):
         from data.news_calendar_feed import _parse_forexfactory
+
         data = [
-            {"currency": "USD", "impact": "High",   "date": "01-27-2025", "time": "8:30am"},
-            {"currency": "USD", "impact": "Low",    "date": "01-27-2025", "time": "9:00am"},
-            {"currency": "EUR", "impact": "High",   "date": "01-27-2025", "time": "10:00am"},
-            {"currency": "USD", "impact": "Medium", "date": "01-27-2025", "time": "11:00am"},
+            {
+                "currency": "USD",
+                "impact": "High",
+                "date": "01-27-2025",
+                "time": "8:30am",
+            },
+            {
+                "currency": "USD",
+                "impact": "Low",
+                "date": "01-27-2025",
+                "time": "9:00am",
+            },
+            {
+                "currency": "EUR",
+                "impact": "High",
+                "date": "01-27-2025",
+                "time": "10:00am",
+            },
+            {
+                "currency": "USD",
+                "impact": "Medium",
+                "date": "01-27-2025",
+                "time": "11:00am",
+            },
         ]
         events = _parse_forexfactory(data)
         # Only USD High should pass (EUR filtered, Low/Medium filtered)
@@ -446,6 +499,7 @@ class TestNewsCalendarFeed:
 
     def test_parse_forexfactory_bad_date_skipped(self):
         from data.news_calendar_feed import _parse_forexfactory
+
         data = [
             {"currency": "USD", "impact": "High", "date": "INVALID", "time": "8:30am"},
         ]
@@ -454,6 +508,7 @@ class TestNewsCalendarFeed:
 
     def test_static_fallback_returns_events(self):
         from data.news_calendar_feed import _static_fallback
+
         events = _static_fallback()
         assert isinstance(events, list)
         # All events should be in the future
@@ -471,14 +526,16 @@ class TestNewsCalendarFeed:
 
         mock_pipe = AsyncMock()
         mock_pipe.__aenter__ = AsyncMock(return_value=mock_pipe)
-        mock_pipe.__aexit__  = AsyncMock(return_value=False)
-        mock_pipe.execute    = AsyncMock(return_value=[1, 3, 1])
+        mock_pipe.__aexit__ = AsyncMock(return_value=False)
+        mock_pipe.execute = AsyncMock(return_value=[1, 3, 1])
 
         mock_redis = AsyncMock()
         mock_redis.pipeline = MagicMock(return_value=mock_pipe)
-        mock_redis.aclose   = AsyncMock()
+        mock_redis.aclose = AsyncMock()
 
-        with patch("data.news_calendar_feed.aioredis.from_url", return_value=mock_redis):
+        with patch(
+            "data.news_calendar_feed.aioredis.from_url", return_value=mock_redis
+        ):
             count = await feed._write_redis(events)
 
         assert count == 3
@@ -491,48 +548,61 @@ class TestNewsCalendarFeed:
 # execution/fix_router — smart routing
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestFIXRouter:
     @pytest.mark.asyncio
     async def test_halted_router_rejects_orders(self):
         from execution.fix_router import FIXRouter
+
         router = FIXRouter.__new__(FIXRouter)
-        router._halted       = True
+        router._halted = True
         router._fix_available = False
-        router._order_count  = 0
-        router._fill_count   = 0
+        router._order_count = 0
+        router._fill_count = 0
         router._reject_count = 0
-        router._fallback     = MagicMock()
+        router._fallback = MagicMock()
 
         # Should return without calling fallback
-        await router._route({"type": "order_request", "symbol": "XAU/USD", "direction": "BUY"})
+        await router._route(
+            {"type": "order_request", "symbol": "XAU/USD", "direction": "BUY"}
+        )
         router._fallback.send.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_fallback_used_when_fix_unavailable(self):
         from execution.fix_router import FIXRouter
+
         router = FIXRouter.__new__(FIXRouter)
-        router._halted        = False
+        router._halted = False
         router._fix_available = False
-        router._adapter       = None
-        router._order_count   = 0
-        router._fill_count    = 0
-        router._reject_count  = 0
+        router._adapter = None
+        router._order_count = 0
+        router._fill_count = 0
+        router._reject_count = 0
 
         fill = {
-            "type": "fill_confirmation", "source": "oanda_rest_fallback",
-            "symbol": "XAU/USD", "direction": "BUY",
-            "units": 1000, "price": 1920.5,
-            "order_id": "123", "timestamp": "2025-01-01T00:00:00Z",
+            "type": "fill_confirmation",
+            "source": "oanda_rest_fallback",
+            "symbol": "XAU/USD",
+            "direction": "BUY",
+            "units": 1000,
+            "price": 1920.5,
+            "order_id": "123",
+            "timestamp": "2025-01-01T00:00:00Z",
         }
         router._fallback = AsyncMock()
         router._fallback.send = AsyncMock(return_value=fill)
 
         with patch("execution.fix_router.bus") as mock_bus:
             mock_bus.publish_order = AsyncMock()
-            await router._route({
-                "type": "order_request", "symbol": "XAU/USD",
-                "direction": "BUY", "units": 1000,
-            })
+            await router._route(
+                {
+                    "type": "order_request",
+                    "symbol": "XAU/USD",
+                    "direction": "BUY",
+                    "units": 1000,
+                }
+            )
 
         router._fallback.send.assert_called_once()
         assert router._fill_count == 1

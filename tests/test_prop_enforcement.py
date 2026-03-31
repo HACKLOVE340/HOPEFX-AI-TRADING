@@ -19,9 +19,6 @@ Verifies that:
 """
 
 import json
-import os
-import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -32,12 +29,14 @@ import pytest
 @pytest.fixture
 def risk_manager():
     from risk.manager import RiskManager
+
     return RiskManager(initial_balance=100_000)
 
 
 @pytest.fixture
 def dd_tracker():
     from risk.drawdown_tracker import DrawdownTracker
+
     return DrawdownTracker(
         initial_balance=100_000,
         max_total_dd_pct=0.10,
@@ -51,7 +50,6 @@ def dd_tracker():
 
 
 class TestDrawdownTracker:
-
     def test_trailing_hwm_rises_with_equity(self, dd_tracker):
         dd_tracker.update(equity=105_000)
         assert dd_tracker.total_hwm == 105_000
@@ -121,10 +119,10 @@ class TestDrawdownTracker:
         # 0.10 * 100 * 1000 / 100_000 = 10% >> 5% max
         ok, reason = dd_tracker.check_modify(
             current_equity=99_000,
-            new_stop_loss_distance=0.10,   # 10% SL distance
-            lots=100.0,                    # 100 lots
+            new_stop_loss_distance=0.10,  # 10% SL distance
+            lots=100.0,  # 100 lots
             account_balance=100_000,
-            pip_value=1000.0,              # large pip value → huge risk
+            pip_value=1000.0,  # large pip value → huge risk
         )
         assert ok is False
 
@@ -133,7 +131,6 @@ class TestDrawdownTracker:
 
 
 class TestRiskManagerPropEnforcement:
-
     def test_dd_tracker_initialised(self, risk_manager):
         assert risk_manager._dd_tracker is not None
 
@@ -170,7 +167,6 @@ class TestRiskManagerPropEnforcement:
 
 
 class TestBrainRespectsPropHalt:
-
     def test_brain_returns_hold_when_risk_halted(self):
         import pandas as pd
         import numpy as np
@@ -187,11 +183,15 @@ class TestBrainRespectsPropHalt:
         np.random.seed(1)
         n = 150
         close = 2300 + np.cumsum(np.random.randn(n) * 2)
-        df = pd.DataFrame({
-            "open": close - 0.5, "high": close + 1,
-            "low": close - 1, "close": close,
-            "volume": np.ones(n) * 1000,
-        })
+        df = pd.DataFrame(
+            {
+                "open": close - 0.5,
+                "high": close + 1,
+                "low": close - 1,
+                "close": close,
+                "volume": np.ones(n) * 1000,
+            }
+        )
 
         decision = brain.process_bar(df, symbol="XAUUSD")
         assert decision.action == "hold"
@@ -208,11 +208,15 @@ class TestBrainRespectsPropHalt:
         np.random.seed(2)
         n = 150
         close = 2300 + np.cumsum(np.random.randn(n) * 2)
-        df = pd.DataFrame({
-            "open": close - 0.5, "high": close + 1,
-            "low": close - 1, "close": close,
-            "volume": np.ones(n) * 1000,
-        })
+        df = pd.DataFrame(
+            {
+                "open": close - 0.5,
+                "high": close + 1,
+                "low": close - 1,
+                "close": close,
+                "volume": np.ones(n) * 1000,
+            }
+        )
 
         decision = brain.process_bar(df, symbol="XAUUSD")
         assert decision.action == "hold"
@@ -226,7 +230,6 @@ class TestBrainRespectsPropHalt:
 
 
 class TestPropFirmConfig:
-
     def test_prop_firm_mode_json_enabled(self):
         cfg_path = Path(__file__).parent.parent / "prop_firm_mode.json"
         assert cfg_path.exists(), "prop_firm_mode.json must exist"

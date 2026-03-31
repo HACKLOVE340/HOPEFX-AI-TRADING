@@ -534,7 +534,9 @@ class TestSocialLeaderboard:
         resp = leaderboard_client.get("/api/social/leaderboard")
         data = resp.json()
         if not data:
-            pytest.skip("No leaderboard entries in test environment — shape check skipped")
+            pytest.skip(
+                "No leaderboard entries in test environment — shape check skipped"
+            )
         entry = data[0]
         for field in ("id", "rank", "name", "return_3m", "sharpe", "followers"):
             assert field in entry, f"Missing field: {field}"

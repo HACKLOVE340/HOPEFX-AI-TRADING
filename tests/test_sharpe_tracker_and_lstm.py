@@ -213,8 +213,16 @@ class TestSharpeGateCheck:
 
     def test_result_keys_present(self):
         r = sharpe_gate_check(100)
-        for key in ("n_trades", "sharpe", "se", "credible", "gate_passed",
-                    "target_n", "n_required_for_se_010", "message"):
+        for key in (
+            "n_trades",
+            "sharpe",
+            "se",
+            "credible",
+            "gate_passed",
+            "target_n",
+            "n_required_for_se_010",
+            "message",
+        ):
             assert key in r
 
 
@@ -228,6 +236,7 @@ class TestLSTMSignalLayerNoModel:
 
     def setup_method(self):
         from ml.lstm_signal_layer import LSTMSignalLayer
+
         # Point at a path that definitely does not exist
         self.layer = LSTMSignalLayer(
             model_path="/tmp/nonexistent_lstm_signal.pt",
@@ -255,9 +264,16 @@ class TestLSTMSignalLayerNoModel:
         ohlcv = _make_ohlcv(50)
         result = self.layer.predict(ohlcv, symbol="XAUUSD")
         required = {
-            "direction", "probability", "confidence", "high_confidence",
-            "abstain", "model_version", "bars_used", "last_close",
-            "feature_count", "latency_ms",
+            "direction",
+            "probability",
+            "confidence",
+            "high_confidence",
+            "abstain",
+            "model_version",
+            "bars_used",
+            "last_close",
+            "feature_count",
+            "latency_ms",
         }
         assert required.issubset(result.keys())
 
@@ -300,7 +316,8 @@ class TestLSTMSignalLayerWithMockModel:
     def _make_layer_with_mock(self, proba: float):
         """Return a loaded LSTMSignalLayer backed by a mock predictor."""
         from ml.lstm_signal_layer import LSTMSignalLayer
-        import tempfile, pathlib
+        import tempfile
+        import pathlib
 
         # Create a dummy file so _load() passes the existence check
         tmp = tempfile.NamedTemporaryFile(suffix=".pt", delete=False)
@@ -406,9 +423,11 @@ class TestLSTMSignalLayerWithMockModel:
 class TestGetLSTMSignalLayerSingleton:
     def test_returns_same_instance(self):
         import ml.lstm_signal_layer as mod
+
         # Reset singleton for isolation
         mod._lstm_layer = None
         from ml.lstm_signal_layer import get_lstm_signal_layer
+
         a = get_lstm_signal_layer()
         b = get_lstm_signal_layer()
         assert a is b

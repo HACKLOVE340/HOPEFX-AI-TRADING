@@ -9,29 +9,33 @@ Unit tests for TCA module:
   - execution/tca.py           (TCAEngine, MarketContextProvider, MarketImpactModel)
   - execution/market_impact.py (AlmgrenChrissModel, FillSimulator)
 """
+
 from __future__ import annotations
 
 import enum
-import sys
 from datetime import datetime, timezone
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 # ── Python 3.10 StrEnum shim ─────────────────────────────────────────────────
 if not hasattr(enum, "StrEnum"):
+
     class _StrEnum(str, enum.Enum):
         pass
+
     enum.StrEnum = _StrEnum  # type: ignore[attr-defined]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TCARecorder tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestTCARecord:
     def _make_record(self, side="BUY", signal=2000.0, fill=2001.0):
         from execution.tca_recorder import TCARecord
+
         now = datetime.now(timezone.utc)
         return TCARecord(
             request_id="req1",
@@ -79,7 +83,14 @@ class TestTCARecord:
     def test_to_dict_keys(self):
         r = self._make_record()
         d = r.to_dict()
-        for key in ("request_id", "symbol", "side", "slippage_bps", "broker", "latency_ms"):
+        for key in (
+            "request_id",
+            "symbol",
+            "side",
+            "slippage_bps",
+            "broker",
+            "latency_ms",
+        ):
             assert key in d
 
     def test_signal_to_fill_ms_non_negative(self):
@@ -90,6 +101,7 @@ class TestTCARecord:
 class TestTCARecorder:
     def setup_method(self):
         from execution.tca_recorder import TCARecorder
+
         self.recorder = TCARecorder()
 
     def test_record_fill_without_signal_returns_none(self):
@@ -150,7 +162,6 @@ class TestTCARecorder:
         assert self.recorder.is_fill_quality_degraded("oanda") is False
 
     def test_is_fill_quality_degraded_true_above_threshold(self):
-        from execution.tca_recorder import TCA_ALERT_THRESHOLD_BPS
         # Fill at 10x threshold slippage for 15 trades
         for i in range(15):
             rid = f"r{i}"
@@ -172,9 +183,18 @@ class TestTCARecorder:
 
     def test_session_classification(self):
         from execution.tca_recorder import TCARecorder
-        assert TCARecorder._get_session(datetime(2024, 1, 1, 10, 0, tzinfo=timezone.utc)) == "london"
-        assert TCARecorder._get_session(datetime(2024, 1, 1, 15, 0, tzinfo=timezone.utc)) in ("london", "new_york")
-        assert TCARecorder._get_session(datetime(2024, 1, 1, 3, 0, tzinfo=timezone.utc)) == "asia"
+
+        assert (
+            TCARecorder._get_session(datetime(2024, 1, 1, 10, 0, tzinfo=timezone.utc))
+            == "london"
+        )
+        assert TCARecorder._get_session(
+            datetime(2024, 1, 1, 15, 0, tzinfo=timezone.utc)
+        ) in ("london", "new_york")
+        assert (
+            TCARecorder._get_session(datetime(2024, 1, 1, 3, 0, tzinfo=timezone.utc))
+            == "asia"
+        )
 
     def test_report_alert_triggered(self):
         for i in range(15):
@@ -199,9 +219,11 @@ class TestTCARecorder:
 # AlmgrenChrissModel tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestAlmgrenChrissModel:
     def setup_method(self):
         from execution.market_impact import AlmgrenChrissModel
+
         self.model = AlmgrenChrissModel()
 
     def test_zero_adv_returns_spread_only(self):
@@ -245,70 +267,110 @@ class TestAlmgrenChrissModel:
 class TestFillSimulator:
     def setup_method(self):
         from execution.market_impact import FillSimulator
+
         self.sim = FillSimulator()
 
     def test_buy_fill_above_signal(self):
         fill = self.sim.simulate_fill(
-            signal_price=2000.0, side="BUY", quantity=10,
-            bar_high=2005.0, bar_low=1995.0, bar_volume=5000,
-            adv=10000, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="BUY",
+            quantity=10,
+            bar_high=2005.0,
+            bar_low=1995.0,
+            bar_volume=5000,
+            adv=10000,
+            volatility_daily=0.012,
         )
         assert fill.fill_price >= 2000.0
 
     def test_sell_fill_below_signal(self):
         fill = self.sim.simulate_fill(
-            signal_price=2000.0, side="SELL", quantity=10,
-            bar_high=2005.0, bar_low=1995.0, bar_volume=5000,
-            adv=10000, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="SELL",
+            quantity=10,
+            bar_high=2005.0,
+            bar_low=1995.0,
+            bar_volume=5000,
+            adv=10000,
+            volatility_daily=0.012,
         )
         assert fill.fill_price <= 2000.0
 
     def test_fill_clamped_to_bar_range_buy(self):
         fill = self.sim.simulate_fill(
-            signal_price=2000.0, side="BUY", quantity=10,
-            bar_high=2001.0, bar_low=1999.0, bar_volume=5000,
-            adv=10000, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="BUY",
+            quantity=10,
+            bar_high=2001.0,
+            bar_low=1999.0,
+            bar_volume=5000,
+            adv=10000,
+            volatility_daily=0.012,
         )
         assert fill.fill_price <= 2001.0
 
     def test_partial_fill_when_order_exceeds_liquidity(self):
         fill = self.sim.simulate_fill(
-            signal_price=2000.0, side="BUY", quantity=10000,
-            bar_high=2005.0, bar_low=1995.0, bar_volume=100,
-            adv=10000, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="BUY",
+            quantity=10000,
+            bar_high=2005.0,
+            bar_low=1995.0,
+            bar_volume=100,
+            adv=10000,
+            volatility_daily=0.012,
         )
         assert fill.partial_fill is True
         assert fill.fill_quantity < 10000
 
     def test_no_partial_fill_small_order(self):
         fill = self.sim.simulate_fill(
-            signal_price=2000.0, side="BUY", quantity=1,
-            bar_high=2005.0, bar_low=1995.0, bar_volume=100000,
-            adv=10000, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="BUY",
+            quantity=1,
+            bar_high=2005.0,
+            bar_low=1995.0,
+            bar_volume=100000,
+            adv=10000,
+            volatility_daily=0.012,
         )
         assert fill.partial_fill is False
         assert fill.fill_quantity == 1
 
     def test_slippage_non_negative(self):
         fill = self.sim.simulate_fill(
-            signal_price=2000.0, side="BUY", quantity=10,
-            bar_high=2005.0, bar_low=1995.0, bar_volume=5000,
-            adv=10000, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="BUY",
+            quantity=10,
+            bar_high=2005.0,
+            bar_low=1995.0,
+            bar_volume=5000,
+            adv=10000,
+            volatility_daily=0.012,
         )
         assert fill.slippage_bps >= 0.0
         assert fill.slippage_usd >= 0.0
 
     def test_batch_simulate(self):
         signals = [
-            dict(signal_price=2000.0, side="BUY", quantity=10,
-                 bar_high=2005.0, bar_low=1995.0, bar_volume=5000)
+            dict(
+                signal_price=2000.0,
+                side="BUY",
+                quantity=10,
+                bar_high=2005.0,
+                bar_low=1995.0,
+                bar_volume=5000,
+            )
             for _ in range(5)
         ]
-        fills = self.sim.simulate_fills_batch(signals, adv=10000, volatility_daily=0.012)
+        fills = self.sim.simulate_fills_batch(
+            signals, adv=10000, volatility_daily=0.012
+        )
         assert len(fills) == 5
 
     def test_get_fill_simulator_singleton(self):
         from execution.market_impact import get_fill_simulator
+
         a = get_fill_simulator()
         b = get_fill_simulator()
         assert a is b
@@ -318,9 +380,11 @@ class TestFillSimulator:
 # MarketContextProvider tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestMarketContextProvider:
     def setup_method(self):
         from execution.tca import MarketContextProvider
+
         self.ctx = MarketContextProvider()
 
     def test_default_adv_when_no_data(self):
@@ -347,6 +411,7 @@ class TestMarketContextProvider:
 
     def test_tick_accumulator_adv(self):
         from datetime import timedelta
+
         now = datetime.now(timezone.utc)
         # Simulate 200 ticks over 2 hours with volume=100 each
         for i in range(200):
@@ -373,7 +438,6 @@ class TestMarketContextProvider:
         assert adv == pytest.approx(53000.0, rel=0.01)
 
     def test_redis_ohlcv_vol(self):
-        import math
         mock_cache = MagicMock()
         closes = [2000.0, 2010.0, 1990.0, 2005.0, 1995.0, 2008.0]
         mock_cache.get_bars.return_value = [{"close": c} for c in closes]
@@ -388,10 +452,12 @@ class TestMarketContextProvider:
 # TCAEngine tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestTCAEngine:
     def setup_method(self):
         # Patch StrEnum before importing tca module
         from execution.tca import TCAEngine, MarketContextProvider
+
         ctx = MarketContextProvider()
         self.engine = TCAEngine(market_context=ctx)
 
@@ -408,9 +474,14 @@ class TestTCAEngine:
     @pytest.mark.asyncio
     async def test_start_and_complete_order(self):
         from execution.tca import BenchmarkType, Side
+
         await self.engine.start_order(
-            "ord1", "XAU_USD", Side.BUY, Decimal("1.0"),
-            Decimal("2000.0"), BenchmarkType.ARRIVAL,
+            "ord1",
+            "XAU_USD",
+            Side.BUY,
+            Decimal("1.0"),
+            Decimal("2000.0"),
+            BenchmarkType.ARRIVAL,
         )
         fill = self._make_fill(2001.0, 1.0)
         await self.engine.record_fill("ord1", fill)
@@ -422,9 +493,14 @@ class TestTCAEngine:
     @pytest.mark.asyncio
     async def test_implementation_shortfall_buy(self):
         from execution.tca import BenchmarkType, Side
+
         await self.engine.start_order(
-            "ord2", "XAU_USD", Side.BUY, Decimal("1.0"),
-            Decimal("2000.0"), BenchmarkType.ARRIVAL,
+            "ord2",
+            "XAU_USD",
+            Side.BUY,
+            Decimal("1.0"),
+            Decimal("2000.0"),
+            BenchmarkType.ARRIVAL,
         )
         fill = self._make_fill(2010.0, 1.0)
         await self.engine.record_fill("ord2", fill)
@@ -435,9 +511,14 @@ class TestTCAEngine:
     @pytest.mark.asyncio
     async def test_implementation_shortfall_sell(self):
         from execution.tca import BenchmarkType, Side
+
         await self.engine.start_order(
-            "ord3", "XAU_USD", Side.SELL, Decimal("1.0"),
-            Decimal("2000.0"), BenchmarkType.ARRIVAL,
+            "ord3",
+            "XAU_USD",
+            Side.SELL,
+            Decimal("1.0"),
+            Decimal("2000.0"),
+            BenchmarkType.ARRIVAL,
         )
         fill = self._make_fill(1990.0, 1.0)
         await self.engine.record_fill("ord3", fill)
@@ -453,9 +534,14 @@ class TestTCAEngine:
     @pytest.mark.asyncio
     async def test_cancelled_order_zero_fill_rate(self):
         from execution.tca import BenchmarkType, Side
+
         await self.engine.start_order(
-            "ord4", "XAU_USD", Side.BUY, Decimal("1.0"),
-            Decimal("2000.0"), BenchmarkType.ARRIVAL,
+            "ord4",
+            "XAU_USD",
+            Side.BUY,
+            Decimal("1.0"),
+            Decimal("2000.0"),
+            BenchmarkType.ARRIVAL,
         )
         # No fills — complete immediately
         metrics = await self.engine.complete_order("ord4", status="CANCELLED")
@@ -464,11 +550,16 @@ class TestTCAEngine:
     @pytest.mark.asyncio
     async def test_cost_callback_fired_on_expensive_trade(self):
         from execution.tca import BenchmarkType, Side
+
         fired = []
         self.engine.register_cost_callback(lambda m: fired.append(m))
         await self.engine.start_order(
-            "ord5", "XAU_USD", Side.BUY, Decimal("1.0"),
-            Decimal("2000.0"), BenchmarkType.ARRIVAL,
+            "ord5",
+            "XAU_USD",
+            Side.BUY,
+            Decimal("1.0"),
+            Decimal("2000.0"),
+            BenchmarkType.ARRIVAL,
         )
         # 100 bps slippage → total_cost_bps > 20 threshold
         fill = self._make_fill(2020.0, 1.0)
@@ -484,11 +575,16 @@ class TestTCAEngine:
     @pytest.mark.asyncio
     async def test_get_stats_after_trades(self):
         from execution.tca import BenchmarkType, Side
+
         for i in range(5):
             oid = f"s{i}"
             await self.engine.start_order(
-                oid, "XAU_USD", Side.BUY, Decimal("1.0"),
-                Decimal("2000.0"), BenchmarkType.ARRIVAL,
+                oid,
+                "XAU_USD",
+                Side.BUY,
+                Decimal("1.0"),
+                Decimal("2000.0"),
+                BenchmarkType.ARRIVAL,
             )
             fill = self._make_fill(2001.0, 1.0)
             await self.engine.record_fill(oid, fill)
@@ -501,14 +597,24 @@ class TestTCAEngine:
     @pytest.mark.asyncio
     async def test_adv_source_recorded_in_metrics(self):
         from execution.tca import BenchmarkType, Side
+
         await self.engine.start_order(
-            "ord6", "XAU_USD", Side.BUY, Decimal("1.0"),
-            Decimal("2000.0"), BenchmarkType.ARRIVAL,
+            "ord6",
+            "XAU_USD",
+            Side.BUY,
+            Decimal("1.0"),
+            Decimal("2000.0"),
+            BenchmarkType.ARRIVAL,
         )
         fill = self._make_fill(2001.0, 1.0)
         await self.engine.record_fill("ord6", fill)
         metrics = await self.engine.complete_order("ord6")
-        assert metrics.adv_source in ("default", "env_override", "redis_ohlcv", "tick_accumulator")
+        assert metrics.adv_source in (
+            "default",
+            "env_override",
+            "redis_ohlcv",
+            "tick_accumulator",
+        )
         assert metrics.vol_source in ("default", "env_override", "redis_ohlcv")
         assert metrics.adv_used > 0
         assert metrics.volatility_used > 0

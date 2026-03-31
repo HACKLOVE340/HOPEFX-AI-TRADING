@@ -170,7 +170,11 @@ class TestCryptoPaymentModel:
 
         data = self._make_payment("PAY_webhook_001")
         record = CryptoPayment(**data)
-        payload = {"payment_id": "PAY_webhook_001", "status": "complete", "tx_hash": "0xabc"}
+        payload = {
+            "payment_id": "PAY_webhook_001",
+            "status": "complete",
+            "tx_hash": "0xabc",
+        }
         record.webhook_payload = json.dumps(payload)
         db_session.add(record)
         db_session.flush()
@@ -346,6 +350,7 @@ class TestRateFeedIntegration:
             return_value=mock_rates,
         ):
             from payments.crypto.rate_feed import get_rates
+
             rates = await get_rates(force_refresh=True)
 
         for coin, price in rates.items():
@@ -364,6 +369,7 @@ class TestRateFeedIntegration:
             return_value=mock_rates,
         ):
             from payments.crypto.rate_feed import get_rates
+
             rates = await get_rates(force_refresh=True)
 
         assert abs(rates.get("USDT", 0) - 1.0) < 0.01

@@ -27,6 +27,7 @@ from api.auth import TokenPayload
 @pytest.fixture(autouse=True)
 def reset_social_feed_state():
     import api.social_feed as sf
+
     sf._feed_items.clear()
     sf._reactions.clear()
     sf._comments.clear()
@@ -51,7 +52,9 @@ def app(stub_user: TokenPayload) -> FastAPI:
     # Always use the canonical module instances — survive any sys.modules reloads
     # performed by other tests (e.g. test_oanda_paper_clock clears sys.modules).
     auth_mod = sys.modules.get("api.auth") or importlib.import_module("api.auth")
-    sf_mod = sys.modules.get("api.social_feed") or importlib.import_module("api.social_feed")
+    sf_mod = sys.modules.get("api.social_feed") or importlib.import_module(
+        "api.social_feed"
+    )
 
     _app = FastAPI()
     _app.include_router(sf_mod.router)
@@ -82,7 +85,10 @@ def _make_signal(signal_id=None, confidence=75.0):
 class TestPublishSignal:
     def test_publish_signal_creates_feed_item(self):
         import api.social_feed as sf
-        item = sf._publish_signal(_make_signal("sig_001"), username="alice", trader_id="t1")
+
+        item = sf._publish_signal(
+            _make_signal("sig_001"), username="alice", trader_id="t1"
+        )
         assert "sig_001" in sf._feed_items
         assert item["signal_id"] == "sig_001"
         assert item["username"] == "alice"
@@ -90,19 +96,28 @@ class TestPublishSignal:
 
     def test_publish_signal_initialises_reactions_and_comments(self):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_002"), username="bob", trader_id="t2")
         assert sf._reactions["sig_002"] == {}
         assert sf._comments["sig_002"] == []
 
     def test_publish_signal_generates_uuid_when_no_signal_id(self):
         import api.social_feed as sf
-        item = sf._publish_signal({"symbol": "EUR/USD", "direction": "SELL", "confidence": 80.0}, username="carol", trader_id="t3")
+
+        item = sf._publish_signal(
+            {"symbol": "EUR/USD", "direction": "SELL", "confidence": 80.0},
+            username="carol",
+            trader_id="t3",
+        )
         assert item["signal_id"] is not None
         assert len(item["signal_id"]) > 0
 
     def test_publish_signal_sets_correct_defaults(self):
         import api.social_feed as sf
-        item = sf._publish_signal(_make_signal("sig_defaults"), username="dave", trader_id="t4")
+
+        item = sf._publish_signal(
+            _make_signal("sig_defaults"), username="dave", trader_id="t4"
+        )
         assert item["thumbs_up"] == 0
         assert item["thumbs_down"] == 0
         assert item["copies"] == 0
@@ -119,6 +134,7 @@ class TestGetFeed:
 
     def test_feed_returns_published_signals(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_a"), "alice", "t1")
         sf._publish_signal(_make_signal("sig_b"), "bob", "t2")
         r = client.get("/api/feed")
@@ -128,8 +144,27 @@ class TestGetFeed:
 
     def test_feed_filters_by_symbol(self, client):
         import api.social_feed as sf
-        sf._publish_signal({"signal_id": "sig_gold", "symbol": "XAU/USD", "direction": "BUY", "confidence": 75.0}, "alice", "t1")
-        sf._publish_signal({"signal_id": "sig_eur", "symbol": "EUR/USD", "direction": "SELL", "confidence": 72.0}, "bob", "t2")
+
+        sf._publish_signal(
+            {
+                "signal_id": "sig_gold",
+                "symbol": "XAU/USD",
+                "direction": "BUY",
+                "confidence": 75.0,
+            },
+            "alice",
+            "t1",
+        )
+        sf._publish_signal(
+            {
+                "signal_id": "sig_eur",
+                "symbol": "EUR/USD",
+                "direction": "SELL",
+                "confidence": 72.0,
+            },
+            "bob",
+            "t2",
+        )
         r = client.get("/api/feed?symbol=XAU/USD")
         assert r.status_code == 200
         data = r.json()
@@ -138,6 +173,7 @@ class TestGetFeed:
 
     def test_feed_pagination(self, client):
         import api.social_feed as sf
+
         for i in range(5):
             sf._publish_signal(_make_signal(f"sig_{i}"), f"user_{i}", f"t{i}")
         r = client.get("/api/feed?page=1&limit=3")
@@ -149,6 +185,7 @@ class TestGetFeed:
 
     def test_feed_sorted_newest_first(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_old"), "alice", "t1")
         time.sleep(0.01)
         sf._publish_signal(_make_signal("sig_new"), "bob", "t2")
@@ -158,6 +195,7 @@ class TestGetFeed:
 
     def test_feed_excludes_private_items(self, client):
         import api.social_feed as sf
+
         item = sf._publish_signal(_make_signal("sig_private"), "alice", "t1")
         item["is_public"] = False
         r = client.get("/api/feed")
@@ -167,6 +205,7 @@ class TestGetFeed:
 class TestReactToSignal:
     def test_thumbs_up_increments_count(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_react"), "alice", "t1")
         r = client.post("/api/feed/sig_react/react", json={"reaction": "up"})
         assert r.status_code == 200
@@ -177,6 +216,7 @@ class TestReactToSignal:
 
     def test_thumbs_down_increments_count(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_down"), "alice", "t1")
         r = client.post("/api/feed/sig_down/react", json={"reaction": "down"})
         assert r.status_code == 200
@@ -184,6 +224,7 @@ class TestReactToSignal:
 
     def test_same_reaction_twice_toggles_off(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_toggle"), "alice", "t1")
         client.post("/api/feed/sig_toggle/react", json={"reaction": "up"})
         r = client.post("/api/feed/sig_toggle/react", json={"reaction": "up"})
@@ -193,6 +234,7 @@ class TestReactToSignal:
 
     def test_changing_reaction_updates_counts(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_change"), "alice", "t1")
         client.post("/api/feed/sig_change/react", json={"reaction": "up"})
         r = client.post("/api/feed/sig_change/react", json={"reaction": "down"})
@@ -206,6 +248,7 @@ class TestReactToSignal:
 
     def test_invalid_reaction_value_returns_422(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_invalid"), "alice", "t1")
         r = client.post("/api/feed/sig_invalid/react", json={"reaction": "sideways"})
         assert r.status_code == 422
@@ -214,6 +257,7 @@ class TestReactToSignal:
 class TestAddComment:
     def test_add_comment_creates_comment(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_comment"), "alice", "t1")
         r = client.post("/api/feed/sig_comment/comment", json={"text": "Great signal!"})
         assert r.status_code == 200
@@ -224,6 +268,7 @@ class TestAddComment:
 
     def test_add_comment_increments_comment_count(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_count"), "alice", "t1")
         client.post("/api/feed/sig_count/comment", json={"text": "First!"})
         client.post("/api/feed/sig_count/comment", json={"text": "Second!"})
@@ -235,12 +280,14 @@ class TestAddComment:
 
     def test_empty_comment_returns_422(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_empty"), "alice", "t1")
         r = client.post("/api/feed/sig_empty/comment", json={"text": ""})
         assert r.status_code == 422
 
     def test_comment_too_long_returns_422(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_long"), "alice", "t1")
         r = client.post("/api/feed/sig_long/comment", json={"text": "x" * 501})
         assert r.status_code == 422
@@ -249,6 +296,7 @@ class TestAddComment:
 class TestGetComments:
     def test_get_comments_returns_empty_list_initially(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_nocomments"), "alice", "t1")
         r = client.get("/api/feed/sig_nocomments/comments")
         assert r.status_code == 200
@@ -256,6 +304,7 @@ class TestGetComments:
 
     def test_get_comments_returns_all_comments(self, client):
         import api.social_feed as sf
+
         sf._publish_signal(_make_signal("sig_multi"), "alice", "t1")
         client.post("/api/feed/sig_multi/comment", json={"text": "First"})
         client.post("/api/feed/sig_multi/comment", json={"text": "Second"})
@@ -272,12 +321,14 @@ class TestGetComments:
 class TestOptInOut:
     def test_opt_in_adds_user_to_opted_in_set(self, client, stub_user):
         import api.social_feed as sf
+
         r = client.post("/api/feed/opt-in")
         assert r.status_code == 200
         assert stub_user.sub in sf._opted_in
 
     def test_opt_out_removes_user_from_opted_in_set(self, client, stub_user):
         import api.social_feed as sf
+
         sf._opted_in.add(stub_user.sub)
         r = client.post("/api/feed/opt-out")
         assert r.status_code == 200
@@ -285,6 +336,7 @@ class TestOptInOut:
 
     def test_opt_in_is_idempotent(self, client, stub_user):
         import api.social_feed as sf
+
         client.post("/api/feed/opt-in")
         r = client.post("/api/feed/opt-in")
         assert r.status_code == 200

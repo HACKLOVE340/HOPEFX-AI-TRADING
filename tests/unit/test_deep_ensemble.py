@@ -266,6 +266,7 @@ class TestDeepEnsembleSignalEngine:
 
 try:
     import torch as _torch  # noqa: F401
+
     _TORCH_AVAILABLE = True
 except ImportError:
     _TORCH_AVAILABLE = False

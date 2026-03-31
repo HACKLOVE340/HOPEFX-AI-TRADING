@@ -185,24 +185,28 @@ class TestJWTExpiryUnified:
         monkeypatch.setenv("ACCESS_TOKEN_EXPIRE_MINUTES", "20")
         monkeypatch.delenv("JWT_EXPIRE_MINUTES", raising=False)
         from auth.jwt import _get_access_token_expire_minutes
+
         assert _get_access_token_expire_minutes() == 20
 
     def test_legacy_jwt_expire_minutes_fallback(self, monkeypatch):
         monkeypatch.delenv("ACCESS_TOKEN_EXPIRE_MINUTES", raising=False)
         monkeypatch.setenv("JWT_EXPIRE_MINUTES", "25")
         from auth.jwt import _get_access_token_expire_minutes
+
         assert _get_access_token_expire_minutes() == 25
 
     def test_access_token_takes_precedence_over_jwt_expire(self, monkeypatch):
         monkeypatch.setenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10")
         monkeypatch.setenv("JWT_EXPIRE_MINUTES", "99")
         from auth.jwt import _get_access_token_expire_minutes
+
         assert _get_access_token_expire_minutes() == 10
 
     def test_default_is_15_when_neither_set(self, monkeypatch):
         monkeypatch.delenv("ACCESS_TOKEN_EXPIRE_MINUTES", raising=False)
         monkeypatch.delenv("JWT_EXPIRE_MINUTES", raising=False)
         from auth.jwt import _get_access_token_expire_minutes
+
         assert _get_access_token_expire_minutes() == 15
 
 
@@ -293,7 +297,9 @@ class TestPropFirmGuardFailSafe:
             ):
                 with patch(
                     "brokers.prop_firms.guard.check_prop_firm_rules",
-                    side_effect=HTTPException(status_code=403, detail="daily loss limit"),
+                    side_effect=HTTPException(
+                        status_code=403, detail="daily loss limit"
+                    ),
                 ):
                     with pytest.raises(HTTPException) as exc_info:
                         await trading_mod._validate_order(MagicMock())
@@ -310,7 +316,11 @@ class TestNoPIILogging:
         with open("mobile/api.py") as f:
             source = f.read()
         # The old pattern logged user.email directly
-        assert "user.email" not in source.split("logger.info")[1].split("\n")[0] if "logger.info" in source else True
+        assert (
+            "user.email" not in source.split("logger.info")[1].split("\n")[0]
+            if "logger.info" in source
+            else True
+        )
         # Positive check: user_id must be logged instead
         assert "user_id" in source
 

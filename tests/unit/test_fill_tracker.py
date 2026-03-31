@@ -108,7 +108,11 @@ def test_sync_fills_deduplicates():
     ft.sync_fills(client, ledger)
 
     # Second sync returns same fills
-    client.fetch_fills_since.return_value = [_make_fill(1), _make_fill(2), _make_fill(3)]
+    client.fetch_fills_since.return_value = [
+        _make_fill(1),
+        _make_fill(2),
+        _make_fill(3),
+    ]
     added = ft.sync_fills(client, ledger)
 
     assert added == 1  # only fill 3 is new
@@ -141,7 +145,11 @@ def test_sync_fills_passes_last_id_to_client():
 def test_sync_fills_sorts_by_id():
     client = MagicMock()
     # Return fills out of order
-    client.fetch_fills_since.return_value = [_make_fill(3), _make_fill(1), _make_fill(2)]
+    client.fetch_fills_since.return_value = [
+        _make_fill(3),
+        _make_fill(1),
+        _make_fill(2),
+    ]
 
     ledger = ft._load_ledger()
     ft.sync_fills(client, ledger)
@@ -183,10 +191,14 @@ def test_gate_file_passed_at_target():
 
 def test_gate_file_preserves_existing_fields():
     """Existing gate file fields (e.g. run_start_utc) must not be wiped."""
-    ft.GATE_FILE.write_text(json.dumps({
-        "run_start_utc": "2026-03-26T17:02:47Z",
-        "sharpe_before": None,
-    }))
+    ft.GATE_FILE.write_text(
+        json.dumps(
+            {
+                "run_start_utc": "2026-03-26T17:02:47Z",
+                "sharpe_before": None,
+            }
+        )
+    )
 
     ledger = ft._load_ledger()
     ledger["last_sync_at"] = "2026-03-28T00:00:00Z"
@@ -200,10 +212,14 @@ def test_gate_file_preserves_existing_fields():
 def test_gate_file_phase3_not_overwritten_once_set():
     """phase3_enabled_at must not be reset on subsequent syncs."""
     first_enabled = "2026-03-01T00:00:00Z"
-    ft.GATE_FILE.write_text(json.dumps({
-        "phase3_enabled_at": first_enabled,
-        "fill_count": 500,
-    }))
+    ft.GATE_FILE.write_text(
+        json.dumps(
+            {
+                "phase3_enabled_at": first_enabled,
+                "fill_count": 500,
+            }
+        )
+    )
 
     ledger = ft._load_ledger()
     ledger["fills"] = [_make_fill(i) for i in range(1, 501)]

@@ -20,18 +20,17 @@ Usage (add to FastAPI app):
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import time
 from collections import defaultdict
-from typing import Awaitable, Callable, Dict, Optional
+from typing import Awaitable, Callable, Dict
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from whitelabel.api_auth import _hash_key, _key_store
-from whitelabel.config import TierName, get_tier_config
+from whitelabel.config import get_tier_config
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +115,9 @@ class WhitelabelRateLimitMiddleware(BaseHTTPMiddleware):
 
         # Add rate-limit headers to the response
         response = await call_next(request)
-        response.headers["X-RateLimit-Limit-Minute"] = str(tier_config.requests_per_minute)
+        response.headers["X-RateLimit-Limit-Minute"] = str(
+            tier_config.requests_per_minute
+        )
         response.headers["X-RateLimit-Remaining-Minute"] = str(
             max(0, tier_config.requests_per_minute - c["min"][0])
         )

@@ -49,7 +49,7 @@ import logging
 import os
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Dict, Optional, Set
 
 from fastapi import Depends, Header, HTTPException, status
@@ -296,6 +296,7 @@ def require_feature(feature: str) -> Callable:
         async def signals(tenant = Depends(require_feature("ml_signals"))):
             ...
     """
+
     async def _dep(tenant: TenantContext = Depends(verify_api_key)) -> TenantContext:
         if not tenant.has_feature(feature):
             raise HTTPException(
@@ -315,6 +316,7 @@ def require_feature(feature: str) -> Callable:
 def _suggest_upgrade(feature: str) -> str:
     """Return the minimum tier that includes the given feature."""
     from whitelabel.config import TIER_CONFIGS, TierName
+
     for tier in (TierName.STARTER, TierName.GROWTH, TierName.ENTERPRISE):
         if feature in TIER_CONFIGS[tier].allowed_features:
             return tier.value

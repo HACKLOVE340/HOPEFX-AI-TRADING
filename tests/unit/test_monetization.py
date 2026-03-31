@@ -597,12 +597,15 @@ class TestStripeIntegration:
         _STRIPE_AVAILABLE so _require_stripe() passes without network calls.
         """
         import sys
+
         # Force the real module object — monetization.__init__ re-exports the
         # stripe_integration *instance* under the same name, so we must go
         # through sys.modules to get the module itself.
         import importlib
-        _mod = sys.modules.get("monetization.stripe_integration") or \
-               importlib.import_module("monetization.stripe_integration")
+
+        _mod = sys.modules.get(
+            "monetization.stripe_integration"
+        ) or importlib.import_module("monetization.stripe_integration")
 
         mock_stripe = _make_stripe_mock()
         original_stripe = _mod._stripe
@@ -626,6 +629,7 @@ class TestStripeIntegration:
             assert customer.email == "customer@test.com"
             assert customer.customer_id.startswith("cus_")
             mock_stripe.Customer.create.assert_called_once()
+
         self._run_with_mock(_test)
 
     def test_create_payment_intent(self):
@@ -639,6 +643,7 @@ class TestStripeIntegration:
             assert intent.amount == 180000  # cents
             assert intent.client_secret is not None
             mock_stripe.PaymentIntent.create.assert_called_once()
+
         self._run_with_mock(_test)
 
     def test_create_checkout_session(self):
@@ -652,6 +657,7 @@ class TestStripeIntegration:
             assert "url" in session
             assert session["tier"] == "professional"
             mock_stripe.checkout.Session.create.assert_called_once()
+
         self._run_with_mock(_test)
 
     def test_create_subscription(self):
@@ -665,6 +671,7 @@ class TestStripeIntegration:
             assert subscription.tier == SubscriptionTier.ENTERPRISE
             assert subscription.status == "active"
             mock_stripe.Subscription.create.assert_called_once()
+
         self._run_with_mock(_test)
 
     def test_cancel_subscription(self):
@@ -674,6 +681,7 @@ class TestStripeIntegration:
             mock_stripe.Subscription.modify.assert_called_once_with(
                 "sub_test123456789012", cancel_at_period_end=True
             )
+
         self._run_with_mock(_test)
 
     def test_handle_webhook(self):
@@ -683,6 +691,7 @@ class TestStripeIntegration:
                 event_data={"id": "pi_test123"},
             )
             assert result["status"] == "success"
+
         self._run_with_mock(_test)
 
     def test_refund_payment(self):
@@ -691,4 +700,5 @@ class TestStripeIntegration:
             assert refund is not None
             assert refund["status"] == "succeeded"
             mock_stripe.Refund.create.assert_called_once()
+
         self._run_with_mock(_test)
