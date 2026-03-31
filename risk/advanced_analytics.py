@@ -857,11 +857,11 @@ class AdvancedRiskAnalytics:
         """
         cl: float = confidence or confidence_level or self.var_confidence
 
-        # Find VaR threshold
-        var_threshold = np.percentile(returns, (1 - cl) * 100)
+        returns_arr   = np.asarray(returns, dtype=float)
+        var_threshold = np.percentile(returns_arr, (1 - cl) * 100)
 
         # Calculate expected shortfall (average of returns below VaR)
-        tail_returns = returns[returns <= var_threshold]
+        tail_returns = returns_arr[returns_arr <= var_threshold]
 
         if len(tail_returns) == 0:
             cvar = abs(float(var_threshold))
