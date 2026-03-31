@@ -831,7 +831,14 @@ license_validator = LicenseValidator(subscription_manager)
 # ---------------------------------------------------------------------------
 
 # Ordered from lowest to highest privilege
-_PLAN_ORDER: list[str] = ["trial", "free", "starter", "professional", "enterprise", "elite"]
+_PLAN_ORDER: list[str] = [
+    "trial",
+    "free",
+    "starter",
+    "professional",
+    "enterprise",
+    "elite",
+]
 
 
 def _plan_rank(plan: str) -> int:
@@ -859,6 +866,7 @@ def require_plan(minimum_plan: str):
     Falls back to "free" when no subscription exists.
     """
     from functools import wraps  # noqa: F401 (kept for potential future use)
+
     try:
         from fastapi import Request
     except ImportError:
@@ -867,8 +875,8 @@ def require_plan(minimum_plan: str):
     async def _dependency(request: "Request", user=None):  # type: ignore[name-defined]
         # Import here to avoid circular imports
         try:
-            from api.auth import get_current_user, TokenPayload
-            from fastapi.security import HTTPBearer as _HTTPBearer
+            from api.auth import get_current_user, TokenPayload  # noqa: F401
+            from fastapi.security import HTTPBearer as _HTTPBearer  # noqa: F401
             from fastapi.security.http import HTTPAuthorizationCredentials as _Creds
         except ImportError:
             # auth module not available (e.g. unit tests) — allow through
@@ -886,6 +894,7 @@ def require_plan(minimum_plan: str):
                 # Propagate HTTP exceptions (401/403) from token validation;
                 # swallow only unexpected errors and fall through to plan check.
                 from fastapi import HTTPException as _HTTPExc
+
                 if isinstance(_exc, _HTTPExc):
                     raise
                 logger.debug("Could not resolve user from request: %s", _exc)
@@ -901,6 +910,7 @@ def require_plan(minimum_plan: str):
 
         if _plan_rank(current_plan) < _plan_rank(minimum_plan):
             from fastapi import HTTPException, status as _status
+
             raise HTTPException(
                 status_code=_status.HTTP_403_FORBIDDEN,
                 detail={
