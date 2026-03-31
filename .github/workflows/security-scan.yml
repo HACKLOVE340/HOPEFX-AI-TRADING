@@ -75,7 +75,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         # exit-code: '1' makes Trivy return non-zero when HIGH/CRITICAL findings exist.
         # The previous continue-on-error: true meant container CVEs never blocked merges.
-        uses: aquasecurity/trivy-action@v0.29.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
