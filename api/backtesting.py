@@ -29,13 +29,70 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
+from api.db_store import db_delete, db_get, db_keys_prefix, db_set
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/backtest", tags=["Backtesting"])
 
-# In-memory results store (keyed by run_id)
-# In production this should be persisted to DB
+# ── Persistent results store ──────────────────────────────────────────────────
+# Results are written to the `configurations` table via db_store so they
+# survive process restarts.  An in-process dict acts as a write-through cache
+# to avoid a DB round-trip on every status poll during a running backtest.
+
+_DB_PREFIX = "backtest:result:"
+_WF_DB_PREFIX = "backtest:wf:"
+
+# Write-through in-process cache (populated lazily from DB on first read)
 _results: Dict[str, dict] = {}
+_results_loaded: bool = False
+
+
+def _load_results_from_db() -> None:
+    """Populate the in-process cache from the DB on first access."""
+    global _results_loaded
+    if _results_loaded:
+        return
+    try:
+        for key in db_keys_prefix(_DB_PREFIX):
+            run_id = key[len(_DB_PREFIX):]
+            value = db_get(key)
+            if value:
+                _results[run_id] = value
+    except Exception as exc:
+        logger.warning("Could not load backtest results from DB: %s", exc)
+    _results_loaded = True
+
+
+def _persist_result(run_id: str, result: dict) -> None:
+    """Write a result to both the in-process cache and the DB."""
+    _results[run_id] = result
+    db_set(f"{_DB_PREFIX}{run_id}", result, changed_by="backtesting_api")
+
+
+def _persist_wf_result(run_id: str, result: dict) -> None:
+    """Write a walk-forward result to both cache and DB."""
+    _wf_results[run_id] = result
+    db_set(f"{_WF_DB_PREFIX}{run_id}", result, changed_by="backtesting_api")
+
+
+# Walk-forward write-through cache
+_wf_results: Dict[str, dict] = {}
+_wf_results_loaded: bool = False
+
+
+def _load_wf_results_from_db() -> None:
+    global _wf_results_loaded
+    if _wf_results_loaded:
+        return
+    try:
+        for key in db_keys_prefix(_WF_DB_PREFIX):
+            run_id = key[len(_WF_DB_PREFIX):]
+            value = db_get(key)
+            if value:
+                _wf_results[run_id] = value
+    except Exception as exc:
+        logger.warning("Could not load walk-forward results from DB: %s", exc)
+    _wf_results_loaded = True
 
 
 # ── Request / response models ─────────────────────────────────────────────────
@@ -287,13 +344,8 @@ async def run_backtest(
             "created_at": created_at,
         }
 
-    _results[run_id] = result
+    _persist_result(run_id, result)
     return BacktestResult(**result)
-
-
-# ── Walk-forward results store ────────────────────────────────────────────────
-
-_wf_results: Dict[str, dict] = {}
 
 
 @router.get("/walk-forward/latest")
@@ -303,6 +355,7 @@ async def get_latest_walk_forward(user: TokenPayload = Depends(get_current_user)
     Returns 404 when no walk-forward run has been executed yet.
     Trigger a run via POST /api/backtest/walk-forward/run first.
     """
+    _load_wf_results_from_db()
     if _wf_results:
         latest = sorted(
             _wf_results.values(),
@@ -319,6 +372,7 @@ async def get_latest_walk_forward(user: TokenPayload = Depends(get_current_user)
 @router.get("/walk-forward/{run_id}")
 async def get_walk_forward(run_id: str, user: TokenPayload = Depends(get_current_user)):
     """Return walk-forward results for a specific run_id."""
+    _load_wf_results_from_db()
     if run_id in _wf_results:
         return _wf_results[run_id]
     raise HTTPException(status_code=404, detail="Walk-forward result not found")
@@ -329,7 +383,8 @@ async def list_results(
     user: TokenPayload = Depends(get_current_user),
     limit: int = 20,
 ):
-    """Return the most recent backtest results (in-memory, newest first)."""
+    """Return the most recent backtest results, newest first."""
+    _load_results_from_db()
     items = sorted(_results.values(), key=lambda r: r["created_at"], reverse=True)
     return [BacktestResult(**r) for r in items[:limit]]
 
@@ -340,8 +395,14 @@ async def get_result(
     user: TokenPayload = Depends(get_current_user),
 ):
     """Get a specific backtest result by run_id."""
+    _load_results_from_db()
     if run_id not in _results:
-        raise HTTPException(status_code=404, detail="Result not found")
+        # Try a direct DB lookup in case the cache was cold
+        value = db_get(f"{_DB_PREFIX}{run_id}")
+        if value:
+            _results[run_id] = value
+        else:
+            raise HTTPException(status_code=404, detail="Result not found")
     return BacktestResult(**_results[run_id])
 
 
@@ -668,7 +729,7 @@ async def run_replay_backtest(
             )
             metrics = await runner.run(start=start, end=end, symbol=req.symbol)
 
-            _results[run_id] = {
+            _persist_result(run_id, {
                 "run_id": run_id,
                 "type": "replay",
                 "strategy": req.strategy,
@@ -688,12 +749,12 @@ async def run_replay_backtest(
                 if metrics
                 else {},
                 "completed_at": datetime.now(timezone.utc).isoformat(),
-            }
+            })
         except Exception as exc:
             logger.error("Replay backtest %s failed: %s", run_id, exc, exc_info=True)
-            _results[run_id] = {"run_id": run_id, "status": "error", "error": str(exc)}
+            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": str(exc)})
 
-    _results[run_id] = {"run_id": run_id, "status": "running"}
+    _persist_result(run_id, {"run_id": run_id, "status": "running"})
     background_tasks.add_task(_run)
     return {
         "run_id": run_id,
@@ -743,7 +804,7 @@ async def run_regime_stress_test(
             )
             report = await tester.run_all_regimes()
 
-            _results[run_id] = {
+            _persist_result(run_id, {
                 "run_id": run_id,
                 "type": "regime_stress",
                 "strategy": req.strategy,
@@ -775,12 +836,12 @@ async def run_regime_stress_test(
                     for r in report.results
                 ],
                 "completed_at": datetime.now(timezone.utc).isoformat(),
-            }
+            })
         except Exception as exc:
             logger.error("Regime stress %s failed: %s", run_id, exc, exc_info=True)
-            _results[run_id] = {"run_id": run_id, "status": "error", "error": str(exc)}
+            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": str(exc)})
 
-    _results[run_id] = {"run_id": run_id, "status": "running"}
+    _persist_result(run_id, {"run_id": run_id, "status": "running"})
     background_tasks.add_task(_run)
     return {
         "run_id": run_id,
