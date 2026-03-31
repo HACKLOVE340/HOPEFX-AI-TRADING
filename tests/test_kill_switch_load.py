@@ -24,9 +24,8 @@ from __future__ import annotations
 
 import asyncio
 import os
-import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -41,6 +40,7 @@ os.environ.setdefault(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_ks(tmp_path: Path, token: str = "test-deactivation-token"):
     """Create a KillSwitch backed by a temp directory."""
     from kill_switch import KillSwitch
@@ -53,7 +53,6 @@ def _make_ks(tmp_path: Path, token: str = "test-deactivation-token"):
 # 1. Concurrent activation is idempotent
 # ===========================================================================
 class TestConcurrentActivation:
-
     @pytest.mark.asyncio
     async def test_concurrent_activations_are_idempotent(self, tmp_path):
         """100 concurrent activate() calls must leave exactly one activation."""
@@ -89,7 +88,6 @@ class TestConcurrentActivation:
 # 2. All concurrent order attempts blocked once active
 # ===========================================================================
 class TestOrderBlockingUnderLoad:
-
     def test_check_kill_switch_raises_503_when_active(self, tmp_path):
         """_check_kill_switch() must raise HTTP 503 when the switch is active."""
         from fastapi import HTTPException
@@ -152,7 +150,6 @@ class TestOrderBlockingUnderLoad:
 # 3. Drawdown breach auto-activates kill switch
 # ===========================================================================
 class TestDrawdownAutoActivation:
-
     def test_max_drawdown_activates_kill_switch(self, tmp_path):
         """Breaching max_drawdown_pct must fire the system kill switch."""
         from risk.manager import RiskConfig, RiskManager
@@ -167,8 +164,8 @@ class TestDrawdownAutoActivation:
 
         # Patch the app-level kill switch so the risk manager fires our test instance
         with patch("app.kill_switch", ks):
-            rm.update_equity(100_000)   # establish peak
-            rm.update_equity(89_000)    # 11% drawdown — exceeds 10% limit
+            rm.update_equity(100_000)  # establish peak
+            rm.update_equity(89_000)  # 11% drawdown — exceeds 10% limit
 
         assert ks.is_active() is True
         assert "drawdown" in ks.reason.lower() or "risk_manager" in ks.reason.lower()
@@ -190,7 +187,7 @@ class TestDrawdownAutoActivation:
             # manager has a non-zero baseline for the daily P&L calculation.
             rm.daily_starting_equity = 100_000
             rm.peak_equity = 100_000
-            rm.update_equity(94_000)    # 6% daily loss — exceeds 5% limit
+            rm.update_equity(94_000)  # 6% daily loss — exceeds 5% limit
 
         assert ks.is_active() is True
 
@@ -208,7 +205,7 @@ class TestDrawdownAutoActivation:
 
         with patch("app.kill_switch", ks):
             rm.update_equity(100_000)
-            rm.update_equity(95_000)    # 5% drawdown — within 10% limit
+            rm.update_equity(95_000)  # 5% drawdown — within 10% limit
 
         assert ks.is_active() is False
 
@@ -217,7 +214,6 @@ class TestDrawdownAutoActivation:
 # 4. Deactivation requires correct token
 # ===========================================================================
 class TestDeactivationSecurity:
-
     def test_wrong_token_raises_permission_error(self, tmp_path):
         ks = _make_ks(tmp_path, token="correct-token")
         ks.activate("test")
@@ -255,7 +251,6 @@ class TestDeactivationSecurity:
 # 5. State survives simulated process restart
 # ===========================================================================
 class TestStatePersistence:
-
     def test_active_state_survives_restart(self, tmp_path):
         """An activated kill switch must still be active after re-instantiation."""
         from kill_switch import KillSwitch
@@ -290,14 +285,15 @@ class TestStatePersistence:
 # 6. File-flag polling activates the switch
 # ===========================================================================
 class TestFileFlagPolling:
-
     @pytest.mark.asyncio
     async def test_flag_file_activates_during_poll(self, tmp_path):
         """Writing the flag file must activate the switch within one poll cycle."""
         from kill_switch import KillSwitch
 
         flag = tmp_path / "ks.flag"
-        ks = KillSwitch(flag_file=flag, poll_interval_sec=0.05, deactivation_token="tok")
+        ks = KillSwitch(
+            flag_file=flag, poll_interval_sec=0.05, deactivation_token="tok"
+        )
 
         await ks.start()
         try:

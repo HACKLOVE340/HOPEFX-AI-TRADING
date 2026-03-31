@@ -1312,8 +1312,7 @@ class TestWebSocketManager:
         os.environ.setdefault("SECURITY_JWT_SECRET", secret)
         now = int(time.time())
         token = _jwt_mod.encode(
-            {"sub": "ws-test-user", "role": "trader",
-             "iat": now, "exp": now + 3600},
+            {"sub": "ws-test-user", "role": "trader", "iat": now, "exp": now + 3600},
             secret,
             algorithm="HS256",
         )

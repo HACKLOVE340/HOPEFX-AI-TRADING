@@ -20,7 +20,6 @@ that the CI 90% coverage gate enforces.
 from __future__ import annotations
 
 import asyncio
-import math
 from decimal import Decimal
 from pathlib import Path
 from typing import List
@@ -32,9 +31,11 @@ import pytest
 
 # ── kill_switch.py ────────────────────────────────────────────────────────────
 
+
 class TestKillSwitch:
     def _make_ks(self, tmp_path: Path):
         from kill_switch import KillSwitch
+
         return KillSwitch(
             flag_file=tmp_path / "ks.flag",
             poll_interval_sec=0.05,
@@ -75,6 +76,7 @@ class TestKillSwitch:
 
     def test_deactivate_no_token_configured_raises(self, tmp_path):
         from kill_switch import KillSwitch
+
         ks = KillSwitch(flag_file=tmp_path / "ks2.flag")
         ks.activate("test")
         with pytest.raises(PermissionError):
@@ -126,9 +128,11 @@ class TestKillSwitch:
 
 # ── execution/market_impact.py ────────────────────────────────────────────────
 
+
 class TestAlmgrenChriss:
     def test_estimate_basic(self):
         from execution.market_impact import AlmgrenChrissModel
+
         model = AlmgrenChrissModel()
         impact = model.estimate(
             order_size=100.0,
@@ -144,6 +148,7 @@ class TestAlmgrenChriss:
 
     def test_fill_price_buy_higher(self):
         from execution.market_impact import AlmgrenChrissModel
+
         model = AlmgrenChrissModel()
         impact = model.estimate(100.0, 10_000.0, 0.012, 3.0, 2000.0)
         assert impact.fill_price("BUY") > 2000.0
@@ -151,6 +156,7 @@ class TestAlmgrenChriss:
 
     def test_zero_adv_spread_only(self):
         from execution.market_impact import AlmgrenChrissModel
+
         model = AlmgrenChrissModel()
         impact = model.estimate(100.0, 0.0, 0.012, 3.0, 2000.0)
         assert impact.temporary_impact_bps == 0.0
@@ -159,11 +165,12 @@ class TestAlmgrenChriss:
 
     def test_fill_simulator_partial_fill(self):
         from execution.market_impact import FillSimulator
+
         sim = FillSimulator()
         fill = sim.simulate_fill(
             signal_price=2000.0,
             side="BUY",
-            quantity=1000.0,   # huge order
+            quantity=1000.0,  # huge order
             bar_high=2002.0,
             bar_low=1998.0,
             bar_volume=100.0,  # tiny bar volume → partial fill
@@ -175,6 +182,7 @@ class TestAlmgrenChriss:
 
     def test_fill_simulator_price_clamped_to_bar(self):
         from execution.market_impact import FillSimulator
+
         sim = FillSimulator()
         fill = sim.simulate_fill(
             signal_price=2000.0,
@@ -190,6 +198,7 @@ class TestAlmgrenChriss:
 
     def test_fill_simulator_sell_clamped(self):
         from execution.market_impact import FillSimulator
+
         sim = FillSimulator()
         fill = sim.simulate_fill(
             signal_price=2000.0,
@@ -206,20 +215,29 @@ class TestAlmgrenChriss:
 
 # ── execution/algo_orders.py ──────────────────────────────────────────────────
 
+
 class TestAlgoOrders:
     @pytest.mark.asyncio
     async def test_twap_completes(self):
         from execution.algo_orders import TWAPOrder
+
         fills = []
 
         async def broker_submit(**kwargs):
             """Real broker submit function — records fills and returns fill report."""
             fills.append(kwargs["quantity"])
-            return {"success": True, "fill_price": 2000.0, "filled_quantity": kwargs["quantity"]}
+            return {
+                "success": True,
+                "fill_price": 2000.0,
+                "filled_quantity": kwargs["quantity"],
+            }
 
         order = TWAPOrder(
-            symbol="XAU_USD", side="BUY", total_quantity=10.0,
-            duration_seconds=0.5, num_slices=5,
+            symbol="XAU_USD",
+            side="BUY",
+            total_quantity=10.0,
+            duration_seconds=0.5,
+            num_slices=5,
             broker_submit_fn=broker_submit,
         )
         report = await order.run()
@@ -229,16 +247,24 @@ class TestAlgoOrders:
     @pytest.mark.asyncio
     async def test_iceberg_completes(self):
         from execution.algo_orders import IcebergOrder
+
         fills = []
 
         async def broker_submit(**kwargs):
             """Real broker submit function — records fills and returns fill report."""
             fills.append(kwargs["quantity"])
-            return {"success": True, "fill_price": 2000.0, "filled_quantity": kwargs["quantity"]}
+            return {
+                "success": True,
+                "fill_price": 2000.0,
+                "filled_quantity": kwargs["quantity"],
+            }
 
         order = IcebergOrder(
-            symbol="XAU_USD", side="SELL", total_quantity=5.0,
-            peak_size=1.0, refill_delay_seconds=0.01,
+            symbol="XAU_USD",
+            side="SELL",
+            total_quantity=5.0,
+            peak_size=1.0,
+            refill_delay_seconds=0.01,
             broker_submit_fn=broker_submit,
         )
         report = await order.run()
@@ -248,16 +274,24 @@ class TestAlgoOrders:
     @pytest.mark.asyncio
     async def test_vwap_completes(self):
         from execution.algo_orders import VWAPOrder
+
         fills = []
 
         async def broker_submit(**kwargs):
             """Real broker submit function — records fills and returns fill report."""
             fills.append(kwargs["quantity"])
-            return {"success": True, "fill_price": 2000.0, "filled_quantity": kwargs["quantity"]}
+            return {
+                "success": True,
+                "fill_price": 2000.0,
+                "filled_quantity": kwargs["quantity"],
+            }
 
         order = VWAPOrder(
-            symbol="XAU_USD", side="BUY", total_quantity=20.0,
-            duration_seconds=0.5, num_slices=4,
+            symbol="XAU_USD",
+            side="BUY",
+            total_quantity=20.0,
+            duration_seconds=0.5,
+            num_slices=4,
             broker_submit_fn=broker_submit,
         )
         report = await order.run()
@@ -266,6 +300,7 @@ class TestAlgoOrders:
     @pytest.mark.asyncio
     async def test_algo_manager_submit_auto_small_order(self):
         from execution.algo_orders import AlgoOrderManager
+
         mgr = AlgoOrderManager()
         # Small order → no algo (returns None)
         result = await mgr.submit_auto("XAU_USD", "BUY", 1.0)
@@ -274,16 +309,24 @@ class TestAlgoOrders:
     @pytest.mark.asyncio
     async def test_algo_manager_cancel(self):
         from execution.algo_orders import AlgoOrderManager, TWAPOrder, AlgoStatus
+
         mgr = AlgoOrderManager()
 
         # Real async broker function that takes a long time (simulates a slow broker)
         async def broker_submit_long_running(**kwargs):
             await asyncio.sleep(60)  # intentionally long — will be cancelled
-            return {"success": True, "fill_price": 2000.0, "filled_quantity": kwargs["quantity"]}
+            return {
+                "success": True,
+                "fill_price": 2000.0,
+                "filled_quantity": kwargs["quantity"],
+            }
 
         order = TWAPOrder(
-            symbol="XAU_USD", side="BUY", total_quantity=100.0,
-            duration_seconds=100.0, num_slices=10,
+            symbol="XAU_USD",
+            side="BUY",
+            total_quantity=100.0,
+            duration_seconds=100.0,
+            num_slices=10,
             broker_submit_fn=broker_submit_long_running,
         )
         mgr._active[order.algo_id] = order
@@ -300,12 +343,14 @@ class TestAlgoOrders:
 
 # ── risk/ ─────────────────────────────────────────────────────────────────────
 
+
 class TestRiskCircuitBreakers:
     def test_circuit_breaker_import(self):
         from risk.circuit_breakers import CircuitBreaker
 
         class _MinimalBroker:
             """Minimal broker interface required by CircuitBreaker."""
+
             def get_balance(self) -> float:
                 return 100_000.0
 
@@ -314,25 +359,30 @@ class TestRiskCircuitBreakers:
 
     def test_drawdown_tracker_import(self):
         from risk.drawdown_tracker import DrawdownTracker
+
         dt = DrawdownTracker(initial_balance=100_000.0, max_total_dd_pct=0.10)
         assert dt is not None
 
     def test_position_sizing_import(self):
         from risk.position_sizing import PositionSizer
+
         ps = PositionSizer()
         assert ps is not None
 
     def test_gatekeeper_import(self):
         from risk.gatekeeper import Gatekeeper
+
         gk = Gatekeeper()
         assert gk is not None
 
 
 # ── compliance/ ───────────────────────────────────────────────────────────────
 
+
 class TestCompliance:
     def test_aml_gate_single_cap(self):
         from compliance.aml import AMLGate
+
         gate = AMLGate()
         result = gate.check_withdrawal(
             user_id="u1",
@@ -344,6 +394,7 @@ class TestCompliance:
 
     def test_aml_gate_kyc_required(self):
         from compliance.aml import AMLGate
+
         gate = AMLGate()
         result = gate.check_withdrawal(
             user_id="u2",
@@ -355,6 +406,7 @@ class TestCompliance:
 
     def test_aml_gate_allows_small_approved(self):
         from compliance.aml import AMLGate
+
         gate = AMLGate()
         result = gate.check_withdrawal(
             user_id="u3",
@@ -365,6 +417,7 @@ class TestCompliance:
 
     def test_compliance_manager_kyc_flow(self):
         from compliance.compliance_manager import ComplianceManager, KYCStatus
+
         cm = ComplianceManager()
         cm.submit_kyc("user1", "passport")
         assert cm.get_kyc_status("user1") == KYCStatus.PENDING
@@ -375,6 +428,7 @@ class TestCompliance:
 
     def test_compliance_manager_audit_log(self):
         from compliance.compliance_manager import ComplianceManager
+
         cm = ComplianceManager()
         cm.submit_kyc("user2", "id_card")
         log = cm.get_audit_log()
@@ -385,10 +439,12 @@ class TestCompliance:
     async def test_kyc_gateway_dev_provider(self):
         """KYC_PROVIDER=mock uses the built-in dev provider (no external calls)."""
         import os
+
         os.environ["KYC_PROVIDER"] = "mock"
         # Re-import to pick up env var
         import importlib
         import compliance.kyc_provider as _kyc_mod
+
         importlib.reload(_kyc_mod)
         gw = _kyc_mod.KYCGateway()
         applicant = await gw.create_applicant(
@@ -402,9 +458,11 @@ class TestCompliance:
     async def test_kyc_gateway_sanctions_screen_no_match(self):
         """LocalSDNScreener screens without network when list not loaded."""
         import os
+
         os.environ["KYC_PROVIDER"] = "mock"
         import importlib
         import compliance.kyc_provider as _kyc_mod
+
         importlib.reload(_kyc_mod)
         # LocalSDNScreener with empty list (not loaded) returns screened=False, is_match=False
         screener = _kyc_mod.LocalSDNScreener()
@@ -416,9 +474,11 @@ class TestCompliance:
     async def test_kyc_gateway_webhook_verified(self):
         """Dev provider always verifies webhooks (no secret required)."""
         import os
+
         os.environ["KYC_PROVIDER"] = "mock"
         import importlib
         import compliance.kyc_provider as _kyc_mod
+
         importlib.reload(_kyc_mod)
         gw = _kyc_mod.KYCGateway()
         ok = await gw.webhook_event(b"{}", "any-sig", {})
@@ -427,6 +487,7 @@ class TestCompliance:
 
 # ── analytics/monte_carlo.py ──────────────────────────────────────────────────
 
+
 class TestMonteCarlo:
     def _pnls(self, n: int = 200) -> List[float]:
         rng = np.random.default_rng(42)
@@ -434,6 +495,7 @@ class TestMonteCarlo:
 
     def test_run_returns_result(self):
         from analytics.monte_carlo import MonteCarloEngine
+
         engine = MonteCarloEngine(n_paths=100)
         result = engine.run(self._pnls())
         assert result.n_paths == 100
@@ -443,35 +505,41 @@ class TestMonteCarlo:
 
     def test_ruin_probability_range(self):
         from analytics.monte_carlo import MonteCarloEngine
+
         engine = MonteCarloEngine(n_paths=200)
         result = engine.run(self._pnls())
         assert 0.0 <= result.ruin_probability <= 1.0
 
     def test_sharpe_positive_fraction(self):
         from analytics.monte_carlo import MonteCarloEngine
+
         engine = MonteCarloEngine(n_paths=200)
         result = engine.run(self._pnls())
         assert 0.0 <= result.sharpe_positive_fraction <= 1.0
 
     def test_block_bootstrap(self):
         from analytics.monte_carlo import MonteCarloEngine
+
         engine = MonteCarloEngine(n_paths=100)
         result = engine.run(self._pnls(), method="block")
         assert result.n_paths == 100
 
     def test_empty_pnls_returns_empty(self):
         from analytics.monte_carlo import MonteCarloEngine
+
         engine = MonteCarloEngine(n_paths=100)
         result = engine.run([])
         assert result.n_paths == 0
 
     def test_run_bootstrap_convenience(self):
         from analytics.monte_carlo import run_bootstrap
+
         result = run_bootstrap(self._pnls(), n_paths=100)
         assert result.n_trades == 200
 
     def test_summary_dict_keys(self):
         from analytics.monte_carlo import run_bootstrap
+
         result = run_bootstrap(self._pnls(), n_paths=50)
         summary = result.summary()
         assert "sharpe_ci_95" in summary
@@ -482,15 +550,17 @@ class TestMonteCarlo:
 
 # ── ml/sharpe_circuit_breaker.py ─────────────────────────────────────────────
 
+
 class TestSharpeCircuitBreaker:
     def test_circuit_closed_initially(self):
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         cb = SharpeCircuitBreaker()
         assert not cb.is_open("model_v1")
 
     def test_record_trade_and_evaluate(self):
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
-        import os
+
         cb = SharpeCircuitBreaker()
         # Record enough losing trades to trip the circuit
         for _ in range(60):
@@ -522,6 +592,7 @@ class TestSharpeCircuitBreaker:
 
     def test_manual_reset(self):
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         cb = SharpeCircuitBreaker()
         for _ in range(50):
             cb.record_trade(pnl=-50.0, model_version="bad_v3")
@@ -532,6 +603,7 @@ class TestSharpeCircuitBreaker:
 
     def test_get_status(self):
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         cb = SharpeCircuitBreaker()
         cb.record_trade(pnl=10.0, model_version="good_v1")
         status = cb.get_status()

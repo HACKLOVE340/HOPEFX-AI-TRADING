@@ -20,7 +20,6 @@ import json
 import os
 import pathlib
 import tempfile
-from datetime import datetime, timezone
 from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
@@ -49,6 +48,7 @@ def _sha256(path: pathlib.Path) -> str:
 
 def _make_registry(tmp_path: pathlib.Path):
     from ml.model_registry import ModelRegistry
+
     return ModelRegistry(registry_path=tmp_path / "registry.json")
 
 
@@ -82,8 +82,9 @@ class TestModelRegistryRegister:
         content = b"deterministic-content-xyz"
         pkl = _tmp_pkl(content)
         expected = hashlib.sha256(content).hexdigest()
-        entry = reg.register("v_sha", pkl, oos_accuracy=0.61, oos_p_value=0.01,
-                              sharpe_gate_passed=True)
+        entry = reg.register(
+            "v_sha", pkl, oos_accuracy=0.61, oos_p_value=0.01, sharpe_gate_passed=True
+        )
         assert entry["sha256"] == expected
         pkl.unlink()
 
@@ -109,8 +110,13 @@ class TestModelRegistryRegister:
     def test_register_persists_to_disk(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl()
-        reg.register("v_persist", pkl, oos_accuracy=0.62, oos_p_value=0.02,
-                     sharpe_gate_passed=True)
+        reg.register(
+            "v_persist",
+            pkl,
+            oos_accuracy=0.62,
+            oos_p_value=0.02,
+            sharpe_gate_passed=True,
+        )
         # Re-load from disk
         reg2 = _make_registry(tmp_path)
         assert "v_persist" in reg2.list_versions()
@@ -120,8 +126,13 @@ class TestModelRegistryRegister:
         reg = _make_registry(tmp_path)
         for i in range(3):
             pkl = _tmp_pkl(f"model-{i}".encode())
-            reg.register(f"v{i}", pkl, oos_accuracy=0.60 + i * 0.01,
-                         oos_p_value=0.01, sharpe_gate_passed=True)
+            reg.register(
+                f"v{i}",
+                pkl,
+                oos_accuracy=0.60 + i * 0.01,
+                oos_p_value=0.01,
+                sharpe_gate_passed=True,
+            )
             pkl.unlink()
         assert len(reg.list_versions()) == 3
 
@@ -145,9 +156,7 @@ class TestModelRegistryPromotionGate:
         return reg, pkl
 
     def test_promote_passes_all_checks(self, tmp_path):
-        reg, pkl = self._reg_with_entry(
-            tmp_path, acc=0.65, pval=0.001, sharpe_ok=True
-        )
+        reg, pkl = self._reg_with_entry(tmp_path, acc=0.65, pval=0.001, sharpe_ok=True)
         entry = reg.promote("v_gate")
         assert entry["state"] == "production"
         assert entry["promoted_at"] is not None
@@ -155,25 +164,19 @@ class TestModelRegistryPromotionGate:
         pkl.unlink()
 
     def test_promote_blocked_low_accuracy(self, tmp_path):
-        reg, pkl = self._reg_with_entry(
-            tmp_path, acc=0.55, pval=0.001, sharpe_ok=True
-        )
+        reg, pkl = self._reg_with_entry(tmp_path, acc=0.55, pval=0.001, sharpe_ok=True)
         with pytest.raises(RuntimeError, match="accuracy"):
             reg.promote("v_gate")
         pkl.unlink()
 
     def test_promote_blocked_high_pvalue(self, tmp_path):
-        reg, pkl = self._reg_with_entry(
-            tmp_path, acc=0.65, pval=0.10, sharpe_ok=True
-        )
+        reg, pkl = self._reg_with_entry(tmp_path, acc=0.65, pval=0.10, sharpe_ok=True)
         with pytest.raises(RuntimeError, match="p-value"):
             reg.promote("v_gate")
         pkl.unlink()
 
     def test_promote_blocked_sharpe_gate_not_passed(self, tmp_path):
-        reg, pkl = self._reg_with_entry(
-            tmp_path, acc=0.65, pval=0.001, sharpe_ok=False
-        )
+        reg, pkl = self._reg_with_entry(tmp_path, acc=0.65, pval=0.001, sharpe_ok=False)
         with pytest.raises(RuntimeError, match="[Ss]harpe"):
             reg.promote("v_gate")
         pkl.unlink()
@@ -187,10 +190,12 @@ class TestModelRegistryPromotionGate:
         reg = _make_registry(tmp_path)
         pkl1 = _tmp_pkl(b"model-1")
         pkl2 = _tmp_pkl(b"model-2")
-        reg.register("v1", pkl1, oos_accuracy=0.62, oos_p_value=0.01,
-                     sharpe_gate_passed=True)
-        reg.register("v2", pkl2, oos_accuracy=0.65, oos_p_value=0.001,
-                     sharpe_gate_passed=True)
+        reg.register(
+            "v1", pkl1, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True
+        )
+        reg.register(
+            "v2", pkl2, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True
+        )
         reg.promote("v1")
         reg.promote("v2")
         assert reg.get_version("v1")["state"] == "retired"
@@ -213,8 +218,9 @@ class TestModelRegistryVerify:
     def test_verify_passes_for_correct_digest(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"correct-content")
-        reg.register("v_ok", pkl, oos_accuracy=0.62, oos_p_value=0.01,
-                     sharpe_gate_passed=True)
+        reg.register(
+            "v_ok", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True
+        )
         ok, msg = reg.verify("v_ok")
         assert ok is True
         assert "OK" in msg
@@ -223,8 +229,13 @@ class TestModelRegistryVerify:
     def test_verify_fails_for_tampered_artifact(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"original-content")
-        reg.register("v_tamper", pkl, oos_accuracy=0.62, oos_p_value=0.01,
-                     sharpe_gate_passed=True)
+        reg.register(
+            "v_tamper",
+            pkl,
+            oos_accuracy=0.62,
+            oos_p_value=0.01,
+            sharpe_gate_passed=True,
+        )
         # Tamper with the file after registration
         pkl.write_bytes(b"tampered-content")
         ok, msg = reg.verify("v_tamper")
@@ -235,8 +246,9 @@ class TestModelRegistryVerify:
     def test_verify_fails_for_missing_artifact(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"will-be-deleted")
-        reg.register("v_del", pkl, oos_accuracy=0.62, oos_p_value=0.01,
-                     sharpe_gate_passed=True)
+        reg.register(
+            "v_del", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True
+        )
         pkl.unlink()
         ok, msg = reg.verify("v_del")
         assert ok is False
@@ -257,8 +269,9 @@ class TestModelRegistryVerify:
     def test_verify_active_after_promotion(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"production-model")
-        reg.register("v_prod", pkl, oos_accuracy=0.65, oos_p_value=0.001,
-                     sharpe_gate_passed=True)
+        reg.register(
+            "v_prod", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True
+        )
         reg.promote("v_prod")
         ok, msg = reg.verify_active()
         assert ok is True
@@ -312,8 +325,11 @@ class TestModelRegistryBootstrap:
         pkl.unlink()
 
     def test_bootstrap_skips_if_already_registered(self, tmp_path):
-        meta = {"oos_accuracy": 0.65, "oos_p_value": 0.001,
-                "sharpe_gate": {"gate_passed": True}}
+        meta = {
+            "oos_accuracy": 0.65,
+            "oos_p_value": 0.001,
+            "sharpe_gate": {"gate_passed": True},
+        }
         meta_path = tmp_path / "meta.json"
         meta_path.write_text(json.dumps(meta))
         pkl = _tmp_pkl(b"idempotent-model")
@@ -346,6 +362,7 @@ class TestAdvancedPredictorIntegrity:
 
     def _make_predictor(self, path):
         from ml.advanced_predictor import AdvancedPredictor
+
         return AdvancedPredictor(model_path=pathlib.Path(path))
 
     def test_integrity_unchecked_before_load(self, tmp_path):
@@ -361,6 +378,7 @@ class TestAdvancedPredictorIntegrity:
     def test_integrity_warns_and_passes_when_no_registry(self, tmp_path):
         """No digest on record → fail-open with a warning."""
         import ml.model_registry as mr
+
         original = mr._registry
         mr._registry = None  # force fresh singleton with empty registry
 
@@ -368,24 +386,33 @@ class TestAdvancedPredictorIntegrity:
         # Point registry at an empty temp dir so no manifest exists
         empty_reg_path = tmp_path / "empty_registry.json"
         from ml.model_registry import ModelRegistry
+
         mr._registry = ModelRegistry(registry_path=empty_reg_path)
 
         p = self._make_predictor(str(pkl))
         ok = p._verify_integrity()
         assert ok is True
-        assert "skipping" in p._integrity_msg.lower() or "No SHA-256" in p._integrity_msg
+        assert (
+            "skipping" in p._integrity_msg.lower() or "No SHA-256" in p._integrity_msg
+        )
 
         pkl.unlink()
         mr._registry = original
 
     def test_integrity_passes_with_matching_digest(self, tmp_path):
         import ml.model_registry as mr
+
         original = mr._registry
 
         pkl = _tmp_pkl(b"registered-model-content")
         reg = _make_registry(tmp_path)
-        reg.register("v_match", pkl, oos_accuracy=0.65, oos_p_value=0.001,
-                     sharpe_gate_passed=True)
+        reg.register(
+            "v_match",
+            pkl,
+            oos_accuracy=0.65,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
+        )
         reg.promote("v_match")
         mr._registry = reg
 
@@ -399,12 +426,18 @@ class TestAdvancedPredictorIntegrity:
 
     def test_integrity_fails_with_mismatched_digest(self, tmp_path):
         import ml.model_registry as mr
+
         original = mr._registry
 
         pkl = _tmp_pkl(b"original-content")
         reg = _make_registry(tmp_path)
-        reg.register("v_mismatch", pkl, oos_accuracy=0.65, oos_p_value=0.001,
-                     sharpe_gate_passed=True)
+        reg.register(
+            "v_mismatch",
+            pkl,
+            oos_accuracy=0.65,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
+        )
         reg.promote("v_mismatch")
 
         # Corrupt the manifest digest
@@ -432,12 +465,18 @@ class TestAdvancedPredictorIntegrity:
     def test_load_blocked_on_integrity_failure(self, tmp_path):
         """_load() must return False when integrity check fails."""
         import ml.model_registry as mr
+
         original = mr._registry
 
         pkl = _tmp_pkl(b"tampered-model")
         reg = _make_registry(tmp_path)
-        reg.register("v_block", pkl, oos_accuracy=0.65, oos_p_value=0.001,
-                     sharpe_gate_passed=True)
+        reg.register(
+            "v_block",
+            pkl,
+            oos_accuracy=0.65,
+            oos_p_value=0.001,
+            sharpe_gate_passed=True,
+        )
         reg.promote("v_block")
 
         # Corrupt manifest digest so integrity fails
@@ -447,6 +486,7 @@ class TestAdvancedPredictorIntegrity:
         mr._registry = reg
 
         from ml.advanced_predictor import AdvancedPredictor
+
         p = AdvancedPredictor(model_path=pkl)
         result = p._load()
         assert result is False
@@ -471,6 +511,7 @@ class TestLiveTradingGateNullCheck:
         (results_dir / "multi_symbol_report.json").write_text(json.dumps(report))
 
         import core.live_trading_gate as g
+
         original_root = g.ROOT
         g.ROOT = tmp_path
         gate = g.LiveTradingGate()
@@ -483,6 +524,7 @@ class TestLiveTradingGateNullCheck:
         (results_dir / "multi_symbol_report.json").write_text(json.dumps(report))
 
         import core.live_trading_gate as g
+
         original = g.ROOT
         g.ROOT = tmp_path
         gate = g.LiveTradingGate()
@@ -536,6 +578,7 @@ class TestLiveTradingGateNullCheck:
     def test_no_report_file_falls_through_to_meta(self, tmp_path):
         """When no report file exists, gate falls back to OOS meta."""
         import core.live_trading_gate as g
+
         original = g.ROOT
         g.ROOT = tmp_path  # no backtest/results/ dir → file not found
         gate = g.LiveTradingGate()
@@ -553,6 +596,7 @@ class TestLiveTradingGateNullCheck:
 class TestOandaPaperClockTrackerWiring:
     def _make_clock(self, tmp_path: pathlib.Path):
         from brokers.oanda_paper_clock import OandaPaperClock
+
         return OandaPaperClock(stamp_path=tmp_path / "stamp.json")
 
     def test_tracker_initialised_on_construction(self, tmp_path):
@@ -574,8 +618,14 @@ class TestOandaPaperClockTrackerWiring:
     def test_record_fill_returns_status_dict(self, tmp_path):
         clock = self._make_clock(tmp_path)
         s = clock.record_fill(0.015)
-        for key in ("n_trades", "sharpe", "sharpe_se", "gate_passed",
-                    "pct_to_gate", "message"):
+        for key in (
+            "n_trades",
+            "sharpe",
+            "sharpe_se",
+            "gate_passed",
+            "pct_to_gate",
+            "message",
+        ):
             assert key in s, f"Missing key: {key}"
 
     def test_sharpe_status_available_true(self, tmp_path):
@@ -592,6 +642,7 @@ class TestOandaPaperClockTrackerWiring:
     def test_sharpe_status_gate_passes_with_enough_trades(self, tmp_path):
         """Gate passes when target_n and target_sharpe are both met."""
         from brokers.oanda_paper_clock import OandaPaperClock
+
         # Use a low target so the test runs fast
         clock = OandaPaperClock(stamp_path=tmp_path / "stamp.json")
         clock._sharpe_tracker.__init__(target_n=5, target_sharpe=0.5, annualise=252)
@@ -618,9 +669,9 @@ class TestOandaPaperClockTrackerWiring:
         """Prometheus gauges are called without raising."""
         clock = self._make_clock(tmp_path)
         mock_gauge = MagicMock()
-        with patch("core.metrics.SHARPE_N_TRADES", mock_gauge), \
-             patch("core.metrics.SHARPE_RATIO", mock_gauge), \
-             patch("core.metrics.SHARPE_GATE_PASSED", mock_gauge):
+        with patch("core.metrics.SHARPE_N_TRADES", mock_gauge), patch(
+            "core.metrics.SHARPE_RATIO", mock_gauge
+        ), patch("core.metrics.SHARPE_GATE_PASSED", mock_gauge):
             clock.record_fill(0.01)
         # set() should have been called at least once per gauge
         assert mock_gauge.set.call_count >= 1
@@ -645,6 +696,7 @@ class TestOandaPaperClockTrackerWiring:
 
     def test_record_fill_logs_structured_message(self, tmp_path, caplog):
         import logging
+
         clock = self._make_clock(tmp_path)
         with caplog.at_level(logging.INFO, logger="brokers.oanda_paper_clock"):
             clock.record_fill(0.012, symbol="EUR_USD")

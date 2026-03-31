@@ -510,11 +510,12 @@ class TestNewsProvider:
 
     def test_incomplete_subclass_missing_one_raises_type_error(self):
         """A subclass missing one abstract method still raises TypeError."""
-        from news.providers import NewsProvider, NewsArticle
+        from news.providers import NewsProvider
 
         class PartialProvider(NewsProvider):
             def get_news(self, **kwargs):
                 return []
+
             # format_article not implemented
 
         with pytest.raises(TypeError):
@@ -530,9 +531,14 @@ class TestNewsProvider:
 
             def format_article(self, raw_article):
                 return NewsArticle(
-                    title="", content="", source="", url="",
-                    published_at=None, sentiment_score=0.0,
-                    relevance_score=0.0, symbols=[],
+                    title="",
+                    content="",
+                    source="",
+                    url="",
+                    published_at=None,
+                    sentiment_score=0.0,
+                    relevance_score=0.0,
+                    symbols=[],
                 )
 
         provider = ConcreteProvider(api_key="test_key")

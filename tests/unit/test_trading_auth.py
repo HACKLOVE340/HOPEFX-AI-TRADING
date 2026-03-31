@@ -163,6 +163,7 @@ def app(mock_broker, mock_brain, tmp_path):
     # a previous test module (e.g. test_risk.py triggering a drawdown halt)
     # does not bleed into these auth tests via the cached singleton.
     from kill_switch import KillSwitch
+
     fresh_ks = KillSwitch(flag_file=tmp_path / "ks_auth_test.flag")
     trading_module._set_kill_switch(fresh_ks)
 

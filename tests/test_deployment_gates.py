@@ -25,9 +25,8 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -42,6 +41,7 @@ os.environ.setdefault(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _meta(*, gate_passed: bool, n_trades: int = 0, ci_mode: bool = False) -> dict:
     """Build a minimal advanced_oos_meta.json payload."""
     return {
@@ -50,7 +50,7 @@ def _meta(*, gate_passed: bool, n_trades: int = 0, ci_mode: bool = False) -> dic
             "gate_passed": gate_passed,
             "n_trades": n_trades,
             "target_n": 600,
-            "se": round((1 + 0.5 * 1.52 ** 2) ** 0.5 / max(n_trades, 1) ** 0.5, 4),
+            "se": round((1 + 0.5 * 1.52**2) ** 0.5 / max(n_trades, 1) ** 0.5, 4),
             "credible": gate_passed,
         },
     }
@@ -65,7 +65,6 @@ def _write_meta(path: Path, payload: dict) -> None:
 # Gate 1 — Kill switch blocks place_order
 # ===========================================================================
 class TestKillSwitchGate:
-
     def test_active_kill_switch_raises_503(self, tmp_path):
         from fastapi import HTTPException
         import api.trading as trading_mod
@@ -119,10 +118,10 @@ class TestKillSwitchGate:
 # Gate 2 — Sharpe gate blocks live orders
 # ===========================================================================
 class TestSharpeGate:
-
     def _patch_meta(self, tmp_path: Path, payload: dict):
         """Patch _OOS_META_PATH and clear the cache."""
         import api.trading as trading_mod
+
         meta_path = tmp_path / "advanced_oos_meta.json"
         _write_meta(meta_path, payload)
         trading_mod._deployment_gate_cache.clear()
@@ -190,9 +189,9 @@ class TestSharpeGate:
 # Gate 3 — CI model guard blocks live orders
 # ===========================================================================
 class TestCIModelGuard:
-
     def _patch_meta(self, tmp_path: Path, payload: dict):
         import api.trading as trading_mod
+
         meta_path = tmp_path / "advanced_oos_meta.json"
         _write_meta(meta_path, payload)
         trading_mod._deployment_gate_cache.clear()
@@ -234,6 +233,7 @@ class TestCIModelGuard:
         monkeypatch.setenv("HOPEFX_CI", "1")
         import importlib
         import ml.train_advanced as ta
+
         importlib.reload(ta)
         assert ta._CI is True
 
@@ -242,6 +242,7 @@ class TestCIModelGuard:
         monkeypatch.setenv("HOPEFX_CI", "0")
         import importlib
         import ml.train_advanced as ta
+
         importlib.reload(ta)
         assert ta._CI is False
 
@@ -250,10 +251,10 @@ class TestCIModelGuard:
 # Bypass: paper trading and test env skip model gates
 # ===========================================================================
 class TestGateBypass:
-
     def _patch_meta_blocked(self, tmp_path: Path):
         """Write a meta that would block live orders."""
         import api.trading as trading_mod
+
         meta_path = tmp_path / "advanced_oos_meta.json"
         _write_meta(meta_path, _meta(gate_passed=False, n_trades=0, ci_mode=True))
         trading_mod._deployment_gate_cache.clear()
@@ -297,7 +298,6 @@ class TestGateBypass:
 # Meta file caching — avoids re-reading on every order
 # ===========================================================================
 class TestMetaCaching:
-
     def test_cache_avoids_repeated_disk_reads(self, tmp_path, monkeypatch):
         import api.trading as trading_mod
 

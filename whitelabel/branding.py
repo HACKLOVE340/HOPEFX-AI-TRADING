@@ -17,8 +17,8 @@ endpoint.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Dict
 
 
 # ── Validation ────────────────────────────────────────────────────────────────
@@ -55,15 +55,15 @@ class BrandTheme:
     favicon_url: str = ""
 
     # Colours
-    primary_color: str = "#3b82f6"       # buttons, links, active states
-    secondary_color: str = "#1e293b"     # cards, panels
-    accent_color: str = "#22c55e"        # positive P&L, buy buttons
-    danger_color: str = "#ef4444"        # negative P&L, sell buttons
-    background_color: str = "#0f172a"    # page background
-    surface_color: str = "#1e293b"       # card/panel background
-    text_primary: str = "#f1f5f9"        # primary text
-    text_secondary: str = "#94a3b8"      # secondary/muted text
-    border_color: str = "#334155"        # borders, dividers
+    primary_color: str = "#3b82f6"  # buttons, links, active states
+    secondary_color: str = "#1e293b"  # cards, panels
+    accent_color: str = "#22c55e"  # positive P&L, buy buttons
+    danger_color: str = "#ef4444"  # negative P&L, sell buttons
+    background_color: str = "#0f172a"  # page background
+    surface_color: str = "#1e293b"  # card/panel background
+    text_primary: str = "#f1f5f9"  # primary text
+    text_secondary: str = "#94a3b8"  # secondary/muted text
+    border_color: str = "#334155"  # borders, dividers
 
     # Typography
     font_family: str = "'Inter', system-ui, sans-serif"
@@ -75,9 +75,15 @@ class BrandTheme:
     def validate(self) -> "BrandTheme":
         """Validate all colour fields in-place. Returns self for chaining."""
         colour_fields = [
-            "primary_color", "secondary_color", "accent_color",
-            "danger_color", "background_color", "surface_color",
-            "text_primary", "text_secondary", "border_color",
+            "primary_color",
+            "secondary_color",
+            "accent_color",
+            "danger_color",
+            "background_color",
+            "surface_color",
+            "text_primary",
+            "text_secondary",
+            "border_color",
         ]
         for f in colour_fields:
             val = getattr(self, f)

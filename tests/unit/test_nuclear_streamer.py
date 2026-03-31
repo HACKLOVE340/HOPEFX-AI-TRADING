@@ -30,24 +30,29 @@ import json
 import os
 import time
 from typing import List
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
+os.environ.setdefault(
+    "SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!"
+)
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _make_streamer(**kwargs):
     """Return a NuclearStreamer with Prometheus disabled and no Redis."""
     from data_feed.nuclear_streamer import NuclearStreamer
+
     return NuclearStreamer(prometheus_port=0, **kwargs)
 
 
 class _Collector:
     """Subscriber that records every price delivered via on_new_price."""
+
     def __init__(self):
         self.prices: List[float] = []
         self.errors: List[Exception] = []
@@ -58,6 +63,7 @@ class _Collector:
 
 class _FaultySubscriber:
     """Subscriber that always raises — used to verify error isolation."""
+
     async def on_new_price(self, price: float) -> None:
         raise RuntimeError("subscriber intentional error")
 
@@ -66,8 +72,8 @@ class _FaultySubscriber:
 # process_tick
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestProcessTick:
 
+class TestProcessTick:
     @pytest.mark.asyncio
     async def test_valid_tick_accepted(self):
         streamer = _make_streamer()
@@ -140,7 +146,9 @@ class TestProcessTick:
         streamer.subscribe(collector)
 
         await streamer.process_tick(2000.0, time.time(), "finnhub")
-        await streamer.process_tick(2200.0, time.time(), "finnhub")  # anomaly — discarded
+        await streamer.process_tick(
+            2200.0, time.time(), "finnhub"
+        )  # anomaly — discarded
         await streamer.process_tick(2010.0, time.time(), "finnhub")  # 0.5% — accepted
 
         assert collector.prices == [2000.0, 2010.0]
@@ -227,8 +235,8 @@ class TestProcessTick:
 # Subscriber broadcast
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestSubscriberBroadcast:
 
+class TestSubscriberBroadcast:
     @pytest.mark.asyncio
     async def test_multiple_subscribers_all_notified(self):
         streamer = _make_streamer()
@@ -291,8 +299,8 @@ class TestSubscriberBroadcast:
 # Circuit breaker
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestCircuitBreaker:
 
+class TestCircuitBreaker:
     def test_circuit_open_after_threshold(self):
         streamer = _make_streamer(circuit_breaker_threshold=3)
         for _ in range(3):
@@ -308,7 +316,9 @@ class TestCircuitBreaker:
         assert streamer._is_circuit_open("finnhub") is False
 
     def test_circuit_resets_after_cooldown(self):
-        streamer = _make_streamer(circuit_breaker_threshold=1, circuit_breaker_cooldown=0.01)
+        streamer = _make_streamer(
+            circuit_breaker_threshold=1, circuit_breaker_cooldown=0.01
+        )
         streamer._record_failure("finnhub")
         assert streamer._is_circuit_open("finnhub") is True
 
@@ -341,8 +351,8 @@ class TestCircuitBreaker:
 # Back-off wrapper
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestRunWithBackoff:
 
+class TestRunWithBackoff:
     @pytest.mark.asyncio
     async def test_stops_when_not_running(self):
         streamer = _make_streamer()
@@ -422,8 +432,8 @@ class TestRunWithBackoff:
 # status()
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestStatus:
 
+class TestStatus:
     def test_status_initial_state(self):
         streamer = _make_streamer()
         s = streamer.status()
@@ -471,8 +481,8 @@ class TestStatus:
 # Architectural boundary — OANDAStream.stream_prices raises StreamingForbidden
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestOANDAStreamArchitecturalBoundary:
 
+class TestOANDAStreamArchitecturalBoundary:
     @pytest.mark.asyncio
     async def test_stream_prices_raises_streaming_forbidden(self):
         from brokers.oanda_stream import OANDAStream, StreamingForbidden
@@ -522,8 +532,8 @@ class TestOANDAStreamArchitecturalBoundary:
 # Architectural boundary — OANDAStreamAdapter tombstone
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestOANDAStreamAdapterTombstone:
 
+class TestOANDAStreamAdapterTombstone:
     @pytest.mark.asyncio
     async def test_start_raises_streaming_forbidden(self):
         from brokers.oanda_ws import OANDAStreamAdapter, StreamingForbidden
@@ -562,23 +572,27 @@ class TestOANDAStreamAdapterTombstone:
 # data_feed public API
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestDataFeedPublicAPI:
 
+class TestDataFeedPublicAPI:
     def test_nuclear_streamer_exported(self):
         from data_feed import NuclearStreamer
+
         assert NuclearStreamer is not None
 
     def test_production_data_engine_exported(self):
         from data_feed import ProductionDataEngine
+
         assert ProductionDataEngine is not None
 
     def test_mt5_backup_exported(self):
         from data_feed import MT5Backup
+
         assert MT5Backup is not None
 
     def test_nuclear_streamer_is_primary(self):
         """NuclearStreamer must be first in __all__."""
         import data_feed
+
         assert data_feed.__all__[0] == "NuclearStreamer"
 
 
@@ -586,8 +600,8 @@ class TestDataFeedPublicAPI:
 # NuclearStreamer.run() — no keys configured
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestRunNoKeys:
 
+class TestRunNoKeys:
     @pytest.mark.asyncio
     async def test_run_exits_cleanly_with_no_keys(self, monkeypatch):
         """run() must log a warning and return without error when no keys are set."""
@@ -630,8 +644,8 @@ class TestRunNoKeys:
 # stop()
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestStop:
 
+class TestStop:
     @pytest.mark.asyncio
     async def test_stop_sets_running_false(self):
         streamer = _make_streamer()

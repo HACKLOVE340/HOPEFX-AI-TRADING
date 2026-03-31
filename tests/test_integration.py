@@ -379,10 +379,12 @@ class TestBrokerRiskIntegration:
 
     def _make_broker(self, balance: float = 10_000.0):
         from brokers.paper_trading import PaperTradingBroker
+
         return PaperTradingBroker(initial_balance=balance)
 
     def _make_risk(self, balance: float = 10_000.0):
         from risk.manager import RiskManager, RiskConfig
+
         cfg = RiskConfig(
             max_position_size_pct=0.02,
             max_drawdown_pct=0.10,
@@ -406,9 +408,12 @@ class TestBrokerRiskIntegration:
         await broker.connect()
         broker.update_market_price("XAUUSD", 2000.0)
         from brokers.base import OrderSide, OrderType
+
         order = broker.place_order(
-            symbol="XAUUSD", side=OrderSide.BUY,
-            order_type=OrderType.MARKET, quantity=0.1,
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            order_type=OrderType.MARKET,
+            quantity=0.1,
         )
         assert order is not None
         positions = broker.get_positions()
@@ -419,7 +424,9 @@ class TestBrokerRiskIntegration:
     def test_risk_manager_position_size(self):
         risk = self._make_risk(10_000.0)
         size = risk.calculate_position_size(
-            symbol="XAUUSD", entry_price=2000.0, account_balance=10_000.0,
+            symbol="XAUUSD",
+            entry_price=2000.0,
+            account_balance=10_000.0,
         )
         actual = size.size if hasattr(size, "size") else size
         assert actual >= 0
@@ -446,9 +453,12 @@ class TestBrokerRiskIntegration:
         await broker.connect()
         broker.update_market_price("EURUSD", 1.0850)
         from brokers.base import OrderSide, OrderType
+
         broker.place_order(
-            symbol="EURUSD", side=OrderSide.BUY,
-            order_type=OrderType.MARKET, quantity=0.1,
+            symbol="EURUSD",
+            side=OrderSide.BUY,
+            order_type=OrderType.MARKET,
+            quantity=0.1,
         )
         assert len(broker.get_positions()) >= 1
         broker.update_market_price("EURUSD", 1.0860)
@@ -462,6 +472,7 @@ class TestMetricsRegistryIntegration:
 
     def setup_method(self):
         from infrastructure.metrics import get_metrics_registry
+
         self.registry = get_metrics_registry()
 
     def test_counter_increments(self):
@@ -494,16 +505,27 @@ class TestMetricsRegistryIntegration:
 
     def test_grafana_metrics_all_registered(self):
         required = [
-            "hopefx_equity", "hopefx_active_positions", "hopefx_pnl_realized",
-            "hopefx_drawdown_current", "hopefx_model_drift_score",
-            "hopefx_orders_total", "hopefx_order_latency_ms_bucket",
-            "hopefx_broker_latency_ms_bucket", "hopefx_db_pool_active",
-            "hopefx_signals_total", "hopefx_broker_connected",
-            "hopefx_broker_failover_total", "hopefx_broker_rejections_total",
-            "hopefx_fix_last_heartbeat_timestamp", "hopefx_market_regime",
-            "hopefx_model_accuracy_pct", "hopefx_model_inference_ms_bucket",
-            "hopefx_model_last_trained_timestamp", "hopefx_signal_confidence_bucket",
-            "hopefx_smart_router_active_broker", "hopefx_win_rate_pct",
+            "hopefx_equity",
+            "hopefx_active_positions",
+            "hopefx_pnl_realized",
+            "hopefx_drawdown_current",
+            "hopefx_model_drift_score",
+            "hopefx_orders_total",
+            "hopefx_order_latency_ms_bucket",
+            "hopefx_broker_latency_ms_bucket",
+            "hopefx_db_pool_active",
+            "hopefx_signals_total",
+            "hopefx_broker_connected",
+            "hopefx_broker_failover_total",
+            "hopefx_broker_rejections_total",
+            "hopefx_fix_last_heartbeat_timestamp",
+            "hopefx_market_regime",
+            "hopefx_model_accuracy_pct",
+            "hopefx_model_inference_ms_bucket",
+            "hopefx_model_last_trained_timestamp",
+            "hopefx_signal_confidence_bucket",
+            "hopefx_smart_router_active_broker",
+            "hopefx_win_rate_pct",
         ]
         missing = [n for n in required if self.registry.get_collector(n) is None]
         assert missing == [], f"Missing Grafana metrics: {missing}"
@@ -516,6 +538,7 @@ class TestKillSwitchIntegration:
         import tempfile
         from pathlib import Path
         from kill_switch import KillSwitch
+
         if tmp_path is None:
             tmp_path = Path(tempfile.mkdtemp())
         flag = tmp_path / "ks_test.flag"
@@ -553,11 +576,13 @@ class TestDataSchedulerIntegration:
 
     def test_import_and_instantiate(self):
         from data.scheduler import DataScheduler
+
         scheduler = DataScheduler()
         assert scheduler is not None
 
     def test_has_start_method(self):
         from data.scheduler import DataScheduler
+
         scheduler = DataScheduler()
         assert callable(getattr(scheduler, "start", None))
 
@@ -567,6 +592,7 @@ class TestPrometheusMonitoringIntegration:
 
     def test_import(self):
         import prometheus_monitoring
+
         assert hasattr(prometheus_monitoring, "setup_prometheus_monitoring")
 
     @pytest.mark.skipif(
@@ -576,6 +602,7 @@ class TestPrometheusMonitoringIntegration:
     def test_setup_on_fastapi_app(self):
         from fastapi import FastAPI
         import prometheus_monitoring
+
         app = FastAPI()
         prometheus_monitoring.setup_prometheus_monitoring(app)
         paths = [r.path for r in app.routes]
@@ -588,6 +615,7 @@ class TestPrometheusMonitoringIntegration:
     def test_idempotent_setup(self):
         from fastapi import FastAPI
         import prometheus_monitoring
+
         app = FastAPI()
         prometheus_monitoring.setup_prometheus_monitoring(app)
         prometheus_monitoring.setup_prometheus_monitoring(app)

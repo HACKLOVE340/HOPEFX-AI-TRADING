@@ -43,7 +43,6 @@ import asyncio
 import logging
 import os
 import signal
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -110,11 +109,13 @@ class LiveDataPipeline:
         self._callbacks.append(fn)
 
     async def start(self) -> None:
-        has_key = any([
-            os.getenv("FINNHUB_API_KEY"),
-            os.getenv("TWELVE_API_KEY"),
-            os.getenv("POLYGON_API_KEY"),
-        ])
+        has_key = any(
+            [
+                os.getenv("FINNHUB_API_KEY"),
+                os.getenv("TWELVE_API_KEY"),
+                os.getenv("POLYGON_API_KEY"),
+            ]
+        )
         if not has_key:
             raise EnvironmentError(
                 "LiveDataPipeline requires at least one streaming API key: "
@@ -128,6 +129,7 @@ class LiveDataPipeline:
 
             class _TickBridge:
                 """Subscriber that normalises NuclearStreamer ticks for callbacks."""
+
                 async def on_new_price(self, price: float) -> None:
                     tick = {"price": price, "symbol": "XAUUSD", "source": "nuclear"}
                     for cb in pipeline_ref._callbacks:

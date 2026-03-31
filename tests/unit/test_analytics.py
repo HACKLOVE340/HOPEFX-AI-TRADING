@@ -148,6 +148,7 @@ class TestSimulationEngine:
 
         # Provide a realistic trade P&L sequence (100 trades, small random returns)
         import numpy as np
+
         rng = np.random.default_rng(42)
         trade_pnls = list(rng.normal(50, 200, 100).tolist())
 
@@ -170,6 +171,7 @@ class TestSimulationEngine:
         engine = SimulationEngine()
 
         import numpy as np
+
         rng = np.random.default_rng(7)
         trade_pnls = list(rng.normal(100, 500, 200).tolist())
 

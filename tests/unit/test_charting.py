@@ -140,6 +140,7 @@ class TestIndicator:
 
     def test_incomplete_subclass_raises_type_error(self):
         """A subclass that omits calculate() raises TypeError at construction."""
+
         class IncompleteIndicator(Indicator):
             pass  # calculate not implemented
 

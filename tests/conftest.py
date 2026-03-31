@@ -91,6 +91,7 @@ def _reset_global_kill_switch():
     # Teardown: deactivate and remove flag/state files from the global instance
     try:
         from pathlib import Path
+
         flag = Path(__file__).parent.parent / "kill_switch.flag"
         state = flag.with_suffix(".state.json")
         for f in (flag, state):
@@ -98,6 +99,7 @@ def _reset_global_kill_switch():
                 f.unlink(missing_ok=True)
         # Reset the in-memory singleton if already imported
         import sys
+
         ks_mod = sys.modules.get("kill_switch")
         if ks_mod is not None:
             ks = getattr(ks_mod, "kill_switch", None)
@@ -234,6 +236,7 @@ os.environ.setdefault("HOPEFX_CI", "1")
 
 # ── Kill switch isolation ─────────────────────────────────────────────────────
 
+
 @pytest.fixture(autouse=True)
 def _reset_kill_switch():
     """
@@ -244,6 +247,7 @@ def _reset_kill_switch():
     """
     try:
         from kill_switch import kill_switch as _ks
+
         _ks.reset_for_testing()
     except Exception:
         pass
@@ -251,6 +255,7 @@ def _reset_kill_switch():
     # Also reset after the test in case it activated the switch
     try:
         from kill_switch import kill_switch as _ks
+
         _ks.reset_for_testing()
     except Exception:
         pass

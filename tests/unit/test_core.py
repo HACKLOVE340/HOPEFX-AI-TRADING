@@ -38,8 +38,9 @@ async def test_event_bus(tmp_path):
 
     bus.subscribe_local(CH_TICK, handler)
 
-    await bus.publish(CH_TICK, {"type": "tick", "symbol": "XAUUSD",
-                                 "bid": 1800.0, "ask": 1800.1})
+    await bus.publish(
+        CH_TICK, {"type": "tick", "symbol": "XAUUSD", "bid": 1800.0, "ask": 1800.1}
+    )
 
     # Local fallback is synchronous — no sleep needed, but yield once to let
     # any pending coroutines complete.

@@ -23,9 +23,9 @@ stored in Redis (falls back to in-memory if Redis unavailable).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Set
+from typing import Dict, Optional, Set
 
 
 class TierName(str, Enum):
@@ -45,10 +45,10 @@ class TierConfig:
     # WebSocket connections
     max_ws_connections: int
     # Trading limits
-    max_symbols: int          # number of symbols accessible via API
-    max_positions: int        # concurrent open positions via API
+    max_symbols: int  # number of symbols accessible via API
+    max_positions: int  # concurrent open positions via API
     # Data access
-    max_history_days: int     # historical data lookback
+    max_history_days: int  # historical data lookback
     # Feature flags available at this tier
     allowed_features: Set[str]
     # Revenue share (fraction of subscription revenue paid to reseller)

@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import pathlib
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -78,8 +77,9 @@ class TestDailyReporter:
 
         # Simulate hour != 0
         now = datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
-        with patch("connect_to_life.datetime") as mock_dt, \
-             patch("connect_to_life._telegram", fake_telegram):
+        with patch("connect_to_life.datetime") as mock_dt, patch(
+            "connect_to_life._telegram", fake_telegram
+        ):
             mock_dt.now.return_value = now
             await reporter.maybe_send({"equity": 100_000})
 
@@ -94,12 +94,20 @@ class TestDailyReporter:
             sent.append(text)
 
         now = datetime(2025, 1, 15, 0, 0, 0, tzinfo=timezone.utc)
-        with patch("connect_to_life.datetime") as mock_dt, \
-             patch("connect_to_life._telegram", fake_telegram):
+        with patch("connect_to_life.datetime") as mock_dt, patch(
+            "connect_to_life._telegram", fake_telegram
+        ):
             mock_dt.now.return_value = now
-            await reporter.maybe_send({"equity": 100_000, "balance": 100_000,
-                                       "daily_pnl": 250.0, "drawdown_pct": 0.5,
-                                       "fill_count": 3, "broker": "oanda"})
+            await reporter.maybe_send(
+                {
+                    "equity": 100_000,
+                    "balance": 100_000,
+                    "daily_pnl": 250.0,
+                    "drawdown_pct": 0.5,
+                    "fill_count": 3,
+                    "broker": "oanda",
+                }
+            )
 
         assert len(sent) == 1
         assert "Daily Report" in sent[0]
@@ -114,8 +122,9 @@ class TestDailyReporter:
             sent.append(text)
 
         now = datetime(2025, 1, 15, 0, 0, 0, tzinfo=timezone.utc)
-        with patch("connect_to_life.datetime") as mock_dt, \
-             patch("connect_to_life._telegram", fake_telegram):
+        with patch("connect_to_life.datetime") as mock_dt, patch(
+            "connect_to_life._telegram", fake_telegram
+        ):
             mock_dt.now.return_value = now
             await reporter.maybe_send({"equity": 100_000})
             await reporter.maybe_send({"equity": 100_000})  # second call same day
@@ -132,10 +141,14 @@ class TestReadStatus:
     """_read_status returns safe defaults when engine is not ready."""
 
     def _make_supervisor(self) -> LifeSupervisor:
-        with patch.dict(os.environ, {
-            "OANDA_API_KEY": "test", "OANDA_ACCOUNT_ID": "test",
-            "INITIAL_BALANCE": "50000",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "OANDA_API_KEY": "test",
+                "OANDA_ACCOUNT_ID": "test",
+                "INITIAL_BALANCE": "50000",
+            },
+        ):
             return LifeSupervisor()
 
     def test_returns_defaults_when_engine_none(self):
@@ -158,9 +171,12 @@ class TestReadStatus:
         sup = self._make_supervisor()
         mock_engine = MagicMock()
         mock_engine._get_status.return_value = {
-            "equity": 102_000.0, "balance": 100_000.0,
-            "daily_pnl": 2_000.0, "drawdown_pct": 0.0,
-            "open_positions": 1, "broker": "oanda",
+            "equity": 102_000.0,
+            "balance": 100_000.0,
+            "daily_pnl": 2_000.0,
+            "drawdown_pct": 0.0,
+            "open_positions": 1,
+            "broker": "oanda",
         }
         mock_tl = MagicMock()
         mock_tl.stats = {"fill_count": 7}
@@ -175,9 +191,12 @@ class TestReadStatus:
         sup = self._make_supervisor()
         mock_engine = MagicMock()
         mock_engine._get_status.return_value = {
-            "equity": 98_000.0, "balance": 100_000.0,
-            "daily_pnl": -2_000.0, "drawdown_pct": 2.0,
-            "open_positions": 0, "broker": "paper",
+            "equity": 98_000.0,
+            "balance": 100_000.0,
+            "daily_pnl": -2_000.0,
+            "drawdown_pct": 2.0,
+            "open_positions": 0,
+            "broker": "paper",
         }
         mock_engine._trade_logger = None
         sup._engine = mock_engine
@@ -196,9 +215,13 @@ class TestBreachShutdown:
     """_breach_shutdown sets exit_code=1, fires Telegram, sets shutdown event."""
 
     def _make_supervisor(self) -> LifeSupervisor:
-        with patch.dict(os.environ, {
-            "OANDA_API_KEY": "test", "OANDA_ACCOUNT_ID": "test",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "OANDA_API_KEY": "test",
+                "OANDA_ACCOUNT_ID": "test",
+            },
+        ):
             return LifeSupervisor()
 
     @pytest.mark.asyncio
@@ -240,10 +263,14 @@ class TestCheckpoint:
     """_checkpoint writes valid JSON to CHECKPOINT_FILE."""
 
     def _make_supervisor(self) -> LifeSupervisor:
-        with patch.dict(os.environ, {
-            "OANDA_API_KEY": "test", "OANDA_ACCOUNT_ID": "test",
-            "INITIAL_BALANCE": "100000",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "OANDA_API_KEY": "test",
+                "OANDA_ACCOUNT_ID": "test",
+                "INITIAL_BALANCE": "100000",
+            },
+        ):
             return LifeSupervisor()
 
     @pytest.mark.asyncio
@@ -294,9 +321,13 @@ class TestOnEngineDone:
     """_on_engine_done sets shutdown event and exit code correctly."""
 
     def _make_supervisor(self) -> LifeSupervisor:
-        with patch.dict(os.environ, {
-            "OANDA_API_KEY": "test", "OANDA_ACCOUNT_ID": "test",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "OANDA_API_KEY": "test",
+                "OANDA_ACCOUNT_ID": "test",
+            },
+        ):
             return LifeSupervisor()
 
     def test_cancelled_task_does_not_set_exit_code_1(self):
