@@ -161,6 +161,16 @@ class IBKRConnector(BrokerConnector):
                 "ib_insync is required. Install: pip install ib_insync==0.9.86",
             )
 
+        # Accept either an IBKRConfig dataclass or a plain dict (factory pattern)
+        if isinstance(config, dict):
+            config = IBKRConfig(
+                host=config.get("host", "127.0.0.1"),
+                port=int(config.get("port", 7497)),
+                client_id=int(config.get("client_id", 1)),
+                account=config.get("account"),
+                readonly=bool(config.get("readonly", False)),
+                timeout_sec=float(config.get("timeout_sec", 20.0)),
+            )
         self._cfg = config or IBKRConfig()
         self._kill_switch = kill_switch
 
