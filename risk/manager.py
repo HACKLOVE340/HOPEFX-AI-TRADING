@@ -339,6 +339,57 @@ class DrawdownCheckResult:
     max_daily_loss_pct: float
 
 
+class _MinimalSignal:
+    """
+    Lightweight signal adapter used by calculate_position_size().
+
+    Bridges raw parameter calls into the size_order() interface without
+    requiring callers to construct a full signal object.
+    """
+
+    __slots__ = (
+        "symbol",
+        "direction",
+        "confidence",
+        "probability",
+        "data_quality",
+        "features",
+        "tick_mid",
+        "tick_spread",
+    )
+
+    def __init__(
+        self,
+        symbol: str,
+        direction: str,
+        confidence: float,
+        probability: float,
+        tick_mid: float = 0.0,
+        tick_spread: float = 1.0,
+    ) -> None:
+        self.symbol = symbol
+        self.direction = direction
+        self.confidence = confidence
+        self.probability = probability
+        self.data_quality = 1.0
+        self.features: dict = {}
+        self.tick_mid = tick_mid
+        self.tick_spread = tick_spread
+
+
+# Static pairwise correlation table for major FX pairs (approximate values).
+# Used by RiskManager.check_correlation_risk() — defined at module level so it
+# is not re-allocated on every call.
+_FX_PAIR_CORRELATIONS: Dict[tuple, float] = {
+    ("EURUSD", "GBPUSD"): 0.87,
+    ("EURUSD", "AUDUSD"): 0.72,
+    ("EURUSD", "NZDUSD"): 0.68,
+    ("USDJPY", "USDCHF"): 0.75,
+    ("GBPUSD", "AUDUSD"): 0.65,
+    ("XAUUSD", "AUDUSD"): 0.55,
+}
+
+
 # ── RiskManager ───────────────────────────────────────────────────────────────
 
 
@@ -426,6 +477,53 @@ class RiskManager:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
+    # ── Drawdown-level thresholds (fraction of max_drawdown_pct) ─────────────
+    _DD_AMBER_FRAC = 0.60   # amber warning threshold
+    _DD_HIGH_FRAC  = 0.80   # HIGH risk level threshold
+    _DD_MED_FRAC   = 0.50   # MEDIUM risk level threshold
+    _DD_CORR_FRAC  = 0.75   # correlation check HIGH threshold
+    _DD_CORR_MED   = 0.50   # correlation check MEDIUM threshold
+
+    def _signal_symbol(self, signal) -> str:
+        return getattr(signal, "symbol", "XAU_USD")
+
+    def _signal_direction(self, signal) -> str:
+        return getattr(signal, "direction", "long")
+
+    def _drawdown_risk_level(self) -> str:
+        """Map current drawdown fraction to a RiskLevel constant."""
+        dd = self._state.current_drawdown
+        if dd > _MAX_DRAWDOWN_PCT * self._DD_HIGH_FRAC:
+            return RiskLevel.HIGH
+        if dd > _MAX_DRAWDOWN_PCT * self._DD_MED_FRAC:
+            return RiskLevel.MEDIUM
+        return RiskLevel.LOW
+
+    def _rejected_assessment(
+        self,
+        signal,
+        reason: str,
+        risk_level: str,
+        data_quality: float = 1.0,
+        sentiment_score: float = 0.0,
+        impact_score: float = 0.0,
+    ) -> "RiskAssessment":
+        """Build a rejected RiskAssessment — eliminates repeated kwarg blocks."""
+        return RiskAssessment(
+            symbol=self._signal_symbol(signal),
+            direction=self._signal_direction(signal),
+            approved=False,
+            risk_level=risk_level,
+            reason=reason,
+            data_quality=data_quality,
+            sentiment_score=sentiment_score,
+            impact_score=impact_score,
+            drawdown_pct=self._state.current_drawdown * 100,
+            daily_dd_pct=self._state.daily_drawdown * 100,
+            open_positions=self._state.open_positions,
+            var_95=self.value_at_risk(),
+        )
+
     def assess(self, signal) -> RiskAssessment:
         """
         Full risk assessment for a proposed trade signal.
@@ -438,66 +536,42 @@ class RiskManager:
         sentiment_score = float(features.get("news_sentiment_score", 0.0))
         impact_score = float(features.get("macro_impact_score", 0.0))
 
-        # Check halt conditions
         if self._halt:
-            return RiskAssessment(
-                symbol=getattr(signal, "symbol", "XAU_USD"),
-                direction=getattr(signal, "direction", "long"),
-                approved=False,
-                risk_level=RiskLevel.CRITICAL,
+            return self._rejected_assessment(
+                signal,
                 reason=f"halted:{self._halt_reason}",
+                risk_level=RiskLevel.CRITICAL,
                 data_quality=data_quality,
                 sentiment_score=sentiment_score,
                 impact_score=impact_score,
-                drawdown_pct=self._state.current_drawdown * 100,
-                daily_dd_pct=self._state.daily_drawdown * 100,
-                open_positions=self._state.open_positions,
-                var_95=self.value_at_risk(),
             )
 
         if self._state.daily_drawdown >= _MAX_DAILY_LOSS_PCT:
-            return RiskAssessment(
-                symbol=getattr(signal, "symbol", "XAU_USD"),
-                direction=getattr(signal, "direction", "long"),
-                approved=False,
-                risk_level=RiskLevel.CRITICAL,
+            return self._rejected_assessment(
+                signal,
                 reason=f"daily_dd:{self._state.daily_drawdown * 100:.2f}%",
+                risk_level=RiskLevel.CRITICAL,
                 data_quality=data_quality,
-                drawdown_pct=self._state.current_drawdown * 100,
-                daily_dd_pct=self._state.daily_drawdown * 100,
-                open_positions=self._state.open_positions,
             )
 
         if data_quality < _MIN_DATA_QUALITY:
-            return RiskAssessment(
-                symbol=getattr(signal, "symbol", "XAU_USD"),
-                direction=getattr(signal, "direction", "long"),
-                approved=False,
-                risk_level=RiskLevel.HIGH,
+            return self._rejected_assessment(
+                signal,
                 reason=f"data_quality:{data_quality:.3f}",
+                risk_level=RiskLevel.HIGH,
                 data_quality=data_quality,
                 sentiment_score=sentiment_score,
                 impact_score=impact_score,
             )
 
-        # Compute sizing
         sizing = self.size_order(signal)
         approved = sizing.quantity > 0
 
-        # Determine risk level
-        dd = self._state.current_drawdown
-        if dd > _MAX_DRAWDOWN_PCT * 0.8:
-            risk_level = RiskLevel.HIGH
-        elif dd > _MAX_DRAWDOWN_PCT * 0.5:
-            risk_level = RiskLevel.MEDIUM
-        else:
-            risk_level = RiskLevel.LOW
-
         return RiskAssessment(
-            symbol=getattr(signal, "symbol", "XAU_USD"),
-            direction=getattr(signal, "direction", "long"),
+            symbol=self._signal_symbol(signal),
+            direction=self._signal_direction(signal),
             approved=approved,
-            risk_level=risk_level,
+            risk_level=self._drawdown_risk_level(),
             reason="approved" if approved else "zero_size",
             sizing=sizing if approved else None,
             data_quality=data_quality,
@@ -509,89 +583,107 @@ class RiskManager:
             var_95=self.value_at_risk(),
         )
 
+    def _zero_sizing(
+        self,
+        symbol: str,
+        direction: str,
+        lineage_id: str,
+        reason: str = "",
+    ) -> PositionSizingResult:
+        """Return a zero-quantity PositionSizingResult and log the rejection reason."""
+        if reason:
+            logger.warning("RiskManager: zero-size — %s", reason)
+        return PositionSizingResult(
+            symbol=symbol,
+            direction=direction,
+            quantity=0.0,
+            notional_usd=0.0,
+            stop_loss_usd=0.0,
+            take_profit_usd=0.0,
+            risk_usd=0.0,
+            lineage_id=lineage_id,
+        )
+
+    def _compute_stop_take(
+        self,
+        direction: str,
+        mid_price: float,
+        atr_proxy: float,
+    ) -> tuple:
+        """Return (stop_loss_usd, take_profit_usd) for a given direction."""
+        tp_dist = atr_proxy * 2.0
+        if direction == "long":
+            return mid_price - atr_proxy, mid_price + tp_dist
+        return mid_price + atr_proxy, mid_price - tp_dist
+
     def size_order(self, signal) -> PositionSizingResult:
         """
         Compute position size for a signal.
 
         All scaling factors derived from orchestrator data.
-        Returns SizedOrder with quantity=0 if any hard gate fails.
+        Returns PositionSizingResult with quantity=0 if any hard gate fails.
         """
-        symbol = getattr(signal, "symbol", "XAU_USD")
+        symbol    = getattr(signal, "symbol", "XAU_USD")
         direction = getattr(signal, "direction", "long")
-        conf = getattr(signal, "confidence", 0.0)
-        prob = getattr(signal, "probability", 0.5)
-        order_id = str(uuid.uuid4())
+        conf      = getattr(signal, "confidence", 0.0)
+        prob      = getattr(signal, "probability", 0.5)
+        order_id  = str(uuid.uuid4())
         lineage_id = str(uuid.uuid4())
 
-        def _zero(reason: str = "") -> PositionSizingResult:
-            if reason:
-                logger.warning("RiskManager: zero-size — %s", reason)
-            return PositionSizingResult(
-                symbol=symbol,
-                direction=direction,
-                quantity=0.0,
-                notional_usd=0.0,
-                stop_loss_usd=0.0,
-                take_profit_usd=0.0,
-                risk_usd=0.0,
-                lineage_id=lineage_id,
-            )
-
+        # ── Hard gates (early returns) ─────────────────────────────────────
         if self._halt:
-            return _zero(f"halted:{self._halt_reason}")
+            return self._zero_sizing(symbol, direction, lineage_id, f"halted:{self._halt_reason}")
 
         if self._state.daily_drawdown >= _MAX_DAILY_LOSS_PCT:
             self._halt_trading("daily_drawdown_limit")
-            return _zero("daily_drawdown_limit")
+            return self._zero_sizing(symbol, direction, lineage_id, "daily_drawdown_limit")
 
         if self._state.current_drawdown >= _MAX_DRAWDOWN_PCT:
             self._halt_trading("max_drawdown_limit")
-            return _zero("max_drawdown_limit")
+            return self._zero_sizing(symbol, direction, lineage_id, "max_drawdown_limit")
 
         if self._state.open_positions >= _MAX_OPEN_POSITIONS:
-            return _zero(f"max_open_positions:{self._state.open_positions}")
+            return self._zero_sizing(
+                symbol, direction, lineage_id,
+                f"max_open_positions:{self._state.open_positions}",
+            )
 
-        # ── Data quality gate — orchestrator is authoritative ──────────────
         data_quality = self._get_data_quality(signal)
         if data_quality < _MIN_DATA_QUALITY:
-            return _zero(f"data_quality:{data_quality:.3f}<{_MIN_DATA_QUALITY}")
-
-        # ── Pull features from orchestrator ────────────────────────────────
-        features = self._get_orchestrator_features(signal)
-        sentiment_score = float(features.get("news_sentiment_score", 0.0))
-        impact_score = float(features.get("macro_impact_score", 0.0))
+            return self._zero_sizing(
+                symbol, direction, lineage_id,
+                f"data_quality:{data_quality:.3f}<{_MIN_DATA_QUALITY}",
+            )
 
         # ── Scaling factors ────────────────────────────────────────────────
-        quality_f = self._quality_factor(data_quality)
+        features = self._get_orchestrator_features(signal)
+        sentiment_score = float(features.get("news_sentiment_score", 0.0))
+        impact_score    = float(features.get("macro_impact_score", 0.0))
+
+        quality_f   = self._quality_factor(data_quality)
         sentiment_f = self._sentiment_factor(sentiment_score)
-        impact_f = self._impact_factor(impact_score)
-        dd_f = self._drawdown_factor()
-        kelly_f = self._kelly(prob, conf)
+        impact_f    = self._impact_factor(impact_score)
+        dd_f        = self._drawdown_factor()
+        kelly_f     = self._kelly(prob, conf)
 
-        # ── Size computation ───────────────────────────────────────────────
-        equity = self._state.account_equity
-        max_notional = equity * _MAX_POSITION_PCT
-        min_notional = equity * _MIN_POSITION_PCT
-        base_notional = equity * kelly_f * _KELLY_FRACTION
+        # ── Notional size ──────────────────────────────────────────────────
+        equity         = self._state.account_equity
+        base_notional  = equity * kelly_f * _KELLY_FRACTION
         final_notional = base_notional * quality_f * sentiment_f * impact_f * dd_f
-        final_notional = max(min_notional, min(final_notional, max_notional))
+        final_notional = max(
+            equity * _MIN_POSITION_PCT,
+            min(final_notional, equity * _MAX_POSITION_PCT),
+        )
 
-        mid_price = getattr(signal, "tick_mid", 1900.0)
-        if mid_price <= 0:
-            mid_price = 1900.0
-        quantity = final_notional / mid_price
+        raw_mid   = getattr(signal, "tick_mid", 1900.0)
+        mid_price = raw_mid if raw_mid > 0 else 1900.0
+        quantity  = final_notional / mid_price
 
         # ── Stop / TP ──────────────────────────────────────────────────────
-        spread = getattr(signal, "tick_spread", 1.0)
+        spread    = getattr(signal, "tick_spread", 1.0)
         atr_proxy = max(spread * 10, mid_price * 0.005)
-        tp_dist = atr_proxy * 2.0
-        stop_loss_usd = (
-            mid_price - atr_proxy if direction == "long" else mid_price + atr_proxy
-        )
-        take_profit_usd = (
-            mid_price + tp_dist if direction == "long" else mid_price - tp_dist
-        )
-        risk_usd = quantity * atr_proxy
+        stop_loss_usd, take_profit_usd = self._compute_stop_take(direction, mid_price, atr_proxy)
+        risk_usd  = quantity * atr_proxy
 
         sized = PositionSizingResult(
             symbol=symbol,
@@ -609,36 +701,27 @@ class RiskManager:
             lineage_id=lineage_id,
         )
 
-        self._sizing_history.append(
-            {
-                "order_id": order_id,
-                "symbol": symbol,
-                "direction": direction,
-                "quantity": sized.quantity,
-                "notional": sized.notional_usd,
-                "quality_f": quality_f,
-                "sentiment_f": sentiment_f,
-                "impact_f": impact_f,
-                "dd_f": dd_f,
-                "kelly_f": kelly_f,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-        )
+        self._sizing_history.append({
+            "order_id": order_id,
+            "symbol": symbol,
+            "direction": direction,
+            "quantity": sized.quantity,
+            "notional": sized.notional_usd,
+            "quality_f": quality_f,
+            "sentiment_f": sentiment_f,
+            "impact_f": impact_f,
+            "dd_f": dd_f,
+            "kelly_f": kelly_f,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
         self._write_sizing_lineage(sized)
 
         logger.info(
             "SIZED %s %s qty=%.4f notional=$%.0f "
             "kelly=%.3f qual=%.3f sent=%.3f imp=%.3f dd=%.3f",
-            direction,
-            symbol,
-            sized.quantity,
-            sized.notional_usd,
-            kelly_f,
-            quality_f,
-            sentiment_f,
-            impact_f,
-            dd_f,
+            direction, symbol, sized.quantity, sized.notional_usd,
+            kelly_f, quality_f, sentiment_f, impact_f, dd_f,
         )
         return sized
 
@@ -718,39 +801,7 @@ class RiskManager:
         # Use signal_strength as confidence when confidence is at default
         effective_confidence = max(confidence, signal_strength)
 
-        class _Signal:
-            """Minimal signal adapter for assess() → size_order() bridge."""
-
-            __slots__ = (
-                "symbol",
-                "direction",
-                "confidence",
-                "probability",
-                "data_quality",
-                "features",
-                "tick_mid",
-                "tick_spread",
-            )
-
-            def __init__(
-                self,
-                symbol: str,
-                direction: str,
-                confidence: float,
-                probability: float,
-                tick_mid: float = 0.0,
-                tick_spread: float = 1.0,
-            ) -> None:
-                self.symbol = symbol
-                self.direction = direction
-                self.confidence = confidence
-                self.probability = probability
-                self.data_quality = 1.0
-                self.features: dict = {}
-                self.tick_mid = tick_mid
-                self.tick_spread = tick_spread
-
-        sig = _Signal(
+        sig = _MinimalSignal(
             symbol=symbol,
             direction=direction,
             confidence=effective_confidence,
@@ -1169,6 +1220,27 @@ class RiskManager:
         """
         return float(np.clip(base_pct, 0.0, base_pct))
 
+    def _make_zero_result(
+        self,
+        symbol: str,
+        direction: str,
+        stop_loss_price: float,
+        take_profit_price: float,
+        reason_str: str,
+    ) -> PositionSizingResult:
+        """Build a zero-quantity result with a halt-reason override."""
+        r = PositionSizingResult(
+            symbol=symbol,
+            direction=direction,
+            quantity=0.0,
+            notional_usd=0.0,
+            stop_loss_usd=float(stop_loss_price),
+            take_profit_usd=float(take_profit_price),
+            risk_usd=0.0,
+        )
+        r._halt_reason_override = reason_str
+        return r
+
     def _calculate_position_size_full(
         self,
         symbol: str,
@@ -1186,32 +1258,22 @@ class RiskManager:
         Returns a zero-quantity PositionSizingResult with a descriptive reason
         when any pre-trade gate rejects the signal.
         """
-
-        def _zero_result(reason_str: str) -> PositionSizingResult:
-            r = PositionSizingResult(
-                symbol=symbol,
-                direction="long",
-                quantity=0.0,
-                notional_usd=0.0,
-                stop_loss_usd=float(stop_loss_price),
-                take_profit_usd=float(take_profit_price),
-                risk_usd=0.0,
-            )
-            r._halt_reason_override = reason_str
-            return r
-
-        # Halt gate
         if self._halt or self._trading_halted:
-            return _zero_result(f"halted:{self._halt_reason}")
+            return self._make_zero_result(
+                symbol, "long", stop_loss_price, take_profit_price,
+                f"halted:{self._halt_reason}",
+            )
 
-        # R/R gate
         min_rr = getattr(self._config, "min_risk_reward", 0.0)
         if min_rr > 0 and entry_price > 0 and stop_loss_price > 0:
-            risk = abs(entry_price - stop_loss_price)
+            risk   = abs(entry_price - stop_loss_price)
             reward = abs(take_profit_price - entry_price)
-            rr = reward / risk if risk > 0 else 0.0
+            rr     = reward / risk if risk > 0 else 0.0
             if rr < min_rr:
-                return _zero_result(f"risk/reward {rr:.2f} too low (min {min_rr:.1f})")
+                return self._make_zero_result(
+                    symbol, "long", stop_loss_price, take_profit_price,
+                    f"risk/reward {rr:.2f} too low (min {min_rr:.1f})",
+                )
 
         return self.calculate_position_size(
             symbol=symbol,
@@ -1303,6 +1365,24 @@ class RiskManager:
 
     # ── Legacy / convenience API (required by tests) ──────────────────────────
 
+    def _blocked_assessment(
+        self,
+        reason: str,
+        level: str,
+        dd: float,
+        daily_dd: float,
+        messages: Optional[List[str]] = None,
+    ) -> TradeAssessment:
+        """Build a blocked TradeAssessment — eliminates repeated kwarg blocks."""
+        return TradeAssessment(
+            can_trade=False,
+            level=level,
+            reason=reason,
+            drawdown=dd,
+            daily_dd=daily_dd,
+            messages=messages or [],
+        )
+
     def assess_risk(
         self,
         account_info: Dict[str, Any],
@@ -1320,75 +1400,46 @@ class RiskManager:
         """
         equity = float(account_info.get("equity") or account_info.get("balance") or 0.0)
 
-        # Negative or zero equity is an immediate hard block.
         if equity <= 0:
-            return TradeAssessment(
-                can_trade=False,
-                level=RiskLevel.CRITICAL,
-                reason=f"invalid_equity:{equity}",
-                drawdown=1.0,
-                daily_dd=1.0,
+            return self._blocked_assessment(
+                f"invalid_equity:{equity}", RiskLevel.CRITICAL, 1.0, 1.0
             )
 
         self.update_equity(equity)
-
-        dd = self._state.current_drawdown
+        dd       = self._state.current_drawdown
         daily_dd = self._state.daily_drawdown
 
         if self._halt:
-            return TradeAssessment(
-                can_trade=False,
-                level=RiskLevel.CRITICAL,
-                reason=f"halted:{self._halt_reason}",
-                drawdown=dd,
-                daily_dd=daily_dd,
+            return self._blocked_assessment(
+                f"halted:{self._halt_reason}", RiskLevel.CRITICAL, dd, daily_dd
             )
 
         if dd >= self._config.max_drawdown_pct:
-            return TradeAssessment(
-                can_trade=False,
-                level=RiskLevel.CRITICAL,
-                reason=f"max_drawdown_exceeded:{dd * 100:.2f}%",
-                drawdown=dd,
-                daily_dd=daily_dd,
+            return self._blocked_assessment(
+                f"max_drawdown_exceeded:{dd * 100:.2f}%", RiskLevel.CRITICAL, dd, daily_dd
             )
 
         if daily_dd >= self._config.max_daily_loss_pct:
-            return TradeAssessment(
-                can_trade=False,
-                level=RiskLevel.HIGH,
-                reason=f"daily_loss_limit:{daily_dd * 100:.2f}%",
-                drawdown=dd,
-                daily_dd=daily_dd,
+            return self._blocked_assessment(
+                f"daily_loss_limit:{daily_dd * 100:.2f}%", RiskLevel.HIGH, dd, daily_dd
             )
 
         n_pos = len(positions) if positions else self._state.open_positions
         if n_pos >= self._config.max_open_positions:
-            return TradeAssessment(
-                can_trade=False,
-                level=RiskLevel.MEDIUM,
-                reason=f"max_positions:{self._config.max_open_positions}",
-                drawdown=dd,
-                daily_dd=daily_dd,
+            return self._blocked_assessment(
+                f"max_positions:{self._config.max_open_positions}",
+                RiskLevel.MEDIUM, dd, daily_dd,
             )
 
-        # CVaR pre-trade gate
         cvar_ok, cvar_msg = self.check_cvar_pre_trade()
         if not cvar_ok:
-            return TradeAssessment(
-                can_trade=False,
-                level=RiskLevel.HIGH,
-                reason="cvar_limit_exceeded",
-                drawdown=dd,
-                daily_dd=daily_dd,
-                messages=[cvar_msg],
+            return self._blocked_assessment(
+                "cvar_limit_exceeded", RiskLevel.HIGH, dd, daily_dd, [cvar_msg]
             )
 
-        level = RiskLevel.LOW
-        if dd > self._config.max_drawdown_pct * 0.75:
-            level = RiskLevel.MEDIUM
-        elif dd > self._config.max_drawdown_pct * 0.50:
-            level = RiskLevel.LOW
+        # Drawdown-proportional risk level
+        limit = self._config.max_drawdown_pct
+        level = RiskLevel.MEDIUM if dd > limit * 0.75 else RiskLevel.LOW
 
         return TradeAssessment(
             can_trade=True,
@@ -1531,6 +1582,21 @@ class RiskManager:
             return True
         return False
 
+    def _drawdown_from_curve(self, equity_curve: Any) -> float:
+        """Compute trailing drawdown from an equity curve list."""
+        arr      = np.array(equity_curve, dtype=float)
+        peak     = np.maximum.accumulate(arr)
+        dd_series = (peak - arr) / np.where(peak > 0, peak, 1.0)
+        return float(dd_series[-1])
+
+    def _drawdown_risk_level_for(self, current_dd: float, limit: float) -> str:
+        """Map a drawdown fraction to a RiskLevel relative to a given limit."""
+        if current_dd > limit * 0.75:
+            return RiskLevel.HIGH
+        if current_dd > limit * 0.50:
+            return RiskLevel.MEDIUM
+        return RiskLevel.LOW
+
     def check_drawdown(  # noqa: F811
         self,
         equity_curve: Any = None,
@@ -1547,34 +1613,24 @@ class RiskManager:
         """
         limit = max_dd if max_dd is not None else self._config.max_drawdown_pct
 
-        if equity_curve is not None and len(equity_curve) >= 2:
-            arr = np.array(equity_curve, dtype=float)
-            peak = np.maximum.accumulate(arr)
-            dd_series = (peak - arr) / np.where(peak > 0, peak, 1.0)
-            current_dd = float(dd_series[-1])
-        else:
-            current_dd = self._state.current_drawdown
+        current_dd = (
+            self._drawdown_from_curve(equity_curve)
+            if equity_curve is not None and len(equity_curve) >= 2
+            else self._state.current_drawdown
+        )
 
         if current_dd > limit:
             return RiskCheckResult(
                 passed=False,
                 risk_level=RiskLevel.CRITICAL,
-                message=(
-                    f"Drawdown {current_dd * 100:.2f}% exceeds limit {limit * 100:.1f}%"
-                ),
+                message=f"Drawdown {current_dd * 100:.2f}% exceeds limit {limit * 100:.1f}%",
                 value=current_dd,
                 threshold=limit,
             )
 
-        level = RiskLevel.LOW
-        if current_dd > limit * 0.75:
-            level = RiskLevel.HIGH
-        elif current_dd > limit * 0.50:
-            level = RiskLevel.MEDIUM
-
         return RiskCheckResult(
             passed=True,
-            risk_level=level,
+            risk_level=self._drawdown_risk_level_for(current_dd, limit),
             message=f"Drawdown {current_dd * 100:.2f}% within limit {limit * 100:.1f}%",
             value=current_dd,
             threshold=limit,
@@ -1596,47 +1652,35 @@ class RiskManager:
         positions       : list of Position objects with .symbol attribute
         max_correlation : maximum allowed pairwise correlation
         """
-        # Static correlation table for major FX pairs (approximate)
-        _CORR: Dict[tuple, float] = {
-            ("EURUSD", "GBPUSD"): 0.87,
-            ("GBPUSD", "EURUSD"): 0.87,
-            ("EURUSD", "AUDUSD"): 0.72,
-            ("AUDUSD", "EURUSD"): 0.72,
-            ("EURUSD", "NZDUSD"): 0.68,
-            ("USDJPY", "USDCHF"): 0.75,
-            ("USDCHF", "USDJPY"): 0.75,
-            ("GBPUSD", "AUDUSD"): 0.65,
-            ("XAUUSD", "AUDUSD"): 0.55,
-        }
-
-        symbols = [getattr(p, "symbol", "") for p in positions]
-        max_found = 0.0
+        symbols    = [getattr(p, "symbol", "") for p in positions]
+        max_found  = 0.0
         worst_pair = ("", "")
 
         for i, s1 in enumerate(symbols):
             for j, s2 in enumerate(symbols):
                 if i >= j:
                     continue
-                corr = _CORR.get((s1, s2), _CORR.get((s2, s1), 0.0))
+                corr = _FX_PAIR_CORRELATIONS.get(
+                    (s1, s2), _FX_PAIR_CORRELATIONS.get((s2, s1), 0.0)
+                )
                 if corr > max_found:
-                    max_found = corr
+                    max_found  = corr
                     worst_pair = (s1, s2)
 
-        if max_found >= max_correlation:
-            level = RiskLevel.HIGH
-        elif max_found >= max_correlation * 0.75:
-            level = RiskLevel.MEDIUM
-        else:
-            level = RiskLevel.LOW
-
+        level = (
+            RiskLevel.HIGH   if max_found >= max_correlation else
+            RiskLevel.MEDIUM if max_found >= max_correlation * 0.75 else
+            RiskLevel.LOW
+        )
+        msg = (
+            f"Max correlation {max_found:.2f} between {worst_pair[0]}/{worst_pair[1]}"
+            if worst_pair[0]
+            else "No correlated pairs detected"
+        )
         return RiskCheckResult(
             passed=max_found < max_correlation,
             risk_level=level,
-            message=(
-                f"Max correlation {max_found:.2f} between {worst_pair[0]}/{worst_pair[1]}"
-                if worst_pair[0]
-                else "No correlated pairs detected"
-            ),
+            message=msg,
             value=max_found,
             threshold=max_correlation,
         )
