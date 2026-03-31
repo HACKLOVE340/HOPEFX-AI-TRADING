@@ -25,6 +25,7 @@ License: Proprietary - Institutional Use Only
 """
 
 import numpy as np
+_ENGINE_RNG = np.random.default_rng()
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Callable, Tuple, Any
 from enum import Enum, IntEnum, auto
@@ -540,7 +541,7 @@ class TransactionCostModel:
                 "r_squared": round(float(r2), 4),
             }
 
-        except Exception as exc:
+        except (ValueError, RuntimeError, TypeError) as exc:
             logger.warning("calibrate_from_executions failed: %s", exc)
             return {"calibrated": False, "error": str(exc)}
 
@@ -1000,7 +1001,7 @@ class MarketMicrostructureAnalyzer:
         try:
             slope = np.polyfit(log_lags, log_tau, 1)[0]
             self.hurst_exponent = max(0, min(1, slope))
-        except Exception:
+        except (ValueError, RuntimeError, TypeError):
             self.hurst_exponent = 0.5
 
     def get_execution_recommendation(self) -> Dict[str, Any]:
@@ -1445,7 +1446,7 @@ class InstitutionalRiskManager:
         for callback in self.emergency_callbacks:
             try:
                 callback(reason, self.daily_pnl, self.current_capital)
-            except Exception as e:
+            except (RuntimeError, ValueError, AttributeError) as e:
                 logger.error(f"Emergency callback failed: {e}")
 
         self._log_risk_event(f"Kill switch: {reason}", RiskEventSeverity.KILL_SWITCH)
@@ -1810,7 +1811,7 @@ class EnhancedBacktestEngine:
                 self.microstructure.order_flow_toxicity,
             )
 
-            slippage_bps = impact["temporary_bps"] + np.random.normal(
+            slippage_bps = impact["temporary_bps"] + _ENGINE_RNG.normal(
                 0, impact["temporary_bps"] * 0.2
             )
 
@@ -1820,7 +1821,7 @@ class EnhancedBacktestEngine:
                 fill_price = base_price * (1 - slippage_bps / 10000)
 
             # Simulate latency
-            latency = np.random.normal(
+            latency = _ENGINE_RNG.normal(
                 self.latency_model["mean"], self.latency_model["std"]
             )
 
@@ -2399,7 +2400,7 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> List[Tic
         stacklevel=2,
     )
 
-    np.random.seed(42)
+    rng = np.random.default_rng(42)
 
     base_price = 1950.0
     volatility = 0.0002
@@ -2407,14 +2408,14 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> List[Tic
     # Simple GBM with a single-step volatility-clustering approximation.
     # This is NOT a real GARCH model — it is only here to produce non-i.i.d.
     # looking data for engine smoke-tests.
-    returns = np.random.normal(0, volatility, n_ticks)
+    returns = rng.normal(0, volatility, n_ticks)
     for i in range(1, n_ticks):
         returns[i] *= 1 + abs(returns[i - 1]) * 5
 
     prices = base_price * np.exp(np.cumsum(returns))
 
     # Uniform random spread — not microstructure-realistic
-    spreads = np.random.uniform(0.02, 0.08, n_ticks)  # 2-8 pips for gold
+    spreads = rng.uniform(0.02, 0.08, n_ticks)  # 2-8 pips for gold
 
     ticks = []
     start_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
@@ -2430,9 +2431,9 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> List[Tic
             symbol=symbol,
             bid=price - spread / 2,
             ask=price + spread / 2,
-            bid_size=np.random.exponential(10.0),
-            ask_size=np.random.exponential(10.0),
-            volume=np.random.poisson(100),
+            bid_size=rng.exponential(10.0),
+            ask_size=rng.exponential(10.0),
+            volume=int(rng.poisson(100)),
             source="synthetic",
         )
         ticks.append(tick)
@@ -2483,7 +2484,7 @@ def _load_real_ticks(
                 )
             )
         return ticks
-    except Exception as exc:
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
         logger.warning("Could not load real tick data: %s", exc)
         return None
 
