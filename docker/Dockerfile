@@ -1,17 +1,17 @@
 # =============================================================================
 # STAGE 1: Python Dependencies Builder
 # =============================================================================
-FROM python:3.12-slim as python-builder
+FROM python:3.12-slim AS python-builder
 
 WORKDIR /build
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
+    cargo \
     g++ \
+    gcc \
     libpq-dev \
     libssl-dev \
-    cargo \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # =============================================================================
 # STAGE 2: Dashboard Builder (Node.js)
 # =============================================================================
-FROM node:20-alpine as dashboard-builder
+FROM node:20-alpine AS dashboard-builder
 
 WORKDIR /dashboard
 
@@ -34,7 +34,7 @@ RUN npm run build
 # =============================================================================
 # STAGE 3: Final Runtime Image
 # =============================================================================
-FROM python:3.12-slim as runtime
+FROM python:3.12-slim AS runtime
 
 WORKDIR /app
 
