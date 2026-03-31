@@ -48,9 +48,12 @@ prompt() {
   local var="$1" prompt_text="$2" secret="${3:-false}"
   if [[ -z "${!var:-}" ]]; then
     if [[ "$secret" == "true" ]]; then
-      read -rsp "  $prompt_text: " "$var"; echo
+      # read into a nameref so shellcheck SC2229 is satisfied
+      local -n _prompt_ref="$var"
+      read -rsp "  $prompt_text: " _prompt_ref; echo
     else
-      read -rp  "  $prompt_text: " "$var"
+      local -n _prompt_ref="$var"
+      read -rp  "  $prompt_text: " _prompt_ref
     fi
     [[ -n "${!var}" ]] || die "$var cannot be empty"
   fi
