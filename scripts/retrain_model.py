@@ -101,8 +101,8 @@ def _load_csv(symbol: str, csv_path: str | None, years: int) -> pd.DataFrame:
     try:
         import yfinance as yf
 
-        _YF_MAP = {"XAU_USD": "GC=F", "XAUUSD": "GC=F", "EUR_USD": "EURUSD=X"}
-        yf_sym = _YF_MAP.get(symbol, symbol)
+        _yf_map = {"XAU_USD": "GC=F", "XAUUSD": "GC=F", "EUR_USD": "EURUSD=X"}
+        yf_sym = _yf_map.get(symbol, symbol)
         period = f"{min(years, 10)}y"
         df = yf.Ticker(yf_sym).history(period=period, interval="1d")
         df.columns = [c.lower() for c in df.columns]
@@ -329,8 +329,8 @@ Examples:
             cmd.append("--smoke")
         if args.symbol and args.symbol not in ("XAU_USD", "XAUUSD"):
             # Map OANDA symbol to yfinance ticker
-            _YF_MAP = {"XAU_USD": "GC=F", "XAUUSD": "GC=F", "EUR_USD": "EURUSD=X"}
-            yf_sym = _YF_MAP.get(args.symbol, args.symbol)
+            _yf_map = {"XAU_USD": "GC=F", "XAUUSD": "GC=F", "EUR_USD": "EURUSD=X"}
+            yf_sym = _yf_map.get(args.symbol, args.symbol)
             cmd += ["--symbol", yf_sym]
         logger.info("Running advanced training: %s", " ".join(cmd))
         result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input

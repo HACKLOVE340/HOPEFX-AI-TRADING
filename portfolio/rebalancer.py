@@ -52,7 +52,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -286,10 +286,7 @@ class BookOptimiser:
         # Project w0 onto feasible region
         w0 = np.clip(w0, [b[0] for b in bounds], [b[1] for b in bounds])
         w0_sum = w0.sum()
-        if w0_sum > 0:
-            w0 = w0 / w0_sum
-        else:
-            w0 = np.array([1.0 / n] * n)
+        w0 = w0 / w0_sum if w0_sum > 0 else np.array([1.0 / n] * n)
 
         result = minimize(
             neg_sharpe,

@@ -255,7 +255,7 @@ class TradeExecutor:
             GateOrder,
             PreTradeGate,
             RiskManagerError,
-            TradeBlocked,
+            TradeBlockedError,
         )
 
         gate = PreTradeGate(self.risk_manager)
@@ -270,7 +270,7 @@ class TradeExecutor:
         )
         try:
             gate.check(gate_order)
-        except TradeBlocked as exc:
+        except TradeBlockedError as exc:
             logger.warning(
                 "ORDER BLOCKED by pre-trade gate | symbol=%s side=%s qty=%.4f "
                 "reason_code=%s detail=%s",

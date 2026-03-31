@@ -11,7 +11,7 @@ prices from OANDA's SSE endpoint.  That responsibility has been transferred
 to data_feed.NuclearStreamer (Finnhub / Twelve Data / Polygon WebSockets).
 
 OANDAStreamAdapter is retained as a tombstone class that raises
-StreamingForbidden on any attempt to start a stream, so that stale import
+StreamingForbiddenError on any attempt to start a stream, so that stale import
 sites fail loudly at startup rather than silently delivering no data.
 
 Migration
@@ -41,7 +41,7 @@ from collections.abc import Callable
 logger = logging.getLogger(__name__)
 
 
-class StreamingForbidden(RuntimeError):
+class StreamingForbiddenError(RuntimeError):
     """
     Raised when code attempts to stream prices through OANDAStreamAdapter.
 
@@ -59,7 +59,7 @@ class StreamingForbidden(RuntimeError):
 
 class OANDAStreamAdapter:
     """
-    Tombstone — raises StreamingForbidden on any streaming attempt.
+    Tombstone — raises StreamingForbiddenError on any streaming attempt.
 
     Kept so that stale import sites fail loudly at startup.
     Migrate to data_feed.NuclearStreamer.
@@ -82,10 +82,10 @@ class OANDAStreamAdapter:
         )
 
     async def start(self) -> None:
-        raise StreamingForbidden("start")
+        raise StreamingForbiddenError("start")
 
     async def stop(self) -> None:
-        raise StreamingForbidden("stop")
+        raise StreamingForbiddenError("stop")
 
     async def poll_rest(self) -> list[dict]:
-        raise StreamingForbidden("poll_rest")
+        raise StreamingForbiddenError("poll_rest")

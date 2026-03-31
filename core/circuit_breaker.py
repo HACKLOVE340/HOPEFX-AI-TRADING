@@ -76,7 +76,7 @@ class CBState(IntEnum):
     OPEN = 2
 
 
-class CircuitBreakerOpen(Exception):
+class CircuitBreakerOpenError(Exception):
     """Raised when a call is attempted while the circuit is OPEN."""
 
     def __init__(self, broker: str, retry_after: float):
@@ -130,7 +130,7 @@ class CircuitBreaker:
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
         if exc_type is None:
             await self._on_success()
-        elif exc_type is not CircuitBreakerOpen:
+        elif exc_type is not CircuitBreakerOpenError:
             await self._on_failure(str(exc_val))
         return False  # never suppress exceptions
 
@@ -147,7 +147,7 @@ class CircuitBreaker:
                     self._transition(CBState.HALF_OPEN)
                     logger.info("Circuit breaker '%s' → HALF_OPEN (probing)", self.name)
                     return
-                raise CircuitBreakerOpen(self.name, self.reset_timeout - elapsed)
+                raise CircuitBreakerOpenError(self.name, self.reset_timeout - elapsed)
 
             # HALF_OPEN: allow one probe through (no action needed here)
 

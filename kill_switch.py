@@ -907,8 +907,8 @@ def create_kill_switch_router(ks: KillSwitch):
                 detail="Authentication service error — access denied",
             ) from exc
 
-        _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
-        if _ROLE_RANK.get(getattr(user, "role", "user"), -1) < _ROLE_RANK["admin"]:
+        _role_rank = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
+        if _role_rank.get(getattr(user, "role", "user"), -1) < _role_rank["admin"]:
             logger.warning(
                 "Kill switch access denied: user=%s role=%s — admin required",
                 getattr(user, "sub", "unknown"),

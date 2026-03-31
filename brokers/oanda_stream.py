@@ -22,7 +22,7 @@ NOT responsible for
 
 Architectural boundary
 ----------------------
-``stream_prices()`` raises ``StreamingForbidden`` at runtime to catch any
+``stream_prices()`` raises ``StreamingForbiddenError`` at runtime to catch any
 code that still tries to use this class as a data source.  All live price
 data must flow through ``data_feed.NuclearStreamer``.
 
@@ -74,7 +74,7 @@ _DEFAULT_TIMEOUT = 10  # seconds
 # ── Architectural boundary enforcement ───────────────────────────────────────
 
 
-class StreamingForbidden(RuntimeError):
+class StreamingForbiddenError(RuntimeError):
     """
     Raised when code attempts to stream prices through OANDAStream.
 
@@ -193,11 +193,11 @@ class OANDAStream:
 
     async def stream_prices(self, *_args, **_kwargs) -> None:
         """
-        Raises StreamingForbidden unconditionally.
+        Raises StreamingForbiddenError unconditionally.
 
         Live price streaming is handled by data_feed.NuclearStreamer.
         """
-        raise StreamingForbidden()
+        raise StreamingForbiddenError()
 
     # ── Account ───────────────────────────────────────────────────────────────
 

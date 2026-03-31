@@ -59,11 +59,11 @@ class CircuitBreaker:
                     self.half_open_calls = 0
                     print(f"🔌 Circuit {self.name}: HALF_OPEN (testing recovery)")
                 else:
-                    raise CircuitBreakerOpen(f"Circuit {self.name} is OPEN")
+                    raise CircuitBreakerOpenError(f"Circuit {self.name} is OPEN")
 
         if self.state == CircuitState.HALF_OPEN:
             if self.half_open_calls >= self.config.half_open_max_calls:
-                raise CircuitBreakerOpen(f"Circuit {self.name} half-open limit reached")
+                raise CircuitBreakerOpenError(f"Circuit {self.name} half-open limit reached")
             self.half_open_calls += 1
 
         # Execute
@@ -121,7 +121,7 @@ class CircuitBreaker:
         }
 
 
-class CircuitBreakerOpen(Exception):
+class CircuitBreakerOpenError(Exception):
     """Exception when circuit is open"""
 
 
@@ -142,7 +142,7 @@ class Bulkhead:
     async def execute(self, func: Callable, *args, **kwargs):
         """Execute with bulkhead constraints"""
         if self.queue_size.locked():
-            raise BulkheadFull(f"Bulkhead {self.name} queue full")
+            raise BulkheadFullError(f"Bulkhead {self.name} queue full")
 
         async with self.queue_size:
             self.queue_count += 1
@@ -164,7 +164,7 @@ class Bulkhead:
         }
 
 
-class BulkheadFull(Exception):
+class BulkheadFullError(Exception):
     pass
 
 

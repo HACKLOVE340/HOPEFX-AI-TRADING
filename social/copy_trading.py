@@ -76,7 +76,7 @@ class CopyTradingEngine:
         return out
 
 
-class RiskLimitExceeded(Exception):
+class RiskLimitExceededError(Exception):
     """Raised when a copy trade would exceed risk limits."""
 
 
@@ -114,7 +114,7 @@ async def _copy_trade(
     max_qty_by_risk = (follower_balance * max_pos_size) / price if price and price > 0 else leader_qty * max_pos_size
 
     if raw_qty > max_qty_by_risk:
-        raise RiskLimitExceeded(
+        raise RiskLimitExceededError(
             f"Copied quantity {raw_qty:.4f} exceeds max allowed {max_qty_by_risk:.4f}"
         )
 

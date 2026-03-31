@@ -23,7 +23,7 @@ This module NEVER:
 
 ALL market data flows exclusively through data_layer.orchestrator.
 Any attempt to call get_market_data(), subscribe_ticks(), or
-reqHistoricalData() raises MarketDataForbidden to enforce the
+reqHistoricalData() raises MarketDataForbiddenError to enforce the
 architectural boundary at runtime.
 
 Connection config
@@ -91,7 +91,7 @@ _MAX_RECONNECTS = int(os.getenv("IBKR_MAX_RECONNECTS", "10"))
 # ── Architectural boundary enforcement ───────────────────────────────────────
 
 
-class MarketDataForbidden(RuntimeError):
+class MarketDataForbiddenError(RuntimeError):
     """
     Raised when code attempts to fetch market data through a broker connector.
 
@@ -445,25 +445,25 @@ class IBKRBroker:
     # ── FORBIDDEN: market data methods ───────────────────────────────────────
 
     def get_market_data(self, *args, **kwargs):
-        raise MarketDataForbidden("get_market_data")
+        raise MarketDataForbiddenError("get_market_data")
 
     def subscribe_ticks(self, *args, **kwargs):
-        raise MarketDataForbidden("subscribe_ticks")
+        raise MarketDataForbiddenError("subscribe_ticks")
 
     async def reqMktData(self, *args, **kwargs):
-        raise MarketDataForbidden("reqMktData")
+        raise MarketDataForbiddenError("reqMktData")
 
     async def reqHistoricalData(self, *args, **kwargs):
-        raise MarketDataForbidden("reqHistoricalData")
+        raise MarketDataForbiddenError("reqHistoricalData")
 
     async def get_ohlcv(self, *args, **kwargs):
-        raise MarketDataForbidden("get_ohlcv")
+        raise MarketDataForbiddenError("get_ohlcv")
 
     async def get_current_price(self, *args, **kwargs):
-        raise MarketDataForbidden("get_current_price")
+        raise MarketDataForbiddenError("get_current_price")
 
     async def stream_prices(self, *args, **kwargs):
-        raise MarketDataForbidden("stream_prices")
+        raise MarketDataForbiddenError("stream_prices")
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 

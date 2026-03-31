@@ -424,7 +424,7 @@ class TestPreTradeGate:
         from risk.pre_trade_gate import (
             PreTradeGate,
             GateOrder,
-            TradeBlocked,
+            TradeBlockedError,
             RiskManagerError,
         )
 
@@ -454,9 +454,9 @@ class TestPreTradeGate:
         gate = PreTradeGate(_BrokenRiskManager())
         order = GateOrder(symbol="XAUUSD", side="BUY", quantity=1.0)
 
-        # Gate must raise — either TradeBlocked (daily loss) or RiskManagerError
+        # Gate must raise — either TradeBlockedError (daily loss) or RiskManagerError
         # (broken config).  It must NEVER silently pass.
-        with pytest.raises((TradeBlocked, RiskManagerError, RuntimeError)):
+        with pytest.raises((TradeBlockedError, RiskManagerError, RuntimeError)):
             gate.check(order)
 
 

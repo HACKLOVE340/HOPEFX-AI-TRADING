@@ -12,7 +12,7 @@ Tests use the real CopyTradingEngine from the production module — no mocks.
 import pytest
 from decimal import Decimal
 
-from social.copy_trading import CopyTradingEngine, CopyRelationship, RiskLimitExceeded
+from social.copy_trading import CopyTradingEngine, CopyRelationship, RiskLimitExceededError
 
 
 class TestCopyRelationship:
@@ -182,7 +182,7 @@ class TestCopyTradingEngine:
             "copy_ratio": 1.0,
             "max_position_size": 0.001,  # very tight limit
         }
-        with pytest.raises(RiskLimitExceeded):
+        with pytest.raises(RiskLimitExceededError):
             await engine.copy_trade(
                 leader_trade=large_trade,
                 follower_config=follower_config,
