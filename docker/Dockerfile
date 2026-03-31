@@ -42,8 +42,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder
 COPY --from=python-builder /root/.local /root/.local

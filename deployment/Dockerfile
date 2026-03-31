@@ -2,13 +2,13 @@
 
 FROM python:3.11-slim AS builder
 
+WORKDIR /build
+
 # Build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /build
 
 # Python dependencies
 COPY requirements.txt .
@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
+WORKDIR /app
+
 # Copy Python packages from builder
 COPY --from=builder /root/.local /root/.local
 
@@ -31,8 +33,6 @@ ENV PATH=/root/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     APP_ENV=production
-
-WORKDIR /app
 
 # Copy application code
 COPY . .
