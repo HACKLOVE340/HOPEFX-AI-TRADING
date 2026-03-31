@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-import subprocess
+import subprocess  # nosec B404 - list-form calls with fixed tool names; no shell=True, no user input
 import sys
 import time
 from typing import List, Optional
@@ -63,7 +63,7 @@ def _run(
     if dry_run:
         logger.info("  [dry-run] skipped")
         return subprocess.CompletedProcess(cmd, returncode=0, stdout=b"", stderr=b"")
-    return subprocess.run(cmd, check=check, capture_output=False)
+    return subprocess.run(  # nosec B603 B607 - list-form calls with fixed tool names; no shell=True, no user inputcmd, check=check, capture_output=False)
 
 
 class DeploymentManager:
@@ -161,7 +161,7 @@ class DeploymentManager:
 
     def _record_current_state(self, environment: str) -> None:
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607 - list-form calls with fixed tool names; no shell=True, no user input
                 [
                     "docker",
                     "inspect",
@@ -295,7 +295,7 @@ class DeploymentManager:
     @staticmethod
     def _is_kubernetes_available() -> bool:
         try:
-            r = subprocess.run(
+            r = subprocess.run(  # nosec B603 B607 - list-form calls with fixed tool names; no shell=True, no user input
                 ["kubectl", "cluster-info"],
                 capture_output=True,
                 check=False,
@@ -308,7 +308,7 @@ class DeploymentManager:
     @staticmethod
     def _is_compose_available() -> bool:
         try:
-            r = subprocess.run(
+            r = subprocess.run(  # nosec B603 B607 - list-form calls with fixed tool names; no shell=True, no user input
                 ["docker", "compose", "version"],
                 capture_output=True,
                 check=False,
