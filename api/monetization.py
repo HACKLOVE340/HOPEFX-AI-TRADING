@@ -147,6 +147,10 @@ class StrategyPurchaseRequest(BaseModel):
 
     buyer_id: str
     strategy_id: str
+    # Stripe customer ID — required to create a PaymentIntent
+    stripe_customer_id: str
+    # Presentment currency (ISO 4217, e.g. "USD", "EUR", "NGN")
+    currency: str = "USD"
 
 
 class ReviewRequest(BaseModel):
@@ -606,24 +610,71 @@ async def get_strategy(strategy_id: str):
 @router.post("/marketplace/purchase")
 async def purchase_strategy(request: StrategyPurchaseRequest):
     """
-    Purchase a strategy.
+    Initiate a strategy purchase via Stripe PaymentIntent.
+
+    Flow:
+    1. Validate the strategy exists and is available.
+    2. Create a pending purchase record.
+    3. Create a Stripe PaymentIntent for the strategy price.
+    4. Return the client_secret so the frontend can confirm payment.
+    5. On payment success, Stripe fires a webhook → /monetization/webhook
+       which calls complete_purchase() to activate the license.
     """
+    # 1. Validate strategy
+    strategy = strategy_marketplace.get_strategy(request.strategy_id)
+    if not strategy:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Strategy not found.",
+        )
+
+    # Determine price — _StrategyListing uses .price; StrategyListing uses .price_monthly
+    price = getattr(strategy, "price", None) or getattr(strategy, "price_monthly", None)
+    if price is None or float(price) <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Strategy has no valid price configured.",
+        )
+
+    # 2. Create pending purchase record
     purchase = strategy_marketplace.purchase_strategy(
         buyer_id=request.buyer_id,
         strategy_id=request.strategy_id,
     )
-
     if not purchase:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unable to purchase. Strategy may be unavailable or already owned.",
+            detail="Unable to initiate purchase. Strategy may be unavailable or already owned.",
         )
 
-    # In production, would initiate payment here
-    # For now, auto-complete
-    strategy_marketplace.complete_purchase(purchase.purchase_id)
+    # 3. Create Stripe PaymentIntent — do NOT auto-complete; wait for webhook
+    try:
+        payment_intent = stripe_integration.create_payment_intent(
+            customer_id=request.stripe_customer_id,
+            amount=Decimal(str(price)),
+            currency=request.currency.lower(),
+            metadata={
+                "purchase_id": purchase.purchase_id,
+                "buyer_id": request.buyer_id,
+                "strategy_id": request.strategy_id,
+            },
+        )
+    except Exception as exc:
+        logger.error("Stripe PaymentIntent creation failed for purchase %s: %s", purchase.purchase_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Payment provider error. Please try again.",
+        )
 
-    return {"success": True, "purchase": purchase.to_dict()}
+    return {
+        "success": True,
+        "purchase_id": purchase.purchase_id,
+        "payment_intent_id": payment_intent.intent_id,
+        "client_secret": payment_intent.client_secret,
+        "amount": float(price),
+        "currency": request.currency.upper(),
+        "status": "requires_payment_method",
+    }
 
 
 @router.post("/marketplace/review")
@@ -831,9 +882,29 @@ async def get_enterprise_stats():
 async def stripe_webhook(payload: Dict[str, Any] = Body(...)):
     """
     Handle Stripe webhooks.
+
+    On payment_intent.succeeded, activates the strategy license for the
+    purchase_id stored in the PaymentIntent metadata.
     """
     event_type = payload.get("type", "")
     event_data = payload.get("data", {}).get("object", {})
+
+    # Activate marketplace purchase when payment is confirmed
+    if event_type == "payment_intent.succeeded":
+        metadata = event_data.get("metadata", {})
+        purchase_id = metadata.get("purchase_id")
+        if purchase_id:
+            activated = strategy_marketplace.complete_purchase(purchase_id)
+            if activated:
+                logger.info(
+                    "Strategy license activated for purchase %s via Stripe webhook",
+                    purchase_id,
+                )
+            else:
+                logger.warning(
+                    "complete_purchase(%s) returned False — purchase may not exist",
+                    purchase_id,
+                )
 
     result = stripe_integration.handle_webhook(event_type, event_data)
 
