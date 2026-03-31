@@ -33,7 +33,7 @@ import os  # noqa: E402
 import sys  # noqa: E402
 from contextlib import asynccontextmanager  # noqa: E402
 from pathlib import Path  # noqa: E402
-from typing import Any, Dict, List, Optional  # noqa: E402
+from typing import Optional  # noqa: E402
 
 # Logger must be defined before any module-level try/except blocks that use it.
 logging.basicConfig(
@@ -41,7 +41,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, HTTPException, Request, status  # noqa: E402
+from fastapi import FastAPI, HTTPException, status  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
@@ -78,7 +78,6 @@ from config.startup_validator import validate_environment  # noqa: E402
 validate_environment(strict=True)  # calls sys.exit(1) on failure
 
 from api.admin import (  # noqa: E402
-    router as admin_router,
     log_activity,
     apply_persisted_risk_settings,
 )
@@ -92,6 +91,7 @@ _signals_router = _create_signals_router()
 # GraphQL — optional dependency
 try:
     from api.graphql_schema import graphql_router as _graphql_router
+
     _graphql_available = True
 except Exception as _gql_err:
     _graphql_router = None
@@ -174,6 +174,7 @@ _register_routers(
 # Without this wiring, the kill switch only works within a single process.
 try:
     from core.event_bus import bus as _event_bus
+
     kill_switch = KillSwitch(event_bus=_event_bus)
     logger.info("KillSwitch wired to Redis EventBus for cross-pod propagation")
 except Exception as _ks_bus_err:
@@ -191,9 +192,11 @@ if _ks_router is not None:
 # Nuclear supervisor + kill switch control endpoints
 try:
     from api.nuclear import router as _nuclear_router
+
     app.include_router(_nuclear_router, prefix="/nuclear", tags=["nuclear"])
 except Exception as _nuclear_err:
     import logging as _logging
+
     _logging.getLogger(__name__).warning(
         "Nuclear router failed to register: %s", _nuclear_err
     )
@@ -201,9 +204,11 @@ except Exception as _nuclear_err:
 # Data layer REST endpoints
 try:
     from api.data_layer import router as _dl_router
+
     app.include_router(_dl_router)
 except Exception as _dl_router_err:
     import logging as _logging
+
     _logging.getLogger(__name__).warning(
         "Data layer router failed to register: %s", _dl_router_err
     )
@@ -211,9 +216,11 @@ except Exception as _dl_router_err:
 # KYC/AML endpoints (Sumsub/Onfido + sanctions screening)
 try:
     from api.kyc import router as _kyc_router
+
     app.include_router(_kyc_router, prefix="/api")
 except Exception as _kyc_router_err:
     import logging as _logging
+
     _logging.getLogger(__name__).warning(
         "KYC router failed to register: %s", _kyc_router_err
     )
@@ -221,9 +228,11 @@ except Exception as _kyc_router_err:
 # TCA endpoints (slippage stats, fill quality, alerts)
 try:
     from api.tca import router as _tca_router
+
     app.include_router(_tca_router, prefix="/api")
 except Exception as _tca_router_err:
     import logging as _logging
+
     _logging.getLogger(__name__).warning(
         "TCA router failed to register: %s", _tca_router_err
     )
@@ -231,9 +240,11 @@ except Exception as _tca_router_err:
 # Chaos engineering + mutation testing endpoints
 try:
     from api.chaos import router as _chaos_router
+
     app.include_router(_chaos_router)
 except Exception as _chaos_router_err:
     import logging as _logging
+
     _logging.getLogger(__name__).warning(
         "Chaos router failed to register: %s", _chaos_router_err
     )
@@ -261,8 +272,8 @@ except Exception as _otel_err:
     logger.debug("OpenTelemetry setup skipped: %s", _otel_err)
 
 
-# AppState extracted to core/app_state.py
-from core.app_state import AppState, app_state  # noqa: E402
+# AppState extracted to core/app_state.py — re-exported here for backwards compat
+from core.app_state import AppState, app_state  # noqa: E402, F401
 
 
 class ErrorResponse(BaseModel):
@@ -290,12 +301,10 @@ def get_db() -> Session:
 
 # CORS + security headers configuration
 # Middleware helpers extracted to core/middleware.py
-from core.middleware import setup_cors, setup_security_headers, setup_metrics_middleware  # noqa: E402
 
 
 # Background task implementations extracted to core/background_tasks.py
 from core.background_tasks import nuclear_price_bridge as _nuclear_price_bridge  # noqa: E402
-from core.background_tasks import price_stream_loop as _price_stream_loop  # noqa: E402
 
 
 @asynccontextmanager
@@ -329,7 +338,9 @@ async def lifespan(_app: FastAPI):
     # Mount nuclear dashboard WebSocket + REST routes (/ws/nuclear, /api/nuclear/*)
     try:
         from charting.websocket_server import mount_nuclear_routes
-        from charting.nuclear_ai_chart_engine import get_chart_engine as _get_chart_engine
+        from charting.nuclear_ai_chart_engine import (
+            get_chart_engine as _get_chart_engine,
+        )
 
         _nuclear_engine = _get_chart_engine()
         mount_nuclear_routes(app, _nuclear_engine)
@@ -350,7 +361,6 @@ app.router.lifespan_context = lifespan
 # Stress tests and component registry builder extracted to core/startup_factories.py
 from core.startup_factories import (  # noqa: E402
     build_component_registry as _build_component_registry,
-    run_startup_stress_tests as _run_startup_stress_tests,
 )
 
 
@@ -380,6 +390,7 @@ async def startup_event():
         for _mod_name, _fn_name in _state_modules:
             try:
                 import importlib as _il
+
                 _mod = _il.import_module(_mod_name)
                 _fn = getattr(_mod, _fn_name, None)
                 if _fn is not None:
@@ -402,6 +413,7 @@ async def startup_event():
         # Non-blocking: if it fails, the rest of the app continues normally.
         try:
             from data_layer.orchestrator import orchestrator
+
             asyncio.create_task(
                 orchestrator.start(),
                 name="data_layer_orchestrator",
@@ -417,14 +429,18 @@ async def startup_event():
         # persisted to DB and the audit log is maintained.
         try:
             from compliance.kyc_provider import init_kyc_gateway
+
             _cm = getattr(app_state, "compliance_manager", None)
             if _cm is not None:
                 init_kyc_gateway(_cm)
                 logger.info("KYCGateway initialised with ComplianceManager")
             else:
                 from compliance.kyc_provider import get_kyc_gateway
+
                 get_kyc_gateway()  # initialise with no-DB fallback
-                logger.warning("KYCGateway initialised without ComplianceManager (no DB)")
+                logger.warning(
+                    "KYCGateway initialised without ComplianceManager (no DB)"
+                )
         except Exception as _kyc_exc:
             logger.warning("KYCGateway init failed (non-fatal): %s", _kyc_exc)
 
@@ -433,6 +449,7 @@ async def startup_event():
         # Provider selected by L2_PROVIDER env var (oanda | ibkr | mock).
         try:
             from market_data.order_book import get_order_book_feed
+
             _l2_symbols = os.getenv("L2_SYMBOLS", "XAU_USD,EUR_USD").split(",")
             _l2_feed = get_order_book_feed()
             _l2_task = asyncio.create_task(
@@ -449,17 +466,19 @@ async def startup_event():
             # and related ML features reflect real order book state.
             async def _l2_depth_bridge() -> None:
                 import asyncio as _asyncio
+
                 _interval = float(os.getenv("L2_SNAPSHOT_INTERVAL", "1.0"))
                 while True:
                     try:
                         from data_layer.orchestrator import orchestrator as _dl_orch
+
                         for _sym in [s.strip() for s in _l2_symbols]:
                             _snap = _l2_feed.get_snapshot(_sym)
                             if _snap is not None:
                                 _dl_orch._micro.inject_l2_depth(
-                                    symbol    = _sym,
-                                    bid_depth = _snap.bid_depth,
-                                    ask_depth = _snap.ask_depth,
+                                    symbol=_sym,
+                                    bid_depth=_snap.bid_depth,
+                                    ask_depth=_snap.ask_depth,
                                 )
                     except Exception as _exc:
                         logger.debug("L2 depth bridge error: %s", _exc)
@@ -471,13 +490,16 @@ async def startup_event():
             if hasattr(app_state, "background_tasks"):
                 app_state.background_tasks.append(_l2_bridge_task)
         except Exception as _l2_exc:
-            logger.warning("L2 order book feed failed to start (non-fatal): %s", _l2_exc)
+            logger.warning(
+                "L2 order book feed failed to start (non-fatal): %s", _l2_exc
+            )
 
         # ── Start Sharpe circuit breaker ──────────────────────────────────────
         # Monitors rolling live Sharpe per model version and gates models out
         # of production when Sharpe drops below threshold for N consecutive windows.
         try:
             from ml.sharpe_circuit_breaker import get_sharpe_cb
+
             _scb_task = asyncio.create_task(
                 get_sharpe_cb().run(),
                 name="sharpe_circuit_breaker",
@@ -559,6 +581,7 @@ async def shutdown_event():
     # Stop data layer orchestrator
     try:
         from data_layer.orchestrator import orchestrator
+
         if orchestrator._started:
             await orchestrator.stop()
             logger.info("✓ Data layer orchestrator stopped")
@@ -570,7 +593,6 @@ async def shutdown_event():
 
 # /health and /status extracted to core/health.py
 from core.health import register_health_routes as _register_health_routes  # noqa: E402
-from core.health import HealthResponse, StatusResponse  # noqa: E402  (re-export for tests)
 
 _register_health_routes(app, app_state, kill_switch)
 
