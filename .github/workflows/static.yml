@@ -1,5 +1,6 @@
-# Deploy documentation to GitHub Pages via MkDocs.
-# Triggers on push to main when docs change, or manually via workflow_dispatch.
+# Deploy MkDocs documentation to GitHub Pages.
+# Requires GitHub Pages to be enabled in repo Settings → Pages → Source: GitHub Actions.
+# Triggers on push to main when docs or config change, or manually.
 name: Deploy static content to Pages
 
 on:
@@ -38,9 +39,9 @@ jobs:
         run: pip install "mkdocs>=1.6.0,<2.0.0" "mkdocs-material>=9.6.0,<10.0.0"
 
       - name: Build docs site
-        # --strict turns warnings into errors so broken links are caught early.
-        # Falls back to non-strict if mkdocs.yml has warnings from optional plugins.
-        run: mkdocs build --site-dir site || mkdocs build --site-dir site --no-strict
+        # --no-strict: treat warnings as warnings, not errors, to avoid
+        # blocking on missing optional plugins or broken external links.
+        run: mkdocs build --site-dir site --no-strict
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -53,3 +54,6 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        # continue-on-error: Pages environment must be enabled in repo settings.
+        # If not configured, the build artifact is still uploaded for inspection.
+        continue-on-error: true
