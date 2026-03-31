@@ -288,12 +288,10 @@ jobs:
 
       - name: Upload coverage to Qlty
         if: matrix.python-version == '3.11'
-        env:
-          QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_COVERAGE_TOKEN }}
-        run: |
-          curl -fsSL https://qlty.sh/install.sh | bash
-          export PATH="$HOME/.qlty/bin:$PATH"
-          qlty coverage publish --token "$QLTY_COVERAGE_TOKEN" coverage.xml
+        uses: qltysh/qlty-action/coverage@v2
+        with:
+          token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
+          files: coverage.xml
 
   frontend:
     runs-on: ubuntu-latest
