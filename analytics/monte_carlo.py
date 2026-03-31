@@ -51,7 +51,7 @@ import logging
 import math
 import os
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 
@@ -69,6 +69,7 @@ _ANNUALISE = math.sqrt(252)
 
 # ── Result data structures ────────────────────────────────────────────────────
 
+
 @dataclass
 class BootstrapResult:
     """
@@ -76,6 +77,7 @@ class BootstrapResult:
 
     All CI tuples are (lower_bound, upper_bound) at the specified level.
     """
+
     n_paths: int
     n_trades: int
     initial_capital: float
@@ -137,6 +139,7 @@ class BootstrapResult:
 
 # ── Core engine ───────────────────────────────────────────────────────────────
 
+
 class MonteCarloEngine:
     """
     Bootstrap Monte Carlo engine for backtest robustness analysis.
@@ -180,7 +183,9 @@ class MonteCarloEngine:
         BootstrapResult with confidence intervals on all key metrics.
         """
         if len(trade_pnls) < 2:
-            logger.warning("MonteCarloEngine: need at least 2 trades — returning empty result")
+            logger.warning(
+                "MonteCarloEngine: need at least 2 trades — returning empty result"
+            )
             return self._empty_result(initial_capital)
 
         pnls = np.array(trade_pnls, dtype=float)
@@ -237,7 +242,10 @@ class MonteCarloEngine:
         # ── Confidence intervals ──────────────────────────────────────────────
         def ci(arr: np.ndarray, level: float) -> Tuple[float, float]:
             alpha = (1 - level) / 2 * 100
-            return (float(np.percentile(arr, alpha)), float(np.percentile(arr, 100 - alpha)))
+            return (
+                float(np.percentile(arr, alpha)),
+                float(np.percentile(arr, 100 - alpha)),
+            )
 
         # Filter out ruin paths for Sharpe CI (they're -999 sentinels)
         valid_sharpe = sharpe_arr[sharpe_arr > -100]
@@ -255,29 +263,41 @@ class MonteCarloEngine:
             max_dd_distribution=max_dd_dist,
             cagr_distribution=cagr_dist,
             final_equity_distribution=final_equity_dist,
-            sharpe_ci_95=ci(valid_sharpe, 0.95) if len(valid_sharpe) > 1 else (0.0, 0.0),
-            sharpe_ci_99=ci(valid_sharpe, 0.99) if len(valid_sharpe) > 1 else (0.0, 0.0),
+            sharpe_ci_95=ci(valid_sharpe, 0.95)
+            if len(valid_sharpe) > 1
+            else (0.0, 0.0),
+            sharpe_ci_99=ci(valid_sharpe, 0.99)
+            if len(valid_sharpe) > 1
+            else (0.0, 0.0),
             max_dd_ci_95=ci(max_dd_arr, 0.95),
             max_dd_ci_99=ci(max_dd_arr, 0.99),
             cagr_ci_95=ci(cagr_arr, 0.95),
             final_equity_ci_95=ci(final_arr, 0.95),
             ruin_probability=ruin_count / self.n_paths,
             probability_of_profit=float(np.mean(final_arr > initial_capital)),
-            expected_shortfall_5pct=float(np.mean(
-                final_arr[final_arr <= np.percentile(final_arr, 5)]
-            )) if len(final_arr) > 0 else 0.0,
+            expected_shortfall_5pct=float(
+                np.mean(final_arr[final_arr <= np.percentile(final_arr, 5)])
+            )
+            if len(final_arr) > 0
+            else 0.0,
             sharpe_se=1.0 / math.sqrt(2 * (n_trades - 1)) if n_trades > 1 else 0.0,
             sharpe_positive_fraction=float(np.mean(valid_sharpe > 0))
-            if len(valid_sharpe) > 0 else 0.0,
+            if len(valid_sharpe) > 0
+            else 0.0,
         )
 
         logger.info(
             "MonteCarloEngine: %d paths, %d trades | "
             "Sharpe=%.3f CI95=[%.3f, %.3f] | MaxDD=%.1f%% CI95=[%.1f%%, %.1f%%] | "
             "Ruin=%.1f%% | Sharpe>0=%.1f%%",
-            self.n_paths, n_trades,
-            orig_sharpe, result.sharpe_ci_95[0], result.sharpe_ci_95[1],
-            orig_max_dd * 100, result.max_dd_ci_95[0] * 100, result.max_dd_ci_95[1] * 100,
+            self.n_paths,
+            n_trades,
+            orig_sharpe,
+            result.sharpe_ci_95[0],
+            result.sharpe_ci_95[1],
+            orig_max_dd * 100,
+            result.max_dd_ci_95[0] * 100,
+            result.max_dd_ci_95[1] * 100,
             result.ruin_probability * 100,
             result.sharpe_positive_fraction * 100,
         )
@@ -326,13 +346,19 @@ class MonteCarloEngine:
 
     def _empty_result(self, initial_capital: float) -> BootstrapResult:
         return BootstrapResult(
-            n_paths=0, n_trades=0, initial_capital=initial_capital,
-            original_sharpe=0.0, original_max_dd=0.0, original_cagr=0.0,
-            original_win_rate=0.0, original_profit_factor=0.0,
+            n_paths=0,
+            n_trades=0,
+            initial_capital=initial_capital,
+            original_sharpe=0.0,
+            original_max_dd=0.0,
+            original_cagr=0.0,
+            original_win_rate=0.0,
+            original_profit_factor=0.0,
         )
 
 
 # ── Convenience function ──────────────────────────────────────────────────────
+
 
 def run_bootstrap(
     trade_pnls: List[float],
