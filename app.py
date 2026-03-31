@@ -390,6 +390,7 @@ async def startup_event():
         await _start_l2_feed(app_state)
         _start_sharpe_circuit_breaker(app_state)
         _start_nuclear_price_bridge(app_state)
+        _mount_gateway(app)
 
         app_state.initialized = True
         log_activity("API server ready")
@@ -520,6 +521,26 @@ def _start_nuclear_price_bridge(state) -> None:
         logger.info("nuclear_price_bridge task started")
     except Exception as _exc:
         logger.warning("nuclear_price_bridge failed to start (non-fatal): %s", _exc)
+
+
+def _mount_gateway(fastapi_app) -> None:
+    """Mount the APIGateway sub-application at /gateway (non-fatal).
+
+    Called after startup_event so app_state is fully populated.
+    Only mounts when ENABLE_GATEWAY=true is set — off by default to avoid
+    exposing the extra surface area unless explicitly opted in.
+    """
+    if os.getenv("ENABLE_GATEWAY", "false").lower() != "true":
+        return
+    try:
+        from api.gateway import build_gateway_app  # noqa: PLC0415
+
+        _gw_app = build_gateway_app()
+        if _gw_app is not None:
+            fastapi_app.mount("/gateway", _gw_app)
+            logger.info("APIGateway mounted at /gateway")
+    except Exception as _exc:
+        logger.warning("APIGateway mount failed (non-fatal): %s", _exc)
 
 
 async def shutdown_event():

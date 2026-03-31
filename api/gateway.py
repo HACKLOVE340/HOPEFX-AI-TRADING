@@ -6,7 +6,26 @@
 # api/gateway.py
 """
 HOPEFX API Gateway
-Secure external interface for clients and integrations
+Secure external interface for clients and integrations.
+
+Usage
+-----
+Standalone (SSL on port 8443)::
+
+    from api.gateway import APIGateway
+    gw = APIGateway(mcc, orchestra, pms, auth_secret=os.environ["SECURITY_JWT_SECRET"])
+    gw.run()
+
+Mounted inside the main FastAPI app (app.py)::
+
+    from api.gateway import build_gateway_app
+    gateway_app = build_gateway_app()
+    if gateway_app is not None:
+        app.mount("/gateway", gateway_app)
+
+The gateway adds Redis-backed rate limiting, GZip compression, and routes all
+order requests through the main app's TradeExecutor so pre-trade risk checks
+(PreTradeGate, drawdown limits, position sizing) are always enforced.
 """
 
 import asyncio
@@ -392,3 +411,48 @@ class APIGateway:
             ssl_certfile=ssl_certfile,
             workers=4,
         )
+
+
+def build_gateway_app():
+    """
+    Build and return the gateway FastAPI sub-application for mounting.
+
+    Returns None when required dependencies (mcc, orchestra, pms) are not
+    available in app_state, so callers can skip mounting gracefully.
+
+    Example — mount in app.py::
+
+        from api.gateway import build_gateway_app
+        _gw = build_gateway_app()
+        if _gw is not None:
+            app.mount("/gateway", _gw)
+    """
+    try:
+        from app import app_state  # noqa: PLC0415
+
+        mcc = getattr(app_state, "mcc", None)
+        orchestra = getattr(app_state, "orchestra", None)
+        pms = getattr(app_state, "portfolio_manager", None)
+        auth_secret = os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET_KEY", "")
+
+        if not auth_secret or len(auth_secret) < 32:
+            logger.warning(
+                "build_gateway_app: SECURITY_JWT_SECRET not set or too short — "
+                "gateway not mounted. Set SECURITY_JWT_SECRET (>=32 chars)."
+            )
+            return None
+
+        if mcc is None or orchestra is None or pms is None:
+            logger.info(
+                "build_gateway_app: mcc/orchestra/pms not yet in app_state — "
+                "gateway not mounted (call after startup_event completes)."
+            )
+            return None
+
+        gw = APIGateway(mcc=mcc, orchestra=orchestra, pms=pms, auth_secret=auth_secret)
+        logger.info("APIGateway built — mount at /gateway to activate")
+        return gw.app
+
+    except Exception as exc:
+        logger.warning("build_gateway_app failed (non-fatal): %s", exc)
+        return None
