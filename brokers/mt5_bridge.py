@@ -124,7 +124,7 @@ def _retry(max_attempts: int = 3, base_delay: float = 0.5):
             for attempt in range(1, max_attempts + 1):
                 try:
                     return fn(*args, **kwargs)
-                except Exception as exc:
+                except (OSError, RuntimeError, ValueError, AttributeError) as exc:
                     last_exc = exc
                     logger.warning(
                         "mt5_bridge retry attempt=%d/%d fn=%s error=%s",
@@ -203,7 +203,7 @@ class EX5SignalExporter:
             try:
                 path.unlink(missing_ok=True)
                 tmp.replace(path)
-            except Exception as exc:
+            except OSError as exc:
                 logger.warning("Atomic rename failed for %s: %s", path, exc)
                 tmp.write_text(json.dumps(payload, indent=2))
                 import shutil
@@ -333,7 +333,7 @@ class EX5SignalExporter:
                     )
             except RuntimeError:
                 raise
-            except Exception as _exc:
+            except (OSError, ValueError, KeyError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
             time.sleep(0.5)
         raise TimeoutError(
@@ -600,7 +600,7 @@ class MT5Bridge:
                 time.sleep(poll_interval)
                 continue
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             deals = mt5.history_deals_get(now - timedelta(minutes=5), now)
             if deals:
                 for deal in deals:
