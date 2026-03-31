@@ -131,7 +131,7 @@ class PublicUser(HttpUser):
         """Test login endpoint responds — 401 expected for non-existent user."""
         with self.client.post(
             "/auth/login",
-            json={"email": "loadtest@example.com", "password": "LoadTest123!"},
+            json={"email": "loadtest@example.com", "password": "LoadTest123!"},  # nosec B105 - load-test probe, 401 expected
             catch_response=True,
             name="/auth/login",
         ) as r:

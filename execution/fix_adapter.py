@@ -198,7 +198,7 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         on_exec_report: Callable[[FIXFillReport], None],
         circuit_breaker: CircuitBreaker,
         username: str = "",
-        password: str = "",
+        password: str = "",  # nosec B107 - optional FIX credential, empty default is intentional
     ) -> None:
         super().__init__()
         self._on_exec_report = on_exec_report
@@ -496,7 +496,7 @@ class FIXAdapter:
         port: int = 9876,
         latency_threshold_ms: float = 100.0,
         username: str = "",
-        password: str = "",
+        password: str = "",  # nosec B107 - optional FIX credential, empty default is intentional
     ) -> None:
         self.config_file = config_file
         self.sender_comp_id = sender_comp_id
