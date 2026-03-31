@@ -165,9 +165,10 @@ jobs:
         path: test-results.xml
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v5
+      # Pinned to SHA for supply-chain safety (tag: v5.4.3)
+      uses: codecov/codecov-action@4650159d642e33fdc30954ca22638caf0df6cac8
       with:
-        file: ./coverage.xml
+        files: ./coverage.xml
         fail_ci_if_error: false
         token: ${{ secrets.CODECOV_TOKEN }}
 
