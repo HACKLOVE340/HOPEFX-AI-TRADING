@@ -100,26 +100,22 @@ KEY_PREFIX: str = _env("RATE_KEY_PREFIX", "hopefx:rl:")
 # slowapi supports multiple limit strings separated by "; "
 # e.g. "60 per minute; 500 per hour" — both must pass.
 
-TRADING_BURST_RATE: str = _env(
-    "RATE_TRADING_BURST", f"{TRADING_RATE}; 500 per hour"
-)
+TRADING_BURST_RATE: str = _env("RATE_TRADING_BURST", f"{TRADING_RATE}; 500 per hour")
 """Trading endpoints: per-minute burst + hourly cap."""
 
-AUTH_BURST_RATE: str = _env(
-    "RATE_AUTH_BURST", f"{AUTH_RATE}; 50 per hour"
-)
+AUTH_BURST_RATE: str = _env("RATE_AUTH_BURST", f"{AUTH_RATE}; 50 per hour")
 """Auth endpoints: per-minute burst + hourly cap."""
 
 
 # ── Convenience mapping (used by middleware / decorators) ─────────────────────
 
 ENDPOINT_RATES: dict = {
-    "auth":        AUTH_BURST_RATE,
-    "trading":     TRADING_BURST_RATE,
+    "auth": AUTH_BURST_RATE,
+    "trading": TRADING_BURST_RATE,
     "market_data": MARKET_DATA_RATE,
-    "admin":       ADMIN_RATE,
-    "websocket":   WEBSOCKET_RATE,
-    "backtest":    BACKTEST_RATE,
-    "withdrawal":  WITHDRAWAL_RATE,
-    "default":     GLOBAL_DEFAULT_RATE,
+    "admin": ADMIN_RATE,
+    "websocket": WEBSOCKET_RATE,
+    "backtest": BACKTEST_RATE,
+    "withdrawal": WITHDRAWAL_RATE,
+    "default": GLOBAL_DEFAULT_RATE,
 }

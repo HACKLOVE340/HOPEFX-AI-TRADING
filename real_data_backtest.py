@@ -526,7 +526,9 @@ def run_multi_symbol_backtest(
                         print(f"  {sym}: rejections={report.rejection_reasons}")
             except Exception as _mv_exc:
                 # Multi-source validation unavailable — fall back to single source
-                print(f"  {sym}: multi-source validation failed ({_mv_exc}) — using Binance only")
+                print(
+                    f"  {sym}: multi-source validation failed ({_mv_exc}) — using Binance only"
+                )
                 df = fetch_ohlcv_paginated(
                     exchange, sym, TIMEFRAME, since_ms=since_ms, max_bars=max_bars
                 )

@@ -194,7 +194,8 @@ class NotificationManager:
                     body = await resp.text()
                     logger.error(
                         "Telegram notification failed: status=%s body=%s",
-                        resp.status, body[:200],
+                        resp.status,
+                        body[:200],
                     )
 
     async def _send_webhook(self, notification: Notification):
@@ -240,6 +241,7 @@ __version__ = "1.0.0"
 
 # ── Module-level singleton used by NuclearHopeFXSupervisor ───────────────────
 
+
 class _NotificationsSingleton:
     """
     Lightweight singleton that wraps NotificationManager and exposes
@@ -258,6 +260,7 @@ class _NotificationsSingleton:
 
     def __init__(self) -> None:
         import os
+
         config = {
             "telegram_bot_token": os.environ.get("TELEGRAM_BOT_TOKEN", ""),
             "telegram_chat_id": os.environ.get("TELEGRAM_CHAT_ID", ""),

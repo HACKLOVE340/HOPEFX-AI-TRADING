@@ -331,9 +331,9 @@ class TelegramBot:
                             broker.close_position(pos.symbol)
                         closed += 1
                     except Exception as _exc:
-                        logger.debug('Suppressed exception: %s', _exc)
+                        logger.debug("Suppressed exception: %s", _exc)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
         await update.message.reply_text(
             f"🛑 *Emergency stop*\nAuto-trade paused. Closed {closed} position(s).",
             parse_mode="Markdown",
