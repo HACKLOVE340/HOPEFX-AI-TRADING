@@ -123,7 +123,7 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
             {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
         ).encode()
         req = urllib.request.Request(url, data=data, method="POST")
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 - API URL is always https://
             return resp.status == 200
     except Exception as exc:
         logger.warning("Telegram send failed: %s", exc)
@@ -150,7 +150,7 @@ class OANDAPaperClient:
 
         url = f"{self.base_url}{path}"
         req = urllib.request.Request(url, headers=self._headers)
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310 - API URL is always https://
             return json.loads(resp.read())
 
     def _post(self, path: str, body: Dict) -> Dict[str, Any]:
@@ -161,7 +161,7 @@ class OANDAPaperClient:
         req = urllib.request.Request(
             url, data=data, headers=self._headers, method="POST"
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310 - API URL is always https://
             return json.loads(resp.read())
 
     def get_account(self) -> Dict[str, Any]:

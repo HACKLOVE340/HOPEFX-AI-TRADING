@@ -377,11 +377,18 @@ class MT5LiveFeed:
             return
 
         import urllib.request
+        from urllib.parse import urlparse
+
+        parsed = urlparse(self.rest_fallback_url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(
+                f"MT5LiveFeed: rest_fallback_url must use http/https scheme, got {parsed.scheme!r}"
+            )
 
         logger.info("MT5LiveFeed: using REST fallback at %s", self.rest_fallback_url)
         while self._running:
             try:
-                with urllib.request.urlopen(
+                with urllib.request.urlopen(  # nosec B310 - scheme validated as http/https above
                     self.rest_fallback_url, timeout=_CONNECTION_TIMEOUT
                 ) as resp:
                     raw = resp.read().decode()

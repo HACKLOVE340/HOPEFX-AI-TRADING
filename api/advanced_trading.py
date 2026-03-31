@@ -736,7 +736,7 @@ async def get_cot_gold():
         # CFTC public data API — gold futures (COMEX, code 088691)
         url = "https://publicreporting.cftc.gov/api/explore/dataset/com_disagg_txt_2024/records/?where=cftc_commodity_code%3D%22088691%22&limit=1&sort=-report_date_as_yyyy_mm_dd"
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - hardcoded https:// CFTC public API URL
             data = json.loads(resp.read())
             if data.get("records"):
                 rec = data["records"][0]["record"]["fields"]
