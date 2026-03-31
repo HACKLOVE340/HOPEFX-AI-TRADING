@@ -34,31 +34,32 @@ from typing import Optional
 # ccxt.pro for async WebSocket streaming
 try:
     import ccxt.pro as ccxtpro  # type: ignore
+
     CCXT_PRO_AVAILABLE = True
 except ImportError:
     ccxtpro = None  # type: ignore
     CCXT_PRO_AVAILABLE = False
 
 # ccxt sync for REST fallback
-import ccxt  # type: ignore
 
-from core.event_bus import bus, CH_TICK, CH_BREACH
+from core.event_bus import bus
 
 logger = logging.getLogger(__name__)
 
 # ── config ────────────────────────────────────────────────────────────────────
-SYMBOL:           str   = os.environ.get("INGEST_SYMBOL", "XAU/USD")
-EXCHANGE_ID:      str   = os.environ.get("INGEST_EXCHANGE", "oanda")
-STALE_TIMEOUT_S:  float = float(os.environ.get("INGEST_STALE_TIMEOUT_S", "10"))
-MAX_SPREAD_USD:   float = float(os.environ.get("INGEST_MAX_SPREAD_USD", "5.0"))
-REST_POLL_S:      float = float(os.environ.get("INGEST_REST_POLL_S", "1.0"))
-WS_RECONNECT_BASE: float = 1.0   # initial back-off seconds
-WS_RECONNECT_MAX:  float = 60.0  # cap back-off at 60 s
+SYMBOL: str = os.environ.get("INGEST_SYMBOL", "XAU/USD")
+EXCHANGE_ID: str = os.environ.get("INGEST_EXCHANGE", "oanda")
+STALE_TIMEOUT_S: float = float(os.environ.get("INGEST_STALE_TIMEOUT_S", "10"))
+MAX_SPREAD_USD: float = float(os.environ.get("INGEST_MAX_SPREAD_USD", "5.0"))
+REST_POLL_S: float = float(os.environ.get("INGEST_REST_POLL_S", "1.0"))
+WS_RECONNECT_BASE: float = 1.0  # initial back-off seconds
+WS_RECONNECT_MAX: float = 60.0  # cap back-off at 60 s
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tick validator
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _validate_tick(bid: float, ask: float, symbol: str) -> bool:
     """
@@ -71,7 +72,9 @@ def _validate_tick(bid: float, ask: float, symbol: str) -> bool:
     - spread does not exceed MAX_SPREAD_USD (catches bad data / flash crashes)
     """
     if bid <= 0 or ask <= 0:
-        logger.warning("Tick rejected: non-positive bid/ask  bid=%.5f ask=%.5f", bid, ask)
+        logger.warning(
+            "Tick rejected: non-positive bid/ask  bid=%.5f ask=%.5f", bid, ask
+        )
         return False
     if ask <= bid:
         logger.warning("Tick rejected: inverted spread  bid=%.5f ask=%.5f", bid, ask)
@@ -79,7 +82,10 @@ def _validate_tick(bid: float, ask: float, symbol: str) -> bool:
     spread = ask - bid
     if spread > MAX_SPREAD_USD:
         logger.warning(
-            "Tick rejected: spread %.5f > max %.5f  symbol=%s", spread, MAX_SPREAD_USD, symbol
+            "Tick rejected: spread %.5f > max %.5f  symbol=%s",
+            spread,
+            MAX_SPREAD_USD,
+            symbol,
         )
         return False
     return True
@@ -88,6 +94,7 @@ def _validate_tick(bid: float, ask: float, symbol: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 # Staleness guard
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class _StalenessGuard:
     """Fires a breach event when no tick arrives within STALE_TIMEOUT_S."""
@@ -107,17 +114,20 @@ class _StalenessGuard:
         if age > STALE_TIMEOUT_S and not self._stale_fired:
             self._stale_fired = True
             logger.warning("STALE FEED: no tick for %.1f s on %s", age, SYMBOL)
-            await bus.publish_breach({
-                "reason": "stale_feed",
-                "symbol": SYMBOL,
-                "age_s": round(age, 2),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
+            await bus.publish_breach(
+                {
+                    "reason": "stale_feed",
+                    "symbol": SYMBOL,
+                    "age_s": round(age, 2),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ccxt.pro WebSocket ingestor
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class MarketIngest:
     """
@@ -137,10 +147,12 @@ class MarketIngest:
         self._last_tick: Optional[dict] = None
 
         # Credentials from env
-        self._api_key    = os.environ.get("OANDA_API_KEY", "")
-        self._api_secret = os.environ.get("OANDA_API_SECRET", os.environ.get("OANDA_API_KEY", ""))
+        self._api_key = os.environ.get("OANDA_API_KEY", "")
+        self._api_secret = os.environ.get(
+            "OANDA_API_SECRET", os.environ.get("OANDA_API_KEY", "")
+        )
         self._account_id = os.environ.get("OANDA_ACCOUNT_ID", "")
-        self._practice   = os.environ.get("OANDA_PRACTICE", "true").lower() != "false"
+        self._practice = os.environ.get("OANDA_PRACTICE", "true").lower() != "false"
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -148,7 +160,9 @@ class MarketIngest:
         """Connect to EventBus and begin streaming ticks."""
         await bus.connect()
         self._running = True
-        logger.info("MarketIngest starting — symbol=%s exchange=%s", SYMBOL, EXCHANGE_ID)
+        logger.info(
+            "MarketIngest starting — symbol=%s exchange=%s", SYMBOL, EXCHANGE_ID
+        )
 
         # Run staleness checker in background
         asyncio.create_task(self._staleness_loop())
@@ -190,7 +204,9 @@ class MarketIngest:
             except asyncio.CancelledError:
                 break
             except Exception as exc:  # noqa: BLE001
-                logger.error("MarketIngest WS error: %s — reconnecting in %.1f s", exc, backoff)
+                logger.error(
+                    "MarketIngest WS error: %s — reconnecting in %.1f s", exc, backoff
+                )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, WS_RECONNECT_MAX)
                 # Close stale exchange object before reconnecting
@@ -198,7 +214,10 @@ class MarketIngest:
                     try:
                         await self._exchange.close()
                     except Exception as close_exc:  # noqa: BLE001
-                        logger.debug("MarketIngest: error closing stale exchange on reconnect: %s", close_exc)
+                        logger.debug(
+                            "MarketIngest: error closing stale exchange on reconnect: %s",
+                            close_exc,
+                        )
 
     # ── REST fallback loop ────────────────────────────────────────────────────
 
@@ -248,12 +267,18 @@ class MarketIngest:
         """Extract bid/ask from a ccxt ticker dict and emit."""
         bid = float(ticker.get("bid") or ticker.get("last") or 0)
         ask = float(ticker.get("ask") or ticker.get("last") or 0)
-        await self._emit_tick(bid, ask, extra={
-            "last":   ticker.get("last"),
-            "volume": ticker.get("baseVolume"),
-        })
+        await self._emit_tick(
+            bid,
+            ask,
+            extra={
+                "last": ticker.get("last"),
+                "volume": ticker.get("baseVolume"),
+            },
+        )
 
-    async def _emit_tick(self, bid: float, ask: float, extra: Optional[dict] = None) -> None:
+    async def _emit_tick(
+        self, bid: float, ask: float, extra: Optional[dict] = None
+    ) -> None:
         """Validate, record staleness, and publish a tick to the EventBus."""
         if not _validate_tick(bid, ask, SYMBOL):
             return
@@ -262,13 +287,13 @@ class MarketIngest:
         self._tick_count += 1
 
         tick = {
-            "symbol":    SYMBOL,
-            "bid":       round(bid, 5),
-            "ask":       round(ask, 5),
-            "mid":       round((bid + ask) / 2, 5),
-            "spread":    round(ask - bid, 5),
+            "symbol": SYMBOL,
+            "bid": round(bid, 5),
+            "ask": round(ask, 5),
+            "mid": round((bid + ask) / 2, 5),
+            "spread": round(ask - bid, 5),
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "seq":       self._tick_count,
+            "seq": self._tick_count,
         }
         if extra:
             tick.update({k: v for k, v in extra.items() if v is not None})
@@ -279,7 +304,11 @@ class MarketIngest:
         if self._tick_count % 100 == 0:
             logger.info(
                 "Tick #%d  %s  bid=%.5f ask=%.5f spread=%.5f",
-                self._tick_count, SYMBOL, bid, ask, ask - bid,
+                self._tick_count,
+                SYMBOL,
+                bid,
+                ask,
+                ask - bid,
             )
 
     # ── staleness background task ─────────────────────────────────────────────
@@ -300,8 +329,8 @@ class MarketIngest:
         is not available in the installed ccxt.pro version.
         """
         config = {
-            "apiKey":  self._api_key,
-            "secret":  self._api_secret,
+            "apiKey": self._api_key,
+            "secret": self._api_secret,
             "options": {"defaultType": "spot"},
         }
 
@@ -310,7 +339,7 @@ class MarketIngest:
             config["urls"] = {
                 "api": {
                     "rest": "https://api-fxpractice.oanda.com",
-                    "ws":   "wss://stream-fxpractice.oanda.com",
+                    "ws": "wss://stream-fxpractice.oanda.com",
                 }
             }
 

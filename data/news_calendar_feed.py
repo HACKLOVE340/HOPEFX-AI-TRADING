@@ -36,24 +36,25 @@ Usage
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional
+from typing import List
 
 import redis.asyncio as aioredis
 
 logger = logging.getLogger(__name__)
 
 # ── config ────────────────────────────────────────────────────────────────────
-REDIS_KEY:           str   = "hopefx:news_events"
-REDIS_TTL_S:         int   = int(os.environ.get("NEWS_REDIS_TTL_S",        "21600"))  # 6 h
-REFRESH_INTERVAL_S:  float = float(os.environ.get("NEWS_REFRESH_INTERVAL_S", "3600")) # 1 h
+REDIS_KEY: str = "hopefx:news_events"
+REDIS_TTL_S: int = int(os.environ.get("NEWS_REDIS_TTL_S", "21600"))  # 6 h
+REFRESH_INTERVAL_S: float = float(
+    os.environ.get("NEWS_REFRESH_INTERVAL_S", "3600")
+)  # 1 h
 # Currencies to watch — USD drives gold; XAU is gold itself
-WATCH_CURRENCIES:    set   = {"USD", "XAU", "ALL"}
+WATCH_CURRENCIES: set = {"USD", "XAU", "ALL"}
 # Minimum impact level to store ("high" or "critical")
-MIN_IMPACT:          str   = os.environ.get("NEWS_MIN_IMPACT", "high").lower()
+MIN_IMPACT: str = os.environ.get("NEWS_MIN_IMPACT", "high").lower()
 
 # ForexFactory public JSON feed (no API key required)
 FF_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
@@ -62,6 +63,7 @@ FF_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
 # ─────────────────────────────────────────────────────────────────────────────
 # Parsers
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _parse_forexfactory(data: list) -> List[datetime]:
     """
@@ -72,12 +74,12 @@ def _parse_forexfactory(data: list) -> List[datetime]:
     """
     events: List[datetime] = []
     impact_map = {"high": 3, "medium": 2, "low": 1, "holiday": 0}
-    min_level  = impact_map.get(MIN_IMPACT, 3)
+    min_level = impact_map.get(MIN_IMPACT, 3)
 
     for item in data:
         currency = (item.get("currency") or item.get("country") or "").upper()
-        impact   = (item.get("impact") or "").lower()
-        level    = impact_map.get(impact, 0)
+        impact = (item.get("impact") or "").lower()
+        level = impact_map.get(impact, 0)
 
         if currency not in WATCH_CURRENCIES and currency not in {"USD", "XAU"}:
             continue
@@ -110,13 +112,15 @@ def _static_fallback() -> List[datetime]:
 
     This is approximate — replace with a real feed in production.
     """
-    now    = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     events = []
 
     # NFP: first Friday of the month at 13:30 UTC
     first_day = now.replace(day=1)
     days_to_friday = (4 - first_day.weekday()) % 7
-    nfp = first_day.replace(hour=13, minute=30, second=0, microsecond=0) + timedelta(days=days_to_friday)
+    nfp = first_day.replace(hour=13, minute=30, second=0, microsecond=0) + timedelta(
+        days=days_to_friday
+    )
     if nfp > now:
         events.append(nfp)
 
@@ -127,7 +131,8 @@ def _static_fallback() -> List[datetime]:
 
     logger.warning(
         "NewsCalendarFeed: using static fallback — %d events. "
-        "Configure a real feed for accurate blackouts.", len(events)
+        "Configure a real feed for accurate blackouts.",
+        len(events),
     )
     return events
 
@@ -135,6 +140,7 @@ def _static_fallback() -> List[datetime]:
 # ─────────────────────────────────────────────────────────────────────────────
 # Feed
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class NewsCalendarFeed:
     """
@@ -149,7 +155,7 @@ class NewsCalendarFeed:
 
     def __init__(self) -> None:
         self._redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-        self._running   = False
+        self._running = False
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -186,7 +192,8 @@ class NewsCalendarFeed:
         count = await self._write_redis(events)
         logger.info(
             "NewsCalendarFeed: stored %d high-impact events in Redis key '%s'.",
-            count, REDIS_KEY,
+            count,
+            REDIS_KEY,
         )
         return count
 
@@ -196,6 +203,7 @@ class NewsCalendarFeed:
         """Download and parse the ForexFactory weekly JSON feed."""
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     FF_URL,
@@ -245,7 +253,8 @@ class NewsCalendarFeed:
             return len(iso_strings)
         except Exception as exc:  # noqa: BLE001
             logger.error(
-                "NewsCalendarFeed: Redis write failed: %s — blackout calendar not updated.", exc
+                "NewsCalendarFeed: Redis write failed: %s — blackout calendar not updated.",
+                exc,
             )
             return 0
 
@@ -269,12 +278,14 @@ class NewsCalendarFeed:
 # CLI entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def _main() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
     )
     from dotenv import load_dotenv
+
     load_dotenv(override=False)
 
     feed = NewsCalendarFeed()

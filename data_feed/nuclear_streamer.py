@@ -60,7 +60,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, List, Optional
 
 import websockets
@@ -238,22 +238,37 @@ class NuclearStreamer:
                 decode_responses=False,
             )
             logger.info(
-                "Redis connected: %s:%d db=%d", self._redis_host, self._redis_port, self._redis_db
+                "Redis connected: %s:%d db=%d",
+                self._redis_host,
+                self._redis_port,
+                self._redis_db,
             )
 
         tasks = []
         if self._finnhub_key:
-            tasks.append(asyncio.create_task(self._run_with_backoff("finnhub", self._finnhub_stream)))
+            tasks.append(
+                asyncio.create_task(
+                    self._run_with_backoff("finnhub", self._finnhub_stream)
+                )
+            )
         else:
             logger.warning("FINNHUB_API_KEY not set — Finnhub stream disabled")
 
         if self._twelve_key and _TWELVE_AVAILABLE:
-            tasks.append(asyncio.create_task(self._run_with_backoff("twelvedata", self._twelve_stream)))
+            tasks.append(
+                asyncio.create_task(
+                    self._run_with_backoff("twelvedata", self._twelve_stream)
+                )
+            )
         elif not self._twelve_key:
             logger.warning("TWELVE_API_KEY not set — Twelve Data stream disabled")
 
         if self._polygon_key:
-            tasks.append(asyncio.create_task(self._run_with_backoff("polygon", self._polygon_stream)))
+            tasks.append(
+                asyncio.create_task(
+                    self._run_with_backoff("polygon", self._polygon_stream)
+                )
+            )
         else:
             logger.warning("POLYGON_API_KEY not set — Polygon stream disabled")
 
@@ -314,7 +329,9 @@ class NuclearStreamer:
                     time.monotonic() - (self._circuit_open_at.get(source) or 0)
                 )
                 logger.info(
-                    "Circuit breaker open for '%s' — waiting %.0f s", source, max(remaining, 0)
+                    "Circuit breaker open for '%s' — waiting %.0f s",
+                    source,
+                    max(remaining, 0),
                 )
                 await asyncio.sleep(max(remaining, 1))
                 continue
@@ -365,7 +382,9 @@ class NuclearStreamer:
             if self._last_price is not None:
                 pct_change = abs((price - self._last_price) / self._last_price) * 100.0
                 if pct_change > self.anomaly_jump_pct:
-                    self._anomaly_counts[source] = self._anomaly_counts.get(source, 0) + 1
+                    self._anomaly_counts[source] = (
+                        self._anomaly_counts.get(source, 0) + 1
+                    )
                     _ANOMALY_COUNTER_GAUGE.labels(source=source).set(
                         self._anomaly_counts[source]
                     )
@@ -549,7 +568,9 @@ class NuclearStreamer:
 
                 elif event == "error":
                     logger.error("Twelve Data error: %s", data)
-                    raise RuntimeError(f"Twelve Data server error: {data.get('message')}")
+                    raise RuntimeError(
+                        f"Twelve Data server error: {data.get('message')}"
+                    )
 
     # ── Polygon stream ─────────────────────────────────────────────────────────
 
@@ -572,9 +593,7 @@ class NuclearStreamer:
             close_timeout=5,
         ) as ws:
             # Step 1: authenticate.
-            await ws.send(
-                json.dumps({"action": "auth", "params": self._polygon_key})
-            )
+            await ws.send(json.dumps({"action": "auth", "params": self._polygon_key}))
             auth_resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
             # auth_resp is a list; check the first element.
             auth_msg = auth_resp[0] if isinstance(auth_resp, list) else auth_resp
@@ -583,9 +602,7 @@ class NuclearStreamer:
             logger.info("Polygon: authenticated")
 
             # Step 2: subscribe.
-            await ws.send(
-                json.dumps({"action": "subscribe", "params": polygon_symbol})
-            )
+            await ws.send(json.dumps({"action": "subscribe", "params": polygon_symbol}))
             sub_resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
             sub_msg = sub_resp[0] if isinstance(sub_resp, list) else sub_resp
             if sub_msg.get("status") not in ("success", "subscribed"):
@@ -641,7 +658,9 @@ class NuclearStreamer:
                         "cooldown_remaining": max(
                             0,
                             self.circuit_breaker_cooldown
-                            - (time.monotonic() - (self._circuit_open_at.get(src) or 0)),
+                            - (
+                                time.monotonic() - (self._circuit_open_at.get(src) or 0)
+                            ),
                         ),
                     }
                     if self._circuit_open_at.get(src)
@@ -655,6 +674,7 @@ class NuclearStreamer:
 
 
 # ── Standalone entry point ─────────────────────────────────────────────────────
+
 
 async def _main() -> None:
     logging.basicConfig(

@@ -39,6 +39,7 @@ Schema
     created_at    TEXT NOT NULL       -- ISO-8601 UTC wall clock
   )
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -57,14 +58,14 @@ from data_layer.types import GoldTick, MacroEvent, NewsArticle
 
 logger = logging.getLogger(__name__)
 
-_SCHEMA_VERSION  = 1
-_DB_PATH         = Path(os.getenv("LINEAGE_DB_PATH",      "data/lineage/lineage.db"))
-_DB_URL          = os.getenv("LINEAGE_DB_URL",            "")   # PostgreSQL URL
-_QUEUE_MAXSIZE   = int(os.getenv("LINEAGE_QUEUE_SIZE",    "50000"))
-_BATCH_SIZE      = int(os.getenv("LINEAGE_BATCH_SIZE",    "500"))
-_FLUSH_INTERVAL  = float(os.getenv("LINEAGE_FLUSH_S",     "2.0"))
-_MAX_RECORDS     = int(os.getenv("LINEAGE_MAX_RECORDS",   "5000000"))  # 5M rows
-_PRUNE_INTERVAL  = int(os.getenv("LINEAGE_PRUNE_INTERVAL","3600"))     # prune hourly
+_SCHEMA_VERSION = 1
+_DB_PATH = Path(os.getenv("LINEAGE_DB_PATH", "data/lineage/lineage.db"))
+_DB_URL = os.getenv("LINEAGE_DB_URL", "")  # PostgreSQL URL
+_QUEUE_MAXSIZE = int(os.getenv("LINEAGE_QUEUE_SIZE", "50000"))
+_BATCH_SIZE = int(os.getenv("LINEAGE_BATCH_SIZE", "500"))
+_FLUSH_INTERVAL = float(os.getenv("LINEAGE_FLUSH_S", "2.0"))
+_MAX_RECORDS = int(os.getenv("LINEAGE_MAX_RECORDS", "5000000"))  # 5M rows
+_PRUNE_INTERVAL = int(os.getenv("LINEAGE_PRUNE_INTERVAL", "3600"))  # prune hourly
 
 _CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS lineage_records (
@@ -109,14 +110,14 @@ class DataLineageStore:
 
     def __init__(self, db_path: Optional[Path] = None) -> None:
         self._db_path: Path = Path(db_path) if db_path else _DB_PATH
-        self._pg_url: str   = _DB_URL          # PostgreSQL dual-write URL
+        self._pg_url: str = _DB_URL  # PostgreSQL dual-write URL
         self._queue: queue.Queue = queue.Queue(maxsize=_QUEUE_MAXSIZE)
         self._conn: Optional[sqlite3.Connection] = None
         self._worker: Optional[threading.Thread] = None
         self._pruner: Optional[threading.Thread] = None
-        self._running    = False
+        self._running = False
         self._write_count = 0
-        self._drop_count  = 0
+        self._drop_count = 0
         self._prune_count = 0
         self._pg_export_count = 0
 
@@ -157,11 +158,12 @@ class DataLineageStore:
         if self._pg_url:
             try:
                 import psycopg2  # type: ignore
+
                 conn = psycopg2.connect(self._pg_url)
                 conn.close()
                 logger.info(
                     "DataLineageStore: PostgreSQL dual-write enabled (%s)",
-                    self._pg_url.split("@")[-1],   # log host only, not credentials
+                    self._pg_url.split("@")[-1],  # log host only, not credentials
                 )
             except ImportError:
                 logger.warning(
@@ -172,7 +174,8 @@ class DataLineageStore:
             except Exception as exc:
                 logger.warning(
                     "DataLineageStore: PostgreSQL connection failed (%s) — "
-                    "dual-write disabled, SQLite only", exc,
+                    "dual-write disabled, SQLite only",
+                    exc,
                 )
                 self._pg_url = ""
 
@@ -183,7 +186,7 @@ class DataLineageStore:
         if self._worker:
             self._worker.join(timeout=10.0)
         if self._conn:
-            self._flush_queue()   # drain remaining records
+            self._flush_queue()  # drain remaining records
             # PostgreSQL export on graceful stop (if configured)
             if self._pg_url:
                 try:
@@ -202,65 +205,65 @@ class DataLineageStore:
 
     def record_tick(self, tick: GoldTick) -> None:
         payload = {
-            "symbol":     tick.symbol,
-            "timestamp":  tick.timestamp.isoformat(),
-            "bid":        tick.bid,
-            "ask":        tick.ask,
-            "mid":        tick.mid,
-            "source":     tick.source.value,
-            "quality":    tick.quality.value,
+            "symbol": tick.symbol,
+            "timestamp": tick.timestamp.isoformat(),
+            "bid": tick.bid,
+            "ask": tick.ask,
+            "mid": tick.mid,
+            "source": tick.source.value,
+            "quality": tick.quality.value,
             "confidence": tick.confidence,
-            "spread":     tick.spread,
+            "spread": tick.spread,
         }
         self._enqueue(
-            record_type = "TICK",
-            lineage_id  = tick.lineage_id,
-            source      = tick.source.value,
-            symbol      = tick.symbol,
-            timestamp   = tick.timestamp.isoformat(),
-            payload     = payload,
+            record_type="TICK",
+            lineage_id=tick.lineage_id,
+            source=tick.source.value,
+            symbol=tick.symbol,
+            timestamp=tick.timestamp.isoformat(),
+            payload=payload,
         )
 
     def record_news(self, article: NewsArticle) -> None:
         payload = {
-            "article_id":      article.article_id,
-            "source":          article.source.value,
-            "headline":        article.headline[:200],
-            "published_at":    article.published_at.isoformat(),
+            "article_id": article.article_id,
+            "source": article.source.value,
+            "headline": article.headline[:200],
+            "published_at": article.published_at.isoformat(),
             "sentiment_score": article.sentiment_score,
             "sentiment_label": article.sentiment_label,
-            "gold_relevance":  article.gold_relevance,
-            "impact_score":    article.impact_score,
+            "gold_relevance": article.gold_relevance,
+            "impact_score": article.impact_score,
         }
         self._enqueue(
-            record_type = "NEWS",
-            lineage_id  = article.lineage_id,
-            source      = article.source.value,
-            symbol      = "XAU_USD",
-            timestamp   = article.published_at.isoformat(),
-            payload     = payload,
+            record_type="NEWS",
+            lineage_id=article.lineage_id,
+            source=article.source.value,
+            symbol="XAU_USD",
+            timestamp=article.published_at.isoformat(),
+            payload=payload,
         )
 
     def record_macro(self, event: MacroEvent) -> None:
         payload = {
-            "event_id":          event.event_id,
-            "name":              event.name,
-            "country":           event.country,
-            "scheduled_at":      event.scheduled_at.isoformat(),
-            "actual":            event.actual,
-            "forecast":          event.forecast,
-            "previous":          event.previous,
-            "impact":            event.impact.value,
+            "event_id": event.event_id,
+            "name": event.name,
+            "country": event.country,
+            "scheduled_at": event.scheduled_at.isoformat(),
+            "actual": event.actual,
+            "forecast": event.forecast,
+            "previous": event.previous,
+            "impact": event.impact.value,
             "gold_impact_score": event.gold_impact_score,
-            "surprise_pct":      event.surprise_pct,
+            "surprise_pct": event.surprise_pct,
         }
         self._enqueue(
-            record_type = "MACRO",
-            lineage_id  = event.lineage_id,
-            source      = "finnhub_calendar",
-            symbol      = "XAU_USD",
-            timestamp   = event.scheduled_at.isoformat(),
-            payload     = payload,
+            record_type="MACRO",
+            lineage_id=event.lineage_id,
+            source="finnhub_calendar",
+            symbol="XAU_USD",
+            timestamp=event.scheduled_at.isoformat(),
+            payload=payload,
         )
 
     def record_signal(
@@ -275,32 +278,33 @@ class DataLineageStore:
     ) -> None:
         now = datetime.now(timezone.utc)
         payload = {
-            "direction":     direction,
-            "confidence":    confidence,
-            "probability":   probability,
+            "direction": direction,
+            "confidence": confidence,
+            "probability": probability,
             "features_hash": features_hash,
             "model_version": model_version,
-            "generated_at":  now.isoformat(),
+            "generated_at": now.isoformat(),
         }
         self._enqueue(
-            record_type = "SIGNAL",
-            lineage_id  = lineage_id,
-            source      = model_version,
-            symbol      = symbol,
-            timestamp   = now.isoformat(),
-            payload     = payload,
+            record_type="SIGNAL",
+            lineage_id=lineage_id,
+            source=model_version,
+            symbol=symbol,
+            timestamp=now.isoformat(),
+            payload=payload,
         )
 
     def record_quality(self, report_dict: Dict[str, Any]) -> None:
         import uuid
+
         now = datetime.now(timezone.utc)
         self._enqueue(
-            record_type = "QUALITY",
-            lineage_id  = str(uuid.uuid4()),
-            source      = "dqe",
-            symbol      = report_dict.get("symbol", "XAU_USD"),
-            timestamp   = now.isoformat(),
-            payload     = report_dict,
+            record_type="QUALITY",
+            lineage_id=str(uuid.uuid4()),
+            source="dqe",
+            symbol=report_dict.get("symbol", "XAU_USD"),
+            timestamp=now.isoformat(),
+            payload=report_dict,
         )
 
     # ── Query API ─────────────────────────────────────────────────────────────
@@ -317,7 +321,7 @@ class DataLineageStore:
             return []
 
         clauses: List[str] = []
-        params:  List[Any] = []
+        params: List[Any] = []
 
         if record_type:
             clauses.append("record_type = ?")
@@ -333,7 +337,7 @@ class DataLineageStore:
             params.append(since.isoformat())
 
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-        sql   = f"""
+        sql = f"""
             SELECT id, record_type, schema_version, lineage_id, source,
                    symbol, timestamp, payload, created_at
             FROM lineage_records
@@ -347,15 +351,15 @@ class DataLineageStore:
             cursor = self._conn.execute(sql, params)
             return [
                 {
-                    "id":             r[0],
-                    "record_type":    r[1],
+                    "id": r[0],
+                    "record_type": r[1],
                     "schema_version": r[2],
-                    "lineage_id":     r[3],
-                    "source":         r[4],
-                    "symbol":         r[5],
-                    "timestamp":      r[6],
-                    "payload":        json.loads(r[7]),
-                    "created_at":     r[8],
+                    "lineage_id": r[3],
+                    "source": r[4],
+                    "symbol": r[5],
+                    "timestamp": r[6],
+                    "payload": json.loads(r[7]),
+                    "created_at": r[8],
                 }
                 for r in cursor.fetchall()
             ]
@@ -387,15 +391,15 @@ class DataLineageStore:
             if row is None:
                 return None
             return {
-                "id":             row[0],
-                "record_type":    row[1],
+                "id": row[0],
+                "record_type": row[1],
                 "schema_version": row[2],
-                "lineage_id":     row[3],
-                "source":         row[4],
-                "symbol":         row[5],
-                "timestamp":      row[6],
-                "payload":        json.loads(row[7]),
-                "created_at":     row[8],
+                "lineage_id": row[3],
+                "source": row[4],
+                "symbol": row[5],
+                "timestamp": row[6],
+                "payload": json.loads(row[7]),
+                "created_at": row[8],
             }
         except Exception as exc:
             logger.warning("DataLineageStore.query_by_lineage_id error: %s", exc)
@@ -448,7 +452,7 @@ class DataLineageStore:
 
         end = end or datetime.now(timezone.utc)
         clauses: List[str] = ["timestamp >= ?", "timestamp <= ?"]
-        params:  List[Any] = [start.isoformat(), end.isoformat()]
+        params: List[Any] = [start.isoformat(), end.isoformat()]
 
         if record_type:
             clauses.append("record_type = ?")
@@ -472,15 +476,15 @@ class DataLineageStore:
             cursor = self._conn.execute(sql, params)
             return [
                 {
-                    "id":             r[0],
-                    "record_type":    r[1],
+                    "id": r[0],
+                    "record_type": r[1],
                     "schema_version": r[2],
-                    "lineage_id":     r[3],
-                    "source":         r[4],
-                    "symbol":         r[5],
-                    "timestamp":      r[6],
-                    "payload":        json.loads(r[7]),
-                    "created_at":     r[8],
+                    "lineage_id": r[3],
+                    "source": r[4],
+                    "symbol": r[5],
+                    "timestamp": r[6],
+                    "payload": json.loads(r[7]),
+                    "created_at": r[8],
                 }
                 for r in cursor.fetchall()
             ]
@@ -539,7 +543,7 @@ class DataLineageStore:
 
         try:
             conn = psycopg2.connect(pg_url)
-            cur  = conn.cursor()
+            cur = conn.cursor()
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS lineage_records (
                     id             TEXT PRIMARY KEY,
@@ -555,8 +559,12 @@ class DataLineageStore:
             """)
             rows = [
                 (
-                    r["id"], r["record_type"], r["schema_version"],
-                    r["lineage_id"], r["source"], r["symbol"],
+                    r["id"],
+                    r["record_type"],
+                    r["schema_version"],
+                    r["lineage_id"],
+                    r["source"],
+                    r["symbol"],
                     r["timestamp"],
                     json.dumps(r["payload"]),
                     r["created_at"],
@@ -605,17 +613,16 @@ class DataLineageStore:
 
     def stats(self) -> Dict[str, Any]:
         return {
-            "write_count":    self._write_count,
-            "drop_count":     self._drop_count,
-            "prune_count":    self._prune_count,
+            "write_count": self._write_count,
+            "drop_count": self._drop_count,
+            "prune_count": self._prune_count,
             "pg_export_count": self._pg_export_count,
-            "pg_enabled":     bool(self._pg_url),
-            "queue_size":     self._queue.qsize(),
-            "db_path":        str(self._db_path),
-            "total_records":  self.count(),
+            "pg_enabled": bool(self._pg_url),
+            "queue_size": self._queue.qsize(),
+            "db_path": str(self._db_path),
+            "total_records": self.count(),
             "by_type": {
-                t: self.count(t)
-                for t in ("TICK", "NEWS", "MACRO", "SIGNAL", "QUALITY")
+                t: self.count(t) for t in ("TICK", "NEWS", "MACRO", "SIGNAL", "QUALITY")
             },
         }
 
@@ -631,14 +638,14 @@ class DataLineageStore:
         payload: Dict[str, Any],
     ) -> None:
         record = {
-            "record_type":    record_type,
+            "record_type": record_type,
             "schema_version": _SCHEMA_VERSION,
-            "lineage_id":     lineage_id,
-            "source":         source,
-            "symbol":         symbol,
-            "timestamp":      timestamp,
-            "payload":        json.dumps(payload, separators=(",", ":")),
-            "created_at":     datetime.now(timezone.utc).isoformat(),
+            "lineage_id": lineage_id,
+            "source": source,
+            "symbol": symbol,
+            "timestamp": timestamp,
+            "payload": json.dumps(payload, separators=(",", ":")),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         record["id"] = _content_id(payload)
 
@@ -680,9 +687,15 @@ class DataLineageStore:
 
         rows = [
             (
-                r["id"], r["record_type"], r["schema_version"],
-                r["lineage_id"], r["source"], r["symbol"],
-                r["timestamp"], r["payload"], r["created_at"],
+                r["id"],
+                r["record_type"],
+                r["schema_version"],
+                r["lineage_id"],
+                r["source"],
+                r["symbol"],
+                r["timestamp"],
+                r["payload"],
+                r["created_at"],
             )
             for r in batch
         ]
@@ -723,7 +736,8 @@ class DataLineageStore:
             self._prune_count += excess
             logger.info(
                 "DataLineageStore: pruned %d old records (total was %d)",
-                excess, total,
+                excess,
+                total,
             )
         except Exception as exc:
             logger.warning("DataLineageStore prune error: %s", exc)

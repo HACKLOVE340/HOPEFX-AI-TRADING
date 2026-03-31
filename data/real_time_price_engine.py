@@ -517,6 +517,7 @@ class RealTimePriceEngine:
 
         # ── Tick persistence ──────────────────────────────────────────────────
         import os as _os
+
         self._session_factory = session_factory
         self._tick_persist_enabled: bool = (
             session_factory is not None
@@ -665,7 +666,9 @@ class RealTimePriceEngine:
             await loop.run_in_executor(None, self._persist_tick_batch, batch)
             logger.debug("Tick flush: persisted %d ticks to DB", len(batch))
         except Exception as exc:
-            logger.error("Tick flush: DB write failed (%s) — %d ticks lost", exc, len(batch))
+            logger.error(
+                "Tick flush: DB write failed (%s) — %d ticks lost", exc, len(batch)
+            )
 
     def _persist_tick_batch(self, batch: list) -> None:
         """
@@ -691,7 +694,9 @@ class RealTimePriceEngine:
                         ask=tick.ask,
                         last_price=tick.mid,
                         volume=tick.volume,
-                        timestamp=datetime.fromtimestamp(tick.timestamp, tz=timezone.utc),
+                        timestamp=datetime.fromtimestamp(
+                            tick.timestamp, tz=timezone.utc
+                        ),
                         source="websocket",
                     )
                     for tick in batch

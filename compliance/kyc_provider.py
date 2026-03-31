@@ -69,11 +69,12 @@ KYC_PROVIDER: str = os.getenv("KYC_PROVIDER", "sumsub")
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
+
 class VerificationStatus(Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
-    REVIEW = "review"       # manual review required
+    REVIEW = "review"  # manual review required
     EXPIRED = "expired"
 
 
@@ -82,12 +83,12 @@ class KYCApplicant:
     applicant_id: str
     user_id: str
     provider: str
-    sdk_token: str = ""          # frontend SDK initialisation token
+    sdk_token: str = ""  # frontend SDK initialisation token
     status: VerificationStatus = VerificationStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     rejection_reason: str = ""
-    review_answer: str = ""      # GREEN | RED | from provider
+    review_answer: str = ""  # GREEN | RED | from provider
     raw_response: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -95,8 +96,8 @@ class KYCApplicant:
 class SanctionsResult:
     screened: bool
     is_match: bool
-    match_score: float           # 0.0–1.0
-    matched_lists: List[str]     # e.g. ["OFAC_SDN", "EU_CONSOLIDATED"]
+    match_score: float  # 0.0–1.0
+    matched_lists: List[str]  # e.g. ["OFAC_SDN", "EU_CONSOLIDATED"]
     details: str = ""
     provider: str = "unknown"
     screened_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -104,9 +105,12 @@ class SanctionsResult:
 
 # ── Abstract base ─────────────────────────────────────────────────────────────
 
+
 class KYCProvider(ABC):
     @abstractmethod
-    async def create_applicant(self, user_id: str, metadata: Dict[str, Any]) -> KYCApplicant:
+    async def create_applicant(
+        self, user_id: str, metadata: Dict[str, Any]
+    ) -> KYCApplicant:
         """Create a new applicant and return SDK token for frontend."""
         ...
 
@@ -127,6 +131,7 @@ class KYCProvider(ABC):
 
 
 # ── Sumsub provider ───────────────────────────────────────────────────────────
+
 
 class SumsubProvider(KYCProvider):
     """
@@ -157,18 +162,22 @@ class SumsubProvider(KYCProvider):
             "Content-Type": "application/json",
         }
 
-    async def create_applicant(self, user_id: str, metadata: Dict[str, Any]) -> KYCApplicant:
+    async def create_applicant(
+        self, user_id: str, metadata: Dict[str, Any]
+    ) -> KYCApplicant:
         try:
             import aiohttp
         except ImportError:
             raise RuntimeError("aiohttp required for Sumsub integration")
 
         path = "/resources/applicants?levelName=basic-kyc-level"
-        body = json.dumps({
-            "externalUserId": user_id,
-            "email": metadata.get("email", ""),
-            "phone": metadata.get("phone", ""),
-        }).encode()
+        body = json.dumps(
+            {
+                "externalUserId": user_id,
+                "email": metadata.get("email", ""),
+                "phone": metadata.get("phone", ""),
+            }
+        ).encode()
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -183,7 +192,9 @@ class SumsubProvider(KYCProvider):
                 applicant_id = data["id"]
 
         # Get SDK token
-        token_path = f"/resources/accessTokens?userId={user_id}&levelName=basic-kyc-level"
+        token_path = (
+            f"/resources/accessTokens?userId={user_id}&levelName=basic-kyc-level"
+        )
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self.BASE_URL}{token_path}",
@@ -192,7 +203,9 @@ class SumsubProvider(KYCProvider):
                 token_data = await resp.json()
                 sdk_token = token_data.get("token", "")
 
-        logger.info("Sumsub: applicant created for user %s (id=%s)", user_id, applicant_id)
+        logger.info(
+            "Sumsub: applicant created for user %s (id=%s)", user_id, applicant_id
+        )
         return KYCApplicant(
             applicant_id=applicant_id,
             user_id=user_id,
@@ -229,9 +242,7 @@ class SumsubProvider(KYCProvider):
         return VerificationStatus.PENDING
 
     def verify_webhook(self, payload: bytes, signature: str) -> bool:
-        expected = hmac.new(
-            self._secret.encode(), payload, hashlib.sha256
-        ).hexdigest()
+        expected = hmac.new(self._secret.encode(), payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
 
     def parse_webhook(self, payload: Dict[str, Any]) -> tuple[str, VerificationStatus]:
@@ -248,6 +259,7 @@ class SumsubProvider(KYCProvider):
 
 
 # ── Onfido provider ───────────────────────────────────────────────────────────
+
 
 class OnfidoProvider(KYCProvider):
     """
@@ -270,19 +282,23 @@ class OnfidoProvider(KYCProvider):
             "Content-Type": "application/json",
         }
 
-    async def create_applicant(self, user_id: str, metadata: Dict[str, Any]) -> KYCApplicant:
+    async def create_applicant(
+        self, user_id: str, metadata: Dict[str, Any]
+    ) -> KYCApplicant:
         try:
             import aiohttp
         except ImportError:
             raise RuntimeError("aiohttp required for Onfido integration")
 
         # Create applicant
-        body = json.dumps({
-            "first_name": metadata.get("first_name", ""),
-            "last_name": metadata.get("last_name", ""),
-            "email": metadata.get("email", ""),
-            "dob": metadata.get("dob", ""),
-        }).encode()
+        body = json.dumps(
+            {
+                "first_name": metadata.get("first_name", ""),
+                "last_name": metadata.get("last_name", ""),
+                "email": metadata.get("email", ""),
+                "dob": metadata.get("dob", ""),
+            }
+        ).encode()
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -298,10 +314,12 @@ class OnfidoProvider(KYCProvider):
         # Create workflow run for SDK token
         sdk_token = ""
         if self._workflow_id:
-            wf_body = json.dumps({
-                "applicant_id": applicant_id,
-                "workflow_id": self._workflow_id,
-            }).encode()
+            wf_body = json.dumps(
+                {
+                    "applicant_id": applicant_id,
+                    "workflow_id": self._workflow_id,
+                }
+            ).encode()
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{self.BASE_URL}/workflow_runs",
@@ -311,7 +329,9 @@ class OnfidoProvider(KYCProvider):
                     wf_data = await resp.json()
                     sdk_token = wf_data.get("sdk_token", "")
 
-        logger.info("Onfido: applicant created for user %s (id=%s)", user_id, applicant_id)
+        logger.info(
+            "Onfido: applicant created for user %s (id=%s)", user_id, applicant_id
+        )
         return KYCApplicant(
             applicant_id=applicant_id,
             user_id=user_id,
@@ -351,9 +371,7 @@ class OnfidoProvider(KYCProvider):
     def verify_webhook(self, payload: bytes, signature: str) -> bool:
         # Onfido uses SHA-256 HMAC with the webhook token
         webhook_token = os.getenv("ONFIDO_WEBHOOK_TOKEN", "")
-        expected = hmac.new(
-            webhook_token.encode(), payload, hashlib.sha256
-        ).hexdigest()
+        expected = hmac.new(webhook_token.encode(), payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
 
     def parse_webhook(self, payload: Dict[str, Any]) -> tuple[str, VerificationStatus]:
@@ -370,15 +388,21 @@ class OnfidoProvider(KYCProvider):
 
 # ── Mock provider ─────────────────────────────────────────────────────────────
 
+
 class MockKYCProvider(KYCProvider):
     """Auto-approves after KYC_MOCK_DELAY_S seconds. For testing only."""
 
     DELAY = float(os.getenv("KYC_MOCK_DELAY_S", "2"))
 
-    async def create_applicant(self, user_id: str, metadata: Dict[str, Any]) -> KYCApplicant:
+    async def create_applicant(
+        self, user_id: str, metadata: Dict[str, Any]
+    ) -> KYCApplicant:
         import uuid
+
         applicant_id = f"mock_{uuid.uuid4().hex[:12]}"
-        logger.info("MockKYC: applicant created for user %s (id=%s)", user_id, applicant_id)
+        logger.info(
+            "MockKYC: applicant created for user %s (id=%s)", user_id, applicant_id
+        )
         return KYCApplicant(
             applicant_id=applicant_id,
             user_id=user_id,
@@ -388,6 +412,7 @@ class MockKYCProvider(KYCProvider):
 
     async def get_status(self, applicant_id: str) -> VerificationStatus:
         import asyncio
+
         await asyncio.sleep(self.DELAY)
         return VerificationStatus.APPROVED
 
@@ -399,6 +424,7 @@ class MockKYCProvider(KYCProvider):
 
 
 # ── Sanctions screening ───────────────────────────────────────────────────────
+
 
 class RefinitivScreener:
     """
@@ -435,15 +461,27 @@ class RefinitivScreener:
         country: Optional[str] = None,
     ) -> SanctionsResult:
         if not self._api_key:
-            logger.warning("Refinitiv: REFINITIV_API_KEY not set — skipping sanctions screen")
-            return SanctionsResult(screened=False, is_match=False, match_score=0.0,
-                                   matched_lists=[], provider="refinitiv_unavailable")
+            logger.warning(
+                "Refinitiv: REFINITIV_API_KEY not set — skipping sanctions screen"
+            )
+            return SanctionsResult(
+                screened=False,
+                is_match=False,
+                match_score=0.0,
+                matched_lists=[],
+                provider="refinitiv_unavailable",
+            )
 
         try:
             import aiohttp
         except ImportError:
-            return SanctionsResult(screened=False, is_match=False, match_score=0.0,
-                                   matched_lists=[], provider="refinitiv_no_aiohttp")
+            return SanctionsResult(
+                screened=False,
+                is_match=False,
+                match_score=0.0,
+                matched_lists=[],
+                provider="refinitiv_no_aiohttp",
+            )
 
         path = f"/groups/{self._group_id}/screening-requests"
         body_dict: Dict[str, Any] = {
@@ -466,20 +504,31 @@ class RefinitivScreener:
                 ) as resp:
                     if resp.status not in (200, 201):
                         logger.warning("Refinitiv screen HTTP %d", resp.status)
-                        return SanctionsResult(screened=False, is_match=False,
-                                               match_score=0.0, matched_lists=[],
-                                               provider="refinitiv_error")
+                        return SanctionsResult(
+                            screened=False,
+                            is_match=False,
+                            match_score=0.0,
+                            matched_lists=[],
+                            provider="refinitiv_error",
+                        )
                     data = await resp.json()
 
             results = data.get("results", [])
             if not results:
-                return SanctionsResult(screened=True, is_match=False, match_score=0.0,
-                                       matched_lists=[], provider="refinitiv")
+                return SanctionsResult(
+                    screened=True,
+                    is_match=False,
+                    match_score=0.0,
+                    matched_lists=[],
+                    provider="refinitiv",
+                )
 
             # Find highest-scoring match
             best = max(results, key=lambda r: r.get("matchStrength", 0))
             score = best.get("matchStrength", 0) / 100.0
-            lists_hit = [r.get("category", "") for r in results if r.get("matchStrength", 0) > 50]
+            lists_hit = [
+                r.get("category", "") for r in results if r.get("matchStrength", 0) > 50
+            ]
             is_match = score >= 0.7
 
             return SanctionsResult(
@@ -492,9 +541,14 @@ class RefinitivScreener:
             )
         except Exception as exc:
             logger.error("Refinitiv screen error: %s", exc)
-            return SanctionsResult(screened=False, is_match=False, match_score=0.0,
-                                   matched_lists=[], provider="refinitiv_error",
-                                   details=str(exc))
+            return SanctionsResult(
+                screened=False,
+                is_match=False,
+                match_score=0.0,
+                matched_lists=[],
+                provider="refinitiv_error",
+                details=str(exc),
+            )
 
 
 class LocalSDNScreener:
@@ -515,17 +569,25 @@ class LocalSDNScreener:
         """Download and parse the OFAC SDN list."""
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
-                async with session.get(self.SDN_URL, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                async with session.get(
+                    self.SDN_URL, timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
                     if resp.status == 200:
                         text = await resp.text()
                         # Extract names from XML (simplified parser)
                         import re
+
                         self._names = re.findall(r"<lastName>([^<]+)</lastName>", text)
-                        self._names += re.findall(r"<firstName>([^<]+)</firstName>", text)
+                        self._names += re.findall(
+                            r"<firstName>([^<]+)</firstName>", text
+                        )
                         self._names = [n.upper().strip() for n in self._names]
                         self._loaded = True
-                        logger.info("LocalSDN: loaded %d name entries", len(self._names))
+                        logger.info(
+                            "LocalSDN: loaded %d name entries", len(self._names)
+                        )
         except Exception as exc:
             logger.warning("LocalSDN: failed to load SDN list: %s", exc)
 
@@ -550,6 +612,7 @@ class LocalSDNScreener:
 
 
 # ── KYCGateway facade ─────────────────────────────────────────────────────────
+
 
 class KYCGateway:
     """
@@ -611,7 +674,9 @@ class KYCGateway:
         Also runs sanctions screening upfront — blocks if a match is found.
         """
         # Sanctions pre-screen
-        full_name = f"{metadata.get('first_name', '')} {metadata.get('last_name', '')}".strip()
+        full_name = (
+            f"{metadata.get('first_name', '')} {metadata.get('last_name', '')}".strip()
+        )
         if full_name:
             sanctions = await self.screen_sanctions(
                 full_name=full_name,
@@ -621,12 +686,18 @@ class KYCGateway:
             if sanctions.is_match:
                 logger.critical(
                     "KYCGateway: sanctions match for user %s — blocking KYC creation. "
-                    "Lists: %s", user_id, sanctions.matched_lists,
+                    "Lists: %s",
+                    user_id,
+                    sanctions.matched_lists,
                 )
-                self._audit("KYC_BLOCKED_SANCTIONS", user_id, {
-                    "matched_lists": sanctions.matched_lists,
-                    "match_score": sanctions.match_score,
-                })
+                self._audit(
+                    "KYC_BLOCKED_SANCTIONS",
+                    user_id,
+                    {
+                        "matched_lists": sanctions.matched_lists,
+                        "match_score": sanctions.match_score,
+                    },
+                )
                 raise PermissionError(
                     f"KYC blocked: sanctions match on {sanctions.matched_lists}"
                 )
@@ -635,12 +706,18 @@ class KYCGateway:
         self._applicants[applicant.applicant_id] = applicant
 
         if self._compliance:
-            self._compliance.submit_kyc(user_id, metadata.get("document_type", "passport"))
+            self._compliance.submit_kyc(
+                user_id, metadata.get("document_type", "passport")
+            )
 
-        self._audit("KYC_APPLICANT_CREATED", user_id, {
-            "applicant_id": applicant.applicant_id,
-            "provider": applicant.provider,
-        })
+        self._audit(
+            "KYC_APPLICANT_CREATED",
+            user_id,
+            {
+                "applicant_id": applicant.applicant_id,
+                "provider": applicant.provider,
+            },
+        )
         return applicant
 
     async def check_status(self, applicant_id: str) -> VerificationStatus:
@@ -656,12 +733,18 @@ class KYCGateway:
                 if status == VerificationStatus.APPROVED:
                     self._compliance.approve_kyc(applicant.user_id)
                 elif status == VerificationStatus.REJECTED:
-                    self._compliance.reject_kyc(applicant.user_id, applicant.rejection_reason)
+                    self._compliance.reject_kyc(
+                        applicant.user_id, applicant.rejection_reason
+                    )
 
-            self._audit("KYC_STATUS_UPDATED", applicant.user_id, {
-                "applicant_id": applicant_id,
-                "status": status.value,
-            })
+            self._audit(
+                "KYC_STATUS_UPDATED",
+                applicant.user_id,
+                {
+                    "applicant_id": applicant_id,
+                    "status": status.value,
+                },
+            )
 
         return status
 
@@ -700,8 +783,11 @@ class KYCGateway:
 
         logger.info(
             "Sanctions screen: name=%r match=%s score=%.2f lists=%s provider=%s",
-            full_name, result.is_match, result.match_score,
-            result.matched_lists, result.provider,
+            full_name,
+            result.is_match,
+            result.match_score,
+            result.matched_lists,
+            result.provider,
         )
         return result
 
@@ -727,7 +813,5 @@ def init_kyc_gateway(compliance_manager: Any) -> KYCGateway:
     """Wire the KYCGateway with a ComplianceManager. Call once at startup."""
     global _kyc_gateway
     _kyc_gateway = KYCGateway(compliance_manager=compliance_manager)
-    logger.info(
-        "KYCGateway initialised (provider=%s)", KYC_PROVIDER
-    )
+    logger.info("KYCGateway initialised (provider=%s)", KYC_PROVIDER)
     return _kyc_gateway

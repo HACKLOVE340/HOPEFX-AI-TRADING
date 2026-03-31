@@ -110,13 +110,17 @@ class AMLGate:
                 )
                 try:
                     import sentry_sdk
-                    sentry_sdk.capture_exception(exc, extras={
-                        "user_id": user_id[:8] + "…",
-                        "amount": str(amount),
-                        "aml_action": "fail_closed",
-                    })
+
+                    sentry_sdk.capture_exception(
+                        exc,
+                        extras={
+                            "user_id": user_id[:8] + "…",
+                            "amount": str(amount),
+                            "aml_action": "fail_closed",
+                        },
+                    )
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Suppressed exception: %s", _exc)
                 return AMLDecision(
                     allowed=False,
                     reason=(

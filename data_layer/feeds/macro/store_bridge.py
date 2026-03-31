@@ -20,11 +20,11 @@ is populated from FRED automatically rather than requiring manual CSV files.
 Graceful degradation: if FRED is unavailable, falls back to CSV files
 in data/macro/ (the original MacroStore.load_defaults() path).
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
@@ -34,7 +34,9 @@ logger = logging.getLogger(__name__)
 
 # Startup retry config
 _STARTUP_MAX_RETRIES = int(__import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
-_STARTUP_RETRY_DELAY = float(__import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
+_STARTUP_RETRY_DELAY = float(
+    __import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0")
+)
 
 
 class MacroStoreBridge:
@@ -47,8 +49,8 @@ class MacroStoreBridge:
     """
 
     def __init__(self, fred: Optional[FREDFeed] = None) -> None:
-        self._fred    = fred or fred_feed
-        self._loaded  = False
+        self._fred = fred or fred_feed
+        self._loaded = False
         self._running = False
         self._last_refresh: Optional[datetime] = None
         self._series_loaded: int = 0
@@ -98,7 +100,9 @@ class MacroStoreBridge:
                 logger.warning(
                     "MacroStoreBridge: FRED load attempt %d/%d failed — "
                     "retrying in %.1fs",
-                    attempt, _STARTUP_MAX_RETRIES, wait,
+                    attempt,
+                    _STARTUP_MAX_RETRIES,
+                    wait,
                 )
                 await asyncio.sleep(wait)
             else:
@@ -131,6 +135,7 @@ class MacroStoreBridge:
         """
         try:
             from ml.macro_store import macro_store
+
             macro_store.load_defaults()
             loaded = len(macro_store._series)
             if loaded > 0:
@@ -154,7 +159,9 @@ class MacroStoreBridge:
         try:
             from ml.macro_store import macro_store
 
-            logger.info("MacroStoreBridge: fetching %d FRED series...", len(FRED_SERIES))
+            logger.info(
+                "MacroStoreBridge: fetching %d FRED series...", len(FRED_SERIES)
+            )
             all_series = await self._fred.fetch_all()
 
             loaded = 0
@@ -166,11 +173,12 @@ class MacroStoreBridge:
                 loaded += 1
                 logger.info(
                     "MacroStoreBridge: loaded %s (%d obs, latest=%.4f)",
-                    name, len(series),
+                    name,
+                    len(series),
                     float(series.iloc[-1]) if not series.empty else 0.0,
                 )
 
-            self._loaded       = True
+            self._loaded = True
             self._series_loaded = loaded
             self._last_refresh = datetime.now(timezone.utc)
 
@@ -181,7 +189,8 @@ class MacroStoreBridge:
 
             logger.info(
                 "MacroStoreBridge: MacroStore populated with %d/%d series",
-                loaded, len(FRED_SERIES),
+                loaded,
+                len(FRED_SERIES),
             )
 
         except ImportError:
@@ -195,7 +204,7 @@ class MacroStoreBridge:
     async def _daily_refresh_loop(self) -> None:
         """Refresh FRED data daily at 18:00 UTC (after US market close)."""
         while self._running:
-            now    = datetime.now(timezone.utc)
+            now = datetime.now(timezone.utc)
             target = now.replace(hour=18, minute=0, second=0, microsecond=0)
             if target <= now:
                 target = target + timedelta(days=1)
@@ -217,6 +226,7 @@ class MacroStoreBridge:
         """
         try:
             from ml.macro_store import macro_store
+
             snap = macro_store.snapshot()
             features: Dict[str, float] = {}
             for name, info in snap.items():
@@ -239,6 +249,7 @@ class MacroStoreBridge:
         """
         try:
             from ml.macro_store import macro_store
+
             raw_snap = macro_store.snapshot()
         except Exception:
             raw_snap = {}
@@ -248,17 +259,18 @@ class MacroStoreBridge:
             if info:
                 series_detail[name] = {
                     "value": info.get("value"),
-                    "date":  info.get("date"),
+                    "date": info.get("date"),
                 }
 
         return {
-            "health":         self.health(),
-            "ml_features":    self.get_ml_features(),
-            "series":         series_detail,
-            "series_count":   len(series_detail),
-            "loaded":         self._loaded,
-            "last_refresh":   self._last_refresh.isoformat()
-                              if self._last_refresh else None,
+            "health": self.health(),
+            "ml_features": self.get_ml_features(),
+            "series": series_detail,
+            "series_count": len(series_detail),
+            "loaded": self._loaded,
+            "last_refresh": self._last_refresh.isoformat()
+            if self._last_refresh
+            else None,
         }
 
     def force_refresh(self) -> None:
@@ -287,17 +299,19 @@ class MacroStoreBridge:
     def health(self) -> dict:
         try:
             from ml.macro_store import macro_store
+
             snap = macro_store.snapshot()
         except Exception:
             snap = {}
         return {
-            "loaded":        self._loaded,
+            "loaded": self._loaded,
             "series_loaded": self._series_loaded,
-            "last_refresh":  self._last_refresh.isoformat() if self._last_refresh else None,
-            "series_count":  len(snap),
-            "series":        {
-                name: info.get("date") if info else None
-                for name, info in snap.items()
+            "last_refresh": self._last_refresh.isoformat()
+            if self._last_refresh
+            else None,
+            "series_count": len(snap),
+            "series": {
+                name: info.get("date") if info else None for name, info in snap.items()
             },
         }
 

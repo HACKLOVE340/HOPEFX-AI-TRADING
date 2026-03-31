@@ -22,6 +22,7 @@ The base class handles:
   - Prometheus metrics per source (latency, errors, ticks)
   - Automatic lineage_id injection
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -48,8 +49,8 @@ _CB_HALF_OPEN_AFTER_S = float(os.getenv("FEED_CB_HALF_OPEN_S", "60.0"))
 
 
 class CircuitState(str, Enum):
-    CLOSED    = "closed"
-    OPEN      = "open"
+    CLOSED = "closed"
+    OPEN = "open"
     HALF_OPEN = "half_open"
 
 
@@ -72,15 +73,16 @@ class GoldFeedBase(ABC):
         self._cb_state: CircuitState = CircuitState.CLOSED
         self._cb_opened_at: float = 0.0
         self._last_error_msg: str = ""
-        self._prom_ticks    = None
-        self._prom_errors   = None
-        self._prom_latency  = None
+        self._prom_ticks = None
+        self._prom_errors = None
+        self._prom_latency = None
         self._prom_cb_state = None
         self._init_prometheus()
 
     def _init_prometheus(self) -> None:
         try:
             from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+
             src = self.name.value
 
             def _counter(name, doc, labels=None):
@@ -123,15 +125,18 @@ class GoldFeedBase(ABC):
                 f"1 if circuit breaker is open for {src}",
             )
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             connector = aiohttp.TCPConnector(
-                limit=10, ttl_dns_cache=300, enable_cleanup_closed=True,
+                limit=10,
+                ttl_dns_cache=300,
+                enable_cleanup_closed=True,
             )
             self._session = aiohttp.ClientSession(
-                timeout=_HTTP_TIMEOUT, connector=connector,
+                timeout=_HTTP_TIMEOUT,
+                connector=connector,
             )
         return self._session
 
@@ -170,14 +175,15 @@ class GoldFeedBase(ABC):
             try:
                 self._prom_errors.labels(reason=reason).inc()
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
         if self._consecutive_errors >= _CB_OPEN_AFTER_ERRORS:
             if self._cb_state != CircuitState.OPEN:
                 self._cb_state = CircuitState.OPEN
                 self._cb_opened_at = time.monotonic()
                 logger.error(
                     "%s circuit: OPEN after %d consecutive errors",
-                    self.name.value, self._consecutive_errors,
+                    self.name.value,
+                    self._consecutive_errors,
                 )
                 if self._prom_cb_state:
                     self._prom_cb_state.set(1)
@@ -219,7 +225,9 @@ class GoldFeedBase(ABC):
                         wait = min(retry_after + random.uniform(0, 1.0), 120.0)
                         logger.warning(
                             "%s rate-limited — sleeping %.1fs (attempt %d)",
-                            self.name.value, wait, attempt + 1,
+                            self.name.value,
+                            wait,
+                            attempt + 1,
                         )
                         await asyncio.sleep(wait)
                         backoff = min(backoff * 2, 120.0)
@@ -232,7 +240,9 @@ class GoldFeedBase(ABC):
 
                     if resp.status >= 500:
                         raise aiohttp.ClientResponseError(
-                            resp.request_info, resp.history, status=resp.status,
+                            resp.request_info,
+                            resp.history,
+                            status=resp.status,
                         )
 
                     resp.raise_for_status()
@@ -250,7 +260,10 @@ class GoldFeedBase(ABC):
                 wait = random.uniform(0, min(backoff, 30.0))
                 logger.warning(
                     "%s HTTP error attempt=%d/4 err=%s — retry in %.2fs",
-                    self.name.value, attempt + 1, exc, wait,
+                    self.name.value,
+                    attempt + 1,
+                    exc,
+                    wait,
                 )
                 if attempt < 3:
                     await asyncio.sleep(wait)
@@ -298,15 +311,15 @@ class GoldFeedBase(ABC):
             ask = mid + half_spread
 
         tick = GoldTick(
-            symbol     = "XAU_USD",
-            timestamp  = datetime.now(timezone.utc),
-            bid        = round(bid, 4),
-            ask        = round(ask, 4),
-            mid        = round(mid, 4),
-            source     = self.name,
-            spread     = round(ask - bid, 4),
-            lineage_id = str(uuid.uuid4()),
-            raw        = raw,
+            symbol="XAU_USD",
+            timestamp=datetime.now(timezone.utc),
+            bid=round(bid, 4),
+            ask=round(ask, 4),
+            mid=round(mid, 4),
+            source=self.name,
+            spread=round(ask - bid, 4),
+            lineage_id=str(uuid.uuid4()),
+            raw=raw,
         )
         self._total_ticks += 1
         if self._prom_ticks:
@@ -323,15 +336,13 @@ class GoldFeedBase(ABC):
 
     def health_summary(self) -> dict:
         return {
-            "source":             self.name.value,
-            "configured":         self.is_configured,
-            "circuit_state":      self._cb_state.value,
-            "total_calls":        self._total_calls,
-            "total_ticks":        self._total_ticks,
-            "total_errors":       self._total_errors,
+            "source": self.name.value,
+            "configured": self.is_configured,
+            "circuit_state": self._cb_state.value,
+            "total_calls": self._total_calls,
+            "total_ticks": self._total_ticks,
+            "total_errors": self._total_errors,
             "consecutive_errors": self._consecutive_errors,
-            "error_rate":         round(
-                self._total_errors / max(self._total_calls, 1), 4
-            ),
-            "last_error":         self._last_error_msg or None,
+            "error_rate": round(self._total_errors / max(self._total_calls, 1), 4),
+            "last_error": self._last_error_msg or None,
         }

@@ -150,7 +150,11 @@ class DataValidator:
                     # Monday open after weekend gap is expected
                     is_weekend_open = dt.weekday() == 0
                 except Exception as exc:
-                    logger.debug("validate_bar: could not parse timestamp for gap check: %r — %s", ts, exc)
+                    logger.debug(
+                        "validate_bar: could not parse timestamp for gap check: %r — %s",
+                        ts,
+                        exc,
+                    )
             if gap_pct > _WEEKDAY_GAP_PCT and not is_weekend_open:
                 result.add_warning(
                     f"Large gap detected: open={o} vs prev_close={self._last_close:.4f} "
@@ -174,7 +178,11 @@ class DataValidator:
                         f"(expected <= {expected_max_gap})"
                     )
             except Exception as exc:
-                logger.debug("validate_bar: could not parse timestamp for stale check: %r — %s", ts, exc)
+                logger.debug(
+                    "validate_bar: could not parse timestamp for stale check: %r — %s",
+                    ts,
+                    exc,
+                )
 
         # ── Update state for next call ───────────────────────────────────
         if result.ok:
@@ -187,7 +195,11 @@ class DataValidator:
                         dt = dt.replace(tzinfo=timezone.utc)
                     self._last_bar_time = dt
                 except Exception as exc:
-                    logger.debug("validate_bar: could not parse timestamp for state update: %r — %s", ts, exc)
+                    logger.debug(
+                        "validate_bar: could not parse timestamp for state update: %r — %s",
+                        ts,
+                        exc,
+                    )
 
         return result
 

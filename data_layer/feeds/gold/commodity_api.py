@@ -12,6 +12,7 @@ Paid tiers: up to 100,000 requests/month
 Endpoint: GET https://api.commoditypriceapi.com/v1/latest?api_key=KEY&base=XAU&symbols=USD
 Response: {"success":true,"base":"XAU","rates":{"USD":1985.5},"timestamp":1700000000}
 """
+
 from __future__ import annotations
 
 import logging
@@ -27,9 +28,9 @@ _BASE = "https://api.commoditypriceapi.com/v1"
 class CommodityAPIFeed(GoldFeedBase):
     """CommodityPriceAPI — REST polling adapter."""
 
-    name           = FeedSource.COMMODITY_API
-    _api_key_env   = "COMMODITY_PRICE_API_KEY"
-    _base_url      = _BASE
+    name = FeedSource.COMMODITY_API
+    _api_key_env = "COMMODITY_PRICE_API_KEY"
+    _base_url = _BASE
     _min_interval_s = 60.0
 
     async def fetch_tick(self) -> GoldTick:
@@ -40,7 +41,7 @@ class CommodityAPIFeed(GoldFeedBase):
             f"{_BASE}/latest",
             params={
                 "api_key": self._api_key,
-                "base":    "XAU",
+                "base": "XAU",
                 "symbols": "USD",
             },
         )

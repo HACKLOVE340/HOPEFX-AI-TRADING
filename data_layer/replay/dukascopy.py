@@ -20,45 +20,69 @@ Note: Dukascopy months are 0-indexed (January = 0).
 
 Supported symbols: XAUUSD, EURUSD, GBPUSD, USDJPY, etc.
 """
+
 from __future__ import annotations
 
 import asyncio
-import io
 import logging
 import lzma
 import os
 import struct
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import aiohttp
 import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL    = "https://datafeed.dukascopy.com/datafeed"
-_CACHE_DIR   = Path(os.getenv("DUKASCOPY_CACHE_DIR", "data/dukascopy_cache"))
+_BASE_URL = "https://datafeed.dukascopy.com/datafeed"
+_CACHE_DIR = Path(os.getenv("DUKASCOPY_CACHE_DIR", "data/dukascopy_cache"))
 _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=30.0, connect=10.0)
-_TICK_STRUCT  = struct.Struct(">IIIff")   # big-endian: uint32, uint32, uint32, float32, float32
-_TICK_SIZE    = _TICK_STRUCT.size         # 20 bytes
-_PRICE_FACTOR = 100_000.0                 # Dukascopy stores price × 100000
+_TICK_STRUCT = struct.Struct(
+    ">IIIff"
+)  # big-endian: uint32, uint32, uint32, float32, float32
+_TICK_SIZE = _TICK_STRUCT.size  # 20 bytes
+_PRICE_FACTOR = 100_000.0  # Dukascopy stores price × 100000
 
 # Timeframe string → minutes mapping.
 # Accepts broker-style strings (H1, M5, D1), ISO-style (1h, 5m, 1d),
 # and plain integers as strings ("60", "5").
 _TF_ALIASES: dict = {
     # Minutes
-    "M1": 1,   "1m": 1,   "1min": 1,   "1": 1,
-    "M5": 5,   "5m": 5,   "5min": 5,   "5": 5,
-    "M15": 15, "15m": 15, "15min": 15, "15": 15,
-    "M30": 30, "30m": 30, "30min": 30, "30": 30,
+    "M1": 1,
+    "1m": 1,
+    "1min": 1,
+    "1": 1,
+    "M5": 5,
+    "5m": 5,
+    "5min": 5,
+    "5": 5,
+    "M15": 15,
+    "15m": 15,
+    "15min": 15,
+    "15": 15,
+    "M30": 30,
+    "30m": 30,
+    "30min": 30,
+    "30": 30,
     # Hours
-    "H1": 60,  "1h": 60,  "1H": 60,   "60": 60,  "60min": 60,
-    "H4": 240, "4h": 240, "4H": 240,  "240": 240,
+    "H1": 60,
+    "1h": 60,
+    "1H": 60,
+    "60": 60,
+    "60min": 60,
+    "H4": 240,
+    "4h": 240,
+    "4H": 240,
+    "240": 240,
     # Daily
-    "D1": 1440, "1d": 1440, "1D": 1440, "daily": 1440, "1440": 1440,
+    "D1": 1440,
+    "1d": 1440,
+    "1D": 1440,
+    "daily": 1440,
+    "1440": 1440,
 }
 
 
@@ -122,10 +146,10 @@ class DukascopyFetcher:
 
         Month is 0-indexed: January=00, December=11.
         """
-        y  = dt.year
-        m  = dt.month - 1   # 0-indexed!
-        d  = dt.day
-        h  = dt.hour
+        y = dt.year
+        m = dt.month - 1  # 0-indexed!
+        d = dt.day
+        h = dt.hour
         return (
             f"{_BASE_URL}/{symbol.upper()}"
             f"/{y:04d}/{m:02d}/{d:02d}/{h:02d}h_ticks.bi5"
@@ -194,36 +218,48 @@ class DukascopyFetcher:
         Returns DataFrame with columns: timestamp (UTC), bid, ask, bid_vol, ask_vol
         """
         if not data:
-            return pd.DataFrame(columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"])
+            return pd.DataFrame(
+                columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"]
+            )
 
         try:
             raw = lzma.decompress(data)
         except lzma.LZMAError as exc:
             logger.warning("Dukascopy LZMA decode error: %s", exc)
-            return pd.DataFrame(columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"])
+            return pd.DataFrame(
+                columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"]
+            )
 
         n_ticks = len(raw) // _TICK_SIZE
         if n_ticks == 0:
-            return pd.DataFrame(columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"])
+            return pd.DataFrame(
+                columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"]
+            )
 
         records = []
         hour_epoch_ms = int(hour.timestamp() * 1000)
 
         for i in range(n_ticks):
             offset = i * _TICK_SIZE
-            chunk  = raw[offset : offset + _TICK_SIZE]
+            chunk = raw[offset : offset + _TICK_SIZE]
             if len(chunk) < _TICK_SIZE:
                 break
-            ms_from_hour, ask_raw, bid_raw, ask_vol, bid_vol = _TICK_STRUCT.unpack(chunk)
-            ts_ms  = hour_epoch_ms + ms_from_hour
-            ask    = ask_raw / _PRICE_FACTOR
-            bid    = bid_raw / _PRICE_FACTOR
+            ms_from_hour, ask_raw, bid_raw, ask_vol, bid_vol = _TICK_STRUCT.unpack(
+                chunk
+            )
+            ts_ms = hour_epoch_ms + ms_from_hour
+            ask = ask_raw / _PRICE_FACTOR
+            bid = bid_raw / _PRICE_FACTOR
             records.append((ts_ms, bid, ask, float(bid_vol), float(ask_vol)))
 
         if not records:
-            return pd.DataFrame(columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"])
+            return pd.DataFrame(
+                columns=["timestamp", "bid", "ask", "bid_vol", "ask_vol"]
+            )
 
-        df = pd.DataFrame(records, columns=["ts_ms", "bid", "ask", "bid_vol", "ask_vol"])
+        df = pd.DataFrame(
+            records, columns=["ts_ms", "bid", "ask", "bid_vol", "ask_vol"]
+        )
         df["timestamp"] = pd.to_datetime(df["ts_ms"], unit="ms", utc=True)
         df = df.drop(columns=["ts_ms"])
         df["mid"] = (df["bid"] + df["ask"]) / 2.0
@@ -266,7 +302,7 @@ class DukascopyFetcher:
                     return self._decode_bi5(data, h)
                 return None
 
-        tasks   = [_fetch_with_sem(h) for h in hours]
+        tasks = [_fetch_with_sem(h) for h in hours]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         frames = []
@@ -304,18 +340,22 @@ class DukascopyFetcher:
         and UTC DatetimeIndex (bar open time).
         """
         tf_min = _parse_timeframe(timeframe_minutes)
-        ticks  = await self.fetch_ticks(symbol, start, end)
+        ticks = await self.fetch_ticks(symbol, start, end)
         if ticks.empty:
             return pd.DataFrame()
 
         freq = f"{tf_min}min"
-        mid  = ticks["mid"] if "mid" in ticks.columns else (ticks["bid"] + ticks["ask"]) / 2
+        mid = (
+            ticks["mid"]
+            if "mid" in ticks.columns
+            else (ticks["bid"] + ticks["ask"]) / 2
+        )
 
         ohlcv = mid.resample(freq).agg(
-            open  = "first",
-            high  = "max",
-            low   = "min",
-            close = "last",
+            open="first",
+            high="max",
+            low="min",
+            close="last",
         )
 
         # Volume: sum of bid_vol + ask_vol

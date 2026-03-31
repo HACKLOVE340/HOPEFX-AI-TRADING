@@ -36,6 +36,7 @@ the MarketDataOrchestrator singleton.
     BAD: from data_layer.feeds.gold.goldapi import GoldAPIFeed
     BAD: from data_layer.quality.engine import dqe
 """
+
 from __future__ import annotations
 
 from data_layer.orchestrator import MarketDataOrchestrator, orchestrator  # noqa: F401

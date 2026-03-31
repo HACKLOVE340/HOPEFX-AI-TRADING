@@ -14,6 +14,7 @@ Response includes: price, bid, ask, open, high, low, close, change, change_pct
 
 API key header: x-access-token
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,10 +31,10 @@ _BASE = "https://www.goldapi.io/api"
 class GoldAPIFeed(GoldFeedBase):
     """GoldAPI.io — REST polling adapter."""
 
-    name          = FeedSource.GOLDAPI
-    _api_key_env  = "GOLDAPI_IO_KEY"
-    _base_url     = _BASE
-    _min_interval_s = 2.0   # conservative — free tier is 100 req/month
+    name = FeedSource.GOLDAPI
+    _api_key_env = "GOLDAPI_IO_KEY"
+    _base_url = _BASE
+    _min_interval_s = 2.0  # conservative — free tier is 100 req/month
 
     async def fetch_tick(self) -> GoldTick:
         if not self.is_configured:
@@ -41,7 +42,10 @@ class GoldAPIFeed(GoldFeedBase):
 
         data = await self._get(
             f"{_BASE}/XAU/USD",
-            headers={"x-access-token": self._api_key, "Content-Type": "application/json"},
+            headers={
+                "x-access-token": self._api_key,
+                "Content-Type": "application/json",
+            },
         )
 
         # GoldAPI response shape:
@@ -51,15 +55,17 @@ class GoldAPIFeed(GoldFeedBase):
         #  "price":1985.5,"ch":5.0,"chp":0.25,"ask":1985.8,"bid":1985.2}
 
         price = float(data.get("price", 0))
-        bid   = float(data.get("bid", 0)) or None
-        ask   = float(data.get("ask", 0)) or None
+        bid = float(data.get("bid", 0)) or None
+        ask = float(data.get("ask", 0)) or None
 
         if price <= 0:
             raise ValueError(f"GoldAPI returned invalid price: {data}")
 
         return self._make_tick(mid=price, bid=bid, ask=ask, raw=data)
 
-    async def fetch_ohlcv(self, timeframe: str = "1d", limit: int = 30) -> List[OHLCVBar]:
+    async def fetch_ohlcv(
+        self, timeframe: str = "1d", limit: int = 30
+    ) -> List[OHLCVBar]:
         """GoldAPI supports date-range historical queries."""
         # GoldAPI historical: GET /api/XAU/USD/{YYYYMMDD}
         # For simplicity, return empty — orchestrator uses Dukascopy for history

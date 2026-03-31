@@ -28,6 +28,7 @@ Sentiment score range: -1.0 (strongly bearish) to +1.0 (strongly bullish)
 Gold relevance range:   0.0 (irrelevant) to 1.0 (directly about gold)
 Impact score range:     0.0 (no impact) to 1.0 (maximum expected impact)
 """
+
 from __future__ import annotations
 
 import logging
@@ -41,66 +42,110 @@ logger = logging.getLogger(__name__)
 # ── Gold relevance keywords ───────────────────────────────────────────────────
 # Tier 1: directly about gold
 _GOLD_TIER1: Set[str] = {
-    "gold", "xau", "xauusd", "bullion", "gold price", "gold futures",
-    "gold etf", "gld", "iau", "gold mining", "gold reserves",
-    "troy ounce", "spot gold", "gold rally", "gold sell-off",
+    "gold",
+    "xau",
+    "xauusd",
+    "bullion",
+    "gold price",
+    "gold futures",
+    "gold etf",
+    "gld",
+    "iau",
+    "gold mining",
+    "gold reserves",
+    "troy ounce",
+    "spot gold",
+    "gold rally",
+    "gold sell-off",
 }
 
 # Tier 2: macro drivers of gold
 _GOLD_TIER2: Set[str] = {
-    "federal reserve", "fed rate", "interest rate", "rate hike", "rate cut",
-    "inflation", "cpi", "pce", "deflation", "stagflation",
-    "dollar index", "dxy", "us dollar", "dollar strength", "dollar weakness",
-    "treasury yield", "10-year yield", "real yield", "tips",
-    "quantitative easing", "qe", "tapering", "monetary policy",
-    "fomc", "powell", "yellen", "central bank",
-    "safe haven", "risk off", "flight to safety",
-    "geopolitical", "war", "conflict", "sanctions", "crisis",
-    "recession", "economic slowdown", "gdp miss",
-    "silver", "platinum", "precious metal", "commodity",
+    "federal reserve",
+    "fed rate",
+    "interest rate",
+    "rate hike",
+    "rate cut",
+    "inflation",
+    "cpi",
+    "pce",
+    "deflation",
+    "stagflation",
+    "dollar index",
+    "dxy",
+    "us dollar",
+    "dollar strength",
+    "dollar weakness",
+    "treasury yield",
+    "10-year yield",
+    "real yield",
+    "tips",
+    "quantitative easing",
+    "qe",
+    "tapering",
+    "monetary policy",
+    "fomc",
+    "powell",
+    "yellen",
+    "central bank",
+    "safe haven",
+    "risk off",
+    "flight to safety",
+    "geopolitical",
+    "war",
+    "conflict",
+    "sanctions",
+    "crisis",
+    "recession",
+    "economic slowdown",
+    "gdp miss",
+    "silver",
+    "platinum",
+    "precious metal",
+    "commodity",
 }
 
 # ── Sentiment amplifiers (gold-specific) ─────────────────────────────────────
 # (pattern, multiplier) — multiplier > 1 = amplify, < 1 = dampen
 # Positive multiplier = bullish for gold, negative = bearish
 _BULLISH_PATTERNS: List[Tuple[str, float]] = [
-    (r"rate\s+cut",           1.5),
-    (r"dovish",               1.4),
-    (r"quantitative\s+eas",   1.4),
-    (r"\bqe\b",               1.3),
+    (r"rate\s+cut", 1.5),
+    (r"dovish", 1.4),
+    (r"quantitative\s+eas", 1.4),
+    (r"\bqe\b", 1.3),
     (r"inflation\s+(surge|spike|jump|rise|high)", 1.4),
-    (r"cpi\s+(beat|above|hot|surge)",             1.4),
+    (r"cpi\s+(beat|above|hot|surge)", 1.4),
     (r"dollar\s+(weak|fall|drop|decline|plunge)", 1.3),
-    (r"dxy\s+(down|fall|drop|decline)",           1.3),
-    (r"geopolit",             1.5),
-    (r"\bwar\b",              1.5),
-    (r"\bconflict\b",         1.3),
-    (r"safe\s+haven",         1.4),
-    (r"recession",            1.3),
-    (r"economic\s+slowdown",  1.2),
+    (r"dxy\s+(down|fall|drop|decline)", 1.3),
+    (r"geopolit", 1.5),
+    (r"\bwar\b", 1.5),
+    (r"\bconflict\b", 1.3),
+    (r"safe\s+haven", 1.4),
+    (r"recession", 1.3),
+    (r"economic\s+slowdown", 1.2),
     (r"gdp\s+(miss|below|weak|contract)", 1.2),
-    (r"yield\s+(fall|drop|decline)",      1.3),
+    (r"yield\s+(fall|drop|decline)", 1.3),
     (r"real\s+yield\s+(fall|drop|negative)", 1.4),
     (r"gold\s+(rally|surge|jump|rise|soar|climb)", 1.6),
-    (r"buy\s+gold",           1.4),
-    (r"gold\s+bull",          1.5),
+    (r"buy\s+gold", 1.4),
+    (r"gold\s+bull", 1.5),
 ]
 
 _BEARISH_PATTERNS: List[Tuple[str, float]] = [
-    (r"rate\s+hike",          1.5),
-    (r"hawkish",              1.4),
-    (r"taper",                1.3),
+    (r"rate\s+hike", 1.5),
+    (r"hawkish", 1.4),
+    (r"taper", 1.3),
     (r"dollar\s+(strong|rise|surge|rally|gain)", 1.3),
-    (r"dxy\s+(up|rise|surge|rally|gain)",        1.3),
-    (r"inflation\s+(cool|ease|fall|drop|low)",   1.3),
-    (r"cpi\s+(miss|below|cool|ease)",            1.3),
-    (r"yield\s+(rise|surge|jump|climb)",         1.3),
-    (r"real\s+yield\s+(rise|positive|high)",     1.4),
-    (r"gold\s+(drop|fall|plunge|decline|sell)",  1.6),
-    (r"sell\s+gold",          1.4),
-    (r"gold\s+bear",          1.5),
-    (r"risk\s+on",            1.2),
-    (r"risk\s+appetite",      1.2),
+    (r"dxy\s+(up|rise|surge|rally|gain)", 1.3),
+    (r"inflation\s+(cool|ease|fall|drop|low)", 1.3),
+    (r"cpi\s+(miss|below|cool|ease)", 1.3),
+    (r"yield\s+(rise|surge|jump|climb)", 1.3),
+    (r"real\s+yield\s+(rise|positive|high)", 1.4),
+    (r"gold\s+(drop|fall|plunge|decline|sell)", 1.6),
+    (r"sell\s+gold", 1.4),
+    (r"gold\s+bear", 1.5),
+    (r"risk\s+on", 1.2),
+    (r"risk\s+appetite", 1.2),
 ]
 
 
@@ -139,14 +184,22 @@ def _apply_gold_amplifiers(text: str, base_score: float) -> float:
     blended = 0.60 * gold_direction + 0.40 * base_score
 
     # Amplify by the strength of gold signals
-    max_mult = max(
-        (m for p, m in _BULLISH_PATTERNS if re.search(p, lower)),
-        default=1.0,
-    ) if bullish_hits > 0 else 1.0
-    max_mult_b = max(
-        (m for p, m in _BEARISH_PATTERNS if re.search(p, lower)),
-        default=1.0,
-    ) if bearish_hits > 0 else 1.0
+    max_mult = (
+        max(
+            (m for p, m in _BULLISH_PATTERNS if re.search(p, lower)),
+            default=1.0,
+        )
+        if bullish_hits > 0
+        else 1.0
+    )
+    max_mult_b = (
+        max(
+            (m for p, m in _BEARISH_PATTERNS if re.search(p, lower)),
+            default=1.0,
+        )
+        if bearish_hits > 0
+        else 1.0
+    )
 
     dominant_mult = max_mult if bullish_hits >= bearish_hits else max_mult_b
     amplified = blended * min(dominant_mult, 1.8)
@@ -170,6 +223,7 @@ class GoldSentimentScorer:
     def _init_vader(self) -> None:
         try:
             from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
             self._vader = SentimentIntensityAnalyzer()
             self._vader_available = True
             logger.info("GoldSentimentScorer: VADER loaded")
@@ -195,11 +249,12 @@ class GoldSentimentScorer:
 
         # Skip scoring if not gold-relevant
         if gold_relevance < 0.05:
-            return _replace(article,
-                gold_relevance  = 0.0,
-                sentiment_score = 0.0,
-                sentiment_label = "neutral",
-                impact_score    = 0.0,
+            return _replace(
+                article,
+                gold_relevance=0.0,
+                sentiment_score=0.0,
+                sentiment_label="neutral",
+                impact_score=0.0,
             )
 
         # ── Sentiment score ───────────────────────────────────────────────
@@ -208,7 +263,7 @@ class GoldSentimentScorer:
         if abs(article.sentiment_score) > 0.01:
             raw_score = article.sentiment_score
         elif self._vader_available and self._vader:
-            scores    = self._vader.polarity_scores(text)
+            scores = self._vader.polarity_scores(text)
             raw_score = scores["compound"]  # [-1, 1]
         else:
             raw_score = self._keyword_score(text)
@@ -230,11 +285,12 @@ class GoldSentimentScorer:
         # Impact score: relevance × |sentiment| × recency_factor
         impact = min(1.0, gold_relevance * abs(weighted_score) * 2.0)
 
-        return _replace(article,
-            sentiment_score = round(weighted_score, 4),
-            sentiment_label = label,
-            gold_relevance  = round(gold_relevance, 4),
-            impact_score    = round(impact, 4),
+        return _replace(
+            article,
+            sentiment_score=round(weighted_score, 4),
+            sentiment_label=label,
+            gold_relevance=round(gold_relevance, 4),
+            impact_score=round(impact, 4),
         )
 
     def score_article(self, article: NewsArticle) -> NewsArticle:
@@ -260,10 +316,10 @@ class GoldSentimentScorer:
         """
         if not articles:
             return {
-                "news_sentiment_score":    0.0,
+                "news_sentiment_score": 0.0,
                 "news_sentiment_momentum": 0.0,
-                "news_article_count_1h":   0.0,
-                "news_bullish_ratio":      0.5,
+                "news_article_count_1h": 0.0,
+                "news_bullish_ratio": 0.5,
             }
 
         ema = 0.0
@@ -276,10 +332,10 @@ class GoldSentimentScorer:
 
         bull_ratio = bullish / len(articles) if articles else 0.5
         return {
-            "news_sentiment_score":    round(ema, 4),
+            "news_sentiment_score": round(ema, 4),
             "news_sentiment_momentum": 0.0,
-            "news_article_count_1h":   float(len(articles)),
-            "news_bullish_ratio":      round(bull_ratio, 4),
+            "news_article_count_1h": float(len(articles)),
+            "news_bullish_ratio": round(bull_ratio, 4),
         }
 
     def score_batch(self, articles: List[NewsArticle]) -> List[NewsArticle]:
@@ -297,12 +353,8 @@ class GoldSentimentScorer:
     def _keyword_score(self, text: str) -> float:
         """Fallback keyword-only sentiment when VADER unavailable."""
         lower = text.lower()
-        bullish_hits = sum(
-            1 for p, _ in _BULLISH_PATTERNS if re.search(p, lower)
-        )
-        bearish_hits = sum(
-            1 for p, _ in _BEARISH_PATTERNS if re.search(p, lower)
-        )
+        bullish_hits = sum(1 for p, _ in _BULLISH_PATTERNS if re.search(p, lower))
+        bearish_hits = sum(1 for p, _ in _BEARISH_PATTERNS if re.search(p, lower))
         total = bullish_hits + bearish_hits
         if total == 0:
             return 0.0
@@ -316,6 +368,7 @@ class GoldSentimentScorer:
 def _replace(article: NewsArticle, **kwargs) -> NewsArticle:
     """Return a new NewsArticle with updated fields (frozen dataclass workaround)."""
     import dataclasses
+
     return dataclasses.replace(article, **kwargs)
 
 

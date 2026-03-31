@@ -81,18 +81,40 @@ class DashboardService:
 
     def _create_default_layout(self) -> None:
         default_widgets = [
-            DashboardWidget("portfolio_summary_1", DashboardWidgetType.PORTFOLIO_SUMMARY,
-                            "Portfolio Overview", {"row": 0, "col": 0, "width": 4, "height": 2}),
-            DashboardWidget("positions_1", DashboardWidgetType.POSITION_LIST,
-                            "Open Positions", {"row": 0, "col": 4, "width": 4, "height": 2}),
-            DashboardWidget("performance_1", DashboardWidgetType.PERFORMANCE_CHART,
-                            "Performance", {"row": 0, "col": 8, "width": 4, "height": 2}),
-            DashboardWidget("strategy_1", DashboardWidgetType.STRATEGY_STATUS,
-                            "Active Strategies", {"row": 2, "col": 0, "width": 6, "height": 2}),
-            DashboardWidget("risk_1", DashboardWidgetType.RISK_METRICS,
-                            "Risk Metrics", {"row": 2, "col": 6, "width": 6, "height": 2}),
+            DashboardWidget(
+                "portfolio_summary_1",
+                DashboardWidgetType.PORTFOLIO_SUMMARY,
+                "Portfolio Overview",
+                {"row": 0, "col": 0, "width": 4, "height": 2},
+            ),
+            DashboardWidget(
+                "positions_1",
+                DashboardWidgetType.POSITION_LIST,
+                "Open Positions",
+                {"row": 0, "col": 4, "width": 4, "height": 2},
+            ),
+            DashboardWidget(
+                "performance_1",
+                DashboardWidgetType.PERFORMANCE_CHART,
+                "Performance",
+                {"row": 0, "col": 8, "width": 4, "height": 2},
+            ),
+            DashboardWidget(
+                "strategy_1",
+                DashboardWidgetType.STRATEGY_STATUS,
+                "Active Strategies",
+                {"row": 2, "col": 0, "width": 6, "height": 2},
+            ),
+            DashboardWidget(
+                "risk_1",
+                DashboardWidgetType.RISK_METRICS,
+                "Risk Metrics",
+                {"row": 2, "col": 6, "width": 6, "height": 2},
+            ),
         ]
-        layout = DashboardLayout("default", "Default Trading Dashboard", default_widgets, is_default=True)
+        layout = DashboardLayout(
+            "default", "Default Trading Dashboard", default_widgets, is_default=True
+        )
         self.layouts["default"] = layout
         self.active_layout_id = "default"
 
@@ -104,7 +126,9 @@ class DashboardService:
             return self.layouts.get(self.active_layout_id)
         return None
 
-    def create_layout(self, name: str, widgets: List[DashboardWidget]) -> DashboardLayout:
+    def create_layout(
+        self, name: str, widgets: List[DashboardWidget]
+    ) -> DashboardLayout:
         layout_id = f"layout_{len(self.layouts) + 1}"
         layout = DashboardLayout(layout_id=layout_id, name=name, widgets=widgets)
         self.layouts[layout_id] = layout
@@ -122,15 +146,15 @@ class DashboardService:
     def get_widget_data(self, widget_type: DashboardWidgetType) -> Dict[str, Any]:
         handlers = {
             DashboardWidgetType.PORTFOLIO_SUMMARY: self._get_portfolio_summary,
-            DashboardWidgetType.POSITION_LIST:     self._get_positions,
+            DashboardWidgetType.POSITION_LIST: self._get_positions,
             DashboardWidgetType.PERFORMANCE_CHART: self._get_performance_data,
-            DashboardWidgetType.STRATEGY_STATUS:   self._get_strategy_status,
-            DashboardWidgetType.RISK_METRICS:      self._get_risk_metrics,
-            DashboardWidgetType.MARKET_OVERVIEW:   self._get_market_overview,
-            DashboardWidgetType.ALERTS:            self._get_alerts,
-            DashboardWidgetType.NEWS_FEED:         self._get_news_feed,
-            DashboardWidgetType.TRADE_HISTORY:     self._get_trade_history,
-            DashboardWidgetType.ORDER_BOOK:        self._get_order_book,
+            DashboardWidgetType.STRATEGY_STATUS: self._get_strategy_status,
+            DashboardWidgetType.RISK_METRICS: self._get_risk_metrics,
+            DashboardWidgetType.MARKET_OVERVIEW: self._get_market_overview,
+            DashboardWidgetType.ALERTS: self._get_alerts,
+            DashboardWidgetType.NEWS_FEED: self._get_news_feed,
+            DashboardWidgetType.TRADE_HISTORY: self._get_trade_history,
+            DashboardWidgetType.ORDER_BOOK: self._get_order_book,
         }
         handler = handlers.get(widget_type)
         return handler() if handler else {}
@@ -195,9 +219,15 @@ class DashboardService:
                 "data_source": "broker",
             }
         return {
-            "total_balance": 0.0, "available_balance": 0.0, "margin_used": 0.0,
-            "unrealized_pnl": 0.0, "daily_pnl": 0.0, "daily_pnl_percent": 0.0,
-            "open_positions": 0, "pending_orders": 0, "data_source": "none",
+            "total_balance": 0.0,
+            "available_balance": 0.0,
+            "margin_used": 0.0,
+            "unrealized_pnl": 0.0,
+            "daily_pnl": 0.0,
+            "daily_pnl_percent": 0.0,
+            "open_positions": 0,
+            "pending_orders": 0,
+            "data_source": "none",
         }
 
     def _get_positions(self) -> Dict[str, Any]:
@@ -247,8 +277,12 @@ class DashboardService:
                     except Exception as exc:
                         logger.warning("DashboardService get_strategy_status: %s", exc)
         if strategies_raw:
-            items = strategies_raw if isinstance(strategies_raw, list) else [strategies_raw]
-            strategies = [self._to_dict(s) for s in items if self._to_dict(s) is not None]
+            items = (
+                strategies_raw if isinstance(strategies_raw, list) else [strategies_raw]
+            )
+            strategies = [
+                self._to_dict(s) for s in items if self._to_dict(s) is not None
+            ]
             return {"strategies": strategies, "data_source": "app_state"}
         return {"strategies": [], "data_source": "none"}
 
@@ -271,9 +305,14 @@ class DashboardService:
             }
 
         return {
-            "var_95": 0.0, "expected_shortfall": 0.0, "sharpe_ratio": 0.0,
-            "sortino_ratio": 0.0, "max_drawdown": 0.0, "current_drawdown": 0.0,
-            "risk_utilization": 0.0, "data_source": "none",
+            "var_95": 0.0,
+            "expected_shortfall": 0.0,
+            "sharpe_ratio": 0.0,
+            "sortino_ratio": 0.0,
+            "max_drawdown": 0.0,
+            "current_drawdown": 0.0,
+            "risk_utilization": 0.0,
+            "data_source": "none",
         }
 
     def _get_market_overview(self) -> Dict[str, Any]:
@@ -283,9 +322,10 @@ class DashboardService:
         tick = self._safe_orch("get_latest_tick")
         gold_price: Optional[float] = None
         if tick is not None:
-            gold_price = float(
-                getattr(tick, "mid", None) or getattr(tick, "price", None) or 0.0
-            ) or None
+            gold_price = (
+                float(getattr(tick, "mid", None) or getattr(tick, "price", None) or 0.0)
+                or None
+            )
 
         for sym in symbols:
             price: Optional[float] = None
@@ -296,9 +336,14 @@ class DashboardService:
             else:
                 raw_quote = self._to_dict(self._safe_broker("get_quote", sym))
                 if raw_quote:
-                    price = float(raw_quote.get("mid") or raw_quote.get("last") or 0.0) or None
+                    price = (
+                        float(raw_quote.get("mid") or raw_quote.get("last") or 0.0)
+                        or None
+                    )
                     source = "broker" if price else "none"
-            markets.append({"symbol": sym, "price": price, "change": None, "data_source": source})
+            markets.append(
+                {"symbol": sym, "price": price, "change": None, "data_source": source}
+            )
 
         return {"markets": markets}
 
@@ -331,12 +376,14 @@ class DashboardService:
                     for a in articles[:10]:
                         d = self._to_dict(a)
                         if d:
-                            news.append({
-                                "title": d.get("title", ""),
-                                "source": d.get("source", ""),
-                                "time": str(d.get("published_at", ""))[:16],
-                                "sentiment": d.get("sentiment_score", 0.0),
-                            })
+                            news.append(
+                                {
+                                    "title": d.get("title", ""),
+                                    "source": d.get("source", ""),
+                                    "time": str(d.get("published_at", ""))[:16],
+                                    "sentiment": d.get("sentiment_score", 0.0),
+                                }
+                            )
                     return {"news": news, "data_source": "orchestrator"}
                 except Exception as exc:
                     logger.warning("DashboardService get_news_feed: %s", exc)

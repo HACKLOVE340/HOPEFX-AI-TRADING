@@ -49,16 +49,15 @@ Configuration (env vars)
   REGULATORY_TIMEOUT_S        — HTTP timeout per attempt (default: 10)
   PROP_FIRM_MODE              — suppress live reporting (default: false)
 """
+
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
-import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -66,40 +65,47 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-_JURISDICTION        = os.getenv("REGULATORY_JURISDICTION",      "US").upper()
-_REPORTING_ENABLED   = os.getenv("REGULATORY_REPORTING_ENABLED", "false").lower() == "true"
-_PROP_FIRM_MODE      = os.getenv("PROP_FIRM_MODE",               "false").lower() == "true"
-_DLQ_PATH            = Path(os.getenv("REGULATORY_DLQ_PATH",     "data/regulatory_dlq"))
-_RETRY_MAX           = int(os.getenv("REGULATORY_RETRY_MAX",     "5"))
-_TIMEOUT_S           = float(os.getenv("REGULATORY_TIMEOUT_S",   "10.0"))
+_JURISDICTION = os.getenv("REGULATORY_JURISDICTION", "US").upper()
+_REPORTING_ENABLED = (
+    os.getenv("REGULATORY_REPORTING_ENABLED", "false").lower() == "true"
+)
+_PROP_FIRM_MODE = os.getenv("PROP_FIRM_MODE", "false").lower() == "true"
+_DLQ_PATH = Path(os.getenv("REGULATORY_DLQ_PATH", "data/regulatory_dlq"))
+_RETRY_MAX = int(os.getenv("REGULATORY_RETRY_MAX", "5"))
+_TIMEOUT_S = float(os.getenv("REGULATORY_TIMEOUT_S", "10.0"))
 
 # CFTC SDR (DTCC GTR)
-_DTCC_GTR_ENDPOINT   = os.getenv("DTCC_GTR_ENDPOINT",
-                                  "https://gtr.dtcc.com/gtr/api/trade/report")
-_DTCC_GTR_API_KEY    = os.getenv("DTCC_GTR_API_KEY", "")
-_DTCC_GTR_CERT_PATH  = os.getenv("DTCC_GTR_CERT_PATH", "")
+_DTCC_GTR_ENDPOINT = os.getenv(
+    "DTCC_GTR_ENDPOINT", "https://gtr.dtcc.com/gtr/api/trade/report"
+)
+_DTCC_GTR_API_KEY = os.getenv("DTCC_GTR_API_KEY", "")
+_DTCC_GTR_CERT_PATH = os.getenv("DTCC_GTR_CERT_PATH", "")
 
 # SEC CAT
-_CAT_ENDPOINT        = os.getenv("CAT_ENDPOINT",
-                                  "https://catnmsplan.com/api/v1/trade")
-_CAT_API_KEY         = os.getenv("CAT_API_KEY", "")
-_CAT_FIRM_ID         = os.getenv("CAT_FIRM_ID", "")
+_CAT_ENDPOINT = os.getenv("CAT_ENDPOINT", "https://catnmsplan.com/api/v1/trade")
+_CAT_API_KEY = os.getenv("CAT_API_KEY", "")
+_CAT_FIRM_ID = os.getenv("CAT_FIRM_ID", "")
 
 # MiFID II
-_ESMA_ENDPOINT       = os.getenv("ESMA_ENDPOINT",
-                                  "https://api.esma.europa.eu/mifid/transaction")
-_ESMA_API_KEY        = os.getenv("ESMA_API_KEY", "")
-_ESMA_LEI            = os.getenv("ESMA_LEI", "")
+_ESMA_ENDPOINT = os.getenv(
+    "ESMA_ENDPOINT", "https://api.esma.europa.eu/mifid/transaction"
+)
+_ESMA_API_KEY = os.getenv("ESMA_API_KEY", "")
+_ESMA_LEI = os.getenv("ESMA_LEI", "")
 
 # ── Prometheus ────────────────────────────────────────────────────────────────
 try:
     from prometheus_client import Counter, Gauge
-    _prom_submitted  = Counter("hopefx_regulatory_submitted_total",
-                               "Regulatory reports submitted", ["jurisdiction"])
-    _prom_failed     = Counter("hopefx_regulatory_failed_total",
-                               "Regulatory report failures", ["jurisdiction"])
-    _prom_dlq_size   = Gauge("hopefx_regulatory_dlq_size",
-                             "Dead-letter queue depth")
+
+    _prom_submitted = Counter(
+        "hopefx_regulatory_submitted_total",
+        "Regulatory reports submitted",
+        ["jurisdiction"],
+    )
+    _prom_failed = Counter(
+        "hopefx_regulatory_failed_total", "Regulatory report failures", ["jurisdiction"]
+    )
+    _prom_dlq_size = Gauge("hopefx_regulatory_dlq_size", "Dead-letter queue depth")
     _PROM_OK = True
 except Exception:
     _PROM_OK = False
@@ -108,15 +114,16 @@ except Exception:
 @dataclass
 class ReportRecord:
     """A single regulatory report submission record."""
-    report_id:    str
+
+    report_id: str
     jurisdiction: str
-    endpoint:     str
-    trade_id:     str
-    payload:      Dict[str, Any]
+    endpoint: str
+    trade_id: str
+    payload: Dict[str, Any]
     submitted_at: str
-    status:       str          # "submitted" | "failed" | "dlq" | "suppressed"
-    attempts:     int = 0
-    last_error:   Optional[str] = None
+    status: str  # "submitted" | "failed" | "dlq" | "suppressed"
+    attempts: int = 0
+    last_error: Optional[str] = None
     response_code: Optional[int] = None
 
 
@@ -134,17 +141,24 @@ class DeadLetterQueue:
 
     def enqueue(self, record: ReportRecord) -> None:
         """Persist a failed report to the DLQ."""
-        filename = self._path / f"dlq_{datetime.now(timezone.utc).strftime('%Y-%m')}.jsonl"
-        entry = json.dumps({
-            "report_id":    record.report_id,
-            "jurisdiction": record.jurisdiction,
-            "endpoint":     record.endpoint,
-            "trade_id":     record.trade_id,
-            "payload":      record.payload,
-            "submitted_at": record.submitted_at,
-            "attempts":     record.attempts,
-            "last_error":   record.last_error,
-        }) + "\n"
+        filename = (
+            self._path / f"dlq_{datetime.now(timezone.utc).strftime('%Y-%m')}.jsonl"
+        )
+        entry = (
+            json.dumps(
+                {
+                    "report_id": record.report_id,
+                    "jurisdiction": record.jurisdiction,
+                    "endpoint": record.endpoint,
+                    "trade_id": record.trade_id,
+                    "payload": record.payload,
+                    "submitted_at": record.submitted_at,
+                    "attempts": record.attempts,
+                    "last_error": record.last_error,
+                }
+            )
+            + "\n"
+        )
         try:
             with open(filename, "a") as fh:
                 fh.write(entry)
@@ -152,7 +166,8 @@ class DeadLetterQueue:
                 _prom_dlq_size.inc()
             logger.warning(
                 "RegulatoryReporter: DLQ enqueued report_id=%s trade_id=%s",
-                record.report_id, record.trade_id,
+                record.report_id,
+                record.trade_id,
             )
         except Exception as exc:
             logger.critical(
@@ -215,19 +230,19 @@ class RegulatoryReporter:
 
         Returns ReportRecord with submission status.
         """
-        trade_id  = str(trade.get("id", trade.get("trade_id", uuid.uuid4())))
+        trade_id = str(trade.get("id", trade.get("trade_id", uuid.uuid4())))
         report_id = str(uuid.uuid4())
 
         # Prop-firm mode: suppress live reporting, still audit
         if _PROP_FIRM_MODE:
             record = ReportRecord(
-                report_id    = report_id,
-                jurisdiction = _JURISDICTION,
-                endpoint     = "suppressed:prop_firm_mode",
-                trade_id     = trade_id,
-                payload      = trade,
-                submitted_at = datetime.now(timezone.utc).isoformat(),
-                status       = "suppressed",
+                report_id=report_id,
+                jurisdiction=_JURISDICTION,
+                endpoint="suppressed:prop_firm_mode",
+                trade_id=trade_id,
+                payload=trade,
+                submitted_at=datetime.now(timezone.utc).isoformat(),
+                status="suppressed",
             )
             self._records.append(record)
             logger.debug(
@@ -239,13 +254,13 @@ class RegulatoryReporter:
         # Reporting disabled — log warning but don't transmit
         if not _REPORTING_ENABLED:
             record = ReportRecord(
-                report_id    = report_id,
-                jurisdiction = _JURISDICTION,
-                endpoint     = "suppressed:reporting_disabled",
-                trade_id     = trade_id,
-                payload      = trade,
-                submitted_at = datetime.now(timezone.utc).isoformat(),
-                status       = "suppressed",
+                report_id=report_id,
+                jurisdiction=_JURISDICTION,
+                endpoint="suppressed:reporting_disabled",
+                trade_id=trade_id,
+                payload=trade,
+                submitted_at=datetime.now(timezone.utc).isoformat(),
+                status="suppressed",
             )
             self._records.append(record)
             logger.warning(
@@ -275,40 +290,39 @@ class RegulatoryReporter:
 
         retried_ok = still_failed = 0
         for entry in entries:
-            trade    = entry.get("payload", {})
+            trade = entry.get("payload", {})
             trade_id = entry.get("trade_id", "unknown")
             endpoint = entry.get("endpoint", "")
             attempts = entry.get("attempts", 0)
 
             success = await self._http_post(
-                endpoint = endpoint,
-                payload  = trade,
-                headers  = self._build_headers(_JURISDICTION),
+                endpoint=endpoint,
+                payload=trade,
+                headers=self._build_headers(_JURISDICTION),
             )
             if success:
                 retried_ok += 1
-                logger.info(
-                    "RegulatoryReporter: DLQ retry OK trade_id=%s", trade_id
-                )
+                logger.info("RegulatoryReporter: DLQ retry OK trade_id=%s", trade_id)
             else:
                 still_failed += 1
                 # Re-enqueue with incremented attempt count
                 record = ReportRecord(
-                    report_id    = entry.get("report_id", str(uuid.uuid4())),
-                    jurisdiction = entry.get("jurisdiction", _JURISDICTION),
-                    endpoint     = endpoint,
-                    trade_id     = trade_id,
-                    payload      = trade,
-                    submitted_at = entry.get("submitted_at", ""),
-                    status       = "dlq",
-                    attempts     = attempts + 1,
-                    last_error   = "retry_failed",
+                    report_id=entry.get("report_id", str(uuid.uuid4())),
+                    jurisdiction=entry.get("jurisdiction", _JURISDICTION),
+                    endpoint=endpoint,
+                    trade_id=trade_id,
+                    payload=trade,
+                    submitted_at=entry.get("submitted_at", ""),
+                    status="dlq",
+                    attempts=attempts + 1,
+                    last_error="retry_failed",
                 )
                 self._dlq.enqueue(record)
 
         logger.info(
             "RegulatoryReporter: DLQ retry complete ok=%d failed=%d",
-            retried_ok, still_failed,
+            retried_ok,
+            still_failed,
         )
         return retried_ok, still_failed
 
@@ -321,31 +335,31 @@ class RegulatoryReporter:
         payload = self._build_cftc_payload(trade, report_id)
         headers = {
             "Authorization": f"Bearer {_DTCC_GTR_API_KEY}",
-            "Content-Type":  "application/json",
-            "X-Report-ID":   report_id,
-            "X-Firm-ID":     _CAT_FIRM_ID or "HOPEFX",
+            "Content-Type": "application/json",
+            "X-Report-ID": report_id,
+            "X-Firm-ID": _CAT_FIRM_ID or "HOPEFX",
         }
 
         record = ReportRecord(
-            report_id    = report_id,
-            jurisdiction = "US-CFTC",
-            endpoint     = _DTCC_GTR_ENDPOINT,
-            trade_id     = trade_id,
-            payload      = payload,
-            submitted_at = datetime.now(timezone.utc).isoformat(),
-            status       = "pending",
+            report_id=report_id,
+            jurisdiction="US-CFTC",
+            endpoint=_DTCC_GTR_ENDPOINT,
+            trade_id=trade_id,
+            payload=payload,
+            submitted_at=datetime.now(timezone.utc).isoformat(),
+            status="pending",
         )
 
         success, status_code, error = await self._submit_with_retry(
-            endpoint = _DTCC_GTR_ENDPOINT,
-            payload  = payload,
-            headers  = headers,
-            record   = record,
+            endpoint=_DTCC_GTR_ENDPOINT,
+            payload=payload,
+            headers=headers,
+            record=record,
         )
 
-        record.status       = "submitted" if success else "dlq"
+        record.status = "submitted" if success else "dlq"
         record.response_code = status_code
-        record.last_error   = error
+        record.last_error = error
 
         if success and _PROM_OK:
             _prom_submitted.labels(jurisdiction="US-CFTC").inc()
@@ -357,24 +371,28 @@ class RegulatoryReporter:
     def _build_cftc_payload(self, trade: Dict, report_id: str) -> Dict:
         """Build CFTC SDR-compliant payload (DTCC GTR format)."""
         return {
-            "reportId":          report_id,
-            "reportType":        "NEW",
-            "assetClass":        "CO",   # Commodity (gold)
-            "productType":       "SPOT",
-            "tradeDate":         trade.get("filled_at", datetime.now(timezone.utc).isoformat())[:10],
-            "effectiveDate":     trade.get("filled_at", datetime.now(timezone.utc).isoformat())[:10],
-            "notionalAmount":    trade.get("notional_usd", 0.0),
-            "notionalCurrency":  "USD",
-            "price":             trade.get("fill_price", 0.0),
-            "quantity":          trade.get("quantity", 0.0),
-            "buySellIndicator":  "B" if trade.get("direction") == "long" else "S",
-            "counterpartyId":    trade.get("broker", "UNKNOWN"),
-            "reportingPartyId":  _CAT_FIRM_ID or "HOPEFX",
-            "uniqueTradeId":     trade.get("fill_id", report_id),
-            "venue":             "XOFF",   # Off-exchange
-            "cleared":           "N",
+            "reportId": report_id,
+            "reportType": "NEW",
+            "assetClass": "CO",  # Commodity (gold)
+            "productType": "SPOT",
+            "tradeDate": trade.get("filled_at", datetime.now(timezone.utc).isoformat())[
+                :10
+            ],
+            "effectiveDate": trade.get(
+                "filled_at", datetime.now(timezone.utc).isoformat()
+            )[:10],
+            "notionalAmount": trade.get("notional_usd", 0.0),
+            "notionalCurrency": "USD",
+            "price": trade.get("fill_price", 0.0),
+            "quantity": trade.get("quantity", 0.0),
+            "buySellIndicator": "B" if trade.get("direction") == "long" else "S",
+            "counterpartyId": trade.get("broker", "UNKNOWN"),
+            "reportingPartyId": _CAT_FIRM_ID or "HOPEFX",
+            "uniqueTradeId": trade.get("fill_id", report_id),
+            "venue": "XOFF",  # Off-exchange
+            "cleared": "N",
             "collateralisation": "UNCOLL",
-            "deliveryType":      "CASH",
+            "deliveryType": "CASH",
             "submissionTimestamp": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -387,30 +405,30 @@ class RegulatoryReporter:
         payload = self._build_cat_payload(trade, report_id)
         headers = {
             "Authorization": f"Bearer {_CAT_API_KEY}",
-            "Content-Type":  "application/json",
+            "Content-Type": "application/json",
             "X-CAT-Firm-ID": _CAT_FIRM_ID,
         }
 
         record = ReportRecord(
-            report_id    = report_id,
-            jurisdiction = "US-SEC-CAT",
-            endpoint     = _CAT_ENDPOINT,
-            trade_id     = trade_id,
-            payload      = payload,
-            submitted_at = datetime.now(timezone.utc).isoformat(),
-            status       = "pending",
+            report_id=report_id,
+            jurisdiction="US-SEC-CAT",
+            endpoint=_CAT_ENDPOINT,
+            trade_id=trade_id,
+            payload=payload,
+            submitted_at=datetime.now(timezone.utc).isoformat(),
+            status="pending",
         )
 
         success, status_code, error = await self._submit_with_retry(
-            endpoint = _CAT_ENDPOINT,
-            payload  = payload,
-            headers  = headers,
-            record   = record,
+            endpoint=_CAT_ENDPOINT,
+            payload=payload,
+            headers=headers,
+            record=record,
         )
 
-        record.status        = "submitted" if success else "dlq"
+        record.status = "submitted" if success else "dlq"
         record.response_code = status_code
-        record.last_error    = error
+        record.last_error = error
 
         if success and _PROM_OK:
             _prom_submitted.labels(jurisdiction="US-SEC-CAT").inc()
@@ -422,17 +440,19 @@ class RegulatoryReporter:
     def _build_cat_payload(self, trade: Dict, report_id: str) -> Dict:
         """Build SEC CAT-compliant payload."""
         return {
-            "catReportId":    report_id,
-            "firmId":         _CAT_FIRM_ID or "HOPEFX",
-            "eventTimestamp": trade.get("filled_at", datetime.now(timezone.utc).isoformat()),
-            "eventType":      "MENO",   # Manual Entry New Order
-            "symbol":         trade.get("symbol", "XAUUSD"),
-            "side":           "B" if trade.get("direction") == "long" else "S",
-            "quantity":       trade.get("quantity", 0.0),
-            "price":          trade.get("fill_price", 0.0),
-            "orderType":      "MKT",
-            "accountId":      trade.get("account_id", "UNKNOWN"),
-            "tradeId":        trade.get("fill_id", report_id),
+            "catReportId": report_id,
+            "firmId": _CAT_FIRM_ID or "HOPEFX",
+            "eventTimestamp": trade.get(
+                "filled_at", datetime.now(timezone.utc).isoformat()
+            ),
+            "eventType": "MENO",  # Manual Entry New Order
+            "symbol": trade.get("symbol", "XAUUSD"),
+            "side": "B" if trade.get("direction") == "long" else "S",
+            "quantity": trade.get("quantity", 0.0),
+            "price": trade.get("fill_price", 0.0),
+            "orderType": "MKT",
+            "accountId": trade.get("account_id", "UNKNOWN"),
+            "tradeId": trade.get("fill_id", report_id),
         }
 
     # ── MiFID II ──────────────────────────────────────────────────────────────
@@ -444,30 +464,30 @@ class RegulatoryReporter:
         payload = self._build_mifid_payload(trade, report_id)
         headers = {
             "Authorization": f"Bearer {_ESMA_API_KEY}",
-            "Content-Type":  "application/json",
-            "X-LEI":         _ESMA_LEI,
+            "Content-Type": "application/json",
+            "X-LEI": _ESMA_LEI,
         }
 
         record = ReportRecord(
-            report_id    = report_id,
-            jurisdiction = "EU-MIFID-II",
-            endpoint     = _ESMA_ENDPOINT,
-            trade_id     = trade_id,
-            payload      = payload,
-            submitted_at = datetime.now(timezone.utc).isoformat(),
-            status       = "pending",
+            report_id=report_id,
+            jurisdiction="EU-MIFID-II",
+            endpoint=_ESMA_ENDPOINT,
+            trade_id=trade_id,
+            payload=payload,
+            submitted_at=datetime.now(timezone.utc).isoformat(),
+            status="pending",
         )
 
         success, status_code, error = await self._submit_with_retry(
-            endpoint = _ESMA_ENDPOINT,
-            payload  = payload,
-            headers  = headers,
-            record   = record,
+            endpoint=_ESMA_ENDPOINT,
+            payload=payload,
+            headers=headers,
+            record=record,
         )
 
-        record.status        = "submitted" if success else "dlq"
+        record.status = "submitted" if success else "dlq"
         record.response_code = status_code
-        record.last_error    = error
+        record.last_error = error
 
         if success and _PROM_OK:
             _prom_submitted.labels(jurisdiction="EU-MIFID-II").inc()
@@ -480,21 +500,23 @@ class RegulatoryReporter:
         """Build MiFID II Article 26 transaction report."""
         return {
             "transactionReferenceNumber": report_id,
-            "tradingVenueTransactionId":  trade.get("fill_id", report_id),
-            "executingEntityId":          _ESMA_LEI or "HOPEFX_LEI",
-            "investmentFirmId":           _ESMA_LEI or "HOPEFX_LEI",
-            "tradingDateTime":            trade.get("filled_at", datetime.now(timezone.utc).isoformat()),
-            "tradingCapacity":            "DEAL",   # Dealing on own account
-            "quantity":                   trade.get("quantity", 0.0),
-            "quantityUnit":               "UNIT",
-            "price":                      trade.get("fill_price", 0.0),
-            "priceCurrency":              "USD",
-            "netAmount":                  trade.get("notional_usd", 0.0),
-            "venue":                      "XOFF",
-            "instrumentId":               "XAU",
-            "instrumentIdType":           "OTHR",
-            "buySellIndicator":           "BUYI" if trade.get("direction") == "long" else "SELL",
-            "reportStatus":               "NEWT",
+            "tradingVenueTransactionId": trade.get("fill_id", report_id),
+            "executingEntityId": _ESMA_LEI or "HOPEFX_LEI",
+            "investmentFirmId": _ESMA_LEI or "HOPEFX_LEI",
+            "tradingDateTime": trade.get(
+                "filled_at", datetime.now(timezone.utc).isoformat()
+            ),
+            "tradingCapacity": "DEAL",  # Dealing on own account
+            "quantity": trade.get("quantity", 0.0),
+            "quantityUnit": "UNIT",
+            "price": trade.get("fill_price", 0.0),
+            "priceCurrency": "USD",
+            "netAmount": trade.get("notional_usd", 0.0),
+            "venue": "XOFF",
+            "instrumentId": "XAU",
+            "instrumentIdType": "OTHR",
+            "buySellIndicator": "BUYI" if trade.get("direction") == "long" else "SELL",
+            "reportStatus": "NEWT",
         }
 
     # ── HTTP submission with retry ────────────────────────────────────────────
@@ -502,37 +524,43 @@ class RegulatoryReporter:
     async def _submit_with_retry(
         self,
         endpoint: str,
-        payload:  Dict,
-        headers:  Dict,
-        record:   ReportRecord,
+        payload: Dict,
+        headers: Dict,
+        record: ReportRecord,
     ) -> tuple[bool, Optional[int], Optional[str]]:
         """
         Submit with exponential backoff retry. Returns (success, status_code, error).
         On final failure, enqueues to DLQ.
         """
         last_error: Optional[str] = None
-        last_code:  Optional[int] = None
+        last_code: Optional[int] = None
 
         for attempt in range(1, _RETRY_MAX + 1):
             record.attempts = attempt
             success, code, error = await self._http_post(endpoint, payload, headers)
-            last_code  = code
+            last_code = code
             last_error = error
 
             if success:
                 logger.info(
                     "RegulatoryReporter: submitted trade_id=%s endpoint=%s attempt=%d",
-                    record.trade_id, endpoint, attempt,
+                    record.trade_id,
+                    endpoint,
+                    attempt,
                 )
                 return True, code, None
 
             logger.warning(
                 "RegulatoryReporter: attempt %d/%d failed trade_id=%s: %s (HTTP %s)",
-                attempt, _RETRY_MAX, record.trade_id, error, code,
+                attempt,
+                _RETRY_MAX,
+                record.trade_id,
+                error,
+                code,
             )
 
             if attempt < _RETRY_MAX:
-                await asyncio.sleep(min(2 ** attempt, 30))  # exponential backoff, cap 30s
+                await asyncio.sleep(min(2**attempt, 30))  # exponential backoff, cap 30s
 
         # All retries exhausted — enqueue to DLQ
         record.last_error = last_error
@@ -546,8 +574,8 @@ class RegulatoryReporter:
     async def _http_post(
         self,
         endpoint: str,
-        payload:  Dict,
-        headers:  Dict,
+        payload: Dict,
+        headers: Dict,
     ) -> tuple[bool, Optional[int], Optional[str]]:
         """
         POST payload to endpoint. Returns (success, status_code, error_msg).
@@ -557,13 +585,14 @@ class RegulatoryReporter:
         """
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     endpoint,
-                    json    = payload,
-                    headers = headers,
-                    timeout = aiohttp.ClientTimeout(total=_TIMEOUT_S),
-                    ssl     = True,
+                    json=payload,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=_TIMEOUT_S),
+                    ssl=True,
                 ) as resp:
                     if resp.status in (200, 201, 202):
                         return True, resp.status, None
@@ -577,8 +606,9 @@ class RegulatoryReporter:
 
             def _sync_post():
                 data = json.dumps(payload).encode()
-                req  = urllib.request.Request(
-                    endpoint, data=data,
+                req = urllib.request.Request(
+                    endpoint,
+                    data=data,
                     headers={**headers, "Content-Type": "application/json"},
                     method="POST",
                 )
@@ -605,17 +635,17 @@ class RegulatoryReporter:
 
     def stats(self) -> Dict[str, Any]:
         submitted = [r for r in self._records if r.status == "submitted"]
-        failed    = [r for r in self._records if r.status == "dlq"]
+        failed = [r for r in self._records if r.status == "dlq"]
         suppressed = [r for r in self._records if r.status == "suppressed"]
         return {
-            "jurisdiction":       _JURISDICTION,
-            "reporting_enabled":  _REPORTING_ENABLED,
-            "prop_firm_mode":     _PROP_FIRM_MODE,
-            "total_reports":      len(self._records),
-            "submitted":          len(submitted),
-            "failed_dlq":         len(failed),
-            "suppressed":         len(suppressed),
-            "dlq_disk_size":      self._dlq.size(),
+            "jurisdiction": _JURISDICTION,
+            "reporting_enabled": _REPORTING_ENABLED,
+            "prop_firm_mode": _PROP_FIRM_MODE,
+            "total_reports": len(self._records),
+            "submitted": len(submitted),
+            "failed_dlq": len(failed),
+            "suppressed": len(suppressed),
+            "dlq_disk_size": self._dlq.size(),
         }
 
 

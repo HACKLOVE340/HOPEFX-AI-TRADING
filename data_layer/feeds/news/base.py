@@ -16,6 +16,7 @@ The base class handles:
   - Rate limiting per API tier
   - Gold relevance pre-filter (rejects articles with zero gold keywords)
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -36,13 +37,45 @@ _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=15.0, connect=5.0)
 
 # Keywords that indicate gold/macro relevance — used for pre-filtering
 GOLD_KEYWORDS: Set[str] = {
-    "gold", "xau", "bullion", "precious metal", "safe haven",
-    "federal reserve", "fed", "interest rate", "inflation", "cpi",
-    "dollar", "dxy", "treasury", "yield", "geopolit", "war", "conflict",
-    "recession", "gdp", "unemployment", "nonfarm", "fomc", "powell",
-    "central bank", "monetary policy", "quantitative", "taper",
-    "silver", "platinum", "commodity", "etf", "gld", "iau",
-    "china", "russia", "ukraine", "middle east", "opec", "oil",
+    "gold",
+    "xau",
+    "bullion",
+    "precious metal",
+    "safe haven",
+    "federal reserve",
+    "fed",
+    "interest rate",
+    "inflation",
+    "cpi",
+    "dollar",
+    "dxy",
+    "treasury",
+    "yield",
+    "geopolit",
+    "war",
+    "conflict",
+    "recession",
+    "gdp",
+    "unemployment",
+    "nonfarm",
+    "fomc",
+    "powell",
+    "central bank",
+    "monetary policy",
+    "quantitative",
+    "taper",
+    "silver",
+    "platinum",
+    "commodity",
+    "etf",
+    "gld",
+    "iau",
+    "china",
+    "russia",
+    "ukraine",
+    "middle east",
+    "opec",
+    "oil",
 }
 
 
@@ -72,6 +105,7 @@ class NewsFeedBase(ABC):
 
     async def _rate_limit(self) -> None:
         import asyncio
+
         elapsed = time.monotonic() - self._last_call_ts
         if elapsed < self._min_interval_s:
             await asyncio.sleep(self._min_interval_s - elapsed)
@@ -79,6 +113,7 @@ class NewsFeedBase(ABC):
 
     async def _get(self, url: str, params: dict = None, headers: dict = None) -> dict:
         import asyncio
+
         await self._rate_limit()
         session = await self._get_session()
         backoff = 1.0
@@ -87,7 +122,9 @@ class NewsFeedBase(ABC):
                 async with session.get(url, params=params, headers=headers) as resp:
                     if resp.status == 429:
                         wait = backoff + random.uniform(0, 1.0)
-                        logger.warning("%s rate-limited — sleeping %.1fs", self.name.value, wait)
+                        logger.warning(
+                            "%s rate-limited — sleeping %.1fs", self.name.value, wait
+                        )
                         await asyncio.sleep(wait)
                         backoff = min(backoff * 2, 120.0)
                         continue
@@ -96,8 +133,13 @@ class NewsFeedBase(ABC):
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 self._total_errors += 1
                 wait = backoff + random.uniform(0, 0.5)
-                logger.warning("%s HTTP error attempt=%d: %s — retry %.1fs",
-                               self.name.value, attempt + 1, exc, wait)
+                logger.warning(
+                    "%s HTTP error attempt=%d: %s — retry %.1fs",
+                    self.name.value,
+                    attempt + 1,
+                    exc,
+                    wait,
+                )
                 if attempt < 3:
                     await asyncio.sleep(wait)
                     backoff = min(backoff * 2, 60.0)
@@ -134,8 +176,8 @@ class NewsFeedBase(ABC):
 
     def health_summary(self) -> dict:
         return {
-            "source":        self.name.value,
-            "configured":    self.is_configured,
+            "source": self.name.value,
+            "configured": self.is_configured,
             "total_fetched": self._total_fetched,
-            "total_errors":  self._total_errors,
+            "total_errors": self._total_errors,
         }

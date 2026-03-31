@@ -320,7 +320,9 @@ class MacroFeed:
                 if cpi_prev > 0:
                     cpi_yoy = round((cpi_now - cpi_prev) / cpi_prev * 100, 2)
             except Exception as exc:
-                logger.warning("MacroFeed.refresh_async: CPI YoY calculation failed: %s", exc)
+                logger.warning(
+                    "MacroFeed.refresh_async: CPI YoY calculation failed: %s", exc
+                )
 
         score = _macro_regime_score(dxy, y10, spread, cpi_yoy)
         snapshot = {

@@ -22,6 +22,7 @@ Responsibilities
 - Prometheus metrics: tick rate, consensus price, active source count
 - Circuit breaker per feed — dead feeds don't block consensus
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -46,9 +47,9 @@ logger = logging.getLogger(__name__)
 
 # Poll interval per source (seconds)
 _POLL_INTERVALS: Dict[FeedSource, float] = {
-    FeedSource.GOLDAPI:       5.0,
-    FeedSource.METALS_DEV:    10.0,
-    FeedSource.METALS_API:    60.0,
+    FeedSource.GOLDAPI: 5.0,
+    FeedSource.METALS_DEV: 10.0,
+    FeedSource.METALS_API: 60.0,
     FeedSource.METALPRICEAPI: 60.0,
     FeedSource.COMMODITY_API: 60.0,
 }
@@ -76,10 +77,10 @@ class GoldFeedManager:
 
     def __init__(self, redis_client=None) -> None:
         self._feeds: Dict[FeedSource, GoldFeedBase] = {
-            FeedSource.GOLDAPI:       GoldAPIFeed(),
+            FeedSource.GOLDAPI: GoldAPIFeed(),
             FeedSource.METALPRICEAPI: MetalpriceAPIFeed(),
-            FeedSource.METALS_API:    MetalsAPIFeed(),
-            FeedSource.METALS_DEV:    MetalsDevFeed(),
+            FeedSource.METALS_API: MetalsAPIFeed(),
+            FeedSource.METALS_DEV: MetalsDevFeed(),
             FeedSource.COMMODITY_API: CommodityAPIFeed(),
         }
         self._latest: Dict[FeedSource, GoldTick] = {}
@@ -93,8 +94,8 @@ class GoldFeedManager:
 
         # Prometheus
         self._prom_consensus_price = None
-        self._prom_active_sources  = None
-        self._prom_tick_rate       = None
+        self._prom_active_sources = None
+        self._prom_tick_rate = None
         self._init_prometheus()
 
     def _init_prometheus(self) -> None:
@@ -134,8 +135,7 @@ class GoldFeedManager:
         """Start all configured feed polling loops."""
         self._running = True
         configured = [
-            (src, feed) for src, feed in self._feeds.items()
-            if feed.is_configured
+            (src, feed) for src, feed in self._feeds.items() if feed.is_configured
         ]
         if not configured:
             logger.error(
@@ -196,7 +196,7 @@ class GoldFeedManager:
                         "GoldFeedManager: %s circuit OPEN — skipping poll", src.value
                     )
                 else:
-                    raw_tick    = await feed.fetch_tick()
+                    raw_tick = await feed.fetch_tick()
                     received_at = time.time()
 
                     # Pre-DQE age gate: reject ticks with timestamps more than
@@ -207,12 +207,14 @@ class GoldFeedManager:
                     if tick_age_s > 300.0:
                         logger.warning(
                             "GoldFeedManager: %s tick too old (age=%.1fs) — discarded",
-                            src.value, tick_age_s,
+                            src.value,
+                            tick_age_s,
                         )
                     elif tick_age_s < -10.0:
                         logger.warning(
                             "GoldFeedManager: %s tick from future (age=%.1fs) — discarded",
-                            src.value, tick_age_s,
+                            src.value,
+                            tick_age_s,
                         )
                     else:
                         validated = dqe.validate_tick(raw_tick, received_at=received_at)
@@ -272,7 +274,8 @@ class GoldFeedManager:
         # contaminating the consensus even before DQE marks the source STALE.
         _max_age_s = float(os.getenv("DQE_STALE_THRESHOLD_S", "30.0")) * 2.0
         live = {
-            src: tick for src, tick in self._latest.items()
+            src: tick
+            for src, tick in self._latest.items()
             if tick.is_valid()
             and (now_epoch - tick.timestamp.timestamp()) <= _max_age_s
         }
@@ -294,15 +297,15 @@ class GoldFeedManager:
             half_spread = max(consensus_mid * 0.00015, 0.10)
 
         self._consensus_tick = GoldTick(
-            symbol     = "XAU_USD",
-            timestamp  = datetime.now(timezone.utc),
-            bid        = round(consensus_mid - half_spread, 4),
-            ask        = round(consensus_mid + half_spread, 4),
-            mid        = round(consensus_mid, 4),
-            source     = FeedSource.AGGREGATED,
-            confidence = round(confidence, 4),
-            spread     = round(half_spread * 2, 4),
-            lineage_id = str(uuid.uuid4()),
+            symbol="XAU_USD",
+            timestamp=datetime.now(timezone.utc),
+            bid=round(consensus_mid - half_spread, 4),
+            ask=round(consensus_mid + half_spread, 4),
+            mid=round(consensus_mid, 4),
+            source=FeedSource.AGGREGATED,
+            confidence=round(confidence, 4),
+            spread=round(half_spread * 2, 4),
+            lineage_id=str(uuid.uuid4()),
         )
         self._last_consensus_at = time.time()
 
@@ -322,19 +325,21 @@ class GoldFeedManager:
         # directly inside an async method blocks the event loop.
         if self._redis and self._consensus_tick:
             try:
-                payload = json.dumps({
-                    "symbol":     self._consensus_tick.symbol,
-                    "timestamp":  self._consensus_tick.timestamp.isoformat(),
-                    "bid":        self._consensus_tick.bid,
-                    "ask":        self._consensus_tick.ask,
-                    "mid":        self._consensus_tick.mid,
-                    "source":     self._consensus_tick.source.value,
-                    "quality":    self._consensus_tick.quality.value,
-                    "confidence": self._consensus_tick.confidence,
-                    "spread":     self._consensus_tick.spread,
-                    "lineage_id": self._consensus_tick.lineage_id,
-                    "epoch":      self._consensus_tick.timestamp.timestamp(),
-                })
+                payload = json.dumps(
+                    {
+                        "symbol": self._consensus_tick.symbol,
+                        "timestamp": self._consensus_tick.timestamp.isoformat(),
+                        "bid": self._consensus_tick.bid,
+                        "ask": self._consensus_tick.ask,
+                        "mid": self._consensus_tick.mid,
+                        "source": self._consensus_tick.source.value,
+                        "quality": self._consensus_tick.quality.value,
+                        "confidence": self._consensus_tick.confidence,
+                        "spread": self._consensus_tick.spread,
+                        "lineage_id": self._consensus_tick.lineage_id,
+                        "epoch": self._consensus_tick.timestamp.timestamp(),
+                    }
+                )
                 _r, _p = self._redis, payload
                 await asyncio.get_running_loop().run_in_executor(
                     None,
@@ -350,17 +355,17 @@ class GoldFeedManager:
             return
         try:
             payload = {
-                "symbol":     tick.symbol,
-                "timestamp":  tick.timestamp.isoformat(),
-                "bid":        tick.bid,
-                "ask":        tick.ask,
-                "mid":        tick.mid,
-                "source":     tick.source.value,
-                "quality":    tick.quality.value,
+                "symbol": tick.symbol,
+                "timestamp": tick.timestamp.isoformat(),
+                "bid": tick.bid,
+                "ask": tick.ask,
+                "mid": tick.mid,
+                "source": tick.source.value,
+                "quality": tick.quality.value,
                 "confidence": tick.confidence,
-                "spread":     tick.spread,
+                "spread": tick.spread,
                 "lineage_id": tick.lineage_id,
-                "epoch":      tick.timestamp.timestamp(),
+                "epoch": tick.timestamp.timestamp(),
             }
             serialised = json.dumps(payload)
             loop = asyncio.get_running_loop()
@@ -401,24 +406,26 @@ class GoldFeedManager:
 
     def active_sources(self) -> List[FeedSource]:
         return [
-            src for src, tick in self._latest.items()
+            src
+            for src, tick in self._latest.items()
             if tick.quality != TickQuality.REJECTED and tick.is_valid()
         ]
 
     def health(self) -> dict:
         h = {
-            "running":        self._running,
-            "tick_count":     self._tick_count,
+            "running": self._running,
+            "tick_count": self._tick_count,
             "active_sources": [s.value for s in self.active_sources()],
-            "consensus_mid":  self._consensus_tick.mid if self._consensus_tick else None,
-            "consensus_conf": self._consensus_tick.confidence if self._consensus_tick else None,
-            "last_consensus_age_s": round(
-                time.time() - self._last_consensus_at, 1
-            ) if self._last_consensus_at else None,
-            "source_health":  dqe.get_source_health(),
-            "feed_health":    {
-                src.value: feed.health_summary()
-                for src, feed in self._feeds.items()
+            "consensus_mid": self._consensus_tick.mid if self._consensus_tick else None,
+            "consensus_conf": self._consensus_tick.confidence
+            if self._consensus_tick
+            else None,
+            "last_consensus_age_s": round(time.time() - self._last_consensus_at, 1)
+            if self._last_consensus_at
+            else None,
+            "source_health": dqe.get_source_health(),
+            "feed_health": {
+                src.value: feed.health_summary() for src, feed in self._feeds.items()
             },
         }
         # Cache feed health to Redis (TTL 10s) for monitoring dashboards
