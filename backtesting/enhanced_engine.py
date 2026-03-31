@@ -25,7 +25,20 @@ License: Proprietary - Institutional Use Only
 """
 
 import numpy as np
+
 _ENGINE_RNG = np.random.default_rng()
+
+# ── Execution simulation constants ────────────────────────────────────────────
+_SLIPPAGE_NOISE_FRAC    = 0.20    # std-dev of slippage noise as fraction of impact
+_MIN_VOLUME_FLOOR       = 1_000   # minimum volume denominator for participation rate
+_LIMIT_FILL_LATENCY_SEC = 0.001   # simulated latency for limit-order fills (1 ms)
+_ORDER_ID_TIME_SCALE    = 1e6     # nanosecond timestamp scale for order ID suffix
+_FILL_TOLERANCE         = 0.0001  # size tolerance for considering an order fully filled
+_ATR_FALLBACK_VOL       = 0.001   # fallback volatility when realized variance is zero
+
+# ── Risk check severity constants ─────────────────────────────────────────────
+_CIRCUIT_BREAKER_HALT_LEVEL = 2   # circuit_breaker_level at which trading halts
+
 from dataclasses import dataclass, field  # noqa: E402
 from typing import Dict, List, Optional, Callable, Tuple, Any  # noqa: E402
 from enum import Enum, IntEnum, auto  # noqa: E402
@@ -1161,121 +1174,77 @@ class InstitutionalRiskManager:
         """Register callback for kill switch activation"""
         self.emergency_callbacks.append(callback)
 
+    @staticmethod
+    def _failed_check(name: str, limit: float, projected: float, severity: "RiskEventSeverity") -> Dict:
+        """Build a standardised failed-check dict for pre-trade risk results."""
+        return {"check": name, "passed": False, "limit": limit, "projected": projected, "severity": severity}
+
+    def _check_position_size(self, symbol: str, side: "OrderSide", size: float, price: float) -> Optional[Dict]:
+        """FIA 1.1: Reject if projected notional exceeds position limit."""
+        current  = self.positions.get(symbol, Position(symbol, side))
+        delta    = size if side == OrderSide.BUY else -size
+        proj_not = abs(current.size + delta) * price
+        limit    = self.current_capital * self.limits["position"]
+        return self._failed_check("POSITION_SIZE", limit, proj_not, RiskEventSeverity.CRITICAL) if proj_not > limit else None
+
+    def _check_leverage(self, notional: float) -> Optional[Dict]:
+        """Reject if projected total exposure exceeds leverage limit."""
+        current_exp = sum(abs(p.size * p.avg_entry_price) for p in self.positions.values())
+        proj_exp    = current_exp + notional
+        max_exp     = self.current_capital * self.limits["leverage"]
+        return self._failed_check("LEVERAGE", max_exp, proj_exp, RiskEventSeverity.CRITICAL) if proj_exp > max_exp else None
+
+    def _check_var_limit(self, symbol: str, size: float, price: float) -> Optional[Dict]:
+        """Warn if projected VaR exceeds the configured limit."""
+        current_var  = self.calculate_var(0.95)
+        projected_var = self._estimate_var_change(symbol, size, price)
+        var_limit    = self.current_capital * self.limits["var"]
+        if current_var + projected_var > var_limit:
+            return {"check": "VAR_LIMIT", "passed": False,
+                    "current_var": current_var, "projected_var": projected_var,
+                    "severity": RiskEventSeverity.WARNING}
+        return None
+
     def check_pre_trade_risk(
         self,
         symbol: str,
-        side: OrderSide,
+        side: "OrderSide",
         size: float,
         price: float,
-        portfolio_state: Dict,
+        portfolio_state: Dict,  # noqa: ARG002
     ) -> Tuple[bool, str, Dict]:
         """
-        Pre-trade risk check - FIA 1.1, 1.2, 1.3 compliant.
-        Returns: (allowed, reason, risk_metadata)
+        Pre-trade risk check — FIA 1.1, 1.2, 1.3 compliant.
+
+        Returns (allowed, reason, risk_metadata).
         """
-        # Check kill switch first
         if self.kill_switch_active:
-            return (
-                False,
-                "KILL_SWITCH_ACTIVE",
-                {"severity": RiskEventSeverity.KILL_SWITCH},
-            )
+            return False, "KILL_SWITCH_ACTIVE", {"severity": RiskEventSeverity.KILL_SWITCH}
 
-        # Check circuit breaker
-        if self.circuit_breaker_level >= 2:
-            return (
-                False,
-                "CIRCUIT_BREAKER_HALT",
-                {"severity": RiskEventSeverity.CRITICAL},
-            )
+        if self.circuit_breaker_level >= _CIRCUIT_BREAKER_HALT_LEVEL:
+            return False, "CIRCUIT_BREAKER_HALT", {"severity": RiskEventSeverity.CRITICAL}
 
-        notional = size * price
-        current_position = self.positions.get(symbol, Position(symbol, side))
-        projected_position = current_position.size + (
-            size if side == OrderSide.BUY else -size
-        )
-        projected_notional = abs(projected_position) * price
-
-        checks = []
-
-        # 1. Position size limit (FIA 1.1)
-        position_limit = self.current_capital * self.limits["position"]
-        if projected_notional > position_limit:
-            checks.append(
-                {
-                    "check": "POSITION_SIZE",
-                    "passed": False,
-                    "limit": position_limit,
-                    "projected": projected_notional,
-                    "severity": RiskEventSeverity.CRITICAL,
-                }
-            )
-
-        # 2. Leverage limit
-        current_exposure = sum(
-            abs(p.size * p.avg_entry_price) for p in self.positions.values()
-        )
-        projected_exposure = current_exposure + notional
-        max_exposure = self.current_capital * self.limits["leverage"]
-        if projected_exposure > max_exposure:
-            checks.append(
-                {
-                    "check": "LEVERAGE",
-                    "passed": False,
-                    "limit": max_exposure,
-                    "projected": projected_exposure,
-                    "severity": RiskEventSeverity.CRITICAL,
-                }
-            )
-
-        # 3. Daily loss limit (FIA 1.5)
+        # FIA 1.5: daily loss — triggers kill switch immediately
         if self.daily_pnl < -self.current_capital * self.limits["daily_loss"]:
             self._trigger_kill_switch("Daily loss limit breached")
-            return (
-                False,
-                "DAILY_LOSS_LIMIT",
-                {"severity": RiskEventSeverity.KILL_SWITCH},
-            )
+            return False, "DAILY_LOSS_LIMIT", {"severity": RiskEventSeverity.KILL_SWITCH}
 
-        # 4. VaR limit
-        current_var = self.calculate_var(0.95)
-        projected_var = self._estimate_var_change(symbol, size, price)
-        if current_var + projected_var > self.current_capital * self.limits["var"]:
-            checks.append(
-                {
-                    "check": "VAR_LIMIT",
-                    "passed": False,
-                    "current_var": current_var,
-                    "projected_var": projected_var,
-                    "severity": RiskEventSeverity.WARNING,
-                }
-            )
+        notional = size * price
+        checks   = list(filter(None, [
+            self._check_position_size(symbol, side, size, price),
+            self._check_leverage(notional),
+            self._check_var_limit(symbol, size, price),
+        ]))
 
-        # Determine outcome
-        critical_failures = [
-            c
-            for c in checks
-            if not c["passed"] and c["severity"] == RiskEventSeverity.CRITICAL
-        ]
-        warning_failures = [
-            c
-            for c in checks
-            if not c["passed"] and c["severity"] == RiskEventSeverity.WARNING
-        ]
+        critical = [c for c in checks if c["severity"] == RiskEventSeverity.CRITICAL]
+        warnings = [c for c in checks if c["severity"] == RiskEventSeverity.WARNING]
 
-        if critical_failures:
-            self._log_risk_event(
-                f"Pre-trade blocked: {critical_failures[0]['check']}",
-                RiskEventSeverity.CRITICAL,
-            )
-            return False, critical_failures[0]["check"], {"failed_checks": checks}
+        if critical:
+            self._log_risk_event(f"Pre-trade blocked: {critical[0]['check']}", RiskEventSeverity.CRITICAL)
+            return False, critical[0]["check"], {"failed_checks": checks}
 
-        if warning_failures:
-            self._log_risk_event(
-                f"Pre-trade warning: {warning_failures[0]['check']}",
-                RiskEventSeverity.WARNING,
-            )
-            # Allow but with caution
+        if warnings:
+            self._log_risk_event(f"Pre-trade warning: {warnings[0]['check']}", RiskEventSeverity.WARNING)
 
         return True, "OK", {"checks_passed": len(checks)}
 
@@ -1598,6 +1567,49 @@ class EnhancedBacktestEngine:
         }
         return models.get(self.execution_quality, models[ExecutionQuality.STANDARD])
 
+    def _get_position_price(self, symbol: str, tick: "TickData", position: "Position") -> float:
+        """Return the best available current price for a position."""
+        if symbol == tick.symbol:
+            return tick.mid
+        history = self.price_history.get(symbol)
+        return history[-1] if history else position.avg_entry_price
+
+    def _annual_financing_rate(self, position: "Position") -> float:
+        """Return the annual overnight financing rate for a position side."""
+        is_long = (
+            position.side.name == "BUY"
+            if hasattr(position.side, "name")
+            else str(position.side) == "BUY"
+        )
+        default_annual = getattr(self.cost_model, "overnight_rate_annual", 0.004)
+        if is_long:
+            return getattr(self.cost_model, "overnight_rate_long_annual", default_annual)
+        return getattr(self.cost_model, "overnight_rate_short_annual", -default_annual * 0.5)
+
+    def _charge_overnight_financing(self, tick: "TickData", bars_per_day: float) -> float:
+        """
+        Charge overnight financing on all open positions for one bar.
+
+        Returns the total financing cost charged this bar (positive = cost).
+        """
+        total_financing = 0.0
+        for symbol, position in self.positions.items():
+            if position.size == 0:
+                continue
+            current_price  = self._get_position_price(symbol, tick, position)
+            notional       = abs(position.size) * current_price
+            annual_rate    = self._annual_financing_rate(position)
+            per_bar_rate   = annual_rate / 365.0 / bars_per_day
+            financing_cost = notional * per_bar_rate
+
+            if financing_cost != 0.0:
+                self.capital                   -= financing_cost
+                position.total_financing_paid  += financing_cost
+                total_financing                += financing_cost
+
+            position.update_mfe_mae(current_price, tick.timestamp)
+        return total_financing
+
     def process_tick(self, tick: TickData) -> Dict[str, Any]:
         """
         Process a single tick with full market microstructure analysis.
@@ -1617,57 +1629,8 @@ class EnhancedBacktestEngine:
         self.price_history[tick.symbol].append(tick.mid)
 
         # ── Overnight financing ───────────────────────────────────────────────
-        # Charged every bar on open position notional.  The per-bar rate is
-        # annual_rate / 365 / bars_per_day.  bars_per_day defaults to 1 (daily
-        # bars); set self._bars_per_day before calling process_tick for intraday.
         bars_per_day: float = getattr(self, "_bars_per_day", 1.0)
-        financing_paid_this_tick: float = 0.0
-
-        for symbol, position in self.positions.items():
-            if position.size == 0:
-                continue
-            current_price = (
-                tick.mid
-                if symbol == tick.symbol
-                else (
-                    self.price_history[symbol][-1]
-                    if self.price_history[symbol]
-                    else position.avg_entry_price
-                )
-            )
-            notional = abs(position.size) * current_price
-
-            # Select rate by side
-            from_long = (
-                position.side.name == "BUY"
-                if hasattr(position.side, "name")
-                else str(position.side) == "BUY"
-            )
-            if from_long:
-                annual_rate = getattr(
-                    self.cost_model,
-                    "overnight_rate_long_annual",
-                    getattr(self.cost_model, "overnight_rate_annual", 0.004),
-                )
-            else:
-                annual_rate = getattr(
-                    self.cost_model,
-                    "overnight_rate_short_annual",
-                    -getattr(self.cost_model, "overnight_rate_annual", 0.004) * 0.5,
-                )
-
-            per_bar_rate = annual_rate / 365.0 / bars_per_day
-            financing_cost = (
-                notional * per_bar_rate
-            )  # positive = cost, negative = receipt
-
-            if financing_cost != 0.0:
-                self.capital -= financing_cost
-                position.total_financing_paid += financing_cost
-                financing_paid_this_tick += financing_cost
-
-            # Update MFE/MAE
-            position.update_mfe_mae(current_price, tick.timestamp)
+        financing_paid_this_tick = self._charge_overnight_financing(tick, bars_per_day)
 
         # Calculate equity
         equity = self._calculate_equity(tick)
@@ -1773,108 +1736,70 @@ class EnhancedBacktestEngine:
 
         return True, "OK", order_id
 
-    def execute_order(
-        self, order_id: str, tick: TickData, fill_size: Optional[float] = None
-    ) -> Tuple[bool, Dict[str, Any]]:
+    def _resolve_market_fill(
+        self, order: Dict, tick: "TickData", size: float
+    ) -> Tuple[float, float, float]:
         """
-        Execute order with realistic market simulation.
+        Compute fill price, slippage, and latency for a market order.
+
+        Returns (fill_price, slippage_bps, latency_sec).
         """
-        if order_id not in self.open_orders:
-            return False, {"error": "Order not found"}
-
-        order = self.open_orders[order_id]
-
-        # Determine fill size
-        size = fill_size or order["size"]
-        if abs(size) > abs(order["size"]):
-            size = order["size"] if order["size"] > 0 else -abs(order["size"])
-
-        # Calculate execution price with slippage
-        is_buy = order["side"] == OrderSide.BUY
-
-        if order["type"] == "market":
-            # Market order: immediate fill at market + slippage
-            base_price = tick.ask if is_buy else tick.bid
-
-            # Calculate slippage
-            volatility = (
-                self.microstructure.realized_variance**0.5
-                if self.microstructure.realized_variance > 0
-                else 0.001
-            )
-            participation = abs(size) / max(tick.volume, 1000)
-
-            impact = self.cost_model.calculate_market_impact(
-                abs(size),
-                participation,
-                volatility,
-                self.microstructure.order_flow_toxicity,
-            )
-
-            slippage_bps = impact["temporary_bps"] + _ENGINE_RNG.normal(
-                0, impact["temporary_bps"] * 0.2
-            )
-
-            if is_buy:
-                fill_price = base_price * (1 + slippage_bps / 10000)
-            else:
-                fill_price = base_price * (1 - slippage_bps / 10000)
-
-            # Simulate latency
-            latency = _ENGINE_RNG.normal(
-                self.latency_model["mean"], self.latency_model["std"]
-            )
-
-        elif order["type"] == "limit" and order["limit_price"]:
-            # Check if limit is marketable
-            if is_buy and order["limit_price"] < tick.ask:
-                return False, {"error": "Limit below ask", "status": "pending"}
-            if not is_buy and order["limit_price"] > tick.bid:
-                return False, {"error": "Limit above bid", "status": "pending"}
-
-            fill_price = order["limit_price"]
-            slippage_bps = 0.0
-            latency = 0.001  # 1ms for limit fill
-
-        else:
-            return False, {"error": "Invalid order type"}
-
-        # Calculate costs
-        abs(size) * fill_price
-        costs = self.cost_model.total_cost(
-            size,
-            fill_price,
-            participation_rate=participation,
-            daily_volatility=volatility,
-            order_flow_toxicity=self.microstructure.order_flow_toxicity,
+        is_buy      = order["side"] == OrderSide.BUY
+        base_price  = tick.ask if is_buy else tick.bid
+        volatility  = (
+            self.microstructure.realized_variance ** 0.5
+            if self.microstructure.realized_variance > 0
+            else _ATR_FALLBACK_VOL
         )
+        participation = abs(size) / max(tick.volume, _MIN_VOLUME_FLOOR)
+        impact        = self.cost_model.calculate_market_impact(
+            abs(size), participation, volatility, self.microstructure.order_flow_toxicity,
+        )
+        slippage_bps = impact["temporary_bps"] + _ENGINE_RNG.normal(
+            0, impact["temporary_bps"] * _SLIPPAGE_NOISE_FRAC
+        )
+        sign       = 1 if is_buy else -1
+        fill_price = base_price * (1 + sign * slippage_bps / 10_000)
+        latency    = _ENGINE_RNG.normal(self.latency_model["mean"], self.latency_model["std"])
+        return fill_price, slippage_bps, latency
 
-        # Update or create position
-        if order["symbol"] not in self.positions:
-            self.positions[order["symbol"]] = Position(
-                symbol=order["symbol"],
-                side=order["side"],
-                size=0.0,
-                avg_entry_price=0.0,
-            )
+    def _resolve_limit_fill(
+        self, order: Dict, tick: "TickData"
+    ) -> Tuple[float, float, float]:
+        """
+        Validate and return fill parameters for a limit order.
 
-        position = self.positions[order["symbol"]]
+        Returns (fill_price, slippage_bps=0, latency_sec).
+        Raises ValueError when the limit is not yet marketable.
+        """
+        is_buy = order["side"] == OrderSide.BUY
+        lp     = order["limit_price"]
+        if is_buy and lp < tick.ask:
+            raise ValueError("Limit below ask")
+        if not is_buy and lp > tick.bid:
+            raise ValueError("Limit above bid")
+        return lp, 0.0, _LIMIT_FILL_LATENCY_SEC
 
-        # Determine if opening, adding, or closing
-        is_opening = (position.size == 0) or (position.size * size > 0)
+    def _apply_fill_to_position(
+        self,
+        order: Dict,
+        position: "Position",
+        size: float,
+        fill_price: float,
+        costs: Dict,
+        tick: "TickData",
+        order_id: str,
+    ) -> None:
+        """
+        Update position state after a fill — handles open, add, and close paths.
+        """
         is_closing = position.size * size < 0
 
         if is_closing:
-            # Close existing position
             trade = self._close_position(
-                position,
-                size,
-                fill_price,
-                tick.timestamp,
-                slippage_bps,
-                costs["total_cost"],
-                order["side"],
-                order_id,
+                position, size, fill_price, tick.timestamp,
+                costs.get("slippage_bps", 0.0), costs["total_cost"],
+                order["side"], order_id,
             )
             if trade:
                 self.closed_trades.append(trade)
@@ -1882,73 +1807,114 @@ class EnhancedBacktestEngine:
                 self.capital += trade.net_pnl
                 self.risk_manager.update_capital(trade.net_pnl, tick.timestamp)
 
-        # Handle remaining size (opening or reversal)
         remaining = size
         if is_closing and abs(size) > abs(position.size):
-            remaining = size + position.size  # position.size has opposite sign
+            remaining = size + position.size
 
-        if remaining != 0 and (is_opening or abs(remaining) > 0):
-            # Update position
-            if position.size == 0:
-                position.side = order["side"]
-                position.avg_entry_price = fill_price
-                position.entry_timestamp = tick.timestamp
-                position.size = remaining
-            else:
-                # Average price calculation
-                total_size = position.size + remaining
-                position.avg_entry_price = (
-                    position.size * position.avg_entry_price + remaining * fill_price
-                ) / total_size
-                position.size = total_size
+        if remaining == 0:
+            return
 
-            position.total_commission_paid += costs["commission"]
-            position.total_slippage_paid += costs["market_impact"]
+        if position.size == 0:
+            position.side            = order["side"]
+            position.avg_entry_price = fill_price
+            position.entry_timestamp = tick.timestamp
+            position.size            = remaining
+        else:
+            total_size               = position.size + remaining
+            position.avg_entry_price = (
+                position.size * position.avg_entry_price + remaining * fill_price
+            ) / total_size
+            position.size = total_size
 
-            position.add_trade(
-                trade_size=remaining,
-                trade_price=fill_price,
-                commission=costs["commission"],
-                slippage=costs["market_impact"],
-                timestamp=tick.timestamp,
-                is_opening=True,
-            )
+        position.total_commission_paid += costs["commission"]
+        position.total_slippage_paid   += costs["market_impact"]
+        position.add_trade(
+            trade_size=remaining, trade_price=fill_price,
+            commission=costs["commission"], slippage=costs["market_impact"],
+            timestamp=tick.timestamp, is_opening=True,
+        )
 
-        # Update order status
+    def _update_order_status(self, order_id: str, order: Dict, size: float) -> None:
+        """Mark order filled or reduce remaining size."""
         order["filled_size"] = order.get("filled_size", 0) + size
-        if abs(order["filled_size"] - order["size"]) < 0.0001:
+        if abs(order["filled_size"] - order["size"]) < _FILL_TOLERANCE:
             order["status"] = "filled"
             del self.open_orders[order_id]
         else:
-            order["size"] -= size  # Remaining
+            order["size"] -= size
 
-        # Log execution
-        self.execution_log.append(
-            {
-                "timestamp": float(tick.timestamp),
-                "order_id": order_id,
-                "symbol": order["symbol"],
-                "side": order["side"].name
-                if isinstance(order["side"], OrderSide)
-                else order["side"],
-                "size": size,
-                "price": fill_price,
-                "slippage_bps": slippage_bps,
-                "costs": costs,
-                "latency_sec": latency,
-                "regime": self.microstructure.current_regime.name,
-            }
+    def execute_order(
+        self, order_id: str, tick: "TickData", fill_size: Optional[float] = None
+    ) -> Tuple[bool, Dict[str, Any]]:
+        """Execute an order with realistic market simulation."""
+        if order_id not in self.open_orders:
+            return False, {"error": "Order not found"}
+
+        order = self.open_orders[order_id]
+        size  = fill_size or order["size"]
+        if abs(size) > abs(order["size"]):
+            size = order["size"] if order["size"] > 0 else -abs(order["size"])
+
+        # ── Resolve fill price ─────────────────────────────────────────────
+        try:
+            if order["type"] == "market":
+                fill_price, slippage_bps, latency = self._resolve_market_fill(order, tick, size)
+                volatility    = (
+                    self.microstructure.realized_variance ** 0.5
+                    if self.microstructure.realized_variance > 0
+                    else _ATR_FALLBACK_VOL
+                )
+                participation = abs(size) / max(tick.volume, _MIN_VOLUME_FLOOR)
+            elif order["type"] == "limit" and order.get("limit_price"):
+                fill_price, slippage_bps, latency = self._resolve_limit_fill(order, tick)
+                volatility    = _ATR_FALLBACK_VOL
+                participation = 0.0
+            else:
+                return False, {"error": "Invalid order type"}
+        except ValueError as exc:
+            return False, {"error": str(exc), "status": "pending"}
+
+        # ── Calculate transaction costs ────────────────────────────────────
+        costs = self.cost_model.total_cost(
+            size, fill_price,
+            participation_rate=participation,
+            daily_volatility=volatility,
+            order_flow_toxicity=self.microstructure.order_flow_toxicity,
         )
+        costs["slippage_bps"] = slippage_bps
+
+        # ── Ensure position exists ─────────────────────────────────────────
+        if order["symbol"] not in self.positions:
+            self.positions[order["symbol"]] = Position(
+                symbol=order["symbol"], side=order["side"], size=0.0, avg_entry_price=0.0,
+            )
+        position = self.positions[order["symbol"]]
+
+        self._apply_fill_to_position(order, position, size, fill_price, costs, tick, order_id)
+        self._update_order_status(order_id, order, size)
+
+        self.execution_log.append({
+            "timestamp":   float(tick.timestamp),
+            "order_id":    order_id,
+            "symbol":      order["symbol"],
+            "side":        order["side"].name if isinstance(order["side"], OrderSide) else order["side"],
+            "size":        size,
+            "price":       fill_price,
+            "slippage_bps": slippage_bps,
+            "costs":       costs,
+            "latency_sec": latency,
+            "regime":      self.microstructure.current_regime.name,
+        })
 
         return True, {
-            "filled": True,
-            "fill_price": fill_price,
-            "fill_size": size,
-            "slippage_bps": slippage_bps,
-            "costs": costs,
-            "position_size": position.size,
+            "filled":         True,
+            "fill_price":     fill_price,
+            "fill_size":      size,
+            "slippage_bps":   slippage_bps,
+            "costs":          costs,
+            "position_size":  position.size,
             "unrealized_pnl": position.unrealized_pnl,
-            "latency_ms": latency * 1000,
+            "latency_ms":     latency * 1000,
         }
 
     def _close_position(
