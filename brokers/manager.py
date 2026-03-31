@@ -34,8 +34,8 @@ from __future__ import annotations
 import logging
 import threading
 import traceback
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 from brokers.base import (
     AccountInfo,
@@ -75,7 +75,7 @@ class BrokerHealth:
         name: str,
         connected: bool,
         consecutive_failures: int,
-        last_error: Optional[str],
+        last_error: str | None,
         is_primary: bool,
         mode: str,
     ) -> None:
@@ -123,10 +123,10 @@ class BrokerManager:
         self._enable_fix = enable_fix
 
         self._brokers: dict[str, BrokerConnector] = {}
-        self._active_name: Optional[str] = None
+        self._active_name: str | None = None
         self._lock = threading.RLock()
         self._consecutive_failures: dict[str, int] = {}
-        self._last_errors: dict[str, Optional[str]] = {}
+        self._last_errors: dict[str, str | None] = {}
 
         # FIX bridge (optional low-latency path)
         self._fix_bridge = None
@@ -301,8 +301,8 @@ class BrokerManager:
         side: OrderSide,
         order_type: OrderType,
         quantity: float,
-        price: Optional[float] = None,
-        stop_price: Optional[float] = None,
+        price: float | None = None,
+        stop_price: float | None = None,
         **kwargs,
     ) -> Order:
         """
@@ -346,7 +346,7 @@ class BrokerManager:
             self._record_failure(exc)
             raise
 
-    def get_order(self, order_id: str) -> Optional[Order]:
+    def get_order(self, order_id: str) -> Order | None:
         """Retrieve order by ID."""
         broker = self._require_connected_broker()
         try:
@@ -488,7 +488,7 @@ class BrokerManager:
 
         return results
 
-    def get_active_broker_name(self) -> Optional[str]:
+    def get_active_broker_name(self) -> str | None:
         """Return the name of the currently active broker."""
         with self._lock:
             return self._active_name
@@ -523,7 +523,7 @@ class BrokerManager:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_active_broker(self) -> Optional[BrokerConnector]:
+    def _get_active_broker(self) -> BrokerConnector | None:
         with self._lock:
             if self._active_name is None:
                 return None

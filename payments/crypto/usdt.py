@@ -9,9 +9,8 @@ USDT Payment Integration
 Handles USDT deposits and withdrawals on TRC20 (TRON) and ERC20 (Ethereum) networks.
 """
 
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Dict, Optional
 from enum import Enum
 import logging
 import hashlib
@@ -76,7 +75,7 @@ class USDTClient:
         tx_hash: str,
         network: USDTNetwork,
         confirmations: int = 0,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Process USDT deposit"""
         try:
             if amount < self.MIN_DEPOSIT:

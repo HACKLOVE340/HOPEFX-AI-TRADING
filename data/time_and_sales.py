@@ -19,8 +19,7 @@ Real-time trade tape (time & sales) with:
 import logging
 import threading
 from collections import deque
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, timedelta, UTC
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -35,7 +34,7 @@ class ExecutedTrade:
     price: float
     size: float
     side: str  # 'buy' or 'sell' (aggressor side)
-    trade_id: Optional[str] = None
+    trade_id: str | None = None
     is_aggressive_buy: bool = False
     is_aggressive_sell: bool = False
     is_large_trade: bool = False
@@ -124,7 +123,7 @@ class TimeAndSalesService:
         velocity = service.get_trade_velocity('XAUUSD')
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize Time & Sales service.
 
@@ -160,10 +159,10 @@ class TimeAndSalesService:
         price: float,
         size: float,
         side: str,
-        timestamp: Optional[datetime] = None,
-        trade_id: Optional[str] = None,
-        ask_price: Optional[float] = None,
-        bid_price: Optional[float] = None,
+        timestamp: datetime | None = None,
+        trade_id: str | None = None,
+        ask_price: float | None = None,
+        bid_price: float | None = None,
     ) -> ExecutedTrade:
         """
         Add a trade to the tape.
@@ -258,7 +257,7 @@ class TimeAndSalesService:
         self,
         symbol: str,
         start_time: datetime,
-        end_time: Optional[datetime] = None,
+        end_time: datetime | None = None,
     ) -> list[ExecutedTrade]:
         """
         Filter trades by time range.
@@ -283,7 +282,7 @@ class TimeAndSalesService:
     def get_large_trades(
         self,
         symbol: str,
-        min_size: Optional[float] = None,
+        min_size: float | None = None,
         lookback_minutes: int = 60,
     ) -> list[ExecutedTrade]:
         """
@@ -309,8 +308,8 @@ class TimeAndSalesService:
     def get_trade_velocity(
         self,
         symbol: str,
-        window_minutes: Optional[int] = None,
-    ) -> Optional[TradeVelocity]:
+        window_minutes: int | None = None,
+    ) -> TradeVelocity | None:
         """
         Calculate trade velocity metrics over a rolling window.
 
@@ -352,7 +351,7 @@ class TimeAndSalesService:
         self,
         symbol: str,
         lookback_minutes: int = 60,
-    ) -> Optional[AggressorStats]:
+    ) -> AggressorStats | None:
         """
         Get buy vs sell aggressor statistics.
 
@@ -560,7 +559,7 @@ def create_time_and_sales_router(service: TimeAndSalesService):
 
     @router.get("/{symbol}/large")
     async def get_large_trades(
-        symbol: str, min_size: Optional[float] = None, lookback_minutes: int = 60
+        symbol: str, min_size: float | None = None, lookback_minutes: int = 60
     ):
         """Get large trades for a symbol."""
         trades = service.get_large_trades(
@@ -605,7 +604,7 @@ def create_time_and_sales_router(service: TimeAndSalesService):
 
 
 # Global instance
-_time_and_sales_service: Optional[TimeAndSalesService] = None
+_time_and_sales_service: TimeAndSalesService | None = None
 
 
 def get_time_and_sales_service() -> TimeAndSalesService:

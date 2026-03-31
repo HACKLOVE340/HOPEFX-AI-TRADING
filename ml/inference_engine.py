@@ -37,9 +37,9 @@ import logging
 import os
 import time
 from collections import deque
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Deque, Dict, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -180,18 +180,18 @@ class InferenceEngine:
         self._predict_count: int = 0
         self._fallback_count: int = 0
         # Uptime tracking — set on first predict call
-        self._first_predict_at: Optional[float] = None
+        self._first_predict_at: float | None = None
         # Rolling window of signal directions for non-neutral rate
         self._signal_window: deque[str] = deque(maxlen=_SIGNAL_WINDOW)
         # Cached model metadata from advanced_oos_meta.json
-        self._meta_cache: Optional[dict[str, Any]] = None
+        self._meta_cache: dict[str, Any] | None = None
         self._meta_mtime: float = 0.0
         # Data layer nudge tracking
         self._last_sentiment_score: float = 0.0
         self._last_macro_impact: float = 0.0
         # Rollback support — stores path to previous model for emergency revert
-        self._active_model_path: Optional[Path] = None
-        self._previous_model_path: Optional[Path] = None
+        self._active_model_path: Path | None = None
+        self._previous_model_path: Path | None = None
         self._rollback_count: int = 0
 
     # ── Lazy loaders ──────────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ class InferenceEngine:
                 logger.debug("InferenceEngine: predictor unavailable: %s", exc)
         return self._predictor
 
-    def _get_macro_df(self, ohlcv: pd.DataFrame) -> Optional[pd.DataFrame]:
+    def _get_macro_df(self, ohlcv: pd.DataFrame) -> pd.DataFrame | None:
         """Align MacroStore to the OHLCV index, deduplicating the result index.
 
         MacroStore is now auto-populated by data_layer.feeds.macro.store_bridge
@@ -240,7 +240,7 @@ class InferenceEngine:
             logger.debug("MacroStore alignment failed: %s", exc)
             return None
 
-    def _get_mtf_df(self, ohlcv: pd.DataFrame, symbol: str) -> Optional[pd.DataFrame]:
+    def _get_mtf_df(self, ohlcv: pd.DataFrame, symbol: str) -> pd.DataFrame | None:
         """Get MTF regime features from MTFFusionStore."""
         if not _MTF_FUSION_ENABLED:
             return None
@@ -299,10 +299,10 @@ class InferenceEngine:
     def _build_features(
         self,
         ohlcv: pd.DataFrame,
-        macro_df: Optional[pd.DataFrame],
-        mtf_df: Optional[pd.DataFrame],
+        macro_df: pd.DataFrame | None,
+        mtf_df: pd.DataFrame | None,
         symbol: str,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """
         Build 200+ feature matrix with real-time data layer injection.
 
@@ -742,7 +742,7 @@ class InferenceEngine:
         probability: float,
         symbol: str,
         model_version: str,
-        features_df: Optional[pd.DataFrame] = None,
+        features_df: pd.DataFrame | None = None,
     ) -> None:
         """
         Write signal to immutable lineage store (non-blocking).
@@ -909,8 +909,8 @@ class InferenceEngine:
 
         # ── Metadata (oos_accuracy, last_trained_at) ──────────────────────────
         meta = self._load_meta()
-        oos_accuracy: Optional[float] = None
-        last_trained_at: Optional[str] = None
+        oos_accuracy: float | None = None
+        last_trained_at: str | None = None
         if meta:
             raw_acc = meta.get("oos_accuracy") or meta.get("accuracy")
             oos_accuracy = float(raw_acc) if raw_acc is not None else None
@@ -931,7 +931,7 @@ class InferenceEngine:
             logger.debug("Suppressed exception: %s", _exc)
 
         # ── Uptime ────────────────────────────────────────────────────────────
-        uptime_seconds: Optional[float] = None
+        uptime_seconds: float | None = None
         if self._first_predict_at is not None:
             uptime_seconds = round(time.time() - self._first_predict_at, 1)
 
@@ -979,7 +979,7 @@ class InferenceEngine:
 
     # ── Model reload / rollback ───────────────────────────────────────────────
 
-    def reload_model(self, model_path: Optional[Path] = None) -> bool:
+    def reload_model(self, model_path: Path | None = None) -> bool:
         """
         Hot-reload the predictor from disk without restarting the process.
 
@@ -1060,7 +1060,7 @@ class InferenceEngine:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_engine: Optional[InferenceEngine] = None
+_engine: InferenceEngine | None = None
 
 
 def get_inference_engine() -> InferenceEngine:

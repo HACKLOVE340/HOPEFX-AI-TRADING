@@ -34,8 +34,9 @@ Environment variables:
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Any, Callable, List, Optional
+from datetime import datetime, UTC
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +63,8 @@ class TelegramBot:
 
     def __init__(
         self,
-        token: Optional[str] = None,
-        allowed_chat_ids: Optional[list[int]] = None,
+        token: str | None = None,
+        allowed_chat_ids: list[int] | None = None,
         app_state: Any = None,
     ):
         self.token = token or os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -114,7 +115,7 @@ class TelegramBot:
                 logger.warning("Telegram bot stop error: %s", exc)
             self._running = False
 
-    async def send_message(self, text: str, chat_id: Optional[int] = None):
+    async def send_message(self, text: str, chat_id: int | None = None):
         """Send a message to all allowed chats (or a specific one)."""
         if not self._app:
             return
@@ -341,14 +342,14 @@ class TelegramBot:
 
 
 # Module-level singleton — wired up in app.py startup
-_bot_instance: Optional[TelegramBot] = None
+_bot_instance: TelegramBot | None = None
 
 
-def get_telegram_bot() -> Optional[TelegramBot]:
+def get_telegram_bot() -> TelegramBot | None:
     return _bot_instance
 
 
-def init_telegram_bot(app_state: Any) -> Optional[TelegramBot]:
+def init_telegram_bot(app_state: Any) -> TelegramBot | None:
     """Create and return the bot instance. Called from app.py startup."""
     global _bot_instance
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")

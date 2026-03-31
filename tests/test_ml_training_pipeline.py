@@ -131,7 +131,7 @@ def test_smoke_flag_overrides_args():
         spec = importlib.util.spec_from_file_location(
             "train_advanced_mod", ROOT / "ml" / "train_advanced.py"
         )
-        mod = importlib.util.module_from_spec(spec)
+        _mod = importlib.util.module_from_spec(spec)
         # Don't exec — just verify the argparse setup by parsing directly
         import argparse as _ap
 
@@ -237,6 +237,7 @@ def test_retrain_model_smoke_exits_zero():
         text=True,
         timeout=300,
         cwd=str(ROOT),
+            check=False,
     )
     assert result.returncode == 0, (
         f"retrain_model.py --smoke --advanced failed:\n"

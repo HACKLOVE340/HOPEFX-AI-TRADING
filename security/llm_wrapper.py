@@ -19,14 +19,13 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # ── Backend selection ─────────────────────────────────────────────────────────
 LLM_BACKEND: str = os.getenv("LLM_BACKEND", "anthropic").lower()
-ANTHROPIC_API_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
-OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
+ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
+OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 
 # Model identifiers
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307")

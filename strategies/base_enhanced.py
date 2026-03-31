@@ -11,9 +11,9 @@ and adds MCC integration.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -44,10 +44,10 @@ class StrategySignal:
         action: str,  # "BUY", "SELL", "HOLD"
         strength: float = 0.5,  # 0.0 to 1.0
         confidence: float = 0.7,
-        target_price: Optional[Decimal] = None,
-        stop_loss: Optional[Decimal] = None,
-        take_profit: Optional[Decimal] = None,
-        metadata: Optional[dict] = None,
+        target_price: Decimal | None = None,
+        stop_loss: Decimal | None = None,
+        take_profit: Decimal | None = None,
+        metadata: dict | None = None,
     ):
         self.action = action
         self.strength = max(0.0, min(1.0, strength))
@@ -82,7 +82,7 @@ class EnhancedStrategy(ABC):
         self.max_history = 1000
 
         # MCC integration hooks
-        self.mcc_callback: Optional[Any] = None
+        self.mcc_callback: Any | None = None
 
     def activate(self):
         self.is_active = True
@@ -94,8 +94,8 @@ class EnhancedStrategy(ABC):
         self,
         timestamp: datetime,
         price: Decimal,
-        bid: Optional[Decimal] = None,
-        ask: Optional[Decimal] = None,
+        bid: Decimal | None = None,
+        ask: Decimal | None = None,
     ):
         """
         Called by MCC on every price update.
@@ -122,9 +122,9 @@ class EnhancedStrategy(ABC):
         self,
         timestamp: datetime,
         price: Decimal,
-        bid: Optional[Decimal] = None,
-        ask: Optional[Decimal] = None,
-    ) -> Optional[StrategySignal]:
+        bid: Decimal | None = None,
+        ask: Decimal | None = None,
+    ) -> StrategySignal | None:
         """
         Your existing generate_signal() goes here.
         Return StrategySignal instead of raw dict.

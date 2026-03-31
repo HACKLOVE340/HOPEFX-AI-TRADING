@@ -35,7 +35,7 @@ import hashlib
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 _WINDOW = 50  # candles per feature vector
 
 
-def _compute_features(df) -> Optional[np.ndarray]:
+def _compute_features(df) -> np.ndarray | None:
     """
     Compute a 32-dimensional feature vector from a candle DataFrame.
 
@@ -338,7 +338,7 @@ class MarketVectorStore:
         self,
         candles: list[dict],
         top_k: int = 5,
-        symbol_filter: Optional[str] = None,
+        symbol_filter: str | None = None,
     ) -> list[SimilarWindow]:
         """
         Given the most recent candles, find the top-k most similar historical

@@ -28,7 +28,6 @@ with a loud warning.
 
 import logging
 import os
-from typing import Dict
 
 from hdwallet import HDWallet
 from hdwallet.symbols import BTC, ETH, TRX

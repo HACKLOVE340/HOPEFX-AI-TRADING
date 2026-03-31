@@ -36,8 +36,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Callable, Dict, List, Optional
+from datetime import datetime, UTC
+from collections.abc import Callable
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ class HeartbeatMonitor:
         self._components: dict[str, ComponentStatus] = {}
         self._alert_callbacks: list[Callable[[ComponentStatus], None]] = []
         self._running: bool = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
     # ---------------------------------------------------------------------- #
     # Registration                                                             #
@@ -197,10 +198,8 @@ class HeartbeatMonitor:
         self._running = False
         if self._task and not self._task.done():
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         logger.info("HeartbeatMonitor stopped")
 
     # ---------------------------------------------------------------------- #

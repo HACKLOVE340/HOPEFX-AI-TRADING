@@ -14,11 +14,11 @@ Advanced market analysis tools:
 - Institutional flow detection
 """
 
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
-from datetime import datetime, time, timezone, UTC
+from datetime import datetime, time, UTC
 from enum import Enum
 import logging
 
@@ -140,7 +140,7 @@ class MarketRegimeDetector:
     - Choppy: Erratic price action
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize regime detector.
 
@@ -425,7 +425,7 @@ class MultiTimeframeAnalyzer:
     - Entry timing based on MTF analysis
     """
 
-    def __init__(self, timeframes: list[str] = None, config: Optional[dict] = None):
+    def __init__(self, timeframes: list[str] = None, config: dict | None = None):
         """
         Initialize MTF analyzer.
 
@@ -578,10 +578,7 @@ class MultiTimeframeAnalyzer:
         # Volume trend
         if "volume" in data.columns:
             vol_sma = data["volume"].rolling(20).mean()
-            if data["volume"].iloc[-1] > vol_sma.iloc[-1]:
-                volume_trend = "increasing"
-            else:
-                volume_trend = "decreasing"
+            volume_trend = "increasing" if data["volume"].iloc[-1] > vol_sma.iloc[-1] else "decreasing"
         else:
             volume_trend = "unknown"
 

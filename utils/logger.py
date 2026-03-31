@@ -13,7 +13,7 @@ Structured Logging System
 import logging
 import logging.handlers
 import json
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 import os
 
 

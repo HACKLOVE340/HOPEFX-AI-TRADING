@@ -50,9 +50,11 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
+from collections.abc import Callable
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +200,7 @@ class FaultInjector:
         self._prune_expired()
         return fault_type in self._active
 
-    def get_fault(self, fault_type: FaultType) -> Optional[ActiveFault]:
+    def get_fault(self, fault_type: FaultType) -> ActiveFault | None:
         """Return the active fault or None."""
         self._prune_expired()
         return self._active.get(fault_type)
@@ -209,7 +211,7 @@ class FaultInjector:
 
     # ── Tick transformation ───────────────────────────────────────────────────
 
-    def transform_tick(self, tick: Any) -> Optional[Any]:
+    def transform_tick(self, tick: Any) -> Any | None:
         """
         Apply active faults to a tick before it reaches the pipeline.
 
@@ -269,10 +271,8 @@ class FaultInjector:
                 fault.metadata["frozen_ts"] = getattr(
                     tick, "timestamp", datetime.now(UTC)
                 )
-            try:
+            with contextlib.suppress((AttributeError, TypeError)):
                 object.__setattr__(tick, "timestamp", fault.metadata["frozen_ts"])
-            except (AttributeError, TypeError):
-                pass
             return tick
 
         # CLOCK_SKEW — shift timestamp
@@ -282,10 +282,8 @@ class FaultInjector:
 
             skew_s = fault.magnitude * fault.metadata.get("direction_sign", 1)
             ts = getattr(tick, "timestamp", datetime.now(UTC))
-            try:
+            with contextlib.suppress((AttributeError, TypeError)):
                 object.__setattr__(tick, "timestamp", ts + timedelta(seconds=skew_s))
-            except (AttributeError, TypeError):
-                pass
             return tick
 
         return tick
@@ -301,7 +299,7 @@ class FaultInjector:
         """Return True if Redis calls should simulate a timeout."""
         return self.is_active(FaultType.REDIS_TIMEOUT)
 
-    def should_partial_fill(self) -> Optional[float]:
+    def should_partial_fill(self) -> float | None:
         """Return fill fraction (0–1) if partial fill is active, else None."""
         if self.is_active(FaultType.PARTIAL_FILL):
             fault = self._active[FaultType.PARTIAL_FILL]

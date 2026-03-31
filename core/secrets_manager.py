@@ -75,8 +75,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ class SecretsManager:
 
     def __init__(self) -> None:
         self._cache: dict[str, str] = {}
-        self._last_refresh: Optional[datetime] = None
+        self._last_refresh: datetime | None = None
         self._refresh_count: int = 0
         self._error_count: int = 0
         self._running: bool = False
@@ -127,7 +127,7 @@ class SecretsManager:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
+    def get(self, key: str, default: str | None = None) -> str | None:
         """
         Return the current value of a secret.
 
@@ -142,7 +142,7 @@ class SecretsManager:
             return os.getenv(env_var, default)
         return os.getenv(key.upper(), default)
 
-    def get_sync(self, key: str, default: Optional[str] = None) -> Optional[str]:
+    def get_sync(self, key: str, default: str | None = None) -> str | None:
         """Synchronous alias for get() — safe to call from non-async code."""
         return self.get(key, default)
 
@@ -373,7 +373,7 @@ class SecretsManager:
 secrets = SecretsManager()
 
 
-def get_secret(key: str, default: Optional[str] = None) -> Optional[str]:
+def get_secret(key: str, default: str | None = None) -> str | None:
     """
     Convenience function: return the current value of a secret.
 

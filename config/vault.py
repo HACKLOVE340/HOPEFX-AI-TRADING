@@ -15,7 +15,7 @@ import os
 try:
     from typing import Self  # Python 3.11+
 except ImportError:
-    from typing_extensions import Self  # Python 3.10 backport
+    from typing import Self  # Python 3.10 backport
 
 import keyring
 from cryptography.fernet import Fernet, InvalidToken

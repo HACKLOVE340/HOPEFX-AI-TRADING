@@ -491,7 +491,7 @@ class TestKillSwitch:
 
         # Wrong token must raise PermissionError or return falsy — never silently deactivate
         try:
-            result = ks.deactivate("wrong-token")
+            _result = ks.deactivate("wrong-token")
             # If it returns without raising, the switch must still be active
             assert (
                 ks.is_active()

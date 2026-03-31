@@ -16,7 +16,6 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -34,18 +33,18 @@ _manager = TraderProfileManager()
 
 
 class ProfileUpdate(BaseModel):
-    bio: Optional[str] = Field(None, max_length=500)
-    avatar_url: Optional[str] = None
-    website: Optional[str] = None
-    is_public: Optional[bool] = None
+    bio: str | None = Field(None, max_length=500)
+    avatar_url: str | None = None
+    website: str | None = None
+    is_public: bool | None = None
 
 
 class ProfileResponse(BaseModel):
     trader_id: str
     username: str
     bio: str
-    avatar_url: Optional[str]
-    website: Optional[str]
+    avatar_url: str | None
+    website: str | None
     verified: bool
     is_public: bool
     total_followers: int
@@ -56,7 +55,7 @@ class ProfileResponse(BaseModel):
     avg_win: float
     avg_loss: float
     sharpe_ratio: float
-    created_at: Optional[str]
+    created_at: str | None
 
 
 def _profile_to_response(p: TraderProfile, include_email: bool = False) -> dict:

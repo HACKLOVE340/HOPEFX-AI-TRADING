@@ -45,7 +45,7 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
 
 # Ensure project root is on path

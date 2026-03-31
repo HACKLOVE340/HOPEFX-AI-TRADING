@@ -25,10 +25,10 @@ Total output: 230+ features when combined with build_advanced_features().
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -195,10 +195,8 @@ def _rolling_hfd(series: pd.Series, window: int, k_max: int) -> pd.Series:
         if len(lk) >= 2:
             log_k = np.log(np.arange(1, len(lk) + 1))
             log_lk = np.log(np.array(lk) + 1e-10)
-            try:
+            with contextlib.suppress(Exception):
                 out[wi + window - 1] = float(np.polyfit(log_k, log_lk, 1)[0])
-            except Exception:  # nosec B110 - polyfit failure leaves NaN in output (correct)
-                pass
     return pd.Series(out, index=series.index)
 
 
@@ -344,10 +342,8 @@ def _rolling_apen(series: pd.Series, window: int, m: int, r_factor: float) -> pd
         r = r_factor * x.std()
         if r == 0 or len(x) < m + 2:
             continue
-        try:
+        with contextlib.suppress(Exception):
             out[wi + window - 1] = _phi_vec(x, m, r) - _phi_vec(x, m + 1, r)
-        except Exception:  # nosec B110 - SampEn failure leaves NaN in output (correct)
-            pass
     return pd.Series(out, index=series.index)
 
 
@@ -462,10 +458,8 @@ def _rolling_corr_dim(series: pd.Series, window: int) -> pd.Series:
         if len(c_vals) >= 2:
             log_eps = np.log(eps_vals[: len(c_vals)] + 1e-10)
             log_c = np.log(np.array(c_vals) + 1e-10)
-            try:
+            with contextlib.suppress(Exception):
                 out[wi + window - 1] = float(np.polyfit(log_eps, log_c, 1)[0])
-            except Exception:  # nosec B110 - polyfit failure leaves NaN in output (correct)
-                pass
     return pd.Series(out, index=series.index)
 
 
@@ -936,7 +930,7 @@ def _rolling_minmax_norm(series: pd.Series, window: int) -> pd.Series:
 
 def build_extended_features(
     ohlcv: pd.DataFrame,
-    macro_df: Optional[pd.DataFrame] = None,
+    macro_df: pd.DataFrame | None = None,
     horizon: int = 1,
     use_filtered_target: bool = True,
     min_move_atr: float = 0.25,
@@ -1026,7 +1020,7 @@ def _zscore(s: pd.Series, w: int) -> pd.Series:
 
 def add_data_layer_features(
     df: pd.DataFrame,
-    as_of: Optional[pd.Timestamp] = None,
+    as_of: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     """
     Inject real-time data layer features from MarketDataOrchestrator into
@@ -1203,12 +1197,12 @@ def add_data_layer_features(
 
 def build_extended_features_with_data_layer(
     ohlcv: pd.DataFrame,
-    macro_df: Optional[pd.DataFrame] = None,
+    macro_df: pd.DataFrame | None = None,
     horizon: int = 1,
     use_filtered_target: bool = True,
     min_move_atr: float = 0.25,
     smoke: bool = False,
-    as_of: Optional[pd.Timestamp] = None,
+    as_of: pd.Timestamp | None = None,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
     Full feature matrix: 200+ OHLCV features + 26 live data layer features.

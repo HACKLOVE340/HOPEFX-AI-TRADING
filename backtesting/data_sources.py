@@ -18,7 +18,7 @@ import abc
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 import pandas as pd
 
@@ -745,10 +745,7 @@ class DataManager:
         # Try Alpha Vantage first (best forex support)
         if "alphavantage" in self.sources:
             # Format symbol for Alpha Vantage (EUR/USD)
-            if "/" not in symbol:
-                formatted = f"{symbol[:3]}/{symbol[3:]}"
-            else:
-                formatted = symbol
+            formatted = f"{symbol[:3]}/{symbol[3:]}" if "/" not in symbol else symbol
             df = self.sources["alphavantage"].get_data(formatted, start_date, end_date)
             if not df.empty:
                 return df

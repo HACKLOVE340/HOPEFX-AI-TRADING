@@ -43,8 +43,8 @@ import logging
 import os
 import re
 import textwrap
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import httpx
 
@@ -83,7 +83,7 @@ _ENDPOINT_FILE_MAP: dict[str, str] = {
 }
 
 
-def _resolve_file_path(endpoint: str) -> Optional[str]:
+def _resolve_file_path(endpoint: str) -> str | None:
     """
     Map an API endpoint string to a source file path.
 
@@ -128,6 +128,7 @@ def _repo() -> str:
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
         url = result.stdout.strip()
         # https://github.com/owner/repo.git  or  git@github.com:owner/repo.git
@@ -143,7 +144,7 @@ def _repo() -> str:
 
 async def _get_file(
     client: httpx.AsyncClient, repo: str, path: str
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Fetch file metadata and content from GitHub. Returns None if not found."""
     url = f"{_GITHUB_API}/repos/{repo}/contents/{path}"
     resp = await client.get(url, headers=_headers(), params={"ref": GITHUB_BASE_BRANCH})
@@ -185,7 +186,7 @@ async def _commit_file(
     path: str,
     content: str,
     message: str,
-    file_sha: Optional[str],
+    file_sha: str | None,
 ) -> str:
     """Create or update a file on *branch*. Returns the new commit SHA."""
     url = f"{_GITHUB_API}/repos/{repo}/contents/{path}"
@@ -279,7 +280,7 @@ def _apply_patch(original_content: str, original_snippet: str, fix_snippet: str)
 
 def _build_pr_body(
     endpoint: str,
-    file_path: Optional[str],
+    file_path: str | None,
     original: str,
     fix: str,
     approved_by: str,
@@ -344,7 +345,7 @@ class GitHubPRPublisher:
         original_code: str,
         fix_code: str,
         approved_by: str = "dashboard",
-        fix_ts: Optional[str] = None,
+        fix_ts: str | None = None,
     ) -> dict[str, Any]:
         """
         Create a branch, commit the fix, and open a GitHub PR.
@@ -384,7 +385,7 @@ class GitHubPRPublisher:
                 await _create_branch(client, repo, branch_name, base_sha)
 
                 # 3. Fetch current file content (if file path is known)
-                file_sha: Optional[str] = None
+                file_sha: str | None = None
                 patched_content: str
 
                 if file_path:
@@ -479,7 +480,7 @@ class GitHubPRPublisher:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_publisher: Optional[GitHubPRPublisher] = None
+_publisher: GitHubPRPublisher | None = None
 
 
 def get_pr_publisher() -> GitHubPRPublisher:

@@ -35,8 +35,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import pandas as pd
 
@@ -205,7 +205,7 @@ class MacroFeed:
     def __init__(self, cache_ttl_seconds: int = 3600):
         self._cache_ttl = cache_ttl_seconds
         self._cache: dict[str, Any] = {}
-        self._cache_ts: Optional[datetime] = None
+        self._cache_ts: datetime | None = None
 
     def _is_cache_fresh(self) -> bool:
         if self._cache_ts is None:
@@ -220,7 +220,7 @@ class MacroFeed:
         y2_df = _fetch_fred_sync(_SERIES_2Y, limit=5)
         cpi_df = _fetch_fred_sync(_SERIES_CPI, limit=3)
 
-        def _latest(df: pd.DataFrame, col: str) -> Optional[float]:
+        def _latest(df: pd.DataFrame, col: str) -> float | None:
             if df.empty:
                 return None
             return float(df.iloc[-1].iloc[0])
@@ -301,7 +301,7 @@ class MacroFeed:
             fetch_cpi(3),
         )
 
-        def _latest(df: pd.DataFrame) -> Optional[float]:
+        def _latest(df: pd.DataFrame) -> float | None:
             if df.empty:
                 return None
             return float(df.iloc[-1].iloc[0])
@@ -345,10 +345,10 @@ class MacroFeed:
 
 
 def _macro_regime_score(
-    dxy: Optional[float],
-    yield_10y: Optional[float],
-    yield_spread: Optional[float],
-    cpi_yoy: Optional[float],
+    dxy: float | None,
+    yield_10y: float | None,
+    yield_spread: float | None,
+    cpi_yoy: float | None,
 ) -> float:
     """
     Compute a 0–100 macro regime score for gold.
@@ -413,7 +413,7 @@ def _regime_label(score: float) -> str:
 
 # ── module-level singleton ────────────────────────────────────────────────────
 
-_feed: Optional[MacroFeed] = None
+_feed: MacroFeed | None = None
 
 
 def get_macro_feed() -> MacroFeed:

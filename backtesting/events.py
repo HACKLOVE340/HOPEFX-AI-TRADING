@@ -10,8 +10,7 @@ Defines events used in event-driven backtesting architecture.
 """
 
 from enum import Enum
-from typing import Optional
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 
 
 class EventType(Enum):
@@ -73,7 +72,7 @@ class OrderEvent(Event):
         order_type: str,
         quantity: float,
         direction: str,
-        price: Optional[float] = None,
+        price: float | None = None,
     ):
         """
         Initialize order event.

@@ -31,8 +31,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -65,7 +65,7 @@ def _save_sub_accounts(user_id: str, accounts: dict[str, Any]) -> None:
     db_set(_SUB_KEY.format(uid=user_id), accounts, changed_by=user_id)
 
 
-def _load_team(team_id: str) -> Optional[dict[str, Any]]:
+def _load_team(team_id: str) -> dict[str, Any] | None:
     from api.db_store import db_get
 
     return db_get(_TEAM_KEY.format(tid=team_id))
@@ -121,8 +121,8 @@ class CreateSubAccountRequest(BaseModel):
 
 
 class UpdateSubAccountRequest(BaseModel):
-    label: Optional[str] = Field(None, min_length=1, max_length=64)
-    active: Optional[bool] = None
+    label: str | None = Field(None, min_length=1, max_length=64)
+    active: bool | None = None
 
 
 class CreateTeamRequest(BaseModel):

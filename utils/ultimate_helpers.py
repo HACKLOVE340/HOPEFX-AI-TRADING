@@ -11,7 +11,8 @@ Helper functions for HOPEFX Ultimate
 import asyncio
 import time
 from functools import wraps
-from typing import Callable, Any
+from typing import Any
+from collections.abc import Callable
 import psutil
 
 try:

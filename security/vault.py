@@ -16,8 +16,7 @@ import logging
 import os
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
-from typing import Dict, Optional
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +47,14 @@ class HSMVault:
     def __init__(self, hsm_type: str = "software", key_store_path: str = "data/keys/"):
         self.hsm_type = hsm_type
         self.key_store_path = key_store_path
-        self._master_key: Optional[bytes] = None
+        self._master_key: bytes | None = None
         self._key_cache: dict[str, bytes] = {}
         self._initialized = False
 
         os.makedirs(key_store_path, exist_ok=True)
 
     def initialize(
-        self, password: Optional[str] = None, hardware_token: Optional[str] = None
+        self, password: str | None = None, hardware_token: str | None = None
     ) -> None:
         """
         Derive or generate the master key and mark the vault ready.
@@ -98,7 +97,7 @@ class HSMVault:
         logger.info("HSMVault initialised: %s", self.hsm_type)
 
     def _derive_key_software(
-        self, password: str, hardware_token: Optional[str]
+        self, password: str, hardware_token: str | None
     ) -> bytes:
         """PBKDF2 key derivation with hardware binding"""
         # Combine password with hardware fingerprint
@@ -138,7 +137,7 @@ class HSMVault:
         except ImportError:
             raise RuntimeError("YubiKey HSM library not installed") from None
 
-    def _derive_key_cloud(self, credential: Optional[str]) -> bytes:
+    def _derive_key_cloud(self, credential: str | None) -> bytes:
         """Cloud HSM key derivation — AWS KMS or Azure Key Vault.
 
         Provider is selected by environment variable CLOUD_HSM_PROVIDER:

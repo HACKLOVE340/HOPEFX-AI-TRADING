@@ -17,9 +17,8 @@ Tests for:
 import json
 import pytest
 import tempfile
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Optional
 from unittest.mock import patch
 
 from fastapi import FastAPI
@@ -409,7 +408,7 @@ def _make_signal(
     direction: SignalDirection = SignalDirection.BUY,
     confidence: float = 0.8,
     symbol: str = "XAUUSD",
-) -> Optional[TradingSignal]:
+) -> TradingSignal | None:
     """Helper to generate a valid signal."""
     return service.generate_signal(
         symbol=symbol,
@@ -1363,7 +1362,7 @@ class TestWebSocketManager:
 
     def test_on_disconnect_callback(self):
         fired = []
-        self.manager.on_disconnect(lambda cid: fired.append(cid))
+        self.manager.on_disconnect(lambda cid: fired.append(cid))  # noqa: PLW0108
         ws = _MockWebSocket()
         conn_id = self.manager.register_connection(ws)
         self.manager.unregister_connection(conn_id)

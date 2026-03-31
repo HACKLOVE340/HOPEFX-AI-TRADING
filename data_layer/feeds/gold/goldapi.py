@@ -18,7 +18,6 @@ API key header: x-access-token
 from __future__ import annotations
 
 import logging
-from typing import List
 
 from data_layer.feeds.gold.base import GoldFeedBase
 from data_layer.types import FeedSource, GoldTick, OHLCVBar

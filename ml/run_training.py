@@ -29,7 +29,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
 
 import pandas as pd

@@ -244,16 +244,15 @@ class TestTemplateContext:
 class TestTemplateRenderFailure:
     def test_render_failure_falls_back_to_none_html(self):
         """If render_email raises, _send is still called (log-only path returns True)."""
-        with _no_channel():
-            with patch(
-                "notifications.email_renderer.render_email",
-                side_effect=Exception("jinja2 missing"),
-            ):
-                from notifications.email_triggers import send_trade_fill_email
+        with _no_channel(), patch(
+            "notifications.email_renderer.render_email",
+            side_effect=Exception("jinja2 missing"),
+        ):
+            from notifications.email_triggers import send_trade_fill_email
 
-                # Should not raise
-                result = send_trade_fill_email(
-                    "XAUUSD", "buy", 0.1, 2050.0, to="t@example.com"
-                )
+            # Should not raise
+            result = send_trade_fill_email(
+                "XAUUSD", "buy", 0.1, 2050.0, to="t@example.com"
+            )
         # Log-only path returns True even with render failure
         assert result is True

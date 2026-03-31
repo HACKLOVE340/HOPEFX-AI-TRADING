@@ -88,9 +88,10 @@ import json
 import logging
 import os
 import tempfile
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ class ModelRegistry:
     snapshot because JSON is written to a temp file then renamed.
     """
 
-    def __init__(self, registry_path: Optional[Path] = None) -> None:
+    def __init__(self, registry_path: Path | None = None) -> None:
         self._path = registry_path or _REGISTRY_FILE
         self._path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -174,10 +175,8 @@ class ModelRegistry:
                 json.dump(manifest, fh, indent=2)
             Path(tmp_path).replace(self._path)
         except Exception:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp_path)
-            except OSError:
-                pass
             raise
 
     # ── Registration ──────────────────────────────────────────────────────────
@@ -438,7 +437,7 @@ class ModelRegistry:
 
     # ── Queries ───────────────────────────────────────────────────────────────
 
-    def active_version(self) -> Optional[dict[str, Any]]:
+    def active_version(self) -> dict[str, Any] | None:
         """Return the active production version entry, or None."""
         manifest = self._load()
         name = manifest.get("active_version")
@@ -446,7 +445,7 @@ class ModelRegistry:
             return None
         return manifest["versions"].get(name)
 
-    def active_path(self) -> Optional[Path]:
+    def active_path(self) -> Path | None:
         """Return the Path to the active model artifact, or None."""
         entry = self.active_version()
         if not entry:
@@ -457,7 +456,7 @@ class ModelRegistry:
         """Return all registered versions keyed by name."""
         return dict(self._load()["versions"])
 
-    def get_version(self, name: str) -> Optional[dict[str, Any]]:
+    def get_version(self, name: str) -> dict[str, Any] | None:
         """Return a single version entry by name, or None."""
         return self._load()["versions"].get(name)
 
@@ -474,11 +473,11 @@ class ModelRegistry:
 
     def bootstrap_from_meta(
         self,
-        meta_path: Optional[Path] = None,
-        model_path: Optional[Path] = None,
+        meta_path: Path | None = None,
+        model_path: Path | None = None,
         name: str = "advanced_oos_v1",
         promote: bool = False,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Seed the registry from an existing ``advanced_oos_meta.json``.
 
@@ -547,7 +546,7 @@ class ModelRegistry:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_registry: Optional[ModelRegistry] = None
+_registry: ModelRegistry | None = None
 
 
 def get_registry() -> ModelRegistry:

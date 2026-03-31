@@ -10,9 +10,10 @@ Event sourcing for complete audit trail and replay capability
 
 import logging
 import uuid
-from typing import Dict, List, Optional, Any, Callable
+from typing import Any
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
 from collections import defaultdict
 import asyncio
@@ -88,7 +89,7 @@ class DomainEvent:
         aggregate_id: str,
         aggregate_type: str,
         payload: dict[str, Any],
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> "DomainEvent":
         return cls(
             event_id=str(uuid.uuid4()),
@@ -117,7 +118,7 @@ class EventStore:
         self._subscribers: dict[EventType, list[Callable]] = defaultdict(list)
         self._event_buffer: list[DomainEvent] = []
         self._buffer_lock = asyncio.Lock()
-        self._flush_task: Optional[asyncio.Task] = None
+        self._flush_task: asyncio.Task | None = None
         self._running = False
 
         # In-memory store for quick access (limited size)
@@ -184,11 +185,11 @@ class EventStore:
 
     async def get_events(
         self,
-        aggregate_id: Optional[str] = None,
-        aggregate_type: Optional[str] = None,
-        event_types: Optional[list[EventType]] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        aggregate_id: str | None = None,
+        aggregate_type: str | None = None,
+        event_types: list[EventType] | None = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         limit: int = 100,
     ) -> list[DomainEvent]:
         """
@@ -281,7 +282,7 @@ class EventStore:
 
 
 # Global event store
-_event_store: Optional[EventStore] = None
+_event_store: EventStore | None = None
 
 
 def get_event_store() -> EventStore:
@@ -297,7 +298,7 @@ async def publish_event(
     aggregate_id: str,
     aggregate_type: str,
     payload: dict[str, Any],
-    metadata: Optional[dict] = None,
+    metadata: dict | None = None,
 ):
     """Convenience function to publish event"""
     event = DomainEvent.create(

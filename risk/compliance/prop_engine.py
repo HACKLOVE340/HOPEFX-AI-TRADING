@@ -34,10 +34,10 @@ import json
 import logging
 import threading
 from dataclasses import dataclass
-from datetime import datetime, time, timezone, UTC
+from datetime import datetime, time, UTC
 from enum import Enum, auto
 from pathlib import Path
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import requests
 
@@ -139,7 +139,7 @@ class PropComplianceEngine:
         self,
         config: PropFirmConfig,
         initial_equity: float = 100_000.0,
-        on_breach: Optional[Callable[[BreachType, str], None]] = None,
+        on_breach: Callable[[BreachType, str], None] | None = None,
     ) -> None:
         self.cfg = config
         self.kill_switch = KillSwitch()
@@ -204,7 +204,7 @@ class PropComplianceEngine:
 
     def before_order(
         self,
-        now: Optional[datetime] = None,
+        now: datetime | None = None,
     ) -> tuple[bool, str]:
         """
         Call before placing any order.
@@ -278,10 +278,7 @@ class PropComplianceEngine:
         from datetime import timedelta
 
         window = timedelta(minutes=self.cfg.news_blackout)
-        for event in self._news_events:
-            if abs((now - event).total_seconds()) <= window.total_seconds():
-                return True
-        return False
+        return any(abs((now - event).total_seconds()) <= window.total_seconds() for event in self._news_events)
 
     def _is_weekend_window(self, now: datetime) -> bool:
         """
@@ -295,9 +292,7 @@ class PropComplianceEngine:
             return True
         if weekday == 5:  # Saturday
             return True
-        if weekday == 6 and t < time(23, 0):  # Sunday before 23:00
-            return True
-        return False
+        return weekday == 6 and t < time(23, 0)  # Sunday before 23:00
 
     def _breach(self, breach_type: BreachType, detail: str) -> None:
         """Handle a compliance breach: pause/kill + alert."""

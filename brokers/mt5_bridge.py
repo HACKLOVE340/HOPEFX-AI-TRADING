@@ -37,10 +37,10 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +89,9 @@ class MT5Order:
     side: OrderSide
     volume: float
     order_type: OrderType = OrderType.MARKET
-    price: Optional[float] = None
-    stop_loss: Optional[float] = None  # mandatory — bridge rejects if None/0
-    take_profit: Optional[float] = None
+    price: float | None = None
+    stop_loss: float | None = None  # mandatory — bridge rejects if None/0
+    take_profit: float | None = None
     deviation: int = 20
     magic: int = 234_001
     comment: str = "HOPEFX"
@@ -120,7 +120,7 @@ def _retry(max_attempts: int = 3, base_delay: float = 0.5):
     def decorator(fn):
         def wrapper(*args, **kwargs):
             delay = base_delay
-            last_exc: Optional[Exception] = None
+            last_exc: Exception | None = None
             for attempt in range(1, max_attempts + 1):
                 try:
                     return fn(*args, **kwargs)
@@ -255,8 +255,8 @@ class EX5SignalExporter:
         self,
         ticket: int,
         symbol: str,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> Path:
         """
         Write a MODIFY signal file for the MT5 EA to update SL/TP on an open position.
@@ -379,7 +379,7 @@ class MT5Bridge:
         server: str,
         login: int,
         password: str,
-        path: Optional[str] = None,
+        path: str | None = None,
         portable: bool = False,
         timeout_ms: int = 60_000,
         enforcer=None,
@@ -494,8 +494,7 @@ class MT5Bridge:
         sym_info = mt5.symbol_info(order.symbol)
         if sym_info is None:
             raise ValueError(f"Symbol {order.symbol!r} not found in MT5")
-        if not sym_info.visible:
-            if not mt5.symbol_select(order.symbol, True):
+        if not sym_info.visible and not mt5.symbol_select(order.symbol, True):
                 raise RuntimeError(f"Cannot select symbol {order.symbol!r}")
 
         tick = mt5.symbol_info_tick(order.symbol)
@@ -628,7 +627,7 @@ class MT5Bridge:
     def close_position(
         self,
         symbol: str,
-        volume: Optional[float] = None,
+        volume: float | None = None,
         deviation: int = 20,
         magic: int = 234_001,
         comment: str = "HOPEFX close",
@@ -760,8 +759,8 @@ class MT5Bridge:
         self,
         ticket: int,
         symbol: str,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> bool:
         """
         Modify stop-loss and/or take-profit on an open position or pending order.
@@ -859,7 +858,7 @@ class MT5Bridge:
     async def async_close_position(
         self,
         symbol: str,
-        volume: Optional[float] = None,
+        volume: float | None = None,
     ) -> list[MT5FillResult]:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.close_position, symbol, volume)
@@ -868,8 +867,8 @@ class MT5Bridge:
         self,
         ticket: int,
         symbol: str,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> bool:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(

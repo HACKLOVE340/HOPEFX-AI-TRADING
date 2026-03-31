@@ -25,7 +25,7 @@ Version: 1.2.0
 """
 
 import logging
-from typing import Optional
+from typing import Optional  # noqa: F401
 
 from .providers import (
     NewsProvider,
@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Singleton risk provider (lazy-initialised)
 # ---------------------------------------------------------------------------
-_risk_provider: Optional[GeopoliticalRiskProvider] = None
+_risk_provider: GeopoliticalRiskProvider | None = None
 
 
 def _get_risk_provider() -> GeopoliticalRiskProvider:
@@ -209,7 +209,7 @@ def create_news_router():
         Defaults to 24 hours. Only CRITICAL and HIGH importance events are returned.
         """
         try:
-            from datetime import datetime, timezone, timedelta
+            from datetime import datetime, timezone, timedelta  # noqa: F401
 
             calendar = EconomicCalendar()
             now = datetime.now(UTC)

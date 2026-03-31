@@ -36,8 +36,8 @@ Credential resolution
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import aiohttp
 
@@ -146,7 +146,7 @@ class OANDAStream:
             "Content-Type": "application/json",
             "Accept-Datetime-Format": "RFC3339",
         }
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     # ── Context manager ───────────────────────────────────────────────────────
 
@@ -201,7 +201,7 @@ class OANDAStream:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    async def get_account_info(self) -> Optional[AccountInfo]:
+    async def get_account_info(self) -> AccountInfo | None:
         """Fetch live account summary."""
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/summary"
@@ -295,10 +295,10 @@ class OANDAStream:
         side: OrderSide,
         units: float,
         order_type: OrderType = OrderType.MARKET,
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
-    ) -> Optional[Order]:
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+    ) -> Order | None:
         """Place a market or limit order."""
         signed_units = units if side == OrderSide.BUY else -units
         body: dict[str, Any] = {

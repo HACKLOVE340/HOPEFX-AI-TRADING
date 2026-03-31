@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -75,10 +75,10 @@ class PositionSizer:
         symbol: str,
         direction: str,
         entry_price: float,
-        stop_loss: Optional[float],
+        stop_loss: float | None,
         account_equity: float,
         confidence: float = 0.6,
-        ohlcv: Optional[Any] = None,
+        ohlcv: Any | None = None,
     ) -> float:
         """
         Compute position size in lots.
@@ -137,8 +137,8 @@ class PositionSizer:
         self,
         equity: float,
         entry: float,
-        stop_loss: Optional[float],
-        ohlcv: Optional[Any],
+        stop_loss: float | None,
+        ohlcv: Any | None,
     ) -> float:
         """
         Volatility-scaled sizing: risk a fixed % of equity per ATR unit.
@@ -214,7 +214,7 @@ class PositionSizer:
         return position_value / entry if entry > 0 else _MIN_LOTS
 
     @staticmethod
-    def _atr_distance(entry: float, ohlcv: Optional[Any]) -> float:
+    def _atr_distance(entry: float, ohlcv: Any | None) -> float:
         """Compute ATR(14) distance for SL fallback."""
         try:
             if ohlcv is not None and len(ohlcv) >= 15:
@@ -234,7 +234,7 @@ class PositionSizer:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_SIZER_SINGLETON: Optional[PositionSizer] = None
+_SIZER_SINGLETON: PositionSizer | None = None
 
 
 def get_position_sizer() -> PositionSizer:

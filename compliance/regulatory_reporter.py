@@ -58,9 +58,9 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -123,8 +123,8 @@ class ReportRecord:
     submitted_at: str
     status: str  # "submitted" | "failed" | "dlq" | "suppressed"
     attempts: int = 0
-    last_error: Optional[str] = None
-    response_code: Optional[int] = None
+    last_error: str | None = None
+    response_code: int | None = None
 
 
 class DeadLetterQueue:
@@ -180,8 +180,8 @@ class DeadLetterQueue:
         for dlq_file in sorted(self._path.glob("dlq_*.jsonl")):
             try:
                 with open(dlq_file) as fh:
-                    for line in fh:
-                        line = line.strip()
+                    for _line in fh:
+                        line = _line.strip()
                         if line:
                             entries.append(json.loads(line))
                 dlq_file.unlink()
@@ -527,13 +527,13 @@ class RegulatoryReporter:
         payload: dict,
         headers: dict,
         record: ReportRecord,
-    ) -> tuple[bool, Optional[int], Optional[str]]:
+    ) -> tuple[bool, int | None, str | None]:
         """
         Submit with exponential backoff retry. Returns (success, status_code, error).
         On final failure, enqueues to DLQ.
         """
-        last_error: Optional[str] = None
-        last_code: Optional[int] = None
+        last_error: str | None = None
+        last_code: int | None = None
 
         for attempt in range(1, _RETRY_MAX + 1):
             record.attempts = attempt
@@ -576,7 +576,7 @@ class RegulatoryReporter:
         endpoint: str,
         payload: dict,
         headers: dict,
-    ) -> tuple[bool, Optional[int], Optional[str]]:
+    ) -> tuple[bool, int | None, str | None]:
         """
         POST payload to endpoint. Returns (success, status_code, error_msg).
 
@@ -586,18 +586,17 @@ class RegulatoryReporter:
         try:
             import aiohttp
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    endpoint,
-                    json=payload,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=_TIMEOUT_S),
-                    ssl=True,
-                ) as resp:
-                    if resp.status in (200, 201, 202):
-                        return True, resp.status, None
-                    body = await resp.text()
-                    return False, resp.status, f"HTTP {resp.status}: {body[:200]}"
+            async with aiohttp.ClientSession() as session, session.post(
+                endpoint,
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=_TIMEOUT_S),
+                ssl=True,
+            ) as resp:
+                if resp.status in (200, 201, 202):
+                    return True, resp.status, None
+                body = await resp.text()
+                return False, resp.status, f"HTTP {resp.status}: {body[:200]}"
 
         except ImportError:
             # aiohttp not installed — use urllib (sync, wrapped in executor)
@@ -655,7 +654,7 @@ class RegulatoryReporter:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_reporter: Optional[RegulatoryReporter] = None
+_reporter: RegulatoryReporter | None = None
 
 
 def get_regulatory_reporter() -> RegulatoryReporter:

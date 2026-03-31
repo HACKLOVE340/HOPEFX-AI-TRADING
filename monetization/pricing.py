@@ -17,7 +17,6 @@ Annual subscriptions get 2 months free (16.67% discount).
 """
 
 from enum import Enum
-from typing import Dict, List, Optional
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -211,11 +210,11 @@ class PricingManager:
             ),
         }
 
-    def get_tier(self, tier: SubscriptionTier) -> Optional[PricingTier]:
+    def get_tier(self, tier: SubscriptionTier) -> PricingTier | None:
         """Get pricing tier by tier enum"""
         return self._tiers.get(tier)
 
-    def get_tier_by_name(self, tier_name: str) -> Optional[PricingTier]:
+    def get_tier_by_name(self, tier_name: str) -> PricingTier | None:
         """Get pricing tier by name"""
         try:
             tier_enum = SubscriptionTier(tier_name.lower())

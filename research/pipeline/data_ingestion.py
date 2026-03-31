@@ -32,9 +32,8 @@ import hashlib
 import logging
 import random
 import time
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import feedparser  # pip install feedparser
 import numpy as np
@@ -176,7 +175,7 @@ def _fill_gaps(df: pd.DataFrame) -> pd.DataFrame:
 def fetch_daily(
     ticker: str,
     start: str = "1980-01-01",
-    end: Optional[str] = None,
+    end: str | None = None,
     use_cache: bool = True,
 ) -> pd.DataFrame:
     """
@@ -350,7 +349,7 @@ DEFAULT_UNIVERSE: dict[str, list[str]] = {
 
 
 def fetch_universe(
-    universe: Optional[dict[str, list[str]]] = None,
+    universe: dict[str, list[str]] | None = None,
     interval: str = "1d",
     start: str = "1990-01-01",
     lookback_days: int = 365,
@@ -434,10 +433,7 @@ def fetch_rss_sentiment(
                     score = _score_headline(title)
 
                 published = getattr(entry, "published_parsed", None)
-                if published:
-                    ts = datetime(*published[:6], tzinfo=UTC)
-                else:
-                    ts = datetime.now(UTC)
+                ts = datetime(*published[:6], tzinfo=UTC) if published else datetime.now(UTC)
 
                 records.append(
                     {

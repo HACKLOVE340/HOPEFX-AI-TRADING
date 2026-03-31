@@ -15,9 +15,9 @@ import random
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, timezone, UTC  # noqa: F401
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # noqa: F401
 
 try:
     import aiohttp
@@ -28,7 +28,7 @@ except ImportError:
     logging.warning("aiohttp not available, OANDA broker disabled")
 
 try:
-    import numpy as np
+    import numpy as np  # noqa: F401
 
     NUMPY_AVAILABLE = True
 except ImportError:
@@ -65,14 +65,14 @@ class Order:
     side: OrderSide
     type: OrderType
     quantity: float
-    price: Optional[float] = None
-    stop_price: Optional[float] = None
+    price: float | None = None
+    stop_price: float | None = None
     status: OrderStatus = OrderStatus.PENDING
     filled_quantity: float = 0.0
     average_fill_price: float = 0.0
     created_at: float = field(default_factory=time.time)
-    filled_at: Optional[float] = None
-    rejected_reason: Optional[str] = None
+    filled_at: float | None = None
+    rejected_reason: str | None = None
     commission: float = 0.0
     slippage: float = 0.0
 
@@ -117,8 +117,8 @@ class Position:
     realized_pnl: float = 0.0
     opened_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     total_commission: float = 0.0
 
     @property
@@ -645,7 +645,7 @@ class PaperTradingBroker(BaseBroker):
             return
         try:
             import uuid as _uuid
-            from datetime import datetime, timezone
+            from datetime import datetime, timezone  # noqa: F401
 
             from database.models import OrderSide as DBOrderSide
             from database.models import Trade, TradeStatus
@@ -730,7 +730,7 @@ class PaperTradingBroker(BaseBroker):
         take_profit: float = None,
     ) -> "Order":
         """Synchronous order placement for unit tests."""
-        import asyncio as _asyncio
+        import asyncio as _asyncio  # noqa: F401
 
         from brokers.base import OrderSide as _OS
         from brokers.base import OrderStatus as _OSt
@@ -939,28 +939,27 @@ class OANDABroker(BaseBroker):
                 )
 
                 # Verify connection
-                async with self._rate_limiter:
-                    async with self._session.get(
-                        f"{self.base_url}/v3/accounts/{self.account_id}",
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            account = data.get("account", {})
+                async with self._rate_limiter, self._session.get(
+                    f"{self.base_url}/v3/accounts/{self.account_id}",
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        account = data.get("account", {})
 
-                            logger.info(
-                                f"OANDA Connected | "
-                                f"Balance: ${float(account.get('balance', 0)):,.2f} | "
-                                f"Currency: {account.get('currency', 'USD')} | "
-                                f"Practice: {self.practice}",
-                            )
+                        logger.info(
+                            f"OANDA Connected | "
+                            f"Balance: ${float(account.get('balance', 0)):,.2f} | "
+                            f"Currency: {account.get('currency', 'USD')} | "
+                            f"Practice: {self.practice}",
+                        )
 
-                            self.connected = True
-                            return True
-                        else:
-                            error_data = await resp.text()
-                            raise ConnectionError(
-                                f"OANDA error {resp.status}: {error_data}",
-                            )
+                        self.connected = True
+                        return True
+                    else:
+                        error_data = await resp.text()
+                        raise ConnectionError(
+                            f"OANDA error {resp.status}: {error_data}",
+                        )
 
             except Exception as e:
                 logger.error(f"Connection attempt {attempt + 1} failed: {e}")
@@ -1191,7 +1190,7 @@ class OANDABroker(BaseBroker):
                 Order(
                     id=order_data.get("id", ""),
                     symbol=order_data.get("instrument", "").replace("_", "/"),
-                    side=OrderSide(order_data.get("units", 0) > 0 and "buy" or "sell"),
+                    side=OrderSide((order_data.get("units", 0) > 0 and "buy") or "sell"),
                     type=OrderType(order_data.get("type", "MARKET").lower()),
                     quantity=abs(float(order_data.get("units", 0))),
                     price=float(order_data.get("price", 0))
@@ -1245,27 +1244,27 @@ except Exception as _exc:
     _logging.getLogger(__name__).warning("PaperTradingBroker import failed: %s", _exc)
 
 
-from brokers.factory import BrokerFactory
+from brokers.factory import BrokerFactory  # noqa: F401
 
 # ── YAML-config-based broker implementations ──────────────────────────────────
 # These complement the existing connector classes and are used by the new
 # yaml-driven BrokerFactory (config/brokers.yaml).
 try:
-    from brokers.mt5_broker import MT5Broker
+    from brokers.mt5_broker import MT5Broker  # noqa: F401
 except Exception as _exc:
     import logging as _logging
 
     _logging.getLogger(__name__).debug("MT5Broker unavailable: %s", _exc)
 
 try:
-    from brokers.oanda_broker import OandaBroker as OandaBrokerYaml
+    from brokers.oanda_broker import OandaBroker as OandaBrokerYaml  # noqa: F401
 except Exception as _exc:
     import logging as _logging
 
     _logging.getLogger(__name__).debug("OandaBroker (yaml) unavailable: %s", _exc)
 
 try:
-    from brokers.ibkr_broker import IBKRBroker
+    from brokers.ibkr_broker import IBKRBroker  # noqa: F401
 except Exception as _exc:
     import logging as _logging
 

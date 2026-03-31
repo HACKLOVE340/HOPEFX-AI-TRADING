@@ -12,7 +12,6 @@ FIA 2024 Security Standards Compliant
 import os
 import hashlib
 import base64
-from typing import Optional
 from cryptography.fernet import Fernet
 import logging
 
@@ -29,9 +28,9 @@ class KeyManager:
     """
 
     def __init__(self):
-        self._master_key: Optional[bytes] = None
-        self._key_id: Optional[str] = None
-        self._rotation_date: Optional[str] = None
+        self._master_key: bytes | None = None
+        self._key_id: str | None = None
+        self._rotation_date: str | None = None
 
     def initialize(self, require_production_key: bool = True) -> None:
         """

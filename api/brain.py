@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -52,9 +51,9 @@ class GenerateResponse(BaseModel):
     success: bool
     strategy_name: str
     strategy_code: str
-    backtest: Optional[BacktestSummary]
+    backtest: BacktestSummary | None
     iterations: int
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class DeployRequest(BaseModel):
@@ -67,7 +66,7 @@ class DeployRequest(BaseModel):
 class DeployResponse(BaseModel):
     success: bool
     message: str
-    strategy_id: Optional[str] = None
+    strategy_id: str | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

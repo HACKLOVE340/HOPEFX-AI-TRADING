@@ -14,8 +14,8 @@ Production Mobile API v2.0
 """
 
 import logging
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta, timezone, UTC
+from typing import Any
+from datetime import datetime, timedelta, UTC
 import uuid
 import asyncio
 
@@ -98,9 +98,9 @@ class PlaceOrderRequest(BaseModel):
     side: str = Field(..., pattern="^(BUY|SELL)$")
     order_type: str = Field(..., pattern="^(MARKET|LIMIT|STOP)$")
     quantity: float = Field(..., gt=0)
-    price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    price: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     comment: str = ""
 
 

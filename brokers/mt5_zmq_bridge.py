@@ -68,10 +68,10 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
 from queue import Empty, Queue
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +120,8 @@ class FillResult:
     lots: float
     fill_price: float
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    error_code: Optional[int] = None
-    error_msg: Optional[str] = None
+    error_code: int | None = None
+    error_msg: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -152,7 +152,7 @@ class BridgeStats:
     fills_received: int = 0
     errors_received: int = 0
     ticks_received: int = 0
-    last_heartbeat: Optional[datetime] = None
+    last_heartbeat: datetime | None = None
     latency_ms: float = 0.0
 
 
@@ -195,11 +195,11 @@ class MT5ZmqBridge:
         self._tick_callbacks: list[Callable[[TickData], None]] = []
 
         # ZMQ context and sockets (None until start())
-        self._ctx: Optional[object] = None
-        self._push: Optional[object] = None
-        self._pull: Optional[object] = None
-        self._pub: Optional[object] = None
-        self._recv_thread: Optional[threading.Thread] = None
+        self._ctx: object | None = None
+        self._push: object | None = None
+        self._pull: object | None = None
+        self._pub: object | None = None
+        self._recv_thread: threading.Thread | None = None
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -286,8 +286,8 @@ class MT5ZmqBridge:
         symbol: str,
         side: str,
         lots: float,
-        sl: Optional[float] = None,
-        tp: Optional[float] = None,
+        sl: float | None = None,
+        tp: float | None = None,
         comment: str = "hopefx",
     ) -> FillResult:
         """
@@ -324,7 +324,7 @@ class MT5ZmqBridge:
 
         return self._send_and_wait(cmd_id, payload, symbol=symbol, side=side, lots=lots)
 
-    def close_position(self, ticket: int, lots: Optional[float] = None) -> FillResult:
+    def close_position(self, ticket: int, lots: float | None = None) -> FillResult:
         """
         Close an open MT5 position by ticket number.
 
@@ -346,8 +346,8 @@ class MT5ZmqBridge:
     def modify_position(
         self,
         ticket: int,
-        sl: Optional[float] = None,
-        tp: Optional[float] = None,
+        sl: float | None = None,
+        tp: float | None = None,
     ) -> FillResult:
         """Modify SL/TP on an open MT5 position."""
         cmd_id = str(uuid.uuid4())
@@ -570,7 +570,7 @@ class MT5ZmqBridge:
 
 # ── module-level singleton ────────────────────────────────────────────────────
 
-_bridge: Optional[MT5ZmqBridge] = None
+_bridge: MT5ZmqBridge | None = None
 
 
 def get_bridge() -> MT5ZmqBridge:

@@ -29,14 +29,14 @@ import logging
 import threading
 import time
 from collections import deque
-from datetime import datetime, timezone, UTC
-from typing import Dict, Optional, Tuple
+from datetime import datetime, UTC
 
 import os
 
 import numpy as np
 
 from data_layer.types import FeedSource, GoldTick, QualityReport, TickQuality
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +191,7 @@ class DataQualityEngine:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def validate_tick(
-        self, tick: GoldTick, received_at: Optional[float] = None
+        self, tick: GoldTick, received_at: float | None = None
     ) -> GoldTick:
         """
         Validate a raw tick from any gold feed.
@@ -415,12 +415,10 @@ class DataQualityEngine:
                     diff_pct,
                 )
                 if self._prom_rejected:
-                    try:
+                    with contextlib.suppress(Exception):
                         self._prom_rejected.labels(
-                            source=src.value, reason="cross_source_outlier"
+                        source=src.value, reason="cross_source_outlier"
                         ).inc()
-                    except Exception:  # nosec B110 - Prometheus metric failure must not affect quality engine
-                        pass
             else:
                 inliers[src] = t
 
@@ -467,7 +465,7 @@ class DataQualityEngine:
             }
         return out
 
-    def best_source(self) -> Optional[FeedSource]:
+    def best_source(self) -> FeedSource | None:
         """Return the highest-confidence non-stale source."""
         candidates = [
             (src, state)

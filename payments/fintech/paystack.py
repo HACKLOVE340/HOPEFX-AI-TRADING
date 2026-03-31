@@ -10,9 +10,8 @@ Handles payments via Paystack (Nigeria) - Bank transfer, Cards, USSD.
 """
 
 import os
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Dict, Optional
 import logging
 import hashlib
 
@@ -25,7 +24,7 @@ class PaystackClient:
     FEE_PERCENT = Decimal("0.015")  # 1.5%
     FEE_CAP_NGN = Decimal("100.00")  # ₦100 cap
 
-    def __init__(self, secret_key: Optional[str] = None):
+    def __init__(self, secret_key: str | None = None):
         if not secret_key:
             raise ValueError(
                 "PaystackClient requires a secret key. "
@@ -98,6 +97,6 @@ class PaystackClient:
 # importing this module in environments without payment credentials does not
 # raise at import time. Callers must check for None before using.
 _paystack_secret = os.getenv("PAYSTACK_SECRET_KEY")
-paystack_client: Optional[PaystackClient] = (
+paystack_client: PaystackClient | None = (
     PaystackClient(_paystack_secret) if _paystack_secret else None
 )

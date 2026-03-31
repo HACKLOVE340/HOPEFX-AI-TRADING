@@ -10,9 +10,9 @@ LSTM, XGBoost, Random Forest with model saving/loading, hyperparameter tuning, e
 
 import json
 import warnings
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import joblib
 import numpy as np
@@ -54,11 +54,11 @@ except ImportError:
 # Enhanced macro + regime features (DXY, VIX, yields, SPX cross-asset)
 try:
     from ml.macro_features import (
-        MACRO_COLUMNS,
+        MACRO_COLUMNS,  # noqa: F401
         add_macro_features,
         add_regime_features,
-        build_enhanced_feature_matrix,
-        fetch_macro_history,
+        build_enhanced_feature_matrix,  # noqa: F401
+        fetch_macro_history,  # noqa: F401
     )
 
     ENHANCED_MACRO_AVAILABLE = True
@@ -67,14 +67,14 @@ except ImportError:
 
 # TensorFlow/Keras
 try:
-    import tensorflow as tf
+    import tensorflow as tf  # noqa: F401
     from tensorflow.keras.callbacks import (
         EarlyStopping,
         ModelCheckpoint,
         ReduceLROnPlateau,
     )
-    from tensorflow.keras.layers import GRU, LSTM, Bidirectional, Dense, Dropout
-    from tensorflow.keras.models import Sequential, load_model, save_model
+    from tensorflow.keras.layers import GRU, LSTM, Bidirectional, Dense, Dropout  # noqa: F401
+    from tensorflow.keras.models import Sequential, load_model, save_model  # noqa: F401
     from tensorflow.keras.optimizers import Adam
 
     TENSORFLOW_AVAILABLE = True
@@ -91,7 +91,7 @@ class FeatureEngineer:
         include_lags: bool = True,
         include_macro: bool = True,
         include_regime: bool = True,
-        macro_df: Optional[pd.DataFrame] = None,
+        macro_df: pd.DataFrame | None = None,
     ):
         self.include_indicators = include_indicators
         self.include_lags = include_lags
@@ -285,8 +285,8 @@ class FeatureEngineer:
     def scale_features(
         self,
         X_train: pd.DataFrame,
-        X_test: Optional[pd.DataFrame] = None,
-    ) -> tuple[np.ndarray, Optional[np.ndarray]]:
+        X_test: pd.DataFrame | None = None,
+    ) -> tuple[np.ndarray, np.ndarray | None]:
         """Scale features using StandardScaler"""
         X_train_scaled = self.scaler.fit_transform(X_train)
 
@@ -372,8 +372,8 @@ class LSTMModel:
         self.learning_rate = learning_rate
         self.model_name = model_name
 
-        self.model: Optional[Any] = None  # tf.keras.Model when TF available
-        self.history: Optional[Any] = None
+        self.model: Any | None = None  # tf.keras.Model when TF available
+        self.history: Any | None = None
         self.scaler = MinMaxScaler(feature_range=(0, 1))
 
     def build_model(self) -> Any:
@@ -410,8 +410,8 @@ class LSTMModel:
     def prepare_sequences(
         self,
         data: np.ndarray,
-        target: Optional[np.ndarray] = None,
-    ) -> tuple[np.ndarray, Optional[np.ndarray]]:
+        target: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, np.ndarray | None]:
         """Create sequences for LSTM input"""
         X, y = [], []
 
@@ -429,8 +429,8 @@ class LSTMModel:
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
-        X_val: Optional[np.ndarray] = None,
-        y_val: Optional[np.ndarray] = None,
+        X_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
         epochs: int = 100,
         batch_size: int = 32,
         patience: int = 15,
@@ -572,7 +572,7 @@ class XGBoostModel:
     def __init__(
         self,
         model_type: str = "classifier",  # 'classifier' or 'regressor'
-        params: Optional[dict] = None,
+        params: dict | None = None,
         model_name: str = "xgboost_model",
     ):
         if not XGBOOST_AVAILABLE:
@@ -581,8 +581,8 @@ class XGBoostModel:
         self.model_type = model_type
         self.model_name = model_name
         self.params = params or self._default_params()
-        self.model: Optional[Any] = None
-        self.feature_importance: Optional[pd.DataFrame] = None
+        self.model: Any | None = None
+        self.feature_importance: pd.DataFrame | None = None
 
     def _default_params(self) -> dict:
         """Default XGBoost parameters"""
@@ -623,8 +623,8 @@ class XGBoostModel:
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
-        X_val: Optional[np.ndarray] = None,
-        y_val: Optional[np.ndarray] = None,
+        X_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
         early_stopping_rounds: int = 10,
     ) -> dict:
         """Train XGBoost model"""
@@ -787,7 +787,7 @@ class RandomForestModel:
         self,
         model_type: str = "classifier",
         n_estimators: int = 200,
-        max_depth: Optional[int] = None,
+        max_depth: int | None = None,
         min_samples_split: int = 2,
         random_state: int = 42,
         model_name: str = "random_forest_model",
@@ -799,8 +799,8 @@ class RandomForestModel:
         self.random_state = random_state
         self.model_name = model_name
 
-        self.model: Optional[Any] = None
-        self.feature_importance: Optional[pd.DataFrame] = None
+        self.model: Any | None = None
+        self.feature_importance: pd.DataFrame | None = None
 
     def build_model(self):
         """Build Random Forest model"""
@@ -946,8 +946,8 @@ class EnsembleModel:
 
     def __init__(
         self,
-        models: Optional[dict[str, Any]] = None,
-        weights: Optional[list[float]] = None,
+        models: dict[str, Any] | None = None,
+        weights: list[float] | None = None,
         voting: str = "soft",  # 'soft' or 'hard'
     ):
         self.models = models or {}
@@ -1013,14 +1013,14 @@ class HyperparameterTuner:
 
     def __init__(self, model_type: str = "xgboost"):
         self.model_type = model_type
-        self.best_params: Optional[dict] = None
-        self.cv_results: Optional[pd.DataFrame] = None
+        self.best_params: dict | None = None
+        self.cv_results: pd.DataFrame | None = None
 
     def tune_xgboost(
         self,
         X: np.ndarray,
         y: np.ndarray,
-        param_grid: Optional[dict] = None,
+        param_grid: dict | None = None,
         cv: int = 3,
         scoring: str = "f1",
     ) -> dict:
@@ -1072,7 +1072,7 @@ class HyperparameterTuner:
         self,
         X: np.ndarray,
         y: np.ndarray,
-        param_grid: Optional[dict] = None,
+        param_grid: dict | None = None,
         cv: int = 3,
         scoring: str = "f1",
         n_iter: int = 20,
@@ -1144,7 +1144,7 @@ class MLEvaluationReport:
         metrics: dict[str, Any],
         y_true: np.ndarray,
         y_pred: np.ndarray,
-        feature_importance: Optional[pd.DataFrame] = None,
+        feature_importance: pd.DataFrame | None = None,
     ) -> str:
         """Generate comprehensive evaluation report"""
 
@@ -1301,7 +1301,6 @@ def train_ml_pipeline(
             # Determine date range from the full df (train + test)
             _idx = df.index if hasattr(df.index, "min") else pd.RangeIndex(len(df))
             if hasattr(_idx, "min") and hasattr(_idx[0], "year"):
-                from datetime import timezone as _tz
 
                 _start = (
                     pd.Timestamp(_idx.min()).to_pydatetime().replace(tzinfo=UTC)
@@ -1310,7 +1309,6 @@ def train_ml_pipeline(
             else:
                 from datetime import datetime as _dt
                 from datetime import timedelta as _td
-                from datetime import timezone as _tz
 
                 _end = _dt.now(UTC)
                 _start = _end - _td(days=len(df) + 30)
@@ -1523,7 +1521,7 @@ def walk_forward_validate(
     n_splits: int = 5,
     gap: int = 20,
     prediction_horizon: int = 1,
-    min_train_size: Optional[int] = None,
+    min_train_size: int | None = None,
 ) -> dict[str, Any]:
     """
     Walk-forward (anchored expanding-window) cross-validation for time-series ML.

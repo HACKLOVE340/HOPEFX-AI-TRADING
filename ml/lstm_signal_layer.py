@@ -73,7 +73,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -117,7 +117,7 @@ class LSTMSignalLayer:
         self._model_path = Path(model_path)
         self._seq_len = seq_len
         self._min_bars = max(min_bars, seq_len + 1)
-        self._predictor: Optional[object] = None  # DeepPredictor, lazy-loaded
+        self._predictor: object | None = None  # DeepPredictor, lazy-loaded
         self._loaded: bool = False
         self._load_attempted: bool = False
         self._n_features: int = 0
@@ -347,11 +347,11 @@ class LSTMSignalLayer:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_lstm_layer: Optional[LSTMSignalLayer] = None
+_lstm_layer: LSTMSignalLayer | None = None
 
 
 def get_lstm_signal_layer(
-    model_path: Optional[Path] = None,
+    model_path: Path | None = None,
     seq_len: int = LSTM_SEQ_LEN,
     min_bars: int = LSTM_MIN_BARS,
 ) -> LSTMSignalLayer:

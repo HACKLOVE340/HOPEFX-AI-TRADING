@@ -46,9 +46,8 @@ import asyncio
 import csv
 import logging
 import os
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -154,8 +153,8 @@ async def _fetch_oanda(
     symbol: str,
     granularity: str,
     count: int = 500,
-    from_dt: Optional[datetime] = None,
-    to_dt: Optional[datetime] = None,
+    from_dt: datetime | None = None,
+    to_dt: datetime | None = None,
 ) -> list[dict]:
     """
     Fetch OHLCV bars from OANDA REST API.
@@ -200,24 +199,23 @@ async def _fetch_oanda(
 
     try:
         timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url, headers=headers, params=params, timeout=timeout
-            ) as resp:
-                if resp.status == 401:
-                    logger.error("OANDA auth failed (401) — check OANDA_API_KEY")
-                    return []
-                if resp.status == 400:
-                    text = await resp.text()
-                    logger.error("OANDA bad request (400): %s", text[:300])
-                    return []
-                if resp.status != 200:
-                    text = await resp.text()
-                    logger.error(
-                        "OANDA fetch failed status=%d: %s", resp.status, text[:200]
-                    )
-                    return []
-                data = await resp.json()
+        async with aiohttp.ClientSession() as session, session.get(
+            url, headers=headers, params=params, timeout=timeout
+        ) as resp:
+            if resp.status == 401:
+                logger.error("OANDA auth failed (401) — check OANDA_API_KEY")
+                return []
+            if resp.status == 400:
+                text = await resp.text()
+                logger.error("OANDA bad request (400): %s", text[:300])
+                return []
+            if resp.status != 200:
+                text = await resp.text()
+                logger.error(
+                    "OANDA fetch failed status=%d: %s", resp.status, text[:200]
+                )
+                return []
+            data = await resp.json()
     except TimeoutError:
         logger.error("OANDA fetch timed out for %s/%s", symbol, granularity)
         return []
@@ -262,7 +260,7 @@ async def _fetch_oanda(
 async def _fetch_yfinance(
     symbol: str,
     granularity: str = "H1",
-    from_dt: Optional[datetime] = None,
+    from_dt: datetime | None = None,
 ) -> list[dict]:
     """
     Fetch bars via yfinance as a fallback when OANDA credentials are absent.
@@ -379,7 +377,7 @@ def _load_existing_timestamps(path: Path) -> set:
     return timestamps
 
 
-def _get_last_timestamp(path: Path) -> Optional[str]:
+def _get_last_timestamp(path: Path) -> str | None:
     """Return the most recent timestamp string in the CSV, or None."""
     existing = _load_existing_timestamps(path)
     if not existing:
@@ -435,7 +433,7 @@ async def _update_timeframe(
     path = _csv_path(symbol, granularity)
     last_ts = _get_last_timestamp(path)
 
-    from_dt: Optional[datetime] = None
+    from_dt: datetime | None = None
     if last_ts:
         try:
             from_dt = datetime.fromisoformat(last_ts).replace(tzinfo=UTC)
@@ -574,8 +572,8 @@ class DataScheduler:
 async def backfill(
     symbol: str = _SYMBOL,
     granularity: str = "H1",
-    from_date: Optional[datetime] = None,
-    to_date: Optional[datetime] = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
 ) -> int:
     """
     Backfill historical OHLCV data from OANDA practice API.

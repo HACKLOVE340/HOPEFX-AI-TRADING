@@ -31,8 +31,8 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Dict, Optional
+from datetime import datetime, timedelta, UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ class SecurityService:
 
     def __init__(
         self,
-        secret_key: Optional[str] = None,
+        secret_key: str | None = None,
         algorithm: str = _ALGORITHM,
         access_token_expire_minutes: int = _ACCESS_TOKEN_EXPIRE_MINUTES,
         refresh_token_expire_days: int = _REFRESH_TOKEN_EXPIRE_DAYS,
@@ -101,7 +101,7 @@ class SecurityService:
     # ── Token creation ────────────────────────────────────────────────────────
 
     def create_access_token(
-        self, data: dict[str, Any], expires_delta: Optional[timedelta] = None
+        self, data: dict[str, Any], expires_delta: timedelta | None = None
     ) -> str:
         """Create a signed JWT access token. Payload must include 'sub'."""
         if not _JWT_AVAILABLE:
@@ -119,7 +119,7 @@ class SecurityService:
         return _jwt.encode(payload, self._secret, algorithm=self._algorithm)
 
     def create_refresh_token(
-        self, data: dict[str, Any], expires_delta: Optional[timedelta] = None
+        self, data: dict[str, Any], expires_delta: timedelta | None = None
     ) -> str:
         """Create a signed JWT refresh token (longer-lived)."""
         if not _JWT_AVAILABLE:
@@ -164,7 +164,7 @@ class SecurityService:
             )
         return payload
 
-    def get_token_jti(self, token: str) -> Optional[str]:
+    def get_token_jti(self, token: str) -> str | None:
         """Extract JTI without full verification — for revocation lookups."""
         if not _JWT_AVAILABLE:
             return None
@@ -233,7 +233,7 @@ class SecurityService:
 
 # ── Module-level convenience functions ───────────────────────────────────────
 
-_default_service: Optional[SecurityService] = None
+_default_service: SecurityService | None = None
 
 
 def _get_default_service() -> SecurityService:
@@ -244,13 +244,13 @@ def _get_default_service() -> SecurityService:
 
 
 def create_access_token(
-    data: dict[str, Any], expires_delta: Optional[timedelta] = None
+    data: dict[str, Any], expires_delta: timedelta | None = None
 ) -> str:
     return _get_default_service().create_access_token(data, expires_delta)
 
 
 def create_refresh_token(
-    data: dict[str, Any], expires_delta: Optional[timedelta] = None
+    data: dict[str, Any], expires_delta: timedelta | None = None
 ) -> str:
     return _get_default_service().create_refresh_token(data, expires_delta)
 

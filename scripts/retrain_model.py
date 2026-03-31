@@ -35,14 +35,14 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 # Ensure project root is on the path regardless of where the script is called from
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 
-import pandas as pd  # noqa: E402
+import pandas as pd
 
 logging.basicConfig(
     level=logging.INFO,
@@ -191,7 +191,7 @@ def retrain(
     # Write manifest
     manifest = {
         "symbol": symbol,
-        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "trained_at": datetime.now(UTC).isoformat(),
         "data_rows": len(df),
         "years_requested": years,
         "models": {},

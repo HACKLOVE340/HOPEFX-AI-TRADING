@@ -16,10 +16,9 @@ Author: HOPEFX Development Team
 """
 
 import logging
-from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +56,11 @@ class EconomicEvent:
     importance: EventImportance
     scheduled_time: datetime
     country: str
-    actual: Optional[float] = None
-    forecast: Optional[float] = None
-    previous: Optional[float] = None
-    currency: Optional[str] = None
-    description: Optional[str] = None
+    actual: float | None = None
+    forecast: float | None = None
+    previous: float | None = None
+    currency: str | None = None
+    description: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary"""
@@ -90,7 +89,7 @@ class EconomicEvent:
         diff_pct = abs((self.actual - self.forecast) / self.forecast)
         return diff_pct > threshold
 
-    def get_impact_direction(self) -> Optional[str]:
+    def get_impact_direction(self) -> str | None:
         """Determine if event is bullish or bearish for currency"""
         if self.actual is None or self.forecast is None:
             return None
@@ -133,7 +132,7 @@ class EconomicCalendar:
         self.events.sort(key=lambda x: x.scheduled_time)
 
     def get_upcoming_events(
-        self, hours_ahead: int = 24, min_importance: Optional[EventImportance] = None
+        self, hours_ahead: int = 24, min_importance: EventImportance | None = None
     ) -> list[EconomicEvent]:
         """
         Get upcoming events
@@ -296,12 +295,11 @@ class EconomicCalendar:
         return sample_events
 
     def update_event_actual(
-        self, title: str, actual: float, scheduled_time: Optional[datetime] = None
+        self, title: str, actual: float, scheduled_time: datetime | None = None
     ):
         """Update actual value for an event after it occurs"""
         for event in self.events:
-            if event.title == title:
-                if scheduled_time is None or event.scheduled_time == scheduled_time:
+            if event.title == title and (scheduled_time is None or event.scheduled_time == scheduled_time):
                     event.actual = actual
                     self.logger.info(f"Updated {title}: actual={actual}")
                     return event

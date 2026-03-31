@@ -9,9 +9,8 @@ Bank Transfer Integration
 Direct bank transfer handling for Nigerian banks.
 """
 
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Dict
 import logging
 
 logger = logging.getLogger(__name__)

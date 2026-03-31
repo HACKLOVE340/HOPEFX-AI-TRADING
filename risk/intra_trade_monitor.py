@@ -38,8 +38,8 @@ import logging
 import os
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Any, Deque, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import numpy as np
 
@@ -145,7 +145,7 @@ class IntraTradeMonitor:
             position.entry_price,
         )
 
-    def on_close(self, position_id: str, close_price: float) -> Optional[float]:
+    def on_close(self, position_id: str, close_price: float) -> float | None:
         """Remove position and return realised PnL."""
         pos = self._positions.pop(position_id, None)
         if pos is None:

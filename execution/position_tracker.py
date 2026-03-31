@@ -12,8 +12,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +32,8 @@ class Position:
     commission: float = 0.0
     opened_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
     def update_price(self, new_price: float):
         """Update position with new price"""
@@ -95,7 +94,7 @@ class PositionTracker:
         position_id: str,
         exit_price: float,
         commission: float = 0,
-    ) -> Optional[Position]:
+    ) -> Position | None:
         """Close position"""
         async with self._lock:
             if position_id not in self.positions:
@@ -133,7 +132,7 @@ class PositionTracker:
                 if pos_id in self.positions:
                     self.positions[pos_id].update_price(price)
 
-    def get_position(self, position_id: str) -> Optional[Position]:
+    def get_position(self, position_id: str) -> Position | None:
         """Get position by ID"""
         return self.positions.get(position_id)
 
@@ -145,7 +144,7 @@ class PositionTracker:
         """Get all positions"""
         return list(self.positions.values())
 
-    def get_exposure(self, symbol: Optional[str] = None) -> dict[str, float]:
+    def get_exposure(self, symbol: str | None = None) -> dict[str, float]:
         """Get total exposure"""
         if symbol:
             positions = self.get_positions_by_symbol(symbol)

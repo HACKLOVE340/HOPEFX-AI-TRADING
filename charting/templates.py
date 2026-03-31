@@ -7,8 +7,8 @@
 Chart Template Management
 """
 
-from typing import Dict, Any
-from datetime import datetime, timezone, UTC
+from typing import Any
+from datetime import datetime, UTC
 
 
 class ChartTemplate:

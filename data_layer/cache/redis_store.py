@@ -44,7 +44,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -163,8 +163,8 @@ class DataLayerRedisStore:
                 from redis.sentinel import Sentinel  # type: ignore[import]
 
                 sentinels = []
-                for part in sentinel_hosts_raw.split(","):
-                    part = part.strip()
+                for _part in sentinel_hosts_raw.split(","):
+                    part = _part.strip()
                     if ":" in part:
                         host, port_s = part.rsplit(":", 1)
                         sentinels.append((host.strip(), int(port_s.strip())))
@@ -254,7 +254,7 @@ class DataLayerRedisStore:
             logger.debug("Redis set error key=%s: %s", key, exc)
             return False
 
-    def _safe_get(self, key: str) -> Optional[str]:
+    def _safe_get(self, key: str) -> str | None:
         if not self._r:
             return None
         try:
@@ -320,7 +320,7 @@ class DataLayerRedisStore:
             except Exception as exc:
                 logger.debug("Redis tick_history error: %s", exc)
 
-    def get_tick(self, symbol: str) -> Optional[dict[str, Any]]:
+    def get_tick(self, symbol: str) -> dict[str, Any] | None:
         raw = self._safe_get(self._key("tick", symbol))
         if raw:
             try:
@@ -376,7 +376,7 @@ class DataLayerRedisStore:
             logger.debug("Redis ohlcv get error: %s", exc)
             return []
 
-    def get_latest_bar(self, symbol: str, timeframe: str) -> Optional[dict[str, Any]]:
+    def get_latest_bar(self, symbol: str, timeframe: str) -> dict[str, Any] | None:
         raw = self._safe_get(self._key("ohlcv_latest", symbol, timeframe))
         if raw:
             try:
@@ -390,7 +390,7 @@ class DataLayerRedisStore:
     def set_microstructure(self, symbol: str, snap: dict[str, Any]) -> None:
         self._safe_set(self._key("micro", symbol), json.dumps(snap), _MICRO_TTL)
 
-    def get_microstructure(self, symbol: str) -> Optional[dict[str, Any]]:
+    def get_microstructure(self, symbol: str) -> dict[str, Any] | None:
         raw = self._safe_get(self._key("micro", symbol))
         return json.loads(raw) if raw else None
 
@@ -399,7 +399,7 @@ class DataLayerRedisStore:
     def set_sentiment(self, signal: dict[str, float]) -> None:
         self._safe_set(self._key("sentiment"), json.dumps(signal), _SENTIMENT_TTL)
 
-    def get_sentiment(self) -> Optional[dict[str, float]]:
+    def get_sentiment(self) -> dict[str, float] | None:
         raw = self._safe_get(self._key("sentiment"))
         return json.loads(raw) if raw else None
 
@@ -408,7 +408,7 @@ class DataLayerRedisStore:
     def set_macro_features(self, features: dict[str, float]) -> None:
         self._safe_set(self._key("macro_features"), json.dumps(features), _MACRO_TTL)
 
-    def get_macro_features(self) -> Optional[dict[str, float]]:
+    def get_macro_features(self) -> dict[str, float] | None:
         raw = self._safe_get(self._key("macro_features"))
         return json.loads(raw) if raw else None
 
@@ -417,7 +417,7 @@ class DataLayerRedisStore:
     def set_calendar_impact(self, score: float) -> None:
         self._safe_set(self._key("calendar_impact"), str(score), _CALENDAR_TTL)
 
-    def get_calendar_impact(self) -> Optional[float]:
+    def get_calendar_impact(self) -> float | None:
         raw = self._safe_get(self._key("calendar_impact"))
         try:
             return float(raw) if raw else None
@@ -431,7 +431,7 @@ class DataLayerRedisStore:
             self._key("quality_report", symbol), json.dumps(report), _QUALITY_TTL
         )
 
-    def get_quality_report(self, symbol: str) -> Optional[dict[str, Any]]:
+    def get_quality_report(self, symbol: str) -> dict[str, Any] | None:
         raw = self._safe_get(self._key("quality_report", symbol))
         return json.loads(raw) if raw else None
 
@@ -440,13 +440,13 @@ class DataLayerRedisStore:
     def set_feed_health(self, health: dict[str, Any]) -> None:
         self._safe_set(self._key("feed_health"), json.dumps(health), _HEALTH_TTL)
 
-    def get_feed_health(self) -> Optional[dict[str, Any]]:
+    def get_feed_health(self) -> dict[str, Any] | None:
         raw = self._safe_get(self._key("feed_health"))
         return json.loads(raw) if raw else None
 
     # ── Memory stats ──────────────────────────────────────────────────────────
 
-    def memory_usage_mb(self) -> Optional[float]:
+    def memory_usage_mb(self) -> float | None:
         """Return Redis used_memory_rss in MB, or None if unavailable."""
         if not self._r:
             return None

@@ -5,8 +5,8 @@
 # No commercial use without explicit permission.
 """nocode/builder.py — No-code strategy builder logic."""
 
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone, UTC
+from typing import Any
+from datetime import datetime, UTC
 import logging
 import re
 
@@ -40,7 +40,7 @@ class NoCodeStrategyBuilder:
     - Export to Python code
     """
 
-    def __init__(self, config: Optional[dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize strategy builder."""
         self.config = config or {}
         self.strategies: dict[str, NoCodeStrategy] = {}
@@ -145,7 +145,7 @@ class NoCodeStrategyBuilder:
         conditions: list[dict[str, Any]],
         action: dict[str, Any],
         logic: str = "AND",
-    ) -> Optional[StrategyRule]:
+    ) -> StrategyRule | None:
         """
         Add a rule to a strategy.
 
@@ -239,7 +239,7 @@ class NoCodeStrategyBuilder:
 
     def parse_plain_english(
         self, description: str, symbol: str, timeframe: str
-    ) -> Optional[NoCodeStrategy]:
+    ) -> NoCodeStrategy | None:
         """
         Parse a plain English strategy description.
 
@@ -455,7 +455,7 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
 
     def create_from_template(
         self, template_id: str, name: str, symbol: str, timeframe: str
-    ) -> Optional[NoCodeStrategy]:
+    ) -> NoCodeStrategy | None:
         """Create a new strategy from a template."""
         template = self.templates.get(template_id)
         if not template:

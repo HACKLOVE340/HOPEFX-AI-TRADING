@@ -43,7 +43,7 @@ import asyncio
 import logging
 import time
 from collections import defaultdict, deque
-from typing import Callable, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +201,7 @@ async def _redis_is_allowed(key: str, limit: int, window_seconds: int) -> bool:
 # ── FastAPI dependency factory ────────────────────────────────────────────────
 
 
-def rate_limit_dependency(rate_str: str, key_func: Optional[Callable] = None):
+def rate_limit_dependency(rate_str: str, key_func: Callable | None = None):
     """
     Return a FastAPI dependency that enforces *rate_str* per client IP
     (or per the value returned by *key_func(request)*).

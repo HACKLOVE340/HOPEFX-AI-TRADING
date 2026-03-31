@@ -25,9 +25,9 @@ License: Proprietary - Institutional Use Only
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple, Any, Union
+from typing import Any
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
 from collections import deque, defaultdict
 import logging
@@ -37,8 +37,8 @@ import warnings
 # ML/DL Libraries
 try:
     import tensorflow as tf
-    from tensorflow import keras
-    from tensorflow.keras.models import Model, Sequential, load_model
+    from tensorflow import keras  # noqa: F401
+    from tensorflow.keras.models import Model, Sequential, load_model  # noqa: F401
     from tensorflow.keras.layers import (
         LSTM,
         GRU,
@@ -46,10 +46,10 @@ try:
         Dropout,
         BatchNormalization,
         Input,
-        Concatenate,
-        Multiply,
+        Concatenate,  # noqa: F401
+        Multiply,  # noqa: F401
         Add,
-        Attention,
+        Attention,  # noqa: F401
         Conv1D,
         MaxPooling1D,
         GlobalAveragePooling1D,
@@ -60,12 +60,12 @@ try:
         EarlyStopping,
         ReduceLROnPlateau,
         ModelCheckpoint,
-        TensorBoard,
+        TensorBoard,  # noqa: F401
         TerminateOnNaN,
     )
-    from tensorflow.keras.optimizers import Adam, AdamW
+    from tensorflow.keras.optimizers import Adam, AdamW  # noqa: F401
     from tensorflow.keras.regularizers import l1_l2
-    from tensorflow.keras.losses import Huber
+    from tensorflow.keras.losses import Huber  # noqa: F401
 
     TENSORFLOW_AVAILABLE = True
 except ImportError:
@@ -73,11 +73,11 @@ except ImportError:
     warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
 
 try:
-    import torch
-    from torch import nn
-    from torch.utils.data import DataLoader, Dataset, TensorDataset
-    from torch.optim import AdamW as TorchAdamW
-    from torch.optim.lr_scheduler import ReduceLROnPlateau as TorchReduceLROnPlateau
+    import torch  # noqa: F401
+    from torch import nn  # noqa: F401
+    from torch.utils.data import DataLoader, Dataset, TensorDataset  # noqa: F401
+    from torch.optim import AdamW as TorchAdamW  # noqa: F401
+    from torch.optim.lr_scheduler import ReduceLROnPlateau as TorchReduceLROnPlateau  # noqa: F401
 
     PYTORCH_AVAILABLE = True
 except ImportError:
@@ -86,21 +86,21 @@ except ImportError:
 try:
     from sklearn.ensemble import (
         RandomForestClassifier,
-        GradientBoostingClassifier,
-        ExtraTreesClassifier,
-        VotingClassifier,
-        StackingClassifier,
+        GradientBoostingClassifier,  # noqa: F401
+        ExtraTreesClassifier,  # noqa: F401
+        VotingClassifier,  # noqa: F401
+        StackingClassifier,  # noqa: F401
     )
-    from sklearn.preprocessing import RobustScaler, StandardScaler, QuantileTransformer
-    from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+    from sklearn.preprocessing import RobustScaler, StandardScaler, QuantileTransformer  # noqa: F401
+    from sklearn.model_selection import TimeSeriesSplit, cross_val_score  # noqa: F401
     from sklearn.metrics import (
-        accuracy_score,
-        precision_recall_fscore_support,
-        log_loss,
-        brier_score_loss,
-        roc_auc_score,
-        mean_squared_error,
-        mean_absolute_error,
+        accuracy_score,  # noqa: F401
+        precision_recall_fscore_support,  # noqa: F401
+        log_loss,  # noqa: F401
+        brier_score_loss,  # noqa: F401
+        roc_auc_score,  # noqa: F401
+        mean_squared_error,  # noqa: F401
+        mean_absolute_error,  # noqa: F401
     )
     from sklearn.calibration import CalibratedClassifierCV
     from sklearn.feature_selection import SelectFromModel, mutual_info_classif
@@ -124,14 +124,14 @@ except ImportError:
     LIGHTGBM_AVAILABLE = False
 
 try:
-    import optuna
+    import optuna  # noqa: F401
 
     OPTUNA_AVAILABLE = True
 except ImportError:
     OPTUNA_AVAILABLE = False
 
 try:
-    import shap
+    import shap  # noqa: F401
 
     SHAP_AVAILABLE = True
 except ImportError:
@@ -217,8 +217,8 @@ class Prediction:
     confidence: float  # 0-1
 
     # Probabilistic outputs
-    probabilities: Optional[dict[str, float]] = None
-    quantiles: Optional[dict[str, float]] = None
+    probabilities: dict[str, float] | None = None
+    quantiles: dict[str, float] | None = None
 
     # Uncertainty decomposition
     epistemic_uncertainty: float = 0.0  # Model uncertainty (reducible)
@@ -226,9 +226,9 @@ class Prediction:
     total_uncertainty: float = 0.0
 
     # Prediction intervals
-    prediction_interval: Optional[tuple[float, float]] = None
-    confidence_80: Optional[tuple[float, float]] = None
-    confidence_95: Optional[tuple[float, float]] = None
+    prediction_interval: tuple[float, float] | None = None
+    confidence_80: tuple[float, float] | None = None
+    confidence_95: tuple[float, float] | None = None
 
     # Model metadata
     model_version: str = "unknown"
@@ -250,7 +250,7 @@ class Prediction:
     # recall trade-off for your risk tolerance.
     DEFAULT_UNCERTAINTY_THRESHOLD: float = 0.3
 
-    def is_confident(self, threshold: Optional[float] = None) -> bool:
+    def is_confident(self, threshold: float | None = None) -> bool:
         """Return True if this prediction clears both confidence and uncertainty gates.
 
         Args:
@@ -298,7 +298,7 @@ class AdvancedFeatureEngineer:
 
     def __init__(
         self,
-        lookback_windows: Optional[list[int]] = None,
+        lookback_windows: list[int] | None = None,
         enable_microstructure: bool = True,
     ):
         self.windows = lookback_windows or [5, 10, 20, 50, 100, 200]
@@ -544,7 +544,7 @@ class AdvancedFeatureEngineer:
         self,
         model: Any,
         X: pd.DataFrame,
-        y: Optional[pd.Series] = None,
+        y: pd.Series | None = None,
         n_repeats: int = 5,
     ) -> dict[str, float]:
         """
@@ -592,7 +592,7 @@ class AdvancedFeatureEngineer:
         return self.feature_importance
 
     def _evaluate_model(
-        self, model: Any, X: pd.DataFrame, y: Optional[pd.Series] = None
+        self, model: Any, X: pd.DataFrame, y: pd.Series | None = None
     ) -> float:
         """
         Evaluate model accuracy on X (and optionally y) for permutation importance.
@@ -605,10 +605,7 @@ class AdvancedFeatureEngineer:
             if TENSORFLOW_AVAILABLE and isinstance(model, Model):
                 preds = model.predict(X.values, verbose=0)
                 # preds may be a dict (multi-output) or an array
-                if isinstance(preds, dict):
-                    direction_probs = preds.get("direction", list(preds.values())[0])
-                else:
-                    direction_probs = preds
+                direction_probs = preds.get("direction", list(preds.values())[0]) if isinstance(preds, dict) else preds
                 if len(direction_probs.shape) > 1:
                     return float(np.mean(np.max(direction_probs, axis=1)))
                 return float(np.mean(np.abs(direction_probs - 0.5) + 0.5))
@@ -675,8 +672,8 @@ class DeepLearningModel:
 
     def __init__(self, config: ModelConfig):
         self.config = config
-        self.model: Optional[Model] = None
-        self.history: Optional[Any] = None
+        self.model: Model | None = None
+        self.history: Any | None = None
         self.is_trained = False
 
         # Feature dimensions (set during training)
@@ -870,7 +867,7 @@ class DeepLearningModel:
         return tf.reduce_mean(tf.square(y_true - mean))
 
     def create_sequences(
-        self, X: np.ndarray, y: np.ndarray, sequence_length: Optional[int] = None
+        self, X: np.ndarray, y: np.ndarray, sequence_length: int | None = None
     ) -> tuple[np.ndarray, np.ndarray]:
         """Create time series sequences for training"""
         seq_len = sequence_length or self.config.sequence_length
@@ -891,9 +888,9 @@ class DeepLearningModel:
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
-        X_val: Optional[np.ndarray] = None,
-        y_val: Optional[np.ndarray] = None,
-        sample_weights: Optional[np.ndarray] = None,
+        X_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
+        sample_weights: np.ndarray | None = None,
     ) -> dict[str, Any]:
         """
         Train model with early stopping and learning rate scheduling.
@@ -1004,7 +1001,7 @@ class DeepLearningModel:
             "return_uncertainty": y_uncertainty,
         }
 
-    def predict(self, X: np.ndarray, mc_samples: Optional[int] = None) -> Prediction:
+    def predict(self, X: np.ndarray, mc_samples: int | None = None) -> Prediction:
         """
         Generate prediction with Monte Carlo dropout for uncertainty.
         """
@@ -1166,8 +1163,8 @@ class EnsemblePredictor:
 
     def __init__(
         self,
-        models: Optional[dict[str, Any]] = None,
-        meta_learner: Optional[Any] = None,
+        models: dict[str, Any] | None = None,
+        meta_learner: Any | None = None,
     ):
         self.models: dict[str, Any] = models or {}
         self.weights: dict[str, float] = {}
@@ -1292,7 +1289,7 @@ class EnsemblePredictor:
         self,
         X_val: pd.DataFrame,
         y_val: pd.Series,
-        val_scores: Optional[dict[str, float]] = None,
+        val_scores: dict[str, float] | None = None,
     ):
         """
         Optimize ensemble weights from actual validation accuracy scores.
@@ -1537,7 +1534,7 @@ class EnsemblePredictor:
 def calibrate_uncertainty_threshold(
     predictions: list["Prediction"],
     actuals: list[bool],
-    sweep: Optional[list[float]] = None,
+    sweep: list[float] | None = None,
 ) -> float:
     """
     Find the uncertainty threshold that maximises F1 on a validation set.
@@ -1620,7 +1617,7 @@ class EnhancedMLPredictor:
 
         # Components
         self.feature_engineer = AdvancedFeatureEngineer()
-        self.ensemble: Optional[EnsemblePredictor] = None
+        self.ensemble: EnsemblePredictor | None = None
         self.models: dict[str, Any] = {}
 
         # State
@@ -1629,7 +1626,7 @@ class EnhancedMLPredictor:
         self.performance_tracker: deque = deque(maxlen=100)
 
         # Optimization results
-        self.best_config: Optional[ModelConfig] = None
+        self.best_config: ModelConfig | None = None
 
         logger.info("EnhancedMLPredictor initialized")
         logger.info(f"  Sequence length: {sequence_length}")
@@ -1638,7 +1635,7 @@ class EnhancedMLPredictor:
         logger.info(f"  Auto-optimize: {self.auto_optimize}")
 
     def build_ensemble(
-        self, model_types: Optional[list[str]] = None, use_stacking: bool = False
+        self, model_types: list[str] | None = None, use_stacking: bool = False
     ):
         """Build ensemble with specified model types"""
         model_types = model_types or ["lstm", "xgboost", "random_forest"]
@@ -1920,7 +1917,7 @@ class EnhancedMLPredictor:
         )
         self.ensemble.fit(X, y, validation_split=0.1)
 
-    def predict(self, df: pd.DataFrame) -> Optional[Prediction]:
+    def predict(self, df: pd.DataFrame) -> Prediction | None:
         """
         Generate prediction with full uncertainty quantification.
         """

@@ -44,7 +44,8 @@ import functools
 import logging
 import time
 from enum import IntEnum
-from typing import Any, Callable, Dict, Optional
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +117,8 @@ class CircuitBreaker:
         self._state = CBState.CLOSED
         self._failure_count = 0
         self._success_count = 0
-        self._opened_at: Optional[float] = None
-        self._last_error: Optional[str] = None
+        self._opened_at: float | None = None
+        self._last_error: str | None = None
         self._lock = asyncio.Lock()
 
     # ── Context manager ───────────────────────────────────────────────────────

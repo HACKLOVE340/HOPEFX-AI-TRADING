@@ -36,7 +36,6 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -233,7 +232,7 @@ class NuclearWordMapScorer:
 
     def __init__(
         self,
-        wordmap_path: Optional[str | Path] = None,
+        wordmap_path: str | Path | None = None,
         vol_amplifier: float = 0.25,
         sentiment_weight: float = 0.5,
     ) -> None:
@@ -364,7 +363,7 @@ class NuclearWordMapScorer:
     # ── Private helpers ───────────────────────────────────────────────────────
 
     def _load_keywords(
-        self, wordmap_path: Optional[str | Path]
+        self, wordmap_path: str | Path | None
     ) -> dict[str, dict[str, float]]:
         """
         Load keywords from WORDMAP.json (nuclear_risk section) merged with

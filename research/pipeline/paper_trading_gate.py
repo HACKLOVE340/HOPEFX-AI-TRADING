@@ -52,9 +52,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +80,7 @@ class PaperTradingGate:
                  Defaults to PAPER_GATE_STATE_PATH env var or data/paper_trading_gate.json.
     """
 
-    def __init__(self, state_path: Optional[str] = None) -> None:
+    def __init__(self, state_path: str | None = None) -> None:
         self._state_path = Path(
             state_path or os.getenv("PAPER_GATE_STATE_PATH", _DEFAULT_STATE_PATH)
         )
@@ -124,7 +123,7 @@ class PaperTradingGate:
 
     # ── Run clock ─────────────────────────────────────────────────────────────
 
-    def set_run_start(self, ts: Optional[datetime] = None) -> None:
+    def set_run_start(self, ts: datetime | None = None) -> None:
         """
         Record the paper run start timestamp.
 
@@ -141,7 +140,7 @@ class PaperTradingGate:
         logger.info("PaperTradingGate: run start set to %s", ts.isoformat())
 
     @property
-    def run_start(self) -> Optional[datetime]:
+    def run_start(self) -> datetime | None:
         """Return the run start as a UTC datetime, or None if not set."""
         s = self._state.get("run_start_utc", "")
         if not s:
@@ -324,7 +323,7 @@ class PaperTradingGate:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_gate: Optional[PaperTradingGate] = None
+_gate: PaperTradingGate | None = None
 
 
 def get_gate() -> PaperTradingGate:

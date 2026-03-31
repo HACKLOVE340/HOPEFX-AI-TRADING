@@ -71,8 +71,7 @@ import math
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Deque, Dict, List, Optional, Tuple
+from datetime import datetime, UTC
 
 import numpy as np
 
@@ -102,9 +101,9 @@ class CircuitState:
     total_trades: int = 0
     consecutive_bad_windows: int = 0
     is_open: bool = False
-    opened_at: Optional[float] = None  # monotonic time
-    last_sharpe: Optional[float] = None
-    last_evaluated_at: Optional[datetime] = None
+    opened_at: float | None = None  # monotonic time
+    last_sharpe: float | None = None
+    last_evaluated_at: datetime | None = None
     trip_reason: str = ""
     sharpe_history: list[tuple[datetime, float]] = field(default_factory=list)
 
@@ -112,7 +111,7 @@ class CircuitState:
         self.pnl_window.append(pnl)
         self.total_trades += 1
 
-    def rolling_sharpe(self) -> Optional[float]:
+    def rolling_sharpe(self) -> float | None:
         """
         Compute annualised Sharpe from the rolling P&L window.
 
@@ -401,7 +400,7 @@ class SharpeCircuitBreaker:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_sharpe_cb: Optional[SharpeCircuitBreaker] = None
+_sharpe_cb: SharpeCircuitBreaker | None = None
 
 
 def get_sharpe_cb() -> SharpeCircuitBreaker:

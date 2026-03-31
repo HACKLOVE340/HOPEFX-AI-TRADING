@@ -49,7 +49,7 @@ import logging
 import math
 import os
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 
 
 logger = logging.getLogger(__name__)
@@ -231,7 +231,7 @@ class SimulatedFill:
     partial_fill: bool  # True if order was partially filled
     fill_quantity: float  # Actual filled quantity
     requested_quantity: float
-    impact_estimate: Optional[ImpactEstimate] = None
+    impact_estimate: ImpactEstimate | None = None
     notes: str = ""
 
 
@@ -248,7 +248,7 @@ class FillSimulator:
     This produces backtest P&L that is closer to live performance.
     """
 
-    def __init__(self, model: Optional[AlmgrenChrissModel] = None) -> None:
+    def __init__(self, model: AlmgrenChrissModel | None = None) -> None:
         self.model = model or AlmgrenChrissModel()
 
     def simulate_fill(
@@ -303,12 +303,8 @@ class FillSimulator:
         # ── Price feasibility: clamp to bar range ─────────────────────────────
         # A fill cannot occur outside the bar's high-low range.
         # This prevents fills at prices the market never traded.
-        if side == "BUY":
-            # BUY fills at or below bar high
-            fill_price = min(raw_fill, bar_high)
-        else:
-            # SELL fills at or above bar low
-            fill_price = max(raw_fill, bar_low)
+        # BUY fills at or below bar high; SELL fills at or above bar low
+        fill_price = min(raw_fill, bar_high) if side == "BUY" else max(raw_fill, bar_low)
 
         slippage_usd = abs(fill_price - signal_price) * fill_quantity
         slippage_bps = abs(fill_price - signal_price) / signal_price * 10_000
@@ -364,7 +360,7 @@ class FillSimulator:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_fill_simulator: Optional[FillSimulator] = None
+_fill_simulator: FillSimulator | None = None
 
 
 def get_fill_simulator() -> FillSimulator:

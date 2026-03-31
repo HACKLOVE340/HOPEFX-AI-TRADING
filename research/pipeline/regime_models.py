@@ -49,7 +49,6 @@ from __future__ import annotations
 import logging
 import pickle  # nosec B403 - joblib tried first; pickle only for legacy fallback
 from pathlib import Path
-from typing import Dict, Optional
 
 import joblib
 import numpy as np
@@ -60,7 +59,7 @@ from sklearn.preprocessing import StandardScaler
 logger = logging.getLogger(__name__)
 
 try:
-    from research.pipeline.models_ensemble import EnsemblePredictor
+    from research.pipeline.models_ensemble import EnsemblePredictor  # noqa: F401
 
     ENSEMBLE_AVAILABLE = True
 except ImportError:
@@ -95,8 +94,8 @@ class RegimeClassifier:
         self.n_regimes = n_regimes
         self.use_hmm = use_hmm and HMM_AVAILABLE
         self._scaler = StandardScaler()
-        self._hmm: Optional[GaussianHMM] = None
-        self._vol_quantiles: Optional[np.ndarray] = None
+        self._hmm: GaussianHMM | None = None
+        self._vol_quantiles: np.ndarray | None = None
         self._fitted = False
 
     # ── Feature extraction for regime classification ───────────────────────
@@ -123,11 +122,8 @@ class RegimeClassifier:
             if col in X.columns:
                 cols.append(col)
 
-        if cols:
-            arr = X[cols].fillna(0).values
-        else:
-            # Minimal fallback: use first 5 numeric columns
-            arr = X.select_dtypes(include=[np.number]).fillna(0).values[:, :5]
+        # Minimal fallback: use first 5 numeric columns when no cols specified
+        arr = X[cols].fillna(0).values if cols else X.select_dtypes(include=[np.number]).fillna(0).values[:, :5]
 
         return arr.astype(np.float32)
 
@@ -285,7 +281,7 @@ class RegimeRouter:
 
         self.regime_clf = RegimeClassifier(n_regimes=n_regimes)
         self.specialists: dict[int, _RegimeSpecialist] = {}
-        self._fallback: Optional[_RegimeSpecialist] = None
+        self._fallback: _RegimeSpecialist | None = None
         self._fitted = False
 
     # ── Fit ───────────────────────────────────────────────────────────────────

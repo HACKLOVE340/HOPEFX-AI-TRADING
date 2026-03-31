@@ -55,7 +55,7 @@ import logging
 import os
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 import pandas as pd
 
@@ -162,7 +162,7 @@ class MacroStore:
     def align_to_hourly(
         self,
         ohlcv_h1: pd.DataFrame,
-        series: Optional[list[str]] = None,
+        series: list[str] | None = None,
         fill_method: str = "ffill",
     ) -> pd.DataFrame:
         """
@@ -213,10 +213,7 @@ class MacroStore:
             # Reindex to hourly, forward-fill, then fill any leading NaN with 0
             combined_idx = idx.union(daily.index)
             reindexed = daily.reindex(combined_idx)
-            if fill_method == "ffill":
-                reindexed = reindexed.ffill()
-            else:
-                reindexed = reindexed.bfill()
+            reindexed = reindexed.ffill() if fill_method == "ffill" else reindexed.bfill()
             aligned = reindexed.reindex(idx).fillna(0.0)
             aligned_cols[name] = aligned
 

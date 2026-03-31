@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
 
 import numpy as np
 
@@ -62,8 +61,8 @@ except ImportError:
 
 # ── TensorFlow / Keras fallback ───────────────────────────────────────────────
 try:
-    import tensorflow as tf
-    from tensorflow.keras import layers, Model
+    import tensorflow as tf  # noqa: F401
+    from tensorflow.keras import layers, Model  # noqa: F401
 
     TF_AVAILABLE = True
 except ImportError:
@@ -351,7 +350,7 @@ if TORCH_AVAILABLE:
         {0.05, 0.95}.
         """
 
-        def __init__(self, smoothing: float = 0.1, pos_weight: Optional[float] = None):
+        def __init__(self, smoothing: float = 0.1, pos_weight: float | None = None):
             super().__init__()
             self.smoothing = smoothing
             self.pos_weight = pos_weight
@@ -420,7 +419,7 @@ class DeepPredictor:
         max_epochs: int = 100,
         patience: int = 10,
         label_smoothing: float = 0.05,
-        pos_weight: Optional[float] = None,
+        pos_weight: float | None = None,
         grad_clip: float = 1.0,
         use_amp: bool = True,
         **model_kwargs,
@@ -528,8 +527,8 @@ class DeepPredictor:
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
-        X_val: Optional[np.ndarray] = None,
-        y_val: Optional[np.ndarray] = None,
+        X_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
         class_weight: bool = True,
     ) -> dict:
         """
@@ -565,14 +564,14 @@ class DeepPredictor:
 
         best_val_loss = float("inf")
         patience_counter = 0
-        best_state: Optional[dict] = None
+        best_state: dict | None = None
 
         for epoch in range(self.max_epochs):
             # ── Train ─────────────────────────────────────────────────────────
             self.model.train()
             train_losses = []
             for X_b, y_b in train_loader:
-                X_b, y_b = X_b.to(self.device), y_b.to(self.device)
+                X_b, y_b = X_b.to(self.device), y_b.to(self.device)  # noqa: PLW2901
                 self.optimizer.zero_grad(set_to_none=True)
 
                 if self.use_amp and self._scaler is not None:
@@ -604,7 +603,7 @@ class DeepPredictor:
                 val_losses = []
                 with torch.no_grad():
                     for X_b, y_b in val_loader:
-                        X_b, y_b = X_b.to(self.device), y_b.to(self.device)
+                        X_b, y_b = X_b.to(self.device), y_b.to(self.device)  # noqa: PLW2901
                         pred = self.model(X_b)
                         val_losses.append(self.criterion(pred, y_b).item())
                 avg_val = float(np.mean(val_losses))

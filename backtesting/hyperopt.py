@@ -37,7 +37,8 @@ Usage:
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Literal, Optional
+from typing import Any, Literal
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
@@ -130,9 +131,9 @@ class HyperoptEngine:
         initial_capital: float = 100_000.0,
         commission: float = 0.001,  # 0.1% per trade
         slippage: float = 0.0005,  # 0.05% per trade
-        timeout_seconds: Optional[float] = None,
+        timeout_seconds: float | None = None,
         n_jobs: int = 1,
-        custom_objective: Optional[Callable] = None,
+        custom_objective: Callable | None = None,
         study_name: str = "hopefx_hyperopt",
         seed: int = 42,
     ):
@@ -438,7 +439,7 @@ def create_hyperopt_router():
     class HyperoptStatus(BaseModel):
         job_id: str
         status: str
-        result: Optional[dict] = None
+        result: dict | None = None
 
     @router.post("/run", response_model=HyperoptStatus, summary="Start a hyperopt job")
     async def run_hyperopt(req: HyperoptRequest, background_tasks: BackgroundTasks):

@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List
+from datetime import datetime, UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

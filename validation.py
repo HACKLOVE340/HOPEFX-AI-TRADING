@@ -11,7 +11,6 @@ Prevents bad trades through pre-execution checks.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
 
 logger = logging.getLogger("validation")
 
@@ -24,9 +23,9 @@ class Order:
     side: str  # 'buy' or 'sell'
     qty: float
     order_type: str = "market"
-    price: Optional[float] = None  # For limit orders
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    price: float | None = None  # For limit orders
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
 
 @dataclass
@@ -34,8 +33,8 @@ class ValidationResult:
     """Validation result with reason if rejected."""
 
     valid: bool
-    reason: Optional[str] = None
-    risk_pct: Optional[float] = None
+    reason: str | None = None
+    risk_pct: float | None = None
 
 
 @dataclass
@@ -62,7 +61,7 @@ _PRICE_BOUNDS: dict = {
 class OrderValidator:
     """Validates orders before execution to prevent bad trades."""
 
-    def __init__(self, config: Optional[ValidatorConfig] = None) -> None:
+    def __init__(self, config: ValidatorConfig | None = None) -> None:
         cfg = config or ValidatorConfig()
         self.max_position_risk = cfg.max_position_risk_pct
         self.max_daily_risk = cfg.max_daily_risk_pct
@@ -76,19 +75,19 @@ class OrderValidator:
 
     # ── Private validators ────────────────────────────────────────────────────
 
-    def _check_symbol(self, order: Order) -> Optional[ValidationResult]:
+    def _check_symbol(self, order: Order) -> ValidationResult | None:
         if order.symbol not in self.allowed_symbols:
             return ValidationResult(
                 valid=False, reason=f"Symbol {order.symbol} not in allowed list"
             )
         return None
 
-    def _check_side(self, order: Order) -> Optional[ValidationResult]:
+    def _check_side(self, order: Order) -> ValidationResult | None:
         if order.side not in ("buy", "sell"):
             return ValidationResult(valid=False, reason=f"Invalid side: {order.side}")
         return None
 
-    def _check_quantity(self, order: Order) -> Optional[ValidationResult]:
+    def _check_quantity(self, order: Order) -> ValidationResult | None:
         if order.qty < self.min_qty:
             return ValidationResult(
                 valid=False,
@@ -103,7 +102,7 @@ class OrderValidator:
 
     def _check_price_sanity(
         self, order: Order, current_price: float
-    ) -> Optional[ValidationResult]:
+    ) -> ValidationResult | None:
         if current_price <= 0:
             return ValidationResult(valid=False, reason="Invalid current price")
         bounds = _PRICE_BOUNDS.get(order.symbol)
@@ -116,7 +115,7 @@ class OrderValidator:
 
     def _check_position_risk(
         self, order: Order, current_price: float, account_balance: float
-    ) -> tuple[Optional[ValidationResult], float]:
+    ) -> tuple[ValidationResult | None, float]:
         position_value = order.qty * current_price
         risk_pct = position_value / account_balance if account_balance > 0 else 1.0
         if risk_pct > self.max_position_risk:
@@ -132,7 +131,7 @@ class OrderValidator:
             )
         return None, risk_pct
 
-    def _check_daily_risk(self, risk_pct: float) -> Optional[ValidationResult]:
+    def _check_daily_risk(self, risk_pct: float) -> ValidationResult | None:
         if self.daily_risk_used + risk_pct > self.max_daily_risk:
             return ValidationResult(
                 valid=False,
@@ -145,7 +144,7 @@ class OrderValidator:
 
     def _check_stop_loss(
         self, order: Order, current_price: float
-    ) -> Optional[ValidationResult]:
+    ) -> ValidationResult | None:
         if order.stop_loss is None:
             logger.warning(
                 "Order %s %s has no stop loss - using default 2%%",
@@ -179,7 +178,7 @@ class OrderValidator:
 
     def _check_take_profit(
         self, order: Order, current_price: float
-    ) -> Optional[ValidationResult]:
+    ) -> ValidationResult | None:
         if order.take_profit is None:
             return None
         if order.side == "buy" and order.take_profit <= current_price:
@@ -196,7 +195,7 @@ class OrderValidator:
 
     def _check_duplicate_position(
         self, order: Order, open_positions: list
-    ) -> Optional[ValidationResult]:
+    ) -> ValidationResult | None:
         for pos in open_positions:
             if pos.get("symbol") == order.symbol and pos.get("side") == order.side:
                 return ValidationResult(
@@ -207,7 +206,7 @@ class OrderValidator:
 
     def _check_leverage(
         self, order: Order, current_price: float, account_balance: float
-    ) -> Optional[ValidationResult]:
+    ) -> ValidationResult | None:
         if account_balance <= 0:
             return None
         effective_leverage = (order.qty * current_price) / account_balance
@@ -225,7 +224,7 @@ class OrderValidator:
         order: Order,
         current_price: float,
         account_balance: float,
-        open_positions: Optional[list] = None,
+        open_positions: list | None = None,
     ) -> ValidationResult:
         """
         Validate an order against risk rules.
@@ -392,7 +391,7 @@ class PropFirmValidator:
         target_met = profit_pct >= self.rules["profit_target_pct"]
         return target_met, profit_pct
 
-    def record_trade_day(self, trade_date: Optional[str] = None) -> None:
+    def record_trade_day(self, trade_date: str | None = None) -> None:
         from datetime import date as _date
 
         if trade_date is None:
@@ -404,7 +403,7 @@ class PropFirmValidator:
         met = days_traded >= self.rules["min_trading_days"]
         return met, days_traded
 
-    def record_pnl(self, pnl: float, trade_date: Optional[str] = None) -> None:
+    def record_pnl(self, pnl: float, trade_date: str | None = None) -> None:
         if pnl < 0:
             self.daily_loss += pnl
             self.total_loss += pnl
@@ -443,8 +442,8 @@ def validate_order_safe(
     qty: float,
     current_price: float,
     account_balance: float,
-    stop_loss: Optional[float] = None,
-    take_profit: Optional[float] = None,
+    stop_loss: float | None = None,
+    take_profit: float | None = None,
 ) -> bool:
     """Simple validation function for quick use."""
     validator = OrderValidator()

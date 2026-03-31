@@ -27,10 +27,10 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .pricing import BillingCycle, SubscriptionTier
 
@@ -70,8 +70,8 @@ class StripeCustomer:
         customer_id: str,
         user_id: str,
         email: str,
-        name: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        name: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         self.customer_id = customer_id
         self.user_id = user_id
@@ -99,7 +99,7 @@ class StripePaymentIntent:
         amount: int,  # cents
         currency: str,
         status: str,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         self.intent_id = intent_id
         self.customer_id = customer_id
@@ -108,7 +108,7 @@ class StripePaymentIntent:
         self.status = status
         self.metadata = metadata or {}
         self.created_at = datetime.now(UTC)
-        self.client_secret: Optional[str] = None
+        self.client_secret: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -172,7 +172,7 @@ class StripeIntegration:
     """
 
     # Price IDs loaded from env vars configured in the Stripe Dashboard.
-    PRICE_IDS: dict[tuple, Optional[str]] = {
+    PRICE_IDS: dict[tuple, str | None] = {
         (SubscriptionTier.FREE, BillingCycle.MONTHLY): None,
         (SubscriptionTier.STARTER, BillingCycle.MONTHLY): os.getenv(
             "STRIPE_PRICE_STARTER_MONTHLY", "price_starter_monthly"
@@ -202,8 +202,8 @@ class StripeIntegration:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        webhook_secret: Optional[str] = None,
+        api_key: str | None = None,
+        webhook_secret: str | None = None,
     ) -> None:
         """
         Initialise Stripe integration.
@@ -245,8 +245,8 @@ class StripeIntegration:
         self,
         user_id: str,
         email: str,
-        name: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        name: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> StripeCustomer:
         """Create a Stripe customer and return the domain model."""
         self._require_stripe()
@@ -269,7 +269,7 @@ class StripeIntegration:
             logger.error("Error creating Stripe customer: %s", exc)
             raise
 
-    def get_customer(self, customer_id: str) -> Optional[StripeCustomer]:
+    def get_customer(self, customer_id: str) -> StripeCustomer | None:
         """Retrieve a customer from Stripe by ID."""
         self._require_stripe()
         try:
@@ -292,9 +292,9 @@ class StripeIntegration:
         customer_id: str,
         amount: Decimal,
         currency: str = "usd",
-        tier: Optional[SubscriptionTier] = None,
+        tier: SubscriptionTier | None = None,
         billing_cycle: BillingCycle = BillingCycle.MONTHLY,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> StripePaymentIntent:
         """Create a Stripe PaymentIntent and return the domain model."""
         self._require_stripe()
@@ -327,7 +327,7 @@ class StripeIntegration:
             logger.error("Error creating payment intent: %s", exc)
             raise
 
-    def get_payment_intent(self, intent_id: str) -> Optional[StripePaymentIntent]:
+    def get_payment_intent(self, intent_id: str) -> StripePaymentIntent | None:
         """Retrieve a PaymentIntent from Stripe by ID."""
         self._require_stripe()
         try:
@@ -425,7 +425,7 @@ class StripeIntegration:
             logger.error("Error creating subscription: %s", exc)
             raise
 
-    def get_subscription(self, subscription_id: str) -> Optional[StripeSubscription]:
+    def get_subscription(self, subscription_id: str) -> StripeSubscription | None:
         """Retrieve a subscription from Stripe by ID."""
         self._require_stripe()
         try:
@@ -501,7 +501,7 @@ class StripeIntegration:
     def refund_payment(
         self,
         payment_intent_id: str,
-        amount: Optional[Decimal] = None,
+        amount: Decimal | None = None,
     ) -> dict[str, Any]:
         """Issue a full or partial refund for a PaymentIntent."""
         self._require_stripe()

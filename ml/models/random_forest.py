@@ -11,7 +11,7 @@ Random Forest ensemble model for classification of trading signals
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -32,7 +32,7 @@ class RandomForestTradingClassifier(BaseMLModel):
     - Handles imbalanced data
     """
 
-    def __init__(self, name: str = "RF_Classifier", config: Optional[dict] = None):
+    def __init__(self, name: str = "RF_Classifier", config: dict | None = None):
         """
         Initialize Random Forest classifier.
 
@@ -91,9 +91,9 @@ class RandomForestTradingClassifier(BaseMLModel):
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
-        X_val: Optional[np.ndarray] = None,
-        y_val: Optional[np.ndarray] = None,
-        feature_names: Optional[list[str]] = None,
+        X_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
+        feature_names: list[str] | None = None,
     ) -> dict[str, Any]:
         """
         Train Random Forest classifier.
@@ -347,7 +347,7 @@ class RandomForestTradingClassifier(BaseMLModel):
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
-        param_grid: Optional[dict] = None,
+        param_grid: dict | None = None,
         cv: int = 5,
     ) -> dict[str, Any]:
         """

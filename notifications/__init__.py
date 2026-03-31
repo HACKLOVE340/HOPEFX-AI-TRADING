@@ -11,10 +11,10 @@ Multi-channel alerts: Discord, Telegram, Email, SMS, Webhooks
 import asyncio
 import logging
 import aiohttp
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional  # noqa: F401
 from enum import Enum
 from dataclasses import dataclass
-import json
+import json  # noqa: F401
 from datetime import UTC
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ class NotificationLevel(Enum):
 class Notification:
     level: NotificationLevel
     message: str
-    data: Optional[dict] = None
+    data: dict | None = None
     timestamp: float = None
 
     def __post_init__(self):
@@ -133,10 +133,9 @@ class NotificationManager:
 
         payload = {"embeds": [embed]}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(webhook_url, json=payload) as resp:
-                if resp.status != 204:
-                    logger.error(f"Discord notification failed: {resp.status}")
+        async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
+            if resp.status != 204:
+                logger.error(f"Discord notification failed: {resp.status}")
 
     @staticmethod
     def _escape_mdv2(text: str) -> str:
@@ -189,15 +188,14 @@ class NotificationManager:
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "MarkdownV2"}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    logger.error(
-                        "Telegram notification failed: status=%s body=%s",
-                        resp.status,
-                        body[:200],
-                    )
+        async with aiohttp.ClientSession() as session, session.post(url, json=payload) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                logger.error(
+                    "Telegram notification failed: status=%s body=%s",
+                    resp.status,
+                    body[:200],
+                )
 
     async def _send_webhook(self, notification: Notification):
         """Send to custom webhook"""
@@ -213,14 +211,13 @@ class NotificationManager:
             "data": notification.data,
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(webhook_url, json=payload) as resp:
-                if resp.status >= 400:
-                    logger.error(f"Webhook notification failed: {resp.status}")
+        async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
+            if resp.status >= 400:
+                logger.error(f"Webhook notification failed: {resp.status}")
 
     def _format_timestamp(self, timestamp: float) -> str:
         """Format timestamp for Discord"""
-        from datetime import datetime, timezone
+        from datetime import datetime, timezone  # noqa: F401
 
         dt = datetime.fromtimestamp(timestamp, tz=UTC)
         return dt.isoformat()

@@ -17,7 +17,7 @@ import secrets
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
+import contextlib
 
 try:
     from cryptography.fernet import Fernet
@@ -44,10 +44,8 @@ class EncryptionManager:
                 key = key_file.read_text().strip()
             else:
                 key = secrets.token_hex(32)
-                try:
+                with contextlib.suppress(OSError):
                     key_file.write_text(key)
-                except OSError:
-                    pass  # read-only fs — key is ephemeral for this process
             logger.warning(
                 "CONFIG_ENCRYPTION_KEY not set — using auto-generated key (not for production)",
             )
@@ -172,9 +170,7 @@ class TradingConfig:
             return False
         if self.max_leverage <= 0 or self.max_leverage > 100:
             return False
-        if self.risk_per_trade <= 0:
-            return False
-        return True
+        return self.risk_per_trade > 0
 
 
 @dataclass
@@ -205,10 +201,7 @@ class AppConfig:
             return False
         if not self.logging.validate():
             return False
-        for cfg in self.api_configs.values():
-            if not cfg.validate():
-                return False
-        return True
+        return all(cfg.validate() for cfg in self.api_configs.values())
 
     def copy(self):
         import copy
@@ -275,7 +268,7 @@ class ConfigManager:
     def __init__(
         self,
         config_dir: str = "config",
-        encryption_key: Optional[str] = None,
+        encryption_key: str | None = None,
     ):
         self.config_dir = Path(config_dir)
         self.config_dir.mkdir(parents=True, exist_ok=True)
@@ -284,17 +277,17 @@ class ConfigManager:
             "CONFIG_ENCRYPTION_KEY",
             "",
         )
-        self._enc: Optional[EncryptionManager] = None
+        self._enc: EncryptionManager | None = None
         if self._encryption_key:
             try:
                 self._enc = EncryptionManager(master_key=self._encryption_key)
             except Exception as e:
                 logger.warning(f"EncryptionManager init failed: {e}")
 
-        self.config: Optional[AppConfig] = None
-        self._environment: Optional[str] = None
-        self._load_timestamp: Optional[float] = None
-        self._config_hash: Optional[str] = None
+        self.config: AppConfig | None = None
+        self._environment: str | None = None
+        self._load_timestamp: float | None = None
+        self._config_hash: str | None = None
         self.settings = _Settings()  # dynamic attribute bag for test compatibility
 
     def _config_file(self, environment: str) -> Path:
@@ -346,7 +339,7 @@ class ConfigManager:
             api_d["api_secret"] = self._decrypt_value(api_d.get("api_secret", ""))
         return AppConfig.from_dict(d)
 
-    def load_config(self, environment: Optional[str] = None) -> AppConfig:
+    def load_config(self, environment: str | None = None) -> AppConfig:
         env = environment or os.environ.get("APP_ENV", "development")
         path = self._config_file(env)
         if not path.exists():
@@ -371,7 +364,7 @@ class ConfigManager:
             raise RuntimeError("No config loaded yet; call load_config() first")
         return self.load_config(self._environment)
 
-    def get_api_config(self, provider: str) -> Optional[APIConfig]:
+    def get_api_config(self, provider: str) -> APIConfig | None:
         if self.config is None:
             raise RuntimeError("Config not loaded; call load_config() first")
         return self.config.api_configs.get(provider)
@@ -416,7 +409,7 @@ class ConfigManager:
         return self._decrypt_value(value)
 
 
-_manager: Optional[ConfigManager] = None
+_manager: ConfigManager | None = None
 
 
 def get_config_manager() -> ConfigManager:
@@ -426,5 +419,5 @@ def get_config_manager() -> ConfigManager:
     return _manager
 
 
-def initialize_config(environment: Optional[str] = None) -> AppConfig:
+def initialize_config(environment: str | None = None) -> AppConfig:
     return get_config_manager().load_config(environment)

@@ -59,8 +59,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Any, Callable, Iterator, List, Optional, Tuple
+from datetime import datetime, UTC
+from typing import Any
+from collections.abc import Callable, Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,7 @@ class ReplayDataHandler:
         self,
         start: datetime,
         end: datetime,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
+        loop: asyncio.AbstractEventLoop | None = None,
     ) -> int:
         """
         Pre-load all ticks for [start, end] into memory.
@@ -236,11 +237,11 @@ class ReplayBacktestRunner:
     def __init__(
         self,
         strategy_fn: Callable,
-        symbols: Optional[list[str]] = None,
+        symbols: list[str] | None = None,
         initial_capital: float = 10_000.0,
         data_frequency: str = "tick",
         leverage: float = 1.0,
-        replay_engine: Optional[Any] = None,
+        replay_engine: Any | None = None,
     ) -> None:
         self._strategy_fn = strategy_fn
         self._symbols = symbols or ["XAU_USD"]
@@ -310,7 +311,7 @@ class RegimeResult:
     regime: StressRegime
     metrics: Any  # PerformanceMetrics or None
     tick_count: int
-    error: Optional[str] = None
+    error: str | None = None
 
     @property
     def passed(self) -> bool:
@@ -373,8 +374,8 @@ class RegimeShiftStressTester:
         strategy_fn: Callable,
         strategy_name: str = "unnamed",
         initial_capital: float = 10_000.0,
-        regimes: Optional[list[StressRegime]] = None,
-        replay_engine: Optional[Any] = None,
+        regimes: list[StressRegime] | None = None,
+        replay_engine: Any | None = None,
         max_drawdown_threshold: float = 0.20,
     ) -> None:
         self._strategy_fn = strategy_fn

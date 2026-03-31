@@ -58,9 +58,9 @@ import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -179,29 +179,27 @@ class SumsubProvider(KYCProvider):
             }
         ).encode()
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.BASE_URL}{path}",
-                headers=self._headers("POST", path, body),
-                data=body,
-            ) as resp:
-                data = await resp.json()
-                if resp.status not in (200, 201):
-                    raise RuntimeError(f"Sumsub create_applicant failed: {data}")
+        async with aiohttp.ClientSession() as session, session.post(
+            f"{self.BASE_URL}{path}",
+            headers=self._headers("POST", path, body),
+            data=body,
+        ) as resp:
+            data = await resp.json()
+            if resp.status not in (200, 201):
+                raise RuntimeError(f"Sumsub create_applicant failed: {data}")
 
-                applicant_id = data["id"]
+            applicant_id = data["id"]
 
         # Get SDK token
         token_path = (
             f"/resources/accessTokens?userId={user_id}&levelName=basic-kyc-level"
         )
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.BASE_URL}{token_path}",
-                headers=self._headers("POST", token_path),
-            ) as resp:
-                token_data = await resp.json()
-                sdk_token = token_data.get("token", "")
+        async with aiohttp.ClientSession() as session, session.post(
+            f"{self.BASE_URL}{token_path}",
+            headers=self._headers("POST", token_path),
+        ) as resp:
+            token_data = await resp.json()
+            sdk_token = token_data.get("token", "")
 
         logger.info(
             "Sumsub: applicant created for user %s (id=%s)", user_id, applicant_id
@@ -221,14 +219,13 @@ class SumsubProvider(KYCProvider):
             return VerificationStatus.PENDING
 
         path = f"/resources/applicants/{applicant_id}/requiredIdDocsStatus"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{self.BASE_URL}{path}",
-                headers=self._headers("GET", path),
-            ) as resp:
-                if resp.status != 200:
-                    return VerificationStatus.PENDING
-                data = await resp.json()
+        async with aiohttp.ClientSession() as session, session.get(
+            f"{self.BASE_URL}{path}",
+            headers=self._headers("GET", path),
+        ) as resp:
+            if resp.status != 200:
+                return VerificationStatus.PENDING
+            data = await resp.json()
 
         # Map Sumsub review answer to our status
         review = data.get("reviewResult", {})
@@ -300,16 +297,15 @@ class OnfidoProvider(KYCProvider):
             }
         ).encode()
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.BASE_URL}/applicants",
-                headers=self._headers(),
-                data=body,
-            ) as resp:
-                data = await resp.json()
-                if resp.status not in (200, 201):
-                    raise RuntimeError(f"Onfido create_applicant failed: {data}")
-                applicant_id = data["id"]
+        async with aiohttp.ClientSession() as session, session.post(
+            f"{self.BASE_URL}/applicants",
+            headers=self._headers(),
+            data=body,
+        ) as resp:
+            data = await resp.json()
+            if resp.status not in (200, 201):
+                raise RuntimeError(f"Onfido create_applicant failed: {data}")
+            applicant_id = data["id"]
 
         # Create workflow run for SDK token
         sdk_token = ""  # nosec B105 - empty init, populated from API response
@@ -320,14 +316,13 @@ class OnfidoProvider(KYCProvider):
                     "workflow_id": self._workflow_id,
                 }
             ).encode()
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.BASE_URL}/workflow_runs",
-                    headers=self._headers(),
-                    data=wf_body,
-                ) as resp:
-                    wf_data = await resp.json()
-                    sdk_token = wf_data.get("sdk_token", "")
+            async with aiohttp.ClientSession() as session, session.post(
+                f"{self.BASE_URL}/workflow_runs",
+                headers=self._headers(),
+                data=wf_body,
+            ) as resp:
+                wf_data = await resp.json()
+                sdk_token = wf_data.get("sdk_token", "")
 
         logger.info(
             "Onfido: applicant created for user %s (id=%s)", user_id, applicant_id
@@ -346,14 +341,13 @@ class OnfidoProvider(KYCProvider):
         except ImportError:
             return VerificationStatus.PENDING
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{self.BASE_URL}/checks?applicant_id={applicant_id}",
-                headers=self._headers(),
-            ) as resp:
-                if resp.status != 200:
-                    return VerificationStatus.PENDING
-                data = await resp.json()
+        async with aiohttp.ClientSession() as session, session.get(
+            f"{self.BASE_URL}/checks?applicant_id={applicant_id}",
+            headers=self._headers(),
+        ) as resp:
+            if resp.status != 200:
+                return VerificationStatus.PENDING
+            data = await resp.json()
 
         checks = data.get("checks", [])
         if not checks:
@@ -457,8 +451,8 @@ class RefinitivScreener:
     async def screen(
         self,
         full_name: str,
-        dob: Optional[str] = None,
-        country: Optional[str] = None,
+        dob: str | None = None,
+        country: str | None = None,
     ) -> SanctionsResult:
         if not self._api_key:
             logger.warning(
@@ -496,22 +490,21 @@ class RefinitivScreener:
         body = json.dumps(body_dict)
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.BASE_URL}{path}",
-                    headers=self._auth_header("POST", path, body),
-                    data=body,
-                ) as resp:
-                    if resp.status not in (200, 201):
-                        logger.warning("Refinitiv screen HTTP %d", resp.status)
-                        return SanctionsResult(
-                            screened=False,
-                            is_match=False,
-                            match_score=0.0,
-                            matched_lists=[],
-                            provider="refinitiv_error",
-                        )
-                    data = await resp.json()
+            async with aiohttp.ClientSession() as session, session.post(
+                f"{self.BASE_URL}{path}",
+                headers=self._auth_header("POST", path, body),
+                data=body,
+            ) as resp:
+                if resp.status not in (200, 201):
+                    logger.warning("Refinitiv screen HTTP %d", resp.status)
+                    return SanctionsResult(
+                        screened=False,
+                        is_match=False,
+                        match_score=0.0,
+                        matched_lists=[],
+                        provider="refinitiv_error",
+                    )
+                data = await resp.json()
 
             results = data.get("results", [])
             if not results:
@@ -570,24 +563,23 @@ class LocalSDNScreener:
         try:
             import aiohttp
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    self.SDN_URL, timeout=aiohttp.ClientTimeout(total=30)
-                ) as resp:
-                    if resp.status == 200:
-                        text = await resp.text()
-                        # Extract names from XML (simplified parser)
-                        import re
+            async with aiohttp.ClientSession() as session, session.get(
+                self.SDN_URL, timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    # Extract names from XML (simplified parser)
+                    import re
 
-                        self._names = re.findall(r"<lastName>([^<]+)</lastName>", text)
-                        self._names += re.findall(
-                            r"<firstName>([^<]+)</firstName>", text
-                        )
-                        self._names = [n.upper().strip() for n in self._names]
-                        self._loaded = True
-                        logger.info(
-                            "LocalSDN: loaded %d name entries", len(self._names)
-                        )
+                    self._names = re.findall(r"<lastName>([^<]+)</lastName>", text)
+                    self._names += re.findall(
+                        r"<firstName>([^<]+)</firstName>", text
+                    )
+                    self._names = [n.upper().strip() for n in self._names]
+                    self._loaded = True
+                    logger.info(
+                        "LocalSDN: loaded %d name entries", len(self._names)
+                    )
         except Exception as exc:
             logger.warning("LocalSDN: failed to load SDN list: %s", exc)
 
@@ -626,9 +618,9 @@ class KYCGateway:
 
     def __init__(
         self,
-        provider: Optional[KYCProvider] = None,
-        screener: Optional[Any] = None,
-        compliance_manager: Optional[Any] = None,
+        provider: KYCProvider | None = None,
+        screener: Any | None = None,
+        compliance_manager: Any | None = None,
     ) -> None:
         self._provider = provider or self._build_provider()
         self._screener = screener or RefinitivScreener()
@@ -768,8 +760,8 @@ class KYCGateway:
     async def screen_sanctions(
         self,
         full_name: str,
-        dob: Optional[str] = None,
-        country: Optional[str] = None,
+        dob: str | None = None,
+        country: str | None = None,
     ) -> SanctionsResult:
         """
         Screen a name against sanctions lists.
@@ -798,7 +790,7 @@ class KYCGateway:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_kyc_gateway: Optional[KYCGateway] = None
+_kyc_gateway: KYCGateway | None = None
 
 
 def get_kyc_gateway() -> KYCGateway:

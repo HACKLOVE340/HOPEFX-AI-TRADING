@@ -25,8 +25,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -72,17 +71,17 @@ class JournalEntry(BaseModel):
     symbol: str
     side: str
     entry_price: float
-    exit_price: Optional[float] = None
+    exit_price: float | None = None
     size: float
-    pnl: Optional[float] = None
+    pnl: float | None = None
     opened_at: str
-    closed_at: Optional[str] = None
+    closed_at: str | None = None
     notes: str = ""
     tags: list[str] = Field(default_factory=list)
-    emotion: Optional[str] = None
+    emotion: str | None = None
     followed_rules: bool = True
-    rule_deviation: Optional[str] = None
-    screenshot_url: Optional[str] = None
+    rule_deviation: str | None = None
+    screenshot_url: str | None = None
     created_at: str = Field(
         default_factory=lambda: datetime.now(UTC).isoformat(),
     )
@@ -92,15 +91,15 @@ class JournalEntry(BaseModel):
 
 
 class JournalUpdate(BaseModel):
-    notes: Optional[str] = None
-    tags: Optional[list[str]] = None
-    emotion: Optional[str] = None
-    followed_rules: Optional[bool] = None
-    rule_deviation: Optional[str] = None
-    screenshot_url: Optional[str] = None
-    exit_price: Optional[float] = None
-    pnl: Optional[float] = None
-    closed_at: Optional[str] = None
+    notes: str | None = None
+    tags: list[str] | None = None
+    emotion: str | None = None
+    followed_rules: bool | None = None
+    rule_deviation: str | None = None
+    screenshot_url: str | None = None
+    exit_price: float | None = None
+    pnl: float | None = None
+    closed_at: str | None = None
 
 
 class TagStats(BaseModel):
@@ -153,9 +152,9 @@ def _load_all_entries() -> dict[str, dict]:
 async def list_trades(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    tag: Optional[str] = None,
-    emotion: Optional[str] = None,
-    symbol: Optional[str] = None,
+    tag: str | None = None,
+    emotion: str | None = None,
+    symbol: str | None = None,
     user: TokenPayload = Depends(get_current_user),
 ) -> list[JournalEntry]:
     entries = list(_load_all_entries().values())

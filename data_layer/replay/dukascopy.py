@@ -28,9 +28,8 @@ import logging
 import lzma
 import os
 import struct
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import List, Optional
 
 import aiohttp
 import pandas as pd
@@ -122,7 +121,7 @@ class DukascopyFetcher:
     """
 
     def __init__(self) -> None:
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -167,7 +166,7 @@ class DukascopyFetcher:
             / f"{hour.hour:02d}h_ticks.bi5"
         )
 
-    def _load_cache(self, symbol: str, hour: datetime) -> Optional[bytes]:
+    def _load_cache(self, symbol: str, hour: datetime) -> bytes | None:
         path = self._cache_path(symbol, hour)
         if path.exists():
             return path.read_bytes()
@@ -180,7 +179,7 @@ class DukascopyFetcher:
 
     # ── Download ──────────────────────────────────────────────────────────────
 
-    async def _fetch_hour(self, symbol: str, hour: datetime) -> Optional[bytes]:
+    async def _fetch_hour(self, symbol: str, hour: datetime) -> bytes | None:
         """Download one hour of bi5 data. Returns raw compressed bytes or None."""
         # Check cache first
         cached = self._load_cache(symbol, hour)
@@ -295,7 +294,7 @@ class DukascopyFetcher:
         # Fetch concurrently in batches
         semaphore = asyncio.Semaphore(max_concurrent)
 
-        async def _fetch_with_sem(h: datetime) -> Optional[pd.DataFrame]:
+        async def _fetch_with_sem(h: datetime) -> pd.DataFrame | None:
             async with semaphore:
                 data = await self._fetch_hour(symbol, h)
                 if data:

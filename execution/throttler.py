@@ -14,7 +14,6 @@ from collections import deque
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ class ThrottleState:
     messages_in_window: int
     window_start: float
     level: ThrottleLevel
-    cooldown_until: Optional[float]
+    cooldown_until: float | None
 
 
 class MessageThrottler:
@@ -120,7 +119,7 @@ class MessageThrottler:
     def _enter_throttle_state(
         self,
         now: float,
-        duration: Optional[float] = None,
+        duration: float | None = None,
     ) -> None:
         """Enter throttled state"""
         cooldown = duration or self.cooldown

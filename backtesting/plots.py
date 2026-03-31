@@ -10,7 +10,6 @@ Creates visualizations of backtest results.
 """
 
 import logging
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,7 @@ class PerformancePlotter:
         if not MATPLOTLIB_AVAILABLE:
             logger.warning("Plotting requires matplotlib")
 
-    def plot_equity_curve(self, filename: Optional[str] = None):
+    def plot_equity_curve(self, filename: str | None = None):
         """Plot equity curve."""
         if not MATPLOTLIB_AVAILABLE:
             return
@@ -62,7 +61,7 @@ class PerformancePlotter:
 
         plt.close()
 
-    def plot_drawdown(self, filename: Optional[str] = None):
+    def plot_drawdown(self, filename: str | None = None):
         """Plot drawdown."""
         if not MATPLOTLIB_AVAILABLE:
             return

@@ -80,8 +80,7 @@ import logging
 import os
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Deque, Dict, List, Optional
+from datetime import datetime, UTC
 
 import numpy as np
 
@@ -164,8 +163,8 @@ class TCAReport:
     """Aggregated TCA statistics for a broker/instrument/session slice."""
 
     broker: str
-    symbol: Optional[str]
-    session: Optional[str]
+    symbol: str | None
+    session: str | None
     n_trades: int
     mean_slippage_bps: float
     median_slippage_bps: float
@@ -253,7 +252,7 @@ class TCARecorder:
         filled_quantity: float,
         broker: str = "unknown",
         latency_ms: float = 0.0,
-    ) -> Optional[TCARecord]:
+    ) -> TCARecord | None:
         """
         Record the actual fill price and compute slippage vs signal price.
 
@@ -318,11 +317,11 @@ class TCARecorder:
 
     def get_report(
         self,
-        broker: Optional[str] = None,
-        symbol: Optional[str] = None,
-        session: Optional[str] = None,
+        broker: str | None = None,
+        symbol: str | None = None,
+        session: str | None = None,
         last_n: int = 500,
-    ) -> Optional[TCAReport]:
+    ) -> TCAReport | None:
         """
         Return aggregated TCA statistics for the given slice.
 
@@ -394,9 +393,9 @@ class TCARecorder:
 
     def _filter_records(
         self,
-        broker: Optional[str],
-        symbol: Optional[str],
-        session: Optional[str],
+        broker: str | None,
+        symbol: str | None,
+        session: str | None,
         last_n: int,
     ) -> list[TCARecord]:
         """Filter records by broker/symbol/session and return last_n."""
@@ -509,7 +508,7 @@ class TCARecorder:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_tca_recorder: Optional[TCARecorder] = None
+_tca_recorder: TCARecorder | None = None
 
 
 def get_tca_recorder() -> TCARecorder:

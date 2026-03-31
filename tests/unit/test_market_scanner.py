@@ -12,7 +12,7 @@ Tests for:
 - Opportunity Detection
 """
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 
 
 class TestScanCriteriaType:
@@ -432,7 +432,7 @@ class TestMarketScanner:
         scanner.add_criteria(ScanCriteriaType.MOMENTUM)
 
         callbacks = []
-        scanner.on_opportunity(lambda opp: callbacks.append(opp))
+        scanner.on_opportunity(lambda opp: callbacks.append(opp))  # noqa: PLW0108
 
         market_data = {
             "XAUUSD": {

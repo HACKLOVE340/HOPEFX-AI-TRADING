@@ -22,10 +22,10 @@ from brain.hopefx_brain import HOPEFXBrain, get_brain, Regime, BrainDecision
 from brain.nuclear_supervisor import NuclearHopeFXSupervisor, get_nuclear_supervisor
 
 __all__ = [
-    "HOPEFXBrain",
-    "get_brain",
-    "Regime",
     "BrainDecision",
+    "HOPEFXBrain",
     "NuclearHopeFXSupervisor",
+    "Regime",
+    "get_brain",
     "get_nuclear_supervisor",
 ]

@@ -17,7 +17,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 # ── Enumerations ──────────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ class GoldTick:
     confidence: float = 1.0  # 0-1, multi-source weighted
     spread: float = 0.0
     lineage_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    raw: Optional[dict[str, Any]] = field(default=None, compare=False)
+    raw: dict[str, Any] | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         # Auto-compute spread when not explicitly set (spread == 0 but ask > bid)
@@ -185,12 +185,12 @@ class MacroEvent:
     country: str
     currency: str
     scheduled_at: datetime
-    actual: Optional[float]
-    forecast: Optional[float]
-    previous: Optional[float]
+    actual: float | None
+    forecast: float | None
+    previous: float | None
     impact: MacroImpact
     gold_impact_score: float = 0.0  # historical gold reaction score
-    surprise_pct: Optional[float] = None  # (actual - forecast) / |forecast|
+    surprise_pct: float | None = None  # (actual - forecast) / |forecast|
     lineage_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 
@@ -201,12 +201,12 @@ class MacroEvent:
 class FeedHealth:
     source: FeedSource
     is_alive: bool
-    last_tick_at: Optional[datetime]
+    last_tick_at: datetime | None
     latency_ms: float
     error_rate: float  # rolling 1-min error rate
     tick_rate: float  # ticks/second
     confidence: float  # 0-1 quality score
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
 
 # ── Data quality report ───────────────────────────────────────────────────────

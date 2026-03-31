@@ -50,9 +50,9 @@ import queue
 import sqlite3
 import threading
 import time
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from data_layer.types import GoldTick, MacroEvent, NewsArticle
 
@@ -108,13 +108,13 @@ class DataLineageStore:
     blocking the hot tick path. Reads are synchronous.
     """
 
-    def __init__(self, db_path: Optional[Path] = None) -> None:
+    def __init__(self, db_path: Path | None = None) -> None:
         self._db_path: Path = Path(db_path) if db_path else _DB_PATH
         self._pg_url: str = _DB_URL  # PostgreSQL dual-write URL
         self._queue: queue.Queue = queue.Queue(maxsize=_QUEUE_MAXSIZE)
-        self._conn: Optional[sqlite3.Connection] = None
-        self._worker: Optional[threading.Thread] = None
-        self._pruner: Optional[threading.Thread] = None
+        self._conn: sqlite3.Connection | None = None
+        self._worker: threading.Thread | None = None
+        self._pruner: threading.Thread | None = None
         self._running = False
         self._write_count = 0
         self._drop_count = 0
@@ -311,10 +311,10 @@ class DataLineageStore:
 
     def query(
         self,
-        record_type: Optional[str] = None,
-        symbol: Optional[str] = None,
-        source: Optional[str] = None,
-        since: Optional[datetime] = None,
+        record_type: str | None = None,
+        symbol: str | None = None,
+        source: str | None = None,
+        since: datetime | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         if not self._conn:
@@ -366,7 +366,7 @@ class DataLineageStore:
             logger.warning("DataLineageStore.query error: %s", exc)
             return []
 
-    def query_by_lineage_id(self, lineage_id: str) -> Optional[dict[str, Any]]:
+    def query_by_lineage_id(self, lineage_id: str) -> dict[str, Any] | None:
         """
         Retrieve a single record by its content-addressed lineage_id.
 
@@ -407,7 +407,7 @@ class DataLineageStore:
     def query_by_source(
         self,
         source: str,
-        record_type: Optional[str] = None,
+        record_type: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         """
@@ -428,9 +428,9 @@ class DataLineageStore:
     def query_by_time_range(
         self,
         start: datetime,
-        end: Optional[datetime] = None,
-        record_type: Optional[str] = None,
-        symbol: Optional[str] = None,
+        end: datetime | None = None,
+        record_type: str | None = None,
+        symbol: str | None = None,
         limit: int = 500,
     ) -> list[dict[str, Any]]:
         """
@@ -493,8 +493,8 @@ class DataLineageStore:
     def export_to_postgres(
         self,
         pg_url: str,
-        record_type: Optional[str] = None,
-        since: Optional[datetime] = None,
+        record_type: str | None = None,
+        since: datetime | None = None,
         batch_size: int = 1000,
     ) -> int:
         """
@@ -592,7 +592,7 @@ class DataLineageStore:
             logger.error("DataLineageStore.export_to_postgres error: %s", exc)
             return 0
 
-    def count(self, record_type: Optional[str] = None) -> int:
+    def count(self, record_type: str | None = None) -> int:
         if not self._conn:
             return 0
         try:
@@ -630,8 +630,8 @@ class DataLineageStore:
         self,
         record_type: str,
         lineage_id: str,
-        source: Optional[str],
-        symbol: Optional[str],
+        source: str | None,
+        symbol: str | None,
         timestamp: str,
         payload: dict[str, Any],
     ) -> None:

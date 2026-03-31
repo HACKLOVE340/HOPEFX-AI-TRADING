@@ -15,7 +15,6 @@ Token generation is handled externally (login endpoint / mobile auth).
 
 import logging
 import os
-from typing import Optional
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
@@ -60,8 +59,8 @@ MAX_ORDER_QUANTITY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
 class TokenPayload(BaseModel):
     sub: str  # user_id
     role: str = "user"
-    exp: Optional[int] = None
-    iat: Optional[int] = None
+    exp: int | None = None
+    iat: int | None = None
 
 
 def _get_jwt_secret() -> str:
@@ -234,8 +233,7 @@ def require_kyc(
 
         if request.app is not _main_app:
             return user  # not the main app — skip KYC (test / embedded app)
-        if app_state.compliance_manager is not None:
-            if not app_state.compliance_manager.is_kyc_approved(user.sub):
+        if app_state.compliance_manager is not None and not app_state.compliance_manager.is_kyc_approved(user.sub):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="KYC verification required before trading. "

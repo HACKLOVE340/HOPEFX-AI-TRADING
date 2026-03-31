@@ -53,9 +53,8 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +204,7 @@ class TradeLogger:
         pnl: float = 0.0,
         broker: str = "paper",
         order_id: str = "",
-        pip_size: Optional[float] = None,
+        pip_size: float | None = None,
         notes: str = "",
     ) -> None:
         """
@@ -303,8 +302,8 @@ class TradeLogger:
     def log_equity(
         self,
         equity: float,
-        balance: Optional[float] = None,
-        daily_pnl: Optional[float] = None,
+        balance: float | None = None,
+        daily_pnl: float | None = None,
         open_positions: int = 0,
     ) -> None:
         """
@@ -499,11 +498,11 @@ class TradeLogger:
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
-_trade_logger: Optional[TradeLogger] = None
+_trade_logger: TradeLogger | None = None
 _tl_lock = threading.Lock()
 
 
-def get_trade_logger(log_dir: Optional[Path] = None) -> TradeLogger:
+def get_trade_logger(log_dir: Path | None = None) -> TradeLogger:
     """Return the module-level TradeLogger singleton (thread-safe)."""
     global _trade_logger
     if _trade_logger is None:

@@ -25,8 +25,8 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, UTC
+from typing import Any
 
 import bcrypt
 import jwt
@@ -100,9 +100,9 @@ class PlaceOrderRequest(BaseModel):
     side: str = Field(..., pattern="^(BUY|SELL)$")
     order_type: str = Field(..., pattern="^(MARKET|LIMIT|STOP)$")
     quantity: float = Field(..., gt=0)
-    price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    price: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     comment: str = ""
 
 

@@ -31,7 +31,6 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -227,7 +226,7 @@ class PPORLAgent:
 
     def __init__(
         self,
-        model_path: Optional[str] = None,
+        model_path: str | None = None,
         total_timesteps: int = 100_000,
         policy: str = "MlpPolicy",
     ) -> None:
@@ -238,8 +237,8 @@ class PPORLAgent:
             )
         self.total_timesteps = total_timesteps
         self.policy = policy
-        self._model: Optional[PPO] = None
-        self._env: Optional[DummyVecEnv] = None
+        self._model: PPO | None = None
+        self._env: DummyVecEnv | None = None
 
         if model_path and Path(model_path).exists():
             self.load(model_path)
@@ -320,7 +319,7 @@ class PPORLAgent:
     # Persistence
     # ------------------------------------------------------------------
 
-    def save(self, path: Optional[str] = None) -> str:
+    def save(self, path: str | None = None) -> str:
         if self._model is None:
             raise RuntimeError("No model to save")
         save_path = path or str(self.MODEL_DIR / "ppo_hopefx")
@@ -343,7 +342,7 @@ class PPORLAgent:
 class NewsItem:
     headline: str
     body: str = ""
-    event_time: Optional[datetime] = None
+    event_time: datetime | None = None
     impact: str = "medium"  # low / medium / high
     currency: str = "XAU"
 
@@ -593,9 +592,9 @@ class AdvancedAIEnsemble:
         self.sentiment_weight = sentiment_weight
         self.model_dir = model_dir
 
-        self._rl: Optional[PPORLAgent] = None
-        self._rag: Optional[VectorRAGNewsSentiment] = None
-        self._retrainer: Optional[OnlineRetrainer] = None
+        self._rl: PPORLAgent | None = None
+        self._rag: VectorRAGNewsSentiment | None = None
+        self._retrainer: OnlineRetrainer | None = None
 
         if _SB3_AVAILABLE and _GYM_AVAILABLE:
             self._rl = PPORLAgent()
@@ -637,7 +636,7 @@ class AdvancedAIEnsemble:
     def predict(
         self,
         obs: np.ndarray,
-        news_item: Optional[NewsItem] = None,
+        news_item: NewsItem | None = None,
     ) -> AdvancedAIEnsemble.Signal:
         """
         Produce a blended trading signal.

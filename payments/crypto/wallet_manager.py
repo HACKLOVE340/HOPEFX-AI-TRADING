@@ -10,7 +10,6 @@ Manages hot/cold wallet separation and multi-currency support.
 """
 
 from decimal import Decimal
-from typing import Dict
 import logging
 
 logger = logging.getLogger(__name__)

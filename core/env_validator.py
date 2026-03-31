@@ -17,7 +17,6 @@ import logging
 import os
 import sys
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class EnvVar:
     required: bool = True
     min_length: int = 0
     description: str = ""
-    default: Optional[str] = None  # only used for optional vars in the report
+    default: str | None = None  # only used for optional vars in the report
 
 
 # ── Variable definitions ──────────────────────────────────────────────────────

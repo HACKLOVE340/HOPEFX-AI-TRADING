@@ -24,9 +24,9 @@ import logging
 import os
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -54,7 +54,7 @@ except ImportError:
     logger.error("xgboost not installed. Install: pip install xgboost>=2.0.0")
 
 try:
-    from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
+    from sklearn.metrics import accuracy_score, classification_report, roc_auc_score  # noqa: F401
     from sklearn.preprocessing import StandardScaler
 
     _SKLEARN = True
@@ -388,7 +388,7 @@ class WalkForwardValidator:
             train_end = min_train + i * fold_size
             test_start = train_end
             test_end = min(test_start + fold_size, n)
-            splits.append((range(0, train_end), range(test_start, test_end)))
+            splits.append((range(train_end), range(test_start, test_end)))
         return splits
 
 
@@ -428,23 +428,23 @@ class XGBoostPredictor:
         "verbosity": 0,
     }
 
-    def __init__(self, params: Optional[dict[str, Any]] = None) -> None:
+    def __init__(self, params: dict[str, Any] | None = None) -> None:
         if not _XGB:
             raise ImportError("xgboost not installed.")
         base = dict(self.DEFAULT_PARAMS)
         if self._CI_FAST:
             base["n_estimators"] = int(os.environ.get("CI_XGB_N_ESTIMATORS", "50"))
         self._params = {**base, **(params or {})}
-        self._model: Optional[xgb.XGBClassifier] = None
-        self._scaler: Optional[StandardScaler] = None
+        self._model: xgb.XGBClassifier | None = None
+        self._scaler: StandardScaler | None = None
         self._feature_names: list[str] = []
 
     def fit(
         self,
         X_train: pd.DataFrame,
         y_train: pd.Series,
-        X_val: Optional[pd.DataFrame] = None,
-        y_val: Optional[pd.Series] = None,
+        X_val: pd.DataFrame | None = None,
+        y_val: pd.Series | None = None,
     ) -> None:
         if not _SKLEARN:
             raise ImportError("scikit-learn not installed.")
@@ -551,7 +551,7 @@ class MLPipeline:
         self._validator = WalkForwardValidator(n_folds=n_folds)
         self._predictor = XGBoostPredictor()
 
-        self._validation_report: Optional[ValidationReport] = None
+        self._validation_report: ValidationReport | None = None
         self._stationary_features: list[str] = []
 
     def run(self, df: pd.DataFrame) -> ValidationReport:
@@ -749,5 +749,5 @@ class MLPipeline:
         """Return probability of upward move for each row in X."""
         return self._predictor.predict_proba(X)
 
-    def get_validation_report(self) -> Optional[ValidationReport]:
+    def get_validation_report(self) -> ValidationReport | None:
         return self._validation_report

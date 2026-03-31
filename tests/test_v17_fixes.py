@@ -56,7 +56,7 @@ class TestWebSocketAuthBypass:
     @pytest.mark.asyncio
     async def test_invalid_token_does_not_set_authenticated(self):
         """Connection must NOT be marked authenticated after a decode failure."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from api.websocket_server import ConnectionInfo
 
@@ -87,7 +87,7 @@ class TestWebSocketAuthBypass:
     @pytest.mark.asyncio
     async def test_valid_token_authenticates(self):
         """A valid JWT must still authenticate successfully."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from api.websocket_server import ConnectionInfo
 
@@ -128,15 +128,13 @@ class TestRiskManagerFailSafe:
         fake_order = MagicMock()
         fake_order.symbol = "EURUSD"
 
-        with patch.object(trading_mod, "app_state", fake_state):
-            with patch.object(
-                trading_mod,
-                "_broker_call",
-                new_callable=AsyncMock,
-                return_value=[],
-            ):
-                with pytest.raises(HTTPException) as exc_info:
-                    await trading_mod._apply_risk_checks(fake_order, "user-1")
+        with patch.object(trading_mod, "app_state", fake_state), patch.object(
+            trading_mod,
+            "_broker_call",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), pytest.raises(HTTPException) as exc_info:
+            await trading_mod._apply_risk_checks(fake_order, "user-1")
         assert exc_info.value.status_code == 503
 
     @pytest.mark.asyncio
@@ -159,15 +157,13 @@ class TestRiskManagerFailSafe:
 
         fake_order = MagicMock()
 
-        with patch.object(trading_mod, "app_state", fake_state):
-            with patch.object(
-                trading_mod,
-                "_broker_call",
-                new_callable=AsyncMock,
-                return_value=[],
-            ):
-                with pytest.raises(HTTPException) as exc_info:
-                    await trading_mod._apply_risk_checks(fake_order, "user-1")
+        with patch.object(trading_mod, "app_state", fake_state), patch.object(
+            trading_mod,
+            "_broker_call",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), pytest.raises(HTTPException) as exc_info:
+            await trading_mod._apply_risk_checks(fake_order, "user-1")
         assert exc_info.value.status_code == 403
 
 
@@ -264,19 +260,16 @@ class TestPropFirmGuardFailSafe:
         fake_state = MagicMock()
         fake_state.broker = MagicMock()
 
-        with patch.object(trading_mod, "app_state", fake_state):
-            with patch.object(
-                trading_mod,
-                "_broker_call",
-                new_callable=AsyncMock,
-                return_value=MagicMock(),
-            ):
-                with patch(
-                    "brokers.prop_firms.guard.check_prop_firm_rules",
-                    side_effect=RuntimeError("guard crashed"),
-                ):
-                    with pytest.raises(HTTPException) as exc_info:
-                        await trading_mod._validate_order(MagicMock())
+        with patch.object(trading_mod, "app_state", fake_state), patch.object(
+            trading_mod,
+            "_broker_call",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ), patch(
+            "brokers.prop_firms.guard.check_prop_firm_rules",
+            side_effect=RuntimeError("guard crashed"),
+        ), pytest.raises(HTTPException) as exc_info:
+            await trading_mod._validate_order(MagicMock())
         assert exc_info.value.status_code == 503
 
     @pytest.mark.asyncio
@@ -289,21 +282,18 @@ class TestPropFirmGuardFailSafe:
         fake_state = MagicMock()
         fake_state.broker = MagicMock()
 
-        with patch.object(trading_mod, "app_state", fake_state):
-            with patch.object(
-                trading_mod,
-                "_broker_call",
-                new_callable=AsyncMock,
-                return_value=MagicMock(),
-            ):
-                with patch(
-                    "brokers.prop_firms.guard.check_prop_firm_rules",
-                    side_effect=HTTPException(
-                        status_code=403, detail="daily loss limit"
-                    ),
-                ):
-                    with pytest.raises(HTTPException) as exc_info:
-                        await trading_mod._validate_order(MagicMock())
+        with patch.object(trading_mod, "app_state", fake_state), patch.object(
+            trading_mod,
+            "_broker_call",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ), patch(
+            "brokers.prop_firms.guard.check_prop_firm_rules",
+            side_effect=HTTPException(
+                status_code=403, detail="daily loss limit"
+            ),
+        ), pytest.raises(HTTPException) as exc_info:
+            await trading_mod._validate_order(MagicMock())
         assert exc_info.value.status_code == 403
 
 

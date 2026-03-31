@@ -43,7 +43,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any
+from collections.abc import AsyncIterator
 
 import pandas as pd
 
@@ -74,10 +75,10 @@ class MarketReplayEngine:
     pipeline as live ticks — ensuring identical feature generation.
     """
 
-    def __init__(self, fetcher: Optional[DukascopyFetcher] = None) -> None:
+    def __init__(self, fetcher: DukascopyFetcher | None = None) -> None:
         self._fetcher = fetcher or dukascopy_fetcher
-        self._replay_cursor: Optional[datetime] = None
-        self._replay_ticks: Optional[pd.DataFrame] = None
+        self._replay_cursor: datetime | None = None
+        self._replay_ticks: pd.DataFrame | None = None
         self._is_replaying: bool = False
 
     # ── OHLCV DataFrame builder ───────────────────────────────────────────────
@@ -211,7 +212,7 @@ class MarketReplayEngine:
         ts_end = pd.Timestamp(end, tz="UTC")
 
         self._is_replaying = True
-        prev_ts: Optional[datetime] = None
+        prev_ts: datetime | None = None
 
         for ts, row in self._replay_ticks.iterrows():
             if ts < ts_start:
@@ -266,7 +267,7 @@ class MarketReplayEngine:
     # ── Replay state ──────────────────────────────────────────────────────────
 
     @property
-    def replay_cursor(self) -> Optional[datetime]:
+    def replay_cursor(self) -> datetime | None:
         """Current replay position (UTC). None if not replaying."""
         return self._replay_cursor
 
@@ -295,8 +296,8 @@ class MarketReplayEngine:
         start: datetime,
         end: datetime,
         timeframe: str = "H1",
-        macro_df: Optional[Any] = None,
-    ) -> Optional[Any]:
+        macro_df: Any | None = None,
+    ) -> Any | None:
         """
         Build a fully-featured OHLCV DataFrame for backtesting.
 
@@ -372,7 +373,7 @@ class MarketReplayEngine:
         start: datetime,
         end: datetime,
         timeframe: str = "H1",
-        callback: Optional[Any] = None,
+        callback: Any | None = None,
     ) -> int:
         """
         Replay OHLCV bars one at a time, calling `callback(bar, features)` for each.
@@ -441,7 +442,7 @@ class MarketReplayEngine:
             return 0
 
     def get_feature_snapshot(
-        self, as_of: Optional[datetime] = None
+        self, as_of: datetime | None = None
     ) -> dict[str, float]:
         """
         Return a complete ML feature snapshot at a given time.

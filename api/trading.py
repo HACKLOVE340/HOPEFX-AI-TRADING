@@ -20,9 +20,9 @@ import json as _json
 import logging
 import os
 import time
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path as _Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -172,7 +172,7 @@ _order_rl_cache: dict = {}  # in-memory fallback: {user_id: [timestamps]}
 
 def _reset_order_rl_cache() -> None:
     """Clear the in-memory rate-limit cache. Used by tests to prevent bleed."""
-    global _order_rl_cache
+    global _order_rl_cache  # noqa: PLW0602
     _order_rl_cache.clear()
 
 
@@ -231,7 +231,7 @@ class OrderRequest(BaseModel):
     side: str = Field(..., pattern="^(buy|sell)$")
     quantity: float = Field(..., gt=0)
     order_type: str = Field("market", pattern="^(market|limit|stop)$")
-    price: Optional[float] = Field(None, gt=0)
+    price: float | None = Field(None, gt=0)
 
     @field_validator("symbol")
     @classmethod
@@ -262,8 +262,8 @@ class OrderResponse(BaseModel):
 
     status: str
     order_id: str
-    filled_price: Optional[float] = None
-    filled_quantity: Optional[float] = None
+    filled_price: float | None = None
+    filled_quantity: float | None = None
 
 
 class ClosePositionResponse(BaseModel):
@@ -279,8 +279,8 @@ class CloseAllResponse(BaseModel):
 class PriceQuote(BaseModel):
     bid: float
     ask: float
-    last: Optional[float] = None
-    timestamp: Optional[float] = None
+    last: float | None = None
+    timestamp: float | None = None
 
 
 class OHLCVBar(BaseModel):
@@ -978,7 +978,7 @@ _TRADE_CSV_FIELDS = [
 ]
 
 
-def _query_trades(user_id: str, symbol: Optional[str], limit: int, offset: int) -> list:
+def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> list:
     """Fetch trades from DB for the given user."""
     try:
         from app import app_state as _state
@@ -1017,7 +1017,7 @@ def _trade_to_dict(t) -> dict:
 @router.get("/trades")
 async def get_trade_history(
     user: TokenPayload = Depends(get_current_user),
-    symbol: Optional[str] = Query(None, max_length=20),
+    symbol: str | None = Query(None, max_length=20),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ):
@@ -1041,7 +1041,7 @@ async def get_trade_history(
 @router.get("/trades/export")
 async def export_trade_history_csv(
     user: TokenPayload = Depends(get_current_user),
-    symbol: Optional[str] = Query(None, max_length=20),
+    symbol: str | None = Query(None, max_length=20),
     limit: int = Query(10000, ge=1, le=100000),
 ):
     """
@@ -1081,7 +1081,7 @@ class StrategyCreateRequest(BaseModel):
     symbol: str = "XAUUSD"
     timeframe: str = "1h"
     strategy_type: str = "ma_crossover"
-    parameters: Optional[dict] = None
+    parameters: dict | None = None
     enabled: bool = True
     risk_per_trade: float = 1.0
 
@@ -1094,7 +1094,7 @@ class StrategyResponse(BaseModel):
     strategy_type: str
     type: str = ""  # alias for strategy_type used by some tests
     enabled: bool
-    parameters: Optional[dict] = None
+    parameters: dict | None = None
 
     def model_post_init(self, __context):
         if not self.type:
@@ -1107,16 +1107,16 @@ class SignalResponse(BaseModel):
     direction: str
     confidence: float
     entry_price: float
-    stop_loss_price: Optional[float] = None
-    take_profit_price: Optional[float] = None
-    notes: Optional[str] = None
+    stop_loss_price: float | None = None
+    take_profit_price: float | None = None
+    notes: str | None = None
     timestamp: str
     source: str = "strategy_brain"
 
 
 class PositionSizeRequest(BaseModel):
     entry_price: float
-    stop_loss_price: Optional[float] = None
+    stop_loss_price: float | None = None
     confidence: float = 1.0
     symbol: str = "XAUUSD"
     account_equity: float = 100_000.0
@@ -1126,9 +1126,9 @@ class PositionSizeRequest(BaseModel):
 class PositionSizeResponse(BaseModel):
     size: float
     risk_amount: float
-    stop_loss_price: Optional[float] = None
-    take_profit_price: Optional[float] = None
-    notes: Optional[str] = None
+    stop_loss_price: float | None = None
+    take_profit_price: float | None = None
+    notes: str | None = None
 
 
 # ── In-memory strategy store for test endpoints ───────────────────────────────
@@ -1180,7 +1180,7 @@ def _make_strategy_router():
         _strategy_store[sid] = record
         return record
 
-    def _resolve(strategy_id: str) -> Optional[str]:
+    def _resolve(strategy_id: str) -> str | None:
         """Return store key by id or name."""
         if strategy_id in _strategy_store:
             return strategy_id

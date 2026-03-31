@@ -11,8 +11,7 @@ Trader Profiles Management
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
-from typing import Optional, Dict
+from datetime import datetime, UTC
 
 
 @dataclass
@@ -23,10 +22,10 @@ class TraderProfile:
     username: str
     email: str
     bio: str = ""
-    avatar_url: Optional[str] = None
-    website: Optional[str] = None
+    avatar_url: str | None = None
+    website: str | None = None
     verified: bool = False
-    verification_date: Optional[datetime] = None
+    verification_date: datetime | None = None
     created_at: datetime = None
     updated_at: datetime = None
 
@@ -86,7 +85,7 @@ class TraderProfileManager:
         self.profiles[trader_id] = profile
         return profile
 
-    def update_profile(self, trader_id: str, **kwargs) -> Optional[TraderProfile]:
+    def update_profile(self, trader_id: str, **kwargs) -> TraderProfile | None:
         """Update trader profile"""
         if trader_id not in self.profiles:
             return None
@@ -99,7 +98,7 @@ class TraderProfileManager:
         profile.updated_at = datetime.now(UTC)
         return profile
 
-    def get_profile(self, trader_id: str) -> Optional[TraderProfile]:
+    def get_profile(self, trader_id: str) -> TraderProfile | None:
         """Get trader profile"""
         return self.profiles.get(trader_id)
 

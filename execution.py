@@ -13,7 +13,7 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Any
 
 from validation import OrderValidator, Order
 
@@ -38,9 +38,9 @@ class ExecutionResult:
     avg_price: float
     slippage: float
     commission: float
-    pnl: Optional[float] = None
-    message: Optional[str] = None
-    timestamp: Optional[str] = None
+    pnl: float | None = None
+    message: str | None = None
+    timestamp: str | None = None
 
 
 class PaperExecutor:
@@ -148,8 +148,8 @@ class PaperExecutor:
         self,
         order: Order,
         current_price: float,
-        bid: Optional[float] = None,
-        ask: Optional[float] = None,
+        bid: float | None = None,
+        ask: float | None = None,
         volatility: float = 0.0,
         skip_validation: bool = False,
     ) -> ExecutionResult:
@@ -447,7 +447,7 @@ class PaperExecutor:
             order_id, order, fill_price, 0.0, commission, timestamp
         )
 
-    def get_position(self, symbol: str) -> Optional[dict]:
+    def get_position(self, symbol: str) -> dict | None:
         """Get current position for symbol."""
         return self.positions.get(symbol)
 
@@ -515,9 +515,9 @@ class SmartOrderRouter:
     _FILL_HISTORY_LEN = 50
     _ERROR_EXCLUSION = 3  # consecutive errors before temporary exclusion
 
-    def __init__(self, routing_weights: Optional[dict[str, float]] = None):
+    def __init__(self, routing_weights: dict[str, float] | None = None):
         self.brokers: dict[str, Any] = {}
-        self.default_broker: Optional[str] = None
+        self.default_broker: str | None = None
         self._weights = routing_weights or self._ROUTING_WEIGHTS
 
         # Per-broker metrics
@@ -606,7 +606,7 @@ class SmartOrderRouter:
         if not ranked:
             raise RuntimeError("SmartOrderRouter: all brokers are temporarily excluded")
 
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         for name in ranked:
             broker = self.brokers[name]
             if not hasattr(broker, "submit_order"):

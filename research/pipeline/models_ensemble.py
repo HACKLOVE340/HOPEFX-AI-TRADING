@@ -40,7 +40,6 @@ import logging
 import pickle  # nosec B403 - joblib tried first; pickle only for legacy fallback
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import joblib
 import numpy as np
@@ -104,8 +103,8 @@ class SHAPFeatureSelector:
 
     def __init__(self, n_features: int = 50):
         self.n_features = n_features
-        self.selected_features_: Optional[list[str]] = None
-        self.importances_: Optional[pd.Series] = None
+        self.selected_features_: list[str] | None = None
+        self.importances_: pd.Series | None = None
 
     def fit(self, model, X: pd.DataFrame, y: np.ndarray) -> SHAPFeatureSelector:
         if SHAP_AVAILABLE:
@@ -287,8 +286,8 @@ class EnsemblePredictor:
 
         self.scaler = StandardScaler()
         self.selector = SHAPFeatureSelector(n_features=n_features)
-        self.stack_: Optional[StackingClassifier] = None
-        self._feature_cols: Optional[list[str]] = None
+        self.stack_: StackingClassifier | None = None
+        self._feature_cols: list[str] | None = None
 
     def _build_base_estimators(self, X: np.ndarray, y: np.ndarray) -> list:
         estimators = []
@@ -497,7 +496,7 @@ class DeepEnsembleStore:
         p_value_gate: float = 0.001,
         deep_weight: float = 0.20,
         seq_len: int = 60,
-        scaler_path: Optional[str] = None,
+        scaler_path: str | None = None,
     ) -> None:
         self.model_path = Path(model_path)
         self.meta_path = Path(meta_path)
@@ -507,8 +506,8 @@ class DeepEnsembleStore:
         self.seq_len = seq_len
         self.scaler_path = Path(scaler_path) if scaler_path else None
 
-        self._predictor: Optional[object] = None
-        self._scaler: Optional[StandardScaler] = None
+        self._predictor: object | None = None
+        self._scaler: StandardScaler | None = None
         self._active: bool = False
         self._oos_accuracy: float = 0.0
         self._p_value: float = 1.0
@@ -700,7 +699,7 @@ class DeepEnsembleStore:
             return advanced_prob
 
     @staticmethod
-    def _extract_features(ohlcv_df: pd.DataFrame) -> Optional[np.ndarray]:
+    def _extract_features(ohlcv_df: pd.DataFrame) -> np.ndarray | None:
         """
         Extract a 6-feature stationary matrix from OHLCV for deep model input.
 

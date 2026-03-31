@@ -40,8 +40,8 @@ import hashlib
 import logging
 import time
 from collections import deque
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, UTC
+from typing import Any
 
 from data_layer.feeds.news.alpha_vantage import AlphaVantageNewsFeed
 from data_layer.feeds.news.base import NewsFeedBase
@@ -315,7 +315,7 @@ class NewsSentimentEngine:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def get_ml_features(self, as_of: Optional[datetime] = None) -> dict[str, float]:
+    def get_ml_features(self, as_of: datetime | None = None) -> dict[str, float]:
         """
         Return 4 sentiment ML features.
 
@@ -403,7 +403,7 @@ class NewsSentimentEngine:
         self,
         since: datetime,
         min_relevance: float = 0.0,
-        source: Optional[Any] = None,
+        source: Any | None = None,
     ) -> list[NewsArticle]:
         """
         Return all articles published at or after `since`.

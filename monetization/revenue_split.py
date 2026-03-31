@@ -45,10 +45,9 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
-from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +92,7 @@ class SaleTransaction:
     creator_amount: Decimal
     currency: str
     transaction_type: TransactionType
-    stripe_payment_intent_id: Optional[str]
+    stripe_payment_intent_id: str | None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict:
@@ -120,8 +119,8 @@ class CreatorBalance:
     pending_usd: Decimal = Decimal("0.00")
     total_earned_usd: Decimal = Decimal("0.00")
     total_paid_usd: Decimal = Decimal("0.00")
-    last_payout_at: Optional[datetime] = None
-    stripe_account_id: Optional[str] = None  # Stripe Connect account
+    last_payout_at: datetime | None = None
+    stripe_account_id: str | None = None  # Stripe Connect account
 
     @property
     def is_payout_eligible(self) -> bool:
@@ -137,11 +136,11 @@ class PayoutRecord:
     amount_usd: Decimal
     currency: str
     status: PayoutStatus
-    stripe_transfer_id: Optional[str]
+    stripe_transfer_id: str | None
     transaction_ids: list[str]
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    completed_at: Optional[datetime] = None
-    failure_reason: Optional[str] = None
+    completed_at: datetime | None = None
+    failure_reason: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -190,7 +189,7 @@ class RevenueSplitEngine:
         gross_amount: float,
         currency: str = "USD",
         transaction_type: TransactionType = TransactionType.PURCHASE,
-        stripe_payment_intent_id: Optional[str] = None,
+        stripe_payment_intent_id: str | None = None,
     ) -> SaleTransaction:
         """
         Record a marketplace sale and credit the creator's pending balance.
@@ -246,8 +245,8 @@ class RevenueSplitEngine:
     def record_refund(
         self,
         original_transaction_id: str,
-        refund_amount: Optional[float] = None,
-    ) -> Optional[SaleTransaction]:
+        refund_amount: float | None = None,
+    ) -> SaleTransaction | None:
         """
         Record a refund, debiting the creator's pending balance.
 

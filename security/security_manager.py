@@ -17,8 +17,7 @@ import logging
 import secrets
 import threading
 import time
-from typing import Dict, Tuple
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -70,9 +69,7 @@ class SecurityManager:
             return False
         if not any(c.isdigit() for c in password):
             return False
-        if not any(c in "!@#$%^&*" for c in password):
-            return False
-        return True
+        return any(c in "!@#$%^&*" for c in password)
 
     def check_rate_limit(self, user_id: str) -> bool:
         """Check if user exceeded rate limit"""

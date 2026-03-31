@@ -63,8 +63,7 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, UTC
 
 import numpy as np
 import pandas as pd
@@ -125,7 +124,7 @@ async def _fetch_ccxt(
     timeframe: str,
     since_ms: int,
     limit: int = 1000,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """Fetch OHLCV from a ccxt exchange. Returns DataFrame or None on failure."""
     try:
         import ccxt.async_support as ccxt_async
@@ -178,7 +177,7 @@ async def _fetch_yfinance(
     symbol: str,
     timeframe: str,
     since_ms: int,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """Fetch OHLCV from Yahoo Finance via yfinance. Returns DataFrame or None."""
     try:
         import yfinance as yf
@@ -238,7 +237,7 @@ async def _fetch_yfinance(
 async def _fetch_alpha_vantage(
     symbol: str,
     timeframe: str,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """Fetch OHLCV from Alpha Vantage REST API. Returns DataFrame or None."""
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "")
     if not api_key:
@@ -266,13 +265,12 @@ async def _fetch_alpha_vantage(
     try:
         import aiohttp
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                url, timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.json()
+        async with aiohttp.ClientSession() as session, session.get(
+            url, timeout=aiohttp.ClientTimeout(total=30)
+        ) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.json()
 
         key = (
             f"Time Series FX ({interval})"
@@ -428,7 +426,7 @@ class MultiSourceValidator:
         bar_results: list[BarValidationResult] = []
         rejection_reasons: dict[str, int] = {}
 
-        prev_close: Optional[float] = None
+        prev_close: float | None = None
 
         for ts, row in primary.iterrows():
             flags: list[str] = []
@@ -549,7 +547,7 @@ class MultiSourceValidator:
 async def fetch_validated_ohlcv(
     symbol: str,
     timeframe: str = "1h",
-    since_ms: Optional[int] = None,
+    since_ms: int | None = None,
     min_sources: int = MIN_SOURCES,
 ) -> pd.DataFrame:
     """

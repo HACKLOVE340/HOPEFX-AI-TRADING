@@ -18,10 +18,11 @@ Professional order management system supporting:
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
 from threading import Lock
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -79,16 +80,16 @@ class Order:
     side: OrderSide
     order_type: OrderType
     quantity: float
-    price: Optional[float] = None
-    stop_price: Optional[float] = None
+    price: float | None = None
+    stop_price: float | None = None
     time_in_force: TimeInForce = TimeInForce.GTC
     status: OrderStatus = OrderStatus.PENDING
     filled_quantity: float = 0.0
     average_fill_price: float = 0.0
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    expires_at: Optional[datetime] = None
-    parent_id: Optional[str] = None
+    expires_at: datetime | None = None
+    parent_id: str | None = None
     child_orders: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -118,9 +119,9 @@ class Order:
 class TrailingStopOrder(Order):
     """Trailing stop order with dynamic stop price."""
 
-    trail_amount: Optional[float] = None  # Fixed dollar/pip amount
-    trail_percent: Optional[float] = None  # Percentage
-    activation_price: Optional[float] = None  # Price to activate trailing
+    trail_amount: float | None = None  # Fixed dollar/pip amount
+    trail_percent: float | None = None  # Percentage
+    activation_price: float | None = None  # Price to activate trailing
     highest_price: float = 0.0  # For long positions
     lowest_price: float = float("inf")  # For short positions
 
@@ -134,8 +135,8 @@ class OCOOrder:
     order1: Order  # Typically limit order (take profit)
     order2: Order  # Typically stop order (stop loss)
     status: OrderStatus = OrderStatus.PENDING
-    triggered_order_id: Optional[str] = None
-    cancelled_order_id: Optional[str] = None
+    triggered_order_id: str | None = None
+    cancelled_order_id: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict:
@@ -204,7 +205,7 @@ class ConditionalOrder:
     condition_logic: str = "AND"  # AND, OR
     status: OrderStatus = OrderStatus.PENDING
     evaluation_count: int = 0
-    last_evaluated: Optional[datetime] = None
+    last_evaluated: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict:
@@ -270,7 +271,7 @@ class AdvancedOrderManager:
     - Thread-safe operations
     """
 
-    def __init__(self, broker_callback: Callable = None, config: Optional[dict] = None):
+    def __init__(self, broker_callback: Callable = None, config: dict | None = None):
         """
         Initialize advanced order manager.
 
@@ -309,11 +310,11 @@ class AdvancedOrderManager:
         side: OrderSide,
         order_type: OrderType,
         quantity: float,
-        price: Optional[float] = None,
-        stop_price: Optional[float] = None,
+        price: float | None = None,
+        stop_price: float | None = None,
         time_in_force: TimeInForce = TimeInForce.GTC,
-        expires_at: Optional[datetime] = None,
-        metadata: Optional[dict] = None,
+        expires_at: datetime | None = None,
+        metadata: dict | None = None,
     ) -> Order:
         """Create a basic order."""
         order = Order(
@@ -341,9 +342,9 @@ class AdvancedOrderManager:
         symbol: str,
         side: OrderSide,
         quantity: float,
-        trail_amount: Optional[float] = None,
-        trail_percent: Optional[float] = None,
-        activation_price: Optional[float] = None,
+        trail_amount: float | None = None,
+        trail_percent: float | None = None,
+        activation_price: float | None = None,
     ) -> TrailingStopOrder:
         """
         Create a trailing stop order.
@@ -450,7 +451,7 @@ class AdvancedOrderManager:
         side: OrderSide,
         quantity: float,
         entry_type: OrderType,
-        entry_price: Optional[float],
+        entry_price: float | None,
         stop_loss_price: float,
         take_profit_price: float,
     ) -> BracketOrder:
@@ -664,7 +665,7 @@ class AdvancedOrderManager:
         self,
         order_id: str,
         current_price: float,
-    ) -> Optional[float]:
+    ) -> float | None:
         """
         Update trailing stop price based on current price.
 
@@ -824,10 +825,7 @@ class AdvancedOrderManager:
         """Handle OCO order fill - cancel the other order."""
         oco = self.oco_orders[oco_id]
 
-        if oco.order1.id == filled_order_id:
-            other_order = oco.order2
-        else:
-            other_order = oco.order1
+        other_order = oco.order2 if oco.order1.id == filled_order_id else oco.order1
 
         # Cancel the other order
         other_order.status = OrderStatus.CANCELLED
@@ -879,7 +877,7 @@ class AdvancedOrderManager:
             logger.info(f"Order cancelled: {order_id}")
             return True
 
-    def get_order(self, order_id: str) -> Optional[Order]:
+    def get_order(self, order_id: str) -> Order | None:
         """Get order by ID."""
         return self.orders.get(order_id)
 

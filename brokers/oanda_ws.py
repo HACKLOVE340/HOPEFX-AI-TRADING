@@ -36,7 +36,7 @@ OANDA credentials are still used for ORDER EXECUTION via brokers.oanda_stream
 from __future__ import annotations
 
 import logging
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +69,9 @@ class OANDAStreamAdapter:
         self,
         api_key: str = "",
         account_id: str = "",
-        instruments: Optional[list[str]] = None,
+        instruments: list[str] | None = None,
         practice: bool = True,
-        on_tick: Optional[Callable[[dict], None]] = None,
+        on_tick: Callable[[dict], None] | None = None,
         connect_timeout: float = 30.0,
         reconcile_timeout: float = 10.0,
     ) -> None:

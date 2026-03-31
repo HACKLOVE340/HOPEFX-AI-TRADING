@@ -49,9 +49,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Dict, List, Optional
 
 import numpy as np
 from scipy import stats as _stats
@@ -89,12 +88,12 @@ class ValidationReport:
     oos_sample_size: int
     live_sample_size: int
     checks: list[CheckResult] = field(default_factory=list)
-    psi: Optional[float] = None
-    ks_statistic: Optional[float] = None
-    ks_p_value: Optional[float] = None
-    mean_drift_sigma: Optional[float] = None
-    directional_bias_drift: Optional[float] = None
-    confidence_drift: Optional[float] = None
+    psi: float | None = None
+    ks_statistic: float | None = None
+    ks_p_value: float | None = None
+    mean_drift_sigma: float | None = None
+    directional_bias_drift: float | None = None
+    confidence_drift: float | None = None
 
     @property
     def passed(self) -> bool:
@@ -155,7 +154,7 @@ class SignalRecord:
     direction: str  # "BUY" | "SELL" | "HOLD"
     confidence: float  # 0.0 – 1.0
     raw_score: float  # raw model output (logit or probability)
-    timestamp: Optional[datetime] = None
+    timestamp: datetime | None = None
 
 
 class SignalDistributionValidator:
@@ -209,7 +208,7 @@ class SignalDistributionValidator:
 
     def validate(
         self,
-        live_signals: Optional[list[SignalRecord]] = None,
+        live_signals: list[SignalRecord] | None = None,
     ) -> ValidationReport:
         """
         Run all distribution checks and return a ValidationReport.

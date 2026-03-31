@@ -27,7 +27,7 @@ import threading
 import time
 import traceback
 from dataclasses import dataclass
-from typing import Callable, List, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +63,8 @@ class FeedHealth:
     permanently_failed: bool = False
     reconnect_attempts: int = 0
     callback_error_count: int = 0
-    last_tick_ts: Optional[float] = None
-    last_error: Optional[str] = None
+    last_tick_ts: float | None = None
+    last_error: str | None = None
 
 
 class MT5LiveFeed:
@@ -78,8 +78,8 @@ class MT5LiveFeed:
     def __init__(
         self,
         url: str,
-        rest_fallback_url: Optional[str] = None,
-        on_tick: Optional[Callable[[dict], None]] = None,
+        rest_fallback_url: str | None = None,
+        on_tick: Callable[[dict], None] | None = None,
         max_reconnect_attempts: int = _DEFAULT_MAX_RECONNECT_ATTEMPTS,
     ) -> None:
         self.url = url
@@ -92,13 +92,13 @@ class MT5LiveFeed:
         self._permanently_failed = False
         self._reconnect_attempts = 0
         self._callback_error_count = 0
-        self._last_tick_ts: Optional[float] = None
-        self._last_error: Optional[str] = None
+        self._last_tick_ts: float | None = None
+        self._last_error: str | None = None
         self._reconnect_delay = _RECONNECT_INITIAL_DELAY
 
-        self._ws: Optional[websocket.WebSocketApp] = None
+        self._ws: websocket.WebSocketApp | None = None
         self._running = False
-        self._connect_thread: Optional[threading.Thread] = None
+        self._connect_thread: threading.Thread | None = None
         self._latency: list[float] = []
         self._tick_buffer: list[dict] = []
 
@@ -348,12 +348,12 @@ class MT5LiveFeed:
             if len(self._tick_buffer) > 10:
                 self._tick_buffer.pop(0)
 
-    def get_smoothed_price(self) -> Optional[float]:
+    def get_smoothed_price(self) -> float | None:
         with self._lock:
             prices = [t["price"] for t in self._tick_buffer if "price" in t]
         return sum(prices) / len(prices) if prices else None
 
-    def get_avg_latency_ms(self) -> Optional[float]:
+    def get_avg_latency_ms(self) -> float | None:
         with self._lock:
             if not self._latency:
                 return None

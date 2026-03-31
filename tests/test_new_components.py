@@ -111,7 +111,7 @@ class TestPropEnforcer:
     def test_kill_switch_callback_fired_on_breach(self):
         fired = []
         e = self._make(daily_dd=0.05)
-        e._kill_switch_fn = lambda reason: fired.append(reason)
+        e._kill_switch_fn = lambda reason: fired.append(reason)  # noqa: PLW0108
         e.update_balance(100_000, start_of_day_equity=100_000)
         e.update_balance(94_000)
         e.before_execute("XAUUSD")
@@ -244,7 +244,8 @@ class TestPaperTradingHelpers:
             logger.log(record)
             import csv
 
-            rows = list(csv.DictReader(open(path)))
+            with open(path) as _fh:
+                rows = list(csv.DictReader(_fh))
             assert len(rows) == 1
             assert rows[0]["instrument"] == "test"
 

@@ -24,8 +24,8 @@ from __future__ import annotations
 import logging
 import threading
 from collections import defaultdict
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class MobileAnalytics:
         self._buffer: list[dict[str, Any]] = []
         self._lock = threading.Lock()
         self._session_counts: dict[str, int] = defaultdict(int)
-        self._flush_timer: Optional[threading.Timer] = None
+        self._flush_timer: threading.Timer | None = None
 
         if enable_background_flush:
             self._schedule_flush()
@@ -74,8 +74,8 @@ class MobileAnalytics:
         self,
         user_id: str,
         event_type: str,
-        properties: Optional[dict[str, Any]] = None,
-        session_id: Optional[str] = None,
+        properties: dict[str, Any] | None = None,
+        session_id: str | None = None,
     ) -> None:
         """
         Track an analytics event.
@@ -102,8 +102,8 @@ class MobileAnalytics:
         self,
         user_id: str,
         screen_name: str,
-        session_id: Optional[str] = None,
-        duration_ms: Optional[int] = None,
+        session_id: str | None = None,
+        duration_ms: int | None = None,
     ) -> None:
         """Track a screen view with optional dwell time."""
         props: dict[str, Any] = {"screen": screen_name}
@@ -116,10 +116,10 @@ class MobileAnalytics:
         user_id: str,
         action: str,
         symbol: str,
-        side: Optional[str] = None,
-        quantity: Optional[float] = None,
-        result: Optional[str] = None,
-        latency_ms: Optional[int] = None,
+        side: str | None = None,
+        quantity: float | None = None,
+        result: str | None = None,
+        latency_ms: int | None = None,
     ) -> None:
         """Track a trading action (place_order, cancel_order, close_position)."""
         props: dict[str, Any] = {
@@ -163,8 +163,8 @@ class MobileAnalytics:
         user_id: str,
         error_type: str,
         message: str,
-        screen: Optional[str] = None,
-        stack_trace: Optional[str] = None,
+        screen: str | None = None,
+        stack_trace: str | None = None,
     ) -> None:
         """Track a client-side error."""
         props: dict[str, Any] = {
@@ -188,7 +188,7 @@ class MobileAnalytics:
         user_id: str,
         metric: str,
         value_ms: float,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> None:
         """Track a performance metric (e.g. WS latency, render time)."""
         props: dict[str, Any] = {"metric": metric, "value_ms": value_ms}

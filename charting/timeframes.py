@@ -7,7 +7,6 @@
 Timeframe Management
 """
 
-from typing import List
 
 
 class Timeframe:

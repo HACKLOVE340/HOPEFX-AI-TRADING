@@ -13,7 +13,7 @@ Advanced Candlestick & Chart Pattern Recognition
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import Any
 from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
@@ -874,7 +874,7 @@ class AdvancedPatternDetector:
                         additional_data={
                             "resistance_level": float(avg_resistance),
                             "support_level": float(support_price),
-                            "num_touches": int(len(nearby_peaks)),
+                            "num_touches": len(nearby_peaks),
                         },
                     )
                     patterns.append(pattern)

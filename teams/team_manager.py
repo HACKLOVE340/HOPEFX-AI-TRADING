@@ -11,9 +11,8 @@ Multi-User Team Management
 """
 
 from dataclasses import dataclass
-from typing import Dict, List
 from enum import Enum
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 import logging
 import uuid
 

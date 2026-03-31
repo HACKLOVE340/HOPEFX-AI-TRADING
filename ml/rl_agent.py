@@ -49,7 +49,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 from datetime import UTC
@@ -356,7 +356,7 @@ class RLAgent:
         """Train PPO on the given environment."""
         try:
             from stable_baselines3 import PPO
-            from stable_baselines3.common.env_checker import check_env
+            from stable_baselines3.common.env_checker import check_env  # noqa: F401
         except ImportError:
             raise ImportError(
                 "stable-baselines3 required: pip install stable-baselines3",
@@ -762,7 +762,7 @@ def walk_forward_eval(
     cv = sharpe_std / sharpe_mean
     stability = float(max(0.0, min(100.0, 100.0 * (1.0 - cv))))
 
-    from datetime import datetime, timezone as tz
+    from datetime import datetime
 
     completed_at = datetime.now(UTC).isoformat()
 
@@ -785,11 +785,11 @@ def walk_forward_eval(
 
 # ── Module-level singleton ─────────────────────────────────────────────────────
 
-_rl_agent_singleton: Optional[RLAgent] = None
+_rl_agent_singleton: RLAgent | None = None
 _rl_agent_lock = __import__("threading").Lock()
 
 
-def get_rl_agent(model_name: str = "hopefx_ppo") -> Optional[RLAgent]:
+def get_rl_agent(model_name: str = "hopefx_ppo") -> RLAgent | None:
     """
     Return the module-level RLAgent singleton (thread-safe).
 

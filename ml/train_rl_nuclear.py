@@ -44,7 +44,7 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -129,8 +129,8 @@ if _GYM_AVAILABLE:
         def reset(
             self,
             *,
-            seed: Optional[int] = None,
-            options: Optional[dict[str, Any]] = None,
+            seed: int | None = None,
+            options: dict[str, Any] | None = None,
         ) -> tuple[np.ndarray, dict]:
             super().reset(seed=seed)
             self._step = 0
@@ -345,8 +345,8 @@ def train(
 
     # progress_bar requires tqdm+rich; degrade gracefully if absent
     try:
-        import tqdm
-        import rich
+        import tqdm  # noqa: F401
+        import rich  # noqa: F401
 
         _progress_bar = True
     except ImportError:

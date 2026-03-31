@@ -11,8 +11,7 @@ Simulates order execution with realistic fills, slippage, and commissions.
 
 import hashlib
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import datetime, UTC
 
 from backtesting.events import OrderEvent, FillEvent
 from backtesting.engine import Order
@@ -66,7 +65,7 @@ class SimulatedExecutionHandler:
             f"Initialized execution handler (commission: {commission_pct*100}%, slippage: {slippage_pct*100}%)"
         )
 
-    def execute_order(self, order: OrderEvent) -> Optional[FillEvent]:
+    def execute_order(self, order: OrderEvent) -> FillEvent | None:
         """
         Execute an order and create fill event.
 

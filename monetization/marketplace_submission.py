@@ -26,9 +26,8 @@ import ast
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +79,8 @@ class AuditReport:
     status: AuditStatus
     checks: list[AuditCheck] = field(default_factory=list)
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    completed_at: Optional[datetime] = None
-    reviewer_id: Optional[str] = None
+    completed_at: datetime | None = None
+    reviewer_id: str | None = None
     reviewer_notes: str = ""
 
     @property
@@ -124,7 +123,7 @@ class StrategySubmission:
     category: str
     tags: list[str]
     status: SubmissionStatus = SubmissionStatus.DRAFT
-    audit_report: Optional[AuditReport] = None
+    audit_report: AuditReport | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     rejection_reason: str = ""
@@ -284,7 +283,7 @@ class SubmissionManager:
         price_monthly: float,
         price_yearly: float,
         category: str = "algorithmic",
-        tags: Optional[list[str]] = None,
+        tags: list[str] | None = None,
     ) -> StrategySubmission:
         sub = StrategySubmission(
             submission_id=str(uuid.uuid4()),
@@ -351,7 +350,7 @@ class SubmissionManager:
             sub.audit_report.status = AuditStatus.FAILED
         return True
 
-    def get(self, submission_id: str) -> Optional[StrategySubmission]:
+    def get(self, submission_id: str) -> StrategySubmission | None:
         return self._submissions.get(submission_id)
 
     def list_by_creator(self, creator_id: str) -> list[StrategySubmission]:

@@ -10,9 +10,8 @@ Handles payments via Flutterwave (Nigeria) - Cards, Bank, Mobile Money.
 """
 
 import os
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -91,6 +90,6 @@ class FlutterwaveClient:
 # importing this module in environments without payment credentials does not
 # raise at import time. Callers must check for None before using.
 _flw_secret = os.getenv("FLUTTERWAVE_SECRET_KEY")
-flutterwave_client: Optional[FlutterwaveClient] = (
+flutterwave_client: FlutterwaveClient | None = (
     FlutterwaveClient(_flw_secret) if _flw_secret else None
 )

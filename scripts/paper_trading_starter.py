@@ -44,9 +44,9 @@ import os
 import signal
 import sys
 import time
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # ── dotenv ────────────────────────────────────────────────────────────────────
 try:
@@ -167,7 +167,7 @@ class OANDAPaperClient:
     def get_account(self) -> dict[str, Any]:
         return self._get(f"/v3/accounts/{self.account_id}/summary")
 
-    def get_price(self, instrument: str) -> Optional[float]:
+    def get_price(self, instrument: str) -> float | None:
         try:
             resp = self._get(
                 f"/v3/accounts/{self.account_id}/pricing?instruments={instrument}"
@@ -326,7 +326,7 @@ class PaperTradingRunner:
 
     # ── signal generation (momentum) ─────────────────────────────────────────
 
-    def _generate_signal(self, instrument: str, price: float) -> Optional[str]:
+    def _generate_signal(self, instrument: str, price: float) -> str | None:
         """
         Simple 20-bar SMA momentum signal.
         Returns "BUY", "SELL", or None.

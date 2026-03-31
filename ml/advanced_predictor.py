@@ -64,7 +64,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -150,7 +150,7 @@ class _SGDAdapter:
             except Exception as exc:
                 logger.warning("SGD adapter update failed: %s", exc)
 
-    def predict_proba(self, X: np.ndarray) -> Optional[float]:
+    def predict_proba(self, X: np.ndarray) -> float | None:
         """Return P(up) from adapter, or None if not ready."""
         if self._clf is None or self._n_updates < 10:
             return None
@@ -179,22 +179,22 @@ class AdvancedPredictor:
 
     def __init__(
         self,
-        model_path: Optional[Path] = None,
+        model_path: Path | None = None,
         min_bars: int = MIN_BARS,
     ) -> None:
         self._model_path = model_path or _MODEL_FILE
         self._min_bars = min_bars
-        self._model: Optional[Any] = None
-        self._feature_names: Optional[list] = None
+        self._model: Any | None = None
+        self._feature_names: list | None = None
         self._n_features: int = 176
-        self._adapter: Optional[_SGDAdapter] = None
+        self._adapter: _SGDAdapter | None = None
         self._meta: dict[str, Any] = {}
         self._lock = threading.Lock()
         self._predict_count: int = 0
         self._abstain_count: int = 0
         self._version: str = "advanced_oos_v1"
         # Integrity state: None = unchecked, True = passed, False = failed
-        self._integrity_ok: Optional[bool] = None
+        self._integrity_ok: bool | None = None
         self._integrity_msg: str = ""
         self._load_meta()
 
@@ -221,7 +221,7 @@ class AdvancedPredictor:
             return False
 
         # ── Attempt registry lookup ───────────────────────────────────────────
-        expected_digest: Optional[str] = None
+        expected_digest: str | None = None
         source = "unknown"
         try:
             from ml.model_registry import get_registry, sha256_file as _sha256
@@ -378,10 +378,10 @@ class AdvancedPredictor:
     def _build_features(
         self,
         ohlcv: pd.DataFrame,
-        macro_df: Optional[pd.DataFrame] = None,
+        macro_df: pd.DataFrame | None = None,
         symbol: str = "XAUUSD",
-        as_of: Optional[pd.Timestamp] = None,
-    ) -> Optional[pd.DataFrame]:
+        as_of: pd.Timestamp | None = None,
+    ) -> pd.DataFrame | None:
         """
         Build the feature matrix from a rolling OHLCV window.
 
@@ -441,10 +441,10 @@ class AdvancedPredictor:
     def predict(
         self,
         ohlcv: pd.DataFrame,
-        macro_df: Optional[pd.DataFrame] = None,
+        macro_df: pd.DataFrame | None = None,
         symbol: str = "XAUUSD",
-        mtf_df: Optional[pd.DataFrame] = None,
-        as_of: Optional[pd.Timestamp] = None,
+        mtf_df: pd.DataFrame | None = None,
+        as_of: pd.Timestamp | None = None,
     ) -> dict[str, Any]:
         """
         Full inference pipeline. Returns a signal dict.
@@ -601,7 +601,7 @@ class AdvancedPredictor:
         self,
         ohlcv: pd.DataFrame,
         label: int,
-        macro_df: Optional[pd.DataFrame] = None,
+        macro_df: pd.DataFrame | None = None,
         symbol: str = "XAUUSD",
     ) -> bool:
         """
@@ -662,7 +662,7 @@ class AdvancedPredictor:
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
-_predictor: Optional[AdvancedPredictor] = None
+_predictor: AdvancedPredictor | None = None
 _predictor_lock = threading.Lock()
 
 
@@ -718,8 +718,8 @@ class HybridEnsemblePredictor:
         self._has_rl: bool = False
 
         # Meta-blender (Ridge on component probabilities)
-        self._meta: Optional[Any] = None
-        self._meta_scaler: Optional[Any] = None
+        self._meta: Any | None = None
+        self._meta_scaler: Any | None = None
         self._meta_trained: bool = False
 
         self._lock = threading.Lock()
@@ -730,7 +730,7 @@ class HybridEnsemblePredictor:
     def _check_components(self) -> None:
         """Probe which components are available without loading models."""
         try:
-            import xgboost
+            import xgboost  # noqa: F401
 
             self._has_xgb = True
         except ImportError:
@@ -738,7 +738,7 @@ class HybridEnsemblePredictor:
             logger.warning("HybridEnsemble: xgboost not available")
 
         try:
-            import torch
+            import torch  # noqa: F401
 
             self._has_lstm = True
         except ImportError:
@@ -746,7 +746,7 @@ class HybridEnsemblePredictor:
             logger.debug("HybridEnsemble: torch not available — LSTM disabled")
 
         try:
-            import stable_baselines3
+            import stable_baselines3  # noqa: F401
 
             self._has_rl = True
         except ImportError:
@@ -790,7 +790,6 @@ class HybridEnsemblePredictor:
             return 0.5
         try:
             from research.pipeline.models_deep import DeepPredictor
-            import torch
 
             model_path = Path(__file__).parent / "saved_models" / "lstm_predictor.pt"
             if not model_path.exists():
@@ -823,7 +822,7 @@ class HybridEnsemblePredictor:
     def predict_proba(
         self,
         X: np.ndarray,
-        X_seq: Optional[np.ndarray] = None,
+        X_seq: np.ndarray | None = None,
     ) -> float:
         """
         Return blended probability P(up) from all available components.
@@ -905,7 +904,7 @@ class HybridEnsemblePredictor:
         }
 
 
-_hybrid_predictor: Optional[HybridEnsemblePredictor] = None
+_hybrid_predictor: HybridEnsemblePredictor | None = None
 _hybrid_lock = threading.Lock()
 
 

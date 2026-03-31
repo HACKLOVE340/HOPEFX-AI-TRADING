@@ -15,4 +15,3 @@ New code should import from backtesting.enhanced_engine directly:
 """
 
 from backtesting.enhanced_engine import *
-from backtesting.enhanced_engine import EnhancedBacktestEngine

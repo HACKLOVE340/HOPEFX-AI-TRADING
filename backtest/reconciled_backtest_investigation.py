@@ -44,9 +44,9 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -204,7 +204,7 @@ def sweep_confidence_thresholds(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _load_xauusd_daily() -> Optional[pd.DataFrame]:
+def _load_xauusd_daily() -> pd.DataFrame | None:
     """Load XAUUSD daily OHLCV from CSV cache or yfinance."""
     csv_path = DATA_DIR / "XAUUSD_D1.csv"
     if csv_path.exists():
@@ -240,7 +240,7 @@ def sweep_hold_periods(
     trades: list[dict],
     hold_periods: list[int],
     cost: float = 70.0,
-    ohlcv: Optional[pd.DataFrame] = None,
+    ohlcv: pd.DataFrame | None = None,
 ) -> list[dict[str, Any]]:
     """
     Re-simulate trades with different hold periods using actual OHLCV data.

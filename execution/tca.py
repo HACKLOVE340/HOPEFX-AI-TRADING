@@ -33,10 +33,11 @@ import math
 import os
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
 
@@ -114,8 +115,8 @@ class TCAMetrics:
     total_fees: Decimal = Decimal("0")
 
     # Timing
-    first_fill_time: Optional[datetime] = None
-    last_fill_time: Optional[datetime] = None
+    first_fill_time: datetime | None = None
+    last_fill_time: datetime | None = None
     time_to_first_fill_ms: float = 0.0
     total_execution_time_ms: float = 0.0
 
@@ -193,9 +194,9 @@ class MarketContextProvider:
     def __init__(self) -> None:
         # In-memory tick volume accumulator: symbol → list of (timestamp, volume)
         self._tick_volumes: dict[str, list[tuple[datetime, float]]] = defaultdict(list)
-        self._redis_cache: Optional[Any] = None
+        self._redis_cache: Any | None = None
 
-    def _get_redis_cache(self) -> Optional[Any]:
+    def _get_redis_cache(self) -> Any | None:
         """Lazy-load the Redis market data cache."""
         if self._redis_cache is None:
             try:
@@ -252,9 +253,8 @@ class MarketContextProvider:
         ticks = self._tick_volumes.get(symbol, [])
         if len(ticks) >= 100:
             total_vol = sum(v for _, v in ticks)
-            if total_vol > 0:
+            if total_vol > 0 and len(ticks) >= 2:
                 # Estimate daily volume from accumulated ticks
-                if len(ticks) >= 2:
                     span_hours = (ticks[-1][0] - ticks[0][0]).total_seconds() / 3600
                     if span_hours > 0:
                         daily_vol = total_vol * (24.0 / span_hours)
@@ -312,8 +312,8 @@ class TCAEngine:
 
     def __init__(
         self,
-        impact_model: Optional[MarketImpactModel] = None,
-        market_context: Optional[MarketContextProvider] = None,
+        impact_model: MarketImpactModel | None = None,
+        market_context: MarketContextProvider | None = None,
         window_size: int = 1000,
     ) -> None:
         self.impact_model = impact_model or MarketImpactModel()

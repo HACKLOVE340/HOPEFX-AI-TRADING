@@ -12,14 +12,15 @@ import asyncio
 import functools
 import hashlib
 import inspect
-import json
+import json  # noqa: F401
 import logging
 import secrets
 import time
 from collections import deque
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, timezone, UTC  # noqa: F401
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Dict, Generic, List, Optional, TypeVar  # noqa: F401
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class RetryWithExponentialBackoff:
         max_retries: int = 3,
         base_delay: float = 1.0,
         exceptions: tuple = (Exception,),
-        on_retry: Optional[Callable] = None,
+        on_retry: Callable | None = None,
     ):
         self.max_retries = max_retries
         self.base_delay = base_delay
@@ -120,7 +121,7 @@ class CircuitBreaker:
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.failure_count = 0
-        self.last_failure_time: Optional[float] = None
+        self.last_failure_time: float | None = None
         self.is_open = False
         self._half_open = False
 
@@ -166,7 +167,7 @@ def generate_id(prefix: str = "", length: int = 12) -> str:
     return f"{prefix}_{random_part}" if prefix else random_part
 
 
-def hash_sensitive(data: str, salt: Optional[str] = None) -> str:
+def hash_sensitive(data: str, salt: str | None = None) -> str:
     """Hash sensitive data"""
     if salt is None:
         salt = secrets.token_hex(16)
@@ -268,9 +269,7 @@ def validate_symbol(symbol: str) -> bool:
     if "/" in symbol and len(symbol) <= 10:
         return True
     # XAUUSD, etc.
-    if len(symbol) <= 10 and symbol.replace("/", "").isalnum():
-        return True
-    return False
+    return len(symbol) <= 10 and symbol.replace("/", "").isalnum()
 
 
 def calculate_correlation(x: list[float], y: list[float]) -> float:
@@ -320,7 +319,7 @@ class ExponentialMovingAverage:
 
     def __init__(self, alpha: float):
         self.alpha = alpha
-        self.value: Optional[float] = None
+        self.value: float | None = None
 
     def update(self, new_value: float) -> float:
         """Update EMA"""
@@ -359,25 +358,25 @@ def get_all_component_statuses(app=None) -> dict[str, Any]:
 
 # Export all utilities
 __all__ = [
+    "CircuitBreaker",
+    "ExponentialMovingAverage",
+    "MovingAverage",
     "RateLimiter",
     "RetryWithExponentialBackoff",
-    "CircuitBreaker",
-    "generate_id",
-    "hash_sensitive",
+    "calculate_correlation",
+    "chunk_list",
+    "deep_merge",
     "format_currency",
     "format_percentage",
+    "generate_id",
+    "get_all_component_statuses",
+    "get_framework_version",
+    "get_timestamp_ms",
+    "hash_sensitive",
+    "parse_timestamp",
     "round_decimal",
     "safe_divide",
-    "chunk_list",
     "timeit",
-    "get_timestamp_ms",
-    "parse_timestamp",
-    "deep_merge",
     "truncate_string",
     "validate_symbol",
-    "calculate_correlation",
-    "MovingAverage",
-    "ExponentialMovingAverage",
-    "get_framework_version",
-    "get_all_component_statuses",
 ]

@@ -19,8 +19,8 @@ from core.acceleration.gpu_engine import (
 )
 
 __all__ = [
-    "GARCHModel",
     "CopulaRiskModel",
+    "GARCHModel",
     "MonteCarloRiskEngine",
     "RealTimeRiskMonitor",
     "RiskMetrics",

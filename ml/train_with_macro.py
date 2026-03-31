@@ -55,9 +55,8 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -118,7 +117,7 @@ def fetch_gold_ohlcv(symbol: str, years: int) -> pd.DataFrame:
     return raw
 
 
-def fetch_macro(start: datetime, end: datetime) -> Optional[pd.DataFrame]:
+def fetch_macro(start: datetime, end: datetime) -> pd.DataFrame | None:
     """Fetch macro data (DXY, VIX, yields, SPX)."""
     try:
         from ml.macro_features import fetch_macro_history
@@ -140,7 +139,7 @@ def fetch_macro(start: datetime, end: datetime) -> Optional[pd.DataFrame]:
 
 def build_features(
     ohlcv: pd.DataFrame,
-    macro_df: Optional[pd.DataFrame],
+    macro_df: pd.DataFrame | None,
     prediction_horizon: int = 1,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """Build feature matrix and binary direction target."""

@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -41,10 +40,10 @@ class BrokerTestRequest(BaseModel):
 class BrokerTestResponse(BaseModel):
     ok: bool
     broker: str
-    latency_ms: Optional[int] = None
-    balance: Optional[str] = None
-    currency: Optional[str] = None
-    error: Optional[str] = None
+    latency_ms: int | None = None
+    balance: str | None = None
+    currency: str | None = None
+    error: str | None = None
 
 
 @router.post("/test-connection", response_model=BrokerTestResponse)
@@ -273,7 +272,7 @@ async def broker_status():
       - RealTimePriceEngine REST status as fallback
     OANDA is never used as a price source.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     checked_at = datetime.now(UTC).isoformat()
 
@@ -310,7 +309,7 @@ async def broker_status():
             balance = None
             currency = None
             open_positions = 0
-            broker_error: Optional[str] = None
+            broker_error: str | None = None
 
             try:
                 if hasattr(broker, "get_account_info"):
@@ -490,7 +489,7 @@ async def paper_clock_status():
         return get_clock().status()
     except Exception as exc:
         logger.warning("paper_clock_status: %s", exc)
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         return {
             "started": False,

@@ -20,8 +20,8 @@ Features:
 """
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import numpy as np
 
@@ -41,7 +41,7 @@ class StrategyBrain:
     - Risk-adjusted position sizing recommendations
     """
 
-    def __init__(self, config: Optional[dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """
         Initialize Strategy Brain.
 
@@ -418,7 +418,7 @@ class StrategyBrain:
         total_performance = 0.0
         strategy_scores = {}
 
-        for name in self.strategies.keys():
+        for name in self.strategies:
             if name in self.strategy_performance:
                 perf = self.strategy_performance[name]
                 # Combine win rate and normalized PnL for score

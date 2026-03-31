@@ -11,8 +11,7 @@ Invoices include access codes and are sent to users upon payment confirmation.
 """
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Optional, Dict, List
+from datetime import datetime, UTC
 from decimal import Decimal
 from enum import Enum
 
@@ -45,7 +44,7 @@ class Invoice:
         tier: SubscriptionTier,
         amount: Decimal,
         currency: str = "USD",
-        access_code: Optional[str] = None,
+        access_code: str | None = None,
         status: InvoiceStatus = InvoiceStatus.DRAFT,
     ):
         self.invoice_id = invoice_id
@@ -59,8 +58,8 @@ class Invoice:
         self.status = status
         self.created_at = datetime.now(UTC)
         self.due_date = datetime.now(UTC)
-        self.paid_at: Optional[datetime] = None
-        self.cancelled_at: Optional[datetime] = None
+        self.paid_at: datetime | None = None
+        self.cancelled_at: datetime | None = None
         self.items: list[dict] = []
         self.notes: str = ""
 
@@ -138,7 +137,7 @@ class InvoiceGenerator:
         user_id: str,
         subscription_id: str,
         tier: SubscriptionTier,
-        access_code: Optional[str] = None,
+        access_code: str | None = None,
         duration_months: int = 1,
     ) -> Invoice:
         """Create a new invoice for subscription"""
@@ -219,11 +218,11 @@ class InvoiceGenerator:
         )
         return invoice
 
-    def get_invoice(self, invoice_id: str) -> Optional[Invoice]:
+    def get_invoice(self, invoice_id: str) -> Invoice | None:
         """Get invoice by ID"""
         return self._invoices.get(invoice_id)
 
-    def get_invoice_by_number(self, invoice_number: str) -> Optional[Invoice]:
+    def get_invoice_by_number(self, invoice_number: str) -> Invoice | None:
         """Get invoice by number"""
         for invoice in self._invoices.values():
             if invoice.invoice_number == invoice_number:
@@ -234,21 +233,21 @@ class InvoiceGenerator:
         """Get all invoices for a user"""
         return [inv for inv in self._invoices.values() if inv.user_id == user_id]
 
-    def get_pending_invoices(self, user_id: Optional[str] = None) -> list[Invoice]:
+    def get_pending_invoices(self, user_id: str | None = None) -> list[Invoice]:
         """Get pending invoices"""
         invoices = self._invoices.values()
         if user_id:
             invoices = [inv for inv in invoices if inv.user_id == user_id]
         return [inv for inv in invoices if inv.status == InvoiceStatus.PENDING]
 
-    def get_paid_invoices(self, user_id: Optional[str] = None) -> list[Invoice]:
+    def get_paid_invoices(self, user_id: str | None = None) -> list[Invoice]:
         """Get paid invoices"""
         invoices = self._invoices.values()
         if user_id:
             invoices = [inv for inv in invoices if inv.user_id == user_id]
         return [inv for inv in invoices if inv.status == InvoiceStatus.PAID]
 
-    def get_overdue_invoices(self, user_id: Optional[str] = None) -> list[Invoice]:
+    def get_overdue_invoices(self, user_id: str | None = None) -> list[Invoice]:
         """Get overdue invoices"""
         invoices = self._invoices.values()
         if user_id:
@@ -282,12 +281,9 @@ class InvoiceGenerator:
         invoice.mark_refunded()
         return True
 
-    def get_invoice_stats(self, user_id: Optional[str] = None) -> dict:
+    def get_invoice_stats(self, user_id: str | None = None) -> dict:
         """Get invoice statistics"""
-        if user_id:
-            invoices = self.get_user_invoices(user_id)
-        else:
-            invoices = list(self._invoices.values())
+        invoices = self.get_user_invoices(user_id) if user_id else list(self._invoices.values())
 
         total = len(invoices)
         pending = len([inv for inv in invoices if inv.status == InvoiceStatus.PENDING])
@@ -312,7 +308,7 @@ class InvoiceGenerator:
             "pending_amount": float(pending_amount),
         }
 
-    def generate_pdf(self, invoice_id: str) -> Optional[bytes]:
+    def generate_pdf(self, invoice_id: str) -> bytes | None:
         """
         Generate PDF for invoice.
 

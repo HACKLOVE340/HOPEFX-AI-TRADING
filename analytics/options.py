@@ -8,7 +8,6 @@ Options Trading and Greeks
 """
 
 import math
-from typing import Dict
 
 
 class OptionsAnalyzer:

@@ -10,9 +10,9 @@ Prevents cascade failures and ensures system stability
 """
 
 import asyncio
-from typing import Dict, Callable, Optional
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum, auto
 
 
@@ -41,7 +41,7 @@ class CircuitBreaker:
         self.state = CircuitState.CLOSED
         self.failures = 0
         self.successes = 0
-        self.last_failure_time: Optional[datetime] = None
+        self.last_failure_time: datetime | None = None
         self.half_open_calls = 0
         self.total_calls = 0
         self.total_failures = 0
@@ -49,9 +49,8 @@ class CircuitBreaker:
     async def call(self, func: Callable, *args, **kwargs):
         """Execute function with circuit breaker protection"""
 
-        if self.state == CircuitState.OPEN:
+        if self.state == CircuitState.OPEN and self.last_failure_time:
             # Check if we should try half-open
-            if self.last_failure_time:
                 elapsed = (
                     datetime.now(UTC) - self.last_failure_time
                 ).total_seconds()

@@ -43,7 +43,8 @@ import asyncio
 import logging
 import os
 import signal
-from typing import Any, Dict, List, Optional
+from typing import Any
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ class LiveDataPipeline:
 
     def __init__(self, config: SecureConfig) -> None:
         self._config = config
-        self._streamer: Optional[Any] = None
+        self._streamer: Any | None = None
         self._callbacks: list[Any] = []
         self._running = False
 
@@ -177,9 +178,9 @@ class OrderGateway:
         symbol: str,
         side: str,
         quantity: float,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
-    ) -> Optional[Any]:
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+    ) -> Any | None:
         try:
             from brokers.base import OrderSide, OrderType
 
@@ -220,7 +221,7 @@ class EnsembleStrategy:
     """Delegates to StrategyOrchestra for multi-strategy signal consensus."""
 
     def __init__(self) -> None:
-        self._orchestra: Optional[Any] = None
+        self._orchestra: Any | None = None
 
     def setup(self, event_bus) -> None:
         try:
@@ -258,7 +259,7 @@ class MLPredictor:
     """Wraps HopeFXPredictor. Loads a pre-trained model if available."""
 
     def __init__(self) -> None:
-        self._predictor: Optional[Any] = None
+        self._predictor: Any | None = None
         self._model_path: str = os.getenv("ML_MODEL_PATH", "ml/saved_models/hopefx")
 
     def load(self) -> bool:
@@ -306,7 +307,7 @@ class RiskManager:
     """Delegates to risk.manager.RiskManager for sizing and circuit-breaker logic."""
 
     def __init__(self, initial_balance: float = 10_000.0) -> None:
-        self._rm: Optional[Any] = None
+        self._rm: Any | None = None
         self._balance = initial_balance
 
     def setup(self) -> None:
@@ -355,7 +356,7 @@ class StateManager:
     """Persists trading state to Redis."""
 
     def __init__(self, redis_host: str = "localhost", redis_port: int = 6379) -> None:
-        self._redis: Optional[Any] = None
+        self._redis: Any | None = None
         self._redis_host = redis_host
         self._redis_port = redis_port
 
@@ -388,7 +389,7 @@ class StateManager:
             except Exception as exc:
                 logger.warning("StateManager.save: %s", exc)
 
-    def load(self, key: str) -> Optional[str]:
+    def load(self, key: str) -> str | None:
         if self._redis:
             try:
                 return self._redis.get(key)
@@ -406,7 +407,7 @@ class AlertManager:
     """Sends alerts via Telegram bot and structured logging."""
 
     def __init__(self, token: str = "", chat_id: str = "") -> None:  # nosec B107 - empty defaults; Telegram is optional, configured via env vars
-        self._bot: Optional[Any] = None
+        self._bot: Any | None = None
         self._token = token
         self._chat_id = chat_id
 
@@ -442,7 +443,7 @@ class NewsFilter:
     """Pauses trading around high-impact Forex Factory events."""
 
     def __init__(self, redis_host: str = "localhost", redis_port: int = 6379) -> None:
-        self._filter: Optional[Any] = None
+        self._filter: Any | None = None
         self._redis_host = redis_host
         self._redis_port = redis_port
 
@@ -518,10 +519,8 @@ class ForwardTestHarness:
             await self._pipeline.stop()
             if not pipeline_task.done():
                 pipeline_task.cancel()
-                try:
+                with contextlib.suppress((TimeoutError, asyncio.CancelledError)):
                     await asyncio.wait_for(pipeline_task, timeout=3.0)
-                except (TimeoutError, asyncio.CancelledError):
-                    pass
             self._alerts.send("ForwardTestHarness stopped", "WARNING")
 
     def stop(self) -> None:

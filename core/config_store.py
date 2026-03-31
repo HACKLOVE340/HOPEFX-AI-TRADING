@@ -31,8 +31,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Any, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class ConfigStore:
             logger.debug("Suppressed exception: %s", _exc)
         return None
 
-    def _db_get(self, key: str) -> Optional[Any]:
+    def _db_get(self, key: str) -> Any | None:
         session = self._db_session()
         if session is None:
             return None

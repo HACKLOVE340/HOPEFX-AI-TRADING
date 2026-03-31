@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -265,12 +265,11 @@ class TestAutoHeal:
         mock_redis.rpush = AsyncMock()
 
         get_redis_mock = AsyncMock(return_value=mock_redis)
-        with patch("security.global_fortress._get_redis", get_redis_mock):
-            with patch(
-                "security.llm_wrapper.call_llm", new_callable=AsyncMock
-            ) as mock_llm:
-                mock_llm.return_value = "def login(u, p): return db.query('SELECT * FROM users WHERE u=?', [u])"
-                await brain.auto_heal()
+        with patch("security.global_fortress._get_redis", get_redis_mock), patch(
+            "security.llm_wrapper.call_llm", new_callable=AsyncMock
+        ) as mock_llm:
+            mock_llm.return_value = "def login(u, p): return db.query('SELECT * FROM users WHERE u=?', [u])"
+            await brain.auto_heal()
 
         # Verify queue was drained
         mock_redis.ltrim.assert_called_once_with("scan:vuln_queue", 1, -1)
@@ -296,12 +295,11 @@ class TestAutoHeal:
 
         with patch(
             "security.global_fortress._get_redis", AsyncMock(return_value=mock_redis)
-        ):
-            with patch(
-                "security.llm_wrapper.call_llm", new_callable=AsyncMock
-            ) as mock_llm:
-                await brain.auto_heal()
-                mock_llm.assert_not_called()
+        ), patch(
+            "security.llm_wrapper.call_llm", new_callable=AsyncMock
+        ) as mock_llm:
+            await brain.auto_heal()
+            mock_llm.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_auto_heal_skips_empty_code_snippet(self):
@@ -317,12 +315,11 @@ class TestAutoHeal:
 
         with patch(
             "security.global_fortress._get_redis", AsyncMock(return_value=mock_redis)
-        ):
-            with patch(
-                "security.llm_wrapper.call_llm", new_callable=AsyncMock
-            ) as mock_llm:
-                await brain.auto_heal()
-                mock_llm.assert_not_called()
+        ), patch(
+            "security.llm_wrapper.call_llm", new_callable=AsyncMock
+        ) as mock_llm:
+            await brain.auto_heal()
+            mock_llm.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_auto_heal_handles_malformed_json(self):
@@ -358,13 +355,12 @@ class TestAutoHeal:
 
         with patch(
             "security.global_fortress._get_redis", AsyncMock(return_value=mock_redis)
-        ):
-            with patch(
-                "security.llm_wrapper.call_llm", new_callable=AsyncMock
-            ) as mock_llm:
-                mock_llm.side_effect = RuntimeError("LLM API key not configured")
-                # Should not raise — logs warning and continues
-                await brain.auto_heal()
+        ), patch(
+            "security.llm_wrapper.call_llm", new_callable=AsyncMock
+        ) as mock_llm:
+            mock_llm.side_effect = RuntimeError("LLM API key not configured")
+            # Should not raise — logs warning and continues
+            await brain.auto_heal()
 
     @pytest.mark.asyncio
     async def test_auto_heal_processes_multiple_entries(self):
@@ -389,12 +385,11 @@ class TestAutoHeal:
 
         with patch(
             "security.global_fortress._get_redis", AsyncMock(return_value=mock_redis)
-        ):
-            with patch(
-                "security.llm_wrapper.call_llm", new_callable=AsyncMock
-            ) as mock_llm:
-                mock_llm.return_value = "fixed code"
-                await brain.auto_heal()
+        ), patch(
+            "security.llm_wrapper.call_llm", new_callable=AsyncMock
+        ) as mock_llm:
+            mock_llm.return_value = "fixed code"
+            await brain.auto_heal()
 
         assert mock_redis.rpush.call_count == 3
 
@@ -431,11 +426,10 @@ class TestFixesRouter:
         mock_redis = AsyncMock()
         mock_redis.lrange.return_value = []
 
-        with patch("api.security.fixes._require_auth", return_value=self._mock_auth()):
-            with patch(
-                "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
-            ):
-                result = await get_pending_fixes(mock_request, limit=50)
+        with patch("api.security.fixes._require_auth", return_value=self._mock_auth()), patch(
+            "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
+        ):
+            result = await get_pending_fixes(mock_request, limit=50)
         assert result == []
 
     @pytest.mark.asyncio
@@ -447,11 +441,10 @@ class TestFixesRouter:
         mock_redis = AsyncMock()
         mock_redis.lrange.return_value = [record]
 
-        with patch("api.security.fixes._require_auth", return_value=self._mock_auth()):
-            with patch(
-                "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
-            ):
-                result = await get_pending_fixes(mock_request, limit=50)
+        with patch("api.security.fixes._require_auth", return_value=self._mock_auth()), patch(
+            "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
+        ):
+            result = await get_pending_fixes(mock_request, limit=50)
         assert len(result) == 1
         assert result[0]["endpoint"] == "/api/auth/login"
 
@@ -475,19 +468,17 @@ class TestFixesRouter:
             "file_path": "api/auth.py",
         }
 
-        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()):
-            with patch(
-                "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
-            ):
-                with patch(
-                    "security.github_pr_publisher.GitHubPRPublisher.publish",
-                    new_callable=AsyncMock,
-                    return_value=pr_result,
-                ):
-                    body = ApproveFixRequest(
-                        endpoint="/api/auth/login", approved_by="admin"
-                    )
-                    result = await approve_fix(body, mock_request)
+        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()), patch(
+            "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
+        ), patch(
+            "security.github_pr_publisher.GitHubPRPublisher.publish",
+            new_callable=AsyncMock,
+            return_value=pr_result,
+        ):
+            body = ApproveFixRequest(
+                endpoint="/api/auth/login", approved_by="admin"
+            )
+            result = await approve_fix(body, mock_request)
 
         assert result["status"] == "approved"
         assert result["pr_url"] == "https://github.com/owner/repo/pull/99"
@@ -509,13 +500,12 @@ class TestFixesRouter:
         mock_redis = AsyncMock()
         mock_redis.lrange.return_value = []
 
-        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()):
-            with patch(
-                "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
-            ):
-                body = ApproveFixRequest(endpoint="/api/nonexistent")
-                with pytest.raises(HTTPException) as exc_info:
-                    await approve_fix(body, mock_request)
+        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()), patch(
+            "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
+        ):
+            body = ApproveFixRequest(endpoint="/api/nonexistent")
+            with pytest.raises(HTTPException) as exc_info:
+                await approve_fix(body, mock_request)
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -530,17 +520,15 @@ class TestFixesRouter:
         mock_redis.rpush = AsyncMock()
         mock_redis.ltrim = AsyncMock()
 
-        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()):
-            with patch(
-                "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
-            ):
-                with patch(
-                    "security.github_pr_publisher.GitHubPRPublisher.publish",
-                    new_callable=AsyncMock,
-                    return_value={"status": "error", "error": "token invalid"},
-                ):
-                    body = ApproveFixRequest(endpoint="/api/auth/login")
-                    result = await approve_fix(body, mock_request)
+        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()), patch(
+            "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
+        ), patch(
+            "security.github_pr_publisher.GitHubPRPublisher.publish",
+            new_callable=AsyncMock,
+            return_value={"status": "error", "error": "token invalid"},
+        ):
+            body = ApproveFixRequest(endpoint="/api/auth/login")
+            result = await approve_fix(body, mock_request)
 
         # Still returns approved — PR error is surfaced but doesn't block
         assert result["status"] == "approved"
@@ -559,16 +547,15 @@ class TestFixesRouter:
         mock_redis.rpush = AsyncMock()
         mock_redis.ltrim = AsyncMock()
 
-        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()):
-            with patch(
-                "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
-            ):
-                body = DeclineFixRequest(
-                    endpoint="/api/auth/login",
-                    declined_by="reviewer",
-                    reason="false positive",
-                )
-                result = await decline_fix(body, mock_request)
+        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()), patch(
+            "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
+        ):
+            body = DeclineFixRequest(
+                endpoint="/api/auth/login",
+                declined_by="reviewer",
+                reason="false positive",
+            )
+            result = await decline_fix(body, mock_request)
 
         assert result["status"] == "declined"
         mock_redis.lrem.assert_called_once()
@@ -586,13 +573,12 @@ class TestFixesRouter:
         mock_redis = AsyncMock()
         mock_redis.lrange.return_value = []
 
-        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()):
-            with patch(
-                "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
-            ):
-                body = DeclineFixRequest(endpoint="/api/nonexistent")
-                with pytest.raises(HTTPException) as exc_info:
-                    await decline_fix(body, mock_request)
+        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()), patch(
+            "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
+        ):
+            body = DeclineFixRequest(endpoint="/api/nonexistent")
+            with pytest.raises(HTTPException) as exc_info:
+                await decline_fix(body, mock_request)
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -604,17 +590,16 @@ class TestFixesRouter:
         mock_redis.rpush = AsyncMock()
         mock_redis.llen = AsyncMock(return_value=1)
 
-        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()):
-            with patch(
-                "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
-            ):
-                body = ScanEntryRequest(
-                    endpoint="/api/auth/login",
-                    code="vulnerable code",
-                    severity="high",
-                    rule="B608",
-                )
-                result = await push_scan_entry(body, mock_request)
+        with patch("api.security.fixes._require_admin", return_value=self._mock_auth()), patch(
+            "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
+        ):
+            body = ScanEntryRequest(
+                endpoint="/api/auth/login",
+                code="vulnerable code",
+                severity="high",
+                rule="B608",
+            )
+            result = await push_scan_entry(body, mock_request)
 
         assert result["status"] == "queued"
         assert result["endpoint"] == "/api/auth/login"
@@ -654,11 +639,10 @@ class TestFixesRouter:
         ]
         mock_redis.lrange.return_value = approved_records
 
-        with patch("api.security.fixes._require_auth", return_value=self._mock_auth()):
-            with patch(
-                "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
-            ):
-                result = await get_fix_stats(mock_request)
+        with patch("api.security.fixes._require_auth", return_value=self._mock_auth()), patch(
+            "api.security.fixes._get_redis", AsyncMock(return_value=mock_redis)
+        ):
+            result = await get_fix_stats(mock_request)
 
         assert result["pending"] == 3
         assert result["approved"] == 10
@@ -676,9 +660,8 @@ class TestFixesRouter:
         with patch(
             "api.security.fixes._require_auth",
             return_value={"sub": "user@test.com", "role": "trader"},
-        ):
-            with patch("api.security.fixes._get_redis", return_value=AsyncMock()):
-                body = ApproveFixRequest(endpoint="/api/auth/login")
-                with pytest.raises(HTTPException) as exc_info:
-                    await approve_fix(body, mock_request)
+        ), patch("api.security.fixes._get_redis", return_value=AsyncMock()):
+            body = ApproveFixRequest(endpoint="/api/auth/login")
+            with pytest.raises(HTTPException) as exc_info:
+                await approve_fix(body, mock_request)
         assert exc_info.value.status_code == 403

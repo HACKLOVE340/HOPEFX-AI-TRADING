@@ -45,8 +45,8 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import aiohttp
 import requests
@@ -107,7 +107,7 @@ class OrderResult:
     broker: str = "oanda"
     latency_ms: float = 0.0
     reject_reason: str = ""
-    raw: Optional[dict] = None
+    raw: dict | None = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -145,11 +145,11 @@ class OANDABroker:
 
     def __init__(
         self,
-        config: Optional[dict] = None,
+        config: dict | None = None,
         *,
-        api_key: Optional[str] = None,
-        account_id: Optional[str] = None,
-        server: Optional[str] = None,
+        api_key: str | None = None,
+        account_id: str | None = None,
+        server: str | None = None,
         **kwargs,
     ) -> None:
         # Accept both dict-style config and keyword-argument style.
@@ -165,7 +165,7 @@ class OANDABroker:
         )
         self._base_url = _LIVE_BASE if _server == "live" else _PRACTICE_BASE
         self._timeout = float(cfg.get("timeout_seconds", _DEFAULT_TIMEOUT))
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
         self.connected: bool = False
         self._total_orders: int = 0
         self._total_fills: int = 0
@@ -223,7 +223,7 @@ class OANDABroker:
 
     # ── Account info ──────────────────────────────────────────────────────────
 
-    async def get_account_info(self) -> Optional[AccountInfo]:
+    async def get_account_info(self) -> AccountInfo | None:
         """Query account balance, NAV, margin. Does NOT return price data."""
         if not self.connected or not self._session:
             return None
@@ -589,7 +589,7 @@ class OANDAConnector:
         self._api_key = api_key
         self._timeout = float(config.get("timeout", 10))
         self.connected = False
-        self.session: Optional[requests.Session] = None
+        self.session: requests.Session | None = None
 
     # ── Connection ────────────────────────────────────────────────────────────
 
@@ -639,9 +639,9 @@ class OANDAConnector:
         side: _OrderSide,
         quantity: float,
         order_type: _OrderType = _OrderType.MARKET,
-        price: Optional[float] = None,
-        stop_price: Optional[float] = None,
-    ) -> Optional[_Order]:
+        price: float | None = None,
+        stop_price: float | None = None,
+    ) -> _Order | None:
         """Place a market or limit order. Returns None when not connected."""
         if not self.connected or not self.session:
             return None
@@ -768,7 +768,7 @@ class OANDAConnector:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    def get_account_info(self) -> Optional[_AccountInfo]:
+    def get_account_info(self) -> _AccountInfo | None:
         """Return account balance and margin info."""
         if not self.connected or not self.session:
             return None
@@ -796,7 +796,7 @@ class OANDAConnector:
         symbol: str,
         granularity: str = "M1",
         count: int = 100,
-    ) -> Optional[list[dict[str, Any]]]:
+    ) -> list[dict[str, Any]] | None:
         """Fetch OHLCV candles. Returns None on error."""
         if not self.connected or not self.session:
             return None

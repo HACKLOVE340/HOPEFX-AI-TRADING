@@ -7,8 +7,7 @@ import base64
 import hashlib
 import logging
 import os
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Optional
+from datetime import datetime, timedelta, UTC
 
 import jwt
 from passlib.context import CryptContext
@@ -107,7 +106,7 @@ def _prepare_password(password: str) -> bytes:
     return base64.b64encode(digest)  # 44 ASCII bytes — safe for bcrypt
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Encode a JWT access token using PyJWT (HS256)."""
     to_encode = data.copy()
     expire = (

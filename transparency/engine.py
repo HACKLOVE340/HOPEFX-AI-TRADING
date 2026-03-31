@@ -5,8 +5,8 @@
 # No commercial use without explicit permission.
 """transparency/engine.py — ExecutionTransparencyEngine."""
 
-from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone, timedelta, UTC
+from typing import Any
+from datetime import datetime, timedelta, UTC
 import logging
 import statistics
 
@@ -38,7 +38,7 @@ class ExecutionTransparencyEngine:
     - Execution audit trail
     """
 
-    def __init__(self, config: Optional[dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize execution transparency engine."""
         self.config = config or {}
         self.executions: list[ExecutionRecord] = []
@@ -57,7 +57,7 @@ class ExecutionTransparencyEngine:
         executed_size: float,
         latency_ms: float,
         broker: str,
-        market_conditions: Optional[dict[str, Any]] = None,
+        market_conditions: dict[str, Any] | None = None,
     ) -> ExecutionRecord:
         """
         Record a trade execution for analysis.
@@ -78,10 +78,8 @@ class ExecutionTransparencyEngine:
             Execution record
         """
         # Calculate slippage
-        if side == "BUY":
-            slippage = executed_price - requested_price  # Positive = worse
-        else:
-            slippage = requested_price - executed_price  # Positive = worse
+        # Positive slippage = worse fill; direction depends on side
+        slippage = executed_price - requested_price if side == "BUY" else requested_price - executed_price
 
         # Convert slippage to pips using appropriate multiplier
         slippage_pips = (
@@ -124,10 +122,10 @@ class ExecutionTransparencyEngine:
 
     def generate_report(
         self,
-        period_start: Optional[datetime] = None,
-        period_end: Optional[datetime] = None,
-        symbol: Optional[str] = None,
-        broker: Optional[str] = None,
+        period_start: datetime | None = None,
+        period_end: datetime | None = None,
+        symbol: str | None = None,
+        broker: str | None = None,
     ) -> ExecutionReport:
         """
         Generate execution quality report.
@@ -305,8 +303,8 @@ class ExecutionTransparencyEngine:
 
     def get_slippage_distribution(
         self,
-        period_start: Optional[datetime] = None,
-        period_end: Optional[datetime] = None,
+        period_start: datetime | None = None,
+        period_end: datetime | None = None,
     ) -> dict[str, Any]:
         """Get slippage distribution data for visualization."""
         period_end = period_end or datetime.now(UTC)
@@ -352,8 +350,8 @@ class ExecutionTransparencyEngine:
 
     def get_latency_trend(
         self,
-        period_start: Optional[datetime] = None,
-        period_end: Optional[datetime] = None,
+        period_start: datetime | None = None,
+        period_end: datetime | None = None,
     ) -> dict[str, Any]:
         """Get latency trend over time."""
         period_end = period_end or datetime.now(UTC)
@@ -384,13 +382,10 @@ class ExecutionTransparencyEngine:
         }
 
     def get_execution_audit_trail(
-        self, order_id: Optional[str] = None, limit: int = 100
+        self, order_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
         """Get execution audit trail."""
-        if order_id:
-            filtered = [e for e in self.executions if e.order_id == order_id]
-        else:
-            filtered = self.executions[-limit:]
+        filtered = [e for e in self.executions if e.order_id == order_id] if order_id else self.executions[-limit:]
 
         return [
             {

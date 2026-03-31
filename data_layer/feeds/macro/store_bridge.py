@@ -25,8 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, Optional
+from datetime import datetime, timedelta, UTC
 
 from data_layer.feeds.macro.fred import FREDFeed, FRED_SERIES, fred_feed
 
@@ -48,11 +47,11 @@ class MacroStoreBridge:
         await bridge.start()   # loads FRED data + starts daily refresh
     """
 
-    def __init__(self, fred: Optional[FREDFeed] = None) -> None:
+    def __init__(self, fred: FREDFeed | None = None) -> None:
         self._fred = fred or fred_feed
         self._loaded = False
         self._running = False
-        self._last_refresh: Optional[datetime] = None
+        self._last_refresh: datetime | None = None
         self._series_loaded: int = 0
 
         # Prometheus

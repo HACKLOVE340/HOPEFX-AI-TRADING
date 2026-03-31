@@ -10,7 +10,6 @@ Manages historical data loading, validation, and access for backtesting.
 """
 
 import pandas as pd
-from typing import Dict, List, Optional
 from datetime import datetime
 import logging
 
@@ -103,10 +102,7 @@ class DataHandler:
         # Find common dates
         common_index = None
         for _symbol, df in self.data.items():
-            if common_index is None:
-                common_index = df.index
-            else:
-                common_index = common_index.intersection(df.index)
+            common_index = df.index if common_index is None else common_index.intersection(df.index)
 
         # Reindex all dataframes
         for symbol in self.data:
@@ -114,7 +110,7 @@ class DataHandler:
 
         logger.info(f"Aligned data to {len(common_index)} common dates")
 
-    def get_latest_bars(self, symbol: str, n: int = 1) -> Optional[pd.DataFrame]:
+    def get_latest_bars(self, symbol: str, n: int = 1) -> pd.DataFrame | None:
         """
         Get the last n bars for a symbol up to current point.
 
@@ -133,7 +129,7 @@ class DataHandler:
 
         return self.data[symbol].iloc[self.current_index - n : self.current_index]
 
-    def get_latest_bar(self, symbol: str) -> Optional[pd.Series]:
+    def get_latest_bar(self, symbol: str) -> pd.Series | None:
         """Get the latest bar for a symbol."""
         bars = self.get_latest_bars(symbol, n=1)
         if bars is not None and not bars.empty:
@@ -154,7 +150,7 @@ class DataHandler:
             return 0
         return min(len(df) for df in self.data.values())
 
-    def get_current_datetime(self) -> Optional[datetime]:
+    def get_current_datetime(self) -> datetime | None:
         """Get current datetime in backtest."""
         if self.current_index == 0:
             return None

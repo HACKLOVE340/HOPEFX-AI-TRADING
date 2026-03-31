@@ -6,9 +6,8 @@
 """Copy trading engine."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 
 @dataclass
@@ -16,8 +15,8 @@ class CopyRelationship:
     follower_id: str
     leader_id: str
     copy_ratio: float = 1.0
-    max_allocation: Optional[Decimal] = None
-    max_per_trade: Optional[Decimal] = None
+    max_allocation: Decimal | None = None
+    max_per_trade: Decimal | None = None
     is_active: bool = True
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -36,8 +35,8 @@ class CopyTradingEngine:
         follower_id: str,
         leader_id: str,
         copy_ratio: float = 1.0,
-        max_allocation: Optional[Decimal] = None,
-        max_per_trade: Optional[Decimal] = None,
+        max_allocation: Decimal | None = None,
+        max_per_trade: Decimal | None = None,
     ) -> CopyRelationship:
         rel = CopyRelationship(
             follower_id=follower_id,
@@ -72,7 +71,7 @@ class CopyTradingEngine:
         for rel in self.relationships.values():
             if not rel.is_active:
                 continue
-            if as_follower and rel.follower_id == user_id or not as_follower and rel.leader_id == user_id:
+            if (as_follower and rel.follower_id == user_id) or (not as_follower and rel.leader_id == user_id):
                 out.append(rel)
         return out
 
@@ -111,11 +110,8 @@ async def _copy_trade(
     # max_position_size is a fraction of balance expressed as notional lots.
     # 1 lot ≈ $1 notional when no price given; use price if available.
     price = leader_trade.get("price")
-    if price and price > 0:
-        max_qty_by_risk = (follower_balance * max_pos_size) / price
-    else:
-        # No price: treat max_position_size as max fraction of leader qty
-        max_qty_by_risk = leader_qty * max_pos_size
+    # No price: treat max_position_size as max fraction of leader qty
+    max_qty_by_risk = (follower_balance * max_pos_size) / price if price and price > 0 else leader_qty * max_pos_size
 
     if raw_qty > max_qty_by_risk:
         raise RiskLimitExceeded(

@@ -55,8 +55,8 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ def _direction_emoji(direction: str) -> str:
     return "⏸️"
 
 
-def _rr_ratio(entry: float, sl: Optional[float], tp: Optional[float]) -> str:
+def _rr_ratio(entry: float, sl: float | None, tp: float | None) -> str:
     """Compute risk/reward ratio string, or 'N/A' if SL/TP not set."""
     if not sl or not tp or entry == 0:
         return "N/A"
@@ -182,7 +182,7 @@ def _build_signal_embed(payload: dict[str, Any]) -> dict[str, Any]:
 def _build_alert_embed(
     message: str,
     level: str = "info",
-    details: Optional[dict[str, Any]] = None,
+    details: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a Discord embed for a system alert."""
     level_map = {
@@ -255,29 +255,28 @@ class DiscordSignalBot:
             import aiohttp
 
             for _attempt in range(retries):
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        webhook_url,
-                        json=payload,
-                        timeout=aiohttp.ClientTimeout(total=10),
-                    ) as resp:
-                        if resp.status in (200, 204):
-                            return True
-                        if resp.status == 429:
-                            retry_after = float(
-                                (await resp.json()).get("retry_after", 1.0)
-                            )
-                            logger.debug(
-                                "Discord rate limited — retrying in %.1f s", retry_after
-                            )
-                            await asyncio.sleep(retry_after)
-                            continue
-                        logger.warning(
-                            "Discord webhook returned %d: %s",
-                            resp.status,
-                            await resp.text(),
+                async with aiohttp.ClientSession() as session, session.post(
+                    webhook_url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    if resp.status in (200, 204):
+                        return True
+                    if resp.status == 429:
+                        retry_after = float(
+                            (await resp.json()).get("retry_after", 1.0)
                         )
-                        return False
+                        logger.debug(
+                            "Discord rate limited — retrying in %.1f s", retry_after
+                        )
+                        await asyncio.sleep(retry_after)
+                        continue
+                    logger.warning(
+                        "Discord webhook returned %d: %s",
+                        resp.status,
+                        await resp.text(),
+                    )
+                    return False
         except ImportError:
             return self._post_sync(webhook_url, payload)
         except Exception as exc:
@@ -354,7 +353,7 @@ class DiscordSignalBot:
         self,
         message: str,
         level: str = "info",
-        details: Optional[dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ) -> bool:
         """
         Post a system alert embed to the fallback/alerts webhook.

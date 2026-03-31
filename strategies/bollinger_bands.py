@@ -11,8 +11,8 @@ and potential reversals.
 """
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict
+from datetime import datetime, UTC
+from typing import Any
 
 import pandas as pd
 

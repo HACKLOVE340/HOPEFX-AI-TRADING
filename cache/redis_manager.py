@@ -14,7 +14,7 @@ DataFrame.to_json / pd.read_json.
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ class RedisCacheManager:
         )
         self.default_ttl = timedelta(hours=1)
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get value from cache."""
         try:
             data = self.client.get(key)
@@ -84,7 +84,7 @@ class RedisCacheManager:
             logger.warning("Redis get failed for key=%s: %s", key, e)
             return None
 
-    def set(self, key: str, value: Any, ttl: Optional[timedelta] = None) -> bool:
+    def set(self, key: str, value: Any, ttl: timedelta | None = None) -> bool:
         """Set value in cache with TTL."""
         try:
             serialized = _serialize(value)
@@ -94,7 +94,7 @@ class RedisCacheManager:
             logger.warning("Redis set failed for key=%s: %s", key, e)
             return False
 
-    def get_market_data(self, symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
+    def get_market_data(self, symbol: str, timeframe: str) -> pd.DataFrame | None:
         """Get cached market data."""
         key = f"ohlcv:{symbol}:{timeframe}"
         return self.get(key)
@@ -104,7 +104,7 @@ class RedisCacheManager:
         symbol: str,
         timeframe: str,
         data: pd.DataFrame,
-        ttl: Optional[timedelta] = None,
+        ttl: timedelta | None = None,
     ):
         """Cache market data."""
         key = f"ohlcv:{symbol}:{timeframe}"

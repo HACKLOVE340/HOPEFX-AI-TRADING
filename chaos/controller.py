@@ -40,8 +40,8 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 from chaos.injector import FaultInjector, FaultType, fault_injector
 
@@ -78,7 +78,7 @@ class ChaosController:
     def __init__(
         self,
         orchestrator: Any = None,
-        injector: Optional[FaultInjector] = None,
+        injector: FaultInjector | None = None,
     ) -> None:
         self._orch = orchestrator
         self._inj = injector or fault_injector

@@ -61,10 +61,11 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any
 
 import websockets
 from prometheus_client import Gauge, start_http_server
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -156,9 +157,9 @@ class NuclearStreamer:
         circuit_breaker_threshold: int = 5,
         circuit_breaker_cooldown: float = 60.0,
         prometheus_port: int = _METRICS_PORT,
-        redis_host: Optional[str] = None,
-        redis_port: Optional[int] = None,
-        redis_db: Optional[int] = None,
+        redis_host: str | None = None,
+        redis_port: int | None = None,
+        redis_db: int | None = None,
     ) -> None:
         self.symbol = symbol
         self.anomaly_jump_pct = anomaly_jump_pct
@@ -167,9 +168,9 @@ class NuclearStreamer:
         self.prometheus_port = prometheus_port
 
         # Credentials from environment.
-        self._finnhub_key: Optional[str] = os.getenv("FINNHUB_API_KEY")
-        self._twelve_key: Optional[str] = os.getenv("TWELVE_API_KEY")
-        self._polygon_key: Optional[str] = os.getenv("POLYGON_API_KEY")
+        self._finnhub_key: str | None = os.getenv("FINNHUB_API_KEY")
+        self._twelve_key: str | None = os.getenv("TWELVE_API_KEY")
+        self._polygon_key: str | None = os.getenv("POLYGON_API_KEY")
 
         # Redis config (env overrides constructor args).
         self._redis_host: str = os.getenv("REDIS_HOST", redis_host or "localhost")
@@ -178,18 +179,18 @@ class NuclearStreamer:
 
         # Shared state — protected by an asyncio lock.
         self._price_lock: asyncio.Lock = asyncio.Lock()
-        self._last_price: Optional[float] = None
+        self._last_price: float | None = None
         self._anomaly_counts: dict[str, int] = {}
 
         # Circuit-breaker state per source.
         self._fail_counts: dict[str, int] = {}
-        self._circuit_open_at: dict[str, Optional[float]] = {}
+        self._circuit_open_at: dict[str, float | None] = {}
 
         # Subscribers notified on every validated tick.
         self._subscribers: list[Any] = []
 
         # Redis client (created lazily in run()).
-        self._redis: Optional[Any] = None
+        self._redis: Any | None = None
 
         # Running flag.
         self._running: bool = False
@@ -203,10 +204,8 @@ class NuclearStreamer:
 
     def unsubscribe(self, component: Any) -> None:
         """Remove a previously registered subscriber."""
-        try:
+        with contextlib.suppress(ValueError):
             self._subscribers.remove(component)
-        except ValueError:
-            pass
 
     async def run(self) -> None:
         """

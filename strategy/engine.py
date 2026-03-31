@@ -35,8 +35,8 @@ import asyncio
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone, UTC
-from typing import Any, Deque, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import pandas as pd
 
@@ -72,8 +72,8 @@ class _OHLCVBuffer:
     def __init__(self, maxbars: int = BUFFER_SIZE) -> None:
         self._bars: deque[dict] = deque(maxlen=maxbars)
         self._pending: list = []
-        self._ema_f: Optional[float] = None
-        self._ema_s: Optional[float] = None
+        self._ema_f: float | None = None
+        self._ema_s: float | None = None
         self._alpha_f: float = 2 / (EMA_FAST + 1)
         self._alpha_s: float = 2 / (EMA_SLOW + 1)
 
@@ -143,7 +143,7 @@ class _MLPredictor:
     """
 
     def __init__(self) -> None:
-        self._predictor: Optional[Any] = None
+        self._predictor: Any | None = None
         self._available: bool = False
         self._load()
 

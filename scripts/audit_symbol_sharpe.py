@@ -44,9 +44,8 @@ import json
 import logging
 import math
 import sys
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -241,7 +240,7 @@ def sharpe_upper_bound(
 # ── Data loading ──────────────────────────────────────────────────────────────
 
 
-def _load_predictions_csv(csv_dir: Path, symbol: str) -> Optional[np.ndarray]:
+def _load_predictions_csv(csv_dir: Path, symbol: str) -> np.ndarray | None:
     """
     Load prediction probabilities from ml/evaluation/ CSVs.
 
@@ -275,7 +274,7 @@ def _load_predictions_csv(csv_dir: Path, symbol: str) -> Optional[np.ndarray]:
     return None
 
 
-def _implied_win_rate_from_sharpe(symbol: str) -> Optional[float]:
+def _implied_win_rate_from_sharpe(symbol: str) -> float | None:
     """
     Back-calculate the win-rate implied by a known implausible Sharpe ratio.
 
@@ -298,7 +297,7 @@ def audit_symbol(
     symbol: str,
     reference_dist: np.ndarray,
     comparison_dist: np.ndarray,
-    known_sharpe: Optional[float] = None,
+    known_sharpe: float | None = None,
     n_trades: int = 250,
     win_rate: float = 0.66,
 ) -> dict[str, object]:
@@ -389,7 +388,7 @@ def audit_symbol(
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Audit EUR/USD and GBP/USD backtest Sharpe ratios using PSI and KS tests"
     )
@@ -511,7 +510,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "audit_type": "symbol_sharpe_audit",
         "generated_at": datetime.now(UTC).isoformat(),
         "reference_symbol": "XAUUSD",
-        "n_reference": int(len(xauusd_dist)),
+        "n_reference": len(xauusd_dist),
         "psi_thresholds": {"stable": PSI_STABLE, "monitor": PSI_MONITOR},
         "ks_p_threshold": KS_P_THRESHOLD,
         "sharpe_plausibility_threshold": SHARPE_PLAUSIBILITY_THRESHOLD,

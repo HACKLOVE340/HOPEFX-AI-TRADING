@@ -25,7 +25,6 @@ import os
 import random
 import time
 from abc import ABC, abstractmethod
-from typing import List, Optional, Set
 
 import aiohttp
 
@@ -88,7 +87,7 @@ class NewsFeedBase(ABC):
 
     def __init__(self) -> None:
         self._api_key: str = os.getenv(self._api_key_env, "")
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
         self._seen_ids: set[str] = set()
         self._last_call_ts: float = 0.0
         self._total_fetched: int = 0

@@ -36,8 +36,9 @@ import struct
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
+from collections.abc import AsyncIterator, Callable
 
 import redis.asyncio as aioredis  # redis-py >= 4.2
 
@@ -154,7 +155,7 @@ class MemoryMappedEventStore:
         self.file_counter += 1
         with open(filename, "wb") as f:
             f.write(b"\x00" * self.max_file_size)
-        self.current_file = open(filename, "r+b")
+        self.current_file = open(filename, "r+b")  # noqa: SIM115
         self.current_mmap = mmap.mmap(self.current_file.fileno(), self.max_file_size)
         self.current_offset = 0
 
@@ -181,8 +182,8 @@ class MemoryMappedEventStore:
 
     def query(
         self,
-        source: Optional[str] = None,
-        event_type: Optional[int] = None,
+        source: str | None = None,
+        event_type: int | None = None,
         limit: int = 1000,
     ) -> list:
         results = []
@@ -194,7 +195,7 @@ class MemoryMappedEventStore:
                     results.append(event)
         return sorted(results, key=lambda e: e.timestamp)[:limit]
 
-    def _read_at(self, file_num: int, offset: int) -> Optional[DomainEvent]:
+    def _read_at(self, file_num: int, offset: int) -> DomainEvent | None:
         filename = f"{self.base_path}events_{file_num:06d}.bin"
         if not os.path.exists(filename):
             return None
@@ -266,8 +267,8 @@ def _make_redis() -> aioredis.Redis:
             from redis.asyncio.sentinel import Sentinel as _Sentinel
 
             hosts = []
-            for entry in sentinel_hosts_str.split(","):
-                entry = entry.strip()
+            for _entry in sentinel_hosts_str.split(","):
+                entry = _entry.strip()
                 if ":" in entry:
                     h, p = entry.rsplit(":", 1)
                     hosts.append((h.strip(), int(p.strip())))
@@ -315,7 +316,7 @@ class EventBus:
     """
 
     def __init__(self) -> None:
-        self._redis: Optional[aioredis.Redis] = None
+        self._redis: aioredis.Redis | None = None
         self._degraded: bool = False
         self._metrics: dict[str, int] = {
             "published": 0,

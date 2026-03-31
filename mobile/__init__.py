@@ -63,16 +63,16 @@ def create_wired_mobile(app_state: object) -> dict:
 
 __all__ = [
     "MobileAPI",
-    "MobileAuth",
-    "PushNotificationManager",
-    "MobileTradingEngine",
     "MobileAnalytics",
+    "MobileAuth",
+    "MobileTradingEngine",
+    "PushNotificationManager",
+    "create_wired_mobile",
+    "mobile_analytics",
     "mobile_api",
     "mobile_auth",
-    "push_notification_manager",
     "mobile_trading_engine",
-    "mobile_analytics",
-    "create_wired_mobile",
+    "push_notification_manager",
 ]
 
 __version__ = "2.0.0"

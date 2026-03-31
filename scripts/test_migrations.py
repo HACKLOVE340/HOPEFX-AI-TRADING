@@ -36,6 +36,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+import contextlib
 
 # ---------------------------------------------------------------------------
 # Load .env if present
@@ -65,7 +66,7 @@ def run(verbose: bool = False) -> int:
         from alembic import command as alembic_command
         from alembic.config import Config as AlembicConfig
         from alembic.script import ScriptDirectory
-        from alembic.runtime.migration import MigrationContext
+        from alembic.runtime.migration import MigrationContext  # noqa: F401
         from sqlalchemy import create_engine, inspect, text
 
         print(f"{_PASS}  alembic + sqlalchemy importable")
@@ -80,9 +81,8 @@ def run(verbose: bool = False) -> int:
 
     if not db_url:
         # Use a temporary SQLite file so we can inspect it after migration
-        _tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        _tmp.close()
-        _tmp_file = _tmp.name
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as _tmp:
+            _tmp_file = _tmp.name
         db_url = f"sqlite:///{_tmp_file}"
         print(f"  Using temporary SQLite DB: {_tmp_file}")
     else:
@@ -169,10 +169,8 @@ def run(verbose: bool = False) -> int:
 
     # ── Cleanup ───────────────────────────────────────────────────────────────
     if _tmp_file:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(_tmp_file)
-        except OSError:
-            pass
 
     print("\n" + "=" * 60)
     if failures == 0:

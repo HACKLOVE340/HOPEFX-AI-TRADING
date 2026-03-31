@@ -77,6 +77,7 @@ def _make_mock_ib():
 
 
 from contextlib import contextmanager
+import contextlib
 
 
 _MISSING = object()  # sentinel
@@ -111,10 +112,8 @@ def _patch_ib(mock_ib_instance):
     finally:
         for k, orig in _originals.items():
             if orig is _MISSING:
-                try:
+                with contextlib.suppress(AttributeError):
                     delattr(_ibkr_mod, k)
-                except AttributeError:
-                    pass
             else:
                 setattr(_ibkr_mod, k, orig)
 
@@ -134,12 +133,11 @@ class TestIBKRConnectorConnect:
     def test_connect_failure_returns_false(self):
         mock_ib = MagicMock()
         mock_ib.connect.side_effect = ConnectionRefusedError("TWS not running")
-        with _patch_ib(mock_ib):
+        with _patch_ib(mock_ib), patch("brokers.ibkr_connector.time.sleep", return_value=None):
             # Suppress retry sleep so test completes instantly
-            with patch("brokers.ibkr_connector.time.sleep", return_value=None):
-                cfg = IBKRConfig(host="127.0.0.1", port=7497, client_id=1)
-                connector = IBKRConnector(config=cfg)
-                result = connector.connect()
+            cfg = IBKRConfig(host="127.0.0.1", port=7497, client_id=1)
+            connector = IBKRConnector(config=cfg)
+            result = connector.connect()
 
         assert result is False
         assert connector.connected is False
@@ -321,10 +319,8 @@ class TestBrokerManager:
 
         # Trigger failures up to threshold
         for _ in range(_MAX_CONSECUTIVE_FAILURES):
-            try:
+            with contextlib.suppress(RuntimeError):
                 mgr.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
-            except RuntimeError:
-                pass
 
         # After threshold, should have failed over to paper
         assert mgr.get_active_broker_name() == "paper"

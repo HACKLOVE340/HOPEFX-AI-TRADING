@@ -12,8 +12,8 @@ CUDA-powered inference for sub-millisecond predictions
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
-from typing import Dict, List
+from dataclasses import dataclass, field  # noqa: F401
+from typing import Dict, List  # noqa: F401
 
 import numpy as np
 
@@ -165,9 +165,8 @@ class GPUInferenceEngine:
         self.input_buffer[:actual_size] = cpu_tensor.to(self.device)
 
         # Inference with autocast for speed
-        with torch.cuda.amp.autocast(enabled=self.config.mixed_precision):
-            with torch.no_grad():
-                direction, confidence = self.model(self.input_buffer)
+        with torch.cuda.amp.autocast(enabled=self.config.mixed_precision), torch.no_grad():
+            direction, confidence = self.model(self.input_buffer)
 
         # Retrieve results
         cpu_direction = direction[:actual_size].cpu().numpy()

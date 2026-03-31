@@ -84,9 +84,10 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
 
@@ -118,8 +119,8 @@ class ChildOrder:
     side: str = "BUY"
     quantity: float = 0.0
     scheduled_at: float = 0.0  # monotonic time
-    submitted_at: Optional[float] = None
-    fill_price: Optional[float] = None
+    submitted_at: float | None = None
+    fill_price: float | None = None
     filled_quantity: float = 0.0
     status: str = "pending"
 
@@ -150,7 +151,7 @@ class AlgoOrder(ABC):
         side: str,
         total_quantity: float,
         strategy_id: str = "unknown",
-        broker_submit_fn: Optional[Callable] = None,
+        broker_submit_fn: Callable | None = None,
     ) -> None:
         self.algo_id = str(uuid.uuid4())[:16]
         self.symbol = symbol
@@ -163,9 +164,9 @@ class AlgoOrder(ABC):
         self.filled_quantity: float = 0.0
         self.child_orders: list[ChildOrder] = []
         self._fill_prices: list[tuple[float, float]] = []  # (qty, price)
-        self._started_at: Optional[float] = None
-        self._completed_at: Optional[float] = None
-        self._task: Optional[asyncio.Task] = None
+        self._started_at: float | None = None
+        self._completed_at: float | None = None
+        self._task: asyncio.Task | None = None
 
     @property
     def remaining_quantity(self) -> float:
@@ -220,7 +221,7 @@ class AlgoOrder(ABC):
         """Execute the algorithm. Returns when complete or cancelled."""
         ...
 
-    async def _submit_child(self, quantity: float) -> Optional[ChildOrder]:
+    async def _submit_child(self, quantity: float) -> ChildOrder | None:
         """Submit a single child order to the broker."""
         if quantity < ALGO_MIN_CHILD_SIZE:
             logger.debug(
@@ -300,7 +301,7 @@ class TWAPOrder(AlgoOrder):
         duration_seconds: float,
         num_slices: int = 10,
         strategy_id: str = "unknown",
-        broker_submit_fn: Optional[Callable] = None,
+        broker_submit_fn: Callable | None = None,
     ) -> None:
         super().__init__(symbol, side, total_quantity, strategy_id, broker_submit_fn)
         self.duration_seconds = duration_seconds
@@ -418,7 +419,7 @@ class VWAPOrder(AlgoOrder):
         duration_seconds: float,
         num_slices: int = 20,
         strategy_id: str = "unknown",
-        broker_submit_fn: Optional[Callable] = None,
+        broker_submit_fn: Callable | None = None,
     ) -> None:
         super().__init__(symbol, side, total_quantity, strategy_id, broker_submit_fn)
         self.duration_seconds = duration_seconds
@@ -486,7 +487,7 @@ class VWAPOrder(AlgoOrder):
 
                 # Last slice: fill remainder
                 if i == len(slice_quantities) - 1:
-                    qty = self.remaining_quantity
+                    qty = self.remaining_quantity  # noqa: PLW2901
 
                 if qty >= ALGO_MIN_CHILD_SIZE:
                     await self._submit_child(qty)
@@ -537,7 +538,7 @@ class IcebergOrder(AlgoOrder):
         peak_size: float,
         refill_delay_seconds: float = 0.5,
         strategy_id: str = "unknown",
-        broker_submit_fn: Optional[Callable] = None,
+        broker_submit_fn: Callable | None = None,
     ) -> None:
         super().__init__(symbol, side, total_quantity, strategy_id, broker_submit_fn)
         self.peak_size = max(ALGO_MIN_CHILD_SIZE, peak_size)
@@ -617,7 +618,7 @@ class AlgoOrderManager:
     DEFAULT_TWAP_SLICES: int = int(os.getenv("ALGO_DEFAULT_TWAP_SLICES", "10"))
     DEFAULT_ICEBERG_PEAK: float = float(os.getenv("ALGO_DEFAULT_ICEBERG_PEAK", "5.0"))
 
-    def __init__(self, broker_submit_fn: Optional[Callable] = None) -> None:
+    def __init__(self, broker_submit_fn: Callable | None = None) -> None:
         self._broker_submit = broker_submit_fn
         self._active: dict[str, AlgoOrder] = {}
         self._completed: dict[str, AlgoFillReport] = {}
@@ -696,7 +697,7 @@ class AlgoOrderManager:
         side: str,
         total_quantity: float,
         strategy_id: str = "unknown",
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Automatically select and submit the appropriate algo based on order size.
 
@@ -742,7 +743,7 @@ class AlgoOrderManager:
             return True
         return False
 
-    def get_status(self, algo_id: str) -> Optional[dict[str, Any]]:
+    def get_status(self, algo_id: str) -> dict[str, Any] | None:
         """Return status dict for an active or completed algo order."""
         order = self._active.get(algo_id)
         if order:
@@ -802,7 +803,7 @@ class AlgoOrderManager:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_algo_manager: Optional[AlgoOrderManager] = None
+_algo_manager: AlgoOrderManager | None = None
 
 
 def get_algo_manager() -> AlgoOrderManager:

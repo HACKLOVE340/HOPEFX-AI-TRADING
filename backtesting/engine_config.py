@@ -28,7 +28,8 @@ The legacy shim at backtest/engine.py re-exports from here.
 
 import logging
 import os
-from typing import Dict, List, Optional, Any, Callable
+from typing import Any
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
@@ -127,7 +128,7 @@ class HistoricalDataLoader:
 
     async def load_data(
         self, symbol: str, timeframe: str, start: datetime, end: datetime
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """Load historical OHLCV data"""
         cache_key = f"{symbol}_{timeframe}_{start}_{end}"
 
@@ -191,7 +192,7 @@ class SimulatedBroker:
         self.positions: dict[str, dict] = {}
         self.trades: list[dict] = []
         self.equity_curve: list[dict] = []
-        self.current_time: Optional[datetime] = None
+        self.current_time: datetime | None = None
         self.total_overnight_cost: float = 0.0
 
         # Per-bar overnight financing rate
@@ -243,10 +244,7 @@ class SimulatedBroker:
         # Apply slippage (variable model uses bar range)
         slippage = self._calculate_slippage(current_price, bar_high, bar_low)
 
-        if side == "buy":
-            fill_price = current_price * (1 + slippage)
-        else:
-            fill_price = current_price * (1 - slippage)
+        fill_price = current_price * (1 + slippage) if side == "buy" else current_price * (1 - slippage)
 
         # Calculate cost
         cost = quantity * fill_price
@@ -454,7 +452,7 @@ class BacktestEngine:
         self.data_loader = HistoricalDataLoader()
         self.broker = SimulatedBroker(config)
         self.strategies: list[Any] = []
-        self.results: Optional[BacktestResult] = None
+        self.results: BacktestResult | None = None
 
         # Event log
         self.events: list[dict] = []
@@ -463,7 +461,7 @@ class BacktestEngine:
         """Add strategy to backtest"""
         self.strategies.append(strategy)
 
-    async def run(self, progress_callback: Optional[Callable] = None) -> BacktestResult:
+    async def run(self, progress_callback: Callable | None = None) -> BacktestResult:
         """
         Run backtest
 
@@ -592,10 +590,7 @@ class BacktestEngine:
             risk_dollars = equity * min(kelly_f, self.config.risk_per_trade * 2)
 
             stop_distance = signal.get("stop_distance", current_price * 0.01)
-            if stop_distance > 0:
-                qty = risk_dollars / stop_distance
-            else:
-                qty = risk_dollars / current_price
+            qty = risk_dollars / stop_distance if stop_distance > 0 else risk_dollars / current_price
 
         # Hard cap: never spend more than 95% of available cash
         max_qty_by_cash = (available_cash * 0.95) / current_price
@@ -608,7 +603,7 @@ class BacktestEngine:
         signal: dict,
         timestamp: datetime,
         prices: dict[str, float],
-        bar_data: Optional[dict[str, dict]] = None,
+        bar_data: dict[str, dict] | None = None,
     ) -> None:
         """
         Process a trading signal.

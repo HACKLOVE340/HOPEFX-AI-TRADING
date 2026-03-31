@@ -29,7 +29,6 @@ Usage
 
 import logging
 import os
-from typing import Dict, List, Optional
 
 import aiohttp
 
@@ -68,10 +67,10 @@ class OandaBroker:
     def __init__(self, config: dict) -> None:
         self._config = config
         self.connected: bool = False
-        self._session: Optional[aiohttp.ClientSession] = None
-        self._account_id: Optional[str] = None
-        self._token: Optional[str] = None
-        self._base_url: Optional[str] = None
+        self._session: aiohttp.ClientSession | None = None
+        self._account_id: str | None = None
+        self._token: str | None = None
+        self._base_url: str | None = None
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -142,7 +141,7 @@ class OandaBroker:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    async def get_account_info(self) -> Optional[dict]:
+    async def get_account_info(self) -> dict | None:
         """Return account summary as a plain dict."""
         if not self._assert_connected("get_account_info"):
             return None
@@ -316,7 +315,7 @@ class OandaBroker:
             logger.error("OandaBroker.place_order network error: %s", exc)
             return {"success": False, "order_id": None, "comment": str(exc)}
 
-    async def close_trade(self, trade_id: str, units: Optional[str] = "ALL") -> dict:
+    async def close_trade(self, trade_id: str, units: str | None = "ALL") -> dict:
         """
         Close an open trade (full or partial).
 
@@ -363,7 +362,7 @@ class OandaBroker:
         except aiohttp.ClientError as exc:
             return {"success": False, "comment": str(exc)}
 
-    async def get_tick(self, instrument: str = "XAU_USD") -> Optional[dict]:
+    async def get_tick(self, instrument: str = "XAU_USD") -> dict | None:
         """Return the latest bid/ask for *instrument*."""
         if not self._assert_connected("get_tick"):
             return None

@@ -8,7 +8,7 @@
 import enum as _enum
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ class ChartEngine:
         self.charts[key] = chart
         return chart
 
-    def get_chart(self, key: str) -> Optional[Chart]:
+    def get_chart(self, key: str) -> Chart | None:
         return self.charts.get(key)
 
     def remove_chart(self, key: str) -> bool:

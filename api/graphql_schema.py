@@ -28,13 +28,13 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 
 
 def _utcnow() -> datetime:
     """Return current UTC time as timezone-aware datetime."""
     return datetime.now(UTC)
-from typing import AsyncGenerator, List, Optional
+from collections.abc import AsyncGenerator
 
 import strawberry
 from strawberry.fastapi import GraphQLRouter
@@ -52,7 +52,7 @@ _FEATURE_ENABLED = os.getenv("FEATURE_GRAPHQL_API", "false").lower() == "true"
 # ── Auth context ──────────────────────────────────────────────────────────────
 
 
-def _get_current_user(info: Info) -> Optional[dict]:
+def _get_current_user(info: Info) -> dict | None:
     """
     Extract and validate JWT from the GraphQL request context.
 
@@ -137,8 +137,8 @@ class Position:
     open_price: float
     current_price: float
     unrealized_pnl: float
-    stop_loss: Optional[float]
-    take_profit: Optional[float]
+    stop_loss: float | None
+    take_profit: float | None
     opened_at: str
 
 
@@ -253,8 +253,8 @@ class CancelResult:
 class ModifyResult:
     modified: bool
     order_id: str
-    new_stop_loss: Optional[float]
-    new_take_profit: Optional[float]
+    new_stop_loss: float | None
+    new_take_profit: float | None
     message: str
 
 
@@ -656,8 +656,8 @@ class Mutation:
         side: str,
         lots: float,
         order_type: str = "market",
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> OrderResult:
         user = _require_auth(info)
         if side.upper() not in ("BUY", "SELL", "LONG", "SHORT"):
@@ -725,8 +725,8 @@ class Mutation:
         self,
         info: Info,
         order_id: str,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> ModifyResult:
         user = _require_auth(info)
         if stop_loss is None and take_profit is None:
@@ -817,7 +817,7 @@ class Subscription:
 
         while True:
             state = _get_broker_state()
-            mid: Optional[float] = None
+            mid: float | None = None
             spread = 0.0002 if "EUR" in symbol else 0.30
 
             if state and hasattr(state, "broker"):

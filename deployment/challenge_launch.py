@@ -49,9 +49,9 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 logging.basicConfig(
     level=logging.INFO,

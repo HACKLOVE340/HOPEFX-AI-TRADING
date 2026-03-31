@@ -24,9 +24,9 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import aiohttp
 
@@ -104,12 +104,12 @@ class PropFirmTrade:
     symbol: str
     side: str  # BUY/SELL
     entry_price: float
-    exit_price: Optional[float] = None
+    exit_price: float | None = None
     quantity: float = 0.0
     pnl: float = 0.0
     pnl_percentage: float = 0.0
     entry_time: datetime = field(default_factory=lambda: datetime.now(UTC))
-    exit_time: Optional[datetime] = None
+    exit_time: datetime | None = None
     duration_seconds: int = 0
     status: str = "open"  # open, closed, cancelled
 
@@ -149,7 +149,7 @@ class BasePropFirmBroker(ABC):
         self.secret_key = secret_key
         self.account_id = account_id
         self.firm_type = firm_type
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
 
     async def __aenter__(self):
         self.session = aiohttp.ClientSession()
@@ -170,9 +170,9 @@ class BasePropFirmBroker(ABC):
         side: str,
         quantity: float,
         order_type: str = "MARKET",
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> dict[str, Any]:
         """Place an order and return the broker's response dict."""
 
@@ -188,7 +188,7 @@ class BasePropFirmBroker(ABC):
     async def get_trade_history(self, limit: int = 100) -> list[PropFirmTrade]:
         """Return the most recent closed trades, newest first."""
 
-    async def check_risk_violations(self) -> tuple[bool, Optional[str]]:
+    async def check_risk_violations(self) -> tuple[bool, str | None]:
         """Check for risk limit violations"""
         metrics = await self.get_metrics()
 
@@ -232,7 +232,7 @@ class FTMOBroker(BasePropFirmBroker):
         self,
         method: str,
         endpoint: str,
-        data: Optional[dict] = None,
+        data: dict | None = None,
     ) -> dict[str, str]:
         """Generate FTMO API signature"""
         timestamp = str(int(datetime.now(UTC).timestamp() * 1000))
@@ -328,9 +328,9 @@ class FTMOBroker(BasePropFirmBroker):
         side: str,
         quantity: float,
         order_type: str = "MARKET",
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> dict[str, Any]:
         """Place order on FTMO with risk checks"""
 
@@ -565,9 +565,9 @@ class The5ersBroker(BasePropFirmBroker):
         side: str,
         quantity: float,
         order_type: str = "MARKET",
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> dict[str, Any]:
         """Place order on The5ers"""
 
@@ -808,9 +808,9 @@ class MyForexFundsBroker(BasePropFirmBroker):
         side: str,
         quantity: float,
         order_type: str = "MARKET",
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> dict[str, Any]:
         """Place order on MyForexFunds"""
 
@@ -1043,9 +1043,9 @@ class TopStepBroker(BasePropFirmBroker):
         side: str,
         quantity: float,
         order_type: str = "MARKET",
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ) -> dict[str, Any]:
         """Place order on TopStep"""
 

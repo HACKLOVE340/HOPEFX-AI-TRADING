@@ -78,7 +78,7 @@ import asyncio
 import logging
 import time
 from collections import deque
-from typing import Callable, Deque, Dict, List, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -456,7 +456,7 @@ class NuclearAIChartEngine:
         nuclear_level: int = 0,
         trading_paused: bool = False,
         rl_loaded: bool = False,
-        sup_status: Optional[dict] = None,
+        sup_status: dict | None = None,
     ) -> dict:
         """Build the nuclear sub-object for the chart state."""
         matched_terms = meta.get("matched_terms", [])
@@ -773,7 +773,7 @@ class NuclearAIChartEngine:
     # ── Equity curve update ───────────────────────────────────────────────────
 
     def record_equity_point(
-        self, equity: float, balance: float, annotation: Optional[str] = None
+        self, equity: float, balance: float, annotation: str | None = None
     ) -> None:
         """Called by connect_to_life.py on each status poll to record equity."""
         drawdown = 0.0
@@ -791,7 +791,7 @@ class NuclearAIChartEngine:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_engine_instance: Optional[NuclearAIChartEngine] = None
+_engine_instance: NuclearAIChartEngine | None = None
 
 
 def get_chart_engine() -> NuclearAIChartEngine:

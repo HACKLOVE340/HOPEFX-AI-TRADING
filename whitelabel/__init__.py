@@ -21,9 +21,9 @@ Key components:
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, timezone, UTC  # noqa: F401
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional  # noqa: F401
 
 _logger = logging.getLogger(__name__)
 
@@ -191,13 +191,13 @@ class Tenant:
         name: str,
         owner_email: str,
         status: TenantStatus = TenantStatus.ACTIVE,
-        expires_at: Optional[datetime] = None,
-        features: Optional[list[FeatureFlag]] = None,
+        expires_at: datetime | None = None,
+        features: list[FeatureFlag] | None = None,
         max_users: int = 50,
         user_count: int = 0,
-        reseller_id: Optional[str] = None,
+        reseller_id: str | None = None,
         custom_domain: str = "",
-        theme: Optional[BrandTheme] = None,
+        theme: BrandTheme | None = None,
     ) -> None:
         self.tenant_id = tenant_id
         self.name = name
@@ -243,9 +243,9 @@ class Reseller:
         company_name: str,
         contact_email: str,
         tier: ResellerTier = ResellerTier.STANDARD,
-        commission_rate: Optional[float] = None,
+        commission_rate: float | None = None,
         is_active: bool = True,
-        referral_code: Optional[str] = None,
+        referral_code: str | None = None,
         total_revenue: float = 0.0,
         total_tenants: int = 0,
     ) -> None:
@@ -308,8 +308,8 @@ class WhiteLabelManager:
         name: str,
         owner_email: str,
         trial_days: int = 0,
-        features: Optional[list[FeatureFlag]] = None,
-        reseller_id: Optional[str] = None,
+        features: list[FeatureFlag] | None = None,
+        reseller_id: str | None = None,
     ) -> Tenant:
         """
         Create a new white-label tenant.
@@ -327,7 +327,7 @@ class WhiteLabelManager:
         tenant_id = _generate_id("WL")
         if trial_days > 0:
             status = TenantStatus.TRIAL
-            expires_at: Optional[datetime] = datetime.now(UTC) + timedelta(
+            expires_at: datetime | None = datetime.now(UTC) + timedelta(
                 days=trial_days
             )
         else:
@@ -353,7 +353,7 @@ class WhiteLabelManager:
         _logger.info("Created white-label tenant %s (%s)", tenant_id, name)
         return tenant
 
-    def get_tenant(self, tenant_id: str) -> Optional[Tenant]:
+    def get_tenant(self, tenant_id: str) -> Tenant | None:
         """Return the tenant with the given ID, or None."""
         return self._tenants.get(tenant_id)
 
@@ -386,7 +386,7 @@ class WhiteLabelManager:
         _logger.info("Tenant %s deleted", tenant_id)
         return True
 
-    def list_tenants(self, status: Optional[TenantStatus] = None) -> list[Tenant]:
+    def list_tenants(self, status: TenantStatus | None = None) -> list[Tenant]:
         """Return all tenants, optionally filtered by status."""
         tenants = list(self._tenants.values())
         if status is not None:
@@ -408,7 +408,7 @@ class WhiteLabelManager:
         _logger.info("Theme updated for tenant %s", tenant_id)
         return True
 
-    def get_theme(self, tenant_id: str) -> Optional[BrandTheme]:
+    def get_theme(self, tenant_id: str) -> BrandTheme | None:
         """Return the BrandTheme for a tenant, or None if not found."""
         tenant = self.get_tenant(tenant_id)
         if tenant is None:
@@ -467,7 +467,7 @@ class WhiteLabelManager:
         self._domains[domain] = tenant_id
         return True
 
-    def resolve_domain(self, domain: str) -> Optional[Tenant]:
+    def resolve_domain(self, domain: str) -> Tenant | None:
         """Return the tenant that owns the given domain, or None."""
         tenant_id = self._domains.get(domain)
         if tenant_id is None:
@@ -506,7 +506,7 @@ class WhiteLabelManager:
         _logger.info("Created reseller %s (%s)", reseller_id, company_name)
         return reseller
 
-    def get_reseller(self, reseller_id: str) -> Optional[Reseller]:
+    def get_reseller(self, reseller_id: str) -> Reseller | None:
         """Return the reseller with the given ID, or None."""
         return self._resellers.get(reseller_id)
 
@@ -524,7 +524,7 @@ class WhiteLabelManager:
         reseller.total_revenue += amount
         return commission
 
-    def upgrade_reseller_tier(self, reseller_id: str) -> Optional[ResellerTier]:
+    def upgrade_reseller_tier(self, reseller_id: str) -> ResellerTier | None:
         """
         Upgrade a reseller's tier based on their total_tenants count.
 
@@ -550,7 +550,7 @@ class WhiteLabelManager:
     # Export / Import
     # ------------------------------------------------------------------
 
-    def export_tenant_config(self, tenant_id: str) -> Optional[dict[str, Any]]:
+    def export_tenant_config(self, tenant_id: str) -> dict[str, Any] | None:
         """
         Export a tenant's configuration as a serialisable dictionary.
 
@@ -612,14 +612,14 @@ class WhiteLabelManager:
 white_label_manager = WhiteLabelManager()
 
 __all__ = [
-    "TenantStatus",
-    "FeatureFlag",
-    "ResellerTier",
     "TIER_COMMISSION_RATES",
     "TIER_TENANT_THRESHOLDS",
     "BrandTheme",
-    "Tenant",
+    "FeatureFlag",
     "Reseller",
+    "ResellerTier",
+    "Tenant",
+    "TenantStatus",
     "WhiteLabelManager",
     "white_label_manager",
     # Sub-modules (imported on demand to avoid circular imports)

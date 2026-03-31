@@ -62,9 +62,9 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +167,7 @@ class HOPEFXBrain:
     Designed to be called from the main trading loop on each new bar.
     """
 
-    def __init__(self, config: Optional[dict[str, Any]] = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         self._config = config or {}
         self._lock = threading.Lock()
 
@@ -461,7 +461,7 @@ class HOPEFXBrain:
         if self._strategy_manager is not None:
             try:
                 available = set(
-                    getattr(self._strategy_manager, "list_strategies", lambda: [])()
+                    getattr(self._strategy_manager, "list_strategies", list)()
                 )
                 for name in candidates:
                     if name in available:
@@ -696,7 +696,7 @@ class HOPEFXBrain:
         alignment = mtf.get("mtf_alignment", "unknown")
         if alignment.startswith("aligned_"):
             aligned_dir = alignment.replace("aligned_", "")
-            if aligned_dir == "trending_up" and final_direction == "long" or aligned_dir == "trending_down" and final_direction == "short":
+            if (aligned_dir == "trending_up" and final_direction == "long") or (aligned_dir == "trending_down" and final_direction == "short"):
                 final_confidence = min(1.0, final_confidence * 1.15)
                 reason += "+mtf_aligned"
         elif alignment == "divergent" and final_direction != "hold":
@@ -789,7 +789,7 @@ class HOPEFXBrain:
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
-_brain: Optional[HOPEFXBrain] = None
+_brain: HOPEFXBrain | None = None
 _brain_lock = threading.Lock()
 
 

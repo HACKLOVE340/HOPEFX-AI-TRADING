@@ -13,7 +13,7 @@ Unit tests for TCA module:
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -552,7 +552,7 @@ class TestTCAEngine:
         from execution.tca import BenchmarkType, Side
 
         fired = []
-        self.engine.register_cost_callback(lambda m: fired.append(m))
+        self.engine.register_cost_callback(lambda m: fired.append(m))  # noqa: PLW0108
         await self.engine.start_order(
             "ord5",
             "XAU_USD",

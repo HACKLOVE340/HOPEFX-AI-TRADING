@@ -41,8 +41,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta, UTC
-from typing import Dict, List
+from datetime import datetime, timedelta, UTC
 
 from core.event_bus import bus, CH_SIGNAL, CH_BREACH
 
@@ -107,7 +106,7 @@ class _NewsCalendar:
         for ev in self._events:
             # Normalise naive datetimes to UTC
             if ev.tzinfo is None:
-                ev = ev.replace(tzinfo=UTC)
+                ev = ev.replace(tzinfo=UTC)  # noqa: PLW2901
             if abs(now - ev) <= cutoff:
                 return True
         return False

@@ -19,7 +19,6 @@ tick → signal → risk → execute pipeline through MT5Bridge.
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Optional
 
 import yaml
 
@@ -181,7 +180,7 @@ class BrokerFactory:
     @classmethod
     def get_broker_from_yaml(
         cls,
-        name: Optional[str] = None,
+        name: str | None = None,
         config_path: str = "config/brokers.yaml",
     ):
         """
@@ -261,7 +260,7 @@ class BrokerFactory:
             return None
 
     @staticmethod
-    def _load_yaml_config(path: str) -> Optional[dict]:
+    def _load_yaml_config(path: str) -> dict | None:
         """Load and return the YAML config, or None if the file is missing."""
         config_path = Path(path)
         if not config_path.exists():

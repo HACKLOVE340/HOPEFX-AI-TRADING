@@ -16,7 +16,7 @@ tests/unit/test_kill_switch_integration.py
 """
 
 import json
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
 

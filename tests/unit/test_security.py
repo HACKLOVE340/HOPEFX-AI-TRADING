@@ -14,7 +14,7 @@ Tests for all security modules including:
 """
 
 import os
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from unittest.mock import patch
 
 from utils.security import (

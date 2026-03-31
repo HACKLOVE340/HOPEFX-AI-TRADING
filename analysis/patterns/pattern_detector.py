@@ -13,7 +13,7 @@ Advanced Candlestick & Chart Pattern Recognition
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import Any
 from dataclasses import dataclass
 from enum import Enum
 import numpy as np

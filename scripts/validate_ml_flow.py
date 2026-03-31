@@ -46,7 +46,7 @@ import traceback
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List
+from collections.abc import Callable
 
 # ── Environment bootstrap ─────────────────────────────────────────────────────
 # Must happen before any app module is imported so startup validators see

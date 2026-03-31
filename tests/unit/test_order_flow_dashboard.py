@@ -7,7 +7,7 @@
 Tests for Order Flow Dashboard (analysis/order_flow_dashboard.py)
 """
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from unittest.mock import MagicMock
 
 

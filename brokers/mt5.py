@@ -16,8 +16,8 @@ Supported:
 """
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 try:
     import MetaTrader5 as mt5
@@ -167,11 +167,11 @@ class MT5Connector(BrokerConnector):
         side: OrderSide,
         quantity: float,
         order_type: OrderType = OrderType.MARKET,
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
         **kwargs,
-    ) -> Optional[Order]:
+    ) -> Order | None:
         """
         Place order on MT5.
 
@@ -198,8 +198,7 @@ class MT5Connector(BrokerConnector):
                 logger.error(f"Symbol {symbol} not found")
                 return None
 
-            if not symbol_info.visible:
-                if not mt5.symbol_select(symbol, True):
+            if not symbol_info.visible and not mt5.symbol_select(symbol, True):
                     logger.error(f"Failed to select symbol {symbol}")
                     return None
 
@@ -308,7 +307,7 @@ class MT5Connector(BrokerConnector):
             logger.error(f"Cancel order error: {e}")
             return False
 
-    def get_order(self, order_id: str) -> Optional[Order]:
+    def get_order(self, order_id: str) -> Order | None:
         """Get order by ID."""
         if not self.connected:
             return None
@@ -324,16 +323,13 @@ class MT5Connector(BrokerConnector):
             logger.error(f"Get order error: {e}")
             return None
 
-    def get_positions(self, symbol: Optional[str] = None) -> list[Position]:
+    def get_positions(self, symbol: str | None = None) -> list[Position]:
         """Get open positions."""
         if not self.connected:
             return []
 
         try:
-            if symbol:
-                positions = mt5.positions_get(symbol=symbol)
-            else:
-                positions = mt5.positions_get()
+            positions = mt5.positions_get(symbol=symbol) if symbol else mt5.positions_get()
 
             if positions is None:
                 return []
@@ -364,7 +360,7 @@ class MT5Connector(BrokerConnector):
             logger.error(f"Get positions error: {e}")
             return []
 
-    def close_position(self, symbol: str, quantity: Optional[float] = None) -> bool:
+    def close_position(self, symbol: str, quantity: float | None = None) -> bool:
         """Close position (full or partial)."""
         if not self.connected:
             return False
@@ -419,7 +415,7 @@ class MT5Connector(BrokerConnector):
             logger.error(f"Close position error: {e}")
             return False
 
-    def get_account_info(self) -> Optional[AccountInfo]:
+    def get_account_info(self) -> AccountInfo | None:
         """Get account information."""
         if not self.connected:
             return None
@@ -447,7 +443,7 @@ class MT5Connector(BrokerConnector):
         symbol: str,
         timeframe: str = "H1",
         count: int = 100,
-    ) -> Optional[list[dict[str, Any]]]:
+    ) -> list[dict[str, Any]] | None:
         """
         Get historical market data.
 

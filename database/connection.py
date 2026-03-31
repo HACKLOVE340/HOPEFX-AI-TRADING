@@ -11,7 +11,7 @@ SQLAlchemy with connection pooling, retries, and monitoring
 import logging
 import time
 import threading
-from typing import Optional, Dict, Callable
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 
@@ -21,7 +21,7 @@ try:
     from sqlalchemy.orm import sessionmaker, Session
     from sqlalchemy.pool import QueuePool
     from sqlalchemy.exc import (
-        SQLAlchemyError,
+        SQLAlchemyError,  # noqa: F401
         OperationalError,
         TimeoutError as SATimeoutError,
     )
@@ -84,7 +84,7 @@ class DatabaseManager:
         self.max_retries = max_retries
         self.query_timeout = query_timeout
 
-        self._engine: Optional[Engine] = None
+        self._engine: Engine | None = None
         self._session_factory = None
         self._metrics = DatabaseMetrics()
         self._metrics_lock = threading.Lock()
@@ -92,7 +92,7 @@ class DatabaseManager:
         self._failure_count = 0
         self._circuit_threshold = 5
         self._circuit_recovery_time = 60.0
-        self._last_failure_time: Optional[float] = None
+        self._last_failure_time: float | None = None
 
         self._initialize()
 
@@ -194,7 +194,7 @@ class DatabaseManager:
         if not self._check_circuit():
             raise ConnectionError("Database circuit breaker is open")
 
-        session: Optional[Session] = None
+        session: Session | None = None
         last_error = None
 
         for attempt in range(self.max_retries):
@@ -377,12 +377,12 @@ class DatabaseMigrationManager:
 
 
 # Global instance
-_db_manager: Optional[DatabaseManager] = None
+_db_manager: DatabaseManager | None = None
 
 
-def get_db_manager() -> Optional[DatabaseManager]:
+def get_db_manager() -> DatabaseManager | None:
     """Get global database manager"""
-    global _db_manager
+    global _db_manager  # noqa: PLW0602
     return _db_manager
 
 

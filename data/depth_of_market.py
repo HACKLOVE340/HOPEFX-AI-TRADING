@@ -17,8 +17,7 @@ Inspired by: MT5, Bookmap, NinjaTrader DOM features
 """
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, UTC
 from dataclasses import dataclass, field, asdict
 from collections import deque
 from enum import Enum
@@ -65,24 +64,24 @@ class OrderBook:
     sequence: int = 0
 
     @property
-    def best_bid(self) -> Optional[float]:
+    def best_bid(self) -> float | None:
         """Get best bid price."""
         return self.bids[0].price if self.bids else None
 
     @property
-    def best_ask(self) -> Optional[float]:
+    def best_ask(self) -> float | None:
         """Get best ask price."""
         return self.asks[0].price if self.asks else None
 
     @property
-    def spread(self) -> Optional[float]:
+    def spread(self) -> float | None:
         """Calculate bid-ask spread."""
         if self.best_bid and self.best_ask:
             return round(self.best_ask - self.best_bid, 5)
         return None
 
     @property
-    def spread_pct(self) -> Optional[float]:
+    def spread_pct(self) -> float | None:
         """Calculate spread as percentage of mid price."""
         if self.best_bid and self.best_ask:
             mid = (self.best_bid + self.best_ask) / 2
@@ -90,14 +89,14 @@ class OrderBook:
         return None
 
     @property
-    def mid_price(self) -> Optional[float]:
+    def mid_price(self) -> float | None:
         """Calculate simple mid price."""
         if self.best_bid and self.best_ask:
             return round((self.best_bid + self.best_ask) / 2, 5)
         return None
 
     @property
-    def weighted_mid_price(self) -> Optional[float]:
+    def weighted_mid_price(self) -> float | None:
         """Calculate volume-weighted mid price."""
         if not self.bids or not self.asks:
             return None
@@ -235,7 +234,7 @@ class DepthOfMarketService:
         analysis = dom_service.get_order_book_analysis('XAUUSD')
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize DOM service.
 
@@ -272,7 +271,7 @@ class DepthOfMarketService:
         symbol: str,
         bids: list[tuple[float, float]],
         asks: list[tuple[float, float]],
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
     ):
         """
         Update order book for a symbol.
@@ -363,7 +362,7 @@ class DepthOfMarketService:
     # ORDER BOOK RETRIEVAL
     # ================================================================
 
-    def get_order_book(self, symbol: str, levels: int = 10) -> Optional[OrderBook]:
+    def get_order_book(self, symbol: str, levels: int = 10) -> OrderBook | None:
         """
         Get order book for a symbol.
 
@@ -392,12 +391,12 @@ class DepthOfMarketService:
 
             return order_book
 
-    def get_order_book_dict(self, symbol: str, levels: int = 10) -> Optional[dict]:
+    def get_order_book_dict(self, symbol: str, levels: int = 10) -> dict | None:
         """Get order book as dictionary."""
         order_book = self.get_order_book(symbol, levels)
         return order_book.to_dict() if order_book else None
 
-    def get_best_bid_ask(self, symbol: str) -> Optional[dict]:
+    def get_best_bid_ask(self, symbol: str) -> dict | None:
         """Get best bid and ask for a symbol."""
         with self._lock:
             if symbol not in self._order_books:
@@ -413,14 +412,14 @@ class DepthOfMarketService:
                 "timestamp": order_book.timestamp.isoformat(),
             }
 
-    def get_spread(self, symbol: str) -> Optional[float]:
+    def get_spread(self, symbol: str) -> float | None:
         """Get current spread for a symbol."""
         with self._lock:
             if symbol not in self._order_books:
                 return None
             return self._order_books[symbol].spread
 
-    def get_imbalance(self, symbol: str) -> Optional[float]:
+    def get_imbalance(self, symbol: str) -> float | None:
         """Get order book imbalance for a symbol."""
         with self._lock:
             if symbol not in self._order_books:
@@ -431,7 +430,7 @@ class DepthOfMarketService:
     # ORDER BOOK ANALYSIS
     # ================================================================
 
-    def get_order_book_analysis(self, symbol: str) -> Optional[OrderBookAnalysis]:
+    def get_order_book_analysis(self, symbol: str) -> OrderBookAnalysis | None:
         """
         Get comprehensive order book analysis.
 
@@ -528,7 +527,7 @@ class DepthOfMarketService:
 
     def get_dom_visualization_data(
         self, symbol: str, levels: int = 20
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """
         Get data formatted for DOM visualization.
 
@@ -761,7 +760,7 @@ def create_dom_router(dom_service: DepthOfMarketService):
 
 
 # Global instance for easy access
-_dom_service: Optional[DepthOfMarketService] = None
+_dom_service: DepthOfMarketService | None = None
 
 
 def get_dom_service() -> DepthOfMarketService:

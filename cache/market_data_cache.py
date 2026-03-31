@@ -13,15 +13,15 @@ import logging
 import time
 import threading
 import asyncio
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional, Tuple, Any
+from datetime import datetime, timedelta, UTC
+from typing import Any
 from dataclasses import dataclass, asdict
 from enum import Enum
 
 try:
     import redis
     from redis import Redis
-    from redis.exceptions import ConnectionError, TimeoutError as RedisTimeoutError
+    from redis.exceptions import ConnectionError, TimeoutError as RedisTimeoutError  # noqa: F401
 
     REDIS_AVAILABLE = True
 except ImportError:
@@ -154,7 +154,7 @@ class _InMemoryStore:
             self._expiry[name] = time.time() + time_secs
         return True
 
-    def get(self, name: str) -> Optional[str]:
+    def get(self, name: str) -> str | None:
         with self._lock:
             self._clean(name)
             return self._data.get(name)
@@ -172,7 +172,7 @@ class _InMemoryStore:
     def scan(
         self,
         cursor: int = 0,
-        match: Optional[str] = None,
+        match: str | None = None,
         count: int = 100,
     ) -> tuple[int, list[str]]:
         """Single-pass SCAN (always returns cursor=0, all matching keys)."""
@@ -231,7 +231,7 @@ class MarketDataCache:
         host: str = "localhost",
         port: int = 6379,
         db: int = 0,
-        password: Optional[str] = None,
+        password: str | None = None,
         socket_timeout: float = 1,
         socket_connect_timeout: float = 1,
         decode_responses: bool = True,
@@ -263,7 +263,7 @@ class MarketDataCache:
         self._using_fallback = False
 
         # Redis client (initialized on first use)
-        self._redis_client: Optional[Redis] = None
+        self._redis_client: Redis | None = None
         self._connection_failed = False
 
         # Attempt connection at init time (tests patch this method)
@@ -271,7 +271,7 @@ class MarketDataCache:
 
         logger.info(f"MarketDataCache initialized (Redis: {host}:{port})")
 
-    def _connect_with_retry(self) -> Optional[Redis]:
+    def _connect_with_retry(self) -> Redis | None:
         """Attempt Redis connection with retries; return client or None on failure."""
         for attempt in range(self.max_retries):
             try:
@@ -303,7 +303,7 @@ class MarketDataCache:
             return None
         raise ConnectionError(f"Could not connect to Redis at {self.host}:{self.port}")
 
-    def _get_redis(self) -> Optional[Redis]:
+    def _get_redis(self) -> Redis | None:
         """Get or create Redis connection with retry"""
         if self._connection_failed and not self.enable_fallback:
             return None
@@ -389,7 +389,7 @@ class MarketDataCache:
         symbol: str,
         timeframe,  # Timeframe enum or plain string e.g. "1h"
         ohlcv_data: list,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> bool:
         """Cache OHLCV data. Accepts Timeframe enum or plain string timeframe."""
         try:
@@ -441,8 +441,8 @@ class MarketDataCache:
             return False
 
     def get_ohlcv(
-        self, symbol: str, timeframe, limit: Optional[int] = None
-    ) -> Optional[list]:
+        self, symbol: str, timeframe, limit: int | None = None
+    ) -> list | None:
         """Retrieve OHLCV data from cache.
 
         Args:
@@ -608,7 +608,7 @@ class MarketDataCache:
                 with self._local_cache_lock:
                     keys_to_remove = [
                         k
-                        for k in self._local_cache.keys()
+                        for k in self._local_cache
                         if k.startswith(f"market_data:{symbol}:")
                         or k == f"tick_data:{symbol}"
                     ]
@@ -724,7 +724,7 @@ class MarketDataCache:
             logger.error(f"cache_ticks error: {e}")
             return False
 
-    def get_ticks(self, symbol: str) -> Optional[list]:
+    def get_ticks(self, symbol: str) -> list | None:
         """Retrieve cached tick list; returns list of TickData or None."""
         key = self._build_tick_key(symbol)
         try:

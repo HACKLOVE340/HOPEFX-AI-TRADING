@@ -48,7 +48,6 @@ from __future__ import annotations
 import logging
 import threading
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -106,7 +105,7 @@ class AnomalyWeighter:
             random_state=random_state,
             n_jobs=-1,
         )
-        self._lof: Optional[LocalOutlierFactor] = None
+        self._lof: LocalOutlierFactor | None = None
         if use_lof:
             self._lof = LocalOutlierFactor(
                 n_neighbors=lof_neighbors,
@@ -330,7 +329,7 @@ class AnomalyWeightStore:
         anomaly_threshold: float = -0.05,
         down_weight_factor: float = 0.5,
         use_lof: bool = True,
-        persist_path: Optional[str] = None,
+        persist_path: str | None = None,
     ) -> None:
         self.window_size = window_size
         self.refit_every = refit_every
@@ -339,7 +338,7 @@ class AnomalyWeightStore:
         self.use_lof = use_lof
         self.persist_path = Path(persist_path) if persist_path else None
         self._contamination = contamination
-        self._weighter: Optional[AnomalyWeighter] = None
+        self._weighter: AnomalyWeighter | None = None
         self._buffer: list = []
         self._bars_since_refit: int = 0
         self._fitted = False
@@ -354,7 +353,7 @@ class AnomalyWeightStore:
     # ── Feature extraction ────────────────────────────────────────────────────
 
     @staticmethod
-    def _extract_features(ohlcv_df: pd.DataFrame) -> Optional[np.ndarray]:
+    def _extract_features(ohlcv_df: pd.DataFrame) -> np.ndarray | None:
         """
         Extract a compact, stationary anomaly-detection feature vector from OHLCV.
 

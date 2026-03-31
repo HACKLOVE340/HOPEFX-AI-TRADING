@@ -31,8 +31,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import datetime, UTC
 
 from core.event_bus import bus, CH_ORDER, CH_BREACH
 from execution.fix_adapter import (
@@ -97,18 +96,17 @@ class _OandaFallback:
             }
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url,
-                json=body,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                data = await resp.json()
-                if resp.status not in (200, 201):
-                    raise RuntimeError(
-                        f"OANDA REST order failed: HTTP {resp.status} — {data}"
-                    )
+        async with aiohttp.ClientSession() as session, session.post(
+            url,
+            json=body,
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            data = await resp.json()
+            if resp.status not in (200, 201):
+                raise RuntimeError(
+                    f"OANDA REST order failed: HTTP {resp.status} — {data}"
+                )
 
         fill = data.get("orderFillTransaction", {})
         price = float(fill.get("price", 0))
@@ -141,7 +139,7 @@ class FIXRouter:
     """
 
     def __init__(self) -> None:
-        self._adapter: Optional[FIXAdapter] = None
+        self._adapter: FIXAdapter | None = None
         self._fallback = _OandaFallback()
         self._fix_available: bool = False
         self._halted: bool = False

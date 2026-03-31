@@ -16,8 +16,8 @@ import os
 import queue
 import threading
 import traceback
-from typing import Dict, Any, Optional, List
-from datetime import datetime, timezone, UTC
+from typing import Any, Optional
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
@@ -26,7 +26,7 @@ from enum import Enum
 import socket
 
 try:
-    from pythonjsonlogger import jsonlogger
+    from pythonjsonlogger import jsonlogger  # noqa: F401
 
     JSON_LOGGER_AVAILABLE = True
 except ImportError:
@@ -53,10 +53,10 @@ class LogContext:
     """Structured log context"""
 
     component: str = "unknown"
-    request_id: Optional[str] = None
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
-    trace_id: Optional[str] = None
+    request_id: str | None = None
+    user_id: str | None = None
+    session_id: str | None = None
+    trace_id: str | None = None
     extra: dict[str, Any] = None
 
     def to_dict(self) -> dict:
@@ -73,7 +73,7 @@ class LogContext:
 class StructuredLogFormatter(logging.Formatter):
     """JSON formatter for structured logging"""
 
-    def __init__(self, fmt: Optional[str] = None, datefmt: Optional[str] = None):
+    def __init__(self, fmt: str | None = None, datefmt: str | None = None):
         super().__init__(fmt, datefmt)
         self.hostname = socket.gethostname()
         self.pid = os.getpid()
@@ -152,7 +152,7 @@ class AsyncLogHandler(logging.Handler):
         self.target_handler = target_handler
         self.queue: queue.Queue = queue.Queue(maxsize=max_queue_size)
         self.dropped_count = 0
-        self._worker_thread: Optional[threading.Thread] = None
+        self._worker_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
 
@@ -246,7 +246,7 @@ class HOPEFXLogger:
         backup_count: int = 5,
         enable_console: bool = True,
         enable_graylog: bool = False,
-        graylog_host: Optional[str] = None,
+        graylog_host: str | None = None,
         graylog_port: int = 12201,
     ):
         """Setup logging infrastructure"""
@@ -347,7 +347,7 @@ class HOPEFXLogger:
         """Set logging context for current thread"""
         self._context.context = context
 
-    def get_context(self) -> Optional[LogContext]:
+    def get_context(self) -> LogContext | None:
         """Get current logging context"""
         return getattr(self._context, "context", None)
 

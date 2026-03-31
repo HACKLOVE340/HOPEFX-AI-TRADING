@@ -10,8 +10,8 @@ Strategy listings, pricing engine, subscription management, license validation
 
 import json
 import secrets
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional, Any
+from datetime import datetime, timedelta, UTC
+from typing import Any
 from pathlib import Path
 from dataclasses import dataclass, field
 from enum import Enum
@@ -99,8 +99,8 @@ class Subscription:
     is_active: bool
     auto_renew: bool
     payment_method: str
-    last_payment_date: Optional[datetime] = None
-    next_payment_date: Optional[datetime] = None
+    last_payment_date: datetime | None = None
+    next_payment_date: datetime | None = None
     cancel_at_period_end: bool = False
 
 
@@ -118,7 +118,7 @@ class LicenseKey:
     is_active: bool
     max_activations: int
     current_activations: int = 0
-    last_used: Optional[datetime] = None
+    last_used: datetime | None = None
 
 
 class MarketplaceDatabase:
@@ -260,7 +260,7 @@ class MarketplaceDatabase:
         conn.commit()
         conn.close()
 
-    def get_strategy(self, strategy_id: str) -> Optional[StrategyListing]:
+    def get_strategy(self, strategy_id: str) -> StrategyListing | None:
         """Get strategy by ID"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -297,8 +297,8 @@ class MarketplaceDatabase:
 
     def search_strategies(
         self,
-        category: Optional[str] = None,
-        tier: Optional[SubscriptionTier] = None,
+        category: str | None = None,
+        tier: SubscriptionTier | None = None,
         min_rating: float = 0.0,
         sort_by: str = "rating",
     ) -> list[StrategyListing]:
@@ -345,8 +345,8 @@ class PricingEngine:
         base_price: float,
         tier: SubscriptionTier,
         billing_cycle: str = "monthly",
-        user_id: Optional[str] = None,
-        coupon_code: Optional[str] = None,
+        user_id: str | None = None,
+        coupon_code: str | None = None,
     ) -> dict[str, float]:
         """
         Calculate final price with discounts
@@ -385,7 +385,7 @@ class PricingEngine:
         }
 
     def add_coupon(
-        self, code: str, discount_percent: float, expires_at: Optional[datetime] = None
+        self, code: str, discount_percent: float, expires_at: datetime | None = None
     ):
         """Add coupon code"""
         self.discounts[code] = discount_percent / 100
@@ -465,7 +465,7 @@ class LicenseManager:
         return license_key
 
     def validate_license(
-        self, key: str, user_id: Optional[str] = None
+        self, key: str, user_id: str | None = None
     ) -> dict[str, Any]:
         """
         Validate license key
@@ -570,7 +570,7 @@ class LicenseManager:
 class SubscriptionManager:
     """Manage user subscriptions"""
 
-    def __init__(self, db: MarketplaceDatabase, stripe_key: Optional[str] = None):
+    def __init__(self, db: MarketplaceDatabase, stripe_key: str | None = None):
         self.db = db
         self.pricing = PricingEngine()
         self.licenses = LicenseManager(db)
@@ -585,7 +585,7 @@ class SubscriptionManager:
         tier: SubscriptionTier,
         billing_cycle: str = "monthly",
         auto_renew: bool = True,
-    ) -> Optional[Subscription]:
+    ) -> Subscription | None:
         """Create new subscription"""
         strategy = self.db.get_strategy(strategy_id)
         if not strategy:
@@ -604,10 +604,7 @@ class SubscriptionManager:
         subscription_id = secrets.token_hex(16)
         start_date = datetime.now(UTC)
 
-        if billing_cycle == "monthly":
-            end_date = start_date + timedelta(days=30)
-        else:
-            end_date = start_date + timedelta(days=365)
+        end_date = start_date + timedelta(days=30) if billing_cycle == "monthly" else start_date + timedelta(days=365)
 
         subscription = Subscription(
             subscription_id=subscription_id,
@@ -718,7 +715,7 @@ class SubscriptionManager:
 class MarketplaceAPI:
     """Main marketplace API"""
 
-    def __init__(self, stripe_key: Optional[str] = None):
+    def __init__(self, stripe_key: str | None = None):
         self.db = MarketplaceDatabase()
         self.subscriptions = SubscriptionManager(self.db, stripe_key)
         self.pricing = PricingEngine()
@@ -859,8 +856,7 @@ class PurchaseStatus(_enum.Enum):
 
 # Dataclass-style aliases
 from dataclasses import dataclass
-from typing import List, Optional
-from datetime import datetime, UTC
+from datetime import datetime
 
 
 @dataclass
@@ -997,9 +993,9 @@ class StrategyMarketplace:
         buyer_id: str = None,
         strategy_id: str = None,
         payment_method: str = "wallet",
-    ) -> Optional[_Purchase]:
+    ) -> _Purchase | None:
         # Handle reversed positional call: purchase_strategy(strategy_id, buyer_id)
-        if buyer_id and not strategy_id and buyer_id in self._strategies or (
+        if (buyer_id and not strategy_id and buyer_id in self._strategies) or (
             buyer_id
             and strategy_id
             and buyer_id in self._strategies
@@ -1038,7 +1034,7 @@ class StrategyMarketplace:
 
     def add_review(
         self, user_id: str, strategy_id: str, rating: int, title: str, content: str
-    ) -> Optional[_Review]:
+    ) -> _Review | None:
         s = self._strategies.get(strategy_id)
         if not s:
             return None

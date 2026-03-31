@@ -74,7 +74,7 @@ import logging
 import os
 import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 # Ensure project root is on sys.path regardless of invocation directory
@@ -261,7 +261,7 @@ def dry_run(args: argparse.Namespace) -> None:
 
         macro_df = None
         if not args.no_macro:
-            end_dt = datetime.now(timezone.utc)
+            end_dt = datetime.now(UTC)
             start_dt = end_dt - timedelta(days=args.years * 365)
             logger.info("Fetching macro data...")
             macro_df = fetch_macro(start_dt, end_dt)
@@ -336,7 +336,7 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
         horizon and accuracy values without a restart.
     """
     _MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     meta = {
         "horizon": args.horizon,

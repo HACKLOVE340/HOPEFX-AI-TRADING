@@ -40,7 +40,8 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class Component:
     # Populated after startup
     status: str = "pending"  # pending | ok | failed | skipped
     instance: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     elapsed_ms: float = 0.0
 
 
@@ -83,7 +84,7 @@ class ComponentRegistry:
         name: str,
         factory: Callable,
         required: bool = False,
-        deps: Optional[list[str]] = None,
+        deps: list[str] | None = None,
     ) -> ComponentRegistry:
         """
         Register a component.
@@ -215,7 +216,7 @@ class ComponentRegistry:
 
     # ── Convenience accessors ─────────────────────────────────────────────────
 
-    def get(self, name: str) -> Optional[Any]:
+    def get(self, name: str) -> Any | None:
         """Return the started instance for a component, or None."""
         comp = self._components.get(name)
         return comp.instance if comp else None

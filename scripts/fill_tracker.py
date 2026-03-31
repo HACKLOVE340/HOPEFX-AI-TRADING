@@ -46,9 +46,9 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 try:
     from dotenv import load_dotenv
@@ -111,7 +111,7 @@ class OANDATransactionClient:
         except Exception as exc:
             raise RuntimeError(f"OANDA API error on {path}: {exc}") from exc
 
-    def fetch_fills_since(self, from_id: Optional[int] = None) -> list[dict[str, Any]]:
+    def fetch_fills_since(self, from_id: int | None = None) -> list[dict[str, Any]]:
         """
         Fetch all ORDER_FILL transactions since `from_id` (exclusive).
 

@@ -56,7 +56,7 @@ import logging
 import os
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Deque, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -150,7 +150,7 @@ class FilterResult:
     confidence: float = 0.0
     expected_value: float = 0.0
     regime: str = "unknown"
-    mtf_aligned: Optional[bool] = None
+    mtf_aligned: bool | None = None
 
     def __bool__(self) -> bool:
         return self.passed
@@ -209,8 +209,8 @@ class SignalFilter:
     def check(
         self,
         signal: dict[str, Any],
-        ohlcv: Optional[Any] = None,
-        symbol: Optional[str] = None,
+        ohlcv: Any | None = None,
+        symbol: str | None = None,
     ) -> FilterResult:
         """
         Run all gates against a signal payload.
@@ -289,8 +289,8 @@ class SignalFilter:
     def filter(
         self,
         signal: dict[str, Any],
-        ohlcv: Optional[Any] = None,
-        symbol: Optional[str] = None,
+        ohlcv: Any | None = None,
+        symbol: str | None = None,
     ) -> FilterResult:
         """Alias for check() — provided for backward compatibility."""
         return self.check(signal=signal, ohlcv=ohlcv, symbol=symbol)
@@ -325,7 +325,7 @@ class SignalFilter:
         except Exception:  # nosec B110 - Prometheus metric failure must not affect signal filtering
             pass
 
-    def ev_stats(self, symbol: Optional[str] = None) -> dict[str, Any]:
+    def ev_stats(self, symbol: str | None = None) -> dict[str, Any]:
         """Return EV statistics for monitoring/API exposure."""
         outcomes = list(self._outcomes.get(symbol or "", [])) or list(
             self._global_outcomes
@@ -473,7 +473,7 @@ class SignalFilter:
             logger.debug("SignalFilter: blackout gate orchestrator error: %s", exc)
         return FilterResult(passed=True, confidence=confidence)
 
-    def _get_current_regime(self, ohlcv: Optional[Any]) -> str:
+    def _get_current_regime(self, ohlcv: Any | None) -> str:
         """
         Determine the current market regime for threshold tightening.
 
@@ -578,8 +578,7 @@ class SignalFilter:
                     confidence=confidence,
                     regime=regime,
                 )
-        elif dir_upper in ("SELL", "SHORT"):
-            if confidence > threshold_short:
+        elif dir_upper in ("SELL", "SHORT") and confidence > threshold_short:
                 return FilterResult(
                     passed=False,
                     gate="confidence",
@@ -813,7 +812,7 @@ class SignalFilter:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_FILTER_SINGLETON: Optional[SignalFilter] = None
+_FILTER_SINGLETON: SignalFilter | None = None
 
 
 def get_signal_filter() -> SignalFilter:

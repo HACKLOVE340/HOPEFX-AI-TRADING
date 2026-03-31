@@ -26,7 +26,6 @@ import asyncio
 import logging
 import os
 import time
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +75,9 @@ async def _fetch_coingecko() -> dict[str, float]:
     url = (
         f"https://api.coingecko.com/api/v3/simple/price" f"?ids={ids}&vs_currencies=usd"
     )
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as session:
-        async with session.get(url) as resp:
-            resp.raise_for_status()
-            data = await resp.json()
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as session, session.get(url) as resp:
+        resp.raise_for_status()
+        data = await resp.json()
 
     rates: dict[str, float] = {}
     for coin, cg_id in _COIN_IDS.items():
@@ -180,7 +178,7 @@ async def get_rates(force_refresh: bool = False) -> dict[str, float]:
         return dict(_FALLBACK_RATES)
 
 
-def coin_per_usd_sync(coin: str, usd_amount: float) -> Optional[float]:
+def coin_per_usd_sync(coin: str, usd_amount: float) -> float | None:
     """
     Synchronous helper: convert USD to coin amount using cached rates.
 

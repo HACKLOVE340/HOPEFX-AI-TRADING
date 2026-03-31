@@ -11,7 +11,7 @@ Uses TensorFlow/Keras for deep learning.
 """
 
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -32,7 +32,7 @@ class LSTMPricePredictor(BaseMLModel):
     - Price movement prediction
     """
 
-    def __init__(self, name: str = "LSTM_Predictor", config: Optional[dict] = None):
+    def __init__(self, name: str = "LSTM_Predictor", config: dict | None = None):
         """
         Initialize LSTM model.
 
@@ -163,8 +163,8 @@ class LSTMPricePredictor(BaseMLModel):
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
-        X_val: Optional[np.ndarray] = None,
-        y_val: Optional[np.ndarray] = None,
+        X_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
     ) -> dict[str, Any]:
         """
         Train LSTM model.

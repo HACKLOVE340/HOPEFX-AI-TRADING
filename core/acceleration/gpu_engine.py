@@ -11,7 +11,6 @@ Monte Carlo simulation with GARCH volatility and copula correlation
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -240,7 +239,7 @@ class RealTimeRiskMonitor:
             "max_drawdown": -0.10,  # 10% max drawdown
             "tail_risk": 3.0,  # Tail risk ratio limit
         }
-        self.current_risk: Optional[RiskMetrics] = None
+        self.current_risk: RiskMetrics | None = None
         self.kill_switch_triggered = False
 
     def update_portfolio(
@@ -294,8 +293,6 @@ class RealTimeRiskMonitor:
 
 import logging as _logging
 from pathlib import Path as _Path
-from typing import List as _List
-from typing import Optional as _Optional
 
 import numpy as _np
 
@@ -352,8 +349,8 @@ class GPUInferenceEngine:
 
     def __init__(
         self,
-        config: _Optional[GPUConfig] = None,
-        model_path: _Optional[str] = None,
+        config: GPUConfig | None = None,
+        model_path: str | None = None,
     ) -> None:
         self.config = config or GPUConfig()
         self.device = self.config.device

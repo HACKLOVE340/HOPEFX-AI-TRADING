@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional, Set
 
 
 class TierName(str, Enum):
@@ -133,7 +132,7 @@ def get_tier_config(tier: TierName) -> TierConfig:
     return TIER_CONFIGS[tier]
 
 
-def get_tier_for_name(name: str) -> Optional[TierConfig]:
+def get_tier_for_name(name: str) -> TierConfig | None:
     """Look up TierConfig by string name, returning None if not found."""
     try:
         return TIER_CONFIGS[TierName(name.lower())]

@@ -21,7 +21,7 @@ All endpoints require authentication except webhooks (verified by HMAC signature
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -37,9 +37,9 @@ class CreateApplicantRequest(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     email: str = Field(..., min_length=3, max_length=254)
-    dob: Optional[str] = Field(None, description="Date of birth YYYY-MM-DD")
-    country: Optional[str] = Field(None, description="ISO 3166-1 alpha-2 country code")
-    phone: Optional[str] = None
+    dob: str | None = Field(None, description="Date of birth YYYY-MM-DD")
+    country: str | None = Field(None, description="ISO 3166-1 alpha-2 country code")
+    phone: str | None = None
     document_type: str = Field(
         "passport", description="passport | driving_licence | id_card"
     )
@@ -54,8 +54,8 @@ class ApplicantResponse(BaseModel):
 
 class SanctionsScreenRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=200)
-    dob: Optional[str] = None
-    country: Optional[str] = None
+    dob: str | None = None
+    country: str | None = None
 
 
 class SanctionsScreenResponse(BaseModel):

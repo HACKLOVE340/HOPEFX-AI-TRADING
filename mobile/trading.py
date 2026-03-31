@@ -23,8 +23,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +80,9 @@ class MobileTradingEngine:
         side: str,
         quantity: float,
         order_type: str = "MARKET",
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
         comment: str = "mobile",
     ) -> dict[str, Any]:
         """Place an order via the real broker (async)."""
@@ -226,7 +226,7 @@ class MobileTradingEngine:
         self,
         user_id: str,
         position_id: str,
-        quantity: Optional[float] = None,
+        quantity: float | None = None,
     ) -> dict[str, Any]:
         """Close a specific position via the real broker (async)."""
         broker = self._get_broker()

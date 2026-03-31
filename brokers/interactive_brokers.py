@@ -11,8 +11,8 @@ Supports stocks, options, futures, forex, and more.
 """
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 try:
     from ib_insync import (
@@ -21,7 +21,7 @@ try:
         Future,
         LimitOrder,
         MarketOrder,
-        Option,
+        Option,  # noqa: F401
         Stock,
         StopOrder,
     )
@@ -135,11 +135,11 @@ class InteractiveBrokersConnector(BrokerConnector):
         side: OrderSide,
         quantity: float,
         order_type: OrderType = OrderType.MARKET,
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
         **kwargs,
-    ) -> Optional[Order]:
+    ) -> Order | None:
         """
         Place order on IB.
 
@@ -233,7 +233,7 @@ class InteractiveBrokersConnector(BrokerConnector):
             logger.error(f"IB cancel order error: {e}")
             return False
 
-    def get_order(self, order_id: str) -> Optional[Order]:
+    def get_order(self, order_id: str) -> Order | None:
         """Get order by ID."""
         if not self.connected:
             return None
@@ -247,7 +247,7 @@ class InteractiveBrokersConnector(BrokerConnector):
             logger.error(f"IB get order error: {e}")
             return None
 
-    def get_positions(self, symbol: Optional[str] = None) -> list[Position]:
+    def get_positions(self, symbol: str | None = None) -> list[Position]:
         """Get open positions."""
         if not self.connected:
             return []
@@ -289,7 +289,7 @@ class InteractiveBrokersConnector(BrokerConnector):
             logger.error(f"IB get positions error: {e}")
             return []
 
-    def close_position(self, symbol: str, quantity: Optional[float] = None) -> bool:
+    def close_position(self, symbol: str, quantity: float | None = None) -> bool:
         """Close position."""
         if not self.connected:
             return False
@@ -322,7 +322,7 @@ class InteractiveBrokersConnector(BrokerConnector):
             logger.error(f"IB close position error: {e}")
             return False
 
-    def get_account_info(self) -> Optional[AccountInfo]:
+    def get_account_info(self) -> AccountInfo | None:
         """Get account information."""
         if not self.connected:
             return None
@@ -365,7 +365,7 @@ class InteractiveBrokersConnector(BrokerConnector):
         symbol: str,
         timeframe: str = "1 hour",
         count: int = 100,
-    ) -> Optional[list[dict[str, Any]]]:
+    ) -> list[dict[str, Any]] | None:
         """Get historical market data."""
         if not self.connected:
             return None

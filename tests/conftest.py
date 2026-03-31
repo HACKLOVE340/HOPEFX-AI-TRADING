@@ -24,7 +24,7 @@ os.environ.setdefault(
 import pytest
 import asyncio
 import numpy as np
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 
 # Import core components for testing
 from brokers import PaperTradingBroker

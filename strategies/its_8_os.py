@@ -19,8 +19,8 @@ Inner Circle Trader methodology:
 """
 
 import logging
-from datetime import datetime, time, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, time, UTC
+from typing import Any
 
 import numpy as np
 
@@ -155,7 +155,7 @@ class ITS8OSStrategy(BaseStrategy):
             logger.error(f"Error in ITS-8-OS analysis: {e}")
             return {"error": str(e)}
 
-    def generate_signal(self, analysis: dict[str, Any]) -> Optional[Signal]:
+    def generate_signal(self, analysis: dict[str, Any]) -> Signal | None:
         """
         Generate trading signal based on ITS-8-OS analysis.
 
@@ -396,10 +396,7 @@ class ITS8OSStrategy(BaseStrategy):
                 if zone_times["start"] <= current_time_only <= zone_times["end"]:
                     active_zone = zone_name
                     # Higher score for prime zones (London, New York)
-                    if zone_name in ["london", "new_york"]:
-                        score = 0.8
-                    else:
-                        score = 0.5
+                    score = 0.8 if zone_name in ["london", "new_york"] else 0.5
                     break
 
             in_kill_zone = active_zone is not None
@@ -553,10 +550,7 @@ class ITS8OSStrategy(BaseStrategy):
             if in_ote_zone:
                 # Determine direction based on recent trend
                 recent_trend = prices[-1]["close"] - prices[-20]["close"]
-                if recent_trend > 0:
-                    signal = "bullish"
-                else:
-                    signal = "bearish"
+                signal = "bullish" if recent_trend > 0 else "bearish"
                 score = 0.7
             else:
                 signal = "neutral"

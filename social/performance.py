@@ -6,9 +6,8 @@
 """Performance tracking for social trading."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Dict
 
 
 @dataclass

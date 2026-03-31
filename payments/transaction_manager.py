@@ -10,10 +10,10 @@ Handles complete transaction lifecycle including recording, validation,
 status tracking, reversal, and reporting.
 """
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from decimal import Decimal
 from enum import Enum
-from typing import Dict, List, Optional, Any
+from typing import Any
 from dataclasses import dataclass, field
 import logging
 import uuid
@@ -56,12 +56,12 @@ class Transaction:
     method: str
     wallet_type: str  # subscription or commission
     status: TransactionStatus = TransactionStatus.PENDING
-    reference: Optional[str] = None
+    reference: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    completed_at: Optional[datetime] = None
-    failed_reason: Optional[str] = None
+    completed_at: datetime | None = None
+    failed_reason: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary"""
@@ -104,8 +104,8 @@ class TransactionManager:
         currency: str,
         method: str,
         wallet_type: str,
-        reference: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        reference: str | None = None,
+        metadata: dict | None = None,
     ) -> Transaction:
         """
         Record a new transaction
@@ -165,7 +165,7 @@ class TransactionManager:
         self,
         transaction_id: str,
         status: TransactionStatus,
-        failed_reason: Optional[str] = None,
+        failed_reason: str | None = None,
     ) -> bool:
         """
         Update transaction status
@@ -229,7 +229,7 @@ class TransactionManager:
 
     def reverse_transaction(
         self, transaction_id: str, reason: str
-    ) -> Optional[Transaction]:
+    ) -> Transaction | None:
         """
         Reverse a completed transaction
 
@@ -292,15 +292,15 @@ class TransactionManager:
             logger.error(f"Error reversing transaction: {e}")
             return None
 
-    def get_transaction(self, transaction_id: str) -> Optional[Transaction]:
+    def get_transaction(self, transaction_id: str) -> Transaction | None:
         """Get transaction by ID"""
         return self.transactions.get(transaction_id)
 
     def get_user_transactions(
         self,
         user_id: str,
-        type: Optional[TransactionType] = None,
-        status: Optional[TransactionStatus] = None,
+        type: TransactionType | None = None,
+        status: TransactionStatus | None = None,
         limit: int = 100,
     ) -> list[Transaction]:
         """
@@ -336,8 +336,8 @@ class TransactionManager:
     def generate_statement(
         self,
         user_id: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> dict:
         """
         Generate transaction statement

@@ -22,11 +22,11 @@ from __future__ import annotations
 import asyncio
 from decimal import Decimal
 from pathlib import Path
-from typing import List
 
 
 import numpy as np
 import pytest
+import contextlib
 
 
 # ── kill_switch.py ────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ class TestKillSwitch:
     def test_callback_called_on_activate(self, tmp_path):
         ks = self._make_ks(tmp_path)
         called = []
-        ks.register_callback(lambda r: called.append(r))
+        ks.register_callback(lambda r: called.append(r))  # noqa: PLW0108
         ks.activate("cb-test")
         assert called == ["cb-test"]
 
@@ -334,10 +334,8 @@ class TestAlgoOrders:
         await asyncio.sleep(0.05)
         cancelled = mgr.cancel(order.algo_id)
         assert cancelled
-        try:
+        with contextlib.suppress((TimeoutError, asyncio.CancelledError)):
             await asyncio.wait_for(task, timeout=1.0)
-        except (TimeoutError, asyncio.CancelledError):
-            pass
         assert order.status in (AlgoStatus.CANCELLED, AlgoStatus.COMPLETED)
 
 

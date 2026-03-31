@@ -38,8 +38,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, timedelta, UTC
-from typing import List
+from datetime import datetime, timedelta, UTC
 
 import redis.asyncio as aioredis
 
@@ -204,24 +203,23 @@ class NewsCalendarFeed:
         try:
             import aiohttp
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    FF_URL,
-                    timeout=aiohttp.ClientTimeout(total=15),
-                    headers={"User-Agent": "HOPEFX-AI-TRADING/1.0"},
-                ) as resp:
-                    if resp.status != 200:
-                        logger.warning(
-                            "NewsCalendarFeed: ForexFactory HTTP %d", resp.status
-                        )
-                        return []
-                    data = await resp.json(content_type=None)
-                    events = _parse_forexfactory(data)
-                    logger.info(
-                        "NewsCalendarFeed: fetched %d events from ForexFactory.",
-                        len(events),
+            async with aiohttp.ClientSession() as session, session.get(
+                FF_URL,
+                timeout=aiohttp.ClientTimeout(total=15),
+                headers={"User-Agent": "HOPEFX-AI-TRADING/1.0"},
+            ) as resp:
+                if resp.status != 200:
+                    logger.warning(
+                        "NewsCalendarFeed: ForexFactory HTTP %d", resp.status
                     )
-                    return events
+                    return []
+                data = await resp.json(content_type=None)
+                events = _parse_forexfactory(data)
+                logger.info(
+                    "NewsCalendarFeed: fetched %d events from ForexFactory.",
+                    len(events),
+                )
+                return events
         except Exception as exc:
             logger.warning("NewsCalendarFeed: ForexFactory fetch failed: %s", exc)
             return []

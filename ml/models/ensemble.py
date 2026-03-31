@@ -21,8 +21,8 @@ Features:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, UTC
+from typing import Any
 
 import numpy as np
 
@@ -90,7 +90,7 @@ class EnsemblePredictor(BaseMLModel):
     - Adaptive model selection
     """
 
-    def __init__(self, name: str = "Ensemble_Predictor", config: Optional[dict] = None):
+    def __init__(self, name: str = "Ensemble_Predictor", config: dict | None = None):
         """
         Initialize ensemble model.
 
@@ -327,8 +327,8 @@ class EnsemblePredictor(BaseMLModel):
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
-        X_val: Optional[np.ndarray] = None,
-        y_val: Optional[np.ndarray] = None,
+        X_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
     ) -> dict[str, Any]:
         """
         Train all component models.
@@ -662,13 +662,13 @@ class EnsemblePredictor(BaseMLModel):
         total_confidence = 0.0
         confidences = {}
 
-        for model_name in self.models.keys():
+        for model_name in self.models:
             conf = self._calculate_model_confidence(model_name)
             confidences[model_name] = conf
             total_confidence += conf
 
         if total_confidence > 0:
-            for model_name in self.models.keys():
+            for model_name in self.models:
                 self.model_weights[model_name] = (
                     confidences[model_name] / total_confidence
                 )

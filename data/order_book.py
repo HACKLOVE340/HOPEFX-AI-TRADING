@@ -6,7 +6,6 @@
 """Order book data structures."""
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
 import time
 
 
@@ -24,21 +23,21 @@ class OrderBook:
     timestamp: float = field(default_factory=time.time)
 
     @property
-    def best_bid(self) -> Optional[float]:
+    def best_bid(self) -> float | None:
         return self.bids[0].price if self.bids else None
 
     @property
-    def best_ask(self) -> Optional[float]:
+    def best_ask(self) -> float | None:
         return self.asks[0].price if self.asks else None
 
     @property
-    def mid_price(self) -> Optional[float]:
+    def mid_price(self) -> float | None:
         if self.best_bid and self.best_ask:
             return (self.best_bid + self.best_ask) / 2
         return None
 
     @property
-    def spread(self) -> Optional[float]:
+    def spread(self) -> float | None:
         if self.best_bid and self.best_ask:
             return self.best_ask - self.best_bid
         return None
@@ -70,7 +69,7 @@ class MultiSymbolOrderBook:
     ) -> None:
         self.get_book(symbol).update(bids, asks)
 
-    def get_mid_price(self, symbol: str) -> Optional[float]:
+    def get_mid_price(self, symbol: str) -> float | None:
         return self.get_book(symbol).mid_price
 
     def symbols(self) -> list[str]:

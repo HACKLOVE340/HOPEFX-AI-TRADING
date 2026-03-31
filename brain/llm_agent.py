@@ -29,6 +29,7 @@ Environment variables
 from __future__ import annotations
 
 import ast
+import contextlib
 import importlib.util
 import logging
 import os
@@ -37,7 +38,7 @@ import textwrap
 import traceback
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import openai
 
@@ -118,6 +119,7 @@ import ta
 from datetime import datetime
 from typing import Optional, Dict, Any
 from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
+import contextlib
 
 class GeneratedStrategy(BaseStrategy):
     \"\"\"Short description of the strategy logic.\"\"\"
@@ -204,7 +206,7 @@ class BacktestResult:
     max_drawdown: float
     win_rate: float
     trades: int
-    error: Optional[str] = None
+    error: str | None = None
 
     def summary(self) -> str:
         if self.error:
@@ -221,17 +223,17 @@ class AgentResult:
     success: bool
     strategy_code: str
     strategy_name: str
-    backtest: Optional[BacktestResult]
+    backtest: BacktestResult | None
     iterations: int
     conversation: list[dict[str, str]] = field(default_factory=list)
-    error: Optional[str] = None
+    error: str | None = None
     strategy_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
 
 
 # ── sandbox execution ─────────────────────────────────────────────────────────
 
 
-def _compile_strategy(code: str) -> tuple[Optional[Any], Optional[str]]:
+def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
     """
     Compile and instantiate a GeneratedStrategy from raw source code.
 
@@ -281,10 +283,8 @@ def _compile_strategy(code: str) -> tuple[Optional[Any], Optional[str]]:
     except (ImportError, AttributeError, SyntaxError, RuntimeError) as exc:
         return None, f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp_path)
-        except OSError:
-            pass
 
 
 # ── quick backtest ────────────────────────────────────────────────────────────
@@ -305,7 +305,7 @@ def _run_backtest(
     """
     try:
         import numpy as np
-        import pandas as pd
+        import pandas as pd  # noqa: F401
         from strategies.base import SignalType
     except ImportError as exc:
         return BacktestResult(0, 0, 0, 0, 0, error=str(exc))
@@ -334,10 +334,9 @@ def _run_backtest(
             logger.debug("Suppressed exception: %s", _exc)
 
         # close on opposite signal
-        if position != 0:
-            if (position > 0 and sig_type == SignalType.SELL) or (
-                position < 0 and sig_type == SignalType.BUY
-            ):
+        if position != 0 and (
+            (position > 0 and sig_type == SignalType.SELL) or (position < 0 and sig_type == SignalType.BUY)
+        ):
                 pnl = position * (price - entry_price)
                 pnl -= abs(position) * price * commission
                 balance += pnl
@@ -400,11 +399,11 @@ class LLMAgent:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = "gpt-4o",
         max_iterations: int = 3,
         target_sharpe: float = 1.5,
-        candle_fetcher: Optional[Any] = None,
+        candle_fetcher: Any | None = None,
         enable_rag: bool = True,
     ):
         key = api_key or os.environ.get("OPENAI_API_KEY", "")
@@ -458,7 +457,7 @@ class LLMAgent:
         self._history = [{"role": "system", "content": _SYSTEM_PROMPT}]
         self._history.append({"role": "user", "content": prompt})
 
-        best_result: Optional[AgentResult] = None
+        best_result: AgentResult | None = None
 
         for iteration in range(1, self.max_iterations + 1):
             logger.info("Iteration %d/%d", iteration, self.max_iterations)
@@ -687,7 +686,7 @@ class LLMAgent:
 
     async def _call_llm_with_messages(
         self, messages: list[dict[str, str]]
-    ) -> tuple[str, Optional[str]]:
+    ) -> tuple[str, str | None]:
         """Call GPT-4 with an explicit message list (used for RAG injection)."""
         try:
             response = await self._client.chat.completions.create(
@@ -710,7 +709,7 @@ class LLMAgent:
         except (OSError, ValueError, RuntimeError) as exc:
             return "", f"LLM call failed: {exc}"
 
-    async def _call_llm(self) -> tuple[str, Optional[str]]:
+    async def _call_llm(self) -> tuple[str, str | None]:
         """Call GPT-4 and return (content, error)."""
         try:
             response = await self._client.chat.completions.create(
@@ -741,7 +740,7 @@ class LLMAgent:
 
 def create_agent(
     candle_source=None,
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
     model: str = "gpt-4o",
     # Backwards-compat alias — remove after all call sites are updated.
     oanda_stream=None,

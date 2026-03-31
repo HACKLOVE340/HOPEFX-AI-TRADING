@@ -14,6 +14,7 @@ collection failures.
 import pytest
 import tempfile
 from pathlib import Path
+import contextlib
 
 
 class TestBrokerFailureModes:
@@ -150,10 +151,8 @@ class TestKillSwitchFailureModes:
         ks = self._ks()
         assert ks.is_active() is False
         # Deactivating an already-inactive switch should not raise
-        try:
+        with contextlib.suppress(Exception):
             ks.deactivate(token="test-tok")
-        except Exception:
-            pass  # Some implementations may raise on double-deactivate — acceptable
 
 
 class TestMetricsFailureModes:

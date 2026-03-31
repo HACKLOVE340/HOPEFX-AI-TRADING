@@ -19,8 +19,8 @@ from __future__ import annotations
 import io
 import logging
 import uuid
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import pandas as pd
 
@@ -108,7 +108,7 @@ class BacktestRequest(BaseModel):
     end_date: str = Field(..., description="ISO date string, e.g. '2024-01-01'")
     initial_capital: float = Field(10000.0, gt=0)
     data_frequency: str = Field("1d", description="'1d', '1h', '15m'")
-    strategy_params: Optional[dict[str, Any]] = None
+    strategy_params: dict[str, Any] | None = None
 
 
 class BacktestResult(BaseModel):
@@ -125,7 +125,7 @@ class BacktestResult(BaseModel):
     total_trades: int
     win_rate_pct: float
     status: str
-    error: Optional[str] = None
+    error: str | None = None
     created_at: str
 
 
@@ -153,7 +153,7 @@ _STRATEGY_MAP = {
 }
 
 
-def _load_strategy(name: str, params: Optional[dict] = None):
+def _load_strategy(name: str, params: dict | None = None):
     """Dynamically load a strategy class by name."""
     if name not in _STRATEGY_MAP:
         raise ValueError(f"Unknown strategy '{name}'. Available: {list(_STRATEGY_MAP)}")
@@ -689,7 +689,7 @@ class ReplayBacktestRequest(BaseModel):
 class RegimeStressRequest(BaseModel):
     strategy: str = Field("microstructure_heuristic")
     initial_capital: float = Field(10_000.0, gt=0)
-    regimes: Optional[list[str]] = Field(
+    regimes: list[str] | None = Field(
         None,
         description="Subset of regime names to run. Omit for all built-in regimes.",
     )
@@ -714,7 +714,7 @@ async def run_replay_backtest(
     async def _run():
         try:
             from backtesting.replay_connector import ReplayBacktestRunner
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             start = datetime.fromisoformat(req.start_date).replace(tzinfo=UTC)
             end = datetime.fromisoformat(req.end_date).replace(tzinfo=UTC)
@@ -787,7 +787,7 @@ async def run_regime_stress_test(
                 RegimeShiftStressTester,
                 STRESS_REGIMES,
             )
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             strategy_fn = _resolve_strategy(req.strategy)
 

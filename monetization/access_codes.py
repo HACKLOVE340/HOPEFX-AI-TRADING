@@ -15,8 +15,7 @@ import logging
 import hashlib
 import secrets
 import string
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Optional, Dict
+from datetime import datetime, timedelta, UTC
 from enum import Enum
 
 from .pricing import SubscriptionTier
@@ -42,8 +41,8 @@ class AccessCode:
         code: str,
         tier: SubscriptionTier,
         duration_days: int = 30,
-        user_id: Optional[str] = None,
-        subscription_id: Optional[str] = None,
+        user_id: str | None = None,
+        subscription_id: str | None = None,
         status: AccessCodeStatus = AccessCodeStatus.ACTIVE,
     ):
         self.code = code
@@ -54,8 +53,8 @@ class AccessCode:
         self.status = status
         self.created_at = datetime.now(UTC)
         self.expires_at = self.created_at + timedelta(days=duration_days)
-        self.activated_at: Optional[datetime] = None
-        self.used_at: Optional[datetime] = None
+        self.activated_at: datetime | None = None
+        self.used_at: datetime | None = None
 
     def is_valid(self) -> bool:
         """Check if access code is valid"""
@@ -174,7 +173,7 @@ class AccessCodeGenerator:
             logger.error(f"Error validating code {code}: {e}")
             return False
 
-    def get_code(self, code: str) -> Optional[AccessCode]:
+    def get_code(self, code: str) -> AccessCode | None:
         """Get access code by code string"""
         return self._codes.get(code)
 
@@ -224,7 +223,7 @@ class AccessCodeGenerator:
             if code.status == AccessCodeStatus.EXPIRED or not code.is_valid()
         ]
 
-    def get_tier_from_code(self, code: str) -> Optional[SubscriptionTier]:
+    def get_tier_from_code(self, code: str) -> SubscriptionTier | None:
         """Extract tier from code"""
         try:
             parts = code.split("-")

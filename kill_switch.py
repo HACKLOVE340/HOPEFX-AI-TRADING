@@ -29,9 +29,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Callable, List, Optional
+from collections.abc import Callable
+import contextlib
 
 # FastAPI Request imported at module scope so route annotations resolve correctly
 # under Pydantic v2 (inner-function imports create unresolvable ForwardRefs).
@@ -85,10 +86,10 @@ class KillSwitch:
 
     def __init__(
         self,
-        flag_file: Optional[Path] = None,
+        flag_file: Path | None = None,
         poll_interval_sec: float = 1.0,
         event_bus=None,
-        deactivation_token: Optional[str] = None,
+        deactivation_token: str | None = None,
     ) -> None:
         self._flag_file: Path = flag_file or _DEFAULT_FLAG_FILE
         # JSON state file sits next to the flag file and survives restarts.
@@ -100,21 +101,21 @@ class KillSwitch:
         # HOPEFX_KILL_SWITCH_TOKEN env var when not supplied directly.
         # If neither is set, deactivation is disabled until a token is
         # configured — this prevents accidental or unauthenticated resumption.
-        self._deactivation_token: Optional[str] = deactivation_token or os.environ.get(
+        self._deactivation_token: str | None = deactivation_token or os.environ.get(
             "HOPEFX_KILL_SWITCH_TOKEN"
         )
 
         self._active: bool = False
         self._reason: str = ""
-        self._activated_at: Optional[datetime] = None
+        self._activated_at: datetime | None = None
 
         self._callbacks: list[Callable[[str], None]] = []
         self._running: bool = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         # Background task that subscribes to Redis CH_BREACH for cross-pod propagation
-        self._redis_sub_task: Optional[asyncio.Task] = None
+        self._redis_sub_task: asyncio.Task | None = None
         # Background task that watches K8s ConfigMap — fallback when Redis is unreachable
-        self._k8s_watch_task: Optional[asyncio.Task] = None
+        self._k8s_watch_task: asyncio.Task | None = None
 
         # Restore persisted state from the previous process before checking
         # the env-var, so that a restart after an activation does not silently
@@ -134,7 +135,7 @@ class KillSwitch:
         """Activate the kill switch immediately."""
         self._activate_internal(reason)
 
-    def deactivate(self, token: Optional[str] = None) -> None:
+    def deactivate(self, token: str | None = None) -> None:
         """
         Deactivate the kill switch and allow trading to resume.
 
@@ -205,7 +206,7 @@ class KillSwitch:
         return self._reason
 
     @property
-    def activated_at(self) -> Optional[datetime]:
+    def activated_at(self) -> datetime | None:
         """UTC timestamp of the last activation, or None if not active."""
         return self._activated_at
 
@@ -258,10 +259,8 @@ class KillSwitch:
         for task in (self._task, self._redis_sub_task, self._k8s_watch_task):
             if task and not task.done():
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
         logger.info("Kill switch polling stopped")
 
     def status(self) -> dict:
@@ -387,7 +386,7 @@ class KillSwitch:
         _STALE_THRESHOLD = timedelta(hours=24)
         _is_production = os.environ.get("APP_ENV", "production") == "production"
 
-        def _is_stale(activated_at: Optional[datetime]) -> bool:
+        def _is_stale(activated_at: datetime | None) -> bool:
             if activated_at is None:
                 return False
             now = datetime.now(UTC)
@@ -470,15 +469,13 @@ class KillSwitch:
         """
         content = self._flag_file.read_text()
         reason = "flag file present at startup"
-        activated_at: Optional[datetime] = None
+        activated_at: datetime | None = None
         for line in content.splitlines():
             if line.startswith("reason="):
                 reason = line.split("=", 1)[1].strip()
             elif line.startswith("activated_at="):
-                try:
+                with contextlib.suppress(ValueError):
                     activated_at = datetime.fromisoformat(line.split("=", 1)[1].strip())
-                except ValueError:
-                    pass
         return reason, activated_at
 
     def _clear_state(self) -> None:

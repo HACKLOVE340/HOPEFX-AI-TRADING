@@ -12,7 +12,6 @@ Configuration Management
 
 import os
 from dataclasses import dataclass
-from typing import Optional
 import json
 
 
@@ -83,7 +82,7 @@ class Config:
         self.api = APIConfig()
 
     @classmethod
-    def from_env(cls, profile: Optional[str] = None):
+    def from_env(cls, profile: str | None = None):
         """Load config from environment"""
         profile = profile or os.getenv("HOPEFX_PROFILE", "production")
         return cls(profile)

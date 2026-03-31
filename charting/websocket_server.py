@@ -53,7 +53,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Dict, Optional, Set
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,7 @@ async def _async_broadcast(state: dict) -> None:
 
 
 def mount_nuclear_routes(
-    app: Any, engine: Optional[NuclearAIChartEngine] = None
+    app: Any, engine: NuclearAIChartEngine | None = None
 ) -> None:
     """
     Mount nuclear dashboard routes onto an existing FastAPI app.

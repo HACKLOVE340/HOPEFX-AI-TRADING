@@ -13,9 +13,10 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
+from collections.abc import Callable
 
 import psutil
 
@@ -163,7 +164,7 @@ class HealthChecker:
 
         # Run checks concurrently
         results = await asyncio.gather(
-            *[self.run_check(name) for name in self._checks.keys()],
+            *[self.run_check(name) for name in self._checks],
             return_exceptions=True,
         )
 
@@ -466,7 +467,7 @@ class HealthChecker:
                 message=f"Brain error: {e!s}",
             )
 
-    async def start_monitoring(self, interval: Optional[int] = None):
+    async def start_monitoring(self, interval: int | None = None):
         """Start background health monitoring"""
         if interval:
             self._check_interval = interval
@@ -500,7 +501,7 @@ class HealthChecker:
 
 # HTTP Server for health checks
 async def start_health_server(
-    host: str = "0.0.0.0", port: int = 8080, checker: Optional[HealthChecker] = None  # nosec B104 - host configurable via parameter
+    host: str = "0.0.0.0", port: int = 8080, checker: HealthChecker | None = None  # nosec B104 - host configurable via parameter
 ):
     """Start HTTP health check server"""
     if not AIOHTTP_AVAILABLE:
@@ -577,7 +578,7 @@ async def start_health_server(
 
 
 # Global instance
-_health_checker: Optional[HealthChecker] = None
+_health_checker: HealthChecker | None = None
 
 
 def get_health_checker(app=None) -> HealthChecker:

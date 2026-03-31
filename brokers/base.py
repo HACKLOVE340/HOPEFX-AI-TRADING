@@ -17,7 +17,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, TypeVar
+from typing import Any, TypeVar
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -169,16 +170,16 @@ class Order:
     side: OrderSide
     type: OrderType
     quantity: float
-    price: Optional[float] = None
-    stop_price: Optional[float] = None
+    price: float | None = None
+    stop_price: float | None = None
     status: OrderStatus = OrderStatus.PENDING
     filled_quantity: float = 0.0
-    average_price: Optional[float] = None
-    timestamp: Optional[datetime] = None
-    metadata: Optional[dict[str, Any]] = None
+    average_price: float | None = None
+    timestamp: datetime | None = None
+    metadata: dict[str, Any] | None = None
 
     @property
-    def average_fill_price(self) -> Optional[float]:
+    def average_fill_price(self) -> float | None:
         """Alias for average_price."""
         return self.average_price
 
@@ -194,7 +195,7 @@ class Position:
     current_price: float
     unrealized_pnl: float
     realized_pnl: float = 0.0
-    timestamp: Optional[datetime] = None
+    timestamp: datetime | None = None
     id: str = ""  # position identifier (defaults to symbol if empty)
 
 
@@ -207,7 +208,7 @@ class AccountInfo:
     margin_used: float
     margin_available: float
     positions_count: int
-    timestamp: Optional[datetime] = None
+    timestamp: datetime | None = None
 
     def __getitem__(self, key: str):
         return getattr(self, key)
@@ -270,8 +271,8 @@ class BrokerConnector(ABC):
         side: OrderSide,
         order_type: OrderType,
         quantity: float,
-        price: Optional[float] = None,
-        stop_price: Optional[float] = None,
+        price: float | None = None,
+        stop_price: float | None = None,
         **kwargs,
     ) -> Order:
         """
@@ -303,7 +304,7 @@ class BrokerConnector(ABC):
         """
 
     @abstractmethod
-    def get_order(self, order_id: str) -> Optional[Order]:
+    def get_order(self, order_id: str) -> Order | None:
         """
         Get order by ID.
 

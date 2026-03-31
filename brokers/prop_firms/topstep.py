@@ -6,7 +6,7 @@
 """TopstepTrader Connector — futures prop firm via MT5."""
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from ..mt5 import MT5Connector
 

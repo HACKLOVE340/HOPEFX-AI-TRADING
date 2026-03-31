@@ -10,8 +10,7 @@ Market Data Validation - FIA 3.1 Market Data Reasonability Checks
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, timedelta, UTC
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -47,7 +46,7 @@ class MarketDataValidator:
         max_staleness_seconds: int = 5,
         max_price_jump_pct: float = 0.02,  # 2% max jump
         min_volume: float = 1.0,
-        reference_prices: Optional[dict[str, float]] = None,
+        reference_prices: dict[str, float] | None = None,
     ):
         self.max_staleness = timedelta(seconds=max_staleness_seconds)
         self.max_price_jump = max_price_jump_pct

@@ -26,8 +26,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, timedelta, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +94,8 @@ class DataValidator:
         self._price_min, self._price_max = _PRICE_BOUNDS.get(
             self.symbol, _DEFAULT_BOUNDS
         )
-        self._last_bar_time: Optional[datetime] = None
-        self._last_close: Optional[float] = None
+        self._last_bar_time: datetime | None = None
+        self._last_close: float | None = None
 
     # ------------------------------------------------------------------
     # Public API

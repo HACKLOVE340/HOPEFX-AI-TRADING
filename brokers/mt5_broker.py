@@ -26,7 +26,6 @@ Usage
 import asyncio
 import logging
 import os
-from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +84,8 @@ class MT5Broker:
     def __init__(self, config: dict) -> None:
         self._config = config
         self.connected: bool = False
-        self._login: Optional[int] = None
-        self._server: Optional[str] = None
+        self._login: int | None = None
+        self._server: str | None = None
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -112,7 +111,7 @@ class MT5Broker:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    async def get_account_info(self) -> Optional[dict]:
+    async def get_account_info(self) -> dict | None:
         """Return account details as a plain dict, or None if not connected."""
         if not self._assert_connected("get_account_info"):
             return None
@@ -163,7 +162,7 @@ class MT5Broker:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self._sync_place_order, order_params)
 
-    async def close_position(self, ticket: int, volume: Optional[float] = None) -> dict:
+    async def close_position(self, ticket: int, volume: float | None = None) -> dict:
         """
         Close an open position by ticket number.
 
@@ -199,7 +198,7 @@ class MT5Broker:
 
     # ── Market data ───────────────────────────────────────────────────────────
 
-    async def get_tick(self, symbol: str) -> Optional[dict]:
+    async def get_tick(self, symbol: str) -> dict | None:
         """Return the latest bid/ask tick for *symbol*."""
         if not self._assert_connected("get_tick"):
             return None
@@ -260,7 +259,7 @@ class MT5Broker:
         )
         return True
 
-    def _sync_account_info(self) -> Optional[dict]:
+    def _sync_account_info(self) -> dict | None:
         info = _mt5.account_info()
         if info is None:
             return None
@@ -409,7 +408,7 @@ class MT5Broker:
             "comment": result.comment,
         }
 
-    def _sync_close_position(self, ticket: int, volume: Optional[float]) -> dict:
+    def _sync_close_position(self, ticket: int, volume: float | None) -> dict:
         positions = _mt5.positions_get(ticket=ticket)
         if not positions:
             return {"success": False, "comment": f"Position {ticket} not found"}
@@ -474,7 +473,7 @@ class MT5Broker:
             "comment": result.comment,
         }
 
-    def _sync_get_tick(self, symbol: str) -> Optional[dict]:
+    def _sync_get_tick(self, symbol: str) -> dict | None:
         tick = _mt5.symbol_info_tick(symbol)
         if tick is None:
             return None

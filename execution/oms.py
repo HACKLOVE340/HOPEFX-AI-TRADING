@@ -13,10 +13,10 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
 from enum import Enum, auto
-from typing import Callable, Dict, List, Optional, Set
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -51,16 +51,16 @@ class Order:
     side: str = "BUY"  # BUY or SELL
     order_type: str = "LIMIT"  # MARKET, LIMIT, STOP, STOP_LIMIT
     quantity: Decimal = Decimal("0")
-    price: Optional[Decimal] = None
-    stop_price: Optional[Decimal] = None
+    price: Decimal | None = None
+    stop_price: Decimal | None = None
     time_in_force: TimeInForce = TimeInForce.GTC
     status: OrderStatus = OrderStatus.CREATED
     filled_quantity: Decimal = Decimal("0")
-    avg_fill_price: Optional[Decimal] = None
+    avg_fill_price: Decimal | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    expires_at: Optional[datetime] = None
-    parent_order_id: Optional[str] = None  # For OCO, bracket orders
+    expires_at: datetime | None = None
+    parent_order_id: str | None = None  # For OCO, bracket orders
     child_orders: list[str] = field(default_factory=list)
     strategy_id: str = "unknown"
     tags: list[str] = field(default_factory=list)

@@ -38,9 +38,9 @@ import os
 import signal
 import sys
 from collections import deque
-from typing import Dict, List
 
 import pandas as pd
+import contextlib
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -254,10 +254,8 @@ class HopeFXEngine:
         the broker stream, economic calendar, or sentiment feed.
         """
         # Push to queue for poll-mode consumers (non-blocking; drop if full)
-        try:
+        with contextlib.suppress(asyncio.QueueFull):
             self._news_queue.put_nowait(event)
-        except asyncio.QueueFull:
-            pass  # supervisor will catch up on next poll cycle
 
         # Fire all registered async callbacks concurrently
         if self._news_callbacks:
@@ -589,10 +587,9 @@ class HopeFXEngine:
         if self._dl_orchestrator:
             try:
                 dl_tick = self._dl_orchestrator.get_latest_tick()
-                if dl_tick and dl_tick.is_valid():
+                if dl_tick and dl_tick.is_valid() and abs(dl_tick.mid - mid) / max(mid, 1.0) < 0.005:
                     # Use orchestrator mid if NuclearStreamer price is within 0.5%
                     # (sanity check — reject if sources diverge significantly)
-                    if abs(dl_tick.mid - mid) / max(mid, 1.0) < 0.005:
                         _real_bid = dl_tick.bid
                         _real_ask = dl_tick.ask
                         spread = dl_tick.spread

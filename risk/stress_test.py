@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -160,9 +159,9 @@ class StressTester:
         self,
         position_value: float,
         leverage: float = 1.0,
-        equity: Optional[float] = None,
+        equity: float | None = None,
         max_loss_pct: float = 0.20,
-        scenarios: Optional[list[StressScenario]] = None,
+        scenarios: list[StressScenario] | None = None,
     ) -> None:
         if position_value < 0:
             raise ValueError("position_value must be >= 0")
@@ -202,16 +201,16 @@ class StressTester:
         )
         return results
 
-    def worst_case(self, results: Optional[list[StressResult]] = None) -> StressResult:
+    def worst_case(self, results: list[StressResult] | None = None) -> StressResult:
         """Return the scenario with the largest USD loss."""
         r = results or self.run_all()
         return min(r, key=lambda x: x.pnl_usd)
 
     def gate_check(
         self,
-        results: Optional[list[StressResult]] = None,
-        equity: Optional[float] = None,
-        max_loss_pct: Optional[float] = None,
+        results: list[StressResult] | None = None,
+        equity: float | None = None,
+        max_loss_pct: float | None = None,
     ) -> bool:
         """
         Return True if all scenarios pass (no scenario breaches the loss gate).
@@ -239,7 +238,7 @@ class StressTester:
             return False
         return True
 
-    def summary(self, results: Optional[list[StressResult]] = None) -> dict:
+    def summary(self, results: list[StressResult] | None = None) -> dict:
         """Return a JSON-serialisable summary of all scenario results."""
         r = results or self.run_all()
         return {

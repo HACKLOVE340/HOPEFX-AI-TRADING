@@ -35,7 +35,7 @@ from __future__ import annotations
 import logging
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -578,8 +578,8 @@ def generate_pre_trade_report(
     quantity: float,
     mid_price: float,
     returns: NDArray[np.float64],
-    equity_curve: Optional[NDArray[np.float64]] = None,
-    reference_returns: Optional[NDArray[np.float64]] = None,
+    equity_curve: NDArray[np.float64] | None = None,
+    reference_returns: NDArray[np.float64] | None = None,
     bid_ask_spread_bps: float = 5.0,
     max_var_pct: float = 0.02,  # block if VaR > 2% of notional
     max_es_pct: float = 0.03,  # block if ES > 3% of notional

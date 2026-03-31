@@ -19,7 +19,7 @@ Usage
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -29,9 +29,9 @@ logger = logging.getLogger(__name__)
 def register_routers(
     app: FastAPI,
     feature_flags: Any,
-    graphql_router: Optional[Any] = None,
+    graphql_router: Any | None = None,
     graphql_available: bool = False,
-    signals_router: Optional[Any] = None,
+    signals_router: Any | None = None,
 ) -> None:
     """Register all API routers on *app*, respecting feature flags."""
 

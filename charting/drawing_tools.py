@@ -11,8 +11,8 @@ horizontal lines, rectangles, Fibonacci retracements, text labels,
 channels, arc/circle annotations, pitchforks, and Elliott Wave labels.
 """
 
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 # Default Fibonacci retracement and extension levels
 DEFAULT_FIB_LEVELS: list[float] = [0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
@@ -56,7 +56,7 @@ class Drawing:
     def __init__(
         self,
         drawing_type: str,
-        drawing_id: Optional[str] = None,
+        drawing_id: str | None = None,
         color: str = "#2196F3",
         line_width: int = 1,
     ) -> None:
@@ -179,7 +179,7 @@ class DrawingToolkit:
     def draw_horizontal_line(
         self,
         price: float,
-        label: Optional[str] = None,
+        label: str | None = None,
         style: str = "solid",
     ) -> Drawing:
         """
@@ -277,7 +277,7 @@ class DrawingToolkit:
         self,
         price_a: float,
         price_b: float,
-        label: Optional[str] = None,
+        label: str | None = None,
     ) -> Drawing:
         """
         Add a horizontal price band between two price levels.
@@ -311,7 +311,7 @@ class DrawingToolkit:
         start_price: float,
         end_time: datetime,
         end_price: float,
-        levels: Optional[list[float]] = None,
+        levels: list[float] | None = None,
     ) -> Drawing:
         """
         Add a Fibonacci retracement drawing.
@@ -358,7 +358,7 @@ class DrawingToolkit:
         price_b: float,
         time_c: datetime,
         price_c: float,
-        levels: Optional[list[float]] = None,
+        levels: list[float] | None = None,
     ) -> Drawing:
         """
         Add a Fibonacci extension drawing using three swing points (A, B, C).
@@ -599,7 +599,7 @@ class DrawingToolkit:
     # Query helpers
     # ------------------------------------------------------------------
 
-    def get_drawings(self, drawing_type: Optional[str] = None) -> list[Drawing]:
+    def get_drawings(self, drawing_type: str | None = None) -> list[Drawing]:
         """
         Return stored drawings, optionally filtered by type.
 
@@ -614,7 +614,7 @@ class DrawingToolkit:
             drawings = [d for d in drawings if d.drawing_type == drawing_type]
         return drawings
 
-    def get_drawing(self, drawing_id: str) -> Optional[Drawing]:
+    def get_drawing(self, drawing_id: str) -> Drawing | None:
         """
         Return the drawing with the given ID, or None.
 
@@ -645,7 +645,7 @@ class DrawingToolkit:
             return True
         return False
 
-    def clear_drawings(self, drawing_type: Optional[str] = None) -> int:
+    def clear_drawings(self, drawing_type: str | None = None) -> int:
         """
         Remove drawings, optionally filtered by type.
 

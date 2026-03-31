@@ -31,9 +31,8 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -140,7 +139,7 @@ def _strategy_returns(
 def evaluate_predictions(
     y_true: np.ndarray,
     y_prob: np.ndarray,
-    actual_returns: Optional[np.ndarray] = None,
+    actual_returns: np.ndarray | None = None,
     threshold: float = 0.5,
     periods_per_year: int = 252,
 ) -> dict:
@@ -245,16 +244,16 @@ class PipelineOrchestrator:
 
     def __init__(self, config: PipelineConfig):
         self.cfg = config
-        self.deep_model: Optional[DeepPredictor] = None
-        self.ensemble: Optional[EnsemblePredictor] = None
-        self.regime_router: Optional[RegimeRouter] = None
-        self.anomaly_weighter: Optional[AnomalyWeighter] = None
-        self.synthesizer: Optional[RegimeSynthesizer] = None
-        self.incremental_xgb: Optional[IncrementalXGBoost] = None
-        self.drift_detector: Optional[DriftDetector] = None
+        self.deep_model: DeepPredictor | None = None
+        self.ensemble: EnsemblePredictor | None = None
+        self.regime_router: RegimeRouter | None = None
+        self.anomaly_weighter: AnomalyWeighter | None = None
+        self.synthesizer: RegimeSynthesizer | None = None
+        self.incremental_xgb: IncrementalXGBoost | None = None
+        self.drift_detector: DriftDetector | None = None
         self.meta_weight: float = 0.5
         self.scaler = StandardScaler()
-        self._feature_cols: Optional[list[str]] = None
+        self._feature_cols: list[str] | None = None
 
     # ── Step 1: Data ──────────────────────────────────────────────────────────
 
@@ -422,7 +421,7 @@ class PipelineOrchestrator:
         self,
         X_train: pd.DataFrame,
         y_train: np.ndarray,
-        sample_weights: Optional[np.ndarray] = None,
+        sample_weights: np.ndarray | None = None,
     ) -> EnsemblePredictor:
         ens = EnsemblePredictor(
             tune_trials=self.cfg.ensemble_tune_trials,

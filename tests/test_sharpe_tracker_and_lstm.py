@@ -320,9 +320,8 @@ class TestLSTMSignalLayerWithMockModel:
         import pathlib
 
         # Create a dummy file so _load() passes the existence check
-        tmp = tempfile.NamedTemporaryFile(suffix=".pt", delete=False)
-        tmp.close()
-        model_path = pathlib.Path(tmp.name)
+        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as tmp:
+            model_path = pathlib.Path(tmp.name)
 
         layer = LSTMSignalLayer(model_path=model_path, seq_len=5, min_bars=10)
 

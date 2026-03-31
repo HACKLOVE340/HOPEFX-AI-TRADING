@@ -48,10 +48,10 @@ import logging
 import os
 import threading
 from dataclasses import dataclass
-from datetime import datetime, time as dtime, timezone, UTC
+from datetime import datetime, time as dtime, UTC
 from enum import Enum, auto
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +182,7 @@ class PropEnforcer:
     def __init__(
         self,
         config_path: Path = _DEFAULT_CONFIG,
-        kill_switch_fn: Optional[Callable[[str], None]] = None,
+        kill_switch_fn: Callable[[str], None] | None = None,
     ):
         self.cfg = PropConfig.from_file(config_path)
         self._lock = threading.Lock()
@@ -216,7 +216,7 @@ class PropEnforcer:
     # ── public API ────────────────────────────────────────────────────────────
 
     def update_balance(
-        self, current_equity: float, start_of_day_equity: Optional[float] = None
+        self, current_equity: float, start_of_day_equity: float | None = None
     ) -> None:
         """
         Update equity state. Call on every account snapshot.
@@ -358,19 +358,14 @@ class PropEnforcer:
             return True
         if weekday == 5:  # Saturday
             return True
-        if weekday == 6 and t < dtime(0, 1):  # Sunday before 00:01
-            return True
-        return False
+        return weekday == 6 and t < dtime(0, 1)  # Sunday before 00:01
 
     def _is_news_blackout(self, now_ts: float) -> bool:
         """True if now is within news_blackout seconds of any registered event."""
         window = self.cfg.news_blackout
         # Purge stale events (> 2× window in the past)
         self._news_events = [e for e in self._news_events if e > now_ts - window * 2]
-        for event_ts in self._news_events:
-            if abs(now_ts - event_ts) <= window:
-                return True
-        return False
+        return any(abs(now_ts - event_ts) <= window for event_ts in self._news_events)
 
     def _trigger_breach(self, breach_type: BreachType, detail: str, halt: bool) -> None:
         """Record breach, optionally halt, fire callbacks, send Telegram alert."""
@@ -438,7 +433,7 @@ class PropEnforcer:
 
 # ── module-level singleton (optional convenience) ─────────────────────────────
 
-_default_enforcer: Optional[PropEnforcer] = None
+_default_enforcer: PropEnforcer | None = None
 
 
 def get_enforcer() -> PropEnforcer:

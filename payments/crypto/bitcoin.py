@@ -21,9 +21,8 @@ import os
 import time
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
 
 from hdwallet import HDWallet
 from hdwallet.symbols import BTC
@@ -71,7 +70,7 @@ class BitcoinAddress:
     user_id: str
     derivation_path: str
     created_at: datetime
-    last_used: Optional[datetime] = None
+    last_used: datetime | None = None
 
 
 @dataclass
@@ -171,7 +170,7 @@ class BitcoinClient:
         amount: Decimal,
         tx_hash: str,
         confirmations: int = 0,
-    ) -> Optional[BitcoinTransaction]:
+    ) -> BitcoinTransaction | None:
         """
         Record or update a Bitcoin deposit transaction.
 
@@ -291,7 +290,7 @@ class BitcoinClient:
             return 26 <= len(address) <= 35
         return False
 
-    def get_transaction_status(self, tx_hash: str) -> Optional[dict]:
+    def get_transaction_status(self, tx_hash: str) -> dict | None:
         """Return status dict for a known transaction, or None."""
         tx = self.transactions.get(tx_hash)
         if not tx:

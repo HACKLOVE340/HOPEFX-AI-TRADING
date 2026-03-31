@@ -35,7 +35,8 @@ import traceback
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ except ImportError:
 
 # Optional Redis
 try:
-    import redis  # type: ignore[import]
+    import redis  # type: ignore[import]  # noqa: F401
 
     _REDIS_AVAILABLE = True
 except ImportError:
@@ -149,11 +150,11 @@ class FeedStatus(Enum):
 @dataclass
 class FeedHealth:
     status: FeedStatus
-    last_tick_ts: Optional[float]
+    last_tick_ts: float | None
     ticks_received: int
     ticks_rejected: int
     redis_publish_errors: int
-    last_error: Optional[str]
+    last_error: str | None
     timestamp: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict[str, Any]:
@@ -259,7 +260,7 @@ class OHLCVAggregator:
         self,
         symbol: str,
         timeframes: list[str],
-        on_bar_closed: Optional[Callable[[OHLCVBar], None]] = None,
+        on_bar_closed: Callable[[OHLCVBar], None] | None = None,
     ) -> None:
         self._symbol = symbol
         self._timeframes = timeframes
@@ -267,7 +268,7 @@ class OHLCVAggregator:
         self._lock = threading.RLock()
 
         # Current open bar per timeframe
-        self._open_bars: dict[str, Optional[OHLCVBar]] = dict.fromkeys(timeframes)
+        self._open_bars: dict[str, OHLCVBar | None] = dict.fromkeys(timeframes)
 
     def on_tick(self, tick: Tick) -> None:
         """Process a tick and update/close bars as needed."""
@@ -318,7 +319,7 @@ class OHLCVAggregator:
                     bar.volume += tick.bid_size + tick.ask_size
                     bar.tick_count += 1
 
-    def get_current_bar(self, timeframe: str) -> Optional[OHLCVBar]:
+    def get_current_bar(self, timeframe: str) -> OHLCVBar | None:
         with self._lock:
             return self._open_bars.get(timeframe)
 
@@ -422,11 +423,11 @@ class IBKRMarketDataFeed:
         self,
         ibkr_connector,
         symbol: str = "XAUUSD",
-        timeframes: Optional[list[str]] = None,
+        timeframes: list[str] | None = None,
         redis_client=None,
         redis_key_prefix: str = "hopefx:",
-        on_tick: Optional[Callable[[Tick], None]] = None,
-        on_bar: Optional[Callable[[OHLCVBar], None]] = None,
+        on_tick: Callable[[Tick], None] | None = None,
+        on_bar: Callable[[OHLCVBar], None] | None = None,
         instrument: str = "commodity",
     ) -> None:
         self._connector = ibkr_connector
@@ -447,14 +448,14 @@ class IBKRMarketDataFeed:
         # State
         self._lock = threading.RLock()
         self._status = FeedStatus.DISCONNECTED
-        self._last_tick_ts: Optional[float] = None
+        self._last_tick_ts: float | None = None
         self._ticks_received = 0
         self._ticks_rejected = 0
-        self._last_error: Optional[str] = None
+        self._last_error: str | None = None
         self._running = False
 
         # Health monitor thread
-        self._health_thread: Optional[threading.Thread] = None
+        self._health_thread: threading.Thread | None = None
 
         # Recent ticks buffer (thread-safe, bounded)
         self._tick_buffer: deque = deque(maxlen=1000)
@@ -679,7 +680,7 @@ class IBKRMarketDataFeed:
                 last_error=self._last_error,
             )
 
-    def get_latest_tick(self) -> Optional[Tick]:
+    def get_latest_tick(self) -> Tick | None:
         """Return the most recent validated tick."""
         with self._lock:
             if self._tick_buffer:
@@ -692,7 +693,7 @@ class IBKRMarketDataFeed:
             buf = list(self._tick_buffer)
         return buf[-n:]
 
-    def get_current_bar(self, timeframe: str = "1m") -> Optional[OHLCVBar]:
+    def get_current_bar(self, timeframe: str = "1m") -> OHLCVBar | None:
         """Return the currently open OHLCV bar for *timeframe*."""
         return self._aggregator.get_current_bar(timeframe)
 

@@ -54,9 +54,9 @@ import subprocess  # nosec B404 - list-form call with sys.executable; no shell=T
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +127,7 @@ class MutationTestRunner:
 
     def __init__(
         self,
-        modules: Optional[list[str]] = None,
+        modules: list[str] | None = None,
         timeout_s: float = _TIMEOUT_S,
         min_score: float = _MIN_SCORE,
         report_path: Path = _REPORT_PATH,
@@ -136,7 +136,7 @@ class MutationTestRunner:
         self._timeout_s = timeout_s
         self._min_score = min_score
         self._report_path = report_path
-        self._last_report: Optional[MutationReport] = None
+        self._last_report: MutationReport | None = None
 
     async def run(self) -> MutationReport:
         """Run mutation testing. Returns MutationReport."""
@@ -181,6 +181,7 @@ class MutationTestRunner:
                 [sys.executable, "-m", "mutmut", "--version"],
                 capture_output=True,
                 timeout=5,
+                check=False,
             )
             return result.returncode == 0
         except Exception:
@@ -381,8 +382,7 @@ class MutationTestRunner:
                 )
 
             # Off-by-one on small integer literals
-            elif isinstance(node, ast.Constant) and isinstance(node.value, int):
-                if 0 < abs(node.value) <= 100:
+            elif isinstance(node, ast.Constant) and isinstance(node.value, int) and 0 < abs(node.value) <= 100:
                     mutants.append(
                         {
                             "line": node.lineno,
@@ -521,7 +521,7 @@ class MutationTestRunner:
         except Exception as exc:
             logger.error("Failed to save mutation report: %s", exc)
 
-    def last_report(self) -> Optional[MutationReport]:
+    def last_report(self) -> MutationReport | None:
         return self._last_report
 
 

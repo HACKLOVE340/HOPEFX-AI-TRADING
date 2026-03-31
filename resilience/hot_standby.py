@@ -99,9 +99,10 @@ import os
 import socket
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -192,9 +193,9 @@ class HotStandbyReplicator:
     def __init__(
         self,
         redis_client: Any,
-        on_promote_callback: Optional[Callable] = None,
-        on_demote_callback: Optional[Callable] = None,
-        role: Optional[Role] = None,
+        on_promote_callback: Callable | None = None,
+        on_demote_callback: Callable | None = None,
+        role: Role | None = None,
     ) -> None:
         self._redis = redis_client
         self._on_promote = on_promote_callback  # async def(StateSnapshot)
@@ -284,7 +285,7 @@ class HotStandbyReplicator:
         """Update the in-memory position snapshot. Thread-safe (GIL)."""
         self._positions = dict(positions)
 
-    def update_equity(self, equity: float, balance: Optional[float] = None) -> None:
+    def update_equity(self, equity: float, balance: float | None = None) -> None:
         """Update equity/balance snapshot."""
         self._equity = equity
         self._balance = balance if balance is not None else equity
@@ -537,7 +538,7 @@ class HotStandbyReplicator:
         if _PROM_OK:
             _prom_state_version.set(version)
 
-    async def _restore_state_snapshot(self) -> Optional[StateSnapshot]:
+    async def _restore_state_snapshot(self) -> StateSnapshot | None:
         """Read state snapshot from Redis. Returns None if unavailable."""
         try:
             pos_raw = await self._redis.get(_KEY_POSITIONS)

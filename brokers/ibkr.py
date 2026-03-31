@@ -47,8 +47,9 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -56,16 +57,16 @@ logger = logging.getLogger(__name__)
 try:
     from ib_insync import (  # type: ignore[import]
         IB,
-        CFD,
+        CFD,  # noqa: F401
         Commodity,
-        Contract,
+        Contract,  # noqa: F401
         Future,
         LimitOrder,
         MarketOrder,
         StopOrder,
         StopLimitOrder,
-        Trade,
-        util,
+        Trade,  # noqa: F401
+        util,  # noqa: F401
     )
 
     _IB_AVAILABLE = True
@@ -142,7 +143,7 @@ class IBKRBroker:
         Keys: server ("paper" | "live"), host (str), client_id (int).
     """
 
-    def __init__(self, config: Optional[dict] = None) -> None:
+    def __init__(self, config: dict | None = None) -> None:
         config = config or {}
         server = str(config.get("server", os.getenv("IBKR_ENV", "paper")))
         self._cfg = IBKRConfig(
@@ -151,7 +152,7 @@ class IBKRBroker:
             client_id=int(config.get("client_id", _CLIENT_ID)),
             paper=server != "live",
         )
-        self._ib: Optional[Any] = None  # IB instance
+        self._ib: Any | None = None  # IB instance
         self.connected: bool = False
         self._reconnects: int = 0
         self._total_orders: int = 0
@@ -220,7 +221,7 @@ class IBKRBroker:
 
     # ── Account info ──────────────────────────────────────────────────────────
 
-    async def get_account_info(self) -> Optional[AccountInfo]:
+    async def get_account_info(self) -> AccountInfo | None:
         """Query account values. Does NOT return price data."""
         if not self.connected or not self._ib:
             return None
@@ -295,10 +296,7 @@ class IBKRBroker:
         if not _IB_AVAILABLE:
             raise RuntimeError("ib_insync not available")
         clean = symbol.replace("_", "").replace("/", "").upper()
-        if use_futures:
-            c = Future(symbol="GC", exchange="NYMEX", currency="USD")
-        else:
-            c = Commodity(clean, "SMART", "USD")
+        c = Future(symbol="GC", exchange="NYMEX", currency="USD") if use_futures else Commodity(clean, "SMART", "USD")
         return c
 
     def _build_ib_order(

@@ -17,9 +17,9 @@ This module handles:
 import logging
 import secrets
 import string
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from decimal import Decimal
-from typing import Optional, Dict, List, Any
+from typing import Any
 from enum import Enum
 from dataclasses import dataclass
 
@@ -105,7 +105,7 @@ class Affiliate:
         code: str,
         level: AffiliateLevel = AffiliateLevel.BRONZE,
         status: AffiliateStatus = AffiliateStatus.PENDING,
-        payment_details: Optional[dict[str, Any]] = None,
+        payment_details: dict[str, Any] | None = None,
     ):
         self.affiliate_id = affiliate_id
         self.user_id = user_id
@@ -114,7 +114,7 @@ class Affiliate:
         self.status = status
         self.payment_details = payment_details or {}
         self.created_at = datetime.now(UTC)
-        self.approved_at: Optional[datetime] = None
+        self.approved_at: datetime | None = None
         self.total_referrals = 0
         self.total_revenue = Decimal("0.00")
         self.total_commissions = Decimal("0.00")
@@ -138,7 +138,7 @@ class Affiliate:
         self.status = AffiliateStatus.SUSPENDED
         logger.info(f"Affiliate {self.affiliate_id} suspended")
 
-    def check_level_upgrade(self) -> Optional[AffiliateLevel]:
+    def check_level_upgrade(self) -> AffiliateLevel | None:
         """Check if affiliate qualifies for level upgrade"""
         current_level_idx = list(AffiliateLevel).index(self.level)
 
@@ -191,7 +191,7 @@ class Referral:
         affiliate_id: str,
         referred_user_id: str,
         status: ReferralStatus = ReferralStatus.PENDING,
-        tier: Optional[SubscriptionTier] = None,
+        tier: SubscriptionTier | None = None,
     ):
         self.referral_id = referral_id
         self.affiliate_id = affiliate_id
@@ -199,12 +199,12 @@ class Referral:
         self.status = status
         self.tier = tier
         self.created_at = datetime.now(UTC)
-        self.converted_at: Optional[datetime] = None
+        self.converted_at: datetime | None = None
         self.expires_at = datetime.now(UTC) + timedelta(
             days=90
         )  # 90-day cookie
-        self.subscription_amount: Optional[Decimal] = None
-        self.commission_amount: Optional[Decimal] = None
+        self.subscription_amount: Decimal | None = None
+        self.commission_amount: Decimal | None = None
 
     def is_expired(self) -> bool:
         """Check if referral tracking has expired"""
@@ -272,8 +272,8 @@ class Payout:
         self.payment_method = payment_method
         self.status = status
         self.created_at = datetime.now(UTC)
-        self.processed_at: Optional[datetime] = None
-        self.transaction_id: Optional[str] = None
+        self.processed_at: datetime | None = None
+        self.transaction_id: str | None = None
         self.notes: str = ""
 
     def process(self, transaction_id: str) -> None:
@@ -335,8 +335,8 @@ class AffiliateManager:
     def create_affiliate(
         self,
         user_id: str,
-        payment_details: Optional[dict[str, Any]] = None,
-        custom_code: Optional[str] = None,
+        payment_details: dict[str, Any] | None = None,
+        custom_code: str | None = None,
     ) -> Affiliate:
         """Create a new affiliate account"""
         import uuid
@@ -369,16 +369,16 @@ class AffiliateManager:
         logger.info(f"Created affiliate {affiliate_id} with code {code}")
         return affiliate
 
-    def get_affiliate(self, affiliate_id: str) -> Optional[Affiliate]:
+    def get_affiliate(self, affiliate_id: str) -> Affiliate | None:
         """Get affiliate by ID"""
         return self._affiliates.get(affiliate_id)
 
-    def get_affiliate_by_code(self, code: str) -> Optional[Affiliate]:
+    def get_affiliate_by_code(self, code: str) -> Affiliate | None:
         """Get affiliate by referral code"""
         affiliate_id = self._affiliate_codes.get(code.upper())
         return self._affiliates.get(affiliate_id) if affiliate_id else None
 
-    def get_user_affiliate(self, user_id: str) -> Optional[Affiliate]:
+    def get_user_affiliate(self, user_id: str) -> Affiliate | None:
         """Get affiliate account for a user"""
         affiliate_id = self._user_affiliates.get(user_id)
         return self._affiliates.get(affiliate_id) if affiliate_id else None
@@ -403,7 +403,7 @@ class AffiliateManager:
 
     def create_referral(
         self, affiliate_code: str, referred_user_id: str
-    ) -> Optional[Referral]:
+    ) -> Referral | None:
         """Create a referral tracking record"""
         import uuid
 
@@ -438,7 +438,7 @@ class AffiliateManager:
         referred_user_id: str,
         tier: SubscriptionTier,
         subscription_amount: Decimal,
-    ) -> Optional[Decimal]:
+    ) -> Decimal | None:
         """Convert a referral when user subscribes"""
         # Find active referral for user
         referral = None
@@ -479,12 +479,12 @@ class AffiliateManager:
 
         return commission
 
-    def get_referral(self, referral_id: str) -> Optional[Referral]:
+    def get_referral(self, referral_id: str) -> Referral | None:
         """Get referral by ID"""
         return self._referrals.get(referral_id)
 
     def get_affiliate_referrals(
-        self, affiliate_id: str, status: Optional[ReferralStatus] = None
+        self, affiliate_id: str, status: ReferralStatus | None = None
     ) -> list[Referral]:
         """Get all referrals for an affiliate"""
         referrals = [
@@ -496,7 +496,7 @@ class AffiliateManager:
 
     def request_payout(
         self, affiliate_id: str, payment_method: str
-    ) -> Optional[Payout]:
+    ) -> Payout | None:
         """Request affiliate payout"""
         import uuid
 
@@ -564,7 +564,7 @@ class AffiliateManager:
         payout.fail(reason)
         return True
 
-    def get_affiliate_metrics(self, affiliate_id: str) -> Optional[AffiliateMetrics]:
+    def get_affiliate_metrics(self, affiliate_id: str) -> AffiliateMetrics | None:
         """Get comprehensive affiliate metrics"""
         affiliate = self.get_affiliate(affiliate_id)
         if not affiliate:
@@ -602,7 +602,7 @@ class AffiliateManager:
         )
 
     def get_affiliate_payouts(
-        self, affiliate_id: str, status: Optional[PayoutStatus] = None
+        self, affiliate_id: str, status: PayoutStatus | None = None
     ) -> list[Payout]:
         """Get all payouts for an affiliate"""
         payouts = [p for p in self._payouts.values() if p.affiliate_id == affiliate_id]
@@ -611,7 +611,7 @@ class AffiliateManager:
         return payouts
 
     def get_all_affiliates(
-        self, status: Optional[AffiliateStatus] = None
+        self, status: AffiliateStatus | None = None
     ) -> list[Affiliate]:
         """Get all affiliates"""
         affiliates = list(self._affiliates.values())
