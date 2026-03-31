@@ -38,7 +38,7 @@ import os
 import signal
 import sys
 from collections import deque
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import pandas as pd
 
@@ -53,11 +53,13 @@ logger = logging.getLogger("hopefx")
 
 # ── config helpers ────────────────────────────────────────────────────────────
 
+
 def _optional(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
 
 
 # ── startup environment validation ────────────────────────────────────────────
+
 
 def validate_startup_environment() -> list[str]:
     """
@@ -78,6 +80,7 @@ def validate_startup_environment() -> list[str]:
     - Python version >= 3.10
     """
     import sys as _sys
+
     warnings: list[str] = []
     errors: list[str] = []
     is_production = os.environ.get("APP_ENV", "production") == "production"
@@ -133,11 +136,14 @@ def validate_startup_environment() -> list[str]:
             if bal <= 0:
                 errors.append(f"INITIAL_BALANCE={bal} must be positive")
         except ValueError:
-            errors.append(f"INITIAL_BALANCE={initial_balance_str!r} is not a valid number")
+            errors.append(
+                f"INITIAL_BALANCE={initial_balance_str!r} is not a valid number"
+            )
 
     # Kill switch pre-check
     try:
         from kill_switch import kill_switch as _ks
+
         if _ks.is_active():
             msg = (
                 f"Kill switch is ACTIVE at startup (reason={_ks.reason!r}). "
@@ -272,8 +278,10 @@ class HopeFXEngine:
         logger.info("═══ HOPEFX Engine starting ═══")
         logger.info(
             "Broker: %s  Mode: %s  Symbol: %s  TF: %s",
-            self.broker_name, self.trading_mode,
-            self.primary_symbol, self.timeframe,
+            self.broker_name,
+            self.trading_mode,
+            self.primary_symbol,
+            self.timeframe,
         )
 
         # 0. Startup environment validation — aborts in production on fatal errors
@@ -285,6 +293,7 @@ class HopeFXEngine:
         #     the engine begins processing bars.
         try:
             from data_layer.orchestrator import orchestrator as _dl_orch
+
             self._dl_orchestrator = _dl_orch
             await _dl_orch.start()
             logger.info(
@@ -301,17 +310,20 @@ class HopeFXEngine:
 
         # 1. Risk manager — wired to orchestrator for data quality + macro gating
         from risk.manager import RiskManager
+
         initial_balance = float(_optional("INITIAL_BALANCE", "100000"))
         self._risk_manager = RiskManager(
             initial_balance=initial_balance,
             orchestrator=self._dl_orchestrator,
             lineage_store=getattr(self._dl_orchestrator, "_lineage", None)
-            if self._dl_orchestrator else None,
+            if self._dl_orchestrator
+            else None,
         )
         logger.info("RiskManager initialised (balance=%.2f)", initial_balance)
 
         # 2. HOPEFXBrain
         from brain.hopefx_brain import get_brain
+
         self._brain = get_brain()
         self._brain.inject(risk_manager=self._risk_manager)
         logger.info("HOPEFXBrain initialised")
@@ -319,6 +331,7 @@ class HopeFXEngine:
         # 3. ML predictor (warm up — loads model into memory)
         try:
             from ml.advanced_predictor import get_predictor
+
             self._predictor = get_predictor()
             self._brain.inject(ml_predictor=self._predictor)
             logger.info(
@@ -331,6 +344,7 @@ class HopeFXEngine:
 
         # 4. Trade logger
         from monitoring.trade_logger import get_trade_logger
+
         self._trade_logger = get_trade_logger()
         logger.info(
             "TradeLogger initialised — log_dir=%s",
@@ -339,6 +353,7 @@ class HopeFXEngine:
 
         # 5. Telegram heartbeat
         from notifications.heartbeat import start_heartbeat
+
         self._heartbeat = start_heartbeat(get_status_fn=self._get_status)
         logger.info("HeartbeatService started — stats=%s", self._heartbeat.stats)
 
@@ -348,6 +363,7 @@ class HopeFXEngine:
         # 6a. Inject broker into RiskOrchestrator so hedge orders can be placed
         try:
             from risk.orchestrator import risk_orchestrator
+
             risk_orchestrator.inject_broker(self._broker)
             logger.info("RiskOrchestrator: broker injected (%s)", self.broker_name)
         except Exception as exc:
@@ -386,6 +402,7 @@ class HopeFXEngine:
             return
         try:
             from brokers.oanda_stream import OANDAStream
+
             broker = OANDAStream(
                 api_key=oanda_key,
                 account_id=oanda_account,
@@ -402,11 +419,13 @@ class HopeFXEngine:
             if account:
                 logger.info(
                     "OANDA account: balance=%.2f equity=%.2f",
-                    account.balance, account.equity,
+                    account.balance,
+                    account.equity,
                 )
                 self._risk_manager.update_equity(account.equity, account.balance)
                 self._trade_logger.log_equity(
-                    equity=account.equity, balance=account.balance,
+                    equity=account.equity,
+                    balance=account.balance,
                 )
             self._broker = broker
             logger.info("OANDA execution broker ready (streaming via NuclearStreamer)")
@@ -417,13 +436,15 @@ class HopeFXEngine:
     def _init_mt5(self) -> None:
         try:
             from brokers.mt5_bridge import MT5Bridge
+
             self._broker = MT5Bridge.from_env()
             connected = self._broker.connect()
             if connected:
                 acct = self._broker.get_account()
                 logger.info(
                     "MT5 account: balance=%.2f equity=%.2f server=%s",
-                    acct.get("balance", 0), acct.get("equity", 0),
+                    acct.get("balance", 0),
+                    acct.get("equity", 0),
                     acct.get("server", "?"),
                 )
                 self._risk_manager.update_equity(
@@ -438,6 +459,7 @@ class HopeFXEngine:
 
     def _init_generic_broker(self) -> None:
         from brokers.factory import BrokerFactory
+
         name = self.broker_name if self.broker_name not in ("oanda", "mt5") else "paper"
         self._broker = BrokerFactory.create_broker(name)
         if self._broker is None:
@@ -454,11 +476,13 @@ class HopeFXEngine:
         The poll loop runs concurrently and handles symbols not covered by
         the streamer (e.g. when no API keys are configured).
         """
-        has_stream_key = any([
-            _optional("FINNHUB_API_KEY"),
-            _optional("TWELVE_API_KEY"),
-            _optional("POLYGON_API_KEY"),
-        ])
+        has_stream_key = any(
+            [
+                _optional("FINNHUB_API_KEY"),
+                _optional("TWELVE_API_KEY"),
+                _optional("POLYGON_API_KEY"),
+            ]
+        )
 
         if has_stream_key:
             await asyncio.gather(
@@ -486,6 +510,7 @@ class HopeFXEngine:
 
         class _NuclearTickBridge:
             """Subscriber that forwards NuclearStreamer ticks to the engine."""
+
             async def on_new_price(self, price: float) -> None:
                 if not engine_ref._running:
                     return
@@ -500,10 +525,12 @@ class HopeFXEngine:
 
         self._streamer = NuclearStreamer(symbol="XAUUSD")
         self._streamer.subscribe(_NuclearTickBridge())
-        logger.info("NuclearStreamer starting — sources: finnhub=%s twelvedata=%s polygon=%s",
-                    bool(_optional("FINNHUB_API_KEY")),
-                    bool(_optional("TWELVE_API_KEY")),
-                    bool(_optional("POLYGON_API_KEY")))
+        logger.info(
+            "NuclearStreamer starting — sources: finnhub=%s twelvedata=%s polygon=%s",
+            bool(_optional("FINNHUB_API_KEY")),
+            bool(_optional("TWELVE_API_KEY")),
+            bool(_optional("POLYGON_API_KEY")),
+        )
         try:
             self._streamer_task = asyncio.current_task()
             await self._streamer.run()
@@ -535,7 +562,9 @@ class HopeFXEngine:
             bid = float(price_data.get("bid", price_data.get("price", 0)))
             ask = float(price_data.get("ask", bid))
             mid = (bid + ask) / 2
-            await self._on_tick(symbol=symbol.replace("_", "/"), bid=bid, ask=ask, mid=mid)
+            await self._on_tick(
+                symbol=symbol.replace("_", "/"), bid=bid, ask=ask, mid=mid
+            )
         except Exception as exc:
             logger.debug("Poll symbol %s error: %s", symbol, exc)
 
@@ -562,7 +591,7 @@ class HopeFXEngine:
         # NuclearStreamer delivers bid=ask=mid (no spread). The orchestrator's
         # consensus tick has real bid/ask from GoldAPI — use it to compute a
         # realistic spread for the OHLCV bar's high/low.
-        real_bid, real_ask, spread = bid, ask, 0.0
+        _real_bid, _real_ask, spread = bid, ask, 0.0
         if self._dl_orchestrator:
             try:
                 dl_tick = self._dl_orchestrator.get_latest_tick()
@@ -570,23 +599,25 @@ class HopeFXEngine:
                     # Use orchestrator mid if NuclearStreamer price is within 0.5%
                     # (sanity check — reject if sources diverge significantly)
                     if abs(dl_tick.mid - mid) / max(mid, 1.0) < 0.005:
-                        real_bid = dl_tick.bid
-                        real_ask = dl_tick.ask
-                        spread   = dl_tick.spread
-                        mid      = dl_tick.mid
+                        _real_bid = dl_tick.bid
+                        _real_ask = dl_tick.ask
+                        spread = dl_tick.spread
+                        mid = dl_tick.mid
             except Exception:
                 pass  # fall back to NuclearStreamer price
 
         # Build OHLCV bar: use spread to give high/low realistic range.
         # Without spread, every bar is a doji — the ML model gets zero ATR signal.
         half_spread = spread / 2.0 if spread > 0 else mid * 0.0001
-        self._ohlcv_window[sym_key].append({
-            "open":   mid,
-            "high":   mid + half_spread,
-            "low":    mid - half_spread,
-            "close":  mid,
-            "volume": 1.0,
-        })
+        self._ohlcv_window[sym_key].append(
+            {
+                "open": mid,
+                "high": mid + half_spread,
+                "low": mid - half_spread,
+                "close": mid,
+                "volume": 1.0,
+            }
+        )
 
         self._bar_count += 1
         bars_per_signal = int(_optional("BARS_PER_SIGNAL", "60"))
@@ -597,7 +628,9 @@ class HopeFXEngine:
         if len(window) < self._min_bars:
             logger.debug(
                 "Waiting for %d bars (have %d) for %s",
-                self._min_bars, len(window), sym_key,
+                self._min_bars,
+                len(window),
+                sym_key,
             )
             return
 
@@ -613,10 +646,15 @@ class HopeFXEngine:
         logger.info(
             "Brain[%s]: action=%s conf=%.3f regime=%s strategy=%s "
             "ml_prob=%.3f ml_conf=%.3f abstain=%s reason=%s",
-            sym_key, decision.action, decision.confidence,
-            decision.regime, decision.strategy,
-            decision.ml_probability, decision.ml_confidence,
-            decision.ml_abstain, decision.reason,
+            sym_key,
+            decision.action,
+            decision.confidence,
+            decision.regime,
+            decision.strategy,
+            decision.ml_probability,
+            decision.ml_confidence,
+            decision.ml_abstain,
+            decision.reason,
         )
 
         # ── Execute if signal is strong enough ────────────────────────────────
@@ -626,46 +664,54 @@ class HopeFXEngine:
         trading_blocked = False
         try:
             from kill_switch import kill_switch as _ks
+
             if _ks.is_active():
                 logger.warning(
                     "Kill switch active (reason=%s) — order blocked for %s",
-                    _ks.reason, sym_key,
+                    _ks.reason,
+                    sym_key,
                 )
                 trading_blocked = True
         except ImportError as _ks_err:
             # kill_switch module missing — block as a safety measure
             logger.error(
                 "kill_switch import failed (%s) — blocking order for %s (fail-safe)",
-                _ks_err, sym_key,
+                _ks_err,
+                sym_key,
             )
             trading_blocked = True
         except Exception as _ks_err:
             logger.error(
                 "kill_switch check raised %s — blocking order for %s (fail-safe)",
-                _ks_err, sym_key,
+                _ks_err,
+                sym_key,
             )
             trading_blocked = True
 
         if not trading_blocked:
             try:
                 from risk.orchestrator import risk_orchestrator as _ro
+
                 if not _ro.is_trading_allowed():
                     logger.warning(
                         "RiskOrchestrator: trading halted (max_risk=%.2f) — "
                         "order blocked for %s",
-                        _ro.get_max_risk(), sym_key,
+                        _ro.get_max_risk(),
+                        sym_key,
                     )
                     trading_blocked = True
             except ImportError as _ro_err:
                 logger.error(
                     "risk.orchestrator import failed (%s) — blocking order for %s (fail-safe)",
-                    _ro_err, sym_key,
+                    _ro_err,
+                    sym_key,
                 )
                 trading_blocked = True
             except Exception as _ro_err:
                 logger.error(
                     "RiskOrchestrator check raised %s — blocking order for %s (fail-safe)",
-                    _ro_err, sym_key,
+                    _ro_err,
+                    sym_key,
                 )
                 trading_blocked = True
 
@@ -679,7 +725,11 @@ class HopeFXEngine:
 
         # ── Dispatch news/sentiment event to nuclear supervisor ───────────────
         # Extract sentiment from brain decision metadata if available
-        if self._news_callbacks or not self._news_queue.empty() or self._bar_count % 60 == 0:
+        if (
+            self._news_callbacks
+            or not self._news_queue.empty()
+            or self._bar_count % 60 == 0
+        ):
             await self._maybe_dispatch_news_event(ohlcv_df, decision, mid)
 
         # ── Equity snapshot ───────────────────────────────────────────────────
@@ -716,9 +766,10 @@ class HopeFXEngine:
             exposure = 0.5
             try:
                 from risk.orchestrator import risk_orchestrator as _ro
+
                 exposure = await _ro.get_current_exposure()
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
             # Only dispatch if there's an elevated signal worth checking
             if abs(sentiment) < 0.1 and vol < 1.5:
@@ -747,12 +798,21 @@ class HopeFXEngine:
         if self.trading_mode != "live":
             logger.info(
                 "[PAPER] %s %s %.2f lots @ %.5f  conf=%.3f  reason=%s",
-                side, symbol, lots, price, decision.confidence, decision.reason,
+                side,
+                symbol,
+                lots,
+                price,
+                decision.confidence,
+                decision.reason,
             )
             self._trade_logger.log_fill(
-                symbol=symbol, side=side, lots=lots,
-                requested_price=price, fill_price=price,
-                pnl=0.0, broker=self.broker_name,
+                symbol=symbol,
+                side=side,
+                lots=lots,
+                requested_price=price,
+                fill_price=price,
+                pnl=0.0,
+                broker=self.broker_name,
                 notes=f"paper|{decision.reason}",
             )
             return
@@ -761,10 +821,13 @@ class HopeFXEngine:
         try:
             if hasattr(self._broker, "place_order"):
                 _order_coro = self._broker.place_order(
-                    symbol=symbol, side=side, lots=lots,
+                    symbol=symbol,
+                    side=side,
+                    lots=lots,
                 )
                 # Brokers may be sync or async — handle both
                 import inspect as _inspect
+
                 result = (
                     await _order_coro
                     if _inspect.isawaitable(_order_coro)
@@ -772,26 +835,38 @@ class HopeFXEngine:
                 )
                 fill_price = float(result.get("fill_price", price)) if result else price
                 self._trade_logger.log_fill(
-                    symbol=symbol, side=side, lots=lots,
-                    requested_price=price, fill_price=fill_price,
-                    broker=self.broker_name, notes=decision.reason,
+                    symbol=symbol,
+                    side=side,
+                    lots=lots,
+                    requested_price=price,
+                    fill_price=fill_price,
+                    broker=self.broker_name,
+                    notes=decision.reason,
                 )
                 logger.info(
                     "Order placed: %s %s %.2f lots @ %.5f",
-                    side, symbol, lots, fill_price,
+                    side,
+                    symbol,
+                    lots,
+                    fill_price,
                 )
 
                 # Online learner feedback — notify Phase-3 store of the fill.
                 try:
                     from core.signal_engine import notify_fill as _notify_fill
                     import pandas as _pd
-                    _features = _pd.DataFrame([{
-                        "symbol": symbol,
-                        "direction": side,
-                        "fill_price": fill_price,
-                        "confidence": getattr(decision, "confidence", 0.0),
-                        "source": "hopefx_engine",
-                    }])
+
+                    _features = _pd.DataFrame(
+                        [
+                            {
+                                "symbol": symbol,
+                                "direction": side,
+                                "fill_price": fill_price,
+                                "confidence": getattr(decision, "confidence", 0.0),
+                                "source": "hopefx_engine",
+                            }
+                        ]
+                    )
                     _notify_fill(
                         _features,
                         label=1,
@@ -819,7 +894,9 @@ class HopeFXEngine:
             if equity > 0:
                 self._risk_manager.update_equity(equity, balance)
                 self._trade_logger.log_equity(
-                    equity=equity, balance=balance, open_positions=open_pos,
+                    equity=equity,
+                    balance=balance,
+                    open_positions=open_pos,
                 )
         except Exception as exc:
             logger.debug("Equity update failed: %s", exc)
@@ -829,7 +906,9 @@ class HopeFXEngine:
     def _get_status(self) -> Dict:
         tl_stats = self._trade_logger.stats if self._trade_logger else {}
         brain_stats = self._brain.stats if self._brain else {}
-        last_decision = (self._brain.recent_decisions(1) or [{}])[0] if self._brain else {}
+        last_decision = (
+            (self._brain.recent_decisions(1) or [{}])[0] if self._brain else {}
+        )
         return {
             "equity": tl_stats.get("equity", 0),
             "balance": tl_stats.get("balance", 0),
@@ -841,7 +920,9 @@ class HopeFXEngine:
             "last_signal": {
                 "direction": last_decision.get("action", "hold"),
                 "confidence": last_decision.get("confidence", 0),
-            } if last_decision else None,
+            }
+            if last_decision
+            else None,
             "risk_alerts": [],
             "brain_signal_rate": brain_stats.get("signal_rate", 0),
         }

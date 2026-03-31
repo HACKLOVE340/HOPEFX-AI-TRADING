@@ -33,6 +33,7 @@ Usage
     results = await controller.run_all_scenarios()
     print(controller.report())
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -47,20 +48,20 @@ from chaos.injector import FaultInjector, FaultType, fault_injector
 logger = logging.getLogger(__name__)
 
 # ── SLA bounds ────────────────────────────────────────────────────────────────
-_FAILOVER_SLA_S    = float(5.0)   # feed failover must complete in 5s
-_STALE_DETECT_SLA  = float(35.0)  # stale tick must be detected in 35s
+_FAILOVER_SLA_S = float(5.0)  # feed failover must complete in 5s
+_STALE_DETECT_SLA = float(35.0)  # stale tick must be detected in 35s
 _REDIS_RECOVER_SLA = float(10.0)  # Redis must reconnect in 10s
-_SPIKE_REJECT_SLA  = float(2.0)   # DQE must reject spike within 2 ticks
+_SPIKE_REJECT_SLA = float(2.0)  # DQE must reject spike within 2 ticks
 
 
 @dataclass
 class ScenarioResult:
-    scenario:     str
-    passed:       bool
-    duration_s:   float
-    sla_s:        float
-    detail:       str
-    injected_at:  datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    scenario: str
+    passed: bool
+    duration_s: float
+    sla_s: float
+    detail: str
+    injected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
     def within_sla(self) -> bool:
@@ -79,8 +80,8 @@ class ChaosController:
         orchestrator: Any = None,
         injector: Optional[FaultInjector] = None,
     ) -> None:
-        self._orch    = orchestrator
-        self._inj     = injector or fault_injector
+        self._orch = orchestrator
+        self._inj = injector or fault_injector
         self._results: List[ScenarioResult] = []
 
     # ── Scenario runner ───────────────────────────────────────────────────────
@@ -103,17 +104,22 @@ class ChaosController:
                 icon = "✓" if result.passed else "✗"
                 logger.info(
                     "CHAOS [%s] %s — %.2fs (SLA=%.1fs) %s",
-                    icon, result.scenario, result.duration_s,
-                    result.sla_s, result.detail,
+                    icon,
+                    result.scenario,
+                    result.duration_s,
+                    result.sla_s,
+                    result.detail,
                 )
             except Exception as exc:
-                self._results.append(ScenarioResult(
-                    scenario   = scenario_fn.__name__,
-                    passed     = False,
-                    duration_s = 0.0,
-                    sla_s      = 0.0,
-                    detail     = f"EXCEPTION: {exc}",
-                ))
+                self._results.append(
+                    ScenarioResult(
+                        scenario=scenario_fn.__name__,
+                        passed=False,
+                        duration_s=0.0,
+                        sla_s=0.0,
+                        detail=f"EXCEPTION: {exc}",
+                    )
+                )
             finally:
                 self._inj.clear_all()
                 await asyncio.sleep(0.5)  # brief pause between scenarios
@@ -130,8 +136,9 @@ class ChaosController:
         t0 = time.monotonic()
         rejected_before = self._get_dqe_rejected_count()
 
-        self._inj.inject(FaultType.PRICE_SPIKE, duration_s=5.0, magnitude=0.03,
-                         direction="up")
+        self._inj.inject(
+            FaultType.PRICE_SPIKE, duration_s=5.0, magnitude=0.03, direction="up"
+        )
         await asyncio.sleep(3.0)
         self._inj.clear(FaultType.PRICE_SPIKE)
 
@@ -140,13 +147,14 @@ class ChaosController:
         duration = time.monotonic() - t0
 
         return ScenarioResult(
-            scenario   = "dqe_spike_rejection",
-            passed     = spike_rejected,
-            duration_s = duration,
-            sla_s      = _SPIKE_REJECT_SLA + 3.0,
-            detail     = (
+            scenario="dqe_spike_rejection",
+            passed=spike_rejected,
+            duration_s=duration,
+            sla_s=_SPIKE_REJECT_SLA + 3.0,
+            detail=(
                 f"rejected_delta={rejected_after - rejected_before}"
-                if spike_rejected else "DQE did not reject spike — check anomaly threshold"
+                if spike_rejected
+                else "DQE did not reject spike — check anomaly threshold"
             ),
         )
 
@@ -167,13 +175,14 @@ class ChaosController:
         duration = time.monotonic() - t0
 
         return ScenarioResult(
-            scenario   = "stale_tick_detection",
-            passed     = detected,
-            duration_s = duration,
-            sla_s      = _STALE_DETECT_SLA,
-            detail     = (
+            scenario="stale_tick_detection",
+            passed=detected,
+            duration_s=duration,
+            sla_s=_STALE_DETECT_SLA,
+            detail=(
                 f"stale_delta={stale_after - stale_before}"
-                if detected else "DQE did not detect stale feed"
+                if detected
+                else "DQE did not detect stale feed"
             ),
         )
 
@@ -189,17 +198,18 @@ class ChaosController:
         # Verify router would reject (check via orchestrator features)
         spread_bps = self._get_current_spread_bps()
         from execution.smart_router import _MAX_SPREAD_BPS
+
         gate_would_fire = spread_bps > _MAX_SPREAD_BPS
 
         self._inj.clear(FaultType.SPREAD_WIDEN)
         duration = time.monotonic() - t0
 
         return ScenarioResult(
-            scenario   = "spread_gate",
-            passed     = gate_would_fire,
-            duration_s = duration,
-            sla_s      = 5.0,
-            detail     = (
+            scenario="spread_gate",
+            passed=gate_would_fire,
+            duration_s=duration,
+            sla_s=5.0,
+            detail=(
                 f"spread={spread_bps:.1f}bps > max={_MAX_SPREAD_BPS:.1f}bps — gate fires"
                 if gate_would_fire
                 else f"spread={spread_bps:.1f}bps — gate would NOT fire (check ROUTER_MAX_SPREAD_BPS)"
@@ -214,8 +224,7 @@ class ChaosController:
         t0 = time.monotonic()
         rejected_before = self._get_dqe_rejected_count()
 
-        self._inj.inject(FaultType.CORRUPT_TICK, duration_s=5.0,
-                         corrupt_type="nan")
+        self._inj.inject(FaultType.CORRUPT_TICK, duration_s=5.0, corrupt_type="nan")
         await asyncio.sleep(3.0)
         self._inj.clear(FaultType.CORRUPT_TICK)
 
@@ -223,11 +232,11 @@ class ChaosController:
         duration = time.monotonic() - t0
 
         return ScenarioResult(
-            scenario   = "corrupt_tick_rejection",
-            passed     = rejected_after > rejected_before,
-            duration_s = duration,
-            sla_s      = 5.0,
-            detail     = f"rejected_delta={rejected_after - rejected_before}",
+            scenario="corrupt_tick_rejection",
+            passed=rejected_after > rejected_before,
+            duration_s=duration,
+            sla_s=5.0,
+            detail=f"rejected_delta={rejected_after - rejected_before}",
         )
 
     async def _scenario_clock_skew_detection(self) -> ScenarioResult:
@@ -239,8 +248,9 @@ class ChaosController:
         t0 = time.monotonic()
         rejected_before = self._get_dqe_rejected_count()
 
-        self._inj.inject(FaultType.CLOCK_SKEW, duration_s=5.0,
-                         magnitude=120.0, direction_sign=1)
+        self._inj.inject(
+            FaultType.CLOCK_SKEW, duration_s=5.0, magnitude=120.0, direction_sign=1
+        )
         await asyncio.sleep(4.0)
         self._inj.clear(FaultType.CLOCK_SKEW)
 
@@ -252,11 +262,11 @@ class ChaosController:
         skew_detected = rejected_after > rejected_before
 
         return ScenarioResult(
-            scenario   = "clock_skew_detection",
-            passed     = skew_detected,
-            duration_s = duration,
-            sla_s      = 10.0,
-            detail     = (
+            scenario="clock_skew_detection",
+            passed=skew_detected,
+            duration_s=duration,
+            sla_s=10.0,
+            detail=(
                 f"future-timestamp rejections delta={rejected_after - rejected_before}"
                 if skew_detected
                 else "causal guard did not reject skewed ticks — check NormalizationPipeline"
@@ -269,7 +279,7 @@ class ChaosController:
         Validates: orchestrator continues operating after feed loss.
         """
         t0 = time.monotonic()
-        health_before = self._get_orchestrator_health()
+        _health_before = self._get_orchestrator_health()
 
         self._inj.inject(FaultType.FEED_DROP, duration_s=5.0)
         await asyncio.sleep(6.0)
@@ -283,13 +293,14 @@ class ChaosController:
         recovered = health_after.get("started", False)
 
         return ScenarioResult(
-            scenario   = "feed_drop_recovery",
-            passed     = recovered,
-            duration_s = duration,
-            sla_s      = _FAILOVER_SLA_S + 8.0,
-            detail     = (
+            scenario="feed_drop_recovery",
+            passed=recovered,
+            duration_s=duration,
+            sla_s=_FAILOVER_SLA_S + 8.0,
+            detail=(
                 "orchestrator still running after feed drop"
-                if recovered else "orchestrator stopped — CRITICAL"
+                if recovered
+                else "orchestrator stopped — CRITICAL"
             ),
         )
 
@@ -312,8 +323,8 @@ class ChaosController:
     def _get_current_spread_bps(self) -> float:
         try:
             features = self._orch.get_ml_features()
-            spread   = features.get("micro_spread", 0.5)
-            mid      = self._orch.get_current_gold_price() or 2350.0
+            spread = features.get("micro_spread", 0.5)
+            mid = self._orch.get_current_gold_price() or 2350.0
             return spread / mid * 10_000 * 10  # 10x widened
         except Exception:
             return 999.0  # assume wide if unavailable
@@ -337,7 +348,11 @@ class ChaosController:
         ]
         for r in self._results:
             icon = "✓" if r.passed else "✗"
-            sla  = "within SLA" if r.within_sla else f"EXCEEDED SLA ({r.duration_s:.1f}s > {r.sla_s:.1f}s)"
+            sla = (
+                "within SLA"
+                if r.within_sla
+                else f"EXCEEDED SLA ({r.duration_s:.1f}s > {r.sla_s:.1f}s)"
+            )
             lines.append(f"  [{icon}] {r.scenario:<35} {sla}")
             lines.append(f"       {r.detail}")
         return "\n".join(lines)
@@ -345,12 +360,12 @@ class ChaosController:
     def results_dict(self) -> List[Dict[str, Any]]:
         return [
             {
-                "scenario":   r.scenario,
-                "passed":     r.passed,
+                "scenario": r.scenario,
+                "passed": r.passed,
                 "duration_s": round(r.duration_s, 3),
-                "sla_s":      r.sla_s,
+                "sla_s": r.sla_s,
                 "within_sla": r.within_sla,
-                "detail":     r.detail,
+                "detail": r.detail,
             }
             for r in self._results
         ]

@@ -22,7 +22,6 @@ Usage
 from __future__ import annotations
 
 import argparse
-import importlib
 import os
 import sys
 import time
@@ -36,14 +35,15 @@ os.environ.setdefault("APP_ENV", "development")
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv(ROOT / ".env", override=False)
 except ImportError:
     pass
 
 # ── Result types ──────────────────────────────────────────────────────────────
-GREEN  = "GREEN"
+GREEN = "GREEN"
 YELLOW = "YELLOW"
-RED    = "RED"
+RED = "RED"
 
 CheckResult = Tuple[str, str, str]  # (status, message, category)
 
@@ -63,6 +63,7 @@ def _check(name: str, category: str, fn) -> CheckResult:
 
 # ── Individual checks ─────────────────────────────────────────────────────────
 
+
 def check_env_vars():
     missing = []
     required = ["SECURITY_JWT_SECRET"]
@@ -71,42 +72,44 @@ def check_env_vars():
             missing.append(var)
     if missing:
         raise Exception(f"Missing required env vars: {missing}")
-    return f"All required env vars present"
+    return "All required env vars present"
 
 
 def check_database():
-    from database.connection import get_db, engine
+    from database.connection import engine
     from sqlalchemy import text
+
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
     return "SQLite/PostgreSQL connected"
 
 
 def check_database_models():
-    from database.models import Base, Trade, Position, MarketData
-    from database.user_models import User
+    from database.models import Base
+
     return f"ORM models importable: {len(Base.metadata.tables)} tables"
 
 
 def check_alembic():
     from alembic.config import Config
-    from alembic import command
-    cfg = Config(str(ROOT / "alembic.ini"))
+
+    _cfg = Config(str(ROOT / "alembic.ini"))
     return "Alembic config loadable"
 
 
 def check_auth_service():
     from auth.service import AuthService
-    from sqlalchemy.orm import sessionmaker
     from database.connection import _get_or_init_manager
+
     mgr = _get_or_init_manager()
-    svc = AuthService(session_factory=mgr._session_factory)
+    _svc = AuthService(session_factory=mgr._session_factory)
     return "AuthService instantiated"
 
 
 def check_jwt():
     from auth.jwt import create_access_token, verify_token
     from fastapi import HTTPException
+
     token = create_access_token({"sub": "test@hopefx.io", "type": "access"})
     assert token, "Token is empty"
     # verify_token raises credentials_exception on failure
@@ -117,29 +120,32 @@ def check_jwt():
 
 
 def check_jwt_handler():
-    from auth.jwt_handler import create_access_token, verify_token
     return "auth.jwt_handler shim importable"
 
 
 def check_api_auth_router():
-    from api.auth import router, get_current_user, require_role
+    from api.auth import router
+
     return f"api.auth router + deps importable (prefix={router.prefix})"
 
 
 def check_auth_router():
     from auth.router import router
+
     routes = [r.path for r in router.routes]
     return f"auth.router: {len(routes)} routes"
 
 
 def check_kill_switch():
     from kill_switch import KillSwitch
-    ks = KillSwitch()
+
+    _ks = KillSwitch()
     return "KillSwitch instantiated"
 
 
 def check_redis():
     import redis
+
     r = redis.Redis(
         host=os.getenv("REDIS_HOST", "localhost"),
         port=int(os.getenv("REDIS_PORT", "6379")),
@@ -151,12 +157,14 @@ def check_redis():
 
 def check_api_trading_router():
     from api.trading import router
+
     routes = [r.path for r in router.routes]
     return f"api.trading: {len(routes)} routes"
 
 
 def check_api_signals_router():
     from api.signals import create_signals_router
+
     router = create_signals_router()
     routes = [r.path for r in router.routes]
     return f"api.signals: {len(routes)} routes"
@@ -164,28 +172,29 @@ def check_api_signals_router():
 
 def check_api_admin_router():
     from api.admin import router
+
     routes = [r.path for r in router.routes]
     return f"api.admin: {len(routes)} routes"
 
 
 def check_websocket_router():
     from api.ws_live import router
+
     routes = [r.path for r in router.routes]
     return f"api.ws_live: {len(routes)} routes"
 
 
 def check_mobile_api():
-    from mobile.api_v2 import app, router
-    return f"mobile.api_v2 app+router importable"
+    return "mobile.api_v2 app+router importable"
 
 
 def check_mobile_push():
-    from mobile.push_notifications import PushNotificationManager
     return "PushNotificationManager importable"
 
 
 def check_ml_model():
     import joblib
+
     model_path = ROOT / "ml" / "saved_models" / "advanced_oos.pkl"
     if not model_path.exists():
         raise AssertionError("advanced_oos.pkl not found (will train on first run)")
@@ -194,43 +203,39 @@ def check_ml_model():
 
 
 def check_ml_inference_engine():
-    from ml.inference_engine import InferenceEngine
     return "InferenceEngine importable"
 
 
 def check_ml_live_inference():
-    from ml.live_inference import AdvancedModelPredictor, get_advanced_predictor
     return "AdvancedModelPredictor importable"
 
 
 def check_event_bus():
-    from core.event_bus import EventBus
     return "EventBus importable"
 
 
 def check_risk_engine():
-    from risk.gatekeeper import Gatekeeper
     return "Gatekeeper (risk engine) importable"
 
 
 def check_execution_oms():
-    from execution.oms import OrderLifecycleManager
     return "OrderLifecycleManager (OMS) importable"
 
 
 def check_data_layer():
-    from data_layer.orchestrator import MarketDataOrchestrator
     return "MarketDataOrchestrator importable"
 
 
 def check_broker_paper():
     from brokers.paper_trading import PaperTradingBroker
-    b = PaperTradingBroker()
-    return f"PaperTradingBroker instantiated"
+
+    _b = PaperTradingBroker()
+    return "PaperTradingBroker instantiated"
 
 
 def check_connect_to_life():
     import ast
+
     src = (ROOT / "connect_to_life.py").read_text()
     ast.parse(src)
     return "connect_to_life.py parses OK"
@@ -238,6 +243,7 @@ def check_connect_to_life():
 
 def check_app_py():
     import ast
+
     src = (ROOT / "app.py").read_text()
     ast.parse(src)
     return "app.py parses OK"
@@ -245,6 +251,7 @@ def check_app_py():
 
 def check_startup_validator():
     from config.startup_validator import validate_environment
+
     validate_environment(strict=False)
     return "startup_validator passed"
 
@@ -252,7 +259,9 @@ def check_startup_validator():
 def check_dashboard_built():
     dist = ROOT / "dashboard" / "dist"
     if not dist.exists():
-        raise AssertionError("dashboard/dist/ not built — run: cd dashboard && npm run build")
+        raise AssertionError(
+            "dashboard/dist/ not built — run: cd dashboard && npm run build"
+        )
     index = dist / "index.html"
     if not index.exists():
         raise AssertionError("dashboard/dist/index.html missing")
@@ -274,11 +283,12 @@ def check_mobile_rn_src():
     app_tsx = rn / "App.tsx"
     if not app_tsx.exists():
         raise AssertionError("mobile-app/App.tsx missing")
-    return f"React Native scaffold present"
+    return "React Native scaffold present"
 
 
 def check_docker_compose():
     import yaml
+
     dc = ROOT / "docker-compose.yml"
     if not dc.exists():
         raise Exception("docker-compose.yml missing")
@@ -291,36 +301,34 @@ def check_env_example():
     f = ROOT / "env.example"
     if not f.exists():
         raise Exception("env.example missing")
-    lines = [l for l in f.read_text().splitlines() if l.strip() and not l.startswith("#")]
+    lines = [
+        ln for ln in f.read_text().splitlines() if ln.strip() and not ln.startswith("#")
+    ]
     return f"env.example present ({len(lines)} vars)"
 
 
 def check_graphql():
     try:
-        from api.graphql_schema import graphql_router
+        from api.graphql_schema import graphql_router  # noqa: F401
+
         return "GraphQL router importable"
     except ImportError as e:
         raise AssertionError(f"GraphQL optional dep missing: {e}")
 
 
 def check_notifications():
-    from notifications.telegram_bot import TelegramBot
-    from notifications.manager import NotificationChannel
     return "TelegramBot + NotificationChannel importable"
 
 
 def check_payments():
-    from payments.payment_gateway import PaymentGateway
     return "PaymentGateway importable"
 
 
 def check_compliance():
-    from compliance.aml import AMLGate
     return "AMLGate importable"
 
 
 def check_backtesting():
-    from backtesting.engine import BacktestEngine
     return "BacktestEngine importable"
 
 
@@ -328,48 +336,49 @@ def check_backtesting():
 
 CHECKS: List[Tuple[str, str, callable]] = [
     # (display_name, category, fn)
-    ("Env vars",                CRITICAL,     check_env_vars),
-    ("Startup validator",       CRITICAL,     check_startup_validator),
-    ("Database connection",     CRITICAL,     check_database),
-    ("Database ORM models",     CRITICAL,     check_database_models),
-    ("Auth service",            CRITICAL,     check_auth_service),
-    ("JWT sign/verify",         CRITICAL,     check_jwt),
-    ("JWT handler shim",        CRITICAL,     check_jwt_handler),
-    ("api.auth router",         CRITICAL,     check_api_auth_router),
-    ("auth.router endpoints",   CRITICAL,     check_auth_router),
-    ("Kill switch",             CRITICAL,     check_kill_switch),
-    ("Trading router",          CRITICAL,     check_api_trading_router),
-    ("Signals router",          CRITICAL,     check_api_signals_router),
-    ("Admin router",            CRITICAL,     check_api_admin_router),
-    ("WebSocket router",        CRITICAL,     check_websocket_router),
-    ("Mobile API v2",           CRITICAL,     check_mobile_api),
-    ("Mobile push notifs",      CRITICAL,     check_mobile_push),
-    ("ML model (joblib)",       CRITICAL,     check_ml_model),
-    ("ML inference engine",     CRITICAL,     check_ml_inference_engine),
-    ("ML live inference",       CRITICAL,     check_ml_live_inference),
-    ("Event bus",               CRITICAL,     check_event_bus),
-    ("Risk engine",             CRITICAL,     check_risk_engine),
-    ("Execution OMS",           CRITICAL,     check_execution_oms),
-    ("Data layer",              CRITICAL,     check_data_layer),
-    ("Paper broker",            CRITICAL,     check_broker_paper),
-    ("connect_to_life.py",      CRITICAL,     check_connect_to_life),
-    ("app.py syntax",           CRITICAL,     check_app_py),
-    ("Redis",                   NON_CRITICAL, check_redis),
-    ("Alembic config",          NON_CRITICAL, check_alembic),
-    ("Dashboard built",         NON_CRITICAL, check_dashboard_built),
-    ("Frontend source",         NON_CRITICAL, check_frontend_src),
-    ("React Native scaffold",   NON_CRITICAL, check_mobile_rn_src),
-    ("docker-compose.yml",      NON_CRITICAL, check_docker_compose),
-    ("env.example",             NON_CRITICAL, check_env_example),
-    ("GraphQL",                 NON_CRITICAL, check_graphql),
-    ("Notifications",           NON_CRITICAL, check_notifications),
-    ("Payments",                NON_CRITICAL, check_payments),
-    ("Compliance",              NON_CRITICAL, check_compliance),
-    ("Backtesting engine",      NON_CRITICAL, check_backtesting),
+    ("Env vars", CRITICAL, check_env_vars),
+    ("Startup validator", CRITICAL, check_startup_validator),
+    ("Database connection", CRITICAL, check_database),
+    ("Database ORM models", CRITICAL, check_database_models),
+    ("Auth service", CRITICAL, check_auth_service),
+    ("JWT sign/verify", CRITICAL, check_jwt),
+    ("JWT handler shim", CRITICAL, check_jwt_handler),
+    ("api.auth router", CRITICAL, check_api_auth_router),
+    ("auth.router endpoints", CRITICAL, check_auth_router),
+    ("Kill switch", CRITICAL, check_kill_switch),
+    ("Trading router", CRITICAL, check_api_trading_router),
+    ("Signals router", CRITICAL, check_api_signals_router),
+    ("Admin router", CRITICAL, check_api_admin_router),
+    ("WebSocket router", CRITICAL, check_websocket_router),
+    ("Mobile API v2", CRITICAL, check_mobile_api),
+    ("Mobile push notifs", CRITICAL, check_mobile_push),
+    ("ML model (joblib)", CRITICAL, check_ml_model),
+    ("ML inference engine", CRITICAL, check_ml_inference_engine),
+    ("ML live inference", CRITICAL, check_ml_live_inference),
+    ("Event bus", CRITICAL, check_event_bus),
+    ("Risk engine", CRITICAL, check_risk_engine),
+    ("Execution OMS", CRITICAL, check_execution_oms),
+    ("Data layer", CRITICAL, check_data_layer),
+    ("Paper broker", CRITICAL, check_broker_paper),
+    ("connect_to_life.py", CRITICAL, check_connect_to_life),
+    ("app.py syntax", CRITICAL, check_app_py),
+    ("Redis", NON_CRITICAL, check_redis),
+    ("Alembic config", NON_CRITICAL, check_alembic),
+    ("Dashboard built", NON_CRITICAL, check_dashboard_built),
+    ("Frontend source", NON_CRITICAL, check_frontend_src),
+    ("React Native scaffold", NON_CRITICAL, check_mobile_rn_src),
+    ("docker-compose.yml", NON_CRITICAL, check_docker_compose),
+    ("env.example", NON_CRITICAL, check_env_example),
+    ("GraphQL", NON_CRITICAL, check_graphql),
+    ("Notifications", NON_CRITICAL, check_notifications),
+    ("Payments", NON_CRITICAL, check_payments),
+    ("Compliance", NON_CRITICAL, check_compliance),
+    ("Backtesting engine", NON_CRITICAL, check_backtesting),
 ]
 
 
 # ── Runner ────────────────────────────────────────────────────────────────────
+
 
 def run_checks(strict: bool = False) -> int:
     results: Dict[str, CheckResult] = {}
@@ -382,24 +391,26 @@ def run_checks(strict: bool = False) -> int:
     for name, category, fn in CHECKS:
         t0 = time.monotonic()
         status, msg, cat = _check(name, category, fn)
-        elapsed = (time.monotonic() - t0) * 1000
+        _elapsed = (time.monotonic() - t0) * 1000
         results[name] = (status, msg, cat)
 
         icon = "✅" if status == GREEN else ("⚠️ " if status == YELLOW else "❌")
-        tag  = "[CRITICAL]    " if cat == CRITICAL else "[non-critical]"
+        tag = "[CRITICAL]    " if cat == CRITICAL else "[non-critical]"
         print(f"  {icon} {tag} {name:<30} {msg[:60]}")
 
     print()
     print("─" * 70)
 
-    greens  = [(n, r) for n, r in results.items() if r[0] == GREEN]
+    greens = [(n, r) for n, r in results.items() if r[0] == GREEN]
     yellows = [(n, r) for n, r in results.items() if r[0] == YELLOW]
-    reds    = [(n, r) for n, r in results.items() if r[0] == RED]
+    reds = [(n, r) for n, r in results.items() if r[0] == RED]
 
-    crit_reds    = [(n, r) for n, r in reds    if r[2] == CRITICAL]
+    crit_reds = [(n, r) for n, r in reds if r[2] == CRITICAL]
     crit_yellows = [(n, r) for n, r in yellows if r[2] == CRITICAL]
 
-    print(f"  TOTAL  ✅ {len(greens)} GREEN   ⚠️  {len(yellows)} YELLOW   ❌ {len(reds)} RED")
+    print(
+        f"  TOTAL  ✅ {len(greens)} GREEN   ⚠️  {len(yellows)} YELLOW   ❌ {len(reds)} RED"
+    )
     print()
 
     if crit_reds:
@@ -428,7 +439,8 @@ def run_checks(strict: bool = False) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HOPEFX connection validator")
-    parser.add_argument("--strict", action="store_true",
-                        help="Fail on critical warnings (YELLOW) too")
+    parser.add_argument(
+        "--strict", action="store_true", help="Fail on critical warnings (YELLOW) too"
+    )
     args = parser.parse_args()
     sys.exit(run_checks(strict=args.strict))

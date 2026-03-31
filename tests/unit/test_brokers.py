@@ -126,10 +126,11 @@ class TestPaperTradingBroker:
         monkeypatch.setenv("PAPER_SLIPPAGE_MODEL", "zero")
         # Re-create slippage model with zero slippage for this test
         from brokers.paper_trading import SlippageModel
+
         paper_broker._slippage = SlippageModel("zero")
 
         paper_broker.market_prices["EUR_USD"] = 1.1000
-        balance_before_open = paper_broker.balance
+        _balance_before_open = paper_broker.balance
 
         paper_broker.place_order(
             symbol="EUR_USD",
@@ -141,7 +142,7 @@ class TestPaperTradingBroker:
 
         # With zero slippage, fill = mid = 1.1000.
         # Opening commission = (10000 / 100000) * 3.5 = $0.35
-        open_commission = (10000 / 100_000) * paper_broker._commission_per_lot
+        _open_commission = (10000 / 100_000) * paper_broker._commission_per_lot
 
         # Move price up by 20 pips — gross P&L = 10000 * 0.0020 = $20
         paper_broker.market_prices["EUR_USD"] = 1.1020
@@ -149,7 +150,7 @@ class TestPaperTradingBroker:
         result = paper_broker.close_position("EUR_USD")
 
         close_commission = (10000 / 100_000) * paper_broker._commission_per_lot
-        gross_pnl = 10000 * (1.1020 - 1.1000)   # $20
+        gross_pnl = 10000 * (1.1020 - 1.1000)  # $20
         net_pnl = gross_pnl - close_commission
 
         assert result
@@ -170,6 +171,7 @@ class TestPaperTradingBroker:
         """
         monkeypatch.setenv("PAPER_SLIPPAGE_MODEL", "zero")
         from brokers.paper_trading import SlippageModel
+
         paper_broker._slippage = SlippageModel("zero")
 
         paper_broker.market_prices["EUR_USD"] = 1.1000
@@ -188,7 +190,7 @@ class TestPaperTradingBroker:
         result = paper_broker.close_position("EUR_USD")
 
         close_commission = (10000 / 100_000) * paper_broker._commission_per_lot
-        gross_pnl = 10000 * (1.0980 - 1.1000)   # -$20
+        gross_pnl = 10000 * (1.0980 - 1.1000)  # -$20
         net_pnl = gross_pnl - close_commission
 
         assert result

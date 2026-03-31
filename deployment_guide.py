@@ -30,12 +30,12 @@ import socket
 import subprocess
 import sys
 import urllib.parse
-from typing import List, Tuple
+from typing import List
 
 # ── result collectors ─────────────────────────────────────────────────────────
-_errors:   List[str] = []
+_errors: List[str] = []
 _warnings: List[str] = []
-_ok:       List[str] = []
+_ok: List[str] = []
 
 
 def _err(msg: str) -> None:
@@ -55,6 +55,7 @@ def _good(msg: str) -> None:
 
 # ── checks ────────────────────────────────────────────────────────────────────
 
+
 def check_python_version() -> None:
     print("\n── Python version ───────────────────────────────────────────")
     major, minor = sys.version_info[:2]
@@ -72,12 +73,12 @@ def check_python_version() -> None:
 def check_required_env_vars() -> None:
     print("\n── Required environment variables ───────────────────────────")
     required = [
-        ("SECURITY_JWT_SECRET",    "JWT signing secret (min 64 chars)"),
-        ("CONFIG_ENCRYPTION_KEY",  "Config encryption key (min 48 chars)"),
+        ("SECURITY_JWT_SECRET", "JWT signing secret (min 64 chars)"),
+        ("CONFIG_ENCRYPTION_KEY", "Config encryption key (min 48 chars)"),
         ("HOPEFX_KILL_SWITCH_TOKEN", "Kill-switch HMAC token"),
-        ("DATABASE_URL",           "SQLAlchemy DB URL"),
-        ("OANDA_API_KEY",          "OANDA v20 API key"),
-        ("OANDA_ACCOUNT_ID",       "OANDA account ID"),
+        ("DATABASE_URL", "SQLAlchemy DB URL"),
+        ("OANDA_API_KEY", "OANDA v20 API key"),
+        ("OANDA_ACCOUNT_ID", "OANDA account ID"),
     ]
     for key, desc in required:
         val = os.environ.get(key, "")
@@ -92,11 +93,11 @@ def check_required_env_vars() -> None:
 def check_optional_env_vars() -> None:
     print("\n── Optional environment variables ───────────────────────────")
     optional = [
-        ("TELEGRAM_BOT_TOKEN",  "Telegram alerts"),
-        ("TELEGRAM_CHAT_ID",    "Telegram chat ID"),
-        ("SENTRY_DSN",          "Sentry error tracking"),
-        ("REDIS_URL",           "Redis pub/sub URL"),
-        ("SMTP_HOST",           "Email delivery"),
+        ("TELEGRAM_BOT_TOKEN", "Telegram alerts"),
+        ("TELEGRAM_CHAT_ID", "Telegram chat ID"),
+        ("SENTRY_DSN", "Sentry error tracking"),
+        ("REDIS_URL", "Redis pub/sub URL"),
+        ("SMTP_HOST", "Email delivery"),
     ]
     for key, desc in optional:
         val = os.environ.get(key, "")
@@ -123,7 +124,7 @@ def check_kill_switch() -> None:
 def check_ml_model() -> None:
     print("\n── ML model ──────────────────────────────────────────────────")
     model_path = pathlib.Path("ml/saved_models/advanced_oos.pkl")
-    meta_path  = pathlib.Path("ml/saved_models/advanced_oos_meta.json")
+    meta_path = pathlib.Path("ml/saved_models/advanced_oos_meta.json")
 
     if not model_path.exists():
         _err(f"{model_path} not found — run ml/run_training.py first")
@@ -135,9 +136,11 @@ def check_ml_model() -> None:
     try:
         try:
             import joblib
+
             model = joblib.load(model_path)
         except Exception:
             import pickle
+
             with open(model_path, "rb") as fh:
                 model = pickle.load(fh)
         _good(f"advanced_oos.pkl loads cleanly ({type(model).__name__})")
@@ -150,9 +153,10 @@ def check_ml_model() -> None:
 
     if meta_path.exists():
         import json
+
         meta = json.loads(meta_path.read_text())
         oos_acc = meta.get("oos_accuracy", 0)
-        sharpe  = meta.get("sharpe_gate", {}).get("sharpe", 0)
+        sharpe = meta.get("sharpe_gate", {}).get("sharpe", 0)
         _good(f"Model meta: OOS accuracy={oos_acc:.1%}  Sharpe={sharpe:.2f}")
     else:
         _warn(f"{meta_path} not found — cannot verify model metrics")
@@ -160,9 +164,22 @@ def check_ml_model() -> None:
 
 def check_dependencies() -> None:
     print("\n── Python dependencies ───────────────────────────────────────")
-    critical = ["fastapi", "uvicorn", "pydantic", "sqlalchemy", "xgboost",
-                "sklearn", "pandas", "numpy", "redis", "aiohttp", "jwt",
-                "passlib", "structlog", "prometheus_client"]
+    critical = [
+        "fastapi",
+        "uvicorn",
+        "pydantic",
+        "sqlalchemy",
+        "xgboost",
+        "sklearn",
+        "pandas",
+        "numpy",
+        "redis",
+        "aiohttp",
+        "jwt",
+        "passlib",
+        "structlog",
+        "prometheus_client",
+    ]
     for pkg in critical:
         try:
             importlib.import_module(pkg)
@@ -179,7 +196,9 @@ def check_alembic() -> None:
     try:
         result = subprocess.run(
             ["python", "-m", "alembic", "current"],
-            capture_output=True, text=True, timeout=15
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         if result.returncode == 0:
             _good(f"Alembic current: {result.stdout.strip()[:80]}")
@@ -193,7 +212,9 @@ def check_docker() -> None:
     print("\n── Docker ────────────────────────────────────────────────────")
     for cmd in (["docker", "--version"], ["docker", "compose", "version"]):
         try:
-            out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True).strip()
+            out = subprocess.check_output(
+                cmd, stderr=subprocess.DEVNULL, text=True
+            ).strip()
             _good(out[:60])
         except Exception:
             _warn(f"{' '.join(cmd)} not available")
@@ -254,7 +275,9 @@ def check_redis_connectivity() -> None:
         host = parsed.hostname or "localhost"
         port = parsed.port or 6379
         with socket.create_connection((host, port), timeout=5):
-            _good(f"TCP connection to Redis {host}:{port} succeeded (redis-py not installed)")
+            _good(
+                f"TCP connection to Redis {host}:{port} succeeded (redis-py not installed)"
+            )
     except OSError as exc:
         _err(f"Cannot reach Redis at {host}:{port} — {exc}")
 
@@ -285,16 +308,21 @@ def check_disk_space() -> None:
     """Warn if free disk space is below the recommended minimum (20 GB)."""
     print("\n── Disk space ────────────────────────────────────────────────")
     try:
-        stat = pathlib.Path(".").stat()
+        _stat = pathlib.Path(".").stat()
         usage = pathlib.Path(".").resolve()
         import shutil
+
         total, used, free = shutil.disk_usage(usage)
-        free_gb = free / (1024 ** 3)
-        total_gb = total / (1024 ** 3)
+        free_gb = free / (1024**3)
+        total_gb = total / (1024**3)
         if free_gb < 5:
-            _err(f"Only {free_gb:.1f} GB free of {total_gb:.1f} GB — minimum 20 GB recommended")
+            _err(
+                f"Only {free_gb:.1f} GB free of {total_gb:.1f} GB — minimum 20 GB recommended"
+            )
         elif free_gb < 20:
-            _warn(f"{free_gb:.1f} GB free of {total_gb:.1f} GB — 20 GB recommended for ML training")
+            _warn(
+                f"{free_gb:.1f} GB free of {total_gb:.1f} GB — 20 GB recommended for ML training"
+            )
         else:
             _good(f"{free_gb:.1f} GB free of {total_gb:.1f} GB")
     except Exception as exc:
@@ -323,7 +351,10 @@ def check_env_file() -> None:
                 continue
             key, _, val = line.partition("=")
             val = val.strip().strip('"').strip("'")
-            if any(marker in val for marker in ("CHANGE_ME", "CHANGEME", "your_", "<", "TODO")):
+            if any(
+                marker in val
+                for marker in ("CHANGE_ME", "CHANGEME", "your_", "<", "TODO")
+            ):
                 placeholders.append(f"  line {lineno}: {key.strip()}")
 
     if placeholders:
@@ -337,15 +368,18 @@ def check_env_file() -> None:
 
 # ── entry point ───────────────────────────────────────────────────────────────
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="HOPEFX pre-flight deployment checker")
-    parser.add_argument("--strict", action="store_true",
-                        help="Exit 1 on any warning (not just errors)")
+    parser.add_argument(
+        "--strict", action="store_true", help="Exit 1 on any warning (not just errors)"
+    )
     args = parser.parse_args()
 
     # Load .env if present
     try:
         from dotenv import load_dotenv
+
         load_dotenv(override=False)
     except ImportError:
         pass
@@ -369,7 +403,9 @@ def main() -> int:
     check_docker()
 
     print("\n" + "=" * 60)
-    print(f"  Results: {len(_ok)} OK  |  {len(_warnings)} warnings  |  {len(_errors)} errors")
+    print(
+        f"  Results: {len(_ok)} OK  |  {len(_warnings)} warnings  |  {len(_errors)} errors"
+    )
     print("=" * 60)
 
     if _errors:
