@@ -644,17 +644,17 @@ class KYCGateway:
         elif name == "onfido":
             return OnfidoProvider()
         elif name == "mock":
-            # Allowed only in non-production environments.
+            # Allowed only in development/test environments.
             _app_env = os.getenv("APP_ENV", "production").lower()
-            if _app_env == "production":
+            if _app_env in ("production", "staging"):
                 raise RuntimeError(
-                    "KYC_PROVIDER=mock is not permitted in production (APP_ENV=production). "
+                    f"KYC_PROVIDER=mock is not permitted in {_app_env} (APP_ENV={_app_env}). "
                     "Set KYC_PROVIDER=sumsub or KYC_PROVIDER=onfido and configure the "
                     "corresponding API credentials."
                 )
             logger.warning(
                 "KYC_PROVIDER=mock — auto-approving all applicants. "
-                "This is only acceptable in non-production environments."
+                "This is only acceptable in development/test environments."
             )
             return MockKYCProvider()
         else:
