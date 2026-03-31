@@ -121,9 +121,9 @@ def _repo() -> str:
         return GITHUB_REPO
     # Auto-detect from git remote
     try:
-        import subprocess
+        import subprocess  # nosec B404 - list-form git call; no shell=True, no user input
 
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - list-form git call; no shell=True, no user input
             ["git", "remote", "get-url", "origin"],
             capture_output=True,
             text=True,

@@ -314,7 +314,7 @@ Examples:
 
     # ── Advanced mode: delegate to train_advanced.py ──────────────────────────
     if args.advanced or args.smoke:
-        import subprocess
+        import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input
 
         cmd = [
             sys.executable,
@@ -333,7 +333,7 @@ Examples:
             yf_sym = _YF_MAP.get(args.symbol, args.symbol)
             cmd += ["--symbol", yf_sym]
         logger.info("Running advanced training: %s", " ".join(cmd))
-        result = subprocess.run(cmd, check=False)
+        result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user inputcmd, check=False)
         sys.exit(result.returncode)
 
     symbols = [args.symbol] if args.symbol else _DEFAULT_SYMBOLS

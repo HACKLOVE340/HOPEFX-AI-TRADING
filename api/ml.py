@@ -779,7 +779,7 @@ async def trigger_retrain(
 
     def _retrain():
         try:
-            import subprocess
+            import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input
             import sys
 
             script = os.path.join(
@@ -789,7 +789,7 @@ async def trigger_retrain(
                 "train_with_macro.py",
             )
             if os.path.exists(script):
-                subprocess.run(
+                subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
                     [sys.executable, script, "--years", "8"],
                     timeout=3600,
                     capture_output=True,
