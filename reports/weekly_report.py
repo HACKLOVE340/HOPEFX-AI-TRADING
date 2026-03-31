@@ -50,7 +50,7 @@ import math
 import os
 import smtplib
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -63,10 +63,10 @@ logger = logging.getLogger(__name__)
 
 # ── Data source constants ─────────────────────────────────────────────────────
 
-DATA_SOURCE_PAPER_OANDA      = "paper_oanda"       # real OANDA practice account
+DATA_SOURCE_PAPER_OANDA = "paper_oanda"  # real OANDA practice account
 DATA_SOURCE_PAPER_SIMULATION = "paper_simulation"  # internal paper broker sim
-DATA_SOURCE_LIVE             = "live"              # funded live account
-DATA_SOURCE_SEEDED           = "seeded"            # test / seed data
+DATA_SOURCE_LIVE = "live"  # funded live account
+DATA_SOURCE_SEEDED = "seeded"  # test / seed data
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -79,13 +79,13 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 class TradeRecord:
     trade_id: str
     symbol: str
-    side: str          # BUY | SELL
+    side: str  # BUY | SELL
     open_time: datetime
     close_time: datetime
     open_price: float
     close_price: float
     lots: float
-    pnl: float         # realised P&L in account currency
+    pnl: float  # realised P&L in account currency
     pips: float
 
 
@@ -100,11 +100,11 @@ class WeeklyReport:
     total_trades: int
     winning_trades: int
     losing_trades: int
-    win_rate: Optional[float]          # None if < 10 trades
+    win_rate: Optional[float]  # None if < 10 trades
     avg_win: float
     avg_loss: float
     profit_factor: Optional[float]
-    expectancy: float                  # avg P&L per trade
+    expectancy: float  # avg P&L per trade
 
     # Return metrics
     gross_pnl: float
@@ -177,7 +177,7 @@ def _calmar(annual_return: float, max_dd: float) -> Optional[float]:
 
 def _profit_factor(wins: List[float], losses: List[float]) -> Optional[float]:
     gross_win = sum(w for w in wins if w > 0)
-    gross_loss = abs(sum(l for l in losses if l < 0))
+    gross_loss = abs(sum(loss for loss in losses if loss < 0))
     if gross_loss < 1e-10:
         return None
     return round(gross_win / gross_loss, 3)
@@ -213,10 +213,7 @@ class WeeklyReportGenerator:
             week_start = week_end - timedelta(days=7)
 
         # Filter trades to this week
-        week_trades = [
-            t for t in trades
-            if week_start <= t.close_time <= week_end
-        ]
+        week_trades = [t for t in trades if week_start <= t.close_time <= week_end]
 
         wins = [t.pnl for t in week_trades if t.pnl > 0]
         losses = [t.pnl for t in week_trades if t.pnl <= 0]
@@ -232,7 +229,9 @@ class WeeklyReportGenerator:
             daily_returns = np.diff(arr) / np.where(arr[:-1] > 0, arr[:-1], 1.0)
 
         dd = _max_drawdown(eq_values) if eq_values else 0.0
-        annual_return = (gross_pnl / starting_equity) * 52 if starting_equity > 0 else 0.0
+        annual_return = (
+            (gross_pnl / starting_equity) * 52 if starting_equity > 0 else 0.0
+        )
 
         symbols = list({t.symbol for t in week_trades})
 
@@ -254,7 +253,9 @@ class WeeklyReportGenerator:
             expectancy=round(gross_pnl / total, 4) if total > 0 else 0.0,
             gross_pnl=round(gross_pnl, 4),
             net_pnl=round(gross_pnl, 4),
-            total_return_pct=round(gross_pnl / starting_equity * 100, 4) if starting_equity > 0 else 0.0,
+            total_return_pct=round(gross_pnl / starting_equity * 100, 4)
+            if starting_equity > 0
+            else 0.0,
             sharpe_ratio=_sharpe(daily_returns),
             sortino_ratio=_sortino(daily_returns),
             max_drawdown_pct=round(dd * 100, 4),
@@ -265,7 +266,8 @@ class WeeklyReportGenerator:
             data_source=resolved_source,
             note=(
                 "Insufficient trades for statistical significance (< 10)."
-                if total < 10 else ""
+                if total < 10
+                else ""
             ),
         )
 
@@ -361,17 +363,22 @@ def _detect_data_source() -> str:
         if oanda_stamp.exists():
             info = _json.loads(oanda_stamp.read_text())
             account_id = info.get("account_id", "PENDING")
-            if account_id and account_id != "PENDING" and not account_id.startswith("PENDING"):
+            if (
+                account_id
+                and account_id != "PENDING"
+                and not account_id.startswith("PENDING")
+            ):
                 return DATA_SOURCE_PAPER_OANDA
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
 
     try:
         from core.live_trading_gate import live_gate  # type: ignore[import]
+
         if getattr(live_gate, "is_live", False):
             return DATA_SOURCE_LIVE
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
 
     return DATA_SOURCE_PAPER_SIMULATION
 
@@ -386,10 +393,10 @@ def _fmt(val: Optional[float], suffix: str = "", decimals: int = 2) -> str:
 
 
 _DATA_SOURCE_LABELS: Dict[str, str] = {
-    DATA_SOURCE_PAPER_OANDA:      "Paper — OANDA practice account (API-connected)",
+    DATA_SOURCE_PAPER_OANDA: "Paper — OANDA practice account (API-connected)",
     DATA_SOURCE_PAPER_SIMULATION: "Paper — internal simulation (no real fills)",
-    DATA_SOURCE_LIVE:             "LIVE — funded account",
-    DATA_SOURCE_SEEDED:           "TEST/SEEDED — not from real or simulated fills",
+    DATA_SOURCE_LIVE: "LIVE — funded account",
+    DATA_SOURCE_SEEDED: "TEST/SEEDED — not from real or simulated fills",
 }
 
 
@@ -436,10 +443,10 @@ def _render_html(r: WeeklyReport) -> str:
 
     # Data source badge colour
     _source_colors: Dict[str, str] = {
-        DATA_SOURCE_LIVE:             "#22c55e",
-        DATA_SOURCE_PAPER_OANDA:      "#3b82f6",
+        DATA_SOURCE_LIVE: "#22c55e",
+        DATA_SOURCE_PAPER_OANDA: "#3b82f6",
         DATA_SOURCE_PAPER_SIMULATION: "#f59e0b",
-        DATA_SOURCE_SEEDED:           "#ef4444",
+        DATA_SOURCE_SEEDED: "#ef4444",
     }
     source_color = _source_colors.get(r.data_source, "#94a3b8")
     source_label = _source_label(r.data_source)
@@ -555,13 +562,18 @@ async def _run_weekly_report_job() -> None:
     try:
         trades, equity_curve, starting_equity, data_source = await _load_trade_data()
         gen = WeeklyReportGenerator()
-        report = gen.generate(trades, equity_curve, starting_equity, data_source=data_source)
+        report = gen.generate(
+            trades, equity_curve, starting_equity, data_source=data_source
+        )
         gen.save_json(report)
         gen.save_html(report)
         gen.send_email(report)
         logger.info(
             "Weekly report complete: trades=%d pnl=%.2f sharpe=%s source=%s",
-            report.total_trades, report.net_pnl, report.sharpe_ratio, report.data_source,
+            report.total_trades,
+            report.net_pnl,
+            report.sharpe_ratio,
+            report.data_source,
         )
     except Exception as exc:
         logger.error("Weekly report job failed: %s", exc, exc_info=True)
@@ -580,6 +592,7 @@ async def _load_trade_data() -> tuple:
 
     try:
         from app import app_state  # type: ignore[import]
+
         broker = getattr(app_state, "broker", None)
         if broker is None:
             return trades, equity_curve, starting_equity, data_source
@@ -597,18 +610,24 @@ async def _load_trade_data() -> tuple:
         if hasattr(broker, "get_closed_trades"):
             raw = broker.get_closed_trades()
             for t in raw:
-                trades.append(TradeRecord(
-                    trade_id=str(t.get("id", uuid.uuid4())),
-                    symbol=t.get("symbol", ""),
-                    side=t.get("side", "BUY"),
-                    open_time=datetime.fromisoformat(t["open_time"]) if "open_time" in t else datetime.now(timezone.utc),
-                    close_time=datetime.fromisoformat(t["close_time"]) if "close_time" in t else datetime.now(timezone.utc),
-                    open_price=float(t.get("open_price", 0)),
-                    close_price=float(t.get("close_price", 0)),
-                    lots=float(t.get("lots", 0)),
-                    pnl=float(t.get("pnl", 0)),
-                    pips=float(t.get("pips", 0)),
-                ))
+                trades.append(
+                    TradeRecord(
+                        trade_id=str(t.get("id", uuid.uuid4())),
+                        symbol=t.get("symbol", ""),
+                        side=t.get("side", "BUY"),
+                        open_time=datetime.fromisoformat(t["open_time"])
+                        if "open_time" in t
+                        else datetime.now(timezone.utc),
+                        close_time=datetime.fromisoformat(t["close_time"])
+                        if "close_time" in t
+                        else datetime.now(timezone.utc),
+                        open_price=float(t.get("open_price", 0)),
+                        close_price=float(t.get("close_price", 0)),
+                        lots=float(t.get("lots", 0)),
+                        pnl=float(t.get("pnl", 0)),
+                        pips=float(t.get("pips", 0)),
+                    )
+                )
 
         # Load equity curve
         if hasattr(broker, "get_equity_history"):
@@ -636,7 +655,9 @@ if __name__ == "__main__":
     async def _main() -> None:
         trades, equity_curve, starting_equity, data_source = await _load_trade_data()
         gen = WeeklyReportGenerator()
-        report = gen.generate(trades, equity_curve, starting_equity, data_source=data_source)
+        report = gen.generate(
+            trades, equity_curve, starting_equity, data_source=data_source
+        )
         json_path = gen.save_json(report)
         html_path = gen.save_html(report)
         print(_render_text(report))
