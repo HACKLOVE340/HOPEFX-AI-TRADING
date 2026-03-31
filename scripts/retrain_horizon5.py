@@ -72,7 +72,7 @@ import argparse
 import json
 import logging
 import os
-import subprocess
+import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -530,7 +530,7 @@ def run_training(args: argparse.Namespace) -> dict:
         args.horizon,
     )
 
-    result = subprocess.run(cmd, check=False)
+    result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user inputcmd, check=False)
 
     if result.returncode != 0:
         logger.error("train_advanced.py exited with code %d", result.returncode)
