@@ -507,7 +507,7 @@ class RiskManager:
         data_quality: float = 1.0,
         sentiment_score: float = 0.0,
         impact_score: float = 0.0,
-    ) -> "RiskAssessment":
+    ) -> RiskAssessment:
         """Build a rejected RiskAssessment — eliminates repeated kwarg blocks."""
         return RiskAssessment(
             symbol=self._signal_symbol(signal),
