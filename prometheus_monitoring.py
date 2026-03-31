@@ -65,21 +65,23 @@ _prom_counters: dict = {}
 # to REGISTRY._names_to_collectors (a private API) returned the core/metrics.py
 # Counter with 3 labels while the infrastructure layer expected 2 labels,
 # causing silent label-count mismatches on every .inc() call.
-_CORE_METRICS_OWNED: frozenset = frozenset({
-    "hopefx_orders_total",        # core/metrics.py — 3 labels: symbol/side/status
-    "hopefx_active_positions",    # core/metrics.py — no labels
-    "hopefx_pnl_total",           # core/metrics.py — no labels
-    "hopefx_http_requests_total",
-    "hopefx_http_request_duration_seconds",
-    "hopefx_ws_connections_active",
-    "hopefx_auth_attempts_total",
-    "hopefx_aml_blocks_total",
-    "hopefx_reconciler_cycles_total",
-    "hopefx_reconciler_mismatches_total",
-    "hopefx_sharpe_n_trades",
-    "hopefx_sharpe_ratio",
-    "hopefx_sharpe_gate_passed",
-})
+_CORE_METRICS_OWNED: frozenset = frozenset(
+    {
+        "hopefx_orders_total",  # core/metrics.py — 3 labels: symbol/side/status
+        "hopefx_active_positions",  # core/metrics.py — no labels
+        "hopefx_pnl_total",  # core/metrics.py — no labels
+        "hopefx_http_requests_total",
+        "hopefx_http_request_duration_seconds",
+        "hopefx_ws_connections_active",
+        "hopefx_auth_attempts_total",
+        "hopefx_aml_blocks_total",
+        "hopefx_reconciler_cycles_total",
+        "hopefx_reconciler_mismatches_total",
+        "hopefx_sharpe_n_trades",
+        "hopefx_sharpe_ratio",
+        "hopefx_sharpe_gate_passed",
+    }
+)
 
 
 def _lookup_existing_collector(name: str):
@@ -103,7 +105,7 @@ def _lookup_existing_collector(name: str):
                     if desc.name == name:
                         return c
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
     return None
 
 
@@ -243,7 +245,10 @@ def _sync_trading_gauges() -> None:
                 dd_gauge.set(getattr(rm, "current_drawdown", 0.0))
             if max_dd_gauge is not None:
                 max_dd_gauge.set(getattr(rm.config, "max_drawdown_pct", 0.10))
-            if daily_loss_gauge is not None and getattr(rm, "daily_starting_equity", 0) > 0:
+            if (
+                daily_loss_gauge is not None
+                and getattr(rm, "daily_starting_equity", 0) > 0
+            ):
                 daily_loss_pct = abs(rm.daily_pnl) / rm.daily_starting_equity
                 daily_loss_gauge.set(daily_loss_pct)
             if daily_limit_gauge is not None:

@@ -46,6 +46,7 @@ class NewsFilterIntegration:
 
     def filter_events(self, events):
         import logging
+
         log = logging.getLogger(__name__)
         now = datetime.now(timezone.utc)
         upcoming_events = []
@@ -62,7 +63,9 @@ class NewsFilterIntegration:
                     upcoming_events.append(event)
                     self.cache_event(event)
             except (KeyError, ValueError, TypeError) as exc:
-                log.warning("filter_events: skipping malformed event %r: %s", event, exc)
+                log.warning(
+                    "filter_events: skipping malformed event %r: %s", event, exc
+                )
         return upcoming_events
 
     def cache_event(self, event):
@@ -70,7 +73,9 @@ class NewsFilterIntegration:
         try:
             self.redis_client.set(key, json.dumps(event), ex=self.event_cache_duration)
         except Exception as exc:
-            logger.warning("cache_event: failed to cache event %s: %s", event.get("id"), exc)
+            logger.warning(
+                "cache_event: failed to cache event %s: %s", event.get("id"), exc
+            )
 
     def is_trading_paused(self) -> bool:
         """Return True if trading is currently paused due to a high-impact news window.
@@ -83,7 +88,8 @@ class NewsFilterIntegration:
             return bool(self.redis_client.get("hopefx:news_pause"))
         except Exception as exc:  # noqa: BLE001
             logger.warning(
-                "is_trading_paused: Redis unavailable, defaulting to not-paused: %s", exc
+                "is_trading_paused: Redis unavailable, defaulting to not-paused: %s",
+                exc,
             )
             return False
 

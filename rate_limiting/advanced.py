@@ -105,6 +105,7 @@ def _parse_rate(rate_str: str) -> tuple:
 
 # ── In-process sliding-window fallback ───────────────────────────────────────
 
+
 class _InMemoryRateLimiter:
     """
     Asyncio-safe sliding-window rate limiter backed by in-process memory.
@@ -199,6 +200,7 @@ async def _redis_is_allowed(key: str, limit: int, window_seconds: int) -> bool:
 
 # ── FastAPI dependency factory ────────────────────────────────────────────────
 
+
 def rate_limit_dependency(rate_str: str, key_func: Optional[Callable] = None):
     """
     Return a FastAPI dependency that enforces *rate_str* per client IP
@@ -256,10 +258,10 @@ def rate_limit_dependency(rate_str: str, key_func: Optional[Callable] = None):
 
 # ── Convenience pre-built dependencies ───────────────────────────────────────
 
-auth_rate_limit        = rate_limit_dependency(AUTH_RATE)
-trading_rate_limit     = rate_limit_dependency(TRADING_RATE)
+auth_rate_limit = rate_limit_dependency(AUTH_RATE)
+trading_rate_limit = rate_limit_dependency(TRADING_RATE)
 market_data_rate_limit = rate_limit_dependency(MARKET_DATA_RATE)
-admin_rate_limit       = rate_limit_dependency(ADMIN_RATE)
-websocket_rate_limit   = rate_limit_dependency(WEBSOCKET_RATE)
-backtest_rate_limit    = rate_limit_dependency(BACKTEST_RATE)
-withdrawal_rate_limit  = rate_limit_dependency(WITHDRAWAL_RATE)
+admin_rate_limit = rate_limit_dependency(ADMIN_RATE)
+websocket_rate_limit = rate_limit_dependency(WEBSOCKET_RATE)
+backtest_rate_limit = rate_limit_dependency(BACKTEST_RATE)
+withdrawal_rate_limit = rate_limit_dependency(WITHDRAWAL_RATE)

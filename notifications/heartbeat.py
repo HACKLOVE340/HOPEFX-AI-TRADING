@@ -54,12 +54,8 @@ from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-_HEARTBEAT_INTERVAL_HOURS: float = float(
-    os.getenv("HEARTBEAT_INTERVAL_HOURS", "1")
-)
-_HEARTBEAT_ENABLED: bool = (
-    os.getenv("HEARTBEAT_ENABLED", "true").lower() == "true"
-)
+_HEARTBEAT_INTERVAL_HOURS: float = float(os.getenv("HEARTBEAT_INTERVAL_HOURS", "1"))
+_HEARTBEAT_ENABLED: bool = os.getenv("HEARTBEAT_ENABLED", "true").lower() == "true"
 _TELEGRAM_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 _TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
 
@@ -71,6 +67,7 @@ async def _send_telegram(token: str, chat_id: str, text: str) -> bool:
     """Send a Telegram message. Returns True on success."""
     try:
         import aiohttp
+
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {
             "chat_id": chat_id,
@@ -79,11 +76,15 @@ async def _send_telegram(token: str, chat_id: str, text: str) -> bool:
             "disable_web_page_preview": True,
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with session.post(
+                url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
                 if resp.status == 200:
                     return True
                 body = await resp.text()
-                logger.warning("Telegram heartbeat send failed: %d %s", resp.status, body[:200])
+                logger.warning(
+                    "Telegram heartbeat send failed: %d %s", resp.status, body[:200]
+                )
                 return False
     except Exception as exc:
         logger.warning("Telegram heartbeat send error: %s", exc)
@@ -129,7 +130,9 @@ def _build_message(status: Dict[str, Any], uptime_seconds: float) -> str:
 
     alerts_text = ""
     if risk_alerts:
-        alerts_text = "\n⚠️ Risk alerts:\n" + "\n".join(f"  • {a}" for a in risk_alerts[:3])
+        alerts_text = "\n⚠️ Risk alerts:\n" + "\n".join(
+            f"  • {a}" for a in risk_alerts[:3]
+        )
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -197,19 +200,24 @@ class HeartbeatService:
                     status["open_positions"] = int(info.get("open_positions", 0))
                     status["broker"] = getattr(broker, "name", "broker")
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
             try:
                 rm = getattr(self._app_state, "risk_manager", None)
                 if rm:
                     status["daily_pnl"] = float(getattr(rm, "daily_pnl", 0))
-                    status["drawdown_pct"] = float(getattr(rm, "current_drawdown", 0)) * 100
-                    status["risk_alerts"] = getattr(rm, "_halt_reason", None) and [rm._halt_reason] or []
+                    status["drawdown_pct"] = (
+                        float(getattr(rm, "current_drawdown", 0)) * 100
+                    )
+                    status["risk_alerts"] = (
+                        getattr(rm, "_halt_reason", None) and [rm._halt_reason] or []
+                    )
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
             try:
                 from monitoring.trade_logger import get_trade_logger
+
                 tl = get_trade_logger()
                 s = tl.stats
                 if not status.get("equity"):
@@ -218,7 +226,7 @@ class HeartbeatService:
                     status["daily_pnl"] = s.get("daily_pnl", 0)
                 status["drawdown_pct"] = s.get("drawdown_pct", 0)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
         status.setdefault("mode", os.getenv("TRADING_MODE", "paper"))
         return status
@@ -243,14 +251,17 @@ class HeartbeatService:
         self._last_ping = time.monotonic()
         logger.info(
             "Heartbeat ping #%d sent to %d/%d chats",
-            self._ping_count, sent, len(self._chat_ids),
+            self._ping_count,
+            sent,
+            len(self._chat_ids),
         )
 
     def _loop(self) -> None:
         """Main heartbeat loop — runs in daemon thread."""
         logger.info(
             "HeartbeatService started — interval=%.1fh chats=%d",
-            self._interval / 3600, len(self._chat_ids),
+            self._interval / 3600,
+            len(self._chat_ids),
         )
         # Send an immediate startup ping
         self._send_ping()
@@ -307,7 +318,8 @@ class HeartbeatService:
             "interval_hours": self._interval / 3600,
             "last_ping_ago_s": (
                 round(time.monotonic() - self._last_ping, 1)
-                if self._last_ping else None
+                if self._last_ping
+                else None
             ),
             "chat_ids": len(self._chat_ids),
             "token_set": bool(self._token),
