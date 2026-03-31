@@ -317,7 +317,9 @@ class GoldFeedManager:
             except Exception:
                 pass
 
-        # Cache consensus tick to Redis for synchronous consumers
+        # Cache consensus tick to Redis for synchronous consumers.
+        # Use run_in_executor — self._redis is a sync client; calling it
+        # directly inside an async method blocks the event loop.
         if self._redis and self._consensus_tick:
             try:
                 payload = json.dumps({
@@ -333,7 +335,11 @@ class GoldFeedManager:
                     "lineage_id": self._consensus_tick.lineage_id,
                     "epoch":      self._consensus_tick.timestamp.timestamp(),
                 })
-                self._redis.setex("hopefx:dl:tick:XAU_USD", 30, payload)
+                _r, _p = self._redis, payload
+                await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    lambda: _r.setex("hopefx:dl:tick:XAU_USD", 30, _p),
+                )
             except Exception as exc:
                 logger.debug("GoldFeedManager consensus Redis cache error: %s", exc)
 
