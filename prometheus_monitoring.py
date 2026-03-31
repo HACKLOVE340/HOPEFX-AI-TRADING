@@ -147,37 +147,51 @@ def _get_or_create_counter(name: str, description: str):
     return _prom_counters.get(name)
 
 
+def _sync_gauge_collector(name: str, collector) -> None:
+    """Push a single Gauge collector value into prometheus_client."""
+    pg = _get_or_create_gauge(name, collector.description)
+    if pg is not None:
+        pg.set(collector.get_value())
+
+
+def _sync_counter_collector(name: str, collector) -> None:
+    """Push a single Counter collector delta into prometheus_client."""
+    pc = _get_or_create_counter(name, collector.description)
+    if pc is None:
+        return
+    current = collector.get_value()
+    last_key = f"__last_{name}"
+    last = getattr(pc, last_key, 0.0)
+    delta = current - last
+    if delta > 0:
+        pc.inc(delta)
+    setattr(pc, last_key, current)
+
+
+def _sync_all_collectors(registry) -> None:
+    """Iterate registry collectors and push each into prometheus_client."""
+    from infrastructure.metrics import Gauge, Counter  # noqa: PLC0415
+
+    for name, collector in list(registry._collectors.items()):
+        if isinstance(collector, Gauge):
+            _sync_gauge_collector(name, collector)
+        elif isinstance(collector, Counter):
+            _sync_counter_collector(name, collector)
+
+
 async def _sync_loop(interval: float) -> None:
     """Periodically push MetricsRegistry values into prometheus_client objects."""
-    from infrastructure.metrics import get_metrics_registry, Gauge, Counter
+    from infrastructure.metrics import get_metrics_registry  # noqa: PLC0415
 
     registry = get_metrics_registry()
 
     while True:
         try:
-            for name, collector in list(registry._collectors.items()):
-                if isinstance(collector, Gauge):
-                    pg = _get_or_create_gauge(name, collector.description)
-                    if pg is not None:
-                        pg.set(collector.get_value())
-
-                elif isinstance(collector, Counter):
-                    pc = _get_or_create_counter(name, collector.description)
-                    if pc is not None:
-                        current = collector.get_value()
-                        last_key = f"__last_{name}"
-                        last = getattr(pc, last_key, 0.0)
-                        delta = current - last
-                        if delta > 0:
-                            pc.inc(delta)
-                        setattr(pc, last_key, current)
-
+            _sync_all_collectors(registry)
         except Exception as exc:
             logger.warning("prometheus_monitoring sync error: %s", exc)
 
-        # Sync trading-specific gauges (kill switch, broker, drawdown)
         _sync_trading_gauges()
-
         await asyncio.sleep(interval)
 
 

@@ -437,20 +437,7 @@ class KillSwitch:
         # Secondary: plain flag file (written by _activate_internal / external tools)
         if self._flag_file.exists():
             try:
-                content = self._flag_file.read_text()
-                reason = "flag file present at startup"
-                activated_at: Optional[datetime] = None
-                for line in content.splitlines():
-                    if line.startswith("reason="):
-                        reason = line.split("=", 1)[1].strip()
-                    if line.startswith("activated_at="):
-                        try:
-                            activated_at = datetime.fromisoformat(
-                                line.split("=", 1)[1].strip()
-                            )
-                        except ValueError:
-                            pass
-
+                reason, activated_at = self._parse_flag_file()
                 if not _is_production and _is_stale(activated_at):
                     logger.warning(
                         "kill_switch.flag is STALE (activated >24 h ago: %s). "
@@ -474,6 +461,25 @@ class KillSwitch:
                 self._persist_state()
             except Exception as exc:
                 logger.warning("Could not read kill switch flag file: %s", exc)
+
+    def _parse_flag_file(self) -> tuple:
+        """Parse the plain-text flag file and return (reason, activated_at).
+
+        Returns a (str, Optional[datetime]) tuple. Falls back to safe defaults
+        when fields are missing or malformed.
+        """
+        content = self._flag_file.read_text()
+        reason = "flag file present at startup"
+        activated_at: Optional[datetime] = None
+        for line in content.splitlines():
+            if line.startswith("reason="):
+                reason = line.split("=", 1)[1].strip()
+            elif line.startswith("activated_at="):
+                try:
+                    activated_at = datetime.fromisoformat(line.split("=", 1)[1].strip())
+                except ValueError:
+                    pass
+        return reason, activated_at
 
     def _clear_state(self) -> None:
         """

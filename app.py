@@ -379,156 +379,17 @@ async def startup_event():
     try:
         await _registry.start_all(app_state)
         _registry.print_table()
+        _push_state_to_api_modules(app_state)
 
-        # Push app_state into every API module that holds a local reference.
-        _state_modules = [
-            ("api.trading", "set_state"),
-            ("api.admin", "set_state"),
-            ("api.watchlist", "set_state"),
-            ("api.advanced_trading", "set_state"),
-        ]
-        for _mod_name, _fn_name in _state_modules:
-            try:
-                import importlib as _il
-
-                _mod = _il.import_module(_mod_name)
-                _fn = getattr(_mod, _fn_name, None)
-                if _fn is not None:
-                    _fn(app_state)
-                    logger.info("State pushed → %s", _mod_name)
-            except ImportError:
-                pass
-            except Exception as _e:
-                logger.warning("Failed to push state to %s: %s", _mod_name, _e)
-
-        # Mirror alert_engine onto request.app.state so both lookup paths work
         if getattr(app_state, "alert_engine", None) is not None:
             app.state.alert_engine = app_state.alert_engine
 
         apply_persisted_risk_settings()
-
-        # ── Start data layer orchestrator ─────────────────────────────────────
-        # The orchestrator is the single source of truth for all market data.
-        # It starts all gold feeds, news engines, macro calendar, and FRED bridge.
-        # Non-blocking: if it fails, the rest of the app continues normally.
-        try:
-            from data_layer.orchestrator import orchestrator
-
-            asyncio.create_task(
-                orchestrator.start(),
-                name="data_layer_orchestrator",
-            )
-            logger.info("Data layer orchestrator starting in background")
-        except Exception as _dl_exc:
-            logger.warning(
-                "Data layer orchestrator failed to start (non-fatal): %s", _dl_exc
-            )
-
-        # ── Initialise KYC/AML gateway ────────────────────────────────────────
-        # Wires KYCGateway with the ComplianceManager so KYC decisions are
-        # persisted to DB and the audit log is maintained.
-        try:
-            from compliance.kyc_provider import init_kyc_gateway
-
-            _cm = getattr(app_state, "compliance_manager", None)
-            if _cm is not None:
-                init_kyc_gateway(_cm)
-                logger.info("KYCGateway initialised with ComplianceManager")
-            else:
-                from compliance.kyc_provider import get_kyc_gateway
-
-                get_kyc_gateway()  # initialise with no-DB fallback
-                logger.warning(
-                    "KYCGateway initialised without ComplianceManager (no DB)"
-                )
-        except Exception as _kyc_exc:
-            logger.warning("KYCGateway init failed (non-fatal): %s", _kyc_exc)
-
-        # ── Start L2 order book feed ──────────────────────────────────────────
-        # Provides real-time Level 2 depth data for microstructure ML features.
-        # Provider selected by L2_PROVIDER env var (oanda | ibkr | mock).
-        try:
-            from market_data.order_book import get_order_book_feed
-
-            _l2_symbols = os.getenv("L2_SYMBOLS", "XAU_USD,EUR_USD").split(",")
-            _l2_feed = get_order_book_feed()
-            _l2_task = asyncio.create_task(
-                _l2_feed.start([s.strip() for s in _l2_symbols]),
-                name="l2_order_book_feed",
-            )
-            if hasattr(app_state, "background_tasks"):
-                app_state.background_tasks.append(_l2_task)
-            logger.info("L2 order book feed starting for symbols: %s", _l2_symbols)
-
-            # Wire L2 depth into MicrostructureEngine via orchestrator.
-            # Runs a background loop that pushes real bid/ask depth into the
-            # engine every L2_SNAPSHOT_INTERVAL seconds so depth_imbalance
-            # and related ML features reflect real order book state.
-            async def _l2_depth_bridge() -> None:
-                import asyncio as _asyncio
-
-                _interval = float(os.getenv("L2_SNAPSHOT_INTERVAL", "1.0"))
-                while True:
-                    try:
-                        from data_layer.orchestrator import orchestrator as _dl_orch
-
-                        for _sym in [s.strip() for s in _l2_symbols]:
-                            _snap = _l2_feed.get_snapshot(_sym)
-                            if _snap is not None:
-                                _dl_orch._micro.inject_l2_depth(
-                                    symbol=_sym,
-                                    bid_depth=_snap.bid_depth,
-                                    ask_depth=_snap.ask_depth,
-                                )
-                    except Exception as _exc:
-                        logger.debug("L2 depth bridge error: %s", _exc)
-                    await _asyncio.sleep(_interval)
-
-            _l2_bridge_task = asyncio.create_task(
-                _l2_depth_bridge(), name="l2_depth_bridge"
-            )
-            if hasattr(app_state, "background_tasks"):
-                app_state.background_tasks.append(_l2_bridge_task)
-        except Exception as _l2_exc:
-            logger.warning(
-                "L2 order book feed failed to start (non-fatal): %s", _l2_exc
-            )
-
-        # ── Start Sharpe circuit breaker ──────────────────────────────────────
-        # Monitors rolling live Sharpe per model version and gates models out
-        # of production when Sharpe drops below threshold for N consecutive windows.
-        try:
-            from ml.sharpe_circuit_breaker import get_sharpe_cb
-
-            _scb_task = asyncio.create_task(
-                get_sharpe_cb().run(),
-                name="sharpe_circuit_breaker",
-            )
-            if hasattr(app_state, "background_tasks"):
-                app_state.background_tasks.append(_scb_task)
-            logger.info("Sharpe circuit breaker started")
-        except Exception as _scb_exc:
-            logger.warning(
-                "Sharpe circuit breaker failed to start (non-fatal): %s", _scb_exc
-            )
-
-        # ── Start NuclearStreamer price bridge ────────────────────────────────
-        # Subscribes to Finnhub / Twelve Data / Polygon WebSocket streams and
-        # writes validated ticks into the broker price table.
-        # Activates when any of FINNHUB_API_KEY / TWELVE_API_KEY / POLYGON_API_KEY
-        # is set.  OANDA is never used as a price source.
-        try:
-            _bridge_task = asyncio.create_task(
-                _nuclear_price_bridge(app_state),
-                name="nuclear_price_bridge",
-            )
-            if hasattr(app_state, "background_tasks"):
-                app_state.background_tasks.append(_bridge_task)
-            logger.info("nuclear_price_bridge task started")
-        except Exception as _bridge_exc:
-            logger.warning(
-                "nuclear_price_bridge failed to start (non-fatal): %s", _bridge_exc
-            )
+        _start_data_layer_orchestrator(app_state)
+        _init_kyc_gateway(app_state)
+        await _start_l2_feed(app_state)
+        _start_sharpe_circuit_breaker(app_state)
+        _start_nuclear_price_bridge(app_state)
 
         app_state.initialized = True
         log_activity("API server ready")
@@ -538,6 +399,127 @@ async def startup_event():
     except Exception as exc:
         logger.error("Startup failed: %s", exc, exc_info=True)
         raise
+
+
+def _push_state_to_api_modules(state) -> None:
+    """Push app_state into every API module that holds a local reference."""
+    import importlib as _il
+
+    _state_modules = [
+        ("api.trading", "set_state"),
+        ("api.admin", "set_state"),
+        ("api.watchlist", "set_state"),
+        ("api.advanced_trading", "set_state"),
+    ]
+    for _mod_name, _fn_name in _state_modules:
+        try:
+            _mod = _il.import_module(_mod_name)
+            _fn = getattr(_mod, _fn_name, None)
+            if _fn is not None:
+                _fn(state)
+                logger.info("State pushed → %s", _mod_name)
+        except ImportError:
+            pass
+        except Exception as _e:
+            logger.warning("Failed to push state to %s: %s", _mod_name, _e)
+
+
+def _start_data_layer_orchestrator(state) -> None:
+    """Start the data layer orchestrator as a background task (non-fatal)."""
+    try:
+        from data_layer.orchestrator import orchestrator  # noqa: PLC0415
+
+        asyncio.create_task(orchestrator.start(), name="data_layer_orchestrator")
+        logger.info("Data layer orchestrator starting in background")
+    except Exception as _exc:
+        logger.warning("Data layer orchestrator failed to start (non-fatal): %s", _exc)
+
+
+def _init_kyc_gateway(state) -> None:
+    """Wire KYCGateway with ComplianceManager (non-fatal)."""
+    try:
+        from compliance.kyc_provider import init_kyc_gateway, get_kyc_gateway  # noqa: PLC0415
+
+        _cm = getattr(state, "compliance_manager", None)
+        if _cm is not None:
+            init_kyc_gateway(_cm)
+            logger.info("KYCGateway initialised with ComplianceManager")
+        else:
+            get_kyc_gateway()  # initialise with no-DB fallback
+            logger.warning("KYCGateway initialised without ComplianceManager (no DB)")
+    except Exception as _exc:
+        logger.warning("KYCGateway init failed (non-fatal): %s", _exc)
+
+
+async def _start_l2_feed(state) -> None:
+    """Start L2 order book feed and depth bridge (non-fatal)."""
+    try:
+        from market_data.order_book import get_order_book_feed  # noqa: PLC0415
+
+        _l2_symbols = os.getenv("L2_SYMBOLS", "XAU_USD,EUR_USD").split(",")
+        _l2_feed = get_order_book_feed()
+        _l2_task = asyncio.create_task(
+            _l2_feed.start([s.strip() for s in _l2_symbols]),
+            name="l2_order_book_feed",
+        )
+        if hasattr(state, "background_tasks"):
+            state.background_tasks.append(_l2_task)
+        logger.info("L2 order book feed starting for symbols: %s", _l2_symbols)
+
+        _l2_bridge_task = asyncio.create_task(
+            _run_l2_depth_bridge(_l2_feed, _l2_symbols),
+            name="l2_depth_bridge",
+        )
+        if hasattr(state, "background_tasks"):
+            state.background_tasks.append(_l2_bridge_task)
+    except Exception as _exc:
+        logger.warning("L2 order book feed failed to start (non-fatal): %s", _exc)
+
+
+async def _run_l2_depth_bridge(l2_feed, l2_symbols: list) -> None:
+    """Push L2 snapshots into MicrostructureEngine on each interval tick."""
+    from data_layer.orchestrator import orchestrator as _dl_orch  # noqa: PLC0415
+
+    _interval = float(os.getenv("L2_SNAPSHOT_INTERVAL", "1.0"))
+    while True:
+        try:
+            for _sym in [s.strip() for s in l2_symbols]:
+                _snap = l2_feed.get_snapshot(_sym)
+                if _snap is not None:
+                    _dl_orch._micro.inject_l2_depth(
+                        symbol=_sym,
+                        bid_depth=_snap.bid_depth,
+                        ask_depth=_snap.ask_depth,
+                    )
+        except Exception as _exc:
+            logger.debug("L2 depth bridge error: %s", _exc)
+        await asyncio.sleep(_interval)
+
+
+def _start_sharpe_circuit_breaker(state) -> None:
+    """Start Sharpe circuit breaker background task (non-fatal)."""
+    try:
+        from ml.sharpe_circuit_breaker import get_sharpe_cb  # noqa: PLC0415
+
+        _scb_task = asyncio.create_task(get_sharpe_cb().run(), name="sharpe_circuit_breaker")
+        if hasattr(state, "background_tasks"):
+            state.background_tasks.append(_scb_task)
+        logger.info("Sharpe circuit breaker started")
+    except Exception as _exc:
+        logger.warning("Sharpe circuit breaker failed to start (non-fatal): %s", _exc)
+
+
+def _start_nuclear_price_bridge(state) -> None:
+    """Start NuclearStreamer price bridge background task (non-fatal)."""
+    try:
+        _bridge_task = asyncio.create_task(
+            _nuclear_price_bridge(state), name="nuclear_price_bridge"
+        )
+        if hasattr(state, "background_tasks"):
+            state.background_tasks.append(_bridge_task)
+        logger.info("nuclear_price_bridge task started")
+    except Exception as _exc:
+        logger.warning("nuclear_price_bridge failed to start (non-fatal): %s", _exc)
 
 
 async def shutdown_event():
