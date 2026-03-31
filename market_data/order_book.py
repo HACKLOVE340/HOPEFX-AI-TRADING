@@ -49,9 +49,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
@@ -68,9 +67,11 @@ L2_SNAPSHOT_INTERVAL: float = float(os.getenv("L2_SNAPSHOT_INTERVAL", "1.0"))
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class BookLevel:
     """Single price level in the order book."""
+
     price: float
     size: float
 
@@ -80,21 +81,22 @@ class OrderBookSnapshot:
     """
     Point-in-time L2 order book snapshot with derived microstructure signals.
     """
+
     symbol: str
     timestamp: datetime
-    bids: List[BookLevel]   # sorted descending by price
-    asks: List[BookLevel]   # sorted ascending by price
+    bids: List[BookLevel]  # sorted descending by price
+    asks: List[BookLevel]  # sorted ascending by price
     mid_price: float = 0.0
     spread_bps: float = 0.0
 
     # Derived signals (computed on construction)
-    obi: float = 0.0              # order book imbalance [-1, 1]
-    weighted_mid: float = 0.0     # volume-weighted mid price
-    bid_depth: float = 0.0        # total bid volume within L2_DEPTH_BPS
-    ask_depth: float = 0.0        # total ask volume within L2_DEPTH_BPS
-    depth_ratio: float = 1.0      # bid_depth / ask_depth
-    price_pressure: float = 0.0   # obi × spread_bps (signed pressure)
-    cumulative_delta: float = 0.0 # running signed trade flow (updated externally)
+    obi: float = 0.0  # order book imbalance [-1, 1]
+    weighted_mid: float = 0.0  # volume-weighted mid price
+    bid_depth: float = 0.0  # total bid volume within L2_DEPTH_BPS
+    ask_depth: float = 0.0  # total ask volume within L2_DEPTH_BPS
+    depth_ratio: float = 1.0  # bid_depth / ask_depth
+    price_pressure: float = 0.0  # obi × spread_bps (signed pressure)
+    cumulative_delta: float = 0.0  # running signed trade flow (updated externally)
 
     def __post_init__(self) -> None:
         if self.bids and self.asks:
@@ -161,15 +163,19 @@ class OrderBookSnapshot:
             "micro_obi": float(np.clip(self.obi, -1.0, 1.0)),
             "micro_weighted_mid_dev": float(
                 (self.weighted_mid - self.mid_price) / self.mid_price
-                if self.mid_price > 0 else 0.0
+                if self.mid_price > 0
+                else 0.0
             ),
             "micro_bid_depth": float(self.bid_depth),
             "micro_ask_depth": float(self.ask_depth),
             "micro_depth_ratio": float(np.clip(self.depth_ratio, 0.0, 10.0)),
             "micro_depth_imbalance": float(np.clip(self.obi, -1.0, 1.0)),
-            "micro_price_pressure": float(np.clip(self.price_pressure / 100, -1.0, 1.0)),
+            "micro_price_pressure": float(
+                np.clip(self.price_pressure / 100, -1.0, 1.0)
+            ),
             "micro_spread": float(self.asks[0].price - self.bids[0].price)
-            if self.bids and self.asks else 0.0,
+            if self.bids and self.asks
+            else 0.0,
             "micro_spread_bps": float(self.spread_bps),
             "micro_cumulative_delta": float(
                 np.clip(self.cumulative_delta / 10_000, -1.0, 1.0)
@@ -187,7 +193,7 @@ class OrderBook:
     def __init__(self, symbol: str, max_levels: int = L2_DEPTH_LEVELS) -> None:
         self.symbol = symbol
         self.max_levels = max_levels
-        self._bids: Dict[float, float] = {}   # price → size
+        self._bids: Dict[float, float] = {}  # price → size
         self._asks: Dict[float, float] = {}
         self._cumulative_delta: float = 0.0
         self._last_snapshot: Optional[OrderBookSnapshot] = None
@@ -256,8 +262,8 @@ class OrderBook:
         sorted_bids = sorted(self._bids.items(), key=lambda x: -x[0])
         sorted_asks = sorted(self._asks.items(), key=lambda x: x[0])
 
-        bids = [BookLevel(p, s) for p, s in sorted_bids[:self.max_levels]]
-        asks = [BookLevel(p, s) for p, s in sorted_asks[:self.max_levels]]
+        bids = [BookLevel(p, s) for p, s in sorted_bids[: self.max_levels]]
+        asks = [BookLevel(p, s) for p, s in sorted_asks[: self.max_levels]]
 
         snap = OrderBookSnapshot(
             symbol=self.symbol,
@@ -278,6 +284,7 @@ class OrderBook:
 
 
 # ── Provider implementations ──────────────────────────────────────────────────
+
 
 class OandaL2Feed:
     """
@@ -308,6 +315,7 @@ class OandaL2Feed:
         """Start polling L2 snapshots for the given symbols."""
         try:
             import aiohttp
+
             self._session = aiohttp.ClientSession(
                 headers={
                     "Authorization": f"Bearer {self._api_key}",
@@ -371,16 +379,16 @@ class OandaL2Feed:
                             book.apply_snapshot(bids, asks)
                             logger.debug(
                                 "OANDA L2: %s — %d bid levels, %d ask levels",
-                                symbol, len(bids), len(asks),
+                                symbol,
+                                len(bids),
+                                len(asks),
                             )
                     elif resp.status == 429:
                         logger.warning("OANDA L2: rate limited — backing off 30s")
                         await asyncio.sleep(30)
                         continue
                     else:
-                        logger.warning(
-                            "OANDA L2: HTTP %d for %s", resp.status, symbol
-                        )
+                        logger.warning("OANDA L2: HTTP %d for %s", resp.status, symbol)
             except asyncio.CancelledError:
                 return
             except Exception as exc:
@@ -407,14 +415,16 @@ class IBKROrderBookFeed:
     async def start(self, symbols: List[str]) -> None:
         """Connect to TWS and subscribe to market depth."""
         try:
-            from ib_insync import IB, Forex, Contract
+            from ib_insync import IB, Forex, Contract  # noqa: F401
         except ImportError:
             logger.warning("ib_insync not installed — IBKR L2 feed disabled")
             return
 
         try:
             self._ib = IB()
-            await self._ib.connectAsync(self._host, self._port, clientId=self._client_id)
+            await self._ib.connectAsync(
+                self._host, self._port, clientId=self._client_id
+            )
             logger.info("IBKR L2 feed connected to %s:%d", self._host, self._port)
 
             for symbol in symbols:
@@ -425,7 +435,9 @@ class IBKROrderBookFeed:
                     contract = Forex(parts[0] + parts[1])
                     await self._ib.qualifyContractsAsync(contract)
                     ticker = self._ib.reqMktDepth(contract, numRows=L2_DEPTH_LEVELS)
-                    ticker.updateEvent += lambda t, sym=symbol: self._on_depth_update(t, sym)
+                    ticker.updateEvent += lambda t, sym=symbol: self._on_depth_update(
+                        t, sym
+                    )
                     self._tickers[symbol] = ticker
                     logger.info("IBKR L2 subscribed to %s", symbol)
         except Exception as exc:
@@ -465,6 +477,7 @@ class MockL2Feed:
 
     def __init__(self) -> None:
         import os as _os
+
         if _os.getenv("APP_ENV", "production").lower() == "production":
             raise RuntimeError(
                 "MockL2Feed cannot be used in production (APP_ENV=production). "
@@ -479,9 +492,7 @@ class MockL2Feed:
         self._running = True
         for symbol in symbols:
             self._books[symbol] = OrderBook(symbol)
-            task = asyncio.create_task(
-                self._generate(symbol), name=f"l2_mock_{symbol}"
-            )
+            task = asyncio.create_task(self._generate(symbol), name=f"l2_mock_{symbol}")
             self._tasks[symbol] = task
             logger.info("MockL2Feed started for %s (development only)", symbol)
 
@@ -525,6 +536,7 @@ class MockL2Feed:
 
 
 # ── OrderBookFeed facade ──────────────────────────────────────────────────────
+
 
 class OrderBookFeed:
     """

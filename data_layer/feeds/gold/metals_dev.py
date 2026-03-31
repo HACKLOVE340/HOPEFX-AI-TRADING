@@ -15,6 +15,7 @@ Response: {"status":"success","currencies":{"USD":{"XAU":1985.5}}}
 WebSocket: wss://stream.metals.dev/v1/stream?api_key=KEY
 (Paid tier only — falls back to REST polling on free tier)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -27,22 +28,22 @@ from data_layer.types import FeedSource, GoldTick
 logger = logging.getLogger(__name__)
 
 _REST_BASE = "https://api.metals.dev/v1"
-_WS_URL    = "wss://stream.metals.dev/v1/stream"
+_WS_URL = "wss://stream.metals.dev/v1/stream"
 
 
 class MetalsDevFeed(GoldFeedBase):
     """Metals.dev — REST polling with optional WebSocket upgrade."""
 
-    name           = FeedSource.METALS_DEV
-    _api_key_env   = "METALS_DEV_KEY"
-    _base_url      = _REST_BASE
-    _min_interval_s = 10.0   # paid tier supports higher frequency
+    name = FeedSource.METALS_DEV
+    _api_key_env = "METALS_DEV_KEY"
+    _base_url = _REST_BASE
+    _min_interval_s = 10.0  # paid tier supports higher frequency
 
     def __init__(self) -> None:
         super().__init__()
         self._ws_task: Optional[asyncio.Task] = None
         self._latest_tick: Optional[GoldTick] = None
-        self._ws_enabled: bool = False   # set True for paid tier
+        self._ws_enabled: bool = False  # set True for paid tier
 
     async def fetch_tick(self) -> GoldTick:
         if not self.is_configured:
@@ -55,9 +56,9 @@ class MetalsDevFeed(GoldFeedBase):
         data = await self._get(
             f"{_REST_BASE}/latest",
             params={
-                "api_key":  self._api_key,
+                "api_key": self._api_key,
                 "currency": "USD",
-                "unit":     "toz",
+                "unit": "toz",
             },
         )
 
@@ -65,8 +66,8 @@ class MetalsDevFeed(GoldFeedBase):
             raise ValueError(f"Metals.dev error: {data}")
 
         currencies = data.get("currencies", {})
-        usd_block  = currencies.get("USD", {})
-        xau_price  = float(usd_block.get("XAU", 0))
+        usd_block = currencies.get("USD", {})
+        xau_price = float(usd_block.get("XAU", 0))
 
         if xau_price <= 0:
             raise ValueError(f"Metals.dev invalid price: {data}")
@@ -85,7 +86,7 @@ class MetalsDevFeed(GoldFeedBase):
         during the connection window.
         """
         try:
-            import websockets  # type: ignore[import]
+            import websockets  # type: ignore[import]  # noqa: F401
         except ImportError:
             logger.debug("Metals.dev WebSocket: websockets package not installed")
             return
@@ -114,12 +115,10 @@ class MetalsDevFeed(GoldFeedBase):
                     backoff = 1.0  # reset on successful connection
                     async for raw in ws:
                         try:
-                            msg   = json.loads(raw)
+                            msg = json.loads(raw)
                             price = float(msg.get("price", 0))
                             if price > 0:
-                                self._latest_tick = self._make_tick(
-                                    mid=price, raw=msg
-                                )
+                                self._latest_tick = self._make_tick(mid=price, raw=msg)
                                 # Enable WS path only after first valid tick
                                 if not self._ws_enabled:
                                     self._ws_enabled = True
@@ -140,7 +139,8 @@ class MetalsDevFeed(GoldFeedBase):
                 wait = random.uniform(0, min(backoff, _MAX_BACKOFF))
                 logger.warning(
                     "Metals.dev WS disconnected: %s — reconnecting in %.1fs",
-                    exc, wait,
+                    exc,
+                    wait,
                 )
                 self._ws_enabled = False  # fall back to REST while disconnected
                 await asyncio.sleep(wait)

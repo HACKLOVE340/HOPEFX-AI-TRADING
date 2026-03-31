@@ -42,6 +42,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 try:
     from dotenv import load_dotenv
+
     load_dotenv(override=False)
 except ImportError:
     pass
@@ -64,8 +65,9 @@ def run(verbose: bool = False) -> int:
         from alembic import command as alembic_command
         from alembic.config import Config as AlembicConfig
         from alembic.script import ScriptDirectory
-        from alembic.runtime.migration import MigrationContext
+        from alembic.runtime.migration import MigrationContext  # noqa: F401
         from sqlalchemy import create_engine, inspect, text
+
         print(f"{_PASS}  alembic + sqlalchemy importable")
     except ImportError as exc:
         print(f"{_FAIL}  alembic/sqlalchemy not installed: {exc}")
@@ -132,7 +134,9 @@ def run(verbose: bool = False) -> int:
                 failures += 1
             else:
                 with engine.connect() as conn:
-                    row = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
+                    row = conn.execute(
+                        text("SELECT version_num FROM alembic_version")
+                    ).fetchone()
                     current = row[0] if row else None
                 head_rev = script.get_current_head()
                 if current == head_rev:
@@ -182,8 +186,9 @@ def run(verbose: bool = False) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Alembic migration smoke test")
-    parser.add_argument("--verbose", "-v", action="store_true",
-                        help="List each revision before running")
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="List each revision before running"
+    )
     args = parser.parse_args()
     sys.exit(run(verbose=args.verbose))
 

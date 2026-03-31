@@ -412,7 +412,6 @@ print("Feature engineering functions ready")
         boundary in production.
         """
         import io
-        import sys
         import contextlib
 
         stdout_capture = io.StringIO()
