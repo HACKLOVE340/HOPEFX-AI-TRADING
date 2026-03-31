@@ -38,7 +38,6 @@ Usage
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 
 # ─── Data classes ─────────────────────────────────────────────────────────────
@@ -68,7 +67,7 @@ class ExplainResult:
     severity: int
     action: str
     rl_action_label: str
-    historical_analog: Optional[str]
+    historical_analog: str | None
 
 
 # ─── Historical analog database ───────────────────────────────────────────────
@@ -148,7 +147,7 @@ class NuclearExplainabilityEngine:
         rl_action: int,
         rl_loaded: bool,
         meta: dict,
-        risk_data: Optional[dict] = None,
+        risk_data: dict | None = None,
         price: float = 0.0,
     ) -> ExplainResult:
         """
@@ -451,7 +450,7 @@ class NuclearExplainabilityEngine:
 
     # ── Historical analog ─────────────────────────────────────────────────────
 
-    def _get_analog(self, severity: int) -> Optional[str]:
+    def _get_analog(self, severity: int) -> str | None:
         for thresh in sorted(_ANALOGS.keys(), reverse=True):
             if severity >= thresh:
                 event, detail = _ANALOGS[thresh]
@@ -487,7 +486,7 @@ class NuclearExplainabilityEngine:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_explainer_instance: Optional[NuclearExplainabilityEngine] = None
+_explainer_instance: NuclearExplainabilityEngine | None = None
 
 
 def get_explainer() -> NuclearExplainabilityEngine:

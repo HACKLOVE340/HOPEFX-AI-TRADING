@@ -20,8 +20,8 @@ Author: HOPEFX Development Team
 import abc
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, UTC
+from typing import Any
 
 import requests
 
@@ -51,10 +51,10 @@ class NewsArticle:
     source: str
     published_at: datetime
     url: str
-    author: Optional[str] = None
-    content: Optional[str] = None
-    symbols: Optional[list[str]] = None
-    sentiment: Optional[float] = None
+    author: str | None = None
+    content: str | None = None
+    symbols: list[str] | None = None
+    sentiment: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
@@ -74,7 +74,7 @@ class NewsArticle:
 class NewsProvider(abc.ABC):
     """Abstract base class for news data providers."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         self.api_key = api_key
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -107,7 +107,7 @@ class NewsAPIProvider(NewsProvider):
         language: str = "en",
         sort_by: str = "publishedAt",
         page_size: int = 20,
-        from_date: Optional[datetime] = None,
+        from_date: datetime | None = None,
     ) -> list[NewsArticle]:
         """
         Get news from NewsAPI
@@ -196,7 +196,7 @@ class AlphaVantageNewsProvider(NewsProvider):
 
     def get_news(
         self,
-        tickers: Optional[str] = None,
+        tickers: str | None = None,
         topics: str = "financial_markets",
         limit: int = 50,
     ) -> list[NewsArticle]:
@@ -296,7 +296,7 @@ class RSSFeedProvider(NewsProvider):
         self.feeds[name] = url
 
     def get_news(
-        self, feeds: Optional[list[str]] = None, hours_back: int = 24
+        self, feeds: list[str] | None = None, hours_back: int = 24
     ) -> list[NewsArticle]:
         """
         Get news from RSS feeds
@@ -375,8 +375,8 @@ class MultiSourceAggregator:
 
     def __init__(
         self,
-        newsapi_key: Optional[str] = None,
-        alphavantage_key: Optional[str] = None,
+        newsapi_key: str | None = None,
+        alphavantage_key: str | None = None,
         use_rss: bool = True,
     ):
         self.providers = []
@@ -394,8 +394,8 @@ class MultiSourceAggregator:
 
     def get_aggregated_news(
         self,
-        query: Optional[str] = None,
-        symbols: Optional[list[str]] = None,
+        query: str | None = None,
+        symbols: list[str] | None = None,
         hours_back: int = 24,
         deduplicate: bool = True,
     ) -> list[NewsArticle]:

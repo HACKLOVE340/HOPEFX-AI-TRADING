@@ -17,7 +17,7 @@ than False, which is distinct from a genuine failure.
 
 import json
 import logging
-from typing import Any, Optional, Union
+from typing import Any
 
 import psutil
 import requests
@@ -28,9 +28,9 @@ logger = logging.getLogger(__name__)
 class HealthCheckService:
     def __init__(
         self,
-        db_connection: Optional[Any] = None,
-        cache_service: Optional[Any] = None,
-        broker: Optional[Any] = None,
+        db_connection: Any | None = None,
+        cache_service: Any | None = None,
+        broker: Any | None = None,
         api_url: str = "http://localhost:8000",
     ):
         self.db_connection = db_connection
@@ -49,7 +49,7 @@ class HealthCheckService:
             self.alerts.append(f"API check failed: {exc}")
             return False
 
-    def check_database(self, db_connection: Optional[Any] = None) -> bool | str:
+    def check_database(self, db_connection: Any | None = None) -> bool | str:
         conn = db_connection or self.db_connection
         if conn is None:
             return "unconfigured"
@@ -60,7 +60,7 @@ class HealthCheckService:
             self.alerts.append(f"Database check failed: {exc}")
             return False
 
-    def check_cache(self, cache_service: Optional[Any] = None) -> bool | str:
+    def check_cache(self, cache_service: Any | None = None) -> bool | str:
         svc = cache_service or self.cache_service
         if svc is None:
             return "unconfigured"
@@ -72,7 +72,7 @@ class HealthCheckService:
             return False
 
     def check_broker_connections(
-        self, broker: Optional[Any] = None
+        self, broker: Any | None = None
     ) -> bool | str:
         b = broker or self.broker
         if b is None:
@@ -84,7 +84,7 @@ class HealthCheckService:
             self.alerts.append(f"Broker connection check failed: {exc}")
             return False
 
-    def check_market_data_feed(self, market_data_url: Optional[str] = None) -> bool:
+    def check_market_data_feed(self, market_data_url: str | None = None) -> bool:
         return self.check_api(market_data_url or self.api_url)
 
     def monitor_system_resources(self) -> dict:

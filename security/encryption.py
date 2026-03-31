@@ -13,7 +13,6 @@ import base64
 import hashlib
 import secrets
 import logging
-from typing import Optional, Dict, Tuple, List
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,7 +20,7 @@ try:
     from cryptography.fernet import Fernet
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # noqa: F401
 
     CRYPTO_AVAILABLE = True
 except ImportError:
@@ -37,7 +36,7 @@ class EncryptedCredential:
 
     ciphertext: str
     salt: str
-    nonce: Optional[str] = None
+    nonce: str | None = None
     version: int = 1
 
 
@@ -52,10 +51,10 @@ class SecureVault:
     - Automatic key rotation support
     """
 
-    def __init__(self, master_key: Optional[str] = None):
+    def __init__(self, master_key: str | None = None):
         self._master_key = master_key or os.getenv("HOPEFX_MASTER_KEY")
         self._cipher = None
-        self._salt: Optional[bytes] = None
+        self._salt: bytes | None = None
 
         if not self._master_key:
             logger.warning("No master key provided, generating temporary key")
@@ -199,7 +198,7 @@ class APICredentialManager:
             logger.error(f"Failed to store credential: {e}")
             return False
 
-    def get_credential(self, service: str, key_name: str) -> Optional[str]:
+    def get_credential(self, service: str, key_name: str) -> str | None:
         """
         Retrieve decrypted credential
         """
@@ -313,7 +312,7 @@ def generate_secure_token(length: int = 32) -> str:
     return secrets.token_urlsafe(length)
 
 
-def hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
+def hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
     """
     Hash password with salt using PBKDF2
     """
@@ -335,8 +334,8 @@ def verify_password(password: str, key: str, salt: str) -> bool:
 
 
 # Global instances
-_vault: Optional[SecureVault] = None
-_credential_manager: Optional[APICredentialManager] = None
+_vault: SecureVault | None = None
+_credential_manager: APICredentialManager | None = None
 
 
 def get_vault() -> SecureVault:

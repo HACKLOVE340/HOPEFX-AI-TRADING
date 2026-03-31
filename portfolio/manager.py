@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 @dataclass
@@ -37,7 +37,7 @@ class Portfolio:
 class PortfolioManager:
     """Portfolio construction, optimization, and risk analytics."""
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         self.config = config or {}
         self.portfolios: dict[str, Portfolio] = {}
 
@@ -66,7 +66,7 @@ class PortfolioManager:
         self,
         returns: pd.DataFrame,
         method: str = "sharpe",
-        constraints: Optional[dict[str, Any]] = None,
+        constraints: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Optimize portfolio weights.

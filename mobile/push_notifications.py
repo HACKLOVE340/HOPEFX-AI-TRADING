@@ -34,7 +34,7 @@ import base64
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 _device_tokens: dict[str, list[str]] = {}
 
 
-def _load_firebase_admin() -> Optional[Any]:
+def _load_firebase_admin() -> Any | None:
     """
     Attempt to initialise the Firebase Admin SDK.
 
@@ -115,7 +115,7 @@ class PushNotificationManager:
 
     def __init__(self) -> None:
         self.server_key: str = os.getenv("FIREBASE_SERVER_KEY", "")
-        self._admin_messaging: Optional[Any] = None
+        self._admin_messaging: Any | None = None
         self.apns_enabled: bool = False
 
         # Try Admin SDK first (preferred — uses v1 API with OAuth2)
@@ -165,7 +165,7 @@ class PushNotificationManager:
         title: str,
         body: str,
         category: str = "general",
-        data: Optional[dict[str, Any]] = None,
+        data: dict[str, Any] | None = None,
     ) -> bool:
         tokens = self.get_tokens(user_id)
 

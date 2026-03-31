@@ -20,7 +20,6 @@ def create_explainability_router(explainer: "AIExplainer"):
     """
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel
-    from typing import Dict
 
     router = APIRouter(prefix="/api/explainability", tags=["Explainability"])
 

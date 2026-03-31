@@ -11,10 +11,9 @@ Multi-Gateway Payment Processor
 """
 
 import os
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
 from enum import Enum
-from typing import Dict, Optional
 import logging
 import uuid
 
@@ -195,7 +194,7 @@ class PaymentGateway:
 
         return False
 
-    def get_payment_status(self, payment_id: str) -> Optional[PaymentStatus]:
+    def get_payment_status(self, payment_id: str) -> PaymentStatus | None:
         """Get payment status"""
         if payment_id in self.payments:
             return self.payments[payment_id].status

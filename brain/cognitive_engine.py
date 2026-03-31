@@ -15,7 +15,6 @@ and (optionally) sentiment analysis.
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -38,11 +37,11 @@ class CognitiveEngine:
             raise ValueError("data must be a non-empty DataFrame")
         self.data = data.copy()
         self.trends: list[str] = []
-        self.momentum: Optional[float] = None
-        self.volatility: Optional[float] = None
-        self.support: Optional[float] = None
-        self.resistance: Optional[float] = None
-        self.sentiment: Optional[float] = None
+        self.momentum: float | None = None
+        self.volatility: float | None = None
+        self.support: float | None = None
+        self.resistance: float | None = None
+        self.sentiment: float | None = None
 
     # ------------------------------------------------------------------ #
     # Public analysis methods                                              #
@@ -141,7 +140,7 @@ class CognitiveEngine:
         return self.support, self.resistance
 
     def perform_sentiment_analysis(
-        self, sentiment_score: Optional[float] = None
+        self, sentiment_score: float | None = None
     ) -> float:
         """
         Integrate external sentiment score (−1 = very bearish, +1 = very bullish).

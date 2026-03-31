@@ -19,8 +19,7 @@ Inspired by: Bookmap, Sierra Chart, OrderFlow.pro
 """
 
 import logging
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timedelta, UTC
 from dataclasses import dataclass
 from collections import defaultdict
 import math
@@ -36,7 +35,7 @@ class Trade:
     price: float
     size: float
     side: str  # 'buy' or 'sell'
-    trade_id: Optional[str] = None
+    trade_id: str | None = None
 
     @property
     def is_buy(self) -> bool:
@@ -244,7 +243,7 @@ class OrderFlowAnalyzer:
         analysis = analyzer.analyze('XAUUSD')
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize order flow analyzer.
 
@@ -277,8 +276,8 @@ class OrderFlowAnalyzer:
         price: float,
         size: float,
         side: str,
-        timestamp: Optional[datetime] = None,
-        trade_id: Optional[str] = None,
+        timestamp: datetime | None = None,
+        trade_id: str | None = None,
     ):
         """
         Add a trade for analysis.
@@ -327,8 +326,8 @@ class OrderFlowAnalyzer:
     def get_trades(
         self,
         symbol: str,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ) -> list[Trade]:
         """Get trades with optional time filter."""
         trades = self._trades.get(symbol, [])
@@ -355,9 +354,9 @@ class OrderFlowAnalyzer:
         self,
         symbol: str,
         price_buckets: int = 50,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> Optional[VolumeProfile]:
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> VolumeProfile | None:
         """
         Calculate volume profile for a symbol.
 
@@ -380,10 +379,7 @@ class OrderFlowAnalyzer:
         min_price = min(prices)
         max_price = max(prices)
 
-        if min_price == max_price:
-            bucket_size = self._tick_size
-        else:
-            bucket_size = (max_price - min_price) / price_buckets
+        bucket_size = self._tick_size if min_price == max_price else (max_price - min_price) / price_buckets
 
         # Aggregate volume by price level
         level_data: dict[float, dict] = defaultdict(
@@ -512,7 +508,7 @@ class OrderFlowAnalyzer:
 
     def analyze(
         self, symbol: str, lookback_minutes: int = 60
-    ) -> Optional[OrderFlowAnalysis]:
+    ) -> OrderFlowAnalysis | None:
         """
         Perform comprehensive order flow analysis.
 
@@ -658,7 +654,7 @@ class OrderFlowAnalyzer:
 
         return absorptions
 
-    def _analyze_window_for_absorption(self, trades: list[Trade]) -> Optional[dict]:
+    def _analyze_window_for_absorption(self, trades: list[Trade]) -> dict | None:
         """Analyze a time window for absorption."""
         if not trades:
             return None
@@ -953,7 +949,7 @@ def create_order_flow_router(analyzer: OrderFlowAnalyzer):
 
 
 # Global instance for easy access
-_order_flow_analyzer: Optional[OrderFlowAnalyzer] = None
+_order_flow_analyzer: OrderFlowAnalyzer | None = None
 
 
 def get_order_flow_analyzer() -> OrderFlowAnalyzer:

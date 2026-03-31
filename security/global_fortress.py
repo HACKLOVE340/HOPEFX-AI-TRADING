@@ -34,8 +34,8 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import httpx
 import numpy as np
@@ -74,7 +74,7 @@ LLM_FIX_PROMPT = (
 
 # ── Redis client (lazy init) ──────────────────────────────────────────────────
 
-_redis_client: Optional[Any] = None
+_redis_client: Any | None = None
 
 
 async def _get_redis() -> Any:
@@ -98,10 +98,10 @@ async def _get_redis() -> Any:
 
 # ── RL agent (lazy load) ──────────────────────────────────────────────────────
 
-_rl_agent: Optional[Any] = None
+_rl_agent: Any | None = None
 
 
-def _get_rl_agent() -> Optional[Any]:
+def _get_rl_agent() -> Any | None:
     global _rl_agent
     if _rl_agent is None:
         try:
@@ -134,10 +134,10 @@ def _get_rl_agent() -> Optional[Any]:
 # is only used for additional similarity scoring (non-critical path).
 
 _ENCODER_ENABLED: bool = os.getenv("BRAIN_SEMANTIC_ENCODER", "false").lower() == "true"
-_encoder: Optional[Any] = None
+_encoder: Any | None = None
 
 
-def _get_encoder() -> Optional[Any]:
+def _get_encoder() -> Any | None:
     """
     Lazy-load SentenceTransformer.
 
@@ -572,7 +572,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
         redis = await _get_redis()
 
         # Find the matching fix record in the queue
-        fix_record: Optional[dict[str, Any]] = None
+        fix_record: dict[str, Any] | None = None
         if redis:
             raw_list = await redis.lrange("fixes:queue", 0, 99)
             for _i, raw in enumerate(raw_list):
@@ -747,7 +747,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
-_brain_instance: Optional[HOPEFXBrain] = None
+_brain_instance: HOPEFXBrain | None = None
 
 
 async def start_brain(app: FastAPI) -> HOPEFXBrain:
@@ -785,6 +785,6 @@ async def start_brain(app: FastAPI) -> HOPEFXBrain:
     return brain
 
 
-def get_brain() -> Optional[HOPEFXBrain]:
+def get_brain() -> HOPEFXBrain | None:
     """Return the running brain instance (or None if not started)."""
     return _brain_instance

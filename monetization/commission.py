@@ -11,8 +11,7 @@ Commissions are charged based on subscription tier (0.1% - 0.5% per trade).
 """
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Optional, Dict, List
+from datetime import datetime, UTC
 from decimal import Decimal
 from enum import Enum
 
@@ -58,7 +57,7 @@ class Commission:
         self.currency = currency
         self.status = status
         self.created_at = datetime.now(UTC)
-        self.collected_at: Optional[datetime] = None
+        self.collected_at: datetime | None = None
 
     def mark_collected(self) -> None:
         """Mark commission as collected"""
@@ -160,7 +159,7 @@ class CommissionTracker:
         commission.mark_collected()
         return True
 
-    def get_commission(self, commission_id: str) -> Optional[Commission]:
+    def get_commission(self, commission_id: str) -> Commission | None:
         """Get commission by ID"""
         return self._commissions.get(commission_id)
 
@@ -172,7 +171,7 @@ class CommissionTracker:
         ]
 
     def get_user_total_commissions(
-        self, user_id: str, status: Optional[CommissionStatus] = None
+        self, user_id: str, status: CommissionStatus | None = None
     ) -> Decimal:
         """Get total commissions for a user"""
         commissions = self.get_user_commissions(user_id)
@@ -184,7 +183,7 @@ class CommissionTracker:
         return Decimal(str(total))
 
     def get_pending_commissions(
-        self, user_id: Optional[str] = None
+        self, user_id: str | None = None
     ) -> list[Commission]:
         """Get pending commissions"""
         if user_id:
@@ -198,7 +197,7 @@ class CommissionTracker:
         ]
 
     def get_collected_commissions(
-        self, user_id: Optional[str] = None
+        self, user_id: str | None = None
     ) -> list[Commission]:
         """Get collected commissions"""
         if user_id:
@@ -211,12 +210,9 @@ class CommissionTracker:
             if c.status == CommissionStatus.COLLECTED
         ]
 
-    def get_commission_stats(self, user_id: Optional[str] = None) -> dict:
+    def get_commission_stats(self, user_id: str | None = None) -> dict:
         """Get commission statistics"""
-        if user_id:
-            commissions = self.get_user_commissions(user_id)
-        else:
-            commissions = list(self._commissions.values())
+        commissions = self.get_user_commissions(user_id) if user_id else list(self._commissions.values())
 
         total_commissions = len(commissions)
         pending = sum(1 for c in commissions if c.status == CommissionStatus.PENDING)
@@ -252,19 +248,16 @@ class CommissionTracker:
 
     def get_monthly_commissions(
         self,
-        user_id: Optional[str] = None,
-        year: Optional[int] = None,
-        month: Optional[int] = None,
+        user_id: str | None = None,
+        year: int | None = None,
+        month: int | None = None,
     ) -> dict:
         """Get monthly commission report"""
         now = datetime.now(UTC)
         year = year or now.year
         month = month or now.month
 
-        if user_id:
-            commissions = self.get_user_commissions(user_id)
-        else:
-            commissions = list(self._commissions.values())
+        commissions = self.get_user_commissions(user_id) if user_id else list(self._commissions.values())
 
         monthly_commissions = [
             c

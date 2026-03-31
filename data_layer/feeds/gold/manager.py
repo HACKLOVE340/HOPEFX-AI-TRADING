@@ -31,8 +31,7 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, UTC
 
 from data_layer.feeds.gold.base import CircuitState, GoldFeedBase
 from data_layer.feeds.gold.goldapi import GoldAPIFeed
@@ -42,6 +41,7 @@ from data_layer.feeds.gold.metals_dev import MetalsDevFeed
 from data_layer.feeds.gold.commodity_api import CommodityAPIFeed
 from data_layer.quality.engine import dqe
 from data_layer.types import FeedSource, GoldTick, TickQuality
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ class GoldFeedManager:
             FeedSource.COMMODITY_API: CommodityAPIFeed(),
         }
         self._latest: dict[FeedSource, GoldTick] = {}
-        self._consensus_tick: Optional[GoldTick] = None
+        self._consensus_tick: GoldTick | None = None
         self._redis = redis_client
         self._tasks: list[asyncio.Task] = []
         self._running = False
@@ -310,15 +310,11 @@ class GoldFeedManager:
         self._last_consensus_at = time.time()
 
         if self._prom_consensus_price:
-            try:
+            with contextlib.suppress(Exception):
                 self._prom_consensus_price.set(consensus_mid)
-            except Exception:  # nosec B110 - Prometheus metric failure must not crash feed
-                pass
         if self._prom_active_sources:
-            try:
+            with contextlib.suppress(Exception):
                 self._prom_active_sources.set(len(live))
-            except Exception:  # nosec B110 - Prometheus metric failure must not crash feed
-                pass
 
         # Cache consensus tick to Redis for synchronous consumers.
         # Use run_in_executor — self._redis is a sync client; calling it
@@ -384,7 +380,7 @@ class GoldFeedManager:
 
     # ── Public accessors ──────────────────────────────────────────────────────
 
-    def get_latest_tick(self, prefer_consensus: bool = True) -> Optional[GoldTick]:
+    def get_latest_tick(self, prefer_consensus: bool = True) -> GoldTick | None:
         """
         Return the best available tick.
 
@@ -401,7 +397,7 @@ class GoldFeedManager:
                 return tick
         return None
 
-    def get_source_tick(self, source: FeedSource) -> Optional[GoldTick]:
+    def get_source_tick(self, source: FeedSource) -> GoldTick | None:
         return self._latest.get(source)
 
     def active_sources(self) -> list[FeedSource]:

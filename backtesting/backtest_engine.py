@@ -12,7 +12,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 
 @dataclass
@@ -54,7 +53,7 @@ class BacktestEngine:
         initial_balance: float = 100_000.0,
         position_size_pct: float = 0.10,
         commission_pct: float = 0.0035,  # 35 bps — realistic XAUUSD spread + commission
-        overnight_rate_annual: Optional[float] = None,
+        overnight_rate_annual: float | None = None,
         bars_per_day: int = 24,  # 24 for H1, 4 for H4, 1 for D1
     ):
         self.initial_balance = initial_balance

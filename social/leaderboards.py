@@ -7,7 +7,6 @@
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 
 @dataclass
@@ -49,7 +48,7 @@ class LeaderboardManager:
             )
 
     def get_leaderboard(
-        self, category: str, limit: Optional[int] = None
+        self, category: str, limit: int | None = None
     ) -> list[LeaderboardEntry]:
         if category not in self._data:
             return []

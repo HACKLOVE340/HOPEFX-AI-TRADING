@@ -51,9 +51,8 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -297,7 +296,7 @@ def backtest_symbol(
 
     # OOS predictions
     proba = model.predict_proba(X_oos)[:, 1]
-    preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal
+    _preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal
 
     # Align OOS prices for PnL calculation
     oos_close = ohlcv["close"].reindex(X_oos.index)
@@ -420,7 +419,7 @@ def _detect_sharpe_outliers(symbol_results: list[dict]) -> tuple[list[str], list
 
 
 def _pool_pnls(
-    symbol_results: list[dict], exclude: Optional[list[str]] = None
+    symbol_results: list[dict], exclude: list[str] | None = None
 ) -> tuple[np.ndarray, int]:
     """
     Pool per-trade P&Ls across symbols, optionally excluding named symbols.
@@ -450,7 +449,7 @@ def _pool_pnls(
         if n == 0:
             continue
 
-        if "trades" in r and r["trades"]:
+        if r.get("trades"):
             # Exact per-trade P&Ls — only accepted path
             all_pnls.extend([t["pnl_pct"] for t in r["trades"]])
             n_total += n
@@ -615,7 +614,7 @@ def run_backtest(
     oos_frac: float = 0.3,
     target_n: int = 600,
     smoke: bool = False,
-    symbols: Optional[list] = None,
+    symbols: list | None = None,
     extended: bool = False,
 ) -> dict:
     """Run multi-symbol backtest and return full report.

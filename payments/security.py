@@ -9,10 +9,9 @@ Security Module
 Handles 2FA, KYC verification, transaction limits, and fraud detection.
 """
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from decimal import Decimal
 from enum import Enum
-from typing import Dict, Optional, List, Tuple
 from dataclasses import dataclass
 import logging
 
@@ -36,7 +35,7 @@ class KYCInfo:
 
     user_id: str
     level: KYCLevel
-    verified_at: Optional[datetime] = None
+    verified_at: datetime | None = None
     documents: dict[str, str] = None
 
     def __post_init__(self):
@@ -145,7 +144,7 @@ class SecurityManager:
         return is_valid
 
     def set_kyc_level(
-        self, user_id: str, level: KYCLevel, documents: Optional[dict[str, str]] = None
+        self, user_id: str, level: KYCLevel, documents: dict[str, str] | None = None
     ) -> None:
         """
         Set KYC level for user
@@ -189,7 +188,7 @@ class SecurityManager:
 
     def check_transaction_limit(
         self, user_id: str, amount: Decimal
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Check if transaction is within limits
 
@@ -256,7 +255,7 @@ class SecurityManager:
 
     def validate_transaction(
         self, user_id: str, amount: Decimal, transaction_type: str
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Validate if transaction is allowed
 
@@ -294,7 +293,7 @@ class SecurityManager:
         return True, None
 
     def check_suspicious_activity(
-        self, user_id: str, amount: Decimal, ip_address: Optional[str] = None
+        self, user_id: str, amount: Decimal, ip_address: str | None = None
     ) -> bool:
         """
         Check for suspicious activity
@@ -324,8 +323,7 @@ class SecurityManager:
             return True
 
         # Check IP whitelist if configured
-        if ip_address and user_id in self.ip_whitelist:
-            if ip_address not in self.ip_whitelist[user_id]:
+        if ip_address and user_id in self.ip_whitelist and ip_address not in self.ip_whitelist[user_id]:
                 logger.warning(f"Suspicious: Unknown IP for user {user_id}")
                 return True
 

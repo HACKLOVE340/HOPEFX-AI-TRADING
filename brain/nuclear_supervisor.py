@@ -53,7 +53,7 @@ import asyncio
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -187,9 +187,9 @@ class NuclearHopeFXSupervisor:
 
     def __init__(
         self,
-        model_path: Optional[str | Path] = None,
-        wordmap_path: Optional[str | Path] = None,
-        vecnorm_path: Optional[str | Path] = None,
+        model_path: str | Path | None = None,
+        wordmap_path: str | Path | None = None,
+        vecnorm_path: str | Path | None = None,
         cooldown_seconds: int = 60,
         auto_resume_seconds: int = 300,
     ) -> None:
@@ -225,7 +225,7 @@ class NuclearHopeFXSupervisor:
 
     # ── RL agent loader ───────────────────────────────────────────────────────
 
-    def _load_rl_agent(self) -> Optional[Any]:
+    def _load_rl_agent(self) -> Any | None:
         """Load the trained PPO model. Returns None if unavailable."""
         if not _SB3_AVAILABLE:
             logger.warning("RL agent disabled — stable-baselines3 not installed")
@@ -249,7 +249,7 @@ class NuclearHopeFXSupervisor:
             )
             return None
 
-    def _load_vec_normalize(self) -> Optional[Any]:
+    def _load_vec_normalize(self) -> Any | None:
         """
         Load the VecNormalize statistics saved alongside the PPO model.
 
@@ -392,7 +392,7 @@ class NuclearHopeFXSupervisor:
         in_cooldown = (now - self._last_trigger_ts) < self._cooldown_seconds
 
         # ── Step 4: Decide action ─────────────────────────────────────────────
-        rl_action: Optional[int] = None
+        rl_action: int | None = None
         action_taken: str = "normal"
 
         if self.rl_agent is not None:
@@ -711,7 +711,7 @@ class NuclearHopeFXSupervisor:
 
     # ── Manual controls ───────────────────────────────────────────────────────
 
-    async def manual_resume(self, deactivation_token: Optional[str] = None) -> None:
+    async def manual_resume(self, deactivation_token: str | None = None) -> None:
         """
         Manually resume trading and reset nuclear level.
 
@@ -802,12 +802,12 @@ class NuclearHopeFXSupervisor:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_supervisor_instance: Optional[NuclearHopeFXSupervisor] = None
+_supervisor_instance: NuclearHopeFXSupervisor | None = None
 
 
 def get_nuclear_supervisor(
-    model_path: Optional[str] = None,
-    wordmap_path: Optional[str] = None,
+    model_path: str | None = None,
+    wordmap_path: str | None = None,
 ) -> NuclearHopeFXSupervisor:
     """Return the module-level singleton, creating it on first call."""
     global _supervisor_instance

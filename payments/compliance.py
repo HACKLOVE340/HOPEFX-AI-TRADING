@@ -9,10 +9,9 @@ Compliance Module
 AML (Anti-Money Laundering) monitoring and regulatory compliance.
 """
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from decimal import Decimal
 from enum import Enum
-from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 import logging
 
@@ -34,13 +33,13 @@ class AMLCheck:
 
     check_id: str
     user_id: str
-    transaction_id: Optional[str]
+    transaction_id: str | None
     check_type: str
     risk_level: RiskLevel
     reason: str
     checked_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     resolved: bool = False
-    resolution_notes: Optional[str] = None
+    resolution_notes: str | None = None
 
 
 @dataclass
@@ -72,10 +71,10 @@ class ComplianceManager:
     def run_aml_check(
         self,
         user_id: str,
-        transaction_id: Optional[str],
+        transaction_id: str | None,
         amount: Decimal,
         transaction_type: str,
-    ) -> Optional[AMLCheck]:
+    ) -> AMLCheck | None:
         """
         Run AML check on transaction
 
@@ -151,7 +150,7 @@ class ComplianceManager:
         self,
         check_id: str,
         user_id: str,
-        transaction_id: Optional[str],
+        transaction_id: str | None,
         check_type: str,
         risk_level: RiskLevel,
         reason: str,

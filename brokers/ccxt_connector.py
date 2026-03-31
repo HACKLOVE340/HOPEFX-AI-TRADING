@@ -26,8 +26,8 @@ Usage:
 """
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 from brokers.base import (
     AccountInfo,
@@ -61,7 +61,7 @@ _TF_MAP = {
 }
 
 
-def _ts(ms: Optional[int]) -> Optional[datetime]:
+def _ts(ms: int | None) -> datetime | None:
     if ms is None:
         return None
     return datetime.fromtimestamp(ms / 1000, tz=UTC)
@@ -136,8 +136,8 @@ class CCXTConnector(BrokerConnector):
         side: OrderSide,
         order_type: OrderType,
         quantity: float,
-        price: Optional[float] = None,
-        stop_price: Optional[float] = None,
+        price: float | None = None,
+        stop_price: float | None = None,
         **kwargs,
     ) -> Order:
         self._require_connected()
@@ -172,7 +172,7 @@ class CCXTConnector(BrokerConnector):
             logger.error("Cancel order %s failed: %s", order_id, exc)
             return False
 
-    def get_order(self, order_id: str, symbol: str = None) -> Optional[Order]:
+    def get_order(self, order_id: str, symbol: str = None) -> Order | None:
         self._require_connected()
         try:
             raw = self._exchange.fetch_order(order_id, symbol)

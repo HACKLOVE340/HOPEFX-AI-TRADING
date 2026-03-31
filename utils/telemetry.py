@@ -12,8 +12,8 @@ Production-grade observability with Prometheus/Grafana integration
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Callable, Dict, List
+from datetime import datetime, UTC
+from collections.abc import Callable
 
 import numpy as np
 

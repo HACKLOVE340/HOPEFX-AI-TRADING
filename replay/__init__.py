@@ -26,9 +26,9 @@ from replay.router import create_replay_router
 
 __all__ = [
     "ChartReplayEngine",
+    "ReplayBar",
+    "ReplaySession",
     "ReplaySpeed",
     "ReplayState",
-    "ReplaySession",
-    "ReplayBar",
     "create_replay_router",
 ]

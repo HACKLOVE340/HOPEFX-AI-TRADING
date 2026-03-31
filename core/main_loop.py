@@ -40,8 +40,7 @@ import os
 import pathlib
 import signal
 import sys
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import datetime, UTC
 
 from dotenv import load_dotenv
 
@@ -79,7 +78,7 @@ class MainLoop:
 
         self._tasks: list[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
-        self._start_time: Optional[datetime] = None
+        self._start_time: datetime | None = None
 
     # ── entry point ───────────────────────────────────────────────────────────
 

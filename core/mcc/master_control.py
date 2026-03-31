@@ -15,9 +15,9 @@ import sys
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
@@ -60,7 +60,7 @@ class MasterControlCore:
     - Heatmap analysis
     """
 
-    def __init__(self, config: Optional[MCCConfig] = None):
+    def __init__(self, config: MCCConfig | None = None):
         self.config = config or MCCConfig()
 
         print("╔══════════════════════════════════════════════════╗")
@@ -69,8 +69,8 @@ class MasterControlCore:
         print("╚══════════════════════════════════════════════════╝")
 
         # Your existing components
-        self.config_manager: Optional[ConfigManager] = None
-        self.cache: Optional[MarketDataCache] = None
+        self.config_manager: ConfigManager | None = None
+        self.cache: MarketDataCache | None = None
         self.db_session = None
 
         # Strategy management
@@ -223,10 +223,7 @@ class MasterControlCore:
             return False
 
         # Check correlation (don't add to correlated position)
-        if self._is_correlated_signal(strategy_name, signal):
-            return False
-
-        return True
+        return not self._is_correlated_signal(strategy_name, signal)
 
     def _is_correlated_signal(self, strategy_name: str, signal: StrategySignal) -> bool:
         """
@@ -245,7 +242,7 @@ class MasterControlCore:
                 continue
 
             # Direction match: both strategies want the same side
-            last_sig: Optional[StrategySignal] = self._latest_signals.get(name)
+            last_sig: StrategySignal | None = self._latest_signals.get(name)
             if last_sig is None or last_sig.action != signal.action:
                 continue
 
@@ -293,7 +290,7 @@ class MasterControlCore:
         total_weight = 0.0
 
         for name in self.active_strategies:
-            sig: Optional[StrategySignal] = self._latest_signals.get(name)
+            sig: StrategySignal | None = self._latest_signals.get(name)
             if sig is None:
                 continue
             action = sig.action if sig.action in vote_weights else "HOLD"
@@ -341,8 +338,8 @@ class MasterControlCore:
         self,
         symbol: str,
         price: Decimal,
-        bid: Optional[Decimal] = None,
-        ask: Optional[Decimal] = None,
+        bid: Decimal | None = None,
+        ask: Decimal | None = None,
     ):
         """
         Call this from your existing price feed handler.
@@ -382,10 +379,7 @@ class MasterControlCore:
         trend = sum(returns) / len(returns)
 
         if volatility > 0.001:  # High volatility threshold
-            if abs(trend) > 0.0005:
-                new_regime = "trending_up" if trend > 0 else "trending_down"
-            else:
-                new_regime = "volatile"
+            new_regime = ("trending_up" if trend > 0 else "trending_down") if abs(trend) > 0.0005 else "volatile"
         else:
             new_regime = "ranging"
 

@@ -50,9 +50,10 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -323,7 +324,7 @@ class LiveTradingGate:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_gate: Optional[LiveTradingGate] = None
+_gate: LiveTradingGate | None = None
 
 
 def get_gate() -> LiveTradingGate:

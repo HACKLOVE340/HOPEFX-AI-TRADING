@@ -11,7 +11,7 @@ FastAPI application with logging, health checks, and metrics
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Optional
+from typing import Any
 
 try:
     from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
@@ -27,6 +27,7 @@ except ImportError:
 from infrastructure.health import HealthStatus, get_health_checker
 from infrastructure.logging import get_logger
 from infrastructure.metrics import get_metrics_registry
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class ConfigUpdate(BaseModel):
     value: Any
 
 
-def create_api_app(trading_app=None) -> Optional[Any]:
+def create_api_app(trading_app=None) -> Any | None:
     """Create FastAPI application"""
     if not FASTAPI_AVAILABLE:
         return None
@@ -82,10 +83,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
     _MAX_QTY = float(os.getenv("MAX_ORDER_QUANTITY", "100.0"))
 
     # ── Health checker resolved before lifespan ───────────────────────────────
-    if trading_app:
-        health_checker = get_health_checker(trading_app)
-    else:
-        health_checker = get_health_checker()
+    health_checker = get_health_checker(trading_app) if trading_app else get_health_checker()
 
     # ── Lifespan defined before FastAPI() so it can be passed at construction ─
     @asynccontextmanager
@@ -171,10 +169,8 @@ def create_api_app(trading_app=None) -> Optional[Any]:
                 logger.debug("Suppressed exception: %s", _exc)
         if _nuclear_stream_task and not _nuclear_stream_task.done():
             _nuclear_stream_task.cancel()
-            try:
+            with contextlib.suppress((TimeoutError, asyncio.CancelledError)):
                 await asyncio.wait_for(_nuclear_stream_task, timeout=3.0)
-            except (TimeoutError, asyncio.CancelledError):
-                pass
         logger.info("API server shutting down...")
         health_checker.stop_monitoring()
 

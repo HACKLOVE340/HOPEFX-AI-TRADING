@@ -38,8 +38,8 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, UTC
+from typing import Any
 
 
 from execution.algo_orders import AlgoOrderManager, get_algo_manager
@@ -120,8 +120,7 @@ class BrokerState:
             )
 
     def check_circuit_reset(self) -> None:
-        if self.circuit_open:
-            if time.monotonic() - self.circuit_open_at > _CB_RESET_S:
+        if self.circuit_open and time.monotonic() - self.circuit_open_at > _CB_RESET_S:
                 self.circuit_open = False
                 self.error_times = []
                 logger.warning("Circuit breaker RESET for broker=%s", self.broker_id)
@@ -195,7 +194,7 @@ class SmartRouter:
     def __init__(
         self,
         lineage_store=None,
-        algo_manager: Optional[AlgoOrderManager] = None,
+        algo_manager: AlgoOrderManager | None = None,
     ) -> None:
         self._lineage: Any = lineage_store
         self._brokers: dict[str, Any] = {}  # broker_id → broker instance
@@ -457,7 +456,7 @@ class SmartRouter:
         impact_score: float,
         direction: str,
         ofi: float,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Return rejection reason string if order should not be routed.
         Return None if routing should proceed.

@@ -21,8 +21,8 @@ All write endpoints require admin role.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -75,21 +75,21 @@ class MutationResultOut(BaseModel):
 
 
 class ChaosStatusResponse(BaseModel):
-    chaos_last_run: Optional[str]
-    chaos_passed: Optional[int]
-    chaos_failed: Optional[int]
-    mutation_score: Optional[float]
-    mutation_passed: Optional[bool]
-    mutation_engine: Optional[str]
-    mutation_last_run: Optional[str]
+    chaos_last_run: str | None
+    chaos_passed: int | None
+    chaos_failed: int | None
+    mutation_score: float | None
+    mutation_passed: bool | None
+    mutation_engine: str | None
+    mutation_last_run: str | None
 
 
 # ── In-memory state (replaced on each run) ───────────────────────────────────
 
 _last_chaos_results: list[dict] = []
-_last_chaos_run_at: Optional[str] = None
+_last_chaos_run_at: str | None = None
 _mutation_running: bool = False
-_last_mutation_report: Optional[dict] = None
+_last_mutation_report: dict | None = None
 
 
 # ── Dependency: get ChaosController from app state ───────────────────────────
@@ -240,7 +240,7 @@ async def get_chaos_results() -> list[ScenarioResultOut]:
 async def run_mutation_tests(
     request: Request,
     background_tasks: BackgroundTasks,
-    modules: Optional[str] = None,
+    modules: str | None = None,
     runner: Any = Depends(_get_mutation_runner),
 ) -> MutationRunResponse:
     """
@@ -252,7 +252,7 @@ async def run_mutation_tests(
     Returns immediately with run_id. Poll /api/chaos/mutation/results
     for completion.
     """
-    global _mutation_running
+    global _mutation_running  # noqa: PLW0602
 
     if _mutation_running:
         raise HTTPException(
@@ -305,7 +305,7 @@ async def run_mutation_tests(
 
 
 @router.get("/mutation/results", response_model=Optional[MutationResultOut])
-async def get_mutation_results() -> Optional[MutationResultOut]:
+async def get_mutation_results() -> MutationResultOut | None:
     """Return the last mutation test report, or null if none has run."""
     if _last_mutation_report is None:
         return None

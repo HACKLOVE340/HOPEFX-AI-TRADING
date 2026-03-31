@@ -46,7 +46,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ class HedgePosition:
     units: float
     direction: str  # "short" or "long"
     opened_at: float = field(default_factory=time.time)
-    order_id: Optional[str] = None
+    order_id: str | None = None
 
 
 @dataclass
@@ -128,8 +128,8 @@ class RiskOrchestrator:
         self,
         default_max_risk: float = 1.0,
         hedge_units: float = 1_000.0,
-        broker: Optional[Any] = None,
-        state_file: Optional[Any] = None,
+        broker: Any | None = None,
+        state_file: Any | None = None,
     ) -> None:
         self._max_risk: float = float(default_max_risk)
         self._hedge_units = hedge_units
@@ -223,7 +223,7 @@ class RiskOrchestrator:
         self._broker = broker
         logger.info("RiskOrchestrator: broker injected (%s)", type(broker).__name__)
 
-    def _get_broker(self) -> Optional[Any]:
+    def _get_broker(self) -> Any | None:
         """Lazy-load broker from hopefx_engine if not injected."""
         if self._broker is not None:
             return self._broker
@@ -327,7 +327,7 @@ class RiskOrchestrator:
             logger.warning("RiskOrchestrator: activating hedge mode on %s", symbol)
 
             broker = self._get_broker()
-            order_id: Optional[str] = None
+            order_id: str | None = None
 
             if broker is not None:
                 try:
@@ -513,7 +513,7 @@ def create_orchestrator_router(orchestrator_instance: RiskOrchestrator):
                            prefix="/risk/orchestrator", tags=["risk"])
     """
     try:
-        from fastapi import APIRouter, HTTPException
+        from fastapi import APIRouter, HTTPException  # noqa: F401
         from pydantic import BaseModel, Field
     except ImportError:
         return None

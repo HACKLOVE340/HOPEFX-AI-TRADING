@@ -9,9 +9,8 @@ Ethereum Payment Integration
 Handles Ethereum (ETH) deposits and withdrawals.
 """
 
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Dict, Optional
 import logging
 import hashlib
 
@@ -55,7 +54,7 @@ class EthereumClient:
 
     def process_deposit(
         self, user_id: str, amount: Decimal, tx_hash: str, confirmations: int = 0
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Process Ethereum deposit"""
         try:
             if amount < self.MIN_DEPOSIT:

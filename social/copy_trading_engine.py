@@ -13,10 +13,10 @@ Advanced Copy Trading & Social Trading Engine
 """
 
 import logging
-from typing import Dict, List, Tuple, Any
+from typing import Any
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 import uuid
 
 from sqlalchemy.ext.declarative import declarative_base
@@ -336,11 +336,8 @@ class AdvancedCopyTradingEngine:
             existing_symbols = self.trade_correlations[follower.follower_id]
 
             # Simple check: if same symbol already traded, skip
-            if signal.symbol in existing_symbols:
-                correlation = 1.0
-            else:
-                # In production, calculate true correlation
-                correlation = 0.0
+            # In production, calculate true correlation; same symbol = 1.0
+            correlation = 1.0 if signal.symbol in existing_symbols else 0.0
 
             if correlation > follower.skip_correlation_above:
                 return True

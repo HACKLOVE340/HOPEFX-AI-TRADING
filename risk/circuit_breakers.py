@@ -15,9 +15,9 @@ import logging
 import threading
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from enum import Enum
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 import redis
 
@@ -74,7 +74,7 @@ class CircuitBreaker:
     - Redis-backed state persistence
     """
 
-    def __init__(self, broker, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, broker, redis_client: redis.Redis | None = None):
         self.broker = broker
         self.redis = redis_client
         self.limits = RiskLimits()
@@ -83,7 +83,7 @@ class CircuitBreaker:
         self.state = CircuitState.CLOSED
         self.state_lock = threading.RLock()
         self._manual_override = False
-        self._override_reason: Optional[str] = None
+        self._override_reason: str | None = None
 
         # P&L tracking
         self.daily_pnl = 0.0
@@ -103,11 +103,11 @@ class CircuitBreaker:
         self.state_changes: list[dict] = []
 
         # Callbacks
-        self.on_breach: Optional[Callable] = None
-        self.on_state_change: Optional[Callable] = None
+        self.on_breach: Callable | None = None
+        self.on_state_change: Callable | None = None
 
         # Async task
-        self._monitoring_task: Optional[asyncio.Task] = None
+        self._monitoring_task: asyncio.Task | None = None
         self._shutdown = False
 
         # Initialize
@@ -178,11 +178,10 @@ class CircuitBreaker:
             return
 
         # Check consecutive losses
-        if self.consecutive_losses >= self.limits.max_consecutive_losses:
-            if (
-                self.loss_streak_amount
-                >= self.limits.max_loss_streak_pct * self.session_start_balance
-            ):
+        if (
+            self.consecutive_losses >= self.limits.max_consecutive_losses
+            and self.loss_streak_amount >= self.limits.max_loss_streak_pct * self.session_start_balance
+        ):
                 await self._trigger_circuit_breaker(
                     "LOSS_STREAK",
                     f"Loss streak: {self.consecutive_losses} trades, ${self.loss_streak_amount:.2f}",
@@ -329,7 +328,7 @@ class CircuitBreaker:
                 logger.warning("🔴 Recovery failed - circuit breaker re-opened")
                 asyncio.create_task(self._schedule_recovery())
 
-    def pre_trade_check(self, order: dict) -> tuple[bool, Optional[str]]:
+    def pre_trade_check(self, order: dict) -> tuple[bool, str | None]:
         """
         Pre-trade risk check. Call this before every order.
         Returns: (allowed: bool, reason: Optional[str])
@@ -474,10 +473,7 @@ class CircuitBreaker:
             {"XAU/USD", "XAG/USD"},  # Metals
             {"US30", "US500", "USTEC"},  # Indices
         ]
-        for group in correlated_groups:
-            if sym1 in group and sym2 in group:
-                return True
-        return False
+        return any(sym1 in group and sym2 in group for group in correlated_groups)
 
     def _get_last_breach_reason(self) -> str:
         """Get reason for last breach"""

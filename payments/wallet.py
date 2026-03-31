@@ -13,8 +13,7 @@ Note: This wallet ONLY handles subscription fees and commission payments.
 Trading capital is managed directly by brokers/prop firms.
 """
 
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, UTC
 from decimal import Decimal
 import logging
 
@@ -48,8 +47,8 @@ class Wallet:
         commission_balance: Decimal = Decimal("0.00"),
         currency: str = "USD",
         status: str = WalletStatus.ACTIVE,
-        created_at: Optional[datetime] = None,
-        updated_at: Optional[datetime] = None,
+        created_at: datetime | None = None,
+        updated_at: datetime | None = None,
     ):
         self.wallet_id = wallet_id
         self.user_id = user_id
@@ -119,7 +118,7 @@ class WalletManager:
         except Exception as exc:
             logger.error("Wallet DB write failed: %s", exc)
 
-    def _load_balance_from_db(self, user_id: str) -> Optional[Decimal]:
+    def _load_balance_from_db(self, user_id: str) -> Decimal | None:
         """Read latest balance_after for user from DB."""
         if not self._session_factory:
             return None
@@ -183,7 +182,7 @@ class WalletManager:
         )
         return wallet
 
-    def get_wallet(self, user_id: str) -> Optional[Wallet]:
+    def get_wallet(self, user_id: str) -> Wallet | None:
         """
         Get wallet for a user
 
@@ -196,7 +195,7 @@ class WalletManager:
         wallet_id = f"WAL-{user_id}"
         return self._wallets.get(wallet_id)
 
-    def get_balance(self, user_id: str, wallet_type: Optional[str] = None) -> dict:
+    def get_balance(self, user_id: str, wallet_type: str | None = None) -> dict:
         """
         Get wallet balance(s)
 
@@ -246,8 +245,8 @@ class WalletManager:
         wallet_type: str = WalletType.SUBSCRIPTION,
         transaction_type: str = "deposit",
         method: str = "unknown",
-        reference: Optional[str] = None,
-    ) -> tuple[bool, str, Optional[dict]]:
+        reference: str | None = None,
+    ) -> tuple[bool, str, dict | None]:
         """
         Credit (add funds to) a wallet
 
@@ -313,8 +312,8 @@ class WalletManager:
         amount: Decimal,
         wallet_type: str = WalletType.SUBSCRIPTION,
         transaction_type: str = "withdrawal",
-        reference: Optional[str] = None,
-    ) -> tuple[bool, str, Optional[dict]]:
+        reference: str | None = None,
+    ) -> tuple[bool, str, dict | None]:
         """
         Debit (remove funds from) a wallet
 

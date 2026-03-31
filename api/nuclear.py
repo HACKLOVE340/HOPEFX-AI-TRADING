@@ -20,7 +20,7 @@ Mount with:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -38,7 +38,7 @@ router = APIRouter()
 class NuclearResumeRequest(BaseModel):
     """Body for POST /nuclear/resume."""
 
-    deactivation_token: Optional[str] = Field(
+    deactivation_token: str | None = Field(
         default=None,
         description=(
             "Kill switch deactivation token (value of HOPEFX_KILL_SWITCH_TOKEN). "
@@ -265,7 +265,7 @@ async def activate_kill_switch(
     response_model=dict[str, Any],
 )
 async def deactivate_kill_switch(
-    token: Optional[str] = None,
+    token: str | None = None,
     _user: TokenPayload = Depends(require_role("admin")),
 ):
     """

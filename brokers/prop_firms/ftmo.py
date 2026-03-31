@@ -16,9 +16,9 @@ import hmac
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import aiohttp
 import pandas as pd
@@ -86,7 +86,7 @@ class FTMOBroker:
         if sandbox:
             self.BASE_URL = "https://sandbox-api.ftmo.com/v1"
 
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         self._request_nonce = 0
         self._rate_limit_remaining = 1000
         self._rate_limit_reset = 0
@@ -103,7 +103,7 @@ class FTMOBroker:
         self,
         method: str,
         endpoint: str,
-        params: Optional[dict] = None,
+        params: dict | None = None,
     ) -> dict[str, str]:
         """Generate FTMO API signature"""
         timestamp = str(int(datetime.now(UTC).timestamp() * 1000))
@@ -196,9 +196,9 @@ class FTMOBroker:
         order_type: str,
         side: str,
         quantity: float,
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
+        price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
         comment: str = "",
     ) -> dict[str, Any]:
         """
@@ -297,7 +297,7 @@ class FTMOBroker:
             logger.error(f"Failed to fetch trade history: {e}")
             raise
 
-    async def check_violation(self) -> tuple[bool, Optional[str]]:
+    async def check_violation(self) -> tuple[bool, str | None]:
         """
         Check if account has any rule violations
 
@@ -345,7 +345,6 @@ class FTMOBroker:
 # ---------------------------------------------------------------------------
 
 from typing import Any as _Any
-from typing import Dict as _Dict
 
 try:
     from brokers.mt5 import MT5Connector as _MT5Connector

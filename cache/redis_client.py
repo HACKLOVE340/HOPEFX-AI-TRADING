@@ -41,13 +41,13 @@ import asyncio
 import logging
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Module-level singletons — one client per process
-_redis_instance: Optional[Any] = None
-_sentinel_instance: Optional[Any] = None
+_redis_instance: Any | None = None
+_sentinel_instance: Any | None = None
 _connection_mode: str = "none"  # "cluster" | "sentinel" | "direct" | "none"
 _last_health_check: float = 0.0
 _health_check_interval: float = float(os.getenv("REDIS_HEALTH_INTERVAL", "30"))
@@ -56,8 +56,8 @@ _health_check_interval: float = float(os.getenv("REDIS_HEALTH_INTERVAL", "30"))
 def _parse_hosts(hosts_str: str, default_port: int = 6379) -> list[tuple[str, int]]:
     """Parse 'host1:port1,host2:port2' into [(host, port), ...]."""
     result = []
-    for entry in hosts_str.split(","):
-        entry = entry.strip()
+    for _entry in hosts_str.split(","):
+        entry = _entry.strip()
         if not entry:
             continue
         if ":" in entry:
@@ -70,10 +70,10 @@ def _parse_hosts(hosts_str: str, default_port: int = 6379) -> list[tuple[str, in
 
 async def _try_cluster(
     hosts_str: str,
-    password: Optional[str],
+    password: str | None,
     decode_responses: bool,
     db: int,
-) -> Optional[Any]:
+) -> Any | None:
     """Attempt Redis Cluster connection. Returns client or None."""
     try:
         from redis.asyncio.cluster import RedisCluster
@@ -108,10 +108,10 @@ async def _try_cluster(
 async def _try_sentinel(
     hosts_str: str,
     master_name: str,
-    password: Optional[str],
+    password: str | None,
     decode_responses: bool,
     db: int,
-) -> tuple[Optional[Any], Optional[Any]]:
+) -> tuple[Any | None, Any | None]:
     """Attempt Redis Sentinel connection. Returns (client, sentinel) or (None, None)."""
     try:
         from redis.asyncio.sentinel import Sentinel
@@ -147,7 +147,7 @@ async def _try_direct(
     redis_url: str,
     decode_responses: bool,
     db: int,
-) -> Optional[Any]:
+) -> Any | None:
     """Attempt direct Redis URL connection. Returns client or None."""
     try:
         import redis.asyncio as aioredis
@@ -173,7 +173,7 @@ async def get_redis(
     *,
     db: int = 0,
     decode_responses: bool = True,
-) -> Optional[Any]:
+) -> Any | None:
     """
     Return a connected Redis client (Cluster → Sentinel → direct fallback chain).
 
@@ -300,7 +300,7 @@ def reset_redis_client() -> None:
     _connection_mode = "none"
 
 
-async def get_sentinel() -> Optional[Any]:
+async def get_sentinel() -> Any | None:
     """Return the raw Sentinel instance (for replica reads, monitoring)."""
     await get_redis()  # ensure initialised
     return _sentinel_instance

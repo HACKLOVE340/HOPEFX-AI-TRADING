@@ -52,6 +52,7 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+import contextlib
 
 # ── logging setup (overridden by --log flag after arg parse) ──────────────────
 logging.basicConfig(
@@ -307,10 +308,8 @@ async def _run_trading(args: argparse.Namespace) -> None:
         engine = HopeFXEngine()
         loop = asyncio.get_running_loop()
         for sig in (_signal.SIGINT, _signal.SIGTERM):
-            try:
+            with contextlib.suppress(NotImplementedError):
                 loop.add_signal_handler(sig, lambda: asyncio.create_task(engine.stop()))
-            except NotImplementedError:
-                pass  # Windows doesn't support add_signal_handler
         await engine.start()
 
     except ImportError:

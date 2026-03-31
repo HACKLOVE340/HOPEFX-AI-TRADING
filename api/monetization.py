@@ -16,7 +16,7 @@ REST API endpoints for monetization features including:
 
 import logging
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
@@ -82,7 +82,7 @@ class SubscribeResponse(BaseModel):
     """Subscribe response"""
 
     subscription_id: str
-    checkout_url: Optional[str] = None
+    checkout_url: str | None = None
     status: str
     tier: str
     billing_cycle: str
@@ -99,8 +99,8 @@ class ActivateCodeResponse(BaseModel):
     """Activate code response"""
 
     success: bool
-    tier: Optional[str] = None
-    expires_at: Optional[str] = None
+    tier: str | None = None
+    expires_at: str | None = None
     message: str
 
 
@@ -108,8 +108,8 @@ class AffiliateSignupRequest(BaseModel):
     """Affiliate signup request"""
 
     user_id: str = Field(..., description="User ID")
-    payment_email: Optional[EmailStr] = None
-    custom_code: Optional[str] = None
+    payment_email: EmailStr | None = None
+    custom_code: str | None = None
 
 
 class AffiliateResponse(BaseModel):
@@ -139,7 +139,7 @@ class StrategyListRequest(BaseModel):
     price: float
     license_type: str = "purchase"
     min_tier: str = "starter"
-    tags: Optional[list[str]] = None
+    tags: list[str] | None = None
 
 
 class StrategyPurchaseRequest(BaseModel):
@@ -169,8 +169,8 @@ class PartnerSignupRequest(BaseModel):
     company_name: str
     contact_email: EmailStr
     partner_type: str
-    contact_name: Optional[str] = None
-    contact_phone: Optional[str] = None
+    contact_name: str | None = None
+    contact_phone: str | None = None
 
 
 class WhiteLabelRequest(BaseModel):
@@ -182,8 +182,8 @@ class WhiteLabelRequest(BaseModel):
     logo_url: str
     primary_color: str
     secondary_color: str
-    custom_domain: Optional[str] = None
-    support_email: Optional[str] = None
+    custom_domain: str | None = None
+    support_email: str | None = None
 
 
 # ==========================
@@ -478,7 +478,7 @@ async def create_referral(request: ReferralRequest):
 
 
 @router.get("/affiliate/{affiliate_id}/referrals")
-async def get_affiliate_referrals(affiliate_id: str, status: Optional[str] = None):
+async def get_affiliate_referrals(affiliate_id: str, status: str | None = None):
     """
     Get all referrals for an affiliate.
     """
@@ -551,11 +551,11 @@ async def list_strategy(request: StrategyListRequest):
 
 @router.get("/marketplace/strategies")
 async def search_strategies(
-    query: Optional[str] = None,
-    category: Optional[str] = None,
-    min_price: Optional[float] = None,
-    max_price: Optional[float] = None,
-    min_rating: Optional[float] = None,
+    query: str | None = None,
+    category: str | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
+    min_rating: float | None = None,
     sort_by: str = Query(
         "popular",
         pattern="^(popular|rating|newest|price_low|price_high)$",
@@ -1012,7 +1012,7 @@ class RecordSaleRequest(BaseModel):
     gross_amount: float = Field(..., gt=0)
     currency: str = "USD"
     transaction_type: str = "purchase"
-    stripe_payment_intent_id: Optional[str] = None
+    stripe_payment_intent_id: str | None = None
 
 
 class RegisterStripeAccountRequest(BaseModel):

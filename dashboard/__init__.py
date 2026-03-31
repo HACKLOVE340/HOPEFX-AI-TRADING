@@ -11,7 +11,7 @@ wired (app_state/broker/orchestrator), falling back to empty structures
 when not wired — same pattern as MobileAPI.
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any  # noqa: F401
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -65,7 +65,7 @@ class DashboardService:
 
     def __init__(
         self,
-        config: Optional[dict[str, Any]] = None,
+        config: dict[str, Any] | None = None,
         app_state: Any = None,
         orchestrator: Any = None,
     ):
@@ -73,7 +73,7 @@ class DashboardService:
         self._app_state = app_state
         self._orchestrator = orchestrator
         self.layouts: dict[str, DashboardLayout] = {}
-        self.active_layout_id: Optional[str] = None
+        self.active_layout_id: str | None = None
         self._create_default_layout()
         logger.info("Dashboard service initialized")
 
@@ -118,10 +118,10 @@ class DashboardService:
         self.layouts["default"] = layout
         self.active_layout_id = "default"
 
-    def get_layout(self, layout_id: str) -> Optional[DashboardLayout]:
+    def get_layout(self, layout_id: str) -> DashboardLayout | None:
         return self.layouts.get(layout_id)
 
-    def get_active_layout(self) -> Optional[DashboardLayout]:
+    def get_active_layout(self) -> DashboardLayout | None:
         if self.active_layout_id:
             return self.layouts.get(self.active_layout_id)
         return None
@@ -190,7 +190,7 @@ class DashboardService:
             return None
 
     @staticmethod
-    def _to_dict(obj: Any) -> Optional[dict[str, Any]]:
+    def _to_dict(obj: Any) -> dict[str, Any] | None:
         if obj is None:
             return None
         if hasattr(obj, "__dict__"):
@@ -320,7 +320,7 @@ class DashboardService:
         markets = []
 
         tick = self._safe_orch("get_latest_tick")
-        gold_price: Optional[float] = None
+        gold_price: float | None = None
         if tick is not None:
             gold_price = (
                 float(getattr(tick, "mid", None) or getattr(tick, "price", None) or 0.0)
@@ -328,7 +328,7 @@ class DashboardService:
             )
 
         for sym in symbols:
-            price: Optional[float] = None
+            price: float | None = None
             source = "none"
             if sym == "XAUUSD" and gold_price is not None:
                 price = gold_price
@@ -403,8 +403,8 @@ class DashboardService:
 
 
 __all__ = [
+    "DashboardLayout",
     "DashboardService",
     "DashboardWidget",
-    "DashboardLayout",
     "DashboardWidgetType",
 ]

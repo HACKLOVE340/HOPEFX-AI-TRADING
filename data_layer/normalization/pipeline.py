@@ -33,8 +33,7 @@ Single-tick operations are pure Python for minimal latency.
 from __future__ import annotations
 
 import logging
-from datetime import timezone, UTC
-from typing import Dict, List, Optional
+from datetime import UTC
 
 import numpy as np
 import os
@@ -266,7 +265,7 @@ class NormalizationPipeline:
     def normalize_bar(
         self,
         bar: dict[str, float],
-        prev_close: Optional[float] = None,
+        prev_close: float | None = None,
     ) -> dict[str, float]:
         """
         Normalize a single OHLCV bar dict.
@@ -309,10 +308,7 @@ class NormalizationPipeline:
         out["log_volume"] = float(np.log1p(max(v, 0.0)))
 
         # log_return
-        if prev_close and prev_close > 0.0 and c > 0.0:
-            lr = float(np.log(c / prev_close))
-        else:
-            lr = 0.0
+        lr = float(np.log(c / prev_close)) if prev_close and prev_close > 0.0 and c > 0.0 else 0.0
         out["log_return"] = lr
 
         # gap_flag: absolute log return > 0.5%
@@ -323,8 +319,8 @@ class NormalizationPipeline:
     def normalize_tick_to_bar(
         self,
         ticks: list[dict[str, float]],
-        prev_close: Optional[float] = None,
-    ) -> Optional[dict[str, float]]:
+        prev_close: float | None = None,
+    ) -> dict[str, float] | None:
         """
         Aggregate a list of tick dicts into a single normalized OHLCV bar.
 

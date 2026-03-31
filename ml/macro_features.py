@@ -41,8 +41,7 @@ Bug fixes vs prior version
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, timedelta, UTC
 
 import numpy as np
 import pandas as pd
@@ -92,7 +91,7 @@ MACRO_COLUMNS: list[str] = [
 
 def fetch_macro_history(
     start: datetime,
-    end: Optional[datetime] = None,
+    end: datetime | None = None,
     interval: str = "1d",
 ) -> pd.DataFrame:
     """
@@ -150,7 +149,7 @@ def fetch_macro_history(
 
 def add_macro_features(
     ohlcv: pd.DataFrame,
-    macro_df: Optional[pd.DataFrame] = None,
+    macro_df: pd.DataFrame | None = None,
     lookback: int = 20,
 ) -> pd.DataFrame:
     """
@@ -377,7 +376,7 @@ def add_regime_features(df: pd.DataFrame, lookback: int = 60) -> pd.DataFrame:
 
 def build_enhanced_feature_matrix(
     ohlcv: pd.DataFrame,
-    macro_df: Optional[pd.DataFrame] = None,
+    macro_df: pd.DataFrame | None = None,
     lookback: int = 20,
     include_regime: bool = True,
 ) -> pd.DataFrame:

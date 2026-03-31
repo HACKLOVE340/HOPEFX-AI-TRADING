@@ -10,7 +10,7 @@ MyForexFunds is a prop trading firm offering forex funded accounts.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from ..mt5 import MT5Connector
 

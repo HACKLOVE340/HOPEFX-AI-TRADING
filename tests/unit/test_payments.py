@@ -18,7 +18,7 @@ import hashlib
 import hmac
 import os
 import time
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -274,9 +274,8 @@ class TestPaymentDBHelpers:
         import logging
         from api.payments import _save_payment
 
-        with patch("api.payments._get_db_session", return_value=None):
-            with caplog.at_level(logging.WARNING, logger="api.payments"):
-                _save_payment(self._make_payment())
+        with patch("api.payments._get_db_session", return_value=None), caplog.at_level(logging.WARNING, logger="api.payments"):
+            _save_payment(self._make_payment())
 
         assert (
             "not persisted" in caplog.text.lower()

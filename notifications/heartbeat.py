@@ -49,8 +49,9 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timezone, timedelta, UTC
-from typing import Any, Callable, Dict, Optional
+from datetime import datetime, timedelta, UTC
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -75,17 +76,16 @@ async def _send_telegram(token: str, chat_id: str, text: str) -> bool:
             "parse_mode": "HTML",
             "disable_web_page_preview": True,
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
-            ) as resp:
-                if resp.status == 200:
-                    return True
-                body = await resp.text()
-                logger.warning(
-                    "Telegram heartbeat send failed: %d %s", resp.status, body[:200]
-                )
-                return False
+        async with aiohttp.ClientSession() as session, session.post(
+            url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
+        ) as resp:
+            if resp.status == 200:
+                return True
+            body = await resp.text()
+            logger.warning(
+                "Telegram heartbeat send failed: %d %s", resp.status, body[:200]
+            )
+            return False
     except Exception as exc:
         logger.warning("Telegram heartbeat send error: %s", exc)
         return False
@@ -166,7 +166,7 @@ class HeartbeatService:
         token: str = _TELEGRAM_TOKEN,
         chat_id: str = _TELEGRAM_CHAT_ID,
         interval_hours: float = _HEARTBEAT_INTERVAL_HOURS,
-        get_status_fn: Optional[Callable[[], dict[str, Any]]] = None,
+        get_status_fn: Callable[[], dict[str, Any]] | None = None,
         app_state: Any = None,
     ) -> None:
         self._token = token
@@ -175,10 +175,10 @@ class HeartbeatService:
         self._get_status_fn = get_status_fn
         self._app_state = app_state
         self._start_time = time.monotonic()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._running = False
         self._ping_count = 0
-        self._last_ping: Optional[float] = None
+        self._last_ping: float | None = None
 
     def _get_status(self) -> dict[str, Any]:
         """Collect current system status."""
@@ -210,7 +210,7 @@ class HeartbeatService:
                         float(getattr(rm, "current_drawdown", 0)) * 100
                     )
                     status["risk_alerts"] = (
-                        getattr(rm, "_halt_reason", None) and [rm._halt_reason] or []
+                        (getattr(rm, "_halt_reason", None) and [rm._halt_reason]) or []
                     )
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
@@ -327,11 +327,11 @@ class HeartbeatService:
 
 
 # ── Module-level convenience ──────────────────────────────────────────────────
-_heartbeat: Optional[HeartbeatService] = None
+_heartbeat: HeartbeatService | None = None
 
 
 def start_heartbeat(
-    get_status_fn: Optional[Callable[[], dict[str, Any]]] = None,
+    get_status_fn: Callable[[], dict[str, Any]] | None = None,
     app_state: Any = None,
     token: str = _TELEGRAM_TOKEN,
     chat_id: str = _TELEGRAM_CHAT_ID,
@@ -354,6 +354,6 @@ def start_heartbeat(
     return _heartbeat
 
 
-def get_heartbeat() -> Optional[HeartbeatService]:
+def get_heartbeat() -> HeartbeatService | None:
     """Return the running heartbeat instance, or None if not started."""
     return _heartbeat

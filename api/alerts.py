@@ -18,7 +18,7 @@ available even when the lifespan-registered alert_engine router is not.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -36,7 +36,7 @@ router = APIRouter(prefix="/api/alerts", tags=["Alerts"])
 class AlertConditionIn(BaseModel):
     type: str
     threshold: float
-    threshold_2: Optional[float] = None
+    threshold_2: float | None = None
 
 
 class CreateAlertIn(BaseModel):
@@ -45,7 +45,7 @@ class CreateAlertIn(BaseModel):
     conditions: list[AlertConditionIn]
     notification_channels: list[str] = ["discord"]
     priority: str = "high"
-    expires_in_hours: Optional[int] = None
+    expires_in_hours: int | None = None
     cooldown_minutes: int = 5
     max_triggers: int = 0
 
@@ -99,10 +99,7 @@ def _get_engine(request: Request):
 
 def _serialise(alert) -> dict[str, Any]:
     """Convert an Alert dataclass / object to a JSON-safe dict."""
-    if hasattr(alert, "to_dict"):
-        d = alert.to_dict()
-    else:
-        d = dict(alert.__dict__)
+    d = alert.to_dict() if hasattr(alert, "to_dict") else dict(alert.__dict__)
 
     # Normalise enum values to strings
     for key in ("status", "priority"):
@@ -173,8 +170,8 @@ async def create_alert(
 @router.get("/")
 async def list_alerts(
     request: Request,
-    symbol: Optional[str] = None,
-    status: Optional[str] = None,
+    symbol: str | None = None,
+    status: str | None = None,
     user: TokenPayload = Depends(get_current_user),
 ):
     """List all alerts, optionally filtered by symbol or status. Requires: authenticated user."""
@@ -194,8 +191,8 @@ async def list_alerts(
 @router.get("/history/triggers")
 async def get_trigger_history(
     request: Request,
-    symbol: Optional[str] = None,
-    alert_id: Optional[str] = None,
+    symbol: str | None = None,
+    alert_id: str | None = None,
     limit: int = 50,
     user: TokenPayload = Depends(get_current_user),
 ):
@@ -209,7 +206,7 @@ async def get_trigger_history(
 @router.get("/active")
 async def get_active_alerts(
     request: Request,
-    symbol: Optional[str] = None,
+    symbol: str | None = None,
     user: TokenPayload = Depends(get_current_user),
 ):
     """Return only active (non-paused, non-expired) alerts. Requires: authenticated user."""

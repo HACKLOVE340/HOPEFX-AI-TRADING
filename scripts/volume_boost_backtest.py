@@ -46,9 +46,8 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import List, Tuple
 
 import numpy as np
 import pandas as pd

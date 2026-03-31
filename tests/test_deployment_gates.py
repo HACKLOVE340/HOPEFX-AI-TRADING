@@ -317,12 +317,11 @@ class TestMetaCaching:
                 read_count += 1
             return original_read_text(self, *args, **kwargs)
 
-        with patch.object(trading_mod, "_OOS_META_PATH", meta_path):
-            with patch.object(Path, "read_text", _counting_read):
-                trading_mod._deployment_gate_cache.clear()
-                trading_mod._read_oos_meta()
-                trading_mod._read_oos_meta()
-                trading_mod._read_oos_meta()
+        with patch.object(trading_mod, "_OOS_META_PATH", meta_path), patch.object(Path, "read_text", _counting_read):
+            trading_mod._deployment_gate_cache.clear()
+            trading_mod._read_oos_meta()
+            trading_mod._read_oos_meta()
+            trading_mod._read_oos_meta()
 
         # File should only be read once — subsequent calls use the cache
         assert read_count == 1

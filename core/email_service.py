@@ -29,7 +29,6 @@ from __future__ import annotations
 import logging
 import os
 import ssl
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +66,7 @@ def _send_via_sendgrid(to: str, subject: str, html: str, text: str) -> bool:
         return False
 
 
-def _smtp_config() -> Optional[dict]:
+def _smtp_config() -> dict | None:
     host = os.getenv("SMTP_HOST")
     if not host:
         return None

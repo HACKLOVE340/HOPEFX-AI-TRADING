@@ -116,14 +116,13 @@ class TestNuclearHopeFXSupervisor:
         mock_ks.activate = MagicMock()
         mock_ks.is_active = MagicMock(return_value=True)
 
-        with patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks):
-            with patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro:
-                mock_ro.return_value = MagicMock(set_max_risk=AsyncMock())
-                with patch("brain.nuclear_supervisor._get_notifications") as mock_notif:
-                    mock_notif.return_value = MagicMock(send_critical_alert=AsyncMock())
-                    result = await supervisor.on_new_event(
-                        _make_event("nuclear strike alert")
-                    )
+        with patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks), patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro:
+            mock_ro.return_value = MagicMock(set_max_risk=AsyncMock())
+            with patch("brain.nuclear_supervisor._get_notifications") as mock_notif:
+                mock_notif.return_value = MagicMock(send_critical_alert=AsyncMock())
+                result = await supervisor.on_new_event(
+                    _make_event("nuclear strike alert")
+                )
 
         assert result["action_taken"] == "nuclear"
         assert supervisor.nuclear_level == 3
@@ -143,15 +142,14 @@ class TestNuclearHopeFXSupervisor:
         mock_ks.is_active = MagicMock(return_value=True)
         mock_ks.deactivate = MagicMock()
 
-        with patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks):
-            with patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro:
-                mock_ro.return_value = MagicMock(
-                    set_max_risk=AsyncMock(),
-                    deactivate_hedge_mode=AsyncMock(),
-                )
-                with patch("brain.nuclear_supervisor._get_notifications") as mock_notif:
-                    mock_notif.return_value = MagicMock(send_info=AsyncMock())
-                    await supervisor.manual_resume(deactivation_token=None)
+        with patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks), patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro:
+            mock_ro.return_value = MagicMock(
+                set_max_risk=AsyncMock(),
+                deactivate_hedge_mode=AsyncMock(),
+            )
+            with patch("brain.nuclear_supervisor._get_notifications") as mock_notif:
+                mock_notif.return_value = MagicMock(send_info=AsyncMock())
+                await supervisor.manual_resume(deactivation_token=None)
 
         assert supervisor.nuclear_level == 0
         assert supervisor.trading_paused is False

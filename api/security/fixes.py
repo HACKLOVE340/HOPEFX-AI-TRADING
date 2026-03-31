@@ -37,8 +37,8 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -77,7 +77,7 @@ def _require_admin(request: Request) -> dict[str, Any]:
 # ── Redis helper ──────────────────────────────────────────────────────────────
 
 
-async def _get_redis() -> Optional[Any]:
+async def _get_redis() -> Any | None:
     try:
         from cache.redis_client import get_redis
 
@@ -102,7 +102,7 @@ class DeclineFixRequest(BaseModel):
     declined_by: str = Field(
         default="dashboard", description="Identifier of the decliner"
     )
-    reason: Optional[str] = Field(default=None, description="Optional decline reason")
+    reason: str | None = Field(default=None, description="Optional decline reason")
 
 
 class ScanEntryRequest(BaseModel):
@@ -230,7 +230,7 @@ async def approve_fix(
     redis = await _get_redis()
 
     # Find matching pending record
-    fix_record: Optional[dict[str, Any]] = None
+    fix_record: dict[str, Any] | None = None
     if redis:
         raw_list = await redis.lrange("fixes:queue", 0, 199)
         for raw in raw_list:

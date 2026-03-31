@@ -16,12 +16,13 @@ PRODUCTION VERSION with all critical fixes:
 import asyncio
 import logging
 import time
-from typing import Dict, List, Optional, Any
+from typing import Any
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
 from collections import deque
 import copy
+import contextlib
 
 try:
     import numpy as np
@@ -106,7 +107,7 @@ class CircuitBreaker:
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.failure_count = 0
-        self.last_failure_time: Optional[float] = None
+        self.last_failure_time: float | None = None
         self.is_open = False
         self._lock = asyncio.Lock()
 
@@ -176,7 +177,7 @@ class HOPEFXBrain:
     6. Graceful degradation: Components can fail individually
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         self.config = config or {}
 
         # State initialization
@@ -369,10 +370,8 @@ class HOPEFXBrain:
 
         # Sleep with shutdown check
         if sleep_time > 0:
-            try:
+            with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(self._shutdown_event.wait(), timeout=sleep_time)
-            except TimeoutError:
-                pass
 
     async def _update_state(self):
         """Gather state from all components - THREAD SAFE"""
@@ -991,10 +990,8 @@ class HOPEFXBrain:
         """Manual emergency stop — sets flag synchronously, schedules cleanup async."""
         logger.info("Manual emergency stop triggered")
         self._emergency_stop = True
-        try:
+        with contextlib.suppress(RuntimeError):
             asyncio.create_task(self._execute_emergency_stop())
-        except RuntimeError:
-            pass  # No running loop — flag is already set
 
     async def shutdown(self):
         """Graceful shutdown"""
@@ -1003,10 +1000,8 @@ class HOPEFXBrain:
         self._shutdown_event.set()
 
         # Wait for current cycle to complete (with timeout)
-        try:
+        with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(self._shutdown_event.wait(), timeout=2.0)
-        except TimeoutError:
-            pass
 
     def get_state(self) -> BrainState:
         """Get current state (deep copy to prevent external modification)"""

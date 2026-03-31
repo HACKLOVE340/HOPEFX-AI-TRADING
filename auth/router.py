@@ -28,7 +28,6 @@ import logging
 import os
 import time
 from collections import defaultdict
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -149,7 +148,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1)
-    totp_code: Optional[str] = Field(None, min_length=6, max_length=8)
+    totp_code: str | None = Field(None, min_length=6, max_length=8)
 
 
 class RefreshRequest(BaseModel):
@@ -158,7 +157,7 @@ class RefreshRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     refresh_token: str
-    access_token: Optional[str] = None  # if provided, immediately blacklisted
+    access_token: str | None = None  # if provided, immediately blacklisted
 
 
 class ForgotPasswordRequest(BaseModel):

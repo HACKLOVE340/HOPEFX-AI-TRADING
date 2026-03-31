@@ -100,8 +100,8 @@ def _seed_admin() -> str:
         load_dotenv(ENV_PATH, override=False)
     except ImportError:
         # Manually load key=value pairs
-        for line in ENV_PATH.read_text().splitlines():
-            line = line.strip()
+        for _line in ENV_PATH.read_text().splitlines():
+            line = _line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, _, v = line.partition("=")
                 os.environ.setdefault(k.strip(), v.strip())
@@ -163,8 +163,7 @@ def bootstrap(verbose: bool = True) -> None:
 
     try:
         admin_password = _seed_admin()
-        if verbose:
-            if created:
+        if verbose and created:
                 print("  ✅  Admin user seeded")
                 print(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
                 print(f"      Username : {DEFAULT_ADMIN_USERNAME}")

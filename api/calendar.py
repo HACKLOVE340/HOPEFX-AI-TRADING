@@ -20,8 +20,8 @@ GET  /api/calendar/auto-pause       — get current auto-pause config
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, UTC
+from typing import Any
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
@@ -210,10 +210,10 @@ class EventOut(BaseModel):
     importance: str
     scheduled_time: str
     country: str
-    currency: Optional[str]
-    forecast: Optional[float]
-    previous: Optional[float]
-    actual: Optional[float]
+    currency: str | None
+    forecast: float | None
+    previous: float | None
+    actual: float | None
     minutes_until: int
     is_high_impact: bool
 
@@ -253,7 +253,7 @@ def _event_to_out(event: Any) -> EventOut:
 @router.get("/upcoming", response_model=list[EventOut])
 async def get_upcoming(
     hours: int = Query(168, ge=1, le=720, description="Look-ahead window in hours"),
-    importance: Optional[str] = Query(
+    importance: str | None = Query(
         None,
         description="Filter: low|medium|high|critical",
     ),
@@ -372,9 +372,9 @@ class FomcRegimeOverride(BaseModel):
 
 class FomcRegimeStatus(BaseModel):
     active: bool
-    outcome: Optional[str]
-    set_at: Optional[str]
-    expires_at: Optional[str]
+    outcome: str | None
+    set_at: str | None
+    expires_at: str | None
     position_size_multiplier: float
     notes: str
 

@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Dict, List, Optional, Set, Tuple
 
 from data_layer.types import NewsArticle
 
@@ -299,7 +298,7 @@ class GoldSentimentScorer:
 
     def get_aggregate_signal(
         self,
-        articles: Optional[list[NewsArticle]] = None,
+        articles: list[NewsArticle] | None = None,
     ) -> dict[str, float]:
         """
         Return an aggregate sentiment signal dict from a list of articles.

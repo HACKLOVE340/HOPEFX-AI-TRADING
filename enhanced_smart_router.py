@@ -14,9 +14,9 @@ import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 import numpy as np
 
@@ -99,13 +99,13 @@ class Order:
     side: OrderSide
     size: float
     order_type: OrderType
-    price: Optional[float] = None  # For limit orders
-    stop_price: Optional[float] = None  # For stop orders
+    price: float | None = None  # For limit orders
+    stop_price: float | None = None  # For stop orders
 
     # Execution parameters
     time_in_force: str = "GTC"  # GTC, IOC, FOK, DAY
-    display_size: Optional[float] = None  # For iceberg
-    arrival_price: Optional[float] = None
+    display_size: float | None = None  # For iceberg
+    arrival_price: float | None = None
 
     # State
     status: OrderStatus = OrderStatus.PENDING
@@ -115,8 +115,8 @@ class Order:
 
     # Metadata
     created_at: datetime = field(default_factory=datetime.now)
-    strategy_id: Optional[str] = None
-    parent_order_id: Optional[str] = None  # For child orders
+    strategy_id: str | None = None
+    parent_order_id: str | None = None  # For child orders
 
     def __post_init__(self):
         self.remaining_size = self.size - self.filled_size
@@ -318,7 +318,7 @@ class TWAPStrategy(ExecutionStrategy):
 
         return min(costs, key=lambda x: x[0])[1]
 
-    async def _simulate_fill(self, order: Order, venue: Venue) -> Optional[Fill]:
+    async def _simulate_fill(self, order: Order, venue: Venue) -> Fill | None:
         """
         Simulate a fill for paper-trading / backtesting.
 
@@ -516,7 +516,7 @@ class SmartOrderRouter:
 
     def __init__(
         self,
-        venues: Optional[list[Venue]] = None,
+        venues: list[Venue] | None = None,
         default_strategy: OrderType = OrderType.TWAP,
     ):
         self.venues = venues or self._default_venues()

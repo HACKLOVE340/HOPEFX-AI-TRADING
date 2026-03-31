@@ -39,8 +39,8 @@ from __future__ import annotations
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone, UTC
-from typing import Any, Deque, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import pandas as pd
 
@@ -51,7 +51,7 @@ _MAX_BARS = int(os.getenv("OHLCV_STORE_MAX_BARS", "500"))
 _REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 
-def _bars_to_df(bars: list[dict[str, Any]]) -> Optional[pd.DataFrame]:
+def _bars_to_df(bars: list[dict[str, Any]]) -> pd.DataFrame | None:
     """
     Convert a list of bar dicts to a DatetimeIndex OHLCV DataFrame.
 
@@ -135,7 +135,7 @@ class OHLCVStore:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def get(self, symbol: str, bars: int = 150) -> Optional[pd.DataFrame]:
+    def get(self, symbol: str, bars: int = 150) -> pd.DataFrame | None:
         """
         Return the last ``bars`` closed OHLCV bars as a DataFrame.
 
@@ -206,7 +206,7 @@ class OHLCVStore:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_store: Optional[OHLCVStore] = None
+_store: OHLCVStore | None = None
 
 
 def get_ohlcv_store(

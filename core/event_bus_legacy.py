@@ -15,8 +15,8 @@ import struct
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
-from typing import Callable, Dict, Optional
+from datetime import datetime, UTC
+from collections.abc import Callable
 
 import lz4.frame
 import msgpack
@@ -90,7 +90,7 @@ class MemoryMappedEventStore:
         self.file_counter += 1
         with open(filename, "wb") as f:
             f.write(b"\x00" * self.max_file_size)
-        self.current_file = open(filename, "r+b")
+        self.current_file = open(filename, "r+b")  # noqa: SIM115
         self.current_mmap = mmap.mmap(self.current_file.fileno(), self.max_file_size)
         self.current_offset = 0
 
@@ -124,8 +124,8 @@ class MemoryMappedEventStore:
 
     def query(
         self,
-        source: Optional[str] = None,
-        event_type: Optional[int] = None,
+        source: str | None = None,
+        event_type: int | None = None,
         limit: int = 1000,
     ):
         results = []

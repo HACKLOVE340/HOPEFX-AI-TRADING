@@ -13,7 +13,7 @@ Tests for:
 - Delta/Cumulative Delta
 """
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 
 
 class TestTrade:

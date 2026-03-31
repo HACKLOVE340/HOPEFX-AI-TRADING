@@ -104,9 +104,8 @@ class TestStartupValidator:
             "DB_HOST": "localhost",
             "REDIS_URL": "redis://localhost:6379/0",
         }
-        with patch.dict(os.environ, env, clear=True):
-            with pytest.raises((SystemExit, StartupValidationError)):
-                validate_environment(strict=False)
+        with patch.dict(os.environ, env, clear=True), pytest.raises((SystemExit, StartupValidationError)):
+            validate_environment(strict=False)
 
     def test_raises_on_weak_secret_key(self):
         from config.startup_validator import (
@@ -120,9 +119,8 @@ class TestStartupValidator:
             "DB_HOST": "localhost",
             "REDIS_URL": "redis://localhost:6379/0",
         }
-        with patch.dict(os.environ, env, clear=True):
-            with pytest.raises((SystemExit, StartupValidationError)):
-                validate_environment(strict=False)
+        with patch.dict(os.environ, env, clear=True), pytest.raises((SystemExit, StartupValidationError)):
+            validate_environment(strict=False)
 
     def test_raises_on_missing_db_password(self):
         from config.startup_validator import (
@@ -135,9 +133,8 @@ class TestStartupValidator:
             "DB_HOST": "localhost",
             "REDIS_URL": "redis://localhost:6379/0",
         }
-        with patch.dict(os.environ, env, clear=True):
-            with pytest.raises((SystemExit, StartupValidationError)):
-                validate_environment(strict=False)
+        with patch.dict(os.environ, env, clear=True), pytest.raises((SystemExit, StartupValidationError)):
+            validate_environment(strict=False)
 
     def test_raises_on_invalid_redis_url(self):
         from config.startup_validator import (
@@ -151,9 +148,8 @@ class TestStartupValidator:
             "DB_HOST": "localhost",
             "REDIS_URL": "http://localhost:6379",  # wrong scheme
         }
-        with patch.dict(os.environ, env, clear=True):
-            with pytest.raises((SystemExit, StartupValidationError)):
-                validate_environment(strict=False)
+        with patch.dict(os.environ, env, clear=True), pytest.raises((SystemExit, StartupValidationError)):
+            validate_environment(strict=False)
 
     def test_passes_with_valid_env(self):
         from config.startup_validator import validate_environment
@@ -180,6 +176,5 @@ class TestStartupValidator:
             "REDIS_URL": "redis://localhost:6379/0",
             "IBKR_PORT": "9999",  # not a valid IBKR port
         }
-        with patch.dict(os.environ, env, clear=True):
-            with pytest.raises((SystemExit, StartupValidationError)):
-                validate_environment(strict=False)
+        with patch.dict(os.environ, env, clear=True), pytest.raises((SystemExit, StartupValidationError)):
+            validate_environment(strict=False)

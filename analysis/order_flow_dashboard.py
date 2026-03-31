@@ -17,8 +17,7 @@ Provides a single get_complete_analysis() method for a full snapshot.
 """
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, UTC
 
 from analysis.order_flow import OrderFlowAnalyzer, get_order_flow_analyzer
 from analysis.institutional_flow import (
@@ -51,11 +50,11 @@ class OrderFlowDashboard:
 
     def __init__(
         self,
-        order_flow_analyzer: Optional[OrderFlowAnalyzer] = None,
-        institutional_detector: Optional[InstitutionalFlowDetector] = None,
-        advanced_analyzer: Optional[AdvancedOrderFlowAnalyzer] = None,
-        time_and_sales: Optional[TimeAndSalesService] = None,
-        dom_service: Optional[DepthOfMarketService] = None,
+        order_flow_analyzer: OrderFlowAnalyzer | None = None,
+        institutional_detector: InstitutionalFlowDetector | None = None,
+        advanced_analyzer: AdvancedOrderFlowAnalyzer | None = None,
+        time_and_sales: TimeAndSalesService | None = None,
+        dom_service: DepthOfMarketService | None = None,
     ):
         """
         Initialize dashboard with optional pre-built service instances.
@@ -293,8 +292,8 @@ class OrderFlowDashboard:
         price: float,
         volume: float,
         side: str,
-        timestamp: Optional[datetime] = None,
-        trade_id: Optional[str] = None,
+        timestamp: datetime | None = None,
+        trade_id: str | None = None,
     ) -> None:
         """
         Add a trade tick to the dashboard components.
@@ -497,11 +496,11 @@ class OrderFlowDashboard:
 
 
 def create_dashboard(
-    order_flow_config: Optional[dict] = None,
-    dom_config: Optional[dict] = None,
-    time_sales_config: Optional[dict] = None,
-    advanced_config: Optional[dict] = None,
-    institutional_config: Optional[dict] = None,
+    order_flow_config: dict | None = None,
+    dom_config: dict | None = None,
+    time_sales_config: dict | None = None,
+    advanced_config: dict | None = None,
+    institutional_config: dict | None = None,
 ) -> OrderFlowDashboard:
     """
     Factory function to create a fully-initialised OrderFlowDashboard.
@@ -563,7 +562,7 @@ def create_dashboard_router(dashboard: OrderFlowDashboard):
 
 
 # Global instance
-_dashboard: Optional[OrderFlowDashboard] = None
+_dashboard: OrderFlowDashboard | None = None
 
 
 def get_order_flow_dashboard() -> OrderFlowDashboard:

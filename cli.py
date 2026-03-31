@@ -333,13 +333,13 @@ def main():
     parser_start.add_argument(
         "--port",
         type=int,
-        default=int(os.getenv("API_PORT", 5000)),
+        default=int(os.getenv("API_PORT", "5000")),
         help="Port to listen on (default: 5000)",
     )
     parser_start.add_argument(
         "--workers",
         type=int,
-        default=int(os.getenv("API_WORKERS", 1)),
+        default=int(os.getenv("API_WORKERS", "1")),
         help="Number of worker processes (default: 1)",
     )
     parser_start.add_argument(

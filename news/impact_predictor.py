@@ -16,7 +16,6 @@ Author: HOPEFX Development Team
 """
 
 import logging
-from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 
@@ -54,8 +53,8 @@ class MarketImpact:
     category: EventCategory
     confidence: float  # 0 to 1
     expected_volatility: float  # Percentage
-    direction_bias: Optional[str] = None  # 'bullish', 'bearish', or None
-    affected_symbols: Optional[list[str]] = None
+    direction_bias: str | None = None  # 'bullish', 'bearish', or None
+    affected_symbols: list[str] | None = None
     timeframe: str = "intraday"  # 'intraday', 'short_term', 'medium_term'
 
     def to_dict(self) -> dict:
@@ -190,8 +189,8 @@ class ImpactPredictor:
         self,
         title: str,
         description: str,
-        sentiment_score: Optional[float] = None,
-        symbols: Optional[list[str]] = None,
+        sentiment_score: float | None = None,
+        symbols: list[str] | None = None,
     ) -> MarketImpact:
         """
         Predict market impact of a news event
@@ -300,7 +299,7 @@ class ImpactPredictor:
             return ImpactLevel.VERY_LOW
 
     def _calculate_confidence(
-        self, text: str, category: EventCategory, sentiment_score: Optional[float]
+        self, text: str, category: EventCategory, sentiment_score: float | None
     ) -> float:
         """Calculate confidence in prediction"""
         confidence = 0.5  # Base confidence
@@ -344,7 +343,7 @@ class ImpactPredictor:
 
         return base_volatility
 
-    def _determine_direction(self, sentiment_score: Optional[float]) -> Optional[str]:
+    def _determine_direction(self, sentiment_score: float | None) -> str | None:
         """Determine market direction bias"""
         if sentiment_score is None:
             return None

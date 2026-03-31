@@ -13,7 +13,6 @@ import logging
 import os
 import secrets
 import sys
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +30,8 @@ class ProductionConfigManager:
 
     def __init__(self, env: str = "production"):
         self.env = env
-        self._encryption_key: Optional[bytes] = None
-        self._salt: Optional[bytes] = None
+        self._encryption_key: bytes | None = None
+        self._salt: bytes | None = None
 
     def initialize(self) -> None:
         """

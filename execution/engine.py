@@ -29,9 +29,10 @@ import time
 import traceback
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +68,10 @@ class ExecutionRequest:
     side: str  # "BUY" | "SELL"
     quantity: float
     order_type: str = "MARKET"  # "MARKET" | "LIMIT" | "STOP"
-    price: Optional[float] = None
-    stop_price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    price: float | None = None
+    stop_price: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     strategy_id: str = "unknown"
     request_id: str = field(default_factory=lambda: str(uuid.uuid4())[:16])
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -96,7 +97,7 @@ class ExecutionReport:
 
     request_id: str
     status: ExecutionStatus
-    order_id: Optional[str] = None
+    order_id: str | None = None
     filled_quantity: float = 0.0
     average_price: float = 0.0
     commission: float = 0.0
@@ -133,7 +134,7 @@ class EngineCircuitBreaker:
         self._reset_sec = reset_sec
         self._failures: list[float] = []  # monotonic timestamps of failures
         self._open = False
-        self._opened_at: Optional[float] = None
+        self._opened_at: float | None = None
         self._lock = asyncio.Lock()
 
     async def record_failure(self) -> None:
@@ -536,7 +537,7 @@ class ExecutionEngine:
     # Pre-trade gate
     # ------------------------------------------------------------------
 
-    async def _run_pre_trade_gate(self, request: ExecutionRequest) -> Optional[str]:
+    async def _run_pre_trade_gate(self, request: ExecutionRequest) -> str | None:
         """
         Run pre-trade gate checks.
 

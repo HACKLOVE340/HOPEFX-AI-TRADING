@@ -37,8 +37,8 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, UTC
+from typing import Any
 
 import aiohttp
 
@@ -143,7 +143,7 @@ def _classify_impact(event_name: str, finnhub_impact: str) -> MacroImpact:
     return mapping.get(finnhub_impact.lower(), MacroImpact.LOW)
 
 
-def _safe_float(val) -> Optional[float]:
+def _safe_float(val) -> float | None:
     try:
         return float(val) if val not in (None, "", "N/A", ".") else None
     except (TypeError, ValueError):
@@ -161,7 +161,7 @@ class MacroCalendarEngine:
     def __init__(self, redis_client=None) -> None:
         self._events: list[MacroEvent] = []
         self._redis = redis_client
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
         self._last_refresh: float = 0.0
         self._lock = asyncio.Lock()
         self._running: bool = False
@@ -401,7 +401,7 @@ class MacroCalendarEngine:
                 return True
         return False
 
-    def get_ml_features(self, as_of: Optional[datetime] = None) -> dict[str, float]:
+    def get_ml_features(self, as_of: datetime | None = None) -> dict[str, float]:
         """
         Return 6 macro calendar ML features.
 
@@ -457,11 +457,8 @@ class MacroCalendarEngine:
         )
 
         # Compute impact score causally
-        if as_of:
-            # For backtesting: compute impact at as_of time
-            impact_score = self._compute_impact_at(as_of)
-        else:
-            impact_score = self.get_current_impact_score()
+        # For backtesting: compute impact at as_of time; otherwise use live score
+        impact_score = self._compute_impact_at(as_of) if as_of else self.get_current_impact_score()
 
         # Causal blackout check: use as_of time, not live datetime.now()
         is_blackout = self._is_blackout_at(now)
@@ -541,7 +538,7 @@ class MacroCalendarEngine:
         except Exception as exc:
             logger.debug("MacroCalendarEngine Redis error: %s", exc)
 
-    def get_event_by_id(self, event_id: str) -> Optional[MacroEvent]:
+    def get_event_by_id(self, event_id: str) -> MacroEvent | None:
         """Return a single event by its event_id, or None if not found."""
         for e in self._events:
             if e.event_id == event_id:

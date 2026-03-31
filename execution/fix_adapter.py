@@ -31,7 +31,8 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -96,8 +97,8 @@ class FIXOrder:
     side: FIXSide
     quantity: float
     ord_type: FIXOrdType = FIXOrdType.MARKET
-    price: Optional[float] = None  # Required for LIMIT
-    stop_px: Optional[float] = None  # Required for STOP
+    price: float | None = None  # Required for LIMIT
+    stop_px: float | None = None  # Required for STOP
     cl_ord_id: str = field(default_factory=lambda: str(uuid.uuid4())[:16])
     account: str = ""
     currency: str = "USD"
@@ -139,7 +140,7 @@ class CircuitBreaker:
         self.threshold_ms = threshold_ms
         self.reset_after_sec = reset_after_sec
         self._open = False
-        self._opened_at: Optional[float] = None
+        self._opened_at: float | None = None
         self._lock = threading.Lock()
 
     def record_latency(self, latency_ms: float) -> None:
@@ -510,10 +511,10 @@ class FIXAdapter:
         # quickfix objects (set in start())
         self._initiator: Any = None
         self._session_id: Any = None
-        self._app: Optional[_QuickfixApp] = None
+        self._app: _QuickfixApp | None = None
 
         # Heartbeat thread
-        self._hb_thread: Optional[threading.Thread] = None
+        self._hb_thread: threading.Thread | None = None
         self._running = False
 
     # ------------------------------------------------------------------
@@ -676,11 +677,11 @@ class FIXAdapter:
             import os
             import tempfile
 
-            tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False)
-            tmp.write(settings_str)
-            tmp.close()
-            settings = fix.SessionSettings(tmp.name)
-            os.unlink(tmp.name)
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as tmp:
+                tmp.write(settings_str)
+                tmp_name = tmp.name
+            settings = fix.SessionSettings(tmp_name)
+            os.unlink(tmp_name)
 
         store_factory = fix.FileStoreFactory(settings)
         log_factory = fix.FileLogFactory(settings)

@@ -33,7 +33,6 @@ import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
 
 # Logger must be defined before any module-level try/except blocks that use it.
 logging.basicConfig(
@@ -273,14 +272,14 @@ except Exception as _otel_err:
 
 
 # AppState extracted to core/app_state.py — re-exported here for backwards compat
-from core.app_state import AppState, app_state
+from core.app_state import app_state
 
 
 class ErrorResponse(BaseModel):
     """Error response"""
 
     error: str
-    detail: Optional[str] = None
+    detail: str | None = None
 
 
 # Dependency to get database session
@@ -651,8 +650,8 @@ def run_server():
     # Default to localhost for security, use 0.0.0.0 only when explicitly set
     # Set API_HOST=0.0.0.0 in production environment to bind to all interfaces
     host = os.getenv("API_HOST", "127.0.0.1")
-    port = int(os.getenv("API_PORT", 8000))
-    workers = int(os.getenv("API_WORKERS", 4))
+    port = int(os.getenv("API_PORT", "8000"))
+    workers = int(os.getenv("API_WORKERS", "4"))
     reload = os.getenv("ENVIRONMENT", "development") == "development"
 
     logger.info(f"Starting API server on {host}:{port}")

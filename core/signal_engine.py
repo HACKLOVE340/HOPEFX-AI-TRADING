@@ -24,8 +24,8 @@ Phase chain (Phases 1–4 are optional and gated by feature flags):
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 # ── MacroStore (populated at startup by init_macro_store) ─────────────────────
 # Imported lazily so the signal engine can start even if ml is unavailable.
-def _get_macro_store() -> Optional[Any]:
+def _get_macro_store() -> Any | None:
     """Return the module-level MacroStore singleton, or None if unavailable."""
     try:
         from ml.macro_store import macro_store
@@ -44,7 +44,7 @@ def _get_macro_store() -> Optional[Any]:
         return None
 
 
-def _get_macro_store_bridge() -> Optional[Any]:
+def _get_macro_store_bridge() -> Any | None:
     """
     Return the MacroStoreBridge via the orchestrator — the single entry point.
 
@@ -74,16 +74,16 @@ except Exception:
     _ML_AVAILABLE = False
 
 # ── Anomaly weight store (Phase 2 — down-weight signals on anomalous bars) ────
-_anomaly_store: Optional[Any] = None
+_anomaly_store: Any | None = None
 
 # ── Online learner store (Phase 3 — incremental XGBoost + drift detection) ───
-_online_learner_store: Optional[Any] = None
+_online_learner_store: Any | None = None
 
 # ── Deep ensemble store (Phase 4 — LSTM/Transformer/TCN stacking) ────────────
-_deep_ensemble_store: Optional[Any] = None
+_deep_ensemble_store: Any | None = None
 
 
-def _get_deep_ensemble_store() -> Optional[Any]:
+def _get_deep_ensemble_store() -> Any | None:
     """Return the module-level DeepEnsembleStore singleton, loading on first call."""
     global _deep_ensemble_store
     try:
@@ -115,7 +115,7 @@ def _get_deep_ensemble_store() -> Optional[Any]:
     return _deep_ensemble_store if _deep_ensemble_store else None
 
 
-def _get_online_learner_store() -> Optional[Any]:
+def _get_online_learner_store() -> Any | None:
     """Return the module-level OnlineLearnerStore singleton, creating it on first call."""
     global _online_learner_store
     try:
@@ -136,7 +136,7 @@ def _get_online_learner_store() -> Optional[Any]:
     return _online_learner_store
 
 
-def _get_anomaly_store() -> Optional[Any]:
+def _get_anomaly_store() -> Any | None:
     """Return the module-level AnomalyWeightStore singleton, creating it on first call."""
     global _anomaly_store
     try:
@@ -159,13 +159,13 @@ def _get_anomaly_store() -> Optional[Any]:
 
 if not _ML_AVAILABLE:
     # Provide no-op stubs so the rest of the module can reference these names
-    def get_active_model() -> Optional[Any]:  # type: ignore[misc]
+    def get_active_model() -> Any | None:  # type: ignore[misc]
         return None
 
     def get_model_version() -> str:  # type: ignore[misc]
         return "none"
 
-    def get_advanced_predictor() -> Optional[Any]:  # type: ignore[misc]
+    def get_advanced_predictor() -> Any | None:  # type: ignore[misc]
         return None
 
 
@@ -179,7 +179,7 @@ _AUTO_TRADE = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").lower() == "true"
 async def _fetch_market_data(
     symbol: str,
     app_state: Any = None,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     Fetch latest OHLCV data for a symbol from the broker's market data feed.
 
@@ -253,7 +253,7 @@ def _compute_signal(
     brain: Any,
     data: dict[str, Any],
     symbol: str,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     Run StrategyBrain and return a signal dict, or None if no consensus.
 
@@ -411,7 +411,7 @@ def _fetch_macro_df(
 def _fetch_mtf_df(
     ohlcv_df: "pd.DataFrame",
     app_state: Any = None,
-) -> Optional[Any]:
+) -> Any | None:
     """
     Fetch MTF regime features from MTFFusionStore if available and enabled.
 
@@ -612,7 +612,7 @@ def _compute_ml_probability(
 def notify_fill(
     features: "pd.DataFrame",
     label: int,
-    primary_prob: Optional[float] = None,
+    primary_prob: float | None = None,
 ) -> None:
     """
     Notify the online learner of a confirmed fill (Phase 3).
@@ -772,7 +772,7 @@ async def _execute_if_approved(
     app_state: Any,
     symbol: str,
     signal_payload: dict[str, Any],
-    data: Optional[dict[str, Any]] = None,
+    data: dict[str, Any] | None = None,
 ) -> None:
     """
     Apply risk filter and execute an auto-trade if approved.
@@ -1229,7 +1229,7 @@ async def _tick(app_state: Any) -> None:
     for sym in _SYMBOLS:
         symbol: str = sym.strip().upper()
 
-        data: Optional[dict[str, Any]] = await _fetch_market_data(symbol, app_state=app_state)
+        data: dict[str, Any] | None = await _fetch_market_data(symbol, app_state=app_state)
         if not data:
             continue
 

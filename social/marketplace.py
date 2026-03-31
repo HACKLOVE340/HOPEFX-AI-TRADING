@@ -11,9 +11,9 @@ Allows users to publish, list, purchase, and subscribe to trading strategies.
 
 import ast
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 from decimal import Decimal
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from dataclasses import dataclass, field
 
 
@@ -54,7 +54,7 @@ class StrategyMarketplace:
 
     PLATFORM_FEE_PCT = 0.20  # 20% platform cut
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         self.config = config or {}
         self.listings: dict[str, StrategyListing] = {}
         self.purchases: dict[str, list[dict]] = {}  # buyer_id -> purchases

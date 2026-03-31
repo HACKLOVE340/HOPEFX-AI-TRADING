@@ -15,10 +15,12 @@ import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime, timedelta, UTC
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
+import contextlib
 
 try:
     import aiohttp
@@ -122,7 +124,7 @@ class PriceFeedBase(abc.ABC):
             except Exception as exc:
                 logger.error("Price callback error: %s", exc)
 
-    def get_last_price(self, symbol: str) -> Optional[Tick]:
+    def get_last_price(self, symbol: str) -> Tick | None:
         """Return the most recent tick for *symbol*, or None if unseen."""
         return self._last_prices.get(symbol)
 
@@ -341,7 +343,7 @@ class WebSocketPriceFeed(PriceFeedBase):
         buffer = self._ohlcv_buffers[symbol][timeframe]
         return list(buffer)[-limit:]
 
-    def get_spread(self, symbol: str) -> Optional[float]:
+    def get_spread(self, symbol: str) -> float | None:
         """Get current spread for symbol"""
         tick = self.get_last_price(symbol)
         return tick.spread if tick else None
@@ -356,7 +358,7 @@ class RESTPriceFeed(PriceFeedBase):
         super().__init__(symbols, config)
         self.rest_url = config.get("rest_url", "https://api.exchange.coinbase.com")
         self.rate_limit_per_sec = config.get("rate_limit_per_sec", 10)
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
         self._request_times: deque = deque(maxlen=100)
         self._cache: dict[str, Any] = {}
         self._cache_ttl = 5  # seconds
@@ -512,8 +514,8 @@ class RealTimePriceEngine:
 
         # Tasks
         self._tasks: list[asyncio.Task] = []
-        self._monitor_task: Optional[asyncio.Task] = None
-        self._tick_flush_task: Optional[asyncio.Task] = None
+        self._monitor_task: asyncio.Task | None = None
+        self._tick_flush_task: asyncio.Task | None = None
 
         # ── Tick persistence ──────────────────────────────────────────────────
         import os as _os
@@ -599,10 +601,8 @@ class RealTimePriceEngine:
         # Stop tick flush loop and drain any remaining buffered ticks
         if self._tick_flush_task and not self._tick_flush_task.done():
             self._tick_flush_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._tick_flush_task
-            except asyncio.CancelledError:
-                pass
         if self._tick_persist_enabled and self._tick_buffer:
             await self._flush_ticks()
 
@@ -680,7 +680,7 @@ class RealTimePriceEngine:
         """
         try:
             from database.models import TickData
-            from datetime import datetime, timezone
+            from datetime import datetime, timezone  # noqa: F401
         except ImportError as exc:
             logger.error("Tick persistence: could not import TickData model: %s", exc)
             return
@@ -715,7 +715,7 @@ class RealTimePriceEngine:
         """Register for candle updates"""
         self._candle_callbacks.append(callback)
 
-    def get_last_price(self, symbol: str) -> Optional[Tick]:
+    def get_last_price(self, symbol: str) -> Tick | None:
         """Get last price (prefer WebSocket)"""
         # Try WebSocket first
         tick = self._ws_feed.get_last_price(symbol)

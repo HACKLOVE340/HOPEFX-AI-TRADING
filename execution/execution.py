@@ -66,8 +66,10 @@ import logging
 import os
 import signal
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
+from collections.abc import Callable
 from datetime import UTC
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +88,10 @@ class ExecutionSystem:
     outside this class in production.
     """
 
-    def __init__(self, ml_inference_fn: Optional[Callable] = None) -> None:
+    def __init__(self, ml_inference_fn: Callable | None = None) -> None:
         self._ml_inference_fn = ml_inference_fn
         self._started = False
-        self._start_time: Optional[float] = None
+        self._start_time: float | None = None
 
         # Components — populated in start()
         self._orchestrator = None
@@ -246,10 +248,8 @@ class ExecutionSystem:
         for task in self._tasks:
             if not task.done():
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
         # 3. Disconnect brokers
         for broker_id, broker in self._brokers.items():
@@ -343,7 +343,7 @@ class ExecutionSystem:
 # ── Broker factory helpers ────────────────────────────────────────────────────
 
 
-async def _connect_oanda() -> Optional[Any]:
+async def _connect_oanda() -> Any | None:
     account_id = os.getenv("OANDA_ACCOUNT_ID", "")
     api_token = os.getenv("OANDA_API_TOKEN", "")
     if not account_id or not api_token:
@@ -370,7 +370,7 @@ async def _connect_oanda() -> Optional[Any]:
         return None
 
 
-async def _connect_ibkr() -> Optional[Any]:
+async def _connect_ibkr() -> Any | None:
     host = os.getenv("IBKR_HOST", "127.0.0.1")
     _port = int(os.getenv("IBKR_PORT", "7497"))
     try:
@@ -440,7 +440,7 @@ def _wire_notify_fill(orchestrator) -> None:
           - Replay engine: notifies of actual execution price
         """
         import json
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         fill_record = {
             "fill_id": fill_id,

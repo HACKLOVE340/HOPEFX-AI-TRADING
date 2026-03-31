@@ -14,9 +14,9 @@ Comprehensive performance analytics including:
 - Risk metrics visualization data
 """
 
-from typing import Dict, List, Any, Tuple
+from typing import Any
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from enum import Enum
 import numpy as np
 import logging

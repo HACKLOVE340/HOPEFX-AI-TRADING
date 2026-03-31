@@ -7,8 +7,7 @@
 Mobile Authentication
 """
 
-from typing import Optional
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 
 
 class MobileAuth:
@@ -19,7 +18,7 @@ class MobileAuth:
 
     def authenticate_biometric(
         self, user_id: str, biometric_data: str, device_id: str
-    ) -> Optional[str]:
+    ) -> str | None:
         """Authenticate using biometrics"""
         # Generate JWT token
         token = (

@@ -14,15 +14,17 @@ import logging
 import os
 import time
 import json
-from typing import Dict, List, Optional, Any, Callable
+from typing import Any
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 
 try:
     import requests
 except ImportError:
     requests = None  # type: ignore
 from enum import Enum
+import contextlib
 
 try:
     import aiohttp
@@ -44,11 +46,11 @@ try:
     from sendgrid import SendGridAPIClient
     from sendgrid.helpers.mail import (
         Mail,
-        From,
-        To,
-        Subject,
+        From,  # noqa: F401
+        To,  # noqa: F401
+        Subject,  # noqa: F401
         HtmlContent,
-        PlainTextContent,
+        PlainTextContent,  # noqa: F401
     )
 
     SENDGRID_AVAILABLE = True
@@ -187,20 +189,19 @@ class DiscordChannel(NotificationChannel):
         payload = {"embeds": [embed]}
 
         async def _send():
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.webhook_url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as response:
-                    if response.status in [200, 204]:
-                        logger.debug(f"Discord notification sent: {notification.title}")
-                        return True
-                    else:
-                        logger.error(
-                            f"Discord error {response.status}: {await response.text()}"
-                        )
-                        return False
+            async with aiohttp.ClientSession() as session, session.post(
+                self.webhook_url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status in [200, 204]:
+                    logger.debug(f"Discord notification sent: {notification.title}")
+                    return True
+                else:
+                    logger.error(
+                        f"Discord error {response.status}: {await response.text()}"
+                    )
+                    return False
 
         return await self._send_with_retry(_send)
 
@@ -256,20 +257,19 @@ class TelegramChannel(NotificationChannel):
         url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
 
         async def _send():
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
-                ) as response:
-                    if response.status == 200:
-                        logger.debug(
-                            f"Telegram notification sent: {notification.title}"
-                        )
-                        return True
-                    else:
-                        logger.error(
-                            f"Telegram error {response.status}: {await response.text()}"
-                        )
-                        return False
+            async with aiohttp.ClientSession() as session, session.post(
+                url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+                if response.status == 200:
+                    logger.debug(
+                        f"Telegram notification sent: {notification.title}"
+                    )
+                    return True
+                else:
+                    logger.error(
+                        f"Telegram error {response.status}: {await response.text()}"
+                    )
+                    return False
 
         return await self._send_with_retry(_send)
 
@@ -297,7 +297,7 @@ class EmailChannel(NotificationChannel):
         self.to_addrs: list[str] = config.get("to_addrs", [])
 
         # Determine send mode
-        self.sendgrid_api_key: Optional[str] = os.getenv(
+        self.sendgrid_api_key: str | None = os.getenv(
             "SENDGRID_API_KEY"
         ) or config.get("sendgrid_api_key")
         if self.sendgrid_api_key and SENDGRID_AVAILABLE:
@@ -380,7 +380,7 @@ class EmailChannel(NotificationChannel):
         )
 
         # Render HTML template if one is specified in notification.data
-        html_body: Optional[str] = None
+        html_body: str | None = None
         template_name = notification.data.get("email_template")
         if template_name:
             try:
@@ -429,7 +429,7 @@ class EmailChannel(NotificationChannel):
         recipients: list[str],
         subject: str,
         body: str,
-        html_body: Optional[str] = None,
+        html_body: str | None = None,
     ) -> bool:
         try:
             sg = SendGridAPIClient(api_key=self.sendgrid_api_key)
@@ -460,7 +460,7 @@ class EmailChannel(NotificationChannel):
         recipients: list[str],
         subject: str,
         body: str,
-        html_body: Optional[str] = None,
+        html_body: str | None = None,
     ) -> bool:
         try:
             msg = MIMEMultipart("alternative")
@@ -527,7 +527,7 @@ class NotificationManager:
         self._processed_ids: set = set()
         self._max_history = 1000
         self._running = False
-        self._worker_task: Optional[asyncio.Task] = None
+        self._worker_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
 
         # Sync API: list of enabled channel names
@@ -604,10 +604,8 @@ class NotificationManager:
 
         if self._worker_task:
             self._worker_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._worker_task
-            except asyncio.CancelledError:
-                pass
 
         logger.info("Notification manager stopped")
 
@@ -617,7 +615,7 @@ class NotificationManager:
         title: str,
         message: str = "",
         data: dict[str, Any] = None,
-        channels: Optional[list[str]] = None,
+        channels: list[str] | None = None,
         bypass_rate_limit: bool = False,
     ) -> bool:
         """
@@ -931,12 +929,12 @@ class NotificationManager:
 
 
 # Global instance
-_notification_manager: Optional[NotificationManager] = None
+_notification_manager: NotificationManager | None = None
 
 
-def get_notification_manager() -> Optional[NotificationManager]:
+def get_notification_manager() -> NotificationManager | None:
     """Get global notification manager"""
-    global _notification_manager
+    global _notification_manager  # noqa: PLW0602
     return _notification_manager
 
 

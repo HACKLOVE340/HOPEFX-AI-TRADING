@@ -52,7 +52,6 @@ import pickle  # nosec B403 - joblib tried first; pickle only for legacy fallbac
 import threading
 from collections import deque
 from pathlib import Path
-from typing import Deque, Dict, List, Optional
 
 import joblib
 import numpy as np
@@ -405,7 +404,7 @@ class IncrementalXGBoost:
         n_base_rounds: int = 300,
         n_new_rounds: int = 20,
         buffer_size: int = 5000,
-        xgb_params: Optional[dict] = None,
+        xgb_params: dict | None = None,
     ):
         if not XGB_AVAILABLE:
             raise RuntimeError("xgboost required for IncrementalXGBoost")
@@ -425,9 +424,9 @@ class IncrementalXGBoost:
             "n_jobs": -1,
         }
 
-        self._booster: Optional[xgb.Booster] = None
+        self._booster: xgb.Booster | None = None
         self._scaler = StandardScaler()
-        self._feature_cols: Optional[list[str]] = None
+        self._feature_cols: list[str] | None = None
         self._replay_X: deque[np.ndarray] = deque(maxlen=buffer_size)
         self._replay_y: deque[float] = deque(maxlen=buffer_size)
         self._update_count: int = 0
@@ -621,7 +620,7 @@ class OnlineEnsemble:
         self,
         X: pd.DataFrame,
         y: np.ndarray,
-        X_arr: Optional[np.ndarray] = None,
+        X_arr: np.ndarray | None = None,
     ) -> bool:
         """
         Incremental update. Returns True if drift was detected.
@@ -706,7 +705,7 @@ class OnlineLearnerStore:
         buffer_size: int = 500,
         adaptive_weights: bool = True,
         use_adwin: bool = True,
-        persist_path: Optional[str] = None,
+        persist_path: str | None = None,
     ) -> None:
         # Normalise weights to sum to 1
         total = primary_weight + online_weight
@@ -717,7 +716,7 @@ class OnlineLearnerStore:
         self.adaptive_weights = adaptive_weights
         self.persist_path = Path(persist_path) if persist_path else None
 
-        self._model: Optional[IncrementalXGBoost] = None
+        self._model: IncrementalXGBoost | None = None
         self._ph_detector = DriftDetector()
         self._adwin_detector = ADWINDriftDetector() if use_adwin else None
         self._blend_weights = (
@@ -763,7 +762,7 @@ class OnlineLearnerStore:
         self,
         features: pd.DataFrame,
         label: int,
-        primary_prob: Optional[float] = None,
+        primary_prob: float | None = None,
     ) -> bool:
         """
         Update the online learner with a confirmed fill.
@@ -989,7 +988,7 @@ _registry_lock = threading.Lock()
 
 def get_online_learner(
     symbol: str = "XAUUSD",
-    persist_path: Optional[Path] = None,
+    persist_path: Path | None = None,
     primary_weight: float = 0.7,
     online_weight: float = 0.3,
     min_fills: int = 20,

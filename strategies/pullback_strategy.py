@@ -52,8 +52,8 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -108,7 +108,7 @@ class PullbackStrategy(BaseStrategy):
 
     def __init__(
         self,
-        config: Optional[StrategyConfig] = None,
+        config: StrategyConfig | None = None,
         *,
         name: str = "pullback",
         symbol: str = "XAU_USD",
@@ -242,7 +242,7 @@ class PullbackStrategy(BaseStrategy):
         """Alias for generate_signal — satisfies BaseStrategy ABC."""
         return self.generate_signal(market_data)
 
-    def on_bar(self, bar: dict[str, Any]) -> Optional[Signal]:
+    def on_bar(self, bar: dict[str, Any]) -> Signal | None:
         """
         Process a single new bar and return a Signal if conditions are met.
 
@@ -286,7 +286,7 @@ class PullbackStrategy(BaseStrategy):
 
     # ── Indicator computation ─────────────────────────────────────────────────
 
-    def _prepare(self, df: pd.DataFrame) -> Optional[pd.DataFrame]:
+    def _prepare(self, df: pd.DataFrame) -> pd.DataFrame | None:
         """Normalise column names and validate required columns."""
         try:
             d = df.copy()
@@ -305,7 +305,7 @@ class PullbackStrategy(BaseStrategy):
             logger.debug("PullbackStrategy._prepare failed: %s", exc)
             return None
 
-    def _compute_indicators(self, df: pd.DataFrame) -> Optional[dict[str, Any]]:
+    def _compute_indicators(self, df: pd.DataFrame) -> dict[str, Any] | None:
         """
         Compute all indicators needed for entry condition evaluation.
 

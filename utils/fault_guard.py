@@ -44,9 +44,8 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum, auto
-from typing import Dict
 
 from core.event_bus import bus
 

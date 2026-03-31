@@ -8,8 +8,9 @@
 import logging
 import threading
 import time
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime, timedelta, UTC
+from typing import Any
+from collections.abc import Callable
 
 from replay.models import ReplaySpeed, ReplayState, ReplaySession, ReplayBar
 
@@ -29,18 +30,18 @@ class ChartReplayEngine:
     - Session recording and review
     """
 
-    def __init__(self, config: Optional[dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize replay engine."""
         self.config = config or {}
         self.sessions: dict[str, ReplaySession] = {}
-        self.active_session_id: Optional[str] = None
+        self.active_session_id: str | None = None
         self.data_cache: dict[str, list[ReplayBar]] = {}
         self.callbacks: dict[str, list[Callable]] = {
             "on_bar": [],
             "on_trade": [],
             "on_state_change": [],
         }
-        self._replay_thread: Optional[threading.Thread] = None
+        self._replay_thread: threading.Thread | None = None
         self._stop_flag = threading.Event()
 
         logger.info("Chart Replay Engine initialized")
@@ -234,7 +235,7 @@ class ChartReplayEngine:
             )
             return []
 
-    def play(self, session_id: Optional[str] = None) -> bool:
+    def play(self, session_id: str | None = None) -> bool:
         """Start or resume replay."""
         session = self._get_session(session_id)
         if not session:
@@ -257,7 +258,7 @@ class ChartReplayEngine:
         logger.info(f"Started replay: {session.session_id}")
         return True
 
-    def pause(self, session_id: Optional[str] = None) -> bool:
+    def pause(self, session_id: str | None = None) -> bool:
         """Pause replay."""
         session = self._get_session(session_id)
         if not session:
@@ -270,7 +271,7 @@ class ChartReplayEngine:
         logger.info(f"Paused replay: {session.session_id}")
         return True
 
-    def stop(self, session_id: Optional[str] = None) -> bool:
+    def stop(self, session_id: str | None = None) -> bool:
         """Stop replay."""
         session = self._get_session(session_id)
         if not session:
@@ -283,7 +284,7 @@ class ChartReplayEngine:
         logger.info(f"Stopped replay: {session.session_id}")
         return True
 
-    def set_speed(self, speed: ReplaySpeed, session_id: Optional[str] = None) -> bool:
+    def set_speed(self, speed: ReplaySpeed, session_id: str | None = None) -> bool:
         """Set replay speed."""
         session = self._get_session(session_id)
         if not session:
@@ -293,7 +294,7 @@ class ChartReplayEngine:
         logger.info(f"Set replay speed to {speed.name}")
         return True
 
-    def seek(self, target_date: datetime, session_id: Optional[str] = None) -> bool:
+    def seek(self, target_date: datetime, session_id: str | None = None) -> bool:
         """Seek to a specific date in the replay."""
         session = self._get_session(session_id)
         if not session:
@@ -312,9 +313,9 @@ class ChartReplayEngine:
         side: str,
         size: float,
         order_type: str = "MARKET",
-        price: Optional[float] = None,
-        session_id: Optional[str] = None,
-    ) -> Optional[dict[str, Any]]:
+        price: float | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, Any] | None:
         """
         Place a practice order in the replay session.
 
@@ -362,7 +363,7 @@ class ChartReplayEngine:
         logger.info(f"Practice trade executed: {side} {size} @ {execution_price}")
         return trade
 
-    def _get_session(self, session_id: Optional[str]) -> Optional[ReplaySession]:
+    def _get_session(self, session_id: str | None) -> ReplaySession | None:
         """Get session by ID or active session."""
         if session_id:
             return self.sessions.get(session_id)
@@ -370,7 +371,7 @@ class ChartReplayEngine:
             return self.sessions.get(self.active_session_id)
         return None
 
-    def _get_current_bar(self, session: ReplaySession) -> Optional[ReplayBar]:
+    def _get_current_bar(self, session: ReplaySession) -> ReplayBar | None:
         """Get the current bar in replay."""
         data_key = f"{session.symbol}_{session.timeframe}"
         bars = self.data_cache.get(data_key, [])
@@ -466,7 +467,7 @@ class ChartReplayEngine:
             except Exception as e:
                 logger.error(f"Callback error: {e}")
 
-    def get_session_summary(self, session_id: Optional[str] = None) -> dict[str, Any]:
+    def get_session_summary(self, session_id: str | None = None) -> dict[str, Any]:
         """Get summary of replay session."""
         session = self._get_session(session_id)
         if not session:

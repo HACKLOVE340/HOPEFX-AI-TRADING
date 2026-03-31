@@ -47,7 +47,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -56,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 # Module-level singleton — populated by init_mtf_store() at startup.
 # signal_engine._fetch_mtf_df() reads this when app_state.mtf_store is absent.
-_MTF_STORE_SINGLETON: Optional[MTFFusionStore] = None
+_MTF_STORE_SINGLETON: MTFFusionStore | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -222,7 +221,7 @@ class MTFFusion:
         self,
         intraday_df: pd.DataFrame,
         daily_df: pd.DataFrame,
-        hourly_df: Optional[pd.DataFrame] = None,
+        hourly_df: pd.DataFrame | None = None,
     ) -> pd.DataFrame:
         """
         Merge daily and hourly regime features into the intraday DataFrame.
@@ -334,12 +333,12 @@ class MTFFusionStore:
     ) -> None:
         self.symbol = symbol
         self.data_dir = data_dir
-        self._h4_df: Optional[pd.DataFrame] = None
-        self._d1_df: Optional[pd.DataFrame] = None
+        self._h4_df: pd.DataFrame | None = None
+        self._d1_df: pd.DataFrame | None = None
         self._fusion = MTFFusion(resample_hourly_from_5m=False)
         self._bootstrapped: bool = False
         self._lock = threading.RLock()
-        self._bootstrap_error: Optional[str] = None
+        self._bootstrap_error: str | None = None
 
     # ── Bootstrap ─────────────────────────────────────────────────────────────
 
@@ -389,7 +388,7 @@ class MTFFusionStore:
                 len(self._d1_df) if self._d1_df is not None else 0,
             )
 
-    def _load_csv(self, path, label: str) -> Optional[pd.DataFrame]:
+    def _load_csv(self, path, label: str) -> pd.DataFrame | None:
         """Load a scheduler CSV into a UTC-indexed OHLCV DataFrame."""
         try:
             from pathlib import Path
@@ -525,7 +524,7 @@ class MTFFusionStore:
 
     # ── Inference ─────────────────────────────────────────────────────────────
 
-    def align_to_h1(self, ohlcv_df: pd.DataFrame) -> Optional[pd.DataFrame]:
+    def align_to_h1(self, ohlcv_df: pd.DataFrame) -> pd.DataFrame | None:
         """
         Align H4 and D1 regime features to the provided H1 OHLCV DataFrame.
 

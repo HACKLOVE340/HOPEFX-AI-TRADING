@@ -20,7 +20,7 @@ Import pattern:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -32,7 +32,7 @@ class OKResponse(BaseModel):
     """Generic success acknowledgement."""
 
     ok: bool = True
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -70,9 +70,9 @@ class PositionOut(BaseModel):
     entry_price: float
     current_price: float = Field(0.0)
     unrealised_pnl: float = Field(0.0)
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
-    opened_at: Optional[datetime] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    opened_at: datetime | None = None
 
 
 # ── Trades ────────────────────────────────────────────────────────────────────
@@ -89,8 +89,8 @@ class TradeOut(BaseModel):
     exit_price: float
     net_pnl: float
     commission: float = Field(0.0)
-    opened_at: Optional[datetime] = None
-    closed_at: Optional[datetime] = None
+    opened_at: datetime | None = None
+    closed_at: datetime | None = None
     result: str = Field(..., description="'win' or 'loss'")
 
 
@@ -115,7 +115,7 @@ class RiskMetricsResponse(BaseModel):
     open_positions: int = Field(0)
     risk_level: str = Field("low", description="low | medium | high | critical")
     halt_active: bool = Field(False)
-    message: Optional[str] = None
+    message: str | None = None
 
 
 # ── Performance ───────────────────────────────────────────────────────────────
@@ -133,8 +133,8 @@ class PerformanceSummaryResponse(BaseModel):
     max_drawdown_pct: float = Field(0.0)
     avg_win: float = Field(0.0)
     avg_loss: float = Field(0.0)
-    period_start: Optional[datetime] = None
-    period_end: Optional[datetime] = None
+    period_start: datetime | None = None
+    period_end: datetime | None = None
 
 
 # ── Market regime ─────────────────────────────────────────────────────────────
@@ -148,16 +148,16 @@ class RegimeResponse(BaseModel):
     )
     confidence: float = Field(..., ge=0.0, le=1.0)
     active_strategy: str
-    hurst_exponent: Optional[float] = None
-    adx: Optional[float] = None
-    timestamp: Optional[datetime] = None
+    hurst_exponent: float | None = None
+    adx: float | None = None
+    timestamp: datetime | None = None
 
 
 class RegimeHistoryEntry(BaseModel):
     regime: str
     strategy: str
     started_at: datetime
-    ended_at: Optional[datetime] = None
+    ended_at: datetime | None = None
     duration_bars: int = Field(0)
 
 
@@ -208,12 +208,12 @@ class SignalOut(BaseModel):
     direction: str = Field(..., description="'buy' or 'sell'")
     confidence: float = Field(..., ge=0.0, le=1.0)
     entry_price: float
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     strategy: str
     timeframe: str = Field("1h")
-    generated_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
+    generated_at: datetime | None = None
+    expires_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -230,8 +230,8 @@ class BrokerStatusResponse(BaseModel):
 
     connected: bool
     broker_type: str
-    account_id: Optional[str] = None
+    account_id: str | None = None
     practice_mode: bool = Field(True)
-    latency_ms: Optional[float] = None
-    last_heartbeat: Optional[datetime] = None
-    error: Optional[str] = None
+    latency_ms: float | None = None
+    last_heartbeat: datetime | None = None
+    error: str | None = None

@@ -10,9 +10,9 @@ Provides team management, role-based access control, and shared resources
 for collaborative trading environments.
 """
 
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Any, Set  # noqa: F401
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, timezone, UTC  # noqa: F401
 from enum import Enum
 import logging
 import hashlib
@@ -138,10 +138,10 @@ class TeamMember:
     display_name: str
     role: UserRole
     joined_at: datetime
-    last_active: Optional[datetime] = None
+    last_active: datetime | None = None
     custom_permissions: set[Permission] = field(default_factory=set)
     is_active: bool = True
-    profile_image: Optional[str] = None
+    profile_image: str | None = None
     settings: dict[str, Any] = field(default_factory=dict)
 
 
@@ -189,7 +189,7 @@ class ActivityLog:
     resource_id: str
     details: dict[str, Any]
     timestamp: datetime
-    ip_address: Optional[str] = None
+    ip_address: str | None = None
 
 
 class TeamManager:
@@ -207,7 +207,7 @@ class TeamManager:
     - API key management
     """
 
-    def __init__(self, config: Optional[dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize team manager."""
         self.config = config or {}
         self.teams: dict[str, Team] = {}
@@ -221,7 +221,7 @@ class TeamManager:
         name: str,
         owner_email: str,
         owner_name: str,
-        owner_id: Optional[str] = None,
+        owner_id: str | None = None,
     ) -> Team:
         """
         Create a new team.
@@ -273,7 +273,7 @@ class TeamManager:
 
     def invite_member(
         self, team_id: str, email: str, role: UserRole, invited_by: str
-    ) -> Optional[TeamInvitation]:
+    ) -> TeamInvitation | None:
         """
         Send an invitation to join a team.
 
@@ -331,7 +331,7 @@ class TeamManager:
 
     def accept_invitation(
         self, invitation_token: str, user_id: str, display_name: str
-    ) -> Optional[TeamMember]:
+    ) -> TeamMember | None:
         """
         Accept a team invitation.
 
@@ -500,10 +500,7 @@ class TeamManager:
             return True
 
         # Check custom permissions
-        if permission in member.custom_permissions:
-            return True
-
-        return False
+        return permission in member.custom_permissions
 
     def get_user_permissions(self, team_id: str, user_id: str) -> set[Permission]:
         """Get all permissions for a user."""
@@ -559,7 +556,7 @@ class TeamManager:
 
     def generate_api_key(
         self, team_id: str, generated_by: str, name: str = "API Key"
-    ) -> Optional[dict[str, str]]:
+    ) -> dict[str, str] | None:
         """Generate an API key for the team."""
         team = self.teams.get(team_id)
         if not team:
@@ -653,7 +650,7 @@ class TeamManager:
         self.activity_logs.append(log)
 
     def get_activity_log(
-        self, team_id: str, user_id: Optional[str] = None, limit: int = 100
+        self, team_id: str, user_id: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
         """Get team activity log."""
         logs = [log for log in self.activity_logs if log.team_id == team_id]
@@ -676,7 +673,7 @@ class TeamManager:
             for log in logs
         ]
 
-    def get_team_summary(self, team_id: str) -> Optional[dict[str, Any]]:
+    def get_team_summary(self, team_id: str) -> dict[str, Any] | None:
         """Get team summary."""
         team = self.teams.get(team_id)
         if not team:
@@ -717,7 +714,6 @@ def create_teams_router(manager: "TeamManager"):
     """
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel
-    from typing import Optional
 
     router = APIRouter(prefix="/api/teams", tags=["Teams"])
 
@@ -725,7 +721,7 @@ def create_teams_router(manager: "TeamManager"):
         name: str
         owner_email: str
         owner_name: str
-        owner_id: Optional[str] = None
+        owner_id: str | None = None
 
     class InviteRequest(BaseModel):
         email: str
@@ -841,7 +837,7 @@ def create_teams_router(manager: "TeamManager"):
 
     @router.get("/{team_id}/activity")
     async def get_activity(
-        team_id: str, user_id: Optional[str] = None, limit: int = 50
+        team_id: str, user_id: str | None = None, limit: int = 50
     ):
         """Get team activity log."""
         return manager.get_activity_log(team_id, user_id=user_id, limit=limit)
@@ -851,13 +847,13 @@ def create_teams_router(manager: "TeamManager"):
 
 # Module exports
 __all__ = [
-    "TeamManager",
-    "Team",
-    "TeamMember",
-    "TeamInvitation",
-    "UserRole",
-    "Permission",
     "ROLE_PERMISSIONS",
     "ActivityLog",
+    "Permission",
+    "Team",
+    "TeamInvitation",
+    "TeamManager",
+    "TeamMember",
+    "UserRole",
     "create_teams_router",
 ]

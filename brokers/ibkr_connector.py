@@ -30,8 +30,9 @@ import threading
 import time
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
+from collections.abc import Callable
 
 from brokers.base import (
     AccountInfo,
@@ -65,7 +66,7 @@ try:
         MarketOrder,
         StopOrder,
         Trade,
-        util,
+        util,  # noqa: F401
     )
 
     IB_AVAILABLE = True
@@ -108,7 +109,7 @@ class IBKRConfig:
     client_id: int = field(
         default_factory=lambda: int(os.environ.get("IBKR_CLIENT_ID", "1"))
     )
-    account: Optional[str] = field(
+    account: str | None = field(
         default_factory=lambda: os.environ.get("IBKR_ACCOUNT")
     )
     readonly: bool = False
@@ -153,7 +154,7 @@ class IBKRConnector(BrokerConnector):
 
     def __init__(
         self,
-        config: Optional[IBKRConfig] = None,
+        config: IBKRConfig | None = None,
         kill_switch=None,
     ) -> None:
         if not IB_AVAILABLE:
@@ -184,12 +185,12 @@ class IBKRConnector(BrokerConnector):
             }
         )
 
-        self._ib: Optional[IB] = None
-        self._account_id: Optional[str] = self._cfg.account
+        self._ib: IB | None = None
+        self._account_id: str | None = self._cfg.account
         self._lock = threading.RLock()
         self._reconnect_attempts = 0
         self._reconnect_delay = _RECONNECT_INITIAL_DELAY
-        self._heartbeat_thread: Optional[threading.Thread] = None
+        self._heartbeat_thread: threading.Thread | None = None
         self._running = False
 
         # Tick callbacks for live market data
@@ -386,8 +387,8 @@ class IBKRConnector(BrokerConnector):
         side: OrderSide,
         order_type: OrderType,
         quantity: float,
-        price: Optional[float] = None,
-        stop_price: Optional[float] = None,
+        price: float | None = None,
+        stop_price: float | None = None,
         instrument: str = "commodity",
         **kwargs,
     ) -> Order:
@@ -502,7 +503,7 @@ class IBKRConnector(BrokerConnector):
             self._capture_sentry(exc)
             return False
 
-    def get_order(self, order_id: str) -> Optional[Order]:
+    def get_order(self, order_id: str) -> Order | None:
         """Retrieve order by ID."""
         if not self.connected or not self._ib:
             return None
@@ -715,7 +716,7 @@ class IBKRConnector(BrokerConnector):
             raise RuntimeError("IBKRConnector.subscribe_ticks: not connected.")
         try:
             contract = self._make_contract(symbol, instrument)
-            ticker = self._ib.reqMktData(contract, "", False, False)
+            ticker = self._ib.reqMktData(contract, "", False, False)  # noqa: F841
 
             def _on_pending_tickers(tickers):
                 for t in tickers:
@@ -758,7 +759,7 @@ class IBKRConnector(BrokerConnector):
         side: OrderSide,
         order_type: OrderType,
         quantity: float,
-        price: Optional[float] = None,
+        price: float | None = None,
     ) -> Order:
         """Convert ib_insync Trade to our Order dataclass."""
         status_map = {

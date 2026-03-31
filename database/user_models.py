@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 
 
 def _utcnow() -> datetime:

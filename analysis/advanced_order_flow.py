@@ -19,8 +19,7 @@ Enhances the base OrderFlowAnalyzer with:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timedelta, UTC
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -166,7 +165,7 @@ class AdvancedOrderFlowAnalyzer:
         divergence = analyzer.detect_delta_divergence('XAUUSD')
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize advanced analyzer.
 
@@ -203,7 +202,7 @@ class AdvancedOrderFlowAnalyzer:
         price: float,
         size: float,
         side: str,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
     ) -> None:
         """Add a trade for analysis."""
         ts = timestamp or datetime.now(UTC)
@@ -230,7 +229,7 @@ class AdvancedOrderFlowAnalyzer:
         self,
         symbol: str,
         lookback_minutes: int = 60,
-    ) -> Optional[AggressionMetrics]:
+    ) -> AggressionMetrics | None:
         """
         Calculate real-time buy/sell aggression metrics.
 
@@ -371,7 +370,7 @@ class AdvancedOrderFlowAnalyzer:
 
         results = []
         current_stack: list[dict] = []
-        current_dir: Optional[str] = None
+        current_dir: str | None = None
 
         def _flush_stack(stack: list[dict], direction: str) -> None:
             if len(stack) < min_stack_size:
@@ -428,7 +427,7 @@ class AdvancedOrderFlowAnalyzer:
         symbol: str,
         lookback_minutes: int = 60,
         segment_minutes: int = 5,
-    ) -> Optional[DeltaDivergence]:
+    ) -> DeltaDivergence | None:
         """
         Detect divergence between price direction and cumulative delta direction.
 
@@ -501,7 +500,7 @@ class AdvancedOrderFlowAnalyzer:
         symbol: str,
         price_bins: int = 50,
         lookback_minutes: int = 240,
-        current_price: Optional[float] = None,
+        current_price: float | None = None,
         top_n: int = 10,
     ) -> list[VolumeCluster]:
         """
@@ -589,8 +588,8 @@ class AdvancedOrderFlowAnalyzer:
     def get_order_flow_oscillator(
         self,
         symbol: str,
-        period: Optional[int] = None,
-    ) -> Optional[OrderFlowOscillator]:
+        period: int | None = None,
+    ) -> OrderFlowOscillator | None:
         """
         Calculate order flow oscillator from recent trades.
 
@@ -637,7 +636,7 @@ class AdvancedOrderFlowAnalyzer:
         self,
         symbol: str,
         lookback_minutes: int = 15,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """
         Get buy/sell pressure gauge readings.
 
@@ -687,7 +686,7 @@ class AdvancedOrderFlowAnalyzer:
 
 
 # Global instance
-_advanced_analyzer: Optional[AdvancedOrderFlowAnalyzer] = None
+_advanced_analyzer: AdvancedOrderFlowAnalyzer | None = None
 
 
 def get_advanced_order_flow_analyzer() -> AdvancedOrderFlowAnalyzer:

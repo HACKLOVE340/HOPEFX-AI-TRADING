@@ -26,10 +26,10 @@ Author: HOPEFX Development Team
 """
 
 import logging
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 import requests
 import json
 
@@ -86,13 +86,13 @@ class GeopoliticalEvent:
     description: str
     region: str
     countries: list[str]
-    coordinates: Optional[tuple[float, float]] = None  # (lat, lon)
+    coordinates: tuple[float, float] | None = None  # (lat, lon)
     timestamp: datetime = field(default_factory=_utc_now)
     source: str = "worldmonitor"
     confidence: float = 0.8
 
     # Trading impact assessment
-    gold_impact: Optional[GoldImpact] = None
+    gold_impact: GoldImpact | None = None
     affected_currencies: list[str] = field(default_factory=list)
     risk_score: float = 0.0  # 0-100
 
@@ -306,7 +306,7 @@ class GeopoliticalRiskProvider:
         "Canada": "CA",
     }
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize geopolitical risk provider.
 
@@ -680,7 +680,7 @@ class GeopoliticalRiskProvider:
                     ts = datetime.now(UTC)
 
                 # Parse coordinates [lon, lat] → (lat, lon)
-                coordinates: Optional[tuple[float, float]] = None
+                coordinates: tuple[float, float] | None = None
                 if geom.get("type") == "Point":
                     coords = geom.get("coordinates", [])
                     if len(coords) >= 2:
@@ -873,8 +873,7 @@ class GeopoliticalRiskProvider:
         # Consider global risk level
         if global_risk >= 70:
             return GoldImpact.STRONGLY_BULLISH
-        elif global_risk >= 50:
-            if bullish_count > bearish_count:
+        elif global_risk >= 50 and bullish_count > bearish_count:
                 return GoldImpact.BULLISH
 
         # Default based on event balance
@@ -1077,7 +1076,7 @@ class WorldMonitorIntegration:
         "datacenters",  # Major data centers
     ]
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """Initialize World Monitor integration"""
         self.config = config or {}
         self.base_url = "https://worldmonitor.app"
@@ -1088,10 +1087,10 @@ class WorldMonitorIntegration:
         self,
         view: str = "global",
         time_range: str = "7d",
-        layers: Optional[list[str]] = None,
-        lat: Optional[float] = None,
-        lon: Optional[float] = None,
-        zoom: Optional[float] = None,
+        layers: list[str] | None = None,
+        lat: float | None = None,
+        lon: float | None = None,
+        zoom: float | None = None,
     ) -> str:
         """
         Build World Monitor dashboard URL.
@@ -1234,7 +1233,7 @@ class WorldMonitorAPIClient:
         "flights": 0.5,
     }
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize World Monitor API client.
 
@@ -1275,8 +1274,8 @@ class WorldMonitorAPIClient:
         logger.info(f"WorldMonitorAPIClient initialized with base_url: {self.base_url}")
 
     def _make_request(
-        self, endpoint: str, params: Optional[dict] = None
-    ) -> Optional[dict]:
+        self, endpoint: str, params: dict | None = None
+    ) -> dict | None:
         """
         Make API request to World Monitor.
 
@@ -1309,8 +1308,8 @@ class WorldMonitorAPIClient:
             return None
 
     def _get_cached_or_fetch(
-        self, layer: str, params: Optional[dict] = None
-    ) -> Optional[dict]:
+        self, layer: str, params: dict | None = None
+    ) -> dict | None:
         """Get data from cache or fetch from API."""
         cache_key = f"{layer}:{json.dumps(params or {}, sort_keys=True)}"
 
@@ -1336,7 +1335,7 @@ class WorldMonitorAPIClient:
 
         return data
 
-    def get_conflicts(self, region: Optional[str] = None) -> list[dict]:
+    def get_conflicts(self, region: str | None = None) -> list[dict]:
         """
         Get active conflict events from ACLED.
 
@@ -1356,7 +1355,7 @@ class WorldMonitorAPIClient:
             return data.get("events", data.get("data", []))
         return []
 
-    def get_country_intel(self, country: Optional[str] = None) -> dict:
+    def get_country_intel(self, country: str | None = None) -> dict:
         """
         Get country-level intelligence including risk scores and sanctions.
 
@@ -1373,7 +1372,7 @@ class WorldMonitorAPIClient:
         data = self._get_cached_or_fetch("country_intel", params)
         return data or {}
 
-    def get_military_theater(self, theater: Optional[str] = None) -> dict:
+    def get_military_theater(self, theater: str | None = None) -> dict:
         """
         Get military force posture by theater.
 
@@ -1393,7 +1392,7 @@ class WorldMonitorAPIClient:
         return data or {}
 
     def get_news_intel(
-        self, topic: Optional[str] = None, hours: int = 24
+        self, topic: str | None = None, hours: int = 24
     ) -> list[dict]:
         """
         Get global news intelligence from GDELT.
@@ -1428,7 +1427,7 @@ class WorldMonitorAPIClient:
             return data.get("outages", [])
         return []
 
-    def get_satellite_fires(self, region: Optional[str] = None) -> list[dict]:
+    def get_satellite_fires(self, region: str | None = None) -> list[dict]:
         """
         Get satellite fire detections from NASA FIRMS.
 
@@ -1448,7 +1447,7 @@ class WorldMonitorAPIClient:
             return data.get("fires", [])
         return []
 
-    def get_military_flights(self, region: Optional[str] = None) -> list[dict]:
+    def get_military_flights(self, region: str | None = None) -> list[dict]:
         """
         Get military flight tracking data from OpenSky.
 
@@ -1785,7 +1784,7 @@ class CustomDataLayerConfig:
         },
     }
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize custom layer configuration.
 
@@ -1813,7 +1812,7 @@ class CustomDataLayerConfig:
             if cfg.get("enabled", False)
         }
 
-    def enable_layer(self, layer: str, weight: Optional[float] = None):
+    def enable_layer(self, layer: str, weight: float | None = None):
         """Enable a data layer."""
         if layer in self.layers:
             self.layers[layer]["enabled"] = True
@@ -1880,7 +1879,7 @@ _api_client = None
 
 
 def get_geopolitical_provider(
-    config: Optional[dict] = None,
+    config: dict | None = None,
 ) -> GeopoliticalRiskProvider:
     """Get or create global geopolitical risk provider"""
     global _geopolitical_provider
@@ -1889,7 +1888,7 @@ def get_geopolitical_provider(
     return _geopolitical_provider
 
 
-def get_api_client(config: Optional[dict] = None) -> WorldMonitorAPIClient:
+def get_api_client(config: dict | None = None) -> WorldMonitorAPIClient:
     """
     Get or create global World Monitor API client.
 
@@ -1916,7 +1915,7 @@ def get_gold_geopolitical_signal() -> dict[str, Any]:
     return provider.get_gold_trading_signal()
 
 
-def get_gold_signal_from_api(config: Optional[dict] = None) -> dict[str, Any]:
+def get_gold_signal_from_api(config: dict | None = None) -> dict[str, Any]:
     """
     Get gold trading signal using direct World Monitor API.
 
@@ -1943,7 +1942,7 @@ def create_self_hosted_setup() -> str:
 
 
 def get_custom_layer_config(
-    gold_optimized: bool = True, custom_layers: Optional[dict] = None
+    gold_optimized: bool = True, custom_layers: dict | None = None
 ) -> CustomDataLayerConfig:
     """
     Get custom data layer configuration.

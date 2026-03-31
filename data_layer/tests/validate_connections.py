@@ -52,8 +52,7 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime, timezone, UTC
-from typing import List, Tuple
+from datetime import datetime, UTC
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
 _GREEN = "\033[92m"
@@ -1115,7 +1114,7 @@ def check_orchestrator_subscribe_ticks() -> ValidationResult:
         from data_layer.orchestrator import orchestrator
 
         received = []
-        orchestrator.subscribe_ticks("_test_sub", lambda t: received.append(t))
+        orchestrator.subscribe_ticks("_test_sub", lambda t: received.append(t))  # noqa: PLW0108
         assert "_test_sub" in orchestrator._tick_callbacks, "subscriber not registered"  # nosec B101
         orchestrator.unsubscribe_ticks("_test_sub")
         assert "_test_sub" not in orchestrator._tick_callbacks, "subscriber not removed"  # nosec B101

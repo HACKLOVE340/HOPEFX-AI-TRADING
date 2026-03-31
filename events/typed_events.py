@@ -30,10 +30,12 @@ import asyncio
 import logging
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone, UTC
-from typing import Any, Callable, Dict, Generic, List, Optional, Type, TypeVar
+from datetime import datetime, UTC
+from typing import Any, Generic, TypeVar
+from collections.abc import Callable
 
 from pydantic import BaseModel, Field
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -68,14 +70,14 @@ class EventEnvelope(BaseModel, Generic[T]):
     source: str
     event_type: str
     payload: T
-    model_version: Optional[str] = None
+    model_version: str | None = None
 
     @classmethod
     def wrap(
         cls,
         source: str,
         payload: T,
-        model_version: Optional[str] = None,
+        model_version: str | None = None,
     ) -> EventEnvelope[T]:
         """Convenience constructor — derives event_type from payload class."""
         return cls(
@@ -107,9 +109,9 @@ class PriceTickEvent(BaseModel):
     symbol: str
     bid: float
     ask: float
-    mid: Optional[float] = None
-    volume: Optional[float] = None
-    spread_pips: Optional[float] = None
+    mid: float | None = None
+    volume: float | None = None
+    spread_pips: float | None = None
 
     def model_post_init(self, __context: Any) -> None:
         if self.mid is None:
@@ -123,12 +125,12 @@ class SignalEvent(BaseModel):
     action: str  # 'BUY' | 'SELL' | 'HOLD'
     confidence: float  # 0.0 – 1.0
     probability: float  # ML model probability
-    entry_price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    entry_price: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     strategy_name: str = "default"
-    model_version: Optional[str] = None  # which model produced this signal
-    regime: Optional[str] = None  # detected market regime
+    model_version: str | None = None  # which model produced this signal
+    regime: str | None = None  # detected market regime
 
 
 class OrderFilledEvent(BaseModel):
@@ -140,19 +142,19 @@ class OrderFilledEvent(BaseModel):
     quantity: float
     fill_price: float
     commission: float = 0.0
-    slippage_pips: Optional[float] = None
+    slippage_pips: float | None = None
     broker: str = "unknown"
-    account_id: Optional[str] = None
+    account_id: str | None = None
 
 
 class RiskHaltEvent(BaseModel):
     """Risk manager has halted trading."""
 
     reason: str
-    halt_until: Optional[datetime] = None  # None = manual resume only
+    halt_until: datetime | None = None  # None = manual resume only
     triggered_by: str = "risk_manager"  # component that triggered
-    drawdown_pct: Optional[float] = None
-    daily_loss_pct: Optional[float] = None
+    drawdown_pct: float | None = None
+    daily_loss_pct: float | None = None
     cvar_breach: bool = False
 
 
@@ -184,7 +186,7 @@ class CircuitBreakerEvent(BaseModel):
     broker: str
     state: str  # 'open' | 'half_open' | 'closed'
     failure_count: int
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -218,10 +220,8 @@ def subscribe(event_type: type[BaseModel], callback: Callable) -> None:
 
 def unsubscribe(event_type: type[BaseModel], callback: Callable) -> None:
     key = event_type.__name__
-    try:
+    with contextlib.suppress(ValueError):
         _subscribers[key].remove(callback)
-    except ValueError:
-        pass
 
 
 async def publish(envelope: EventEnvelope) -> None:

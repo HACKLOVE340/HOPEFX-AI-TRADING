@@ -42,9 +42,9 @@ import sys
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -162,7 +162,7 @@ class RiskAssessment:
     approved: bool
     risk_level: str  # RiskLevel constant
     reason: str  # human-readable approval/rejection reason
-    sizing: Optional[PositionSizingResult] = None
+    sizing: PositionSizingResult | None = None
     data_quality: float = 1.0
     sentiment_score: float = 0.0
     impact_score: float = 0.0
@@ -347,12 +347,12 @@ class _MinimalSignal:
     """
 
     __slots__ = (
-        "symbol",
-        "direction",
         "confidence",
-        "probability",
         "data_quality",
+        "direction",
         "features",
+        "probability",
+        "symbol",
         "tick_mid",
         "tick_spread",
     )
@@ -413,16 +413,16 @@ class RiskManager:
 
     def __init__(
         self,
-        config: Optional[RiskConfig] = None,
+        config: RiskConfig | None = None,
         orchestrator=None,
         lineage_store=None,
-        initial_balance: Optional[float] = None,
-        halt_state_file: Optional[Any] = None,
+        initial_balance: float | None = None,
+        halt_state_file: Any | None = None,
     ) -> None:
         self._orch = orchestrator
         self._lineage = lineage_store
         self._config = config or RiskConfig()
-        self._halt_state_file: Optional[Path] = (
+        self._halt_state_file: Path | None = (
             Path(halt_state_file) if halt_state_file is not None else None
         )
 
@@ -769,14 +769,14 @@ class RiskManager:
         self,
         symbol: str,
         entry_price: float,
-        account_balance: Optional[float] = None,
-        account_equity: Optional[float] = None,
+        account_balance: float | None = None,
+        account_equity: float | None = None,
         direction: str = "long",
         confidence: float = 0.7,
         probability: float = 0.55,
         signal_strength: float = 0.7,
-        stop_loss_price: Optional[float] = None,
-        take_profit_price: Optional[float] = None,
+        stop_loss_price: float | None = None,
+        take_profit_price: float | None = None,
         volatility: float = 0.0,
         **kwargs,
     ) -> PositionSizingResult:
@@ -827,8 +827,8 @@ class RiskManager:
         quantity: float = 0.0,
         direction: str = "buy",
         *,
-        size: Optional[float] = None,
-        side: Optional[str] = None,
+        size: float | None = None,
+        side: str | None = None,
     ) -> tuple[bool, str]:
         """Return (allowed, reason) for a proposed trade.
 
@@ -1047,7 +1047,7 @@ class RiskManager:
 
     # ── Public orchestrator convenience accessors ─────────────────────────────
 
-    def get_current_gold_price(self) -> Optional[float]:
+    def get_current_gold_price(self) -> float | None:
         """
         Return the current consensus gold mid price from the orchestrator.
 
@@ -1130,7 +1130,7 @@ class RiskManager:
     # ── Halt ──────────────────────────────────────────────────────────────────
 
     def _halt_trading(
-        self, reason: str, duration_hours: Optional[float] = None
+        self, reason: str, duration_hours: float | None = None
     ) -> None:
         self._halt = True
         self._trading_halted = True
@@ -1142,8 +1142,7 @@ class RiskManager:
             import app as _app  # late import to avoid circular dependency
 
             ks = getattr(_app, "kill_switch", None)
-            if ks is not None and callable(getattr(ks, "activate", None)):
-                if not ks.is_active():
+            if ks is not None and callable(getattr(ks, "activate", None)) and not ks.is_active():
                     ks.activate(reason=f"risk_manager:{reason}")
         except Exception as _exc:  # pragma: no cover
             logger.debug("RiskManager: could not fire app kill_switch: %s", _exc)
@@ -1370,7 +1369,7 @@ class RiskManager:
         level: str,
         dd: float,
         daily_dd: float,
-        messages: Optional[list[str]] = None,
+        messages: list[str] | None = None,
     ) -> TradeAssessment:
         """Build a blocked TradeAssessment — eliminates repeated kwarg blocks."""
         return TradeAssessment(
@@ -1596,7 +1595,7 @@ class RiskManager:
             return RiskLevel.MEDIUM
         return RiskLevel.LOW
 
-    def check_drawdown(
+    def check_drawdown(  # noqa: F811
         self,
         equity_curve: Any = None,
         max_dd: float = None,
@@ -1909,14 +1908,14 @@ class RiskManager:
 
     # ── Extended validate_trade ───────────────────────────────────────────────
 
-    def validate_trade(  # type: ignore[override]
+    def validate_trade(  # type: ignore[override]  # noqa: F811
         self,
         symbol: str,
         quantity: float = 0.0,
         direction: str = "buy",
         *,
-        size: Optional[float] = None,
-        side: Optional[str] = None,
+        size: float | None = None,
+        side: str | None = None,
     ) -> tuple[bool, str]:
         """Return (allowed, reason) for a proposed trade.
 
@@ -1953,7 +1952,7 @@ class RiskManager:
 
     # ── Extended check_risk_limits (returns violations list) ─────────────────
 
-    def check_risk_limits(self) -> tuple[bool, list[str]]:  # type: ignore[override]
+    def check_risk_limits(self) -> tuple[bool, list[str]]:  # type: ignore[override]  # noqa: F811
         """Return (within_limits: bool, violations: List[str]).
 
         Evaluates drawdown, daily loss, open-position count, and halt state.
@@ -1995,7 +1994,7 @@ class RiskManager:
 
     # ── can_open_position (extended — human-readable reasons) ─────────────────
 
-    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]
+    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]  # noqa: F811
         """Return (True, 'approved') or (False, human-readable reason)."""
         if self._halt or self._trading_halted:
             return False, f"halted:{self._halt_reason}"
@@ -2039,7 +2038,7 @@ class RiskManager:
         self,
         entry_price: float,
         direction: str,
-        percent: Optional[float] = None,
+        percent: float | None = None,
     ) -> float:
         """Return stop-loss price for a given entry and direction.
 
@@ -2055,7 +2054,7 @@ class RiskManager:
         self,
         entry_price: float,
         direction: str,
-        percent: Optional[float] = None,
+        percent: float | None = None,
     ) -> float:
         """Return take-profit price for a given entry and direction.
 

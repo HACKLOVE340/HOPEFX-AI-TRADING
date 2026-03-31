@@ -14,9 +14,10 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any
+from collections.abc import Callable
 
 import uuid
 
@@ -51,8 +52,8 @@ class Order:
     side: str  # 'buy' or 'sell'
     quantity: float
     order_type: OrderType
-    price: Optional[float] = None
-    stop_price: Optional[float] = None
+    price: float | None = None
+    stop_price: float | None = None
     time_in_force: str = "GTC"  # GTC, IOC, FOK
     status: OrderStatus = OrderStatus.PENDING
     filled_qty: float = 0.0
@@ -90,7 +91,7 @@ class AsyncExecutionEngine:
         self,
         broker_configs: list[dict],
         paper_mode: bool = True,
-        paper_rng_seed: Optional[int] = 42,
+        paper_rng_seed: int | None = 42,
     ):
         self.paper_mode = paper_mode
         # Per-instance RNG for paper-mode fill simulation; seeded for
@@ -112,8 +113,8 @@ class AsyncExecutionEngine:
         )
 
         # Callbacks
-        self.on_fill: Optional[Callable[[Fill], None]] = None
-        self.on_order_update: Optional[Callable[[Order], None]] = None
+        self.on_fill: Callable[[Fill], None] | None = None
+        self.on_order_update: Callable[[Order], None] | None = None
 
         # Rate limiting
         self.rate_limiters: dict[str, asyncio.Semaphore] = {}
@@ -239,7 +240,7 @@ class AsyncExecutionEngine:
         self,
         order_id: str,
         new_price: float,
-        new_qty: Optional[float] = None,
+        new_qty: float | None = None,
     ) -> bool:
         """Modify existing order (cancel + replace)"""
         if order_id not in self.orders:
@@ -271,7 +272,7 @@ class AsyncExecutionEngine:
         tasks = [self.submit_order(order) for order in orders]
         return await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def close_all_positions(self, symbol: Optional[str] = None) -> list[str]:
+    async def close_all_positions(self, symbol: str | None = None) -> list[str]:
         """Emergency position flattening"""
         positions = await self.get_positions()
 
@@ -301,8 +302,7 @@ class AsyncExecutionEngine:
     async def get_positions(self) -> list[dict]:
         """Get current positions with caching"""
         # Return cached if recent
-        if hasattr(self, "_position_cache_time"):
-            if time.time() - self._position_cache_time < 1.0:  # 1 second cache
+        if hasattr(self, "_position_cache_time") and time.time() - self._position_cache_time < 1.0:  # 1 second cache
                 return list(self.position_cache.values())
 
         # Fetch fresh
@@ -336,20 +336,19 @@ class AsyncExecutionEngine:
 
         payload = self._format_order(order, broker)
 
-        async with self.rate_limiters[venue]:
-            async with session.post(f"{broker['url']}/orders", json=payload) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    order.status = OrderStatus.SUBMITTED
-                    order.metadata["broker_id"] = data.get("id")
+        async with self.rate_limiters[venue], session.post(f"{broker['url']}/orders", json=payload) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                order.status = OrderStatus.SUBMITTED
+                order.metadata["broker_id"] = data.get("id")
 
-                    # Start fill monitoring
-                    task = asyncio.create_task(self._monitor_fills(order))
-                    self._tasks.add(task)
+                # Start fill monitoring
+                task = asyncio.create_task(self._monitor_fills(order))
+                self._tasks.add(task)
 
-                else:
-                    error = await resp.text()
-                    raise RuntimeError(f"Submit failed (HTTP {resp.status}): {error}")
+            else:
+                error = await resp.text()
+                raise RuntimeError(f"Submit failed (HTTP {resp.status}): {error}")
 
     async def _simulate_fill(self, order: Order):
         """Fill simulation for paper trading only — never called in live mode."""
@@ -674,9 +673,9 @@ class AsyncExecutionEngine:
         best = min(available, key=lambda v: np.mean(self.latency_stats.get(v, [100])))
         return best
 
-    def _get_backup_venue(self, primary: str) -> Optional[str]:
+    def _get_backup_venue(self, primary: str) -> str | None:
         """Get backup venue if primary fails"""
-        venues = [v for v in self.brokers.keys() if v != primary]
+        venues = [v for v in self.brokers if v != primary]
         return venues[0] if venues else None
 
     def _venue_has_symbol(self, venue: str, symbol: str) -> bool:

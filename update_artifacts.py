@@ -84,7 +84,7 @@ def _font(size: int, bold: bool = True):
         if os.path.exists(path):
             try:
                 return ImageFont.truetype(path, size)
-            except Exception:  # nosec B112 - skip unreadable font file, try next path  # noqa: S112
+            except Exception:  # nosec B112 - skip unreadable font file, try next path
                 continue
     return ImageFont.load_default()
 
@@ -237,7 +237,7 @@ def _git_push(output: Path) -> None:
             ["git", "add", str(output)], check=True, cwd=ROOT
         )
         r = subprocess.run(  # nosec B603 B607 - list-form git calls; no shell=True, no user input
-            ["git", "diff", "--cached", "--quiet"], cwd=ROOT
+            ["git", "diff", "--cached", "--quiet"], cwd=ROOT, check=False
         )
         if r.returncode == 0:
             print("No changes to commit — cover.png is already up to date.")

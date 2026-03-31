@@ -31,7 +31,6 @@ import logging
 import secrets
 import struct
 import time
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -56,7 +55,7 @@ _KEY_BACKUP = "2fa:backup:{}"
 # ── Persistence helpers ───────────────────────────────────────────────────────
 
 
-def _get_secret(user_id: str) -> Optional[str]:
+def _get_secret(user_id: str) -> str | None:
     val = db_get(_KEY_SECRET.format(user_id))
     if val is not None:
         return str(val)
@@ -110,7 +109,7 @@ def _base32_secret() -> str:
     return base64.b32encode(raw).decode().rstrip("=")
 
 
-def _totp(secret_b32: str, t: Optional[int] = None) -> str:
+def _totp(secret_b32: str, t: int | None = None) -> str:
     if t is None:
         t = int(time.time()) // 30
     key = base64.b32decode(secret_b32 + "=" * (-len(secret_b32) % 8))

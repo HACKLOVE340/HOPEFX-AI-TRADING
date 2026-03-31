@@ -44,7 +44,6 @@ import re
 import secrets
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 # ── constants ─────────────────────────────────────────────────────────────────
 
@@ -54,7 +53,7 @@ ENV_EXAMPLE = ROOT / ".env.example"
 
 # Secrets that MUST be set before production launch.
 # Format: (env_var_name, description, generator_fn)
-REQUIRED_SECRETS: list[tuple[str, str, Optional[str]]] = [
+REQUIRED_SECRETS: list[tuple[str, str, str | None]] = [
     ("SECURITY_JWT_SECRET", "JWT signing key (48-char random)", "token48"),
     ("CONFIG_ENCRYPTION_KEY", "Config encryption key (48-char)", "token48"),
     ("HOPEFX_KILL_SWITCH_TOKEN", "Kill-switch HMAC token (48-char)", "token48"),
@@ -120,8 +119,8 @@ def _load_env(path: Path) -> dict[str, str]:
     result: dict[str, str] = {}
     if not path.exists():
         return result
-    for line in path.read_text().splitlines():
-        line = line.strip()
+    for _line in path.read_text().splitlines():
+        line = _line.strip()
         if not line or line.startswith("#"):
             continue
         if "=" in line:

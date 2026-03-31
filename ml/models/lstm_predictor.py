@@ -14,7 +14,6 @@ Advanced LSTM Neural Network for Price Prediction
 
 import warnings
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -26,12 +25,12 @@ try:
     from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
     from tensorflow.keras.layers import (
         LSTM,
-        Attention,
-        Bidirectional,
-        Concatenate,
+        Attention,  # noqa: F401
+        Bidirectional,  # noqa: F401
+        Concatenate,  # noqa: F401
         Dense,
         Dropout,
-        Input,
+        Input,  # noqa: F401
     )
     from tensorflow.keras.models import Model, Sequential
     from tensorflow.keras.optimizers import Adam
@@ -158,8 +157,8 @@ class LSTMPredictor:
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
-        X_val: Optional[np.ndarray] = None,
-        y_val: Optional[np.ndarray] = None,
+        X_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
         epochs: int = 100,
         batch_size: int = 32,
         verbose: int = 1,

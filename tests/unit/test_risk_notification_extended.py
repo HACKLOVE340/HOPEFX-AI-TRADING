@@ -14,6 +14,7 @@ Covers uncovered code paths in:
 import pytest
 from unittest.mock import MagicMock, patch
 import logging
+import contextlib
 
 
 # ---------------------------------------------------------------------------
@@ -351,26 +352,22 @@ class TestNotificationManagerExtended:
 
         mgr.config["discord_webhook_url"] = "https://discord.com/api/webhooks/test"
         # Simulate ImportError on requests, fallback to urllib
-        with patch("requests.post", side_effect=ImportError("no requests")):
-            with patch("urllib.request.urlopen") as mock_urlopen:
-                mock_urlopen.return_value = MagicMock()
-                # Should not raise; either uses urllib fallback or logs an error
-                try:
-                    mgr._send_discord("Test", NotificationLevel.INFO, None)
-                except Exception:
-                    pass  # Error logging is acceptable for this code path
+        with patch("requests.post", side_effect=ImportError("no requests")), patch("urllib.request.urlopen") as mock_urlopen:
+            mock_urlopen.return_value = MagicMock()
+            # Should not raise; either uses urllib fallback or logs an error
+            with contextlib.suppress(Exception):
+                mgr._send_discord("Test", NotificationLevel.INFO, None)
 
     def test_send_discord_http_scheme_rejected(self, mgr, caplog):
         """Discord webhook with http (non-https) should be rejected."""
         from notifications.manager import NotificationLevel
 
         mgr.config["discord_webhook_url"] = "http://discord.com/api/webhooks/test"
-        with patch("requests.post", side_effect=ImportError("no requests")):
-            with patch("urllib.request.urlopen") as mock_urlopen:
-                with caplog.at_level(logging.ERROR):
-                    mgr._send_discord("Test", NotificationLevel.INFO, None)
-                # urlopen must NOT be called because http scheme is rejected
-                mock_urlopen.assert_not_called()
+        with patch("requests.post", side_effect=ImportError("no requests")), patch("urllib.request.urlopen") as mock_urlopen:
+            with caplog.at_level(logging.ERROR):
+                mgr._send_discord("Test", NotificationLevel.INFO, None)
+            # urlopen must NOT be called because http scheme is rejected
+            mock_urlopen.assert_not_called()
 
     def test_notify_error_handling(self, mgr):
         from notifications.manager import NotificationLevel, NotificationChannel

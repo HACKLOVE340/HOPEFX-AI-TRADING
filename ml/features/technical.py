@@ -11,7 +11,6 @@ technical indicators and derived features from OHLCV data.
 """
 
 import logging
-from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -32,7 +31,7 @@ class TechnicalFeatureEngineer:
     - Statistical features
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize feature engineer.
 

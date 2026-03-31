@@ -12,7 +12,6 @@ Provides ATR-based, fixed-risk, and Kelly-criterion position sizing.
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Optional
 
 
 class PositionSizer:
@@ -47,10 +46,10 @@ class PositionSizer:
         self,
         account,
         entry_price: Decimal,
-        atr: Optional[Decimal] = None,
-        stop_distance: Optional[Decimal] = None,
-        win_rate: Optional[float] = None,
-        payoff_ratio: Optional[float] = None,
+        atr: Decimal | None = None,
+        stop_distance: Decimal | None = None,
+        win_rate: float | None = None,
+        payoff_ratio: float | None = None,
     ) -> Decimal:
         """
         Return position size in lots, capped at self.max_lots.

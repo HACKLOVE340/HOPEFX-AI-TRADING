@@ -58,8 +58,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +145,7 @@ def send_trade_fill_email(
     direction: str,
     quantity: float,
     fill_price: float,
-    net_pnl: Optional[float] = None,
+    net_pnl: float | None = None,
     commission: float = 0.0,
     to: str = "",
 ) -> bool:

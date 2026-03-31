@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class Signal:
     price: float
     timestamp: datetime
     confidence: float  # 0.0 to 1.0
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
     def __post_init__(self):
         """Validate signal data"""
@@ -67,7 +67,7 @@ class StrategyConfig:
     enabled: bool = True
     risk_per_trade: float = 1.0  # Percentage
     max_positions: int = 3
-    parameters: Optional[dict[str, Any]] = None
+    parameters: dict[str, Any] | None = None
 
 
 class BaseStrategy(ABC):
@@ -133,7 +133,7 @@ class BaseStrategy(ABC):
         """
 
     @abstractmethod
-    def generate_signal(self, analysis: dict[str, Any]) -> Optional[Signal]:
+    def generate_signal(self, analysis: dict[str, Any]) -> Signal | None:
         """
         Generate trading signal based on analysis.
 
@@ -144,7 +144,7 @@ class BaseStrategy(ABC):
             Signal if conditions are met, None otherwise
         """
 
-    def on_bar(self, bar: dict[str, Any]) -> Optional[Signal]:
+    def on_bar(self, bar: dict[str, Any]) -> Signal | None:
         """
         Process new bar data.
 

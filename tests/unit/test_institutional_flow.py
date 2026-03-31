@@ -7,7 +7,7 @@
 Tests for Institutional Flow Detector (analysis/institutional_flow.py)
 """
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 
 
 class TestInstitutionalTrade:

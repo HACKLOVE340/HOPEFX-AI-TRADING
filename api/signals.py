@@ -20,9 +20,10 @@ import threading
 import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -109,13 +110,13 @@ class SignalAlert:
 
     id: str
     symbol: str
-    direction: Optional[SignalDirection] = None
+    direction: SignalDirection | None = None
     min_confidence: float = 0.5
     min_strength: SignalStrength = SignalStrength.MODERATE
     notify_channels: list[str] = field(default_factory=lambda: ["web"])
     active: bool = True
     triggered_count: int = 0
-    last_triggered: Optional[datetime] = None
+    last_triggered: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -209,7 +210,7 @@ class RealTimeSignalService:
     - Performance tracking
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize signal service.
 
@@ -257,8 +258,8 @@ class RealTimeSignalService:
         total_strategies: int,
         regime: str = "unknown",
         session: str = "unknown",
-        metadata: Optional[dict] = None,
-    ) -> Optional[TradingSignal]:
+        metadata: dict | None = None,
+    ) -> TradingSignal | None:
         """
         Generate a new trading signal.
 
@@ -466,7 +467,7 @@ class RealTimeSignalService:
 
             return sorted(signals, key=lambda s: -s.confidence)
 
-    def get_signal(self, signal_id: str) -> Optional[TradingSignal]:
+    def get_signal(self, signal_id: str) -> TradingSignal | None:
         """Get signal by ID."""
         return self.active_signals.get(signal_id)
 
@@ -511,7 +512,7 @@ class RealTimeSignalService:
     def create_alert(
         self,
         symbol: str,
-        direction: Optional[SignalDirection] = None,
+        direction: SignalDirection | None = None,
         min_confidence: float = 0.5,
         min_strength: SignalStrength = SignalStrength.MODERATE,
         notify_channels: list[str] = None,
@@ -827,21 +828,21 @@ def create_signals_router():
         price: float
         direction: str = "buy"  # "buy" | "sell"
         confidence: float = 0.7  # 0-1
-        entry_price: Optional[float] = None
-        stop_loss: Optional[float] = None
-        take_profit: Optional[float] = None
+        entry_price: float | None = None
+        stop_loss: float | None = None
+        take_profit: float | None = None
         timeframe: str = "1h"
         regime: str = "ranging"
         session: str = "new_york"
-        strategies_agreeing: Optional[list[str]] = None
+        strategies_agreeing: list[str] | None = None
         total_strategies: int = 1
-        parameters: Optional[dict[str, Any]] = None
+        parameters: dict[str, Any] | None = None
 
     class CreateAlertRequest(_BaseModel):
         symbol: str
         direction: str  # "buy" | "sell" | "both"
         min_confidence: float = 0.7
-        notify_webhook: Optional[str] = None
+        notify_webhook: str | None = None
 
     @signals_router.get("/summary")
     async def get_signal_summary():
@@ -849,7 +850,7 @@ def create_signals_router():
         return _get_signal_service().get_signal_summary()
 
     @signals_router.get("/latest")
-    async def get_latest_signals(symbol: Optional[str] = None, limit: int = 10):
+    async def get_latest_signals(symbol: str | None = None, limit: int = 10):
         """
         Return the most recent N signals from the live signal engine.
 
@@ -867,14 +868,14 @@ def create_signals_router():
         }
 
     @signals_router.get("/active")
-    async def get_active_signals(symbol: Optional[str] = None):
+    async def get_active_signals(symbol: str | None = None):
         """List all currently active signals, optionally filtered by symbol."""
         svc = _get_signal_service()
         signals = svc.get_active_signals(symbol=symbol)
         return {"signals": [s.to_dict() for s in signals], "count": len(signals)}
 
     @signals_router.get("/history")
-    async def get_signal_history(symbol: Optional[str] = None, hours: int = 24):
+    async def get_signal_history(symbol: str | None = None, hours: int = 24):
         """Get signal history for the past N hours."""
         svc = _get_signal_service()
         signals = svc.get_signal_history(symbol=symbol, hours=hours)
@@ -976,7 +977,7 @@ def create_signals_router():
             raise HTTPException(status_code=500, detail=f"Alert creation failed: {e}") from e
 
     @signals_router.get("/alerts")
-    async def list_alerts(symbol: Optional[str] = None):
+    async def list_alerts(symbol: str | None = None):
         """List active alerts."""
         svc = _get_signal_service()
         alerts = svc.get_alerts(symbol=symbol)
@@ -1042,7 +1043,6 @@ def create_signals_router():
     # ── Signal distribution validation ───────────────────────────────────────
 
     from pydantic import BaseModel as _BM
-    from typing import List as _List, Optional as _Opt
 
     class OOSSignalItem(_BM):
         direction: str
@@ -1058,7 +1058,7 @@ def create_signals_router():
         signals: list[OOSSignalItem]
 
     class ValidateSignalsRequest(_BM):
-        live_signals: _Opt[list[LiveSignalItem]] = None
+        live_signals: list[LiveSignalItem] | None = None
 
     @signals_router.post("/distribution/oos-reference")
     async def set_oos_reference(body: SetOOSReferenceRequest):

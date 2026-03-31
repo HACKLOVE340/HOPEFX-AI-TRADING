@@ -14,7 +14,7 @@ Tests for:
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from unittest.mock import Mock, patch
 
 

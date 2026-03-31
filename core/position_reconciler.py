@@ -22,12 +22,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
-_reconciler_task: Optional[asyncio.Task] = None
+_reconciler_task: asyncio.Task | None = None
 
 # How many consecutive mismatches for the same symbol before escalating to ERROR
 _MISMATCH_ALERT_THRESHOLD = 3
@@ -282,7 +281,7 @@ class PositionReconciler:
         except Exception as rm_exc:
             logger.warning("Could not halt risk manager: %s", rm_exc)
 
-    async def _get_price(self, symbol: str) -> Optional[float]:
+    async def _get_price(self, symbol: str) -> float | None:
         """Fetch latest price. Uses yfinance with a short timeout."""
         try:
             import yfinance as yf
@@ -320,7 +319,7 @@ def start_reconciler(
     interval_seconds: int = 10,
 ) -> PositionReconciler:
     """Create and start the reconciler. Returns the instance for status queries."""
-    global _reconciler_task
+    global _reconciler_task  # noqa: PLW0602
     rec = PositionReconciler(
         session_factory=session_factory,
         broker=broker,

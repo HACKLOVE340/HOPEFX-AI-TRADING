@@ -67,8 +67,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from datetime import datetime, timezone, UTC
-from typing import Deque, Dict, List, Optional
+from datetime import datetime, UTC
 
 import numpy as np
 import pandas as pd
@@ -81,7 +80,7 @@ try:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from data.order_book import OrderBook, OrderBookLevel
+    from data.order_book import OrderBook, OrderBookLevel  # noqa: F401
 
     OB_AVAILABLE = True
 except ImportError:
@@ -176,10 +175,10 @@ class MicrostructureFeatures:
     def push_snapshot(
         self,
         book,  # OrderBook instance or dict with bids/asks
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
         last_price: float = 0.0,
         trade_volume: float = 0.0,
-        is_buy: Optional[bool] = None,
+        is_buy: bool | None = None,
     ) -> None:
         """
         Add one order-book snapshot.
@@ -327,10 +326,7 @@ def _compute_from_records(records: list[dict], n_levels: int = 10) -> pd.DataFra
     ).astype(float)
 
     # VWAP deviation (session-level, reset daily)
-    if df.index.tz is not None:
-        dates = df.index.normalize()
-    else:
-        dates = pd.to_datetime(df.index.date)
+    dates = df.index.normalize() if df.index.tz is not None else pd.to_datetime(df.index.date)
     cum_pv = (df["ms_last_price"] * df["ms_trade_vol"]).groupby(dates).cumsum()
     cum_v = df["ms_trade_vol"].groupby(dates).cumsum().replace(0, np.nan)
     session_vwap = cum_pv / cum_v
@@ -404,7 +400,7 @@ def compute_microstructure_features(
 def attach_microstructure(
     price_df: pd.DataFrame,
     ms_df: pd.DataFrame,
-    resample: Optional[str] = None,
+    resample: str | None = None,
 ) -> pd.DataFrame:
     """
     Merge microstructure features into a price DataFrame.

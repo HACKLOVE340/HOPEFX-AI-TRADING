@@ -203,10 +203,7 @@ class TestCacheOhlcv:
         self.cache.cache_ohlcv("XAUUSD", Timeframe.ONE_HOUR, ohlcv)
         positional_args = self.mock_redis.setex.call_args[0]
         keyword_args = self.mock_redis.setex.call_args[1]
-        if positional_args:
-            ttl_arg = positional_args[1]
-        else:
-            ttl_arg = keyword_args.get("time") or keyword_args.get("ex")
+        ttl_arg = positional_args[1] if positional_args else keyword_args.get("time") or keyword_args.get("ex")
         assert ttl_arg == MarketDataCache.DEFAULT_TTL[Timeframe.ONE_HOUR]
 
     def test_cache_ohlcv_custom_ttl(self):

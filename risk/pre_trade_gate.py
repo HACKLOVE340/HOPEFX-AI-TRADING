@@ -34,8 +34,8 @@ import logging
 import os
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from risk.manager import RiskManager
@@ -75,7 +75,7 @@ class TradeBlocked(Exception):
         self,
         reason_code: str,
         detail: str,
-        checks_failed: Optional[list[str]] = None,
+        checks_failed: list[str] | None = None,
     ) -> None:
         self.reason_code = reason_code
         self.detail = detail
@@ -105,9 +105,9 @@ class GateOrder:
     symbol: str
     side: str  # "BUY" | "SELL"
     quantity: float
-    price: Optional[float] = None  # None = market order
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    price: float | None = None  # None = market order
+    stop_loss: float | None = None
+    take_profit: float | None = None
     strategy_id: str = "unknown"
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -132,8 +132,8 @@ class GateResult:
     order: GateOrder
     checks_passed: list[str]
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    cvar: Optional[float] = None
-    drawdown_pct: Optional[float] = None
+    cvar: float | None = None
+    drawdown_pct: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -172,8 +172,8 @@ class PreTradeGate:
             ValueError — if order fields are invalid (caller bug).
         """
         checks_passed: list[str] = []
-        cvar: Optional[float] = None
-        drawdown_pct: Optional[float] = None
+        cvar: float | None = None
+        drawdown_pct: float | None = None
 
         # ── 1. Kill-switch ────────────────────────────────────────────────────
         self._run_check(
@@ -310,7 +310,7 @@ class PreTradeGate:
         name: str,
         fn,
         checks_passed: list[str],
-    ) -> Optional[float]:
+    ) -> float | None:
         """Like _run_check but fn() returns an Optional[float] metric."""
         try:
             value = fn()
@@ -406,7 +406,7 @@ class PreTradeGate:
             )
         return current_dd
 
-    def _check_cvar(self) -> Optional[float]:
+    def _check_cvar(self) -> float | None:
         """
         Block if CVaR pre-trade gate fails.
         Returns current CVaR value (or None if insufficient history).

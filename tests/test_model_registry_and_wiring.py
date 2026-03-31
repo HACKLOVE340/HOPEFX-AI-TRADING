@@ -20,7 +20,7 @@ import json
 import os
 import pathlib
 import tempfile
-from typing import Any, Dict
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest

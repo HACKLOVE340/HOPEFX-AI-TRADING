@@ -18,8 +18,8 @@ import logging
 import threading
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timezone, UTC
-from typing import Callable, Dict, List, Optional, Set
+from datetime import datetime, UTC
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -46,7 +46,7 @@ class Tick:
     ask: float
     last: float
     volume: float = 0.0
-    trade_id: Optional[str] = None
+    trade_id: str | None = None
 
     @property
     def mid(self) -> float:
@@ -107,7 +107,7 @@ class StreamEvent:
     """An event published on the stream event bus."""
 
     event_type: str  # 'tick', 'bar', 'connected', 'disconnected', 'error'
-    symbol: Optional[str]
+    symbol: str | None
     timestamp: datetime
     data: dict = field(default_factory=dict)
 
@@ -135,7 +135,7 @@ class TickAggregator:
         mins = (ts.minute // self._tf_minutes) * self._tf_minutes
         return ts.replace(minute=mins, second=0, microsecond=0)
 
-    def add_tick(self, tick: Tick) -> Optional[AggregatedBar]:
+    def add_tick(self, tick: Tick) -> AggregatedBar | None:
         """
         Add a tick and return a completed bar if the bar period has closed.
 
@@ -148,7 +148,7 @@ class TickAggregator:
         bar_ts = self._bar_key(tick.timestamp)
         key = tick.symbol
 
-        completed: Optional[AggregatedBar] = None
+        completed: AggregatedBar | None = None
 
         if key in self._open_bars and self._open_bars[key]["ts"] != bar_ts:
             # Close the current bar
@@ -190,7 +190,7 @@ class TickAggregator:
 
         return completed
 
-    def get_open_bar(self, symbol: str) -> Optional[dict]:
+    def get_open_bar(self, symbol: str) -> dict | None:
         """Get the currently open bar for a symbol."""
         return self._open_bars.get(symbol)
 
@@ -216,7 +216,7 @@ class StreamingService:
         service.publish_tick(Tick('XAUUSD', datetime.now(timezone.utc), 1950.0, 1950.1, 1950.05))
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize streaming service.
 
@@ -389,7 +389,7 @@ class StreamingService:
             bars = list(self._bars.get(symbol, {}).get(timeframe, []))
         return bars[-limit:]
 
-    def get_latest_tick(self, symbol: str) -> Optional[Tick]:
+    def get_latest_tick(self, symbol: str) -> Tick | None:
         """Get the most recent tick for a symbol."""
         with self._lock:
             buf = self._tick_buffers.get(symbol)
@@ -430,7 +430,7 @@ class StreamingService:
     def reconnect_with_backoff(
         self,
         connect_fn: Callable,
-        max_attempts: Optional[int] = None,
+        max_attempts: int | None = None,
     ) -> bool:
         """
         Attempt to reconnect with exponential backoff.
@@ -556,7 +556,7 @@ def create_streaming_router(service: StreamingService):
 
 
 # Global instance
-_streaming_service: Optional[StreamingService] = None
+_streaming_service: StreamingService | None = None
 
 
 def get_streaming_service() -> StreamingService:

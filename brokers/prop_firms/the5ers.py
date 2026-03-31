@@ -10,7 +10,7 @@ The5ers is a prop trading firm offering funded forex accounts.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from ..mt5 import MT5Connector
 

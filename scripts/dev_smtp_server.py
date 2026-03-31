@@ -34,12 +34,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from email import message_from_bytes
 from pathlib import Path
 
 from aiosmtpd.controller import Controller
 from aiosmtpd.smtp import AuthResult, LoginPassword
+import contextlib
 
 ROOT = Path(__file__).resolve().parent.parent
 LOG_PATH = ROOT / "logs" / "dev_email.log"
@@ -136,10 +137,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(_serve(args.host, args.port))
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":

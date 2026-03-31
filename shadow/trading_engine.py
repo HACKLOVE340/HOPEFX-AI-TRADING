@@ -47,8 +47,8 @@ import os
 import random
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ class ShadowFill:
     pnl: float = 0.0
     closed: bool = False
     close_price: float = 0.0
-    live_slippage_bps: Optional[float] = None  # set when live fill is reported
+    live_slippage_bps: float | None = None  # set when live fill is reported
 
 
 @dataclass
@@ -132,10 +132,7 @@ class PaperFillSimulator:
         noise = mid * _NOISE_BPS / 10_000 * random.gauss(0, 1)
 
         total_cost = half_spread + market_impact + abs(noise)
-        if side == "long":
-            fill = mid + total_cost
-        else:
-            fill = mid - total_cost
+        fill = mid + total_cost if side == "long" else mid - total_cost
 
         slippage_bps = abs(fill - mid) / mid * 10_000
         return round(fill, 4), round(slippage_bps, 3)
@@ -198,7 +195,7 @@ class ShadowTradingEngine:
         mid: float,
         stop_loss: float,
         take_profit: float,
-    ) -> Optional[ShadowFill]:
+    ) -> ShadowFill | None:
         """Execute a signal in paper mode. Returns the simulated fill."""
         if not self._started:
             return None
@@ -294,8 +291,8 @@ class ShadowTradingEngine:
         self,
         signal_id: str,
         live_pnl: float,
-        live_fill_price: Optional[float] = None,
-        live_slippage_bps: Optional[float] = None,
+        live_fill_price: float | None = None,
+        live_slippage_bps: float | None = None,
     ) -> None:
         """
         Record a live trade close for paper-vs-live comparison.

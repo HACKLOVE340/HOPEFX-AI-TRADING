@@ -5,7 +5,7 @@
 # No commercial use without explicit permission.
 """nocode/models.py — Data models for the no-code strategy builder."""
 
-from typing import Dict, List, Optional, Any, Union
+from typing import Any
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -119,7 +119,7 @@ class Condition:
 
     def _get_value(
         self, indicator: Indicator, data: dict[str, float]
-    ) -> Optional[float]:
+    ) -> float | None:
         """Get indicator value from data."""
         key = indicator.get_id()
         return data.get(key)
@@ -152,9 +152,9 @@ class TradingAction:
     action_type: ActionType
     position_size: float = 1.0  # Percentage of balance or fixed size
     size_type: str = "percent"  # "percent" or "fixed"
-    stop_loss: Optional[float] = None  # Percentage or pips
-    take_profit: Optional[float] = None  # Percentage or pips
-    trailing_stop: Optional[float] = None
+    stop_loss: float | None = None  # Percentage or pips
+    take_profit: float | None = None  # Percentage or pips
+    trailing_stop: float | None = None
 
 
 @dataclass

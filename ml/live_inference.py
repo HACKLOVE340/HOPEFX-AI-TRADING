@@ -39,7 +39,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -97,7 +97,7 @@ class _FeatureCache:
         raw = f"{symbol}:{last_ts}"
         return _CACHE_PREFIX + hashlib.sha256(raw.encode()).hexdigest()[:16]
 
-    def get(self, symbol: str, last_ts: Any) -> Optional[pd.DataFrame]:
+    def get(self, symbol: str, last_ts: Any) -> pd.DataFrame | None:
         """Return cached feature DataFrame or None on miss/error."""
         self._try_connect()
         key = self._make_key(symbol, last_ts)
@@ -180,14 +180,14 @@ class AdvancedModelPredictor:
 
     def __init__(
         self,
-        model_path: Optional[Path] = None,
+        model_path: Path | None = None,
         min_bars: int = _MIN_BARS,
-        cache: Optional[_FeatureCache] = None,
+        cache: _FeatureCache | None = None,
     ) -> None:
         self.model_path = model_path or (_SAVED / "advanced_oos.pkl")
         self.min_bars = min_bars
-        self._model: Optional[Any] = None
-        self._feature_names: Optional[list] = None
+        self._model: Any | None = None
+        self._feature_names: list | None = None
         self._version = "advanced_oos_v1"
         self._cache: _FeatureCache = cache or _feature_cache
 
@@ -233,9 +233,9 @@ class AdvancedModelPredictor:
     def _build_features(
         self,
         ohlcv: pd.DataFrame,
-        macro_df: Optional[pd.DataFrame] = None,
+        macro_df: pd.DataFrame | None = None,
         symbol: str = "XAUUSD",
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """
         Build the advanced feature matrix from a rolling OHLCV window.
 
@@ -308,9 +308,9 @@ class AdvancedModelPredictor:
     def predict_proba(
         self,
         ohlcv: pd.DataFrame,
-        macro_df: Optional[pd.DataFrame] = None,
+        macro_df: pd.DataFrame | None = None,
         symbol: str = "XAUUSD",
-        mtf_df: Optional[pd.DataFrame] = None,
+        mtf_df: pd.DataFrame | None = None,
     ) -> float:
         """
         Return the probability that the next bar closes higher (0–1).
@@ -398,7 +398,7 @@ class AdvancedModelPredictor:
     def predict_signal(
         self,
         ohlcv: pd.DataFrame,
-        macro_df: Optional[pd.DataFrame] = None,
+        macro_df: pd.DataFrame | None = None,
         symbol: str = "XAUUSD",
         threshold_long: float = 0.58,
         threshold_short: float = 0.42,
@@ -439,7 +439,7 @@ class AdvancedModelPredictor:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 # Loaded lazily on first access so import cost is zero.
-_predictor: Optional[AdvancedModelPredictor] = None
+_predictor: AdvancedModelPredictor | None = None
 
 
 def get_advanced_predictor() -> AdvancedModelPredictor:
@@ -454,7 +454,7 @@ def get_advanced_predictor() -> AdvancedModelPredictor:
 
 import asyncio
 import threading
-from typing import Callable, List
+from collections.abc import Callable
 from datetime import UTC
 
 
@@ -509,7 +509,7 @@ class LiveInferenceLoop:
         self._running: bool = False
         self._tick_count: int = 0
         self._error_count: int = 0
-        self._last_signal: Optional[dict[str, Any]] = None
+        self._last_signal: dict[str, Any] | None = None
         self._lock = threading.Lock()
 
     def add_callback(self, fn: Callable[[dict[str, Any]], None]) -> None:
@@ -521,7 +521,7 @@ class LiveInferenceLoop:
         with self._lock:
             self._callbacks = [c for c in self._callbacks if c is not fn]
 
-    async def _fetch_ohlcv(self) -> Optional[pd.DataFrame]:
+    async def _fetch_ohlcv(self) -> pd.DataFrame | None:
         """
         Pull the latest OHLCV window from the data layer.
 
@@ -561,7 +561,7 @@ class LiveInferenceLoop:
 
         return None
 
-    async def _fetch_macro(self) -> Optional[pd.DataFrame]:
+    async def _fetch_macro(self) -> pd.DataFrame | None:
         """
         Pull aligned macro features from MacroStore.
 
@@ -610,7 +610,7 @@ class LiveInferenceLoop:
 
     async def _tick(self) -> None:
         """Single inference tick: fetch → predict → filter → publish."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         ohlcv = await self._fetch_ohlcv()
         if ohlcv is None or len(ohlcv) < self.min_bars:

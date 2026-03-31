@@ -19,7 +19,7 @@ DELETE /tca/records          — flush in-memory records (admin)
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -59,8 +59,8 @@ async def get_all_reports(
 async def get_broker_report(
     broker: str,
     request: Request,
-    symbol: Optional[str] = Query(None),
-    session: Optional[str] = Query(None),
+    symbol: str | None = Query(None),
+    session: str | None = Query(None),
     last_n: int = Query(500, ge=1, le=10000),
 ) -> dict[str, Any]:
     """Return TCA report for a specific broker, optionally filtered by symbol/session."""
@@ -81,8 +81,8 @@ async def get_broker_report(
 async def get_recent_records(
     request: Request,
     n: int = Query(100, ge=1, le=1000),
-    broker: Optional[str] = Query(None),
-    symbol: Optional[str] = Query(None),
+    broker: str | None = Query(None),
+    symbol: str | None = Query(None),
 ) -> list[dict[str, Any]]:
     """Return the N most recent TCA records, optionally filtered."""
     _require_auth(request)

@@ -28,7 +28,7 @@ import json
 import logging
 import time
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class MarketDataCache:
     # Tick cache
     # ------------------------------------------------------------------
 
-    def get_latest_tick(self, symbol: str) -> Optional[dict[str, Any]]:
+    def get_latest_tick(self, symbol: str) -> dict[str, Any] | None:
         """Return the most recent tick for *symbol*, or None."""
         try:
             key = f"{self._prefix}tick_cache:{symbol}"
@@ -144,7 +144,7 @@ class MarketDataCache:
             self._log_error("get_bars_since", exc)
             return []
 
-    def get_latest_bar(self, symbol: str, timeframe: str) -> Optional[dict[str, Any]]:
+    def get_latest_bar(self, symbol: str, timeframe: str) -> dict[str, Any] | None:
         """Return the most recently closed bar."""
         try:
             key = f"{self._prefix}latest_bar:{symbol}:{timeframe}"
@@ -158,7 +158,7 @@ class MarketDataCache:
     # Feed health
     # ------------------------------------------------------------------
 
-    def get_feed_health(self) -> Optional[dict[str, Any]]:
+    def get_feed_health(self) -> dict[str, Any] | None:
         """Return the latest feed health snapshot."""
         try:
             val = self._r.get(f"{self._prefix}feed:health")

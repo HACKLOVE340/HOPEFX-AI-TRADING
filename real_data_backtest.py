@@ -36,7 +36,7 @@ from __future__ import annotations
 import math
 import os
 import time
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -95,7 +95,7 @@ def fetch_ohlcv_paginated(
     exchange: Any,
     symbol: str,
     timeframe: str,
-    since_ms: Optional[int] = None,
+    since_ms: int | None = None,
     max_bars: int = 5000,
     batch_size: int = 500,
 ) -> pd.DataFrame:

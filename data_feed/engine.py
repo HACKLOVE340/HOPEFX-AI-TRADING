@@ -37,12 +37,13 @@ import asyncio
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import aiohttp
 import yaml
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +89,8 @@ class ProductionDataEngine:
         self._cfg = self._raw_config["data_feed"]
 
         # State
-        self.current_price: Optional[float] = None
-        self.last_update: Optional[datetime] = None
+        self.current_price: float | None = None
+        self.last_update: datetime | None = None
         self.price_history: deque = deque(
             maxlen=int(self._cfg.get("history_size", 5000))
         )
@@ -104,10 +105,10 @@ class ProductionDataEngine:
 
         # Per-provider failure counters and circuit-breaker open timestamps.
         self._fail_count: dict[str, int] = dict.fromkeys(self._fallback_order, 0)
-        self._circuit_open_at: dict[str, Optional[datetime]] = dict.fromkeys(self._fallback_order)
+        self._circuit_open_at: dict[str, datetime | None] = dict.fromkeys(self._fallback_order)
 
         # HTTP session (created in start())
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
         # MT5 backup (lazy-initialised)
         self._mt5_backup = None
@@ -153,10 +154,8 @@ class ProductionDataEngine:
 
     def unsubscribe(self, component: Any) -> None:
         """Remove a previously registered subscriber."""
-        try:
+        with contextlib.suppress(ValueError):
             self.subscribers.remove(component)
-        except ValueError:
-            pass
 
     # ── Internal polling loop ─────────────────────────────────────────────────
 
@@ -260,7 +259,7 @@ class ProductionDataEngine:
                 await asyncio.sleep(0.5 * attempt)  # Back-off between retries.
         return False
 
-    async def _call_rest_provider(self, provider: str) -> Optional[float]:
+    async def _call_rest_provider(self, provider: str) -> float | None:
         """Call a REST provider and return the raw price float."""
         cfg = self._cfg.get(provider, {})
         url = _resolve_env(cfg.get("url", ""))

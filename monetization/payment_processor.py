@@ -28,10 +28,10 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from decimal import Decimal
 from enum import Enum
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 from .pricing import SubscriptionTier
 from .subscription import subscription_manager, SubscriptionStatus
@@ -92,12 +92,12 @@ class Payment:
         self.payment_method = payment_method
         self.status = status
         self.created_at = datetime.now(UTC)
-        self.processed_at: Optional[datetime] = None
-        self.stripe_payment_intent_id: Optional[str] = None
-        self.stripe_customer_id: Optional[str] = None
-        self.error_message: Optional[str] = None
+        self.processed_at: datetime | None = None
+        self.stripe_payment_intent_id: str | None = None
+        self.stripe_customer_id: str | None = None
+        self.error_message: str | None = None
         self.retry_count: int = 0
-        self.next_retry_at: Optional[datetime] = None
+        self.next_retry_at: datetime | None = None
 
     def mark_succeeded(self) -> None:
         self.status = PaymentStatus.SUCCEEDED
@@ -154,7 +154,7 @@ class PaymentProcessor:
     When not set, operations are logged only (safe for dev/test).
     """
 
-    def __init__(self, stripe_api_key: Optional[str] = None) -> None:
+    def __init__(self, stripe_api_key: str | None = None) -> None:
         self._stripe_api_key = stripe_api_key or os.getenv("STRIPE_SECRET_KEY", "")
         self._webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
         self._payments: dict[str, Payment] = {}
@@ -221,9 +221,9 @@ class PaymentProcessor:
         self,
         amount: Decimal,
         currency: str = "usd",
-        customer_id: Optional[str] = None,
-        idempotency_key: Optional[str] = None,
-    ) -> Optional[str]:
+        customer_id: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> str | None:
         """
         Create a Stripe PaymentIntent via the real Stripe SDK.
 
@@ -335,7 +335,7 @@ class PaymentProcessor:
     def refund_payment(
         self,
         payment_id: str,
-        amount: Optional[Decimal] = None,
+        amount: Decimal | None = None,
         reason: str = "requested_by_customer",
     ) -> bool:
         """
@@ -609,7 +609,7 @@ class PaymentProcessor:
     # Queries
     # ------------------------------------------------------------------
 
-    def get_payment(self, payment_id: str) -> Optional[Payment]:
+    def get_payment(self, payment_id: str) -> Payment | None:
         return self._payments.get(payment_id)
 
     def get_user_payments(self, user_id: str) -> list[Payment]:

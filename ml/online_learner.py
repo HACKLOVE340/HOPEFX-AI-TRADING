@@ -34,7 +34,7 @@ except ImportError:
     TensorDataset = None  # type: ignore[assignment,misc]
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -140,7 +140,7 @@ class OnlineLearner:
     def train_step(
         self,
         new_data: tuple[np.ndarray, np.ndarray],
-        validation_data: Optional[tuple[np.ndarray, np.ndarray]] = None,
+        validation_data: tuple[np.ndarray, np.ndarray] | None = None,
     ) -> float:
         """
         Single online training step with EWC and replay.
@@ -242,7 +242,7 @@ class EnsemblePredictor:
     Provides robust predictions via model diversity.
     """
 
-    def __init__(self, models: list[nn.Module], weights: Optional[list[float]] = None):
+    def __init__(self, models: list[nn.Module], weights: list[float] | None = None):
         self.models = models
         self.weights = weights or [1.0 / len(models)] * len(models)
         self.performance_history: dict[int, list[float]] = {
@@ -344,7 +344,7 @@ class SklearnOnlineLearner:
     def __init__(
         self,
         symbol: str = "XAU_USD",
-        persist_path: Optional[str] = None,
+        persist_path: str | None = None,
         n_features: int = 176,
         ewc_lambda: float = 0.10,
     ) -> None:
@@ -360,13 +360,13 @@ class SklearnOnlineLearner:
         self._scaler = None
 
         # EWC anchor: snapshot of model coef_ after stable training
-        self._anchor_coef: Optional[np.ndarray] = None
-        self._anchor_intercept: Optional[np.ndarray] = None
+        self._anchor_coef: np.ndarray | None = None
+        self._anchor_intercept: np.ndarray | None = None
         self._base_alpha = 1e-4  # SGD alpha before EWC adjustment
 
         # Drift detection: rolling window of predicted probabilities
         self._prob_window: deque = deque(maxlen=self._DRIFT_WINDOW)
-        self._ref_probs: Optional[np.ndarray] = None  # reference distribution
+        self._ref_probs: np.ndarray | None = None  # reference distribution
         self._drift_count = 0
 
         # Performance tracking: rolling accuracy
@@ -397,7 +397,7 @@ class SklearnOnlineLearner:
         except ImportError:
             logger.warning("sklearn not available — SklearnOnlineLearner is a no-op")
 
-    def _extract_features(self, bars: pd.DataFrame) -> Optional[np.ndarray]:
+    def _extract_features(self, bars: pd.DataFrame) -> np.ndarray | None:
         """
         Extract feature vector from OHLCV bars.
 
@@ -458,7 +458,7 @@ class SklearnOnlineLearner:
             logger.debug("SklearnOnlineLearner._extract_features: %s", exc)
             return None
 
-    def _extract_label(self, bars: pd.DataFrame) -> Optional[np.ndarray]:
+    def _extract_label(self, bars: pd.DataFrame) -> np.ndarray | None:
         """Binary label: 1 if last close > first close, else 0."""
         try:
             closes = bars["close"].values
@@ -645,7 +645,7 @@ class SklearnOnlineLearner:
             )
             return False
 
-    def predict_proba(self, bars: pd.DataFrame) -> Optional[float]:
+    def predict_proba(self, bars: pd.DataFrame) -> float | None:
         """
         Return P(up) for the given bars, or None if not yet fitted.
 
@@ -711,7 +711,7 @@ _learner_registry: dict[str, SklearnOnlineLearner] = {}
 
 def get_online_learner(
     symbol: str = "XAU_USD",
-    persist_path: Optional[str] = None,
+    persist_path: str | None = None,
 ) -> SklearnOnlineLearner:
     """
     Return the SklearnOnlineLearner singleton for ``symbol``.
@@ -722,7 +722,7 @@ def get_online_learner(
 
     Called by HourlyTrainer._online_update() on every hourly cycle.
     """
-    global _learner_registry
+    global _learner_registry  # noqa: PLW0602
 
     if symbol not in _learner_registry:
         if persist_path is None:
@@ -788,7 +788,7 @@ class XGBoostOnlineModel:
         random_state: int = 42,
     ) -> None:
         try:
-            import xgboost as xgb
+            import xgboost as xgb  # noqa: F401
         except ImportError as exc:
             raise ImportError(
                 "xgboost is required for XGBoostOnlineModel. "
@@ -805,7 +805,7 @@ class XGBoostOnlineModel:
 
         self._model: Any = None
         self._is_trained: bool = False
-        self.metadata: Optional[ModelMetadata] = None
+        self.metadata: ModelMetadata | None = None
 
     async def fit(
         self,

@@ -50,7 +50,7 @@ import os
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional, Set
+from collections.abc import Callable
 
 from fastapi import Depends, Header, HTTPException, status
 
@@ -63,7 +63,7 @@ try:
     import redis as _redis  # type: ignore
 
     _REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    _redis_client: Optional[_redis.Redis] = _redis.from_url(  # type: ignore[assignment]
+    _redis_client: _redis.Redis | None = _redis.from_url(  # type: ignore[assignment]
         _REDIS_URL, decode_responses=True, socket_connect_timeout=2
     )
     _redis_client.ping()
@@ -244,7 +244,7 @@ def _check_rate_limit_memory(key_hash: str, tier_config: TierConfig) -> None:
 
 
 async def verify_api_key(
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> TenantContext:
     """
     FastAPI dependency: authenticate an API key and return TenantContext.

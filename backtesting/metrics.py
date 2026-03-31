@@ -11,7 +11,6 @@ Calculates comprehensive trading performance metrics.
 
 import pandas as pd
 import numpy as np
-from typing import Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -237,7 +236,7 @@ class PerformanceMetrics:
         losing_trades = self.trade_history[self.trade_history["pnl"] < 0]["pnl"]
         return losing_trades.min() if len(losing_trades) > 0 else 0.0
 
-    def calculate_avg_trade_duration(self) -> Optional[float]:
+    def calculate_avg_trade_duration(self) -> float | None:
         """Calculate average trade duration in days."""
         # This would require entry/exit timestamps in trade history
         # Simplified implementation

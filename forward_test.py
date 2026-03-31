@@ -34,8 +34,7 @@ import asyncio
 import logging
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, timedelta, UTC
 
 import pandas as pd
 
@@ -195,11 +194,11 @@ class PaperOrderGateway:
 
     def __init__(self, risk: RealRiskManager) -> None:
         self._risk = risk
-        self._position: Optional[Position] = None
+        self._position: Position | None = None
         self._trades: list[dict] = []
 
     @property
-    def position(self) -> Optional[Position]:
+    def position(self) -> Position | None:
         return self._position
 
     def open(self, close: float, signal: str) -> bool:
@@ -241,7 +240,7 @@ class PaperOrderGateway:
         )
         return True
 
-    def update(self, close: float) -> Optional[float]:
+    def update(self, close: float) -> float | None:
         """Check SL/TP on bar close. Returns realised PnL if closed."""
         if self._position is None:
             return None
@@ -466,10 +465,7 @@ async def _async_main() -> int:
 
     now = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    if args.end:
-        end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=UTC)
-    else:
-        end = now
+    end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=UTC) if args.end else now
 
     if args.start:
         start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=UTC)

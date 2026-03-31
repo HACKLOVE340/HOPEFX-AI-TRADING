@@ -23,14 +23,14 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _CONFIG_PATH = Path(__file__).parents[2] / "prop_firm_mode.json"
-_config: Optional[dict[str, Any]] = None
-_firm_rules: Optional[dict[str, Any]] = None
-_enforcement: Optional[dict[str, Any]] = None
+_config: dict[str, Any] | None = None
+_firm_rules: dict[str, Any] | None = None
+_enforcement: dict[str, Any] | None = None
 
 
 def _load_config() -> None:

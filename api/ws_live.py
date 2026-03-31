@@ -52,8 +52,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Dict, Optional, Set
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -72,7 +71,7 @@ HEARTBEAT_MISS_LIMIT: int = int(os.getenv("WS_HEARTBEAT_MISS_LIMIT", "3"))
 WS_AUTH_REQUIRED: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
 
 
-def _validate_ws_token(token: str) -> Optional[dict]:
+def _validate_ws_token(token: str) -> dict | None:
     """Validate a Bearer token from a WS auth message. Returns payload or None."""
     if token.startswith("Bearer "):
         token = token[7:]
@@ -103,7 +102,7 @@ class LiveConnectionManager:
         self._connections: dict[str, WebSocket] = {}
         self._subscriptions: dict[str, set[str]] = {}
         # connection_id → user_id (None until auth message received)
-        self._user_ids: dict[str, Optional[str]] = {}
+        self._user_ids: dict[str, str | None] = {}
         # connection_id → heartbeat miss count
         self._hb_misses: dict[str, int] = {}
         self._counter = 0
@@ -130,7 +129,7 @@ class LiveConnectionManager:
     def is_authenticated(self, cid: str) -> bool:
         return self._user_ids.get(cid) is not None
 
-    def get_user_id(self, cid: str) -> Optional[str]:
+    def get_user_id(self, cid: str) -> str | None:
         return self._user_ids.get(cid)
 
     def disconnect(self, cid: str) -> None:
@@ -267,7 +266,7 @@ def _seed_from_broker() -> None:
         )
 
 
-def _get_live_price(symbol: str) -> Optional[float]:
+def _get_live_price(symbol: str) -> float | None:
     """
     Return the current mid price from the live stack:
     1. price_engine.get_last_price() — real ticks when a feed is connected
@@ -301,7 +300,7 @@ def _get_live_price(symbol: str) -> Optional[float]:
     return None
 
 
-def _make_tick(symbol: str) -> Optional[dict]:
+def _make_tick(symbol: str) -> dict | None:
     """
     Build a price_tick message for the given symbol from live sources only.
 
@@ -337,7 +336,7 @@ def _make_tick(symbol: str) -> Optional[dict]:
 
 # ─── Background broadcaster ───────────────────────────────────────────────────
 
-_broadcast_task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
+_broadcast_task: asyncio.Task | None = None  # type: ignore[type-arg]
 
 
 async def _eventbus_tick_broadcaster() -> None:
@@ -392,7 +391,7 @@ def _compute_atr_sl_tp(
     direction: str,
     sl_atr_mult: float = 1.5,
     tp_atr_mult: float = 3.0,
-) -> tuple[Optional[float], Optional[float]]:
+) -> tuple[float | None, float | None]:
     """
     Compute ATR(14)-based stop-loss and take-profit prices.
 
@@ -408,7 +407,7 @@ def _compute_atr_sl_tp(
     sl_mult = float(os.getenv("SL_ATR_MULT", str(sl_atr_mult)))
     tp_mult = float(os.getenv("TP_ATR_MULT", str(tp_atr_mult)))
 
-    atr: Optional[float] = None
+    atr: float | None = None
 
     # ── 1. Signal engine data buffer ─────────────────────────────────────────
     try:
@@ -662,7 +661,7 @@ async def _heartbeat_broadcaster() -> None:
 
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
-    global _broadcast_task
+    global _broadcast_task  # noqa: PLW0602
     loop = asyncio.get_event_loop()
     loop.create_task(_price_broadcaster())
     loop.create_task(_heartbeat_broadcaster())
@@ -866,7 +865,7 @@ async def ws_live_stats() -> dict:
 # ─── Push helpers (called from trading/signal routers) ───────────────────────
 
 
-async def push_position_update(position: dict, user_id: Optional[str] = None) -> None:
+async def push_position_update(position: dict, user_id: str | None = None) -> None:
     """Push a position update. If user_id is given, only that user receives it."""
     msg = {"type": "position_update", "data": position}
     if user_id:
@@ -875,7 +874,7 @@ async def push_position_update(position: dict, user_id: Optional[str] = None) ->
         await _manager.broadcast("positions", msg)
 
 
-async def push_position_close(position_id: str, user_id: Optional[str] = None) -> None:
+async def push_position_close(position_id: str, user_id: str | None = None) -> None:
     msg = {"type": "position_close", "data": {"id": position_id}}
     if user_id:
         await _manager.send_to_user(user_id, "positions", msg)
@@ -888,7 +887,7 @@ async def push_signal(signal: dict) -> None:
     await _manager.broadcast("signals", {"type": "signal", "data": signal})
 
 
-async def push_account_update(account: dict, user_id: Optional[str] = None) -> None:
+async def push_account_update(account: dict, user_id: str | None = None) -> None:
     """Account updates are per-user — equity/balance is private."""
     msg = {"type": "account_update", "data": account}
     if user_id:

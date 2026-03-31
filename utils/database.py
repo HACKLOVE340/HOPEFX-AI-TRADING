@@ -14,7 +14,7 @@ Database Connection Management
 import re
 import sqlite3
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import logging
 
@@ -84,7 +84,7 @@ class Database:
     def __init__(self, db_path: str = "hopefx.db"):
         self.pool = DatabasePool(db_path)
 
-    def execute(self, query: str, params: tuple = ()) -> Optional[list[dict]]:
+    def execute(self, query: str, params: tuple = ()) -> list[dict] | None:
         """Execute query and return results"""
         try:
             with self.pool.get_connection() as conn:
@@ -104,7 +104,7 @@ class Database:
     def insert(self, table: str, data: dict[str, Any]) -> bool:
         """Insert record"""
         _validate_identifier(table, "table name")
-        for col in data.keys():
+        for col in data:
             _validate_identifier(col, "column name")
         columns = ", ".join(data.keys())
         placeholders = ", ".join(["?" for _ in data])
@@ -127,9 +127,9 @@ class Database:
         for ensuring it contains no user-supplied data.
         """
         _validate_identifier(table, "table name")
-        for col in data.keys():
+        for col in data:
             _validate_identifier(col, "column name")
-        updates = ", ".join([f"{k} = ?" for k in data.keys()])
+        updates = ", ".join([f"{k} = ?" for k in data])
         query = f"UPDATE {table} SET {updates} WHERE {where}"  # nosec B608 - table/column identifiers validated; where is caller-controlled
 
         try:

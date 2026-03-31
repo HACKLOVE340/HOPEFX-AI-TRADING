@@ -265,7 +265,6 @@ def test_main_reset_clears_ledger(tmp_path):
 
 def test_main_missing_credentials_exits_2(capsys):
     """Missing OANDA_API_KEY exits 2."""
-    with patch.dict("os.environ", {"OANDA_API_KEY": "", "OANDA_ACCOUNT_ID": ""}):
-        with patch("sys.argv", ["fill_tracker.py"]):
-            code = ft.main()
+    with patch.dict("os.environ", {"OANDA_API_KEY": "", "OANDA_ACCOUNT_ID": ""}), patch("sys.argv", ["fill_tracker.py"]):
+        code = ft.main()
     assert code == 2

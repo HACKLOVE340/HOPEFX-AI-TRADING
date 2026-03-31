@@ -66,7 +66,7 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -86,6 +86,7 @@ from data_layer.quality.engine import DataQualityEngine, dqe
 from data_layer.replay.engine import MarketReplayEngine, market_replay_engine
 from data_layer.sentiment.engine import NewsSentimentEngine, news_sentiment_engine
 from data_layer.types import GoldTick, QualityReport, TickQuality
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ class MarketDataOrchestrator:
         self._redis_store: DataLayerRedisStore = dl_redis_store
 
         # Core components
-        self._gold_feed: Optional[GoldFeedManager] = None
+        self._gold_feed: GoldFeedManager | None = None
         self._dqe: DataQualityEngine = dqe
         self._micro: MicrostructureEngine = microstructure_engine
         self._sentiment: NewsSentimentEngine = news_sentiment_engine
@@ -124,7 +125,7 @@ class MarketDataOrchestrator:
         self._tick_count = 0
 
         # Background task handle — tracked so stop() can cancel it immediately
-        self._uptime_task: Optional[asyncio.Task] = None
+        self._uptime_task: asyncio.Task | None = None
 
         # Tick subscriber callbacks: name → Callable[[GoldTick], None]
         # Registered via subscribe_ticks(); called on every accepted tick.
@@ -309,10 +310,8 @@ class MarketDataOrchestrator:
         # 6. Cancel background uptime/health task immediately (don't wait 10s)
         if self._uptime_task and not self._uptime_task.done():
             self._uptime_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._uptime_task
-            except asyncio.CancelledError:
-                pass
             self._uptime_task = None
 
         self._started = False
@@ -357,7 +356,7 @@ class MarketDataOrchestrator:
 
     # ── Primary data access ───────────────────────────────────────────────────
 
-    def get_latest_tick(self, symbol: str = "XAU_USD") -> Optional[GoldTick]:
+    def get_latest_tick(self, symbol: str = "XAU_USD") -> GoldTick | None:
         """
         Return the latest validated, normalised gold tick.
 
@@ -478,7 +477,7 @@ class MarketDataOrchestrator:
 
     def get_ml_features(
         self,
-        as_of: Optional[datetime] = None,
+        as_of: datetime | None = None,
         symbol: str = "XAU_USD",
     ) -> dict[str, float]:
         """
@@ -549,7 +548,7 @@ class MarketDataOrchestrator:
 
     # ── Convenience accessors ─────────────────────────────────────────────────
 
-    def get_current_gold_price(self) -> Optional[float]:
+    def get_current_gold_price(self) -> float | None:
         """Return current consensus gold mid price, or None if unavailable."""
         tick = self.get_latest_tick()
         return tick.mid if tick else None
@@ -601,7 +600,7 @@ class MarketDataOrchestrator:
         symbol: str = "XAU_USD",
         bars: int = 150,
         timeframe: str = "H1",
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """
         Return the last ``bars`` closed OHLCV bars as a DataFrame.
 
@@ -616,7 +615,7 @@ class MarketDataOrchestrator:
             logger.debug("Orchestrator.get_ohlcv: %s", exc)
             return None
 
-    def get_macro_features(self) -> Optional[pd.DataFrame]:
+    def get_macro_features(self) -> pd.DataFrame | None:
         """
         Return the MacroStore as a DataFrame aligned to the current time.
 
@@ -636,7 +635,7 @@ class MarketDataOrchestrator:
             logger.debug("Orchestrator.get_macro_features: %s", exc)
             return None
 
-    def get_quality_report(self, symbol: str = "XAU_USD") -> Optional[QualityReport]:
+    def get_quality_report(self, symbol: str = "XAU_USD") -> QualityReport | None:
         """
         Return the latest data quality report.
 
@@ -688,7 +687,7 @@ class MarketDataOrchestrator:
         symbol: str = "XAU_USD",
         timeframe_minutes: int = 60,
         max_ticks: int = 5000,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """
         Build an OHLCV DataFrame from the tick history in Redis.
 
@@ -778,7 +777,7 @@ class MarketDataOrchestrator:
         symbol: str = "XAU_USD",
         bars: int = 200,
         timeframe: str = "H1",
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """
         Return up to ``bars`` OHLCV bars, trying OHLCVStore first then
         falling back to tick-based reconstruction from Redis.

@@ -26,8 +26,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, Optional, Tuple
+from datetime import datetime, timedelta, UTC
 
 import aiohttp
 import pandas as pd
@@ -63,7 +62,7 @@ class FREDFeed:
     """
 
     def __init__(self) -> None:
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -77,7 +76,7 @@ class FREDFeed:
     async def fetch_series(
         self,
         series_id: str,
-        observation_start: Optional[str] = None,
+        observation_start: str | None = None,
         limit: int = 500,
     ) -> pd.Series:
         """
@@ -143,7 +142,7 @@ class FREDFeed:
             return pd.Series(dtype=float)
 
     async def fetch_all(
-        self, observation_start: Optional[str] = None
+        self, observation_start: str | None = None
     ) -> dict[str, pd.Series]:
         """
         Fetch all configured FRED series concurrently.
@@ -165,7 +164,7 @@ class FREDFeed:
 
         return results
 
-    async def fetch_latest_values(self) -> dict[str, Optional[float]]:
+    async def fetch_latest_values(self) -> dict[str, float | None]:
         """
         Return the most recent value for each series.
 

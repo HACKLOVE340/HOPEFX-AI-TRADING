@@ -10,9 +10,9 @@ Provides Jupyter-style notebook integration for quantitative research,
 strategy development, and data analysis.
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any  # noqa: F401
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, timezone, UTC  # noqa: F401
 from enum import Enum
 import logging
 import json
@@ -44,11 +44,11 @@ class NotebookCell:
     cell_id: str
     cell_type: CellType
     content: str
-    output: Optional[str] = None
+    output: str | None = None
     status: CellStatus = CellStatus.IDLE
     execution_count: int = 0
-    execution_time: Optional[float] = None
-    error_message: Optional[str] = None
+    execution_time: float | None = None
+    error_message: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -82,7 +82,7 @@ class ResearchNotebookEngine:
     - Template library
     """
 
-    def __init__(self, config: Optional[dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize research notebook engine."""
         self.config = config or {}
         self.notebooks: dict[str, ResearchNotebook] = {}
@@ -317,7 +317,7 @@ print("Feature engineering functions ready")
 
     def add_cell(
         self, notebook_id: str, cell_type: CellType, content: str
-    ) -> Optional[NotebookCell]:
+    ) -> NotebookCell | None:
         """
         Add a cell to a notebook.
 
@@ -347,8 +347,8 @@ print("Feature engineering functions ready")
         self,
         notebook_id: str,
         cell_id: str,
-        execution_context: Optional[dict[str, Any]] = None,
-    ) -> Optional[dict[str, Any]]:
+        execution_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
         """
         Execute a code cell.
 
@@ -445,7 +445,7 @@ print("Feature engineering functions ready")
 
     def create_from_template(
         self, template_id: str, title: str, author: str
-    ) -> Optional[ResearchNotebook]:
+    ) -> ResearchNotebook | None:
         """Create a notebook from a template."""
         template = self.templates.get(template_id)
         if not template:
@@ -461,7 +461,7 @@ print("Feature engineering functions ready")
 
         return notebook
 
-    def export_notebook(self, notebook_id: str, format: str = "json") -> Optional[str]:
+    def export_notebook(self, notebook_id: str, format: str = "json") -> str | None:
         """Export notebook to file format."""
         notebook = self.notebooks.get(notebook_id)
         if not notebook:
@@ -524,9 +524,9 @@ print("Feature engineering functions ready")
 
     def search_notebooks(
         self,
-        query: Optional[str] = None,
-        tags: Optional[list[str]] = None,
-        author: Optional[str] = None,
+        query: str | None = None,
+        tags: list[str] | None = None,
+        author: str | None = None,
     ) -> list[dict[str, Any]]:
         """Search notebooks."""
         results = []
@@ -575,7 +575,6 @@ def create_research_router(engine: "ResearchNotebookEngine"):
     """
     from fastapi import APIRouter, Depends, HTTPException
     from pydantic import BaseModel
-    from typing import Optional, List
     from api.auth import require_role, TokenPayload
 
     router = APIRouter(prefix="/api/research", tags=["Research"])
@@ -591,7 +590,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         content: str = ""
 
     @router.get("/notebooks")
-    async def list_notebooks(query: Optional[str] = None, author: Optional[str] = None):
+    async def list_notebooks(query: str | None = None, author: str | None = None):
         """List all research notebooks (excluding templates)."""
         return engine.search_notebooks(query=query, author=author)
 
@@ -744,13 +743,13 @@ def create_features(df):
 
 # Module exports
 __all__ = [
-    "ResearchNotebookEngine",
-    "ResearchNotebook",
-    "NotebookCell",
-    "CellType",
     "CellStatus",
-    "create_research_router",
-    "calculate_sharpe_ratio",
+    "CellType",
+    "NotebookCell",
+    "ResearchNotebook",
+    "ResearchNotebookEngine",
     "calculate_max_drawdown",
+    "calculate_sharpe_ratio",
     "create_features",
+    "create_research_router",
 ]

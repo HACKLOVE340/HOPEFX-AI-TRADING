@@ -14,7 +14,6 @@ Advanced ML Feature Engineering for Trading
 """
 
 import logging
-from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -322,14 +321,14 @@ class AdvancedFeatureEngineer:
             df[f"entropy_{period}"] = (
                 df["returns"]
                 .rolling(period)
-                .apply(lambda x: self._calculate_entropy(x), raw=True)
+                .apply(self._calculate_entropy, raw=True)
             )
 
         # Permutation entropy
         df["perm_entropy_10"] = (
             df["returns"]
             .rolling(10)
-            .apply(lambda x: self._calculate_permutation_entropy(x), raw=True)
+            .apply(self._calculate_permutation_entropy, raw=True)
         )
 
         return df
@@ -342,12 +341,12 @@ class AdvancedFeatureEngineer:
             df[f"hurst_{period}"] = (
                 df["returns"]
                 .rolling(period)
-                .apply(lambda x: self._calculate_hurst(x), raw=True)
+                .apply(self._calculate_hurst, raw=True)
             )
 
         # Detrended fluctuation analysis
         df["dfa_10"] = (
-            df["returns"].rolling(10).apply(lambda x: self._calculate_dfa(x), raw=True)
+            df["returns"].rolling(10).apply(self._calculate_dfa, raw=True)
         )
 
         return df

@@ -50,7 +50,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,7 @@ def _scrub_dict(d: dict[str, Any]) -> dict[str, Any]:
 
 def _before_send(
     event: dict[str, Any], hint: dict[str, Any]
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     Sentry before_send hook.
 
@@ -216,7 +216,7 @@ def _before_send(
 
 def _before_send_transaction(
     event: dict[str, Any], hint: dict[str, Any]
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     Sentry before_send_transaction hook.
 

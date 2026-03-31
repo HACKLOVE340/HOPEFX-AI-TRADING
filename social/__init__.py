@@ -23,15 +23,15 @@ performance_tracker = PerformanceTracker()
 
 __all__ = [
     "CopyTradingEngine",
-    "StrategyMarketplace",
-    "ProfileManager",
     "LeaderboardManager",
     "PerformanceTracker",
+    "ProfileManager",
+    "StrategyMarketplace",
     "copy_trading_engine",
-    "marketplace",
-    "profile_manager",
     "leaderboard_manager",
+    "marketplace",
     "performance_tracker",
+    "profile_manager",
 ]
 
 # Module metadata

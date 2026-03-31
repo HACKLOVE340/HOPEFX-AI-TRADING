@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import List
 
 from fastapi import APIRouter
 from pydantic import BaseModel

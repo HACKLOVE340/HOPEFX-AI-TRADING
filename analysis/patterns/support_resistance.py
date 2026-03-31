@@ -18,8 +18,7 @@ significant buying or selling pressure:
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ class PriceLevel:
     level_type: str  # 'support', 'resistance', 'pivot'
     strength: float  # 0.0 – 1.0 (higher = stronger)
     touch_count: int  # Number of times price tested this level
-    last_touch: Optional[datetime]  # Datetime of last touch, or None
+    last_touch: datetime | None  # Datetime of last touch, or None
     method: str  # 'swing', 'fibonacci', 'round_number', etc.
     is_active: bool
     description: str = ""
@@ -296,10 +295,7 @@ def _group_to_zone(group: list[SRLevel]) -> SRZone:
     mid_p = (low_p + high_p) / 2
 
     types = {lv.level_type for lv in group}
-    if len(types) == 1:
-        zone_type = types.pop()
-    else:
-        zone_type = "mixed"
+    zone_type = types.pop() if len(types) == 1 else "mixed"
 
     avg_strength = sum(lv.strength for lv in group) / len(group)
     total_touches = sum(lv.touches for lv in group)
@@ -387,7 +383,7 @@ class SupportResistanceDetector:
             print(lvl.price, lvl.strength)
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialise the detector.
 
@@ -415,7 +411,7 @@ class SupportResistanceDetector:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_ohlcv_cols(self, df) -> Optional[dict[str, str]]:
+    def _get_ohlcv_cols(self, df) -> dict[str, str] | None:
         """Return lower-cased column name map or None if df is invalid."""
         try:
             import pandas as pd
@@ -445,7 +441,7 @@ class SupportResistanceDetector:
     def detect_levels(
         self,
         df,
-        current_price: Optional[float] = None,
+        current_price: float | None = None,
     ) -> dict[str, list[PriceLevel]]:
         """
         Detect support, resistance, and pivot levels.
@@ -747,7 +743,7 @@ class SupportResistanceDetector:
         highs: list[float],
         lows: list[float],
         closes: list[float],
-        volumes: Optional[list[float]] = None,
+        volumes: list[float] | None = None,
     ) -> list[SRLevel]:
         """
         Detect all support and resistance levels (legacy API).
@@ -782,7 +778,7 @@ class SupportResistanceDetector:
         highs: list[float],
         lows: list[float],
         closes: list[float],
-        volumes: Optional[list[float]] = None,
+        volumes: list[float] | None = None,
     ) -> list[SRZone]:
         """
         Detect S/R zones by merging nearby individual levels (legacy API).
@@ -845,7 +841,7 @@ class SupportResistanceDetector:
         highs: list[float],
         lows: list[float],
         closes: list[float],
-        tolerance_pct: Optional[float] = None,
+        tolerance_pct: float | None = None,
     ) -> bool:
         """
         Check whether *price* is close to any detected S/R level (legacy API).

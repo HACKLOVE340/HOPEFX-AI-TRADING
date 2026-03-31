@@ -25,8 +25,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, Optional
+from datetime import datetime, timedelta, UTC
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -52,7 +51,7 @@ _WEBHOOK_SECRET = os.getenv("CRYPTO_WEBHOOK_SECRET", "")
 
 class AddressRequest(BaseModel):
     currency: str = Field(..., description="BTC | ETH | USDT")
-    network: Optional[str] = Field(None, description="For USDT: TRC20 | ERC20 | BEP20")
+    network: str | None = Field(None, description="For USDT: TRC20 | ERC20 | BEP20")
     plan_id: str
     amount_usd: float = Field(..., gt=0)
     user_id: str
@@ -77,7 +76,7 @@ class PaymentStatusResponse(BaseModel):
     confirmations_required: int
     currency: str
     amount_crypto: float
-    tx_hash: Optional[str] = None
+    tx_hash: str | None = None
 
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
@@ -130,7 +129,7 @@ def _save_payment(payment: dict) -> None:
         session.close()
 
 
-def _load_payment(payment_id: str) -> Optional[dict]:
+def _load_payment(payment_id: str) -> dict | None:
     """Load a payment record from the database."""
     session = _get_db_session()
     if session is None:
@@ -330,7 +329,7 @@ def _verify_webhook_hmac(body: bytes, signature: str) -> bool:
 @router.post("/webhook", include_in_schema=True, tags=["Payments"])
 async def payment_webhook(
     request: Request,
-    x_webhook_signature: Optional[str] = Header(None, alias="X-Webhook-Signature"),
+    x_webhook_signature: str | None = Header(None, alias="X-Webhook-Signature"),
 ):
     """
     Receive on-chain confirmation callbacks from a crypto payment processor

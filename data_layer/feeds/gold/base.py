@@ -32,9 +32,8 @@ import random
 import time
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import List, Optional
 
 import aiohttp
 
@@ -63,7 +62,7 @@ class GoldFeedBase(ABC):
 
     def __init__(self) -> None:
         self._api_key: str = os.getenv(self._api_key_env, "")
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
         self._last_call_ts: float = 0.0
         self._min_interval_s: float = 1.0
         self._consecutive_errors: int = 0
@@ -176,8 +175,7 @@ class GoldFeedBase(ABC):
                 self._prom_errors.labels(reason=reason).inc()
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
-        if self._consecutive_errors >= _CB_OPEN_AFTER_ERRORS:
-            if self._cb_state != CircuitState.OPEN:
+        if self._consecutive_errors >= _CB_OPEN_AFTER_ERRORS and self._cb_state != CircuitState.OPEN:
                 self._cb_state = CircuitState.OPEN
                 self._cb_opened_at = time.monotonic()
                 logger.error(
@@ -201,8 +199,8 @@ class GoldFeedBase(ABC):
     async def _get(
         self,
         url: str,
-        params: Optional[dict] = None,
-        headers: Optional[dict] = None,
+        params: dict | None = None,
+        headers: dict | None = None,
     ) -> dict:
         """Authenticated GET with exponential backoff and circuit breaker."""
         if not self._check_circuit():
@@ -291,10 +289,10 @@ class GoldFeedBase(ABC):
     def _make_tick(
         self,
         mid: float,
-        bid: Optional[float] = None,
-        ask: Optional[float] = None,
+        bid: float | None = None,
+        ask: float | None = None,
         spread_pct: float = 0.0002,
-        raw: Optional[dict] = None,
+        raw: dict | None = None,
     ) -> GoldTick:
         """
         Construct a GoldTick from a mid price.

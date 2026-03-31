@@ -10,7 +10,6 @@ Tracks positions, equity, and generates performance history.
 """
 
 import pandas as pd
-from typing import Dict, List
 from datetime import datetime
 import logging
 from backtesting.events import FillEvent

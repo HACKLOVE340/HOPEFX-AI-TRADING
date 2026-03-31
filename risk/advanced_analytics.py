@@ -33,9 +33,9 @@ callers to use the correct multi-day methods.  Set to False only in tests.
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -108,7 +108,7 @@ class MonteCarloResult:
     cvar_95: float
     max_gain: float
     max_loss: float
-    simulated_paths: Optional[NDArray[np.float64]] = None
+    simulated_paths: NDArray[np.float64] | None = None
     num_simulations: int = 10000
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -164,7 +164,7 @@ class AdvancedRiskAnalytics:
     - Risk-adjusted performance metrics
     """
 
-    def __init__(self, config: Optional[dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """
         Initialize risk analytics.
 
@@ -259,9 +259,9 @@ class AdvancedRiskAnalytics:
     def calculate_var_historical(
         self,
         returns: NDArray[np.float64],
-        confidence_level: Optional[float] = None,
+        confidence_level: float | None = None,
         time_horizon: int = 1,
-        portfolio_value: Optional[float] = None,
+        portfolio_value: float | None = None,
     ) -> VaRResult:
         """
         Calculate Historical VaR.
@@ -337,10 +337,7 @@ class AdvancedRiskAnalytics:
                     f"{t}-day window. Result is approximate (assumes i.i.d. normal returns)."
                 )
 
-        if portfolio_value:
-            var_value = abs(var_scaled * portfolio_value)
-        else:
-            var_value = abs(var_scaled)
+        var_value = abs(var_scaled * portfolio_value) if portfolio_value else abs(var_scaled)
 
         return VaRResult(
             var_value=var_value,
@@ -354,9 +351,9 @@ class AdvancedRiskAnalytics:
     def calculate_var_parametric(
         self,
         returns: NDArray[np.float64],
-        confidence_level: Optional[float] = None,
+        confidence_level: float | None = None,
         time_horizon: int = 1,
-        portfolio_value: Optional[float] = None,
+        portfolio_value: float | None = None,
     ) -> VaRResult:
         """
         Calculate Parametric (Variance-Covariance) VaR.
@@ -443,10 +440,7 @@ class AdvancedRiskAnalytics:
             var_scaled = -(mean_t + z_score * std_t)
 
         # Convert to dollar value if portfolio value provided
-        if portfolio_value:
-            var_final = abs(var_scaled * portfolio_value)
-        else:
-            var_final = abs(var_scaled)
+        var_final = abs(var_scaled * portfolio_value) if portfolio_value else abs(var_scaled)
 
         return VaRResult(
             var_value=var_final,
@@ -468,10 +462,10 @@ class AdvancedRiskAnalytics:
     def calculate_var_monte_carlo(
         self,
         returns: NDArray[np.float64],
-        confidence_level: Optional[float] = None,
+        confidence_level: float | None = None,
         time_horizon: int = 1,
-        num_simulations: Optional[int] = None,
-        portfolio_value: Optional[float] = None,
+        num_simulations: int | None = None,
+        portfolio_value: float | None = None,
         use_historical_bootstrap: bool = False,
     ) -> VaRResult:
         """
@@ -549,10 +543,7 @@ class AdvancedRiskAnalytics:
         # Calculate VaR from simulations
         var_value = -np.percentile(simulated_returns, (1 - confidence_level) * 100)
 
-        if portfolio_value:
-            var_final = abs(var_value * portfolio_value)
-        else:
-            var_final = abs(var_value)
+        var_final = abs(var_value * portfolio_value) if portfolio_value else abs(var_value)
 
         return VaRResult(
             var_value=var_final,
@@ -566,9 +557,9 @@ class AdvancedRiskAnalytics:
     def calculate_var_multiday(
         self,
         returns: NDArray[np.float64],
-        confidence_level: Optional[float] = None,
+        confidence_level: float | None = None,
         time_horizon: int = 10,
-        portfolio_value: Optional[float] = None,
+        portfolio_value: float | None = None,
         method: str = "overlapping",
     ) -> "VaRResult":
         """
@@ -679,9 +670,9 @@ class AdvancedRiskAnalytics:
     def calculate_var_ewma(
         self,
         returns: NDArray[np.float64],
-        confidence_level: Optional[float] = None,
+        confidence_level: float | None = None,
         time_horizon: int = 1,
-        portfolio_value: Optional[float] = None,
+        portfolio_value: float | None = None,
         decay: float = 0.94,
     ) -> "VaRResult":
         """
@@ -792,9 +783,9 @@ class AdvancedRiskAnalytics:
     def recommended_var(
         self,
         returns: NDArray[np.float64],
-        confidence_level: Optional[float] = None,
+        confidence_level: float | None = None,
         time_horizon: int = 1,
-        portfolio_value: Optional[float] = None,
+        portfolio_value: float | None = None,
     ) -> "VaRResult":
         """
         Return the recommended VaR estimate for XAUUSD production risk limits.
@@ -837,9 +828,9 @@ class AdvancedRiskAnalytics:
     def calculate_cvar(
         self,
         returns: NDArray[np.float64],
-        confidence_level: Optional[float] = None,
-        portfolio_value: Optional[float] = None,
-        confidence: Optional[float] = None,
+        confidence_level: float | None = None,
+        portfolio_value: float | None = None,
+        confidence: float | None = None,
     ) -> float:
         """
         Calculate Conditional VaR (Expected Shortfall).
@@ -863,10 +854,7 @@ class AdvancedRiskAnalytics:
         # Calculate expected shortfall (average of returns below VaR)
         tail_returns = returns_arr[returns_arr <= var_threshold]
 
-        if len(tail_returns) == 0:
-            cvar = abs(float(var_threshold))
-        else:
-            cvar = abs(float(np.mean(tail_returns)))
+        cvar = abs(float(var_threshold)) if len(tail_returns) == 0 else abs(float(np.mean(tail_returns)))
 
         if portfolio_value:
             cvar = cvar * portfolio_value
@@ -883,7 +871,7 @@ class AdvancedRiskAnalytics:
         expected_return: float,
         volatility: float,
         time_horizon: int = 252,  # Trading days
-        num_simulations: Optional[int] = None,
+        num_simulations: int | None = None,
         return_paths: bool = False,
     ) -> MonteCarloResult:
         """
@@ -924,7 +912,7 @@ class AdvancedRiskAnalytics:
         final_returns = (final_values - initial_value) / initial_value
 
         fr: NDArray[np.float64] = np.asarray(final_returns, dtype=np.float64)
-        paths: Optional[NDArray[np.float64]] = (
+        paths: NDArray[np.float64] | None = (
             np.asarray(cumulative_returns, dtype=np.float64) if return_paths else None
         )
         result = MonteCarloResult(
@@ -944,9 +932,9 @@ class AdvancedRiskAnalytics:
     def simulate_portfolio_scenarios(
         self,
         positions: dict[str, dict[str, Any]],
-        correlations: Optional[NDArray[np.float64]] = None,
+        correlations: NDArray[np.float64] | None = None,
         time_horizon: int = 30,
-        num_simulations: Optional[int] = None,
+        num_simulations: int | None = None,
     ) -> dict[str, Any]:
         """
         Simulate portfolio scenarios with correlated assets.
@@ -1089,7 +1077,7 @@ class AdvancedRiskAnalytics:
     ) -> list[StressTestResult]:
         """Run all stress test scenarios."""
         results = []
-        for scenario_name in self.stress_scenarios.keys():
+        for scenario_name in self.stress_scenarios:
             result = self.run_stress_test(portfolio, scenario_name)
             results.append(result)
         return results
@@ -1257,7 +1245,7 @@ class AdvancedRiskAnalytics:
     def calculate_calmar_ratio(
         self,
         returns: NDArray[np.float64],
-        equity_curve: Optional[NDArray[np.float64]] = None,
+        equity_curve: NDArray[np.float64] | None = None,
     ) -> float:
         """Calculate Calmar ratio (annual return / max drawdown)."""
         annual_return = float(np.mean(returns) * 252)
@@ -1314,9 +1302,9 @@ class AdvancedRiskAnalytics:
     def calculate_var_garch(
         self,
         returns: NDArray[np.float64],
-        confidence_level: Optional[float] = None,
+        confidence_level: float | None = None,
         time_horizon: int = 10,
-        portfolio_value: Optional[float] = None,
+        portfolio_value: float | None = None,
     ) -> "VaRResult":
         """
         Compute multi-day VaR using GARCH(1,1) conditional volatility forecast.
@@ -1428,8 +1416,8 @@ class AdvancedRiskAnalytics:
     def calculate_all_metrics(
         self,
         returns: NDArray[np.float64],
-        equity_curve: Optional[NDArray[np.float64]] = None,
-        portfolio_value: Optional[float] = None,
+        equity_curve: NDArray[np.float64] | None = None,
+        portfolio_value: float | None = None,
     ) -> dict[str, Any]:
         """Calculate comprehensive risk metrics."""
 
@@ -1504,8 +1492,8 @@ class AdvancedRiskAnalytics:
     def calculate_var(
         self,
         returns: Any,
-        confidence: Optional[float] = None,
-        confidence_level: Optional[float] = None,
+        confidence: float | None = None,
+        confidence_level: float | None = None,
     ) -> float:
         """Return VaR as a negative number (loss). Uses historical simulation."""
         cl: float = confidence or confidence_level or self.var_confidence
@@ -1515,7 +1503,7 @@ class AdvancedRiskAnalytics:
     def calculate_sharpe(
         self,
         returns: Any,
-        risk_free_rate: Optional[float] = None,
+        risk_free_rate: float | None = None,
     ) -> float:
         """Alias for calculate_sharpe_ratio with optional risk_free_rate override."""
         old_rfr = self.risk_free_rate

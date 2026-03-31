@@ -21,7 +21,6 @@ def create_replay_router(engine: "ChartReplayEngine"):
     """
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel
-    from typing import Optional
 
     router = APIRouter(prefix="/api/replay", tags=["Replay"])
 
@@ -38,9 +37,9 @@ def create_replay_router(engine: "ChartReplayEngine"):
     class PlaceOrderRequest(BaseModel):
         side: str
         size: float
-        price: Optional[float] = None
-        stop_loss: Optional[float] = None
-        take_profit: Optional[float] = None
+        price: float | None = None
+        stop_loss: float | None = None
+        take_profit: float | None = None
 
     @router.post("/sessions")
     async def create_session(req: CreateSessionRequest):

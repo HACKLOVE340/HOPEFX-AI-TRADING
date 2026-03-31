@@ -16,8 +16,7 @@ Identifies classic chart patterns in price series:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, UTC
 
 try:
     import pandas as pd  # type: ignore[import]
@@ -114,7 +113,7 @@ def _detect_head_and_shoulders(
     peaks: list[int],
     troughs: list[int],
     symmetry_tolerance: float = 0.03,
-) -> Optional[ChartPattern]:
+) -> ChartPattern | None:
     """Detect Head and Shoulders (bearish) from peak indices.
 
     Args:
@@ -177,7 +176,7 @@ def _detect_inverse_head_and_shoulders(
     peaks: list[int],
     troughs: list[int],
     symmetry_tolerance: float = 0.03,
-) -> Optional[ChartPattern]:
+) -> ChartPattern | None:
     """Detect Inverse Head and Shoulders (bullish) from trough indices.
 
     Args:
@@ -242,7 +241,7 @@ def _detect_double_top(
     prices: list[float],
     peaks: list[int],
     symmetry_tolerance: float = 0.02,
-) -> Optional[ChartPattern]:
+) -> ChartPattern | None:
     """Detect Double Top (bearish) from peak indices.
 
     Args:
@@ -288,7 +287,7 @@ def _detect_double_bottom(
     prices: list[float],
     troughs: list[int],
     symmetry_tolerance: float = 0.02,
-) -> Optional[ChartPattern]:
+) -> ChartPattern | None:
     """Detect Double Bottom (bullish) from trough indices.
 
     Args:
@@ -341,7 +340,7 @@ def _classify_triangle(
     prices: list[float],
     start: int,
     end: int,
-) -> Optional[ChartPattern]:
+) -> ChartPattern | None:
     """Return a triangle ChartPattern based on trendline slopes."""
     flat = 1e-6
     both_converge = high_slope < 0 and low_slope > 0
@@ -389,7 +388,7 @@ def _detect_triangle(
     prices: list[float],
     peaks: list[int],
     troughs: list[int],
-) -> Optional[ChartPattern]:
+) -> ChartPattern | None:
     """Detect triangle patterns using peak and trough trendlines."""
     if len(peaks) < 2 or len(troughs) < 2:
         return None
@@ -417,7 +416,7 @@ def _detect_wedge(
     prices: list[float],
     peaks: list[int],
     troughs: list[int],
-) -> Optional[ChartPattern]:
+) -> ChartPattern | None:
     """Detect Rising (bearish) or Falling (bullish) Wedge."""
     if len(peaks) < 2 or len(troughs) < 2:
         return None
@@ -489,7 +488,7 @@ def _detect_channel(
     prices: list[float],
     peaks: list[int],
     troughs: list[int],
-) -> Optional[ChartPattern]:
+) -> ChartPattern | None:
     """Detect Rising or Falling Channel (parallel trendlines)."""
     if len(peaks) < 2 or len(troughs) < 2:
         return None
@@ -544,7 +543,7 @@ class ChartPatternDetector:
             print(p.pattern_type, p.direction, p.confidence)
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialise detector.
 
@@ -560,7 +559,7 @@ class ChartPatternDetector:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_closes(self, df: "pd.DataFrame") -> Optional[list[float]]:
+    def _get_closes(self, df: "pd.DataFrame") -> list[float] | None:
         """Extract close prices from DataFrame; return None on failure."""
         if not HAS_PANDAS:
             logger.warning(
@@ -750,7 +749,7 @@ class ChartPatternDetector:
         peaks = _find_peaks(closes, self.swing_window)
         troughs = _find_troughs(closes, self.swing_window)
 
-        candidates: list[Optional[ChartPattern]] = [
+        candidates: list[ChartPattern | None] = [
             _detect_head_and_shoulders(closes, peaks, troughs),
             _detect_inverse_head_and_shoulders(closes, peaks, troughs),
             _detect_double_top(closes, peaks),

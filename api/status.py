@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Dict, List
+from datetime import datetime, timedelta, UTC
+from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse

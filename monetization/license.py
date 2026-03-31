@@ -11,8 +11,7 @@ based on user subscriptions and access codes.
 """
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Optional, Dict, List
+from datetime import datetime, UTC
 from enum import Enum
 
 from .pricing import SubscriptionTier, pricing_manager
@@ -113,7 +112,7 @@ class LicenseValidator:
             "timestamp": datetime.now(UTC),
         }
 
-    def get_user_tier(self, user_id: str) -> Optional[SubscriptionTier]:
+    def get_user_tier(self, user_id: str) -> SubscriptionTier | None:
         """Get user's subscription tier"""
         subscription = subscription_manager.get_user_subscription(user_id)
         return subscription.tier if subscription else None
@@ -166,8 +165,7 @@ class LicenseValidator:
             return False
 
         # Check API access feature
-        if not self.has_feature_access(user_id, "api_access"):
-            return False
+        return self.has_feature_access(user_id, "api_access")
 
         # Validate API key (would check against stored keys in production)
         return True
@@ -224,12 +222,12 @@ class LicenseValidator:
         downgrade_path = pricing_manager.get_downgrade_path(current_tier)
         return new_tier in downgrade_path
 
-    def clear_cache(self, user_id: Optional[str] = None) -> None:
+    def clear_cache(self, user_id: str | None = None) -> None:
         """Clear validation cache"""
         if user_id:
             # Clear only user's cache
             keys_to_remove = [
-                k for k in self._validation_cache.keys() if k.startswith(f"{user_id}:")
+                k for k in self._validation_cache if k.startswith(f"{user_id}:")
             ]
             for key in keys_to_remove:
                 del self._validation_cache[key]

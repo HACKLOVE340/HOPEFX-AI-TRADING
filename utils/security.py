@@ -18,8 +18,9 @@ import os
 import re
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional, Any, Pattern
+from datetime import datetime, timedelta, UTC
+from typing import Any
+from re import Pattern
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
@@ -56,8 +57,8 @@ class AuditEvent:
 
     event_type: AuditEventType
     level: SecurityLevel
-    user_id: Optional[str]
-    ip_address: Optional[str]
+    user_id: str | None
+    ip_address: str | None
     resource: str
     action: str
     details: dict[str, Any]
@@ -117,7 +118,7 @@ class LogSanitizer:
         self,
         enabled: bool = True,
         redact_emails: bool = False,
-        custom_patterns: Optional[dict[str, Pattern]] = None,
+        custom_patterns: dict[str, Pattern] | None = None,
         redaction_text: str = "[REDACTED]",
     ):
         """
@@ -170,7 +171,7 @@ class LogSanitizer:
         return sanitized
 
     def sanitize_dict(
-        self, data: dict[str, Any], sensitive_keys: Optional[list[str]] = None
+        self, data: dict[str, Any], sensitive_keys: list[str] | None = None
     ) -> dict[str, Any]:
         """
         Sanitize a dictionary by redacting sensitive keys.
@@ -270,9 +271,9 @@ class SecurityAuditor:
         action: str,
         success: bool = True,
         level: SecurityLevel = SecurityLevel.INFO,
-        user_id: Optional[str] = None,
-        ip_address: Optional[str] = None,
-        details: Optional[dict[str, Any]] = None,
+        user_id: str | None = None,
+        ip_address: str | None = None,
+        details: dict[str, Any] | None = None,
     ) -> AuditEvent:
         """
         Log a security audit event.
@@ -329,9 +330,9 @@ class SecurityAuditor:
 
     def get_events(
         self,
-        event_type: Optional[AuditEventType] = None,
-        level: Optional[SecurityLevel] = None,
-        since: Optional[datetime] = None,
+        event_type: AuditEventType | None = None,
+        level: SecurityLevel | None = None,
+        since: datetime | None = None,
         limit: int = 100,
     ) -> list[AuditEvent]:
         """Get filtered audit events"""
@@ -365,13 +366,13 @@ class CredentialRotationTracker:
         self._credentials: dict[str, datetime] = {}
 
     def register_credential(
-        self, credential_name: str, created_at: Optional[datetime] = None
+        self, credential_name: str, created_at: datetime | None = None
     ) -> None:
         """Register a credential for rotation tracking"""
         self._credentials[credential_name] = created_at or datetime.now(UTC)
         logger.info(f"Registered credential for rotation tracking: {credential_name}")
 
-    def get_credential_age(self, credential_name: str) -> Optional[timedelta]:
+    def get_credential_age(self, credential_name: str) -> timedelta | None:
         """Get the age of a credential"""
         if credential_name not in self._credentials:
             return None

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def _get_session():
         return None
 
 
-def db_get(key: str) -> Optional[Any]:
+def db_get(key: str) -> Any | None:
     """
     Retrieve a JSON-decoded value from the configurations table.
     Returns None on miss or error.

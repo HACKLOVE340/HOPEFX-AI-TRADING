@@ -45,9 +45,9 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Dict, Optional
+from typing import Any
 
 import requests
 
@@ -127,7 +127,7 @@ _FX_CACHE_TS: float = 0.0
 _FX_CACHE_TTL: int = int(os.getenv("FX_RATE_TTL_SECONDS", "3600"))  # 1 hour default
 
 
-def _fetch_rates_openexchangerates() -> Optional[dict[str, float]]:
+def _fetch_rates_openexchangerates() -> dict[str, float] | None:
     """Fetch USD-base rates from Open Exchange Rates."""
     app_id = os.getenv("OPEN_EXCHANGE_RATES_APP_ID", "").strip()
     if not app_id:
@@ -149,7 +149,7 @@ def _fetch_rates_openexchangerates() -> Optional[dict[str, float]]:
         return None
 
 
-def _fetch_rates_fixer() -> Optional[dict[str, float]]:
+def _fetch_rates_fixer() -> dict[str, float] | None:
     """Fetch EUR-base rates from Fixer.io and convert to USD base."""
     api_key = os.getenv("FIXER_API_KEY", "").strip()
     if not api_key:
@@ -289,15 +289,15 @@ def _get_stripe_key() -> str:
 @dataclass
 class PaymentResult:
     success: bool
-    payment_intent_id: Optional[str]
-    client_secret: Optional[str]
+    payment_intent_id: str | None
+    client_secret: str | None
     status: str
     amount_cents: int
     currency: str
     requires_action: bool = False
-    error_code: Optional[str] = None
-    error_message: Optional[str] = None
-    radar_risk_score: Optional[int] = None
+    error_code: str | None = None
+    error_message: str | None = None
+    radar_risk_score: int | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
@@ -364,10 +364,10 @@ class StripeProductionClient:
         amount_usd: Decimal,
         currency: str = "USD",
         description: str = "HopeFX subscription",
-        metadata: Optional[dict[str, Any]] = None,
-        user_ip: Optional[str] = None,
-        user_agent: Optional[str] = None,
-        idempotency_key: Optional[str] = None,
+        metadata: dict[str, Any] | None = None,
+        user_ip: str | None = None,
+        user_agent: str | None = None,
+        idempotency_key: str | None = None,
     ) -> PaymentResult:
         """
         Create a Stripe PaymentIntent with Radar fraud scoring.
@@ -495,7 +495,7 @@ class StripeProductionClient:
 
     def verify_webhook(
         self, payload: bytes, sig_header: str
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Verify a Stripe webhook signature and return the event dict.
 
@@ -651,7 +651,7 @@ class StripeProductionClient:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_client: Optional[StripeProductionClient] = None
+_client: StripeProductionClient | None = None
 
 
 def get_stripe_client() -> StripeProductionClient:

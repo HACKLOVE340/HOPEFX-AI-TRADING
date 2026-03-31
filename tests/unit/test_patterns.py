@@ -15,7 +15,7 @@ Tests for:
 import pytest
 import numpy as np
 import pandas as pd
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 
 
 # ================================================================

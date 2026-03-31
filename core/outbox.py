@@ -39,8 +39,8 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -269,7 +269,7 @@ async def _publish_in_process(channel: str, payload: str) -> None:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_relay: Optional[OutboxRelay] = None
+_relay: OutboxRelay | None = None
 
 
 def get_relay() -> OutboxRelay:

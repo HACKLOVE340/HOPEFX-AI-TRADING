@@ -62,10 +62,11 @@ import pathlib
 import signal
 import sys
 import time
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 from dotenv import load_dotenv
+import contextlib
 
 # ── Nuclear chart engine (optional — graceful degradation if unavailable) ─────
 _chart_engine = None
@@ -241,8 +242,8 @@ class LifeSupervisor:
         self._initial_bal = float(os.environ.get("INITIAL_BALANCE", "100000"))
         self._trading_mode = os.environ.get("TRADING_MODE", "paper")
 
-        self._engine: Optional[object] = None
-        self._engine_task: Optional[asyncio.Task] = None
+        self._engine: object | None = None
+        self._engine_task: asyncio.Task | None = None
         self._reporter = DailyReporter(self._tg_token, self._tg_chat)
         self._shutdown_event = asyncio.Event()
         self._exit_code: int = 0
@@ -483,7 +484,7 @@ class LifeSupervisor:
             logger.critical("Engine task died with exception: %s", exc)
             self._exit_code = 1
 
-    def _nuclear_annotation(self) -> Optional[str]:
+    def _nuclear_annotation(self) -> str | None:
         """Return a chart annotation string based on current nuclear supervisor state."""
         if self._nuclear_supervisor is None:
             return None
@@ -591,10 +592,8 @@ class LifeSupervisor:
                 logger.warning("Engine stop error: %s", exc)
             finally:
                 self._engine_task.cancel()
-                try:
+                with contextlib.suppress((asyncio.CancelledError, Exception)):
                     await self._engine_task
-                except (asyncio.CancelledError, Exception):
-                    pass
         logger.info("Engine stopped.")
 
         # Stop nuclear chart engine cleanly

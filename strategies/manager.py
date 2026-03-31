@@ -29,9 +29,9 @@ import abc
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -144,7 +144,7 @@ class BaseStrategy(abc.ABC):
     performance_metrics is updated by update_performance() after each trade.
     """
 
-    def __init__(self, name: str, config: Optional[dict[str, Any]] = None) -> None:
+    def __init__(self, name: str, config: dict[str, Any] | None = None) -> None:
         self.name = name
         self.config: dict[str, Any] = config or {}
         self.enabled: bool = True
@@ -227,7 +227,7 @@ class BaseStrategy(abc.ABC):
 class TrendFollowingStrategy(BaseStrategy):
     """MA crossover trend-following strategy. Requires Starter plan."""
 
-    def __init__(self, config: Optional[dict[str, Any]] = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         super().__init__("TrendFollowing", config)
         self.fast_period: int = self.config.get("fast_period", 20)
         self.slow_period: int = self.config.get("slow_period", 50)
@@ -309,7 +309,7 @@ class TrendFollowingStrategy(BaseStrategy):
 class MeanReversionStrategy(BaseStrategy):
     """Bollinger Band mean-reversion strategy. Requires Professional plan."""
 
-    def __init__(self, config: Optional[dict[str, Any]] = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         super().__init__("MeanReversion", config)
         self.period: int = self.config.get("period", 20)
         self.std_dev: float = self.config.get("std_dev", 2.0)
@@ -391,7 +391,7 @@ class MeanReversionStrategy(BaseStrategy):
 class BreakoutStrategy(BaseStrategy):
     """Support/resistance breakout strategy. Requires Professional plan."""
 
-    def __init__(self, config: Optional[dict[str, Any]] = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         super().__init__("Breakout", config)
         self.lookback_period: int = self.config.get("lookback_period", 20)
         self.breakout_threshold: float = self.config.get("breakout_threshold", 0.001)
@@ -650,7 +650,7 @@ class StrategyManager:
     # Performance
     # ------------------------------------------------------------------
 
-    def get_strategy_performance(self, name: Optional[str] = None) -> dict:
+    def get_strategy_performance(self, name: str | None = None) -> dict:
         if name:
             s = self.strategies.get(name)
             return s.performance_metrics if s else {}

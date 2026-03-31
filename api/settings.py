@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
@@ -127,7 +127,7 @@ def _db_save(user_id: str, data: dict) -> bool:
         return False
 
 
-def _db_load(user_id: str) -> Optional[dict]:
+def _db_load(user_id: str) -> dict | None:
     """Load settings from the configurations table. Returns None on miss/error."""
     try:
         from database.connection import get_db_manager
@@ -154,7 +154,7 @@ def _db_load(user_id: str) -> Optional[dict]:
 
 @router.post("/api/settings/notifications", summary="Save notification settings")
 async def save_notification_settings(body: NotificationSettings, request: Request):
-    global _notification_config
+    global _notification_config  # noqa: PLW0602
     data = body.model_dump()
     user_id = _get_user_id(request)
 
@@ -226,11 +226,10 @@ async def _test_discord(webhook_url: str) -> None:
             },
         ],
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(webhook_url, json=payload) as resp:
-            if resp.status not in (200, 204):
-                text = await resp.text()
-                raise ValueError(f"Discord returned {resp.status}: {text[:200]}")
+    async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
+        if resp.status not in (200, 204):
+            text = await resp.text()
+            raise ValueError(f"Discord returned {resp.status}: {text[:200]}")
 
 
 async def _test_slack(webhook_url: str) -> None:
@@ -239,11 +238,10 @@ async def _test_slack(webhook_url: str) -> None:
     import aiohttp
 
     payload = {"text": "*HOPEFX* — Slack notifications are working correctly."}
-    async with aiohttp.ClientSession() as session:
-        async with session.post(webhook_url, json=payload) as resp:
-            if resp.status != 200:
-                text = await resp.text()
-                raise ValueError(f"Slack returned {resp.status}: {text[:200]}")
+    async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
+        if resp.status != 200:
+            text = await resp.text()
+            raise ValueError(f"Slack returned {resp.status}: {text[:200]}")
 
 
 async def _test_telegram(bot_token: str, chat_id: str) -> None:
@@ -257,10 +255,9 @@ async def _test_telegram(bot_token: str, chat_id: str) -> None:
         "text": "*HOPEFX* — Telegram notifications are working correctly.",
         "parse_mode": "Markdown",
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=payload) as resp:
-            data = await resp.json()
-            if not data.get("ok"):
-                raise ValueError(
-                    f"Telegram error: {data.get('description', 'unknown')}",
-                )
+    async with aiohttp.ClientSession() as session, session.post(url, json=payload) as resp:
+        data = await resp.json()
+        if not data.get("ok"):
+            raise ValueError(
+                f"Telegram error: {data.get('description', 'unknown')}",
+            )

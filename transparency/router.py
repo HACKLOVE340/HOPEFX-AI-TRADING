@@ -5,7 +5,7 @@
 # No commercial use without explicit permission.
 """transparency/router.py — FastAPI router for execution transparency."""
 
-from datetime import timezone, UTC
+from datetime import UTC
 
 from transparency.engine import ExecutionTransparencyEngine
 
@@ -22,7 +22,6 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
     """
     from fastapi import APIRouter
     from pydantic import BaseModel
-    from typing import Optional
 
     router = APIRouter(prefix="/api/transparency", tags=["Transparency"])
 
@@ -101,7 +100,7 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
         return engine.get_latency_trend(start, end)
 
     @router.get("/audit")
-    async def get_audit_trail(order_id: Optional[str] = None, limit: int = 100):
+    async def get_audit_trail(order_id: str | None = None, limit: int = 100):
         """Get execution audit trail, optionally filtered by order ID."""
         return engine.get_execution_audit_trail(order_id=order_id, limit=limit)
 

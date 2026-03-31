@@ -33,9 +33,9 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -58,7 +58,7 @@ _SERIES_MAP: dict[str, dict[str, str]] = {
 }
 
 
-def _fetch_series(ticker: str, years: int = _HISTORY_YEARS) -> Optional[pd.DataFrame]:
+def _fetch_series(ticker: str, years: int = _HISTORY_YEARS) -> pd.DataFrame | None:
     """Fetch `years` of daily close data for `ticker` via yfinance."""
     try:
         import yfinance as yf

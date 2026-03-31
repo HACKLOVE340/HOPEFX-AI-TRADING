@@ -22,9 +22,8 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from decimal import Decimal
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +210,7 @@ class AMLGate:
         currency: str,
         flags: list,
         risk_score: float,
-    ) -> Optional[AMLDecision]:
+    ) -> AMLDecision | None:
         """DB-backed rules. Returns AMLDecision to block, or None to continue."""
         from database.models import WalletTransaction
 
@@ -278,7 +277,7 @@ class AMLGate:
 
 
 # Module-level singleton (wired at startup with session_factory)
-_aml_gate: Optional[AMLGate] = None
+_aml_gate: AMLGate | None = None
 
 
 def get_aml_gate() -> AMLGate:

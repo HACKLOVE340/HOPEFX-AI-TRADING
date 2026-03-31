@@ -14,9 +14,9 @@ import logging
 import os
 import joblib
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -31,7 +31,7 @@ class BaseMLModel(ABC):
     the required methods.
     """
 
-    def __init__(self, name: str, config: Optional[dict] = None):
+    def __init__(self, name: str, config: dict | None = None):
         """
         Initialize the ML model.
 
@@ -60,8 +60,8 @@ class BaseMLModel(ABC):
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
-        X_val: Optional[np.ndarray] = None,
-        y_val: Optional[np.ndarray] = None,
+        X_val: np.ndarray | None = None,
+        y_val: np.ndarray | None = None,
     ) -> dict[str, Any]:
         """
         Train the model.
@@ -213,7 +213,7 @@ class BaseMLModel(ABC):
 
         self.logger.info(f"Model loaded from {filepath}")
 
-    def get_feature_importance(self) -> Optional[dict[str, float]]:
+    def get_feature_importance(self) -> dict[str, float] | None:
         """
         Get feature importance if supported by the model.
 

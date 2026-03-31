@@ -50,8 +50,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -243,7 +242,7 @@ def _get_users_from_subscriptions() -> dict[str, dict]:
 async def list_users(
     page: int = 1,
     limit: int = 20,
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     admin: TokenPayload = Depends(get_current_user),
 ):
     """List all users with subscription status. Admin only."""
@@ -412,8 +411,8 @@ async def impersonate_user(
 async def get_audit_log(
     page: int = 1,
     limit: int = 50,
-    user_id: Optional[str] = None,
-    event_type: Optional[str] = None,
+    user_id: str | None = None,
+    event_type: str | None = None,
     admin: TokenPayload = Depends(get_current_user),
 ):
     """Return paginated audit log with optional filters. Admin only."""

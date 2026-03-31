@@ -12,9 +12,8 @@ Captures price discrepancies across multiple venues
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Dict, List, Optional
 
 
 @dataclass
@@ -83,7 +82,7 @@ class ExchangeConnector(ABC):
         symbol: str,
         side: str,
         size: Decimal,
-        price: Optional[Decimal] = None,
+        price: Decimal | None = None,
         order_type: str = "limit",
     ) -> dict:
         """Place an order and return fill info as ``{"filled": bool, "fill_price": ...}``."""

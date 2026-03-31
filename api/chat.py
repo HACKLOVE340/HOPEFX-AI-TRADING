@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -40,7 +39,7 @@ router = APIRouter(prefix="/api/chat", tags=["AI Chat"])
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4096, description="User message")
-    session_id: Optional[str] = Field(
+    session_id: str | None = Field(
         None,
         description="Optional session ID for history isolation",
     )
@@ -48,7 +47,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 # ── per-session agent cache ───────────────────────────────────────────────────
@@ -58,7 +57,7 @@ class ChatResponse(BaseModel):
 _agents: dict[str, object] = {}
 
 
-def _get_agent(session_id: Optional[str] = None):
+def _get_agent(session_id: str | None = None):
     """Return (or create) an LLMAgent for the given session."""
     try:
         from brain.llm_agent import LLMAgent
@@ -121,7 +120,7 @@ async def ai_chat(
 
 @router.delete("/history", summary="Clear conversation history for a session")
 async def clear_chat_history(
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
     user: TokenPayload = Depends(get_current_user),
 ):
     """
@@ -153,15 +152,15 @@ async def chat_status(user: TokenPayload = Depends(get_current_user)):
     Does not make a live API call — purely a configuration check.
     Any authenticated user may call this.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     api_key_set = bool(os.getenv("OPENAI_API_KEY", ""))
     model = os.getenv("OPENAI_MODEL", "gpt-4o")
 
     llm_available = False
-    llm_error: Optional[str] = None
+    llm_error: str | None = None
     try:
-        from brain.llm_agent import LLMAgent
+        from brain.llm_agent import LLMAgent  # noqa: F401
 
         llm_available = True
     except ImportError as exc:

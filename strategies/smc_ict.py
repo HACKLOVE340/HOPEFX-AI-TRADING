@@ -17,8 +17,8 @@ This strategy implements Smart Money Concepts including:
 """
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 from .base import BaseStrategy, Signal, SignalType, StrategyConfig
 
@@ -124,7 +124,7 @@ class SMCICTStrategy(BaseStrategy):
             logger.error(f"Error in SMC ICT analysis: {e}")
             return {"error": str(e)}
 
-    def generate_signal(self, analysis: dict[str, Any]) -> Optional[Signal]:
+    def generate_signal(self, analysis: dict[str, Any]) -> Signal | None:
         """
         Generate trading signal based on SMC analysis.
 
@@ -500,14 +500,8 @@ class SMCICTStrategy(BaseStrategy):
         threshold: float = 0.001,
     ) -> bool:
         """Check if price is near any of the given levels"""
-        for level in levels:
-            if abs(price - level) / level <= threshold:
-                return True
-        return False
+        return any(abs(price - level) / level <= threshold for level in levels)
 
     def _price_in_fvg(self, price: float, fvgs: list[dict]) -> bool:
         """Check if price is inside any Fair Value Gap"""
-        for fvg in fvgs:
-            if fvg["bottom"] <= price <= fvg["top"]:
-                return True
-        return False
+        return any(fvg["bottom"] <= price <= fvg["top"] for fvg in fvgs)

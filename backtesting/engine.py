@@ -10,9 +10,10 @@ Production-grade backtesting with transaction cost modeling
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from dataclasses import dataclass, field
-from typing import List, Dict, Callable, Optional, Tuple, Any
+from typing import Any
+from collections.abc import Callable
 from enum import Enum
 import json
 from pathlib import Path
@@ -98,11 +99,11 @@ class Order:
     side: OrderSide
     order_type: OrderType
     quantity: float
-    price: Optional[float] = None
-    stop_price: Optional[float] = None
+    price: float | None = None
+    stop_price: float | None = None
     status: OrderStatus = OrderStatus.PENDING
     filled_quantity: float = 0.0
-    filled_price: Optional[float] = None
+    filled_price: float | None = None
     commission: float = 0.0
     slippage: float = 0.0
 
@@ -256,10 +257,7 @@ class TransactionCostModel:
         """Returns (fill_price, commission, slippage)"""
 
         # Base price with spread
-        if order.side == OrderSide.BUY:
-            base_price = tick.ask
-        else:
-            base_price = tick.bid
+        base_price = tick.ask if order.side == OrderSide.BUY else tick.bid
 
         # Add slippage
         if self.slippage_model == "fixed":
@@ -271,10 +269,7 @@ class TransactionCostModel:
         else:
             slippage = 0.0
 
-        if order.side == OrderSide.BUY:
-            fill_price = base_price + slippage
-        else:
-            fill_price = base_price - slippage
+        fill_price = base_price + slippage if order.side == OrderSide.BUY else base_price - slippage
 
         # Commission
         if self.commission_per_lot > 0:
@@ -309,7 +304,7 @@ class BacktestEngine:
     def __init__(
         self,
         initial_capital: float = 10000.0,
-        transaction_costs: Optional[TransactionCostModel] = None,
+        transaction_costs: TransactionCostModel | None = None,
         data_frequency: str = "tick",  # tick, 1m, 5m, 1h, 1d
         enable_fractional: bool = False,
         leverage: float = 1.0,
@@ -333,21 +328,21 @@ class BacktestEngine:
         self.pending_orders: list[Order] = []
         self.closed_trades: list[Trade] = []
         self.equity_history: list[dict] = []
-        self.current_time: Optional[datetime] = None
+        self.current_time: datetime | None = None
 
         # Performance tracking
         self.peak_equity = initial_capital
         self.current_drawdown = 0.0
         self.max_drawdown = 0.0
-        self.drawdown_start: Optional[datetime] = None
+        self.drawdown_start: datetime | None = None
         self.max_drawdown_duration = 0
 
         # Strategy
-        self.strategy: Optional[Callable] = None
+        self.strategy: Callable | None = None
         self.symbols: list[str] = []
 
         # Data
-        self.data_handler: Optional[Any] = None
+        self.data_handler: Any | None = None
 
     def set_strategy(self, strategy: Callable, symbols: list[str]):
         """Set the trading strategy function"""
@@ -439,7 +434,7 @@ class BacktestEngine:
                 fill_price = tick.ask if order.side == OrderSide.BUY else tick.bid
 
             elif order.order_type == OrderType.LIMIT:
-                if order.side == OrderSide.BUY and tick.ask <= order.price or order.side == OrderSide.SELL and tick.bid >= order.price:
+                if (order.side == OrderSide.BUY and tick.ask <= order.price) or (order.side == OrderSide.SELL and tick.bid >= order.price):
                     fill_price = order.price
 
             elif order.order_type == OrderType.STOP:

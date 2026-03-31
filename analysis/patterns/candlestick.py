@@ -11,8 +11,7 @@ continuation patterns in OHLCV price data.
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, UTC
 
 try:
     import pandas as pd  # type: ignore[import]
@@ -116,7 +115,7 @@ def _detect_hammer(
     i: int,
     doji_threshold: float = 0.05,
     wick_ratio: float = 2.0,
-) -> Optional[CandlestickPattern]:
+) -> CandlestickPattern | None:
     """Hammer / Hanging Man detection at index *i*.
 
     Args:
@@ -162,7 +161,7 @@ def _detect_shooting_star(
     i: int,
     doji_threshold: float = 0.05,
     wick_ratio: float = 2.0,
-) -> Optional[CandlestickPattern]:
+) -> CandlestickPattern | None:
     """Shooting Star detection at index *i*.
 
     Args:
@@ -206,7 +205,7 @@ def _detect_marubozu(
     closes: list[float],
     i: int,
     marubozu_threshold: float = 0.05,
-) -> Optional[CandlestickPattern]:
+) -> CandlestickPattern | None:
     """Marubozu (almost no shadows) detection at index *i*.
 
     Args:
@@ -251,7 +250,7 @@ def _detect_doji_pattern(
     closes: list[float],
     i: int,
     doji_threshold: float = 0.05,
-) -> Optional[CandlestickPattern]:
+) -> CandlestickPattern | None:
     """Doji detection at index *i*.
 
     Args:
@@ -316,7 +315,7 @@ def _detect_engulfing(
     opens: list[float],
     closes: list[float],
     i: int,
-) -> Optional[CandlestickPattern]:
+) -> CandlestickPattern | None:
     """Bullish / Bearish Engulfing detection ending at index *i*."""
     if i < 1:
         return None
@@ -372,7 +371,7 @@ def _detect_harami(
     opens: list[float],
     closes: list[float],
     i: int,
-) -> Optional[CandlestickPattern]:
+) -> CandlestickPattern | None:
     """Bullish / Bearish Harami detection ending at index *i*."""
     if i < 1:
         return None
@@ -420,7 +419,7 @@ def _detect_piercing_dark_cloud(
     opens: list[float],
     closes: list[float],
     i: int,
-) -> Optional[CandlestickPattern]:
+) -> CandlestickPattern | None:
     """Piercing Line / Dark Cloud Cover ending at index *i*."""
     if i < 1:
         return None
@@ -490,7 +489,7 @@ def _detect_three_soldiers_crows(
     opens: list[float],
     closes: list[float],
     i: int,
-) -> Optional[CandlestickPattern]:
+) -> CandlestickPattern | None:
     """Three White Soldiers / Three Black Crows ending at index *i*."""
     if i < 2:
         return None
@@ -526,7 +525,7 @@ def _detect_morning_evening_star(
     opens: list[float],
     closes: list[float],
     i: int,
-) -> Optional[CandlestickPattern]:
+) -> CandlestickPattern | None:
     """Morning Star / Evening Star ending at index *i*."""
     if i < 2:
         return None
@@ -596,7 +595,7 @@ class CandlestickPatternDetector:
             print(p.pattern_name, p.direction, p.confidence)
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialise detector.
 
@@ -608,7 +607,7 @@ class CandlestickPatternDetector:
         self.doji_threshold: float = float(cfg.get("doji_threshold", 0.05))
         self.wick_ratio: float = float(cfg.get("wick_ratio", 2.0))
         self.marubozu_threshold: float = float(cfg.get("marubozu_threshold", 0.05))
-        self.max_patterns_per_type: Optional[int] = (
+        self.max_patterns_per_type: int | None = (
             int(cfg["max_patterns_per_type"])
             if cfg.get("max_patterns_per_type") is not None
             else None

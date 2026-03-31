@@ -26,7 +26,6 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent.parent
@@ -309,7 +308,7 @@ def check_env_example():
 
 def check_graphql():
     try:
-        from api.graphql_schema import graphql_router
+        from api.graphql_schema import graphql_router  # noqa: F401
 
         return "GraphQL router importable"
     except ImportError as e:

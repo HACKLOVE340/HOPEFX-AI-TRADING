@@ -17,8 +17,7 @@ Identifies institutional vs retail trading activity through:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, timedelta, UTC
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -122,7 +121,7 @@ class InstitutionalFlowDetector:
         direction = detector.get_smart_money_direction('XAUUSD')
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize detector.
 
@@ -158,7 +157,7 @@ class InstitutionalFlowDetector:
         price: float,
         size: float,
         side: str,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
     ) -> None:
         """Add a trade for analysis."""
         ts = timestamp or datetime.now(UTC)
@@ -522,7 +521,7 @@ class InstitutionalFlowDetector:
         self,
         symbol: str,
         lookback_minutes: int = 60,
-    ) -> Optional[SmartMoneyDirection]:
+    ) -> SmartMoneyDirection | None:
         """
         Determine the net institutional / smart-money flow direction.
 
@@ -592,7 +591,7 @@ class InstitutionalFlowDetector:
 
 
 # Global instance
-_institutional_detector: Optional[InstitutionalFlowDetector] = None
+_institutional_detector: InstitutionalFlowDetector | None = None
 
 
 def get_institutional_detector() -> InstitutionalFlowDetector:

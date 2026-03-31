@@ -58,8 +58,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +136,7 @@ class DrawdownTracker:
     def update(
         self,
         equity: float,
-        balance: Optional[float] = None,
+        balance: float | None = None,
     ) -> DrawdownResult:
         """
         Update tracker with current equity (and optionally balance).
@@ -246,7 +245,7 @@ class DrawdownTracker:
 
     # ── Partial fill handling ─────────────────────────────────────────────────
 
-    def record_fill(self, pnl: float, balance_after: Optional[float] = None) -> None:
+    def record_fill(self, pnl: float, balance_after: float | None = None) -> None:
         """
         Record a partial or full fill with its realised P&L.
 

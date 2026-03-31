@@ -46,8 +46,7 @@ import asyncio
 import collections
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Deque, Dict, Optional, Tuple
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +70,7 @@ class _VersionWindow:
         self.total_trades += 1
 
     @property
-    def mean_pnl(self) -> Optional[float]:
+    def mean_pnl(self) -> float | None:
         if not self.pnl_window:
             return None
         return sum(self.pnl_window) / len(self.pnl_window)
@@ -92,15 +91,15 @@ class ModelPerformanceMonitor:
 
     def __init__(self) -> None:
         self._windows: dict[str, _VersionWindow] = {}
-        self._current_version: Optional[str] = None
-        self._previous_version: Optional[str] = None
+        self._current_version: str | None = None
+        self._previous_version: str | None = None
         self._running = False
         self._rollback_count: int = 0
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def on_model_promoted(
-        self, new_version: str, previous_version: Optional[str]
+        self, new_version: str, previous_version: str | None
     ) -> None:
         """
         Notify the monitor that a new model version was promoted.
@@ -118,7 +117,7 @@ class ModelPerformanceMonitor:
         if new_version not in self._windows:
             self._windows[new_version] = _VersionWindow(new_version, WINDOW_TRADES)
 
-    def record_trade(self, pnl: float, model_version: Optional[str] = None) -> None:
+    def record_trade(self, pnl: float, model_version: str | None = None) -> None:
         """
         Record a trade P&L for the given model version.
 
@@ -214,7 +213,7 @@ class ModelPerformanceMonitor:
             await self._rollback(current, previous, reason)
 
     def _should_rollback(
-        self, cur_mean: float, prev_mean: Optional[float]
+        self, cur_mean: float, prev_mean: float | None
     ) -> tuple[bool, str]:
         """
         Determine whether to roll back the current model.
@@ -331,7 +330,7 @@ class ModelPerformanceMonitor:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_monitor: Optional[ModelPerformanceMonitor] = None
+_monitor: ModelPerformanceMonitor | None = None
 
 
 def get_monitor() -> ModelPerformanceMonitor:

@@ -43,9 +43,9 @@ import argparse
 import json
 import logging
 import sys
-from datetime import timezone, UTC
+from datetime import UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -313,7 +313,7 @@ def run_backtest(
     trades: list[dict] = []
     equity = pd.Series(INITIAL_BALANCE, index=prices.index, dtype=float)
     balance = INITIAL_BALANCE
-    open_trade: Optional[dict] = None
+    open_trade: dict | None = None
 
     price_arr = prices.values
     sig_arr = signals["signal"].values

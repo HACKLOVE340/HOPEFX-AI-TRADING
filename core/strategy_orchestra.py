@@ -10,8 +10,7 @@ Coordinates multiple strategies to prevent conflicts and maximize returns
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, UTC
 
 from core.event_bus import DomainEvent, EventBus
 from strategies.base import BaseStrategy, Signal
@@ -136,7 +135,7 @@ class StrategyOrchestra:
                 ),
             )
 
-    def _calculate_composite_signal(self) -> Optional[Signal]:
+    def _calculate_composite_signal(self) -> Signal | None:
         if not self.active_strategies:
             return None
 

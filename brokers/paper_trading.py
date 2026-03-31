@@ -16,8 +16,8 @@ import random
 import time
 import uuid
 from collections import deque
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, UTC
+from typing import Any
 
 from .base import (
     AccountInfo,
@@ -301,8 +301,8 @@ class PaperTradingBroker(BrokerConnector):
         side: OrderSide,
         order_type: OrderType,
         quantity: float,
-        price: Optional[float] = None,
-        stop_price: Optional[float] = None,
+        price: float | None = None,
+        stop_price: float | None = None,
         **kwargs,
     ) -> Order:
         """
@@ -411,7 +411,7 @@ class PaperTradingBroker(BrokerConnector):
         logger.warning(f"Cannot cancel order {order_id}")
         return False
 
-    def get_order(self, order_id: str) -> Optional[Order]:
+    def get_order(self, order_id: str) -> Order | None:
         """Get order by ID"""
         return self.orders.get(order_id)
 

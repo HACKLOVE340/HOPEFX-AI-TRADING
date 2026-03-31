@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 from datetime import UTC
 
 if TYPE_CHECKING:
@@ -443,7 +443,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     """
     import json
     import pathlib
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     stamp_path = pathlib.Path("data/oanda_paper_start.json")
     stamp_path.parent.mkdir(parents=True, exist_ok=True)
@@ -617,7 +617,8 @@ async def init_prop_enforcer(s: Any) -> Any:
     try:
         ks = getattr(s, "kill_switch", None)
         if ks is not None:
-            kill_fn = lambda reason: ks.activate(reason)
+            def kill_fn(reason: str) -> None:
+                ks.activate(reason)
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
 
@@ -1397,7 +1398,7 @@ async def init_daily_online_learner(s: Any) -> Any:
         OnlineLearner.adapt_to_regime() to adjust EWC lambda and learning
         rate.  Best-effort — failures are logged but never propagate.
         """
-        from datetime import datetime as _dt, timezone as _tz
+        from datetime import datetime as _dt
 
         while True:
             try:
@@ -1441,7 +1442,7 @@ async def init_daily_online_learner(s: Any) -> Any:
                         "DailyOnlineLearner[%s] EWC tick failed: %s", sym, exc
                     )
 
-    async def _detect_regime(symbol: str) -> Optional[str]:
+    async def _detect_regime(symbol: str) -> str | None:
         """
         Classify the current market regime from recent H1 bars.
 
@@ -1698,7 +1699,7 @@ def build_component_registry(app, feature_flags):
     return registry
 
 
-async def init_chaos_controller(s: Any) -> Optional[Any]:
+async def init_chaos_controller(s: Any) -> Any | None:
     """
     Initialise ChaosController and MutationTestRunner.
 
@@ -1731,7 +1732,7 @@ async def init_chaos_controller(s: Any) -> Optional[Any]:
         return None
 
 
-async def init_hot_standby(s: Any) -> Optional[Any]:
+async def init_hot_standby(s: Any) -> Any | None:
     """
     Initialise HotStandbyReplicator for position-state replication and
     auto-failover beyond Redis Sentinel.

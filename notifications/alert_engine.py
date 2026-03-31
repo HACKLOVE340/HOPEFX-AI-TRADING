@@ -18,8 +18,9 @@ Inspired by: TradingView alerts, MT5 alerts, cTrader alerts
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional, Any, Callable
+from datetime import datetime, timedelta, UTC
+from typing import Any
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 import threading
@@ -95,9 +96,9 @@ class AlertCondition:
 
     type: AlertConditionType
     threshold: float
-    threshold_2: Optional[float] = None  # For range conditions
-    indicator: Optional[str] = None  # For indicator conditions
-    period: Optional[int] = None  # Timeframe/period
+    threshold_2: float | None = None  # For range conditions
+    indicator: str | None = None  # For indicator conditions
+    period: int | None = None  # Timeframe/period
     operator: str = ">"  # Comparison operator
 
     def to_dict(self) -> dict:
@@ -126,22 +127,22 @@ class Alert:
 
     # Notification settings
     notify_channels: list[str] = field(default_factory=lambda: ["web"])
-    message_template: Optional[str] = None
+    message_template: str | None = None
 
     # Timing settings
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     cooldown_minutes: int = 5  # Min time between triggers
     max_triggers: int = 0  # 0 = unlimited
 
     # State
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    last_triggered_at: Optional[datetime] = None
+    last_triggered_at: datetime | None = None
     trigger_count: int = 0
-    last_value: Optional[float] = None
-    previous_value: Optional[float] = None
+    last_value: float | None = None
+    previous_value: float | None = None
 
     # User/ownership
-    user_id: Optional[str] = None
+    user_id: str | None = None
     tags: list[str] = field(default_factory=list)
 
     def is_active(self) -> bool:
@@ -154,10 +155,7 @@ class Alert:
             return False
 
         # Check max triggers
-        if self.max_triggers > 0 and self.trigger_count >= self.max_triggers:
-            return False
-
-        return True
+        return not (self.max_triggers > 0 and self.trigger_count >= self.max_triggers)
 
     def is_in_cooldown(self) -> bool:
         """Check if alert is in cooldown period."""
@@ -253,7 +251,7 @@ class AlertEngine:
         await alert_engine.start_monitoring()
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize alert engine.
 
@@ -281,7 +279,7 @@ class AlertEngine:
 
         # Background monitoring
         self._monitoring = False
-        self._monitor_task: Optional[asyncio.Task] = None
+        self._monitor_task: asyncio.Task | None = None
 
         # Statistics
         self._stats = {
@@ -303,17 +301,17 @@ class AlertEngine:
         symbol: str,
         condition_type: AlertConditionType,
         threshold: float,
-        threshold_2: Optional[float] = None,
-        indicator: Optional[str] = None,
-        period: Optional[int] = None,
+        threshold_2: float | None = None,
+        indicator: str | None = None,
+        period: int | None = None,
         priority: AlertPriority = AlertPriority.MEDIUM,
-        notify_channels: Optional[list[str]] = None,
-        message_template: Optional[str] = None,
-        expires_in_hours: Optional[int] = None,
+        notify_channels: list[str] | None = None,
+        message_template: str | None = None,
+        expires_in_hours: int | None = None,
         cooldown_minutes: int = 5,
         max_triggers: int = 0,
-        user_id: Optional[str] = None,
-        tags: Optional[list[str]] = None,
+        user_id: str | None = None,
+        tags: list[str] | None = None,
     ) -> Alert:
         """
         Create a new alert.
@@ -429,7 +427,7 @@ class AlertEngine:
             )
             return alert
 
-    def update_alert(self, alert_id: str, **updates) -> Optional[Alert]:
+    def update_alert(self, alert_id: str, **updates) -> Alert | None:
         """Update an alert."""
         with self._lock:
             if alert_id not in self._alerts:
@@ -480,16 +478,16 @@ class AlertEngine:
             self._alerts[alert_id].status = AlertStatus.ACTIVE
             return True
 
-    def get_alert(self, alert_id: str) -> Optional[Alert]:
+    def get_alert(self, alert_id: str) -> Alert | None:
         """Get an alert by ID."""
         return self._alerts.get(alert_id)
 
     def get_alerts(
         self,
-        symbol: Optional[str] = None,
-        user_id: Optional[str] = None,
-        status: Optional[AlertStatus] = None,
-        priority: Optional[AlertPriority] = None,
+        symbol: str | None = None,
+        user_id: str | None = None,
+        status: AlertStatus | None = None,
+        priority: AlertPriority | None = None,
     ) -> list[Alert]:
         """Get alerts with optional filters."""
         with self._lock:
@@ -506,7 +504,7 @@ class AlertEngine:
 
             return alerts
 
-    def get_active_alerts(self, symbol: Optional[str] = None) -> list[Alert]:
+    def get_active_alerts(self, symbol: str | None = None) -> list[Alert]:
         """Get all active alerts."""
         return [a for a in self.get_alerts(symbol=symbol) if a.is_active()]
 
@@ -565,7 +563,7 @@ class AlertEngine:
 
     def _check_alert_conditions(
         self, alert: Alert, data: dict[str, Any]
-    ) -> Optional[AlertTrigger]:
+    ) -> AlertTrigger | None:
         """Check if alert conditions are met."""
         price = data.get("price", 0)
         volume = data.get("volume", 0)
@@ -619,7 +617,7 @@ class AlertEngine:
         indicators: dict[str, float],
         spread: float,
         imbalance: float,
-        previous_value: Optional[float],
+        previous_value: float | None,
     ) -> tuple:
         """
         Evaluate a single condition.
@@ -791,8 +789,8 @@ class AlertEngine:
 
     def get_trigger_history(
         self,
-        symbol: Optional[str] = None,
-        alert_id: Optional[str] = None,
+        symbol: str | None = None,
+        alert_id: str | None = None,
         limit: int = 50,
     ) -> list[AlertTrigger]:
         """Get trigger history."""
@@ -869,7 +867,6 @@ def create_alert_router(alert_engine: AlertEngine):
     """
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel
-    from typing import Optional, List
 
     router = APIRouter(prefix="/api/alerts", tags=["Alerts"])
 
@@ -878,11 +875,11 @@ def create_alert_router(alert_engine: AlertEngine):
         symbol: str
         condition_type: str
         threshold: float
-        threshold_2: Optional[float] = None
-        indicator: Optional[str] = None
+        threshold_2: float | None = None
+        indicator: str | None = None
         priority: str = "medium"
         notify_channels: list[str] = ["web"]
-        expires_in_hours: Optional[int] = None
+        expires_in_hours: int | None = None
         cooldown_minutes: int = 5
         max_triggers: int = 0
 
@@ -911,14 +908,14 @@ def create_alert_router(alert_engine: AlertEngine):
         return alert.to_dict()
 
     @router.get("/")
-    async def list_alerts(symbol: Optional[str] = None, status: Optional[str] = None):
+    async def list_alerts(symbol: str | None = None, status: str | None = None):
         """List all alerts."""
         status_enum = AlertStatus(status) if status else None
         alerts = alert_engine.get_alerts(symbol=symbol, status=status_enum)
         return [a.to_dict() for a in alerts]
 
     @router.get("/active")
-    async def get_active_alerts(symbol: Optional[str] = None):
+    async def get_active_alerts(symbol: str | None = None):
         """Get active alerts."""
         alerts = alert_engine.get_active_alerts(symbol)
         return [a.to_dict() for a in alerts]
@@ -954,7 +951,7 @@ def create_alert_router(alert_engine: AlertEngine):
 
     @router.get("/history/triggers")
     async def get_trigger_history(
-        symbol: Optional[str] = None, alert_id: Optional[str] = None, limit: int = 50
+        symbol: str | None = None, alert_id: str | None = None, limit: int = 50
     ):
         """Get trigger history."""
         history = alert_engine.get_trigger_history(symbol, alert_id, limit)
@@ -969,7 +966,7 @@ def create_alert_router(alert_engine: AlertEngine):
 
 
 # Global instance for easy access
-_alert_engine: Optional[AlertEngine] = None
+_alert_engine: AlertEngine | None = None
 
 
 def get_alert_engine() -> AlertEngine:

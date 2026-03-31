@@ -24,8 +24,7 @@ import logging
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, timezone, UTC
-from typing import Dict, List
+from datetime import datetime, UTC
 
 from strategies.base import (
     BaseStrategy,

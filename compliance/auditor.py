@@ -14,9 +14,8 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +44,7 @@ class AuditRecord:
     action: str
     data: dict
     hash_chain: str  # Link to previous record
-    signature: Optional[str] = None
+    signature: str | None = None
 
 
 class ImmutableAuditLog:
@@ -282,10 +281,7 @@ class TradeReporting:
             return True
 
         # Suspicious activity
-        if trade.get("flags", {}).get("suspicious", False):
-            return True
-
-        return False
+        return trade.get("flags", {}).get("suspicious", False)
 
     async def _submit_to_regulator(self, trade: dict):
         """

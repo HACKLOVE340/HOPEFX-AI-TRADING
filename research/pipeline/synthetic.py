@@ -48,7 +48,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
 
 import numpy as np
 
@@ -254,8 +253,8 @@ class RegimeSynthesizer:
         self.G = _Generator(noise_dim, n_regimes, hidden, latent).to(self.device)
         self.D = _Discriminator(latent, n_regimes, hidden).to(self.device)
 
-        self._feature_mean: Optional[np.ndarray] = None
-        self._feature_std: Optional[np.ndarray] = None
+        self._feature_mean: np.ndarray | None = None
+        self._feature_std: np.ndarray | None = None
         self._fitted = False
 
     # ── Normalisation (min-max to [-1, 1] for GAN stability) ─────────────────
@@ -426,7 +425,7 @@ class RegimeSynthesizer:
         X: np.ndarray,
         regime_labels: np.ndarray,
         target_regime: int,
-        target_count: Optional[int] = None,
+        target_count: int | None = None,
         multiplier: float = 3.0,
     ) -> tuple[np.ndarray, np.ndarray]:
         """

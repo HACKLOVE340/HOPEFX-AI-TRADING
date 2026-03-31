@@ -12,9 +12,8 @@ Intelligent order routing across multiple brokers with best execution
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -59,7 +58,7 @@ class SmartOrderRouter:
             "cost_weight": 0.30,
             "reliability_weight": 0.20,
         }
-        self.last_route_decision: Optional[str] = None
+        self.last_route_decision: str | None = None
 
     def add_broker(self, broker_id: str, connector: "BrokerConnector"):
         """Add broker to routing pool"""

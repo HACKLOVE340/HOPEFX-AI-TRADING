@@ -35,9 +35,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class OandaPaperClock:
     multiple times only writes the stamp once (on first call).
     """
 
-    def __init__(self, stamp_path: Optional[Path] = None) -> None:
+    def __init__(self, stamp_path: Path | None = None) -> None:
         self._stamp_path = stamp_path or _STAMP_PATH
         self._stamp_path.parent.mkdir(parents=True, exist_ok=True)
         # Sharpe progress tracker — updated on every confirmed fill
@@ -384,7 +384,7 @@ class OandaPaperClock:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_clock: Optional[OandaPaperClock] = None
+_clock: OandaPaperClock | None = None
 
 
 def get_clock() -> OandaPaperClock:

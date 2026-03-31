@@ -20,9 +20,10 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ class ConnectionInfo:
     connection_id: str
     connected_at: datetime
     subscriptions: set[str] = field(default_factory=set)
-    user_id: Optional[str] = None
+    user_id: str | None = None
     authenticated: bool = False
     messages_sent: int = 0
     messages_received: int = 0
@@ -100,7 +101,7 @@ class WebSocketManager:
         manager.unregister_connection(conn_id)
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize WebSocket manager.
 
@@ -146,8 +147,8 @@ class WebSocketManager:
     def register_connection(
         self,
         websocket: Any,
-        connection_id: Optional[str] = None,
-        user_id: Optional[str] = None,
+        connection_id: str | None = None,
+        user_id: str | None = None,
     ) -> str:
         """
         Register a new WebSocket connection.
@@ -215,7 +216,7 @@ class WebSocketManager:
 
         logger.info(f"WebSocket unregistered: {connection_id}")
 
-    def get_connection_info(self, connection_id: str) -> Optional[ConnectionInfo]:
+    def get_connection_info(self, connection_id: str) -> ConnectionInfo | None:
         """Get information about a connection."""
         return self._connection_info.get(connection_id)
 
@@ -335,7 +336,7 @@ class WebSocketManager:
         channel: str,
         data: dict[str, Any],
         event: str = "update",
-        exclude: Optional[set[str]] = None,
+        exclude: set[str] | None = None,
     ):
         """
         Broadcast a message to all subscribers of a channel.
@@ -448,7 +449,7 @@ class WebSocketManager:
     # MESSAGE HANDLING
     # ================================================================
 
-    async def handle_message(self, connection_id: str, message: str) -> Optional[dict]:
+    async def handle_message(self, connection_id: str, message: str) -> dict | None:
         """
         Handle an incoming WebSocket message.
 
@@ -513,7 +514,7 @@ class WebSocketManager:
 
         return None
 
-    async def _handle_auth(self, connection_id: str, token: Optional[str]) -> dict:
+    async def _handle_auth(self, connection_id: str, token: str | None) -> dict:
         """Validate JWT bearer token and mark connection authenticated.
 
         Any JWT decode failure (wrong secret, expired, malformed) is a hard
@@ -583,7 +584,7 @@ class WebSocketManager:
         price: float,
         bid: float,
         ask: float,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
     ):
         """Broadcast price update for a symbol."""
         channel = f"prices:{symbol}"
@@ -605,7 +606,7 @@ class WebSocketManager:
         symbol: str,
         bids: list[dict],
         asks: list[dict],
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
     ):
         """Broadcast order book update for a symbol."""
         channel = f"orderbook:{symbol}"
@@ -626,7 +627,7 @@ class WebSocketManager:
         price: float,
         quantity: float,
         side: str,
-        trade_id: Optional[str] = None,
+        trade_id: str | None = None,
     ):
         """Broadcast trade execution."""
         channel = f"trades:{symbol}"
@@ -650,7 +651,7 @@ class WebSocketManager:
         # Also broadcast to all-signals channel
         await self.broadcast("signals:all", signal_data, event="signal")
 
-    async def broadcast_alert(self, user_id: Optional[str], alert_data: dict[str, Any]):
+    async def broadcast_alert(self, user_id: str | None, alert_data: dict[str, Any]):
         """Broadcast alert notification."""
         if user_id:
             # Send to specific user
@@ -758,7 +759,7 @@ def create_websocket_router(manager: WebSocketManager):
 
 
 # Global instance for easy access
-_ws_manager: Optional[WebSocketManager] = None
+_ws_manager: WebSocketManager | None = None
 
 
 def get_websocket_manager() -> WebSocketManager:

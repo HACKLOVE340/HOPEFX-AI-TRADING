@@ -43,7 +43,6 @@ import tempfile
 import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -176,13 +175,13 @@ class IBKRFIXBridge:
 
     def __init__(
         self,
-        config: Optional[IBKRFIXConfig] = None,
+        config: IBKRFIXConfig | None = None,
         kill_switch=None,
     ) -> None:
         self._cfg = config or IBKRFIXConfig()
         self._kill_switch = kill_switch
-        self._adapter: Optional[FIXAdapter] = None
-        self._cfg_file: Optional[str] = None
+        self._adapter: FIXAdapter | None = None
+        self._cfg_file: str | None = None
         self._started = False
 
         logger.info(
@@ -219,15 +218,14 @@ class IBKRFIXBridge:
         cfg_content = self._cfg.generate_quickfix_cfg()
 
         # Write to temp file — FIXAdapter reads from filesystem
-        tmp = tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=".cfg",
             prefix="ibkr_fix_",
             delete=False,
-        )
-        tmp.write(cfg_content)
-        tmp.flush()
-        tmp.close()
+        ) as tmp:
+            tmp.write(cfg_content)
+            tmp.flush()
         self._cfg_file = tmp.name
 
         logger.info(

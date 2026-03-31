@@ -14,7 +14,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -139,7 +139,7 @@ def apply_persisted_risk_settings() -> None:
     Also migrates any legacy JSON file to the shared store on first run.
     Called once at startup by app.py after app_state is initialised.
     """
-    global _risk_settings
+    global _risk_settings  # noqa: PLW0602
 
     # One-time migration: if the legacy JSON file exists and the shared store
     # has no value yet, migrate the file contents to the store.
@@ -371,7 +371,7 @@ async def update_risk_settings(
 class KYCDecision(BaseModel):
     user_id: str
     action: str  # "approve" | "reject" | "request_more_info"
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 @router.get("/kyc/pending")

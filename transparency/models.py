@@ -5,7 +5,7 @@
 # No commercial use without explicit permission.
 """transparency/models.py — Data models for execution transparency."""
 
-from typing import Dict, Any
+from typing import Any
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

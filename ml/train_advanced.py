@@ -54,9 +54,8 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import joblib
 import numpy as np
@@ -93,7 +92,7 @@ def fetch_gold_ohlcv(
     symbol: str,
     years: int,
     use_cached: bool = False,
-    cached_csv: Optional[str] = None,
+    cached_csv: str | None = None,
 ) -> pd.DataFrame:
     """
     Download XAUUSD/GC=F daily OHLCV from Yahoo Finance.
@@ -114,10 +113,7 @@ def fetch_gold_ohlcv(
             df.columns = [c.lower() for c in df.columns]
             # Trim to requested years
             cutoff = datetime.now(UTC) - timedelta(days=years * 365)
-            if df.index.tz is not None:
-                cutoff = cutoff
-            else:
-                cutoff = cutoff.replace(tzinfo=None)
+            cutoff = cutoff if df.index.tz is not None else cutoff.replace(tzinfo=None)
             df = df[df.index >= cutoff]
             if not df.empty:
                 logger.info(
@@ -159,7 +155,7 @@ def fetch_gold_ohlcv(
     return raw
 
 
-def fetch_macro(start: datetime, end: datetime) -> Optional[pd.DataFrame]:
+def fetch_macro(start: datetime, end: datetime) -> pd.DataFrame | None:
     """Fetch macro data (DXY, VIX, yields, SPX)."""
     try:
         from ml.macro_features import fetch_macro_history

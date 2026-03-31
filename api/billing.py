@@ -20,7 +20,6 @@ from __future__ import annotations
 import logging
 import os
 from decimal import Decimal
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -175,9 +174,9 @@ class CreatePaymentIntentRequest(BaseModel):
     amount_usd: float
     currency: str = "USD"
     description: str = "HopeFX subscription"
-    metadata: Optional[dict] = None
-    user_ip: Optional[str] = None
-    idempotency_key: Optional[str] = None
+    metadata: dict | None = None
+    user_ip: str | None = None
+    idempotency_key: str | None = None
 
 
 @router.post("/stripe/payment-intent")
@@ -260,7 +259,7 @@ async def generate_referral_link(user: TokenPayload = Depends(get_current_user))
 
 class FreeTierBody(BaseModel):
     user_id: str
-    ref_code: Optional[str] = None  # optional referral code from signup URL
+    ref_code: str | None = None  # optional referral code from signup URL
 
 
 @router.post("/auth/activate-free-tier", status_code=status.HTTP_201_CREATED)
@@ -509,7 +508,7 @@ async def get_transactions(
         if d is None:
             return ""
         if isinstance(d, (int, float)):
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             return datetime.fromtimestamp(d, tz=UTC).isoformat()
         return str(d)

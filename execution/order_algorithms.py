@@ -33,8 +33,9 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from datetime import datetime, UTC
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +109,8 @@ class ChildOrder:
     lots: float
     algo: str
     scheduled_at: datetime
-    sent_at: Optional[datetime] = None
-    fill_price: Optional[float] = None
+    sent_at: datetime | None = None
+    fill_price: float | None = None
     filled_lots: float = 0.0
     status: str = "pending"  # pending|sent|filled|partial|failed
 
@@ -185,7 +186,7 @@ class PartialFillAggregator:
 
     def record_fill(
         self, parent_id: str, lots: float, price: float
-    ) -> Optional[PartialFillState]:
+    ) -> PartialFillState | None:
         state = self._states.get(parent_id)
         if state is None:
             logger.warning("PartialFillAggregator: unknown parent_id=%s", parent_id)

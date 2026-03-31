@@ -20,10 +20,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
 
 from data_layer.feeds.gold.base import GoldFeedBase
 from data_layer.types import FeedSource, GoldTick
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +41,8 @@ class MetalsDevFeed(GoldFeedBase):
 
     def __init__(self) -> None:
         super().__init__()
-        self._ws_task: Optional[asyncio.Task] = None
-        self._latest_tick: Optional[GoldTick] = None
+        self._ws_task: asyncio.Task | None = None
+        self._latest_tick: GoldTick | None = None
         self._ws_enabled: bool = False  # set True for paid tier
 
     async def fetch_tick(self) -> GoldTick:
@@ -86,7 +86,7 @@ class MetalsDevFeed(GoldFeedBase):
         during the connection window.
         """
         try:
-            import websockets  # type: ignore[import]
+            import websockets  # type: ignore[import]  # noqa: F401
         except ImportError:
             logger.debug("Metals.dev WebSocket: websockets package not installed")
             return
@@ -149,9 +149,7 @@ class MetalsDevFeed(GoldFeedBase):
     async def stop_websocket(self) -> None:
         if self._ws_task:
             self._ws_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._ws_task
-            except asyncio.CancelledError:
-                pass
             self._ws_task = None
         self._ws_enabled = False

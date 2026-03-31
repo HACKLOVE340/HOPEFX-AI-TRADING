@@ -27,8 +27,8 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Any, Optional, Dict, List
+from datetime import datetime, timedelta, UTC
+from typing import Any
 from enum import Enum
 
 from .pricing import SubscriptionTier, pricing_manager
@@ -139,13 +139,13 @@ class Subscription:
         user_id: str,
         tier: SubscriptionTier,
         status: SubscriptionStatus = SubscriptionStatus.PENDING,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        access_code: Optional[str] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        access_code: str | None = None,
         auto_renew: bool = True,
-        stripe_subscription_id: Optional[str] = None,
-        stripe_customer_id: Optional[str] = None,
-        license_key: Optional[str] = None,
+        stripe_subscription_id: str | None = None,
+        stripe_customer_id: str | None = None,
+        license_key: str | None = None,
     ):
         self.subscription_id = subscription_id
         self.user_id = user_id
@@ -250,7 +250,7 @@ class SubscriptionManager:
         user_id: str,
         tier: SubscriptionTier,
         duration_days: int = 30,
-        access_code: Optional[str] = None,
+        access_code: str | None = None,
         auto_renew: bool = True,
     ) -> Subscription:
         """Internal base subscription creation (no Stripe fields)."""
@@ -275,11 +275,11 @@ class SubscriptionManager:
         logger.info(f"Created subscription {subscription_id} for user {user_id}")
         return subscription
 
-    def get_subscription(self, subscription_id: str) -> Optional[Subscription]:
+    def get_subscription(self, subscription_id: str) -> Subscription | None:
         """Get subscription by ID"""
         return self._subscriptions.get(subscription_id)
 
-    def get_user_subscription(self, user_id: str) -> Optional[Subscription]:
+    def get_user_subscription(self, user_id: str) -> Subscription | None:
         """Get active subscription for a user"""
         subscription_id = self._user_subscriptions.get(user_id)
         if subscription_id:
@@ -414,10 +414,10 @@ class SubscriptionManager:
         user_id: str,
         tier: SubscriptionTier,
         duration_days: int = 30,
-        access_code: Optional[str] = None,
+        access_code: str | None = None,
         auto_renew: bool = True,
-        stripe_subscription_id: Optional[str] = None,
-        stripe_customer_id: Optional[str] = None,
+        stripe_subscription_id: str | None = None,
+        stripe_customer_id: str | None = None,
     ) -> "Subscription":
         """Create a new subscription (overrides base to add Stripe fields)."""
         import uuid as _uuid
@@ -461,7 +461,7 @@ class SubscriptionManager:
         tier: SubscriptionTier,
         success_url: str = "https://hopefx.ai/success",
         cancel_url: str = "https://hopefx.ai/cancel",
-        email: Optional[str] = None,
+        email: str | None = None,
     ) -> dict:
         """
         Create a Stripe Checkout Session for the given tier.
@@ -614,7 +614,7 @@ class LicenseValidator:
     def validate(
         self,
         user_id: str,
-        license_key: Optional[str] = None,
+        license_key: str | None = None,
     ) -> "LicenseValidator.Result":
         """
         Validate a user's license.
@@ -675,7 +675,7 @@ class LicenseValidator:
 # ---------------------------------------------------------------------------
 
 
-def create_subscription_router(manager: Optional[SubscriptionManager] = None):
+def create_subscription_router(manager: SubscriptionManager | None = None):
     """
     Build and return a FastAPI APIRouter with subscription endpoints.
 
@@ -704,7 +704,7 @@ def create_subscription_router(manager: Optional[SubscriptionManager] = None):
     class SubscribeRequest(BaseModel):
         user_id: str
         tier: str = "professional"
-        email: Optional[str] = None
+        email: str | None = None
         success_url: str = "https://hopefx.ai/success"
         cancel_url: str = "https://hopefx.ai/cancel"
 
@@ -758,7 +758,7 @@ def create_subscription_router(manager: Optional[SubscriptionManager] = None):
     @router.post("/webhook")
     async def stripe_webhook(
         request: Request,
-        stripe_signature: Optional[str] = Header(None, alias="stripe-signature"),
+        stripe_signature: str | None = Header(None, alias="stripe-signature"),
     ):
         """Receive and process Stripe webhook events."""
         payload = await request.body()
@@ -778,7 +778,7 @@ def create_subscription_router(manager: Optional[SubscriptionManager] = None):
         return result
 
     @router.get("/license/validate", response_model=LicenseValidateResponse)
-    async def validate_license(user_id: str, license_key: Optional[str] = None):
+    async def validate_license(user_id: str, license_key: str | None = None):
         """
         Validate a license key for a user.
         Free tier requires no key. Paid tiers require a matching key.
@@ -865,7 +865,6 @@ def require_plan(minimum_plan: str):
     The user's current plan is read from their active subscription record.
     Falls back to "free" when no subscription exists.
     """
-    from functools import wraps
 
     try:
         from fastapi import Request
@@ -875,8 +874,8 @@ def require_plan(minimum_plan: str):
     async def _dependency(request: "Request", user=None):  # type: ignore[name-defined]
         # Import here to avoid circular imports
         try:
-            from api.auth import get_current_user, TokenPayload
-            from fastapi.security import HTTPBearer as _HTTPBearer
+            from api.auth import get_current_user, TokenPayload  # noqa: F401
+            from fastapi.security import HTTPBearer as _HTTPBearer  # noqa: F401
             from fastapi.security.http import HTTPAuthorizationCredentials as _Creds
         except ImportError:
             # auth module not available (e.g. unit tests) — allow through

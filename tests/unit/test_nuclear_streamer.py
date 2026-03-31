@@ -29,10 +29,10 @@ import asyncio
 import json
 import os
 import time
-from typing import List
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import contextlib
 
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault(
@@ -631,11 +631,8 @@ class TestRunNoKeys:
             t.cancel()  # cancel immediately so run() exits
             return t
 
-        with patch("asyncio.create_task", side_effect=_spy_create_task):
-            try:
-                await asyncio.wait_for(streamer.run(), timeout=1.0)
-            except (TimeoutError, asyncio.CancelledError):
-                pass
+        with patch("asyncio.create_task", side_effect=_spy_create_task), contextlib.suppress((TimeoutError, asyncio.CancelledError)):
+            await asyncio.wait_for(streamer.run(), timeout=1.0)
 
         assert len(tasks_created) >= 1
 

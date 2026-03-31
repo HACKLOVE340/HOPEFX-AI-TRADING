@@ -13,7 +13,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ class Order:
     price: float
     timestamp: datetime
     account_id: str
-    strategy_id: Optional[str] = None
+    strategy_id: str | None = None
 
 
 class SelfTradePrevention:
@@ -56,7 +55,7 @@ class SelfTradePrevention:
         # Track resting orders
         self.resting_orders: dict[str, list[Order]] = {}  # symbol -> orders
 
-    def check_self_trade(self, new_order: Order) -> Optional[dict]:
+    def check_self_trade(self, new_order: Order) -> dict | None:
         """
         Check if new order would self-match with resting orders
         Returns action to take if self-trade detected
@@ -78,7 +77,7 @@ class SelfTradePrevention:
                 continue
 
             # Check if prices cross
-            if new_order.side == "buy" and new_order.price >= resting.price or new_order.side == "sell" and new_order.price <= resting.price:
+            if (new_order.side == "buy" and new_order.price >= resting.price) or (new_order.side == "sell" and new_order.price <= resting.price):
                 return self._handle_cross(new_order, resting)
 
         return None

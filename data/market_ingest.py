@@ -28,8 +28,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone, UTC
-from typing import Optional
+from datetime import datetime, UTC
 
 # ccxt.pro for async WebSocket streaming
 try:
@@ -140,11 +139,11 @@ class MarketIngest:
     """
 
     def __init__(self) -> None:
-        self._exchange: Optional[object] = None
+        self._exchange: object | None = None
         self._staleness = _StalenessGuard()
         self._running: bool = False
         self._tick_count: int = 0
-        self._last_tick: Optional[dict] = None
+        self._last_tick: dict | None = None
 
         # Credentials from env
         self._api_key = os.environ.get("OANDA_API_KEY", "")
@@ -277,7 +276,7 @@ class MarketIngest:
         )
 
     async def _emit_tick(
-        self, bid: float, ask: float, extra: Optional[dict] = None
+        self, bid: float, ask: float, extra: dict | None = None
     ) -> None:
         """Validate, record staleness, and publish a tick to the EventBus."""
         if not _validate_tick(bid, ask, SYMBOL):
@@ -363,5 +362,5 @@ class MarketIngest:
         return self._tick_count
 
     @property
-    def last_tick(self) -> Optional[dict]:
+    def last_tick(self) -> dict | None:
         return self._last_tick

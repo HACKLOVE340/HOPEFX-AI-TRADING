@@ -39,9 +39,9 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 from infrastructure.metrics import get_metrics_registry
 
@@ -77,7 +77,7 @@ class ExecutionResult:
     """Order execution result."""
 
     success: bool
-    order_id: Optional[str]
+    order_id: str | None
     filled_quantity: float
     average_price: float
     commission: float
@@ -110,7 +110,7 @@ class TradeExecutor:
 
         # ── Streak tracking ───────────────────────────────────────────────────
         self._consecutive_losses: int = 0
-        self._streak_halted_until: Optional[float] = None  # monotonic time
+        self._streak_halted_until: float | None = None  # monotonic time
 
     async def execute_signal(self, signal: dict) -> ExecutionResult:
         """Execute a trading signal with full validation and risk controls."""
@@ -494,8 +494,7 @@ class TradeExecutor:
         DRAWDOWN_HALT_PCT.  Idempotent — safe to call after every close.
         """
         current_dd = getattr(self.risk_manager, "current_drawdown", 0.0)
-        if current_dd >= DRAWDOWN_HALT_PCT:
-            if not getattr(self.risk_manager, "_trading_halted", False):
+        if current_dd >= DRAWDOWN_HALT_PCT and not getattr(self.risk_manager, "_trading_halted", False):
                 reason = (
                     f"Drawdown circuit breaker: {current_dd:.2%} >= "
                     f"{DRAWDOWN_HALT_PCT:.2%}"
@@ -661,7 +660,7 @@ class TradeExecutor:
 
             engine = get_inference_engine()
 
-            pnl: Optional[float] = signal.get("realized_pnl")
+            pnl: float | None = signal.get("realized_pnl")
             if pnl is None:
                 position_id = signal.get("position_id") or result.order_id
                 if position_id and hasattr(self.position_tracker, "get_position"):
@@ -750,7 +749,7 @@ class TradeExecutor:
 
         Exposed via health endpoints and dashboard widgets.
         """
-        streak_cooldown_remaining: Optional[float] = None
+        streak_cooldown_remaining: float | None = None
         if self._streak_halted_until is not None:
             remaining = self._streak_halted_until - time.monotonic()
             streak_cooldown_remaining = max(0.0, round(remaining / 60, 1))

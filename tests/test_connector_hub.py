@@ -23,7 +23,7 @@ Covered modules
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone, timedelta, UTC
+from datetime import datetime, timedelta, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -105,7 +105,7 @@ class TestEventBus:
         bus._degraded = False
 
         received: list = []
-        bus.subscribe_local(CH_SIGNAL, lambda m: received.append(m))
+        bus.subscribe_local(CH_SIGNAL, lambda m: received.append(m))  # noqa: PLW0108
 
         # Patch sleep to avoid waiting during retries
         with patch("core.event_bus.asyncio.sleep", new_callable=AsyncMock):
@@ -519,7 +519,7 @@ class TestNewsCalendarFeed:
     @pytest.mark.asyncio
     async def test_write_redis_calls_pipeline(self):
         from data.news_calendar_feed import NewsCalendarFeed
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         feed = NewsCalendarFeed()
         events = [datetime.now(UTC) + timedelta(hours=i) for i in range(3)]

@@ -26,8 +26,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Optional, Tuple
+from datetime import datetime, timedelta, UTC
 
 import jwt
 
@@ -224,7 +223,7 @@ class AuthService:
         username: str,
         password: str,
         role: str = "trader",
-    ) -> tuple[bool, str, Optional[str]]:
+    ) -> tuple[bool, str, str | None]:
         """
         Create a new user account.
 
@@ -288,7 +287,7 @@ class AuthService:
             logger.info("Email verified: %s", user.email)
             return True, "Email verified successfully"
 
-    def resend_verification(self, email: str) -> tuple[bool, str, Optional[str]]:
+    def resend_verification(self, email: str) -> tuple[bool, str, str | None]:
         from database.user_models import User
 
         with self._sf() as session:
@@ -311,8 +310,8 @@ class AuthService:
         password: str,
         ip_address: str = "unknown",
         device_info: str = "",
-        totp_code: Optional[str] = None,
-    ) -> tuple[bool, str, Optional[dict]]:
+        totp_code: str | None = None,
+    ) -> tuple[bool, str, dict | None]:
         """
         Authenticate user. Returns (success, message, token_dict).
 
@@ -439,7 +438,7 @@ class AuthService:
         self,
         raw_refresh_token: str,
         ip_address: str = "unknown",
-    ) -> tuple[bool, str, Optional[dict]]:
+    ) -> tuple[bool, str, dict | None]:
         """
         Rotate refresh token. Old token is revoked, new pair issued.
         """
@@ -493,7 +492,7 @@ class AuthService:
     def logout(
         self,
         raw_refresh_token: str,
-        access_token: Optional[str] = None,
+        access_token: str | None = None,
     ) -> tuple[bool, str]:
         from database.user_models import UserSession
 
@@ -544,7 +543,7 @@ class AuthService:
 
     # ── Password reset ────────────────────────────────────────────────────────
 
-    def request_password_reset(self, email: str) -> tuple[bool, str, Optional[str]]:
+    def request_password_reset(self, email: str) -> tuple[bool, str, str | None]:
         from database.user_models import User
 
         with self._sf() as session:
@@ -591,7 +590,7 @@ class AuthService:
 
     # ── 2FA ──────────────────────────────────────────────────────────────────
 
-    def setup_2fa(self, user_id: str) -> tuple[bool, str, Optional[str]]:
+    def setup_2fa(self, user_id: str) -> tuple[bool, str, str | None]:
         """Generate TOTP secret (encrypted at rest). User must confirm before enabling."""
         from database.user_models import User
 

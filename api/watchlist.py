@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from pydantic import BaseModel
@@ -60,7 +59,7 @@ def _reset_watchlists() -> None:
 # ── DB session helper ─────────────────────────────────────────────────────────
 
 
-def _get_session() -> Optional[object]:
+def _get_session() -> object | None:
     try:
         from database.connection import get_db_manager
 
@@ -76,7 +75,7 @@ def _get_session() -> Optional[object]:
 # ── Dedicated-table persistence ───────────────────────────────────────────────
 
 
-def _db_load(user_id: str) -> Optional[list[str]]:
+def _db_load(user_id: str) -> list[str] | None:
     """Load from dedicated watchlists table. Returns None when DB unavailable."""
     session = _get_session()
     if session is None:
@@ -195,7 +194,7 @@ def _mem_remove(user_id: str, symbol: str) -> None:
 # ── Price helper ──────────────────────────────────────────────────────────────
 
 
-def _get_price(symbol: str) -> Optional[dict]:
+def _get_price(symbol: str) -> dict | None:
     """
     Return a live price dict for *symbol*, or None if no feed is available.
 

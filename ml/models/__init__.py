@@ -20,9 +20,9 @@ from .random_forest import RandomForestTradingClassifier
 
 __all__ = [
     "BaseMLModel",
-    "LSTMPricePredictor",
-    "RandomForestTradingClassifier",
-    "EnsemblePredictor",
     "EnsemblePrediction",
+    "EnsemblePredictor",
+    "LSTMPricePredictor",
     "ModelPrediction",
+    "RandomForestTradingClassifier",
 ]

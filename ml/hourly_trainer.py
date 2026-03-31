@@ -41,9 +41,9 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class HourlyTrainer:
         enabled: bool = _ENABLED,
         interval_secs: int = _INTERVAL_SECS,
         full_retrain_hrs: int = _FULL_RETRAIN_HRS,
-        symbols: Optional[list[str]] = None,
+        symbols: list[str] | None = None,
         model_dir: str = _MODEL_DIR,
     ) -> None:
         self.enabled = enabled
@@ -89,7 +89,7 @@ class HourlyTrainer:
         self._online_update_count: int = 0
         self._full_retrain_count: int = 0
         self._running: bool = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -284,7 +284,7 @@ class HourlyTrainer:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_hourly_trainer: Optional[HourlyTrainer] = None
+_hourly_trainer: HourlyTrainer | None = None
 
 
 def get_hourly_trainer() -> HourlyTrainer:

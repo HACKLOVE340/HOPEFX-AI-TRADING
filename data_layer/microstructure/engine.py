@@ -40,8 +40,7 @@ import logging
 import threading
 import time
 from collections import deque
-from datetime import datetime, timezone, UTC
-from typing import Dict, Optional
+from datetime import datetime, UTC
 
 import os
 
@@ -64,15 +63,15 @@ class _TickRecord:
     """Lightweight tick record for microstructure calculations."""
 
     __slots__ = (
-        "ts",
-        "mid",
-        "bid",
         "ask",
-        "spread",
-        "volume",
-        "is_buy",
-        "bid_depth",
         "ask_depth",
+        "bid",
+        "bid_depth",
+        "is_buy",
+        "mid",
+        "spread",
+        "ts",
+        "volume",
     )
 
     def __init__(
@@ -169,7 +168,7 @@ class MicrostructureEngine:
         with self._lock:
             return self._process_tick(tick)
 
-    def get_snapshot(self) -> Optional[MicrostructureSnapshot]:
+    def get_snapshot(self) -> MicrostructureSnapshot | None:
         """Return the most recent microstructure snapshot."""
         with self._lock:
             if not self._ticks:

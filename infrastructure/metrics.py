@@ -15,7 +15,8 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ class MetricCollector:
         name: str,
         metric_type: MetricType,
         description: str,
-        labels: Optional[list[str]] = None,
+        labels: list[str] | None = None,
     ):
         self.name = name
         self.metric_type = metric_type
@@ -60,7 +61,7 @@ class MetricCollector:
         self._values: dict[str, list[MetricValue]] = defaultdict(list)
         self._lock = threading.RLock()  # RLock allows re-entry from inc()->observe()
 
-    def observe(self, value: float, labels: Optional[dict[str, str]] = None):
+    def observe(self, value: float, labels: dict[str, str] | None = None):
         """Record a value"""
         label_key = json.dumps(labels or {}, sort_keys=True)
 
@@ -73,7 +74,7 @@ class MetricCollector:
             if len(self._values[label_key]) > 1000:
                 self._values[label_key] = self._values[label_key][-1000:]
 
-    def get_values(self, labels: Optional[dict[str, str]] = None) -> list[MetricValue]:
+    def get_values(self, labels: dict[str, str] | None = None) -> list[MetricValue]:
         """Get values for specific labels"""
         label_key = json.dumps(labels or {}, sort_keys=True)
         with self._lock:
@@ -93,11 +94,11 @@ class MetricCollector:
 class Counter(MetricCollector):
     """Counter metric (monotonically increasing)"""
 
-    def __init__(self, name: str, description: str, labels: Optional[list[str]] = None):
+    def __init__(self, name: str, description: str, labels: list[str] | None = None):
         super().__init__(name, MetricType.COUNTER, description, labels)
         self._totals: dict[str, float] = defaultdict(float)
 
-    def inc(self, amount: float = 1.0, labels: Optional[dict[str, str]] = None):
+    def inc(self, amount: float = 1.0, labels: dict[str, str] | None = None):
         """Increment counter"""
         label_key = json.dumps(labels or {}, sort_keys=True)
 
@@ -105,7 +106,7 @@ class Counter(MetricCollector):
             self._totals[label_key] += amount
             self.observe(self._totals[label_key], labels)
 
-    def get_value(self, labels: Optional[dict[str, str]] = None) -> float:
+    def get_value(self, labels: dict[str, str] | None = None) -> float:
         """Get current counter value"""
         label_key = json.dumps(labels or {}, sort_keys=True)
         with self._lock:
@@ -115,11 +116,11 @@ class Counter(MetricCollector):
 class Gauge(MetricCollector):
     """Gauge metric (can go up or down)"""
 
-    def __init__(self, name: str, description: str, labels: Optional[list[str]] = None):
+    def __init__(self, name: str, description: str, labels: list[str] | None = None):
         super().__init__(name, MetricType.GAUGE, description, labels)
         self._current: dict[str, float] = {}
 
-    def set(self, value: float, labels: Optional[dict[str, str]] = None):
+    def set(self, value: float, labels: dict[str, str] | None = None):
         """Set gauge value"""
         label_key = json.dumps(labels or {}, sort_keys=True)
 
@@ -127,7 +128,7 @@ class Gauge(MetricCollector):
             self._current[label_key] = value
             self.observe(value, labels)
 
-    def inc(self, amount: float = 1.0, labels: Optional[dict[str, str]] = None):
+    def inc(self, amount: float = 1.0, labels: dict[str, str] | None = None):
         """Increment gauge"""
         label_key = json.dumps(labels or {}, sort_keys=True)
 
@@ -137,11 +138,11 @@ class Gauge(MetricCollector):
             self._current[label_key] = new_value
             self.observe(new_value, labels)
 
-    def dec(self, amount: float = 1.0, labels: Optional[dict[str, str]] = None):
+    def dec(self, amount: float = 1.0, labels: dict[str, str] | None = None):
         """Decrement gauge"""
         self.inc(-amount, labels)
 
-    def get_value(self, labels: Optional[dict[str, str]] = None) -> float:
+    def get_value(self, labels: dict[str, str] | None = None) -> float:
         """Get current gauge value"""
         label_key = json.dumps(labels or {}, sort_keys=True)
         with self._lock:
@@ -157,8 +158,8 @@ class Histogram(MetricCollector):
         self,
         name: str,
         description: str,
-        labels: Optional[list[str]] = None,
-        buckets: Optional[list[float]] = None,
+        labels: list[str] | None = None,
+        buckets: list[float] | None = None,
     ):
         super().__init__(name, MetricType.HISTOGRAM, description, labels)
         self.buckets = buckets or self.DEFAULT_BUCKETS
@@ -168,7 +169,7 @@ class Histogram(MetricCollector):
         self._sums: dict[str, float] = defaultdict(float)
         self._counts: dict[str, int] = defaultdict(int)
 
-    def observe(self, value: float, labels: Optional[dict[str, str]] = None):
+    def observe(self, value: float, labels: dict[str, str] | None = None):
         """Observe a value"""
         label_key = json.dumps(labels or {}, sort_keys=True)
 
@@ -184,19 +185,19 @@ class Histogram(MetricCollector):
 
             super().observe(value, labels)
 
-    def get_bucket_counts(self, labels: Optional[dict[str, str]] = None) -> list[int]:
+    def get_bucket_counts(self, labels: dict[str, str] | None = None) -> list[int]:
         """Get bucket counts"""
         label_key = json.dumps(labels or {}, sort_keys=True)
         with self._lock:
             return list(self._bucket_counts.get(label_key, [0] * len(self.buckets)))
 
-    def get_sum(self, labels: Optional[dict[str, str]] = None) -> float:
+    def get_sum(self, labels: dict[str, str] | None = None) -> float:
         """Get sum of all observations"""
         label_key = json.dumps(labels or {}, sort_keys=True)
         with self._lock:
             return self._sums.get(label_key, 0.0)
 
-    def get_count(self, labels: Optional[dict[str, str]] = None) -> int:
+    def get_count(self, labels: dict[str, str] | None = None) -> int:
         """Get total count"""
         label_key = json.dumps(labels or {}, sort_keys=True)
         with self._lock:
@@ -398,7 +399,7 @@ class MetricsRegistry:
         )
 
     def create_counter(
-        self, name: str, description: str, labels: Optional[list[str]] = None
+        self, name: str, description: str, labels: list[str] | None = None
     ) -> Counter:
         """Create and register a counter"""
         counter = Counter(name, description, labels)
@@ -406,7 +407,7 @@ class MetricsRegistry:
         return counter
 
     def create_gauge(
-        self, name: str, description: str, labels: Optional[list[str]] = None
+        self, name: str, description: str, labels: list[str] | None = None
     ) -> Gauge:
         """Create and register a gauge"""
         gauge = Gauge(name, description, labels)
@@ -417,15 +418,15 @@ class MetricsRegistry:
         self,
         name: str,
         description: str,
-        labels: Optional[list[str]] = None,
-        buckets: Optional[list[float]] = None,
+        labels: list[str] | None = None,
+        buckets: list[float] | None = None,
     ) -> Histogram:
         """Create and register a histogram"""
         histogram = Histogram(name, description, labels, buckets)
         self._collectors[name] = histogram
         return histogram
 
-    def get_collector(self, name: str) -> Optional[MetricCollector]:
+    def get_collector(self, name: str) -> MetricCollector | None:
         """Get a registered collector"""
         return self._collectors.get(name)
 
@@ -538,7 +539,7 @@ class MetricsRegistry:
                         lines.append(f"{name}{{{label_str}}} {value}")
 
             elif isinstance(collector, Histogram):
-                for label_key in collector.get_all_values().keys():
+                for label_key in collector.get_all_values():
                     labels = json.loads(label_key) if label_key else {}
                     label_str = ",".join([f'{k}="{v}"' for k, v in labels.items()])
 
@@ -584,7 +585,7 @@ class MetricsRegistry:
 
 
 # Global instance
-_metrics_registry: Optional[MetricsRegistry] = None
+_metrics_registry: MetricsRegistry | None = None
 
 
 def get_metrics_registry() -> MetricsRegistry:
@@ -611,7 +612,7 @@ def record_error(component: str, error_type: str):
     get_metrics_registry().record_error(component, error_type)
 
 
-def update_gauge(name: str, value: float, labels: Optional[dict] = None):
+def update_gauge(name: str, value: float, labels: dict | None = None):
     """Update gauge value"""
     collector = get_metrics_registry().get_collector(name)
     if isinstance(collector, Gauge):

@@ -11,7 +11,7 @@ Monte Carlo simulation with GARCH volatility and copula correlation
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple  # noqa: F401
 
 import numpy as np
 import pandas as pd
@@ -240,7 +240,7 @@ class RealTimeRiskMonitor:
             "max_drawdown": -0.10,  # 10% max drawdown
             "tail_risk": 3.0,  # Tail risk ratio limit
         }
-        self.current_risk: Optional[RiskMetrics] = None
+        self.current_risk: RiskMetrics | None = None
         self.kill_switch_triggered = False
 
     def update_portfolio(

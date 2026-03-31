@@ -33,7 +33,6 @@ Usage
 import asyncio
 import logging
 import os
-from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +40,12 @@ try:
     from ib_insync import (  # type: ignore
         IB,
         Contract,
-        Forex,
-        Future,
+        Forex,  # noqa: F401
+        Future,  # noqa: F401
         LimitOrder,
         MarketOrder,
-        Order,
-        Stock,
+        Order,  # noqa: F401
+        Stock,  # noqa: F401
         StopOrder,
     )
 
@@ -92,12 +91,12 @@ class IBKRBroker:
     def __init__(self, config: dict) -> None:
         self._config = config
         self.connected: bool = False
-        self._ib: Optional[object] = IB() if _IB_AVAILABLE else None
-        self._server_type: Optional[str] = None
-        self._host: Optional[str] = None
-        self._port: Optional[int] = None
-        self._client_id: Optional[int] = None
-        self._account: Optional[str] = None
+        self._ib: object | None = IB() if _IB_AVAILABLE else None
+        self._server_type: str | None = None
+        self._host: str | None = None
+        self._port: int | None = None
+        self._client_id: int | None = None
+        self._account: str | None = None
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -169,7 +168,7 @@ class IBKRBroker:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    async def get_account_info(self) -> Optional[dict]:
+    async def get_account_info(self) -> dict | None:
         """Return account summary as a plain dict."""
         if not self._assert_connected("get_account_info"):
             return None
@@ -377,7 +376,7 @@ class IBKRBroker:
         sec_type: str = "CASH",
         exchange: str = "IDEALPRO",
         currency: str = "USD",
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Request a snapshot tick for *symbol*."""
         if not self._assert_connected("get_tick"):
             return None
@@ -436,7 +435,7 @@ def _build_contract(symbol: str, sec_type: str, exchange: str, currency: str) ->
     return contract
 
 
-def _safe_float(value: object) -> Optional[float]:
+def _safe_float(value: object) -> float | None:
     """Convert a value to float, returning None on failure."""
     try:
         return float(value)

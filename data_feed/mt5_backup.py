@@ -21,7 +21,7 @@ is never blocked.
 import asyncio
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class MT5Backup:
         self._config = config
         self.symbol = symbol
         self.connected: bool = False
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -85,7 +85,7 @@ class MT5Backup:
         self._loop = asyncio.get_event_loop()
         return await self._loop.run_in_executor(None, self._sync_connect)
 
-    async def get_price(self) -> Optional[float]:
+    async def get_price(self) -> float | None:
         """
         Return the mid-price for ``self.symbol`` or None if unavailable.
 
@@ -152,7 +152,7 @@ class MT5Backup:
         _mt5.shutdown()
         return False
 
-    def _sync_get_price(self) -> Optional[float]:
+    def _sync_get_price(self) -> float | None:
         """Blocking tick fetch.  Called from executor."""
         tick = _mt5.symbol_info_tick(self.symbol)
         if tick is None:

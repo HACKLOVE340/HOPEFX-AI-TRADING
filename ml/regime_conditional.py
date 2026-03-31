@@ -40,7 +40,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import joblib
 import numpy as np
@@ -394,7 +394,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         self.adx_col = adx_col
 
         self._regime_models: dict[int, Pipeline] = {}
-        self._global_model: Optional[Pipeline] = None
+        self._global_model: Pipeline | None = None
         self._regime_counts: dict[int, int] = {}
         self._feature_names: list[str] = []
         self._is_fitted = False
@@ -571,7 +571,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         ohlcv: pd.DataFrame,
         symbol: str = "XAU_USD",
         min_data_quality: float = 0.40,
-        extra_features: Optional[pd.DataFrame] = None,
+        extra_features: pd.DataFrame | None = None,
     ) -> dict[str, Any]:
         """
         Full end-to-end live prediction wired to the orchestrator.
@@ -967,13 +967,13 @@ def walk_forward_regime_eval(
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_rcm_singleton: Optional[RegimeConditionalModel] = None
-_rcm_path: Optional[str] = None
+_rcm_singleton: RegimeConditionalModel | None = None
+_rcm_path: str | None = None
 
 
 def get_regime_conditional_model(
-    model_path: Optional[str] = None,
-) -> Optional[RegimeConditionalModel]:
+    model_path: str | None = None,
+) -> RegimeConditionalModel | None:
     """
     Return the module-level RegimeConditionalModel singleton.
 

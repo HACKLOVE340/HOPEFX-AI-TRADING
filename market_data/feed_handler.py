@@ -13,8 +13,8 @@ import asyncio
 import json
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
-from typing import Callable, Dict, List, Optional, Set
+from datetime import datetime, UTC
+from collections.abc import Callable
 
 try:
     import aiohttp
@@ -176,7 +176,7 @@ class FeedHandler:
         """Register tick callback"""
         self.normalized_callbacks.append(callback)
 
-    def get_l1_book(self, symbol: str) -> Optional[Tick]:
+    def get_l1_book(self, symbol: str) -> Tick | None:
         """Get current L1 quote for symbol"""
         for tick in reversed(self.tick_buffer):
             if tick.symbol == symbol and not tick.is_trade:
@@ -196,7 +196,7 @@ class ExchangeFeed:
     def __init__(self, name: str, ws_url: str):
         self.name = name
         self.ws_url = ws_url
-        self.callback: Optional[Callable] = None
+        self.callback: Callable | None = None
         self.subscribed_symbols: set[str] = set()
         self.connected = False
 

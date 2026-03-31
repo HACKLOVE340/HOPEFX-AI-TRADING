@@ -11,7 +11,7 @@ Advanced features for AI signal generation
 import logging
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -25,7 +25,7 @@ class FeatureVector:
     symbol: str
     timestamp: float
     features: dict[str, float]
-    label: Optional[float] = None  # For training
+    label: float | None = None  # For training
 
     def to_array(self) -> np.ndarray:
         """Convert to numpy array"""
@@ -158,8 +158,8 @@ class FeatureEngineer:
         self,
         symbol: str,
         ohlcv_data: list[Any],
-        order_book: Optional[dict] = None,
-    ) -> Optional[FeatureVector]:
+        order_book: dict | None = None,
+    ) -> FeatureVector | None:
         """
         Extract ML features from market data
 

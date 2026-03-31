@@ -11,8 +11,8 @@ Professional trading dashboard with WebSocket updates
 import asyncio
 import json
 import logging
-from typing import Dict, Optional, Any, Set
-from datetime import datetime, timezone, UTC
+from typing import Any
+from datetime import datetime, UTC
 from collections import deque
 
 try:
@@ -25,8 +25,8 @@ except ImportError:
     AIOHTTP_AVAILABLE = False
 
 try:
-    import plotly
-    import plotly.graph_objs as go
+    import plotly  # noqa: F401
+    import plotly.graph_objs as go  # noqa: F401
 
     PLOTLY_AVAILABLE = True
 except ImportError:
@@ -44,7 +44,7 @@ class DashboardWebSocketManager:
         self.clients: set[web.WebSocketResponse] = set()
         self._lock = asyncio.Lock()
         self._running = False
-        self._broadcast_task: Optional[asyncio.Task] = None
+        self._broadcast_task: asyncio.Task | None = None
 
     async def register(self, ws: web.WebSocketResponse):
         """Register new client"""

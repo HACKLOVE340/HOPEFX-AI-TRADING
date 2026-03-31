@@ -30,7 +30,6 @@ No raw price levels are included as features.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -349,7 +348,7 @@ def add_trend_features(df: pd.DataFrame, smoke: bool = False) -> pd.DataFrame:
 
 def add_intermarket_features(
     df: pd.DataFrame,
-    macro_df: Optional[pd.DataFrame] = None,
+    macro_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """
     Gold vs DXY, SPX, oil divergence signals.
@@ -440,7 +439,7 @@ def add_intermarket_features(
 
 def add_cot_proxy_features(
     df: pd.DataFrame,
-    macro_df: Optional[pd.DataFrame] = None,
+    macro_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """
     Proxy features for speculative positioning and central bank demand.
@@ -620,7 +619,7 @@ def build_filtered_target(
 
 def build_advanced_features(
     ohlcv: pd.DataFrame,
-    macro_df: Optional[pd.DataFrame] = None,
+    macro_df: pd.DataFrame | None = None,
     horizon: int = 1,
     use_filtered_target: bool = True,
     min_move_atr: float = 0.25,

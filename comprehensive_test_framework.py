@@ -13,8 +13,8 @@ import asyncio
 import pytest
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta, timezone, UTC
+from typing import Any
+from datetime import datetime, timedelta, UTC
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -27,7 +27,7 @@ try:
         TickData,
         TransactionCostModel,
     )
-    from enhanced_realtime_engine import MultiSourceAggregator, MarketTick, MockProvider
+    from enhanced_realtime_engine import MultiSourceAggregator, MarketTick, MockProvider  # noqa: F401
     from enhanced_ml_predictor import EnhancedMLPredictor, FeatureEngineering
     from enhanced_smart_router import SmartOrderRouter, Order, OrderSide, OrderType
 
@@ -56,7 +56,7 @@ class TestResult:
     category: TestCategory
     passed: bool
     duration_ms: float
-    error_message: Optional[str] = None
+    error_message: str | None = None
     metadata: dict[str, Any] = None
 
 

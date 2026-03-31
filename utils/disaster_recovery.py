@@ -12,9 +12,9 @@ Automated backup, failover, and state restoration
 import asyncio
 import json
 import gzip
-from typing import TYPE_CHECKING, Dict, List
+from typing import TYPE_CHECKING
 from dataclasses import dataclass, asdict
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
 import hashlib
 import aiofiles

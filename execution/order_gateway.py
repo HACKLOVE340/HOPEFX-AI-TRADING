@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from execution.trade_executor import ExecutionResult, TradeExecutor
@@ -54,7 +54,7 @@ class Order:
         self.commission_paid: float = 0.0
         self.is_filled: bool = False
         self.is_rejected: bool = False
-        self.rejection_reason: Optional[str] = None
+        self.rejection_reason: str | None = None
         # Optional fields set by callers
         self.symbol: str = "XAUUSD"
         self.strategy_id: str = "order_gateway"
@@ -86,7 +86,7 @@ class OrderGateway:
     instantiates OrderGateway without arguments.
     """
 
-    def __init__(self, executor: Optional[TradeExecutor] = None) -> None:
+    def __init__(self, executor: TradeExecutor | None = None) -> None:
         self.executor = executor
         self.orders: dict[str, Order] = {}
         if executor is None:

@@ -27,8 +27,8 @@ GET  /api/data-layer/ml-features     — complete ML feature set
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -169,7 +169,7 @@ async def get_microstructure(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
         micro_features = {k: v for k, v in features.items() if k.startswith("micro_")}
 
         snap = orch._micro.get_snapshot()
-        snapshot_dict: Optional[dict[str, Any]] = None
+        snapshot_dict: dict[str, Any] | None = None
         if snap is not None:
             snapshot_dict = {
                 "timestamp": snap.timestamp.isoformat(),
@@ -228,8 +228,8 @@ async def get_quality_report(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
 
 @router.get("/lineage")
 async def get_lineage(
-    record_type: Optional[str] = Query(None),
-    symbol: Optional[str] = Query("XAU_USD"),
+    record_type: str | None = Query(None),
+    symbol: str | None = Query("XAU_USD"),
     limit: int = Query(50, ge=1, le=500),
 ) -> dict[str, Any]:
     """Recent lineage records (immutable audit trail) — via orchestrator."""

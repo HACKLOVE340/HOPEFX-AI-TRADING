@@ -15,7 +15,6 @@ Author: HOPEFX Development Team
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import re
@@ -60,7 +59,7 @@ class SentimentScore:
     subjectivity: float  # 0 (objective) to 1 (subjective)
     confidence: float  # 0 to 1
     label: SentimentLabel
-    compound_score: Optional[float] = None  # VADER compound score
+    compound_score: float | None = None  # VADER compound score
 
     def to_dict(self) -> dict:
         """Convert to dictionary"""

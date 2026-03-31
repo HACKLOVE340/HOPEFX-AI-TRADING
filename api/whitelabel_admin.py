@@ -25,10 +25,12 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+
+import contextlib
 
 from api.auth import TokenPayload, get_current_user
 from whitelabel import (
@@ -94,15 +96,15 @@ class CreateTenantBody(BaseModel):
     owner_email: str
     trial_days: int = Field(0, ge=0, le=365)
     features: list[str] = []
-    primary_color: Optional[str] = None
-    logo_url: Optional[str] = None
+    primary_color: str | None = None
+    logo_url: str | None = None
 
 
 class UpdateTenantBody(BaseModel):
-    primary_color: Optional[str] = None
-    logo_url: Optional[str] = None
-    company_name: Optional[str] = None
-    custom_domain: Optional[str] = None
+    primary_color: str | None = None
+    logo_url: str | None = None
+    company_name: str | None = None
+    custom_domain: str | None = None
 
 
 def _tenant_to_dict(t: Any) -> dict:
@@ -133,7 +135,7 @@ def _tenant_to_dict(t: Any) -> dict:
 
 @router.get("/tenants")
 async def list_tenants(
-    status_filter: Optional[str] = None,
+    status_filter: str | None = None,
     user: TokenPayload = Depends(get_current_user),
 ):
     status_enum = None
@@ -156,10 +158,8 @@ async def create_tenant(
 ):
     features = []
     for f in body.features:
-        try:
+        with contextlib.suppress(ValueError):
             features.append(FeatureFlag(f))
-        except ValueError:
-            pass  # skip unknown flags
 
     tenant = _manager.create_tenant(
         name=body.name,

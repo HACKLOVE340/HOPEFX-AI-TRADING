@@ -12,7 +12,8 @@ Prevents overfitting with rolling train/test splits
 import logging
 import pandas as pd
 import numpy as np
-from typing import Any, List, Dict, Callable, Tuple
+from typing import Any
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -226,10 +227,7 @@ class WalkForwardEngine:
         train_return = train_perf.get("total_return", 0)
         test_return = test_perf.get("total_return", 0)
 
-        if train_return > 0 and test_return < train_return * 0.3:
-            return True
-
-        return False
+        return train_return > 0 and test_return < train_return * 0.3
 
     def get_aggregate_stats(self) -> dict[str, Any]:
         """Aggregate statistics across all windows."""

@@ -8,7 +8,7 @@ import logging
 import requests
 import redis
 import time
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 

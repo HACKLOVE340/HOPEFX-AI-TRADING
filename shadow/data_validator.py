@@ -40,8 +40,9 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ class ShadowTickBuffer:
             self.ticks.pop(0)
 
     @property
-    def latest(self) -> Optional[dict]:
+    def latest(self) -> dict | None:
         return self.ticks[-1] if self.ticks else None
 
     @property

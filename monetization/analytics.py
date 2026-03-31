@@ -16,9 +16,9 @@ This module provides:
 """
 
 import logging
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from decimal import Decimal
-from typing import Optional, Dict, List, Any
+from typing import Any
 from enum import Enum
 from dataclasses import dataclass
 
@@ -145,10 +145,10 @@ class RevenueEntry:
         entry_id: str,
         source: RevenueSource,
         amount: Decimal,
-        user_id: Optional[str] = None,
-        tier: Optional[SubscriptionTier] = None,
+        user_id: str | None = None,
+        tier: SubscriptionTier | None = None,
         description: str = "",
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         self.entry_id = entry_id
         self.source = source
@@ -185,10 +185,10 @@ class RevenueAnalytics:
         self,
         source: RevenueSource,
         amount: Decimal,
-        user_id: Optional[str] = None,
-        tier: Optional[SubscriptionTier] = None,
+        user_id: str | None = None,
+        tier: SubscriptionTier | None = None,
         description: str = "",
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> RevenueEntry:
         """Record a revenue entry"""
         import uuid
@@ -220,7 +220,7 @@ class RevenueAnalytics:
         tier: SubscriptionTier,
         billing_cycle: BillingCycle,
         amount: Decimal,
-        previous_tier: Optional[SubscriptionTier] = None,
+        previous_tier: SubscriptionTier | None = None,
     ) -> None:
         """
         Record a subscription lifecycle event and update Prometheus counters.
@@ -296,9 +296,9 @@ class RevenueAnalytics:
     def get_revenue_by_period(
         self,
         period: TimePeriod,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        source: Optional[RevenueSource] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        source: RevenueSource | None = None,
     ) -> list[RevenueMetric]:
         """Get revenue aggregated by time period"""
         entries = list(self._entries.values())
@@ -358,7 +358,7 @@ class RevenueAnalytics:
 
         return metrics
 
-    def get_mrr(self, as_of: Optional[datetime] = None) -> Decimal:
+    def get_mrr(self, as_of: datetime | None = None) -> Decimal:
         """Calculate Monthly Recurring Revenue"""
         as_of = as_of or datetime.now(UTC)
 
@@ -377,7 +377,7 @@ class RevenueAnalytics:
 
         return sum(e.amount for e in subscription_entries)
 
-    def get_arr(self, as_of: Optional[datetime] = None) -> Decimal:
+    def get_arr(self, as_of: datetime | None = None) -> Decimal:
         """Calculate Annual Recurring Revenue"""
         return self.get_mrr(as_of) * 12
 
@@ -428,7 +428,7 @@ class RevenueAnalytics:
         )
 
     def get_subscription_metrics(
-        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
+        self, start_date: datetime | None = None, end_date: datetime | None = None
     ) -> SubscriptionMetrics:
         """Get subscription-related metrics"""
         events = self._subscription_events
@@ -483,7 +483,7 @@ class RevenueAnalytics:
         )
 
     def get_revenue_by_source(
-        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
+        self, start_date: datetime | None = None, end_date: datetime | None = None
     ) -> dict[str, Decimal]:
         """Get revenue breakdown by source"""
         entries = list(self._entries.values())
@@ -501,7 +501,7 @@ class RevenueAnalytics:
         return breakdown
 
     def get_revenue_by_tier(
-        self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
+        self, start_date: datetime | None = None, end_date: datetime | None = None
     ) -> dict[str, Decimal]:
         """Get revenue breakdown by subscription tier"""
         entries = [e for e in self._entries.values() if e.tier is not None]
@@ -521,8 +521,8 @@ class RevenueAnalytics:
     def get_top_customers(
         self,
         limit: int = 10,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> list[dict[str, Any]]:
         """Get top customers by revenue"""
         entries = [e for e in self._entries.values() if e.user_id]

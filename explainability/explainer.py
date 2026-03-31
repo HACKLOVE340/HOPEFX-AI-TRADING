@@ -5,8 +5,8 @@
 # No commercial use without explicit permission.
 """explainability/explainer.py — AIExplainer: SHAP-based signal explanation."""
 
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timezone, UTC
+from typing import Any
+from datetime import datetime, UTC
 import logging
 
 from explainability.models import (
@@ -34,7 +34,7 @@ class AIExplainer:
     - Natural language explanations
     """
 
-    def __init__(self, config: Optional[dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize AI Explainer."""
         self.config = config or {}
         self.explanation_history: list[Explanation] = []
@@ -283,10 +283,7 @@ class AIExplainer:
                         )
                     )
 
-                    if decision == "left":
-                        node = tree.children_left[node]
-                    else:
-                        node = tree.children_right[node]
+                    node = tree.children_left[node] if decision == "left" else tree.children_right[node]
         except Exception as e:
             logger.debug(f"Could not extract decision path: {e}")
 
@@ -378,7 +375,7 @@ class AIExplainer:
 
     def get_model_performance_explanation(
         self, model_name: str
-    ) -> Optional[ModelPerformanceExplanation]:
+    ) -> ModelPerformanceExplanation | None:
         """
         Return performance metrics for *model_name* from the live ML predictor.
 
@@ -466,8 +463,7 @@ class AIExplainer:
 
         for cont1 in explanation1.feature_contributions:
             for cont2 in explanation2.feature_contributions:
-                if cont1.feature_name == cont2.feature_name:
-                    if abs(cont1.contribution - cont2.contribution) > 0.05:
+                if cont1.feature_name == cont2.feature_name and abs(cont1.contribution - cont2.contribution) > 0.05:
                         diff_features.append(
                             {
                                 "feature": cont1.feature_name,
@@ -513,8 +509,7 @@ class AIExplainer:
                     }
                 )
 
-        elif current_prediction == "BUY" and target_prediction == "SELL":
-            if "rsi" in features and features["rsi"] < 30:
+        elif current_prediction == "BUY" and target_prediction == "SELL" and "rsi" in features and features["rsi"] < 30:
                 changes_needed.append(
                     {
                         "feature": "rsi",

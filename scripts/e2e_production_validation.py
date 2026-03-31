@@ -45,9 +45,9 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-from typing import List, Tuple
+import contextlib
 
 # Ensure project root is on sys.path regardless of where the script is invoked.
 # This script lives in scripts/ — add the parent directory (project root).
@@ -124,7 +124,8 @@ def check_architecture() -> str:
     violations = []
     for path in EXTERNAL_FILES:
         try:
-            src = open(path).read()
+            with open(path) as _fh:
+                src = _fh.read()
             for b in FORBIDDEN:
                 if b in src:
                     violations.append(f"{path}: {b}")
@@ -479,7 +480,8 @@ def check_inference() -> str:
     assert hasattr(engine, "get_data_layer_features"), "get_data_layer_features missing"
     assert hasattr(engine, "_get_data_layer_nudge"), "_get_data_layer_nudge missing"
     # Verify no direct sub-module imports remain
-    src = open("ml/inference_engine.py").read()
+    with open("ml/inference_engine.py") as _fh:
+        src = _fh.read()
     assert "from data_layer.feeds.macro.store_bridge" not in src
     assert "from data_layer.lineage.store" not in src
     return "InferenceEngine OK, no forbidden imports"
@@ -509,7 +511,8 @@ def check_risk() -> str:
     ), "Gatekeeper missing _orch (orchestrator reference)"
 
     # Verify no direct sub-module imports in gatekeeper
-    src = open("risk/gatekeeper.py").read()
+    with open("risk/gatekeeper.py") as _fh:
+        src = _fh.read()
     assert "from data_layer.lineage.store" not in src
     return "RiskManager + Gatekeeper wired, no forbidden imports"
 
@@ -519,7 +522,8 @@ def check_risk() -> str:
 
 @check("Execution: ExecutionEngine imports cleanly, no forbidden imports")
 def check_execution() -> str:
-    src = open("execution/execution.py").read()
+    with open("execution/execution.py") as _fh:
+        src = _fh.read()
     assert "from data_layer.lineage.store" not in src
     return "execution.execution OK, no forbidden imports"
 
@@ -529,7 +533,8 @@ def check_execution() -> str:
 
 @check("API: data_layer router importable, no forbidden imports")
 def check_api() -> str:
-    src = open("api/data_layer.py").read()
+    with open("api/data_layer.py") as _fh:
+        src = _fh.read()
     forbidden = [
         "from data_layer.sentiment.engine",
         "from data_layer.calendar.engine",
@@ -603,7 +608,8 @@ def check_prometheus() -> str:
 @check("forward_test.py: no MockPriceFeed / MockRiskManager / MockTick")
 def check_forward_test_no_mocks() -> str:
     # Strip comments before checking — "No GBM" in a docstring is fine
-    lines = open("forward_test.py").readlines()
+    with open("forward_test.py") as _fh:
+        lines = _fh.readlines()
     code_lines = [ln for ln in lines if not ln.lstrip().startswith("#")]
     src = "".join(code_lines)
     forbidden = [
@@ -627,7 +633,8 @@ def check_forward_test_no_mocks() -> str:
 
 @check("examples/order_flow_example.py: no MockDataSource")
 def check_order_flow_no_mocks() -> str:
-    src = open("examples/order_flow_example.py").read()
+    with open("examples/order_flow_example.py") as _fh:
+        src = _fh.read()
     assert "MockDataSource" not in src, "MockDataSource still present"
     assert (
         "orchestrator" in src or "MarketReplayEngine" in src
@@ -660,10 +667,8 @@ async def check_orchestrator_start_stop() -> None:
     except Exception as exc:
         record("Orchestrator: start() lifecycle", False, str(exc))
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await orch.stop()
-        except Exception:  # nosec B110 - orchestrator stop failure during cleanup is non-fatal
-            pass
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

@@ -10,8 +10,8 @@ Multi-asset backtesting, portfolio optimization, correlation analysis, risk metr
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional, Tuple, Any
+from datetime import datetime, UTC
+from typing import Any
 from pathlib import Path
 import json
 import warnings
@@ -45,8 +45,8 @@ class PortfolioAnalytics:
 
     def __init__(self, risk_free_rate: float = 0.02):
         self.risk_free_rate = risk_free_rate
-        self.returns_data: Optional[pd.DataFrame] = None
-        self.weights: Optional[np.ndarray] = None
+        self.returns_data: pd.DataFrame | None = None
+        self.weights: np.ndarray | None = None
         self.assets: list[str] = []
 
     def load_returns_data(self, returns_df: pd.DataFrame):
@@ -58,7 +58,7 @@ class PortfolioAnalytics:
         )
 
     def calculate_correlation_matrix(
-        self, save_path: Optional[str] = None
+        self, save_path: str | None = None
     ) -> pd.DataFrame:
         """Calculate and visualize correlation matrix"""
         if self.returns_data is None:
@@ -130,8 +130,8 @@ class PortfolioAnalytics:
 
     def optimize_portfolio(
         self,
-        target_return: Optional[float] = None,
-        target_risk: Optional[float] = None,
+        target_return: float | None = None,
+        target_risk: float | None = None,
         max_sharpe: bool = True,
         allow_short: bool = False,
         max_position_size: float = 0.5,
@@ -226,7 +226,7 @@ class PortfolioAnalytics:
             return {"success": False, "message": result.message}
 
     def generate_efficient_frontier(
-        self, n_portfolios: int = 100, save_path: Optional[str] = None
+        self, n_portfolios: int = 100, save_path: str | None = None
     ) -> pd.DataFrame:
         """
         Generate efficient frontier by simulating random portfolios
@@ -500,11 +500,8 @@ class MultiAssetBacktester:
             # Check if rebalancing needed
             if date in rebalance_dates or date == prices_df.index[0]:
                 # Get target weights for this date
-                if date in weights_df.index:
-                    target_weights = weights_df.loc[date]
-                else:
-                    # Forward fill last known weights
-                    target_weights = weights_df.loc[:date].iloc[-1]
+                # Forward fill last known weights if date not in index
+                target_weights = weights_df.loc[date] if date in weights_df.index else weights_df.loc[:date].iloc[-1]
 
                 self._rebalance(date, current_prices, target_weights)
 
@@ -623,7 +620,7 @@ class RiskAnalyzer:
         drawdown = (cumulative - rolling_max) / rolling_max
         return drawdown
 
-    def plot_drawdowns(self, save_path: Optional[str] = None):
+    def plot_drawdowns(self, save_path: str | None = None):
         """Plot drawdown chart"""
         drawdown = self.calculate_drawdown_series()
 
@@ -707,7 +704,7 @@ class RiskAnalyzer:
 # Convenience functions
 def create_portfolio_report(
     returns_df: pd.DataFrame,
-    weights: Optional[np.ndarray] = None,
+    weights: np.ndarray | None = None,
     output_dir: str = "analytics/outputs",
 ) -> str:
     """

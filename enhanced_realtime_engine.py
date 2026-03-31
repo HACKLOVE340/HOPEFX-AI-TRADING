@@ -27,8 +27,9 @@ import asyncio
 import aiohttp
 import websockets
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Callable, Set, Any, AsyncIterator
-from datetime import datetime, timezone, UTC
+from typing import Any
+from collections.abc import Callable, AsyncIterator
+from datetime import datetime, UTC
 from enum import Enum, IntEnum, auto
 from collections import deque, defaultdict
 import logging
@@ -48,7 +49,7 @@ except ImportError:
 
 try:
     import zmq
-    import zmq.asyncio
+    import zmq.asyncio  # noqa: F401
 
     ZMQ_AVAILABLE = True
 except ImportError:
@@ -130,11 +131,11 @@ class MarketTick:
     ask: float
     bid_size: float = 0.0
     ask_size: float = 0.0
-    last_price: Optional[float] = None
-    last_size: Optional[float] = None
-    volume_24h: Optional[float] = None
-    vwap: Optional[float] = None
-    open_interest: Optional[float] = None
+    last_price: float | None = None
+    last_size: float | None = None
+    volume_24h: float | None = None
+    vwap: float | None = None
+    open_interest: float | None = None
 
     # Metadata
     source: str = "unknown"
@@ -208,8 +209,8 @@ class VenueMetrics:
     # Errors
     errors: int = 0
     reconnections: int = 0
-    last_error: Optional[str] = None
-    last_error_time: Optional[datetime] = None
+    last_error: str | None = None
+    last_error_time: datetime | None = None
 
     # Health score 0-100
     health_score: float = 100.0
@@ -287,7 +288,7 @@ class DataProvider(ABC):
 
         self._callbacks: list[Callable[[MarketTick], Any]] = []
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
 
     @abstractmethod
     async def connect(self) -> bool:
@@ -371,7 +372,7 @@ class PolygonProvider(DataProvider):
     def __init__(self, api_key: str):
         super().__init__("polygon", priority=1, weight=1.0)
         self.api_key = api_key
-        self.ws: Optional[websockets.WebSocketClientProtocol] = None
+        self.ws: websockets.WebSocketClientProtocol | None = None
         self.uri = "wss://socket.polygon.io/stocks"
 
     async def connect(self) -> bool:
@@ -482,7 +483,7 @@ class OandaProvider(DataProvider):
         self.base_url = (
             f"https://stream-fx{'' if environment == 'live' else 'practice'}.oanda.com"
         )
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
 
     async def connect(self) -> bool:
         self.session = aiohttp.ClientSession()
@@ -542,10 +543,10 @@ class OandaProvider(DataProvider):
 class BinanceProvider(DataProvider):
     """Binance WebSocket with depth"""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         super().__init__("binance", priority=3, weight=0.8)
         self.api_key = api_key
-        self.ws: Optional[websockets.WebSocketClientProtocol] = None
+        self.ws: websockets.WebSocketClientProtocol | None = None
         self.base_endpoint = "wss://stream.binance.com:9443/ws"
 
     async def connect(self) -> bool:
@@ -703,14 +704,14 @@ class ConsensusAggregator:
         consensus_threshold: float = 0.67,
         max_sources: int = 5,
         outlier_threshold: float = 0.001,  # 10 bps
-        redis_url: Optional[str] = None,
+        redis_url: str | None = None,
     ):
         self.consensus_threshold = consensus_threshold
         self.max_sources = max_sources
         self.outlier_threshold = outlier_threshold
 
         # Redis for distributed caching
-        self.redis: Optional[redis.Redis] = None
+        self.redis: redis.Redis | None = None
         if redis_url and REDIS_AVAILABLE:
             try:
                 self.redis = redis.from_url(redis_url)
@@ -775,7 +776,7 @@ class ConsensusAggregator:
             await self._cache_consensus(consensus)
             await self._notify_consensus(consensus)
 
-    def _form_consensus(self, symbol: str) -> Optional[MarketTick]:
+    def _form_consensus(self, symbol: str) -> MarketTick | None:
         """
         Form consensus price using weighted median.
         Implements Byzantine fault tolerance.

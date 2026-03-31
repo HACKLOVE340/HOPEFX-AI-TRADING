@@ -17,8 +17,6 @@ Import either::
 
 from auth.jwt import (
     ALGORITHM,
-    _get_secret,
-    _load_secret,
     create_access_token,
     decode_access_token,
     hash_password,

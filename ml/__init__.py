@@ -29,16 +29,16 @@ RL_NUCLEAR_MODEL_PATH: str = "ml/rl_models/nuclear_decision_ppo.zip"
 RL_NUCLEAR_VECNORM_PATH: str = "ml/rl_models/nuclear_decision_vecnorm.pkl"
 
 __all__ = [
+    "RL_NUCLEAR_MODEL_PATH",
+    "RL_NUCLEAR_VECNORM_PATH",
     "BaseMLModel",
     "LSTMPricePredictor",
     "RandomForestTradingClassifier",
     "TechnicalFeatureEngineer",
     "create_ml_router",
     "get_active_model",
-    "get_model_version",
     "get_advanced_predictor",
-    "RL_NUCLEAR_MODEL_PATH",
-    "RL_NUCLEAR_VECNORM_PATH",
+    "get_model_version",
 ]
 
 # Module metadata
@@ -50,7 +50,7 @@ import json as _json
 import logging as _logging
 from pathlib import Path as _Path
 from typing import Any as _Any
-from typing import Optional as _Optional
+from typing import Optional as _Optional  # noqa: F401
 
 _ml_logger = _logging.getLogger(__name__)
 _SAVED = _Path(__file__).parent / "saved_models"
@@ -130,7 +130,7 @@ def _record_checksums() -> None:
         _ml_logger.warning("Could not record model checksums: %s", exc)
 
 
-def _try_load(path: _Path) -> _Optional[_Any]:
+def _try_load(path: _Path) -> _Any | None:
     """Load a model file via joblib with SHA-256 integrity check.
 
     Uses joblib (not raw pickle) — joblib handles numpy arrays more safely
@@ -339,14 +339,14 @@ def _load_models() -> None:
         )
 
 
-def get_active_model() -> _Optional[_Any]:
+def get_active_model() -> _Any | None:
     """
     Return the best available trained model.
 
     Priority: macro XGBoost → baseline XGBoost → macro RF → baseline RF → None.
     Models are loaded lazily on first call and cached for the process lifetime.
     """
-    global _macro_xgb
+    global _macro_xgb  # noqa: PLW0602
     if _macro_xgb is None and _model_version == "none":
         _load_models()
     return _macro_xgb or _baseline_xgb or _macro_rf or _baseline_rf
@@ -391,7 +391,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     Returns:
         FastAPI APIRouter
     """
-    from typing import Any, Dict, List, Optional
+    from typing import Any, Dict, List, Optional  # noqa: F401
 
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel

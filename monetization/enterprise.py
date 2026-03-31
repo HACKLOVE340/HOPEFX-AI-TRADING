@@ -15,9 +15,9 @@ This module provides:
 """
 
 import logging
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from decimal import Decimal
-from typing import Optional, Dict, List, Any
+from typing import Any
 from enum import Enum
 from dataclasses import dataclass
 
@@ -73,16 +73,16 @@ class WhiteLabelConfig:
     logo_url: str
     primary_color: str
     secondary_color: str
-    favicon_url: Optional[str] = None
-    support_email: Optional[str] = None
-    support_url: Optional[str] = None
-    terms_url: Optional[str] = None
-    privacy_url: Optional[str] = None
-    custom_domain: Optional[str] = None
-    custom_css: Optional[str] = None
-    email_from_name: Optional[str] = None
-    email_from_address: Optional[str] = None
-    footer_text: Optional[str] = None
+    favicon_url: str | None = None
+    support_email: str | None = None
+    support_url: str | None = None
+    terms_url: str | None = None
+    privacy_url: str | None = None
+    custom_domain: str | None = None
+    custom_css: str | None = None
+    email_from_name: str | None = None
+    email_from_address: str | None = None
+    footer_text: str | None = None
     show_powered_by: bool = True
 
 
@@ -91,15 +91,15 @@ class EnterpriseFeatures:
     """Enterprise-specific feature configuration"""
 
     sso_enabled: bool = False
-    sso_provider: Optional[str] = None
-    sso_config: Optional[dict[str, Any]] = None
-    api_rate_limit_override: Optional[int] = None
+    sso_provider: str | None = None
+    sso_config: dict[str, Any] | None = None
+    api_rate_limit_override: int | None = None
     custom_webhooks: bool = True
     dedicated_support: bool = True
     sla_tier: str = "standard"
     data_retention_days: int = 365
     audit_logging: bool = True
-    ip_whitelist: Optional[list[str]] = None
+    ip_whitelist: list[str] | None = None
     mfa_required: bool = False
     custom_reports: bool = True
     api_key_limit: int = 10
@@ -117,8 +117,8 @@ class Partner:
         contact_email: str,
         partner_type: PartnerType,
         status: PartnerStatus = PartnerStatus.PENDING,
-        contact_name: Optional[str] = None,
-        contact_phone: Optional[str] = None,
+        contact_name: str | None = None,
+        contact_phone: str | None = None,
     ):
         self.partner_id = partner_id
         self.company_name = company_name
@@ -128,13 +128,13 @@ class Partner:
         self.partner_type = partner_type
         self.status = status
         self.created_at = datetime.now(UTC)
-        self.approved_at: Optional[datetime] = None
+        self.approved_at: datetime | None = None
 
         # Commission settings
         self.commission_rate = PARTNER_COMMISSION_RATES.get(
             partner_type, Decimal("0.10")
         )
-        self.custom_commission_rate: Optional[Decimal] = None
+        self.custom_commission_rate: Decimal | None = None
 
         # Revenue tracking
         self.total_revenue = Decimal("0.00")
@@ -143,11 +143,11 @@ class Partner:
 
         # Referrals/clients
         self.client_count = 0
-        self.api_key: Optional[str] = None
+        self.api_key: str | None = None
 
         # Contract details
-        self.contract_start: Optional[datetime] = None
-        self.contract_end: Optional[datetime] = None
+        self.contract_start: datetime | None = None
+        self.contract_end: datetime | None = None
         self.notes: str = ""
 
     def get_commission_rate(self) -> Decimal:
@@ -227,7 +227,7 @@ class WhiteLabelInstance:
         self.config = config
         self.status = status
         self.created_at = datetime.now(UTC)
-        self.deployed_at: Optional[datetime] = None
+        self.deployed_at: datetime | None = None
 
         # Enterprise features
         self.enterprise_features = EnterpriseFeatures()
@@ -238,8 +238,8 @@ class WhiteLabelInstance:
         self.total_revenue = Decimal("0.00")
 
         # Technical details
-        self.subdomain: Optional[str] = None
-        self.api_endpoint: Optional[str] = None
+        self.subdomain: str | None = None
+        self.api_endpoint: str | None = None
         self.environment: str = "production"
 
     def deploy(self) -> None:
@@ -313,7 +313,7 @@ class EnterpriseCustomer:
         company_name: str,
         contact_email: str,
         tier: SubscriptionTier = SubscriptionTier.ENTERPRISE,
-        contact_name: Optional[str] = None,
+        contact_name: str | None = None,
     ):
         self.customer_id = customer_id
         self.company_name = company_name
@@ -327,8 +327,8 @@ class EnterpriseCustomer:
 
         # Contract details
         self.contract_value = Decimal("0.00")
-        self.contract_start: Optional[datetime] = None
-        self.contract_end: Optional[datetime] = None
+        self.contract_start: datetime | None = None
+        self.contract_end: datetime | None = None
         self.billing_cycle: str = "annual"
         self.auto_renew = True
 
@@ -408,9 +408,9 @@ class EnterpriseManager:
         company_name: str,
         contact_email: str,
         partner_type: PartnerType,
-        contact_name: Optional[str] = None,
-        contact_phone: Optional[str] = None,
-        custom_commission_rate: Optional[Decimal] = None,
+        contact_name: str | None = None,
+        contact_phone: str | None = None,
+        custom_commission_rate: Decimal | None = None,
     ) -> Partner:
         """Register a new partner"""
         import uuid
@@ -433,7 +433,7 @@ class EnterpriseManager:
         logger.info(f"Registered partner {partner_id}: {company_name}")
         return partner
 
-    def get_partner(self, partner_id: str) -> Optional[Partner]:
+    def get_partner(self, partner_id: str) -> Partner | None:
         """Get partner by ID"""
         return self._partners.get(partner_id)
 
@@ -453,7 +453,7 @@ class EnterpriseManager:
 
     def create_white_label_instance(
         self, partner_id: str, name: str, config: WhiteLabelConfig
-    ) -> Optional[WhiteLabelInstance]:
+    ) -> WhiteLabelInstance | None:
         """Create white-label instance for partner"""
         import uuid
 
@@ -486,7 +486,7 @@ class EnterpriseManager:
 
     def get_white_label_instance(
         self, instance_id: str
-    ) -> Optional[WhiteLabelInstance]:
+    ) -> WhiteLabelInstance | None:
         """Get white-label instance by ID"""
         return self._white_label_instances.get(instance_id)
 
@@ -503,8 +503,8 @@ class EnterpriseManager:
         company_name: str,
         contact_email: str,
         tier: SubscriptionTier = SubscriptionTier.ENTERPRISE,
-        contact_name: Optional[str] = None,
-        contract_value: Optional[Decimal] = None,
+        contact_name: str | None = None,
+        contract_value: Decimal | None = None,
         contract_months: int = 12,
     ) -> EnterpriseCustomer:
         """Register enterprise customer"""
@@ -532,7 +532,7 @@ class EnterpriseManager:
 
         return customer
 
-    def get_enterprise_customer(self, customer_id: str) -> Optional[EnterpriseCustomer]:
+    def get_enterprise_customer(self, customer_id: str) -> EnterpriseCustomer | None:
         """Get enterprise customer by ID"""
         return self._enterprise_customers.get(customer_id)
 
@@ -556,8 +556,8 @@ class EnterpriseManager:
 
     def get_all_partners(
         self,
-        partner_type: Optional[PartnerType] = None,
-        status: Optional[PartnerStatus] = None,
+        partner_type: PartnerType | None = None,
+        status: PartnerStatus | None = None,
     ) -> list[Partner]:
         """Get all partners with optional filters"""
         partners = list(self._partners.values())
@@ -570,7 +570,7 @@ class EnterpriseManager:
         return partners
 
     def get_all_white_label_instances(
-        self, status: Optional[WhiteLabelStatus] = None
+        self, status: WhiteLabelStatus | None = None
     ) -> list[WhiteLabelInstance]:
         """Get all white-label instances"""
         instances = list(self._white_label_instances.values())
@@ -581,7 +581,7 @@ class EnterpriseManager:
         return instances
 
     def get_all_enterprise_customers(
-        self, tier: Optional[SubscriptionTier] = None
+        self, tier: SubscriptionTier | None = None
     ) -> list[EnterpriseCustomer]:
         """Get all enterprise customers"""
         customers = list(self._enterprise_customers.values())
@@ -592,8 +592,8 @@ class EnterpriseManager:
         return customers
 
     def process_partner_payout(
-        self, partner_id: str, amount: Optional[Decimal] = None
-    ) -> Optional[dict[str, Any]]:
+        self, partner_id: str, amount: Decimal | None = None
+    ) -> dict[str, Any] | None:
         """Process payout for partner"""
         import uuid
 

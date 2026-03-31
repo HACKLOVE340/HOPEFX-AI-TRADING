@@ -40,9 +40,10 @@ _ATR_FALLBACK_VOL       = 0.001   # fallback volatility when realized variance i
 _CIRCUIT_BREAKER_HALT_LEVEL = 2   # circuit_breaker_level at which trading halts
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Callable, Tuple, Any
+from typing import Any
+from collections.abc import Callable
 from enum import Enum, IntEnum, auto
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from collections import deque, defaultdict
 import logging
 import json
@@ -51,8 +52,8 @@ import warnings
 
 # Performance libraries
 try:
-    import numba
-    from numba import jit, prange, njit, cuda
+    import numba  # noqa: F401
+    from numba import jit, prange, njit, cuda  # noqa: F401
 
     NUMBA_AVAILABLE = True
 except ImportError:
@@ -60,16 +61,16 @@ except ImportError:
     warnings.warn("Numba unavailable - performance degraded", stacklevel=2)
 
 try:
-    import cupy as cp
-    from cupy.cuda import Device
+    import cupy as cp  # noqa: F401
+    from cupy.cuda import Device  # noqa: F401
 
     CUDA_AVAILABLE = True
 except ImportError:
     CUDA_AVAILABLE = False
 
 try:
-    from scipy import stats, optimize, interpolate
-    from scipy.optimize import minimize, differential_evolution
+    from scipy import stats, optimize, interpolate  # noqa: F401
+    from scipy.optimize import minimize, differential_evolution  # noqa: F401
 
     SCIPY_AVAILABLE = True
 except ImportError:
@@ -230,12 +231,12 @@ class TickData:
     ask: float
     bid_size: float = 0.0
     ask_size: float = 0.0
-    last_price: Optional[float] = None
-    last_size: Optional[float] = None
+    last_price: float | None = None
+    last_size: float | None = None
     volume: float = 0.0
     trade_count: int = 0
-    vwap: Optional[float] = None
-    open_interest: Optional[float] = None
+    vwap: float | None = None
+    open_interest: float | None = None
 
     # Market microstructure
     bid_depth: list[tuple[float, float]] = field(default_factory=list)  # (price, size)
@@ -614,7 +615,7 @@ class Position:
     # Size and entry
     size: float = 0.0
     avg_entry_price: float = 0.0
-    entry_timestamp: Optional[NanosecondTimestamp] = None
+    entry_timestamp: NanosecondTimestamp | None = None
 
     # Cost tracking
     total_commission_paid: float = 0.0
@@ -624,8 +625,8 @@ class Position:
     # Risk metrics (MFE/MAE tracking)
     max_favorable_excursion: float = 0.0  # Best unrealized P&L
     max_adverse_excursion: float = 0.0  # Worst unrealized P&L (drawdown)
-    mfe_timestamp: Optional[NanosecondTimestamp] = None
-    mae_timestamp: Optional[NanosecondTimestamp] = None
+    mfe_timestamp: NanosecondTimestamp | None = None
+    mae_timestamp: NanosecondTimestamp | None = None
 
     # Trade history
     opening_trades: list[dict] = field(default_factory=list)
@@ -723,7 +724,7 @@ class TradeRecord:
     """
 
     trade_id: str
-    parent_order_id: Optional[str]
+    parent_order_id: str | None
 
     # Timing
     entry_time: NanosecondTimestamp
@@ -1155,7 +1156,7 @@ class InstitutionalRiskManager:
 
         # Kill switch state
         self.kill_switch_active = False
-        self.kill_switch_reason: Optional[str] = None
+        self.kill_switch_reason: str | None = None
         self.circuit_breaker_level = 0  # 0=normal, 1=warning, 2=halt
 
         # VaR calculation
@@ -1178,7 +1179,7 @@ class InstitutionalRiskManager:
         """Build a standardised failed-check dict for pre-trade risk results."""
         return {"check": name, "passed": False, "limit": limit, "projected": projected, "severity": severity}
 
-    def _check_position_size(self, symbol: str, side: "OrderSide", size: float, price: float) -> Optional[dict]:
+    def _check_position_size(self, symbol: str, side: "OrderSide", size: float, price: float) -> dict | None:
         """FIA 1.1: Reject if projected notional exceeds position limit."""
         current  = self.positions.get(symbol, Position(symbol, side))
         delta    = size if side == OrderSide.BUY else -size
@@ -1186,14 +1187,14 @@ class InstitutionalRiskManager:
         limit    = self.current_capital * self.limits["position"]
         return self._failed_check("POSITION_SIZE", limit, proj_not, RiskEventSeverity.CRITICAL) if proj_not > limit else None
 
-    def _check_leverage(self, notional: float) -> Optional[dict]:
+    def _check_leverage(self, notional: float) -> dict | None:
         """Reject if projected total exposure exceeds leverage limit."""
         current_exp = sum(abs(p.size * p.avg_entry_price) for p in self.positions.values())
         proj_exp    = current_exp + notional
         max_exp     = self.current_capital * self.limits["leverage"]
         return self._failed_check("LEVERAGE", max_exp, proj_exp, RiskEventSeverity.CRITICAL) if proj_exp > max_exp else None
 
-    def _check_var_limit(self, symbol: str, size: float, price: float) -> Optional[dict]:
+    def _check_var_limit(self, symbol: str, size: float, price: float) -> dict | None:
         """Warn if projected VaR exceeds the configured limit."""
         current_var  = self.calculate_var(0.95)
         projected_var = self._estimate_var_change(symbol, size, price)
@@ -1368,7 +1369,7 @@ class InstitutionalRiskManager:
         entry_price: float,
         stop_loss: float,
         volatility: float,
-        correlation_matrix: Optional[np.ndarray] = None,
+        correlation_matrix: np.ndarray | None = None,
     ) -> float:
         """
         Calculate optimal position size using Kelly with risk constraints.
@@ -1512,8 +1513,8 @@ class EnhancedBacktestEngine:
     def __init__(
         self,
         initial_capital: float = 1_000_000.0,
-        cost_model: Optional[TransactionCostModel] = None,
-        risk_manager: Optional[InstitutionalRiskManager] = None,
+        cost_model: TransactionCostModel | None = None,
+        risk_manager: InstitutionalRiskManager | None = None,
         execution_quality: ExecutionQuality = ExecutionQuality.STANDARD,
         enable_gpu: bool = False,
         parallel_workers: int = 1,
@@ -1533,7 +1534,7 @@ class EnhancedBacktestEngine:
         self.open_orders: dict[str, Any] = {}  # Track working orders
 
         # Market data
-        self.current_time: Optional[NanosecondTimestamp] = None
+        self.current_time: NanosecondTimestamp | None = None
         self.microstructure = MarketMicrostructureAnalyzer()
         self.price_history: dict[str, deque] = defaultdict(lambda: deque(maxlen=1000))
 
@@ -1691,11 +1692,11 @@ class EnhancedBacktestEngine:
         side: OrderSide,
         size: float,
         order_type: str = "market",
-        limit_price: Optional[float] = None,
-        stop_price: Optional[float] = None,
+        limit_price: float | None = None,
+        stop_price: float | None = None,
         time_in_force: str = "GTC",
-        strategy_id: Optional[str] = None,
-    ) -> tuple[bool, str, Optional[str]]:
+        strategy_id: str | None = None,
+    ) -> tuple[bool, str, str | None]:
         """
         Submit order with full pre-trade risk checks.
         """
@@ -1843,7 +1844,7 @@ class EnhancedBacktestEngine:
             order["size"] -= size
 
     def execute_order(
-        self, order_id: str, tick: "TickData", fill_size: Optional[float] = None
+        self, order_id: str, tick: "TickData", fill_size: float | None = None
     ) -> tuple[bool, dict[str, Any]]:
         """Execute an order with realistic market simulation."""
         if order_id not in self.open_orders:
@@ -1926,7 +1927,7 @@ class EnhancedBacktestEngine:
         total_cost: float,
         side: OrderSide,
         parent_order_id: str,
-    ) -> Optional[TradeRecord]:
+    ) -> TradeRecord | None:
         """Close position and create trade record"""
         if position.size == 0:
             return None
@@ -2019,10 +2020,7 @@ class EnhancedBacktestEngine:
         [e[0] for e in self.equity_curve]
 
         # Calculate returns
-        if len(equity_values) > 1:
-            equity_returns = np.diff(equity_values) / equity_values[:-1]
-        else:
-            equity_returns = np.array([])
+        equity_returns = np.diff(equity_values) / equity_values[:-1] if len(equity_values) > 1 else np.array([])
 
         # Drawdown calculation
         peak = self.initial_capital
@@ -2408,7 +2406,7 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> list[Tic
 
 def _load_real_ticks(
     symbol: str = "XAUUSD", max_bars: int = 5000
-) -> Optional[list["TickData"]]:
+) -> list["TickData"] | None:
     """
     Attempt to load real OHLCV data via real_data_backtest.py and convert to
     TickData objects for use by the backtest engine.
@@ -2477,7 +2475,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
     print("=" * 80)
 
     # ── Data loading ──────────────────────────────────────────────────────────
-    ticks: Optional[list[TickData]] = None
+    ticks: list[TickData] | None = None
     data_source = "real/binance"
 
     if use_real_data:
@@ -2560,7 +2558,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
 
         def generate_signal(
             self, tick: TickData, regime: MarketRegime
-        ) -> Optional[tuple[OrderSide, float]]:
+        ) -> tuple[OrderSide, float] | None:
             self.prices.append(tick.mid)
 
             if len(self.prices) < self.slow:

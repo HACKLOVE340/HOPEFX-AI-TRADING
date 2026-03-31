@@ -30,7 +30,6 @@ import socket
 import subprocess  # nosec B404 - list-form calls with fixed tool names; no shell=True, no user input
 import sys
 import urllib.parse
-from typing import List
 
 # ── result collectors ─────────────────────────────────────────────────────────
 _errors: list[str] = []
@@ -199,6 +198,7 @@ def check_alembic() -> None:
             capture_output=True,
             text=True,
             timeout=15,
+            check=False,
         )
         if result.returncode == 0:
             _good(f"Alembic current: {result.stdout.strip()[:80]}")
@@ -345,8 +345,8 @@ def check_env_file() -> None:
     # Scan for unresolved placeholders
     placeholders = []
     with open(env_path) as fh:
-        for lineno, line in enumerate(fh, 1):
-            line = line.strip()
+        for lineno, _line in enumerate(fh, 1):
+            line = _line.strip()
             if line.startswith("#") or "=" not in line:
                 continue
             key, _, val = line.partition("=")

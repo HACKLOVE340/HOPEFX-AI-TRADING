@@ -51,8 +51,8 @@ import logging
 import os
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from datetime import datetime, UTC
+from typing import Any
 
 import numpy as np
 
@@ -196,9 +196,9 @@ class OrderBook:
         self._bids: dict[float, float] = {}  # price → size
         self._asks: dict[float, float] = {}
         self._cumulative_delta: float = 0.0
-        self._last_snapshot: Optional[OrderBookSnapshot] = None
+        self._last_snapshot: OrderBookSnapshot | None = None
         self._update_count: int = 0
-        self._last_update: Optional[datetime] = None
+        self._last_update: datetime | None = None
 
         # Rolling history for spread z-score
         self._spread_history: deque[float] = deque(maxlen=20)
@@ -207,7 +207,7 @@ class OrderBook:
         self,
         bids: list[tuple[float, float]],
         asks: list[tuple[float, float]],
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
     ) -> OrderBookSnapshot:
         """
         Replace the entire book with a new snapshot.
@@ -226,7 +226,7 @@ class OrderBook:
         side: str,
         price: float,
         size: float,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
     ) -> OrderBookSnapshot:
         """
         Apply an incremental update (delta) to the book.
@@ -251,11 +251,11 @@ class OrderBook:
         else:
             self._cumulative_delta -= size
 
-    def get_snapshot(self) -> Optional[OrderBookSnapshot]:
+    def get_snapshot(self) -> OrderBookSnapshot | None:
         """Return the most recent snapshot."""
         return self._last_snapshot
 
-    def _build_snapshot(self, timestamp: Optional[datetime]) -> OrderBookSnapshot:
+    def _build_snapshot(self, timestamp: datetime | None) -> OrderBookSnapshot:
         """Build and cache a new snapshot from current book state."""
         ts = timestamp or datetime.now(UTC)
 
@@ -306,7 +306,7 @@ class OandaL2Feed:
         self._account_id = os.getenv("OANDA_ACCOUNT_ID", "")
         self._practice = os.getenv("OANDA_PRACTICE", "true").lower() == "true"
         self._base_url = self.PRACTICE_URL if self._practice else self.LIVE_URL
-        self._session: Optional[Any] = None
+        self._session: Any | None = None
         self._books: dict[str, OrderBook] = {}
         self._running = False
         self._poll_tasks: dict[str, asyncio.Task] = {}
@@ -346,7 +346,7 @@ class OandaL2Feed:
         if self._session:
             await self._session.close()
 
-    def get_snapshot(self, symbol: str) -> Optional[OrderBookSnapshot]:
+    def get_snapshot(self, symbol: str) -> OrderBookSnapshot | None:
         """Return the latest L2 snapshot for a symbol."""
         book = self._books.get(symbol)
         return book.get_snapshot() if book else None
@@ -408,14 +408,14 @@ class IBKROrderBookFeed:
         self._host = os.getenv("IBKR_HOST", "127.0.0.1")
         self._port = int(os.getenv("IBKR_PORT", "7497"))
         self._client_id = int(os.getenv("IBKR_CLIENT_ID", "2"))
-        self._ib: Optional[Any] = None
+        self._ib: Any | None = None
         self._books: dict[str, OrderBook] = {}
         self._tickers: dict[str, Any] = {}
 
     async def start(self, symbols: list[str]) -> None:
         """Connect to TWS and subscribe to market depth."""
         try:
-            from ib_insync import IB, Forex, Contract
+            from ib_insync import IB, Forex, Contract  # noqa: F401
         except ImportError:
             logger.warning("ib_insync not installed — IBKR L2 feed disabled")
             return
@@ -455,7 +455,7 @@ class IBKROrderBookFeed:
         except Exception as exc:
             logger.debug("IBKR depth update error for %s: %s", symbol, exc)
 
-    def get_snapshot(self, symbol: str) -> Optional[OrderBookSnapshot]:
+    def get_snapshot(self, symbol: str) -> OrderBookSnapshot | None:
         book = self._books.get(symbol)
         return book.get_snapshot() if book else None
 
@@ -503,7 +503,7 @@ class MockL2Feed:
             if not task.done():
                 task.cancel()
 
-    def get_snapshot(self, symbol: str) -> Optional[OrderBookSnapshot]:
+    def get_snapshot(self, symbol: str) -> OrderBookSnapshot | None:
         book = self._books.get(symbol)
         return book.get_snapshot() if book else None
 
@@ -547,9 +547,9 @@ class OrderBookFeed:
     uniform get_snapshot() interface to the ML pipeline.
     """
 
-    def __init__(self, provider: Optional[str] = None) -> None:
+    def __init__(self, provider: str | None = None) -> None:
         self._provider_name = provider or L2_PROVIDER
-        self._provider: Optional[Any] = None
+        self._provider: Any | None = None
         self._symbols: list[str] = []
 
     async def start(self, symbols: list[str]) -> None:
@@ -586,7 +586,7 @@ class OrderBookFeed:
         if self._provider:
             await self._provider.stop()
 
-    def get_snapshot(self, symbol: str) -> Optional[OrderBookSnapshot]:
+    def get_snapshot(self, symbol: str) -> OrderBookSnapshot | None:
         """Return the latest L2 snapshot for a symbol, or None if unavailable."""
         if self._provider is None:
             return None
@@ -617,7 +617,7 @@ class OrderBookFeed:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_order_book_feed: Optional[OrderBookFeed] = None
+_order_book_feed: OrderBookFeed | None = None
 
 
 def get_order_book_feed() -> OrderBookFeed:

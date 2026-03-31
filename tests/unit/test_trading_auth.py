@@ -18,7 +18,6 @@ Covers:
 
 import os
 import time
-from typing import Dict
 from unittest.mock import AsyncMock, MagicMock
 
 import importlib.util

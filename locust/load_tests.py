@@ -50,7 +50,6 @@ from __future__ import annotations
 
 import os
 import random
-from typing import Dict
 
 from locust import HttpUser, between, events, task
 from locust.exception import StopUser

@@ -17,8 +17,9 @@ Inspired by: TradeStation RadarScreen, TradingView Screener, TC2000
 """
 
 import logging
-from datetime import datetime, timedelta, timezone, UTC
-from typing import Dict, List, Optional, Any, Callable
+from datetime import datetime, timedelta, UTC
+from typing import Any
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 import threading
@@ -133,14 +134,14 @@ class MarketOpportunity:
     opportunity_type: str
     direction: SignalDirection
     strength: float  # 0-100
-    entry_price: Optional[float]
-    stop_loss: Optional[float]
-    take_profit: Optional[float]
-    risk_reward: Optional[float]
+    entry_price: float | None
+    stop_loss: float | None
+    take_profit: float | None
+    risk_reward: float | None
     triggers: list[str]
     analysis: dict[str, Any]
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
 
     @property
     def is_valid(self) -> bool:
@@ -195,7 +196,7 @@ class MarketScanner:
         opportunities = scanner.get_top_opportunities(limit=5)
     """
 
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: dict | None = None):
         """
         Initialize market scanner.
 
@@ -272,7 +273,7 @@ class MarketScanner:
     def add_criteria(
         self,
         criteria_type: ScanCriteriaType,
-        parameters: Optional[dict] = None,
+        parameters: dict | None = None,
         weight: float = 1.0,
         required: bool = False,
     ):
@@ -310,8 +311,8 @@ class MarketScanner:
     def scan(
         self,
         market_data: dict[str, dict[str, Any]],
-        criteria: Optional[list[ScanCriteriaType]] = None,
-        min_strength: Optional[float] = None,
+        criteria: list[ScanCriteriaType] | None = None,
+        min_strength: float | None = None,
     ) -> list[ScanResult]:
         """
         Run scan across all symbols.
@@ -425,7 +426,7 @@ class MarketScanner:
 
     def _scan_symbol(
         self, symbol: str, data: dict[str, Any], criteria: list[ScanCriteria]
-    ) -> Optional[ScanResult]:
+    ) -> ScanResult | None:
         """Scan a single symbol against criteria."""
         if not data:
             return None
@@ -737,7 +738,7 @@ class MarketScanner:
                 if opportunity:
                     self._add_opportunity(opportunity)
 
-    def _create_opportunity(self, result: ScanResult) -> Optional[MarketOpportunity]:
+    def _create_opportunity(self, result: ScanResult) -> MarketOpportunity | None:
         """Create an opportunity from a scan result."""
         # Get price from details
         price = None
@@ -804,8 +805,8 @@ class MarketScanner:
 
     def get_opportunities(
         self,
-        symbol: Optional[str] = None,
-        direction: Optional[SignalDirection] = None,
+        symbol: str | None = None,
+        direction: SignalDirection | None = None,
         min_strength: float = 0,
     ) -> list[MarketOpportunity]:
         """Get stored opportunities with optional filters."""
@@ -833,7 +834,7 @@ class MarketScanner:
     # RESULTS ACCESS
     # ================================================================
 
-    def get_last_result(self, symbol: str) -> Optional[ScanResult]:
+    def get_last_result(self, symbol: str) -> ScanResult | None:
         """Get last scan result for a symbol."""
         return self._last_results.get(symbol)
 
@@ -868,14 +869,13 @@ def create_scanner_router(scanner: MarketScanner):
     """
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel
-    from typing import Optional, List
 
     router = APIRouter(prefix="/api/scanner", tags=["Market Scanner"])
 
     class ScanRequest(BaseModel):
         market_data: dict[str, dict[str, Any]]
-        criteria: Optional[list[str]] = None
-        min_strength: Optional[float] = None
+        criteria: list[str] | None = None
+        min_strength: float | None = None
 
     class AddCriteriaRequest(BaseModel):
         criteria_type: str
@@ -900,8 +900,8 @@ def create_scanner_router(scanner: MarketScanner):
 
     @router.get("/opportunities")
     async def get_opportunities(
-        symbol: Optional[str] = None,
-        direction: Optional[str] = None,
+        symbol: str | None = None,
+        direction: str | None = None,
         min_strength: float = 0,
         limit: int = 20,
     ):
@@ -978,7 +978,7 @@ def create_scanner_router(scanner: MarketScanner):
 
 
 # Global instance for easy access
-_market_scanner: Optional[MarketScanner] = None
+_market_scanner: MarketScanner | None = None
 
 
 def get_market_scanner() -> MarketScanner:

@@ -51,11 +51,10 @@ import os
 import smtplib
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, UTC
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -100,10 +99,10 @@ class WeeklyReport:
     total_trades: int
     winning_trades: int
     losing_trades: int
-    win_rate: Optional[float]  # None if < 10 trades
+    win_rate: float | None  # None if < 10 trades
     avg_win: float
     avg_loss: float
-    profit_factor: Optional[float]
+    profit_factor: float | None
     expectancy: float  # avg P&L per trade
 
     # Return metrics
@@ -112,10 +111,10 @@ class WeeklyReport:
     total_return_pct: float
 
     # Risk metrics
-    sharpe_ratio: Optional[float]
-    sortino_ratio: Optional[float]
+    sharpe_ratio: float | None
+    sortino_ratio: float | None
     max_drawdown_pct: float
-    calmar_ratio: Optional[float]
+    calmar_ratio: float | None
 
     # Context
     starting_equity: float
@@ -137,7 +136,7 @@ class WeeklyReport:
 # ── Metric calculations ───────────────────────────────────────────────────────
 
 
-def _sharpe(returns: np.ndarray, periods_per_year: int = 252) -> Optional[float]:
+def _sharpe(returns: np.ndarray, periods_per_year: int = 252) -> float | None:
     if len(returns) < 5:
         return None
     mu = float(np.mean(returns))
@@ -147,7 +146,7 @@ def _sharpe(returns: np.ndarray, periods_per_year: int = 252) -> Optional[float]
     return round(mu / sigma * math.sqrt(periods_per_year), 3)
 
 
-def _sortino(returns: np.ndarray, periods_per_year: int = 252) -> Optional[float]:
+def _sortino(returns: np.ndarray, periods_per_year: int = 252) -> float | None:
     if len(returns) < 5:
         return None
     mu = float(np.mean(returns))
@@ -169,13 +168,13 @@ def _max_drawdown(equity_curve: list[float]) -> float:
     return round(float(np.min(dd)), 6)
 
 
-def _calmar(annual_return: float, max_dd: float) -> Optional[float]:
+def _calmar(annual_return: float, max_dd: float) -> float | None:
     if abs(max_dd) < 1e-10:
         return None
     return round(annual_return / abs(max_dd), 3)
 
 
-def _profit_factor(wins: list[float], losses: list[float]) -> Optional[float]:
+def _profit_factor(wins: list[float], losses: list[float]) -> float | None:
     gross_win = sum(w for w in wins if w > 0)
     gross_loss = abs(sum(loss for loss in losses if loss < 0))
     if gross_loss < 1e-10:
@@ -202,9 +201,9 @@ class WeeklyReportGenerator:
         trades: list[TradeRecord],
         equity_curve: list[tuple[datetime, float]],
         starting_equity: float = 10_000.0,
-        week_start: Optional[datetime] = None,
-        week_end: Optional[datetime] = None,
-        data_source: Optional[str] = None,
+        week_start: datetime | None = None,
+        week_end: datetime | None = None,
+        data_source: str | None = None,
     ) -> WeeklyReport:
         now = datetime.now(UTC)
         if week_end is None:
@@ -386,7 +385,7 @@ def _detect_data_source() -> str:
 # ── Templates ─────────────────────────────────────────────────────────────────
 
 
-def _fmt(val: Optional[float], suffix: str = "", decimals: int = 2) -> str:
+def _fmt(val: float | None, suffix: str = "", decimals: int = 2) -> str:
     if val is None:
         return "—"
     return f"{val:.{decimals}f}{suffix}"

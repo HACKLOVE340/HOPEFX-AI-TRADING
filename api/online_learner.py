@@ -32,8 +32,8 @@ Endpoints
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -119,9 +119,9 @@ class LearnerStatusItem(BaseModel):
     fitted: bool
     update_count: int
     persist_path: str
-    last_fit_at: Optional[str] = None
-    accuracy: Optional[float] = None
-    regime: Optional[str] = None
+    last_fit_at: str | None = None
+    accuracy: float | None = None
+    regime: str | None = None
 
 
 class LearnerStatusResponse(BaseModel):
@@ -155,7 +155,7 @@ class Phase3StatusItem(BaseModel):
     fill_count: int
     ph_drift_count: int
     adwin_drift_count: int
-    recent_error: Optional[float] = None
+    recent_error: float | None = None
     primary_weight: float
     online_weight: float
     adaptive_weights: bool
@@ -182,7 +182,7 @@ class ResetResponse(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
-def _get_phase3_items(symbol: Optional[str] = None) -> list[Phase3StatusItem]:
+def _get_phase3_items(symbol: str | None = None) -> list[Phase3StatusItem]:
     """Collect Phase-3 OnlineLearnerStore status for all registered symbols."""
     items: list[Phase3StatusItem] = []
     try:
@@ -217,7 +217,7 @@ def _get_phase3_items(symbol: Optional[str] = None) -> list[Phase3StatusItem]:
     summary="Online learner status for all registered symbols",
 )
 async def online_learner_status(
-    symbol: Optional[str] = None,
+    symbol: str | None = None,
     user: TokenPayload = Depends(get_current_user),
 ):
     """
@@ -333,7 +333,7 @@ async def partial_fit(
     summary="Deep diagnostics for both online learner layers",
 )
 async def online_learner_diagnostics(
-    symbol: Optional[str] = None,
+    symbol: str | None = None,
     user: TokenPayload = Depends(get_current_user),
 ):
     """

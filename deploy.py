@@ -25,7 +25,6 @@ import logging
 import subprocess  # nosec B404 - list-form calls with fixed tool names; no shell=True, no user input
 import sys
 import time
-from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -57,7 +56,7 @@ HEALTH_CHECK_INTERVAL_S = 6
 
 
 def _run(
-    cmd: List[str], dry_run: bool = False, check: bool = True
+    cmd: list[str], dry_run: bool = False, check: bool = True
 ) -> subprocess.CompletedProcess:
     logger.info("$ %s", " ".join(cmd))
     if dry_run:
@@ -69,10 +68,10 @@ def _run(
 
 
 class DeploymentManager:
-    def __init__(self, environments: List[str], dry_run: bool = False) -> None:
+    def __init__(self, environments: list[str], dry_run: bool = False) -> None:
         self.environments = environments
         self.dry_run = dry_run
-        self._previous_image: Optional[str] = None
+        self._previous_image: str | None = None
 
     def deploy(self, environment: str) -> bool:
         """
@@ -130,7 +129,7 @@ class DeploymentManager:
         )
         for attempt in range(1, HEALTH_CHECK_RETRIES + 1):
             try:
-                with urllib.request.urlopen(url, timeout=5) as resp:  # nosec B310 - health check URL is always http/https  # noqa: S310
+                with urllib.request.urlopen(url, timeout=5) as resp:  # nosec B310 - health check URL is always http/https
                     if resp.status == 200:
                         logger.info("Health check passed (attempt %d)", attempt)
                         return True

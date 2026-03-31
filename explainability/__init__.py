@@ -27,10 +27,10 @@ from explainability.router import create_explainability_router
 
 __all__ = [
     "AIExplainer",
-    "Explanation",
-    "FeatureContribution",
     "DecisionNode",
-    "ModelPerformanceExplanation",
+    "Explanation",
     "ExplanationType",
+    "FeatureContribution",
+    "ModelPerformanceExplanation",
     "create_explainability_router",
 ]

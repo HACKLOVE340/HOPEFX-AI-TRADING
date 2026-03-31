@@ -10,9 +10,8 @@ Real-time P&L, exposure, and portfolio optimization
 """
 
 import numpy as np
-from typing import Dict, List, Optional
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from decimal import Decimal
 
 
@@ -228,7 +227,7 @@ class PortfolioOptimizer:
     def __init__(self, pms: PortfolioManager):
         self.pms = pms
         self.returns_history: dict[str, list[float]] = {}
-        self.covariance_matrix: Optional[np.ndarray] = None
+        self.covariance_matrix: np.ndarray | None = None
         self.target_volatility = 0.15  # 15% annualized
 
     def update_returns(self, symbol: str, daily_return: float):

@@ -37,9 +37,9 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from risk.intra_trade_monitor import IntraTradeMonitor, OpenPosition as IntraPosition
 from risk.post_trade_analyzer import PostTradeAnalyzer
@@ -47,6 +47,7 @@ from risk.drawdown_tracker import DrawdownTracker
 from shadow.trading_engine import ShadowTradingEngine
 from shadow.data_validator import ShadowDataValidator
 from resilience.hot_standby import HotStandbyReplicator
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -142,12 +143,12 @@ class HopeFXEngine:
         gatekeeper,
         lineage_store,
         ml_inference_fn=None,
-        intra_trade_monitor: Optional[IntraTradeMonitor] = None,
-        post_trade_analyzer: Optional[PostTradeAnalyzer] = None,
-        drawdown_tracker: Optional[DrawdownTracker] = None,
-        shadow_engine: Optional[ShadowTradingEngine] = None,
-        shadow_validator: Optional[ShadowDataValidator] = None,
-        hot_standby: Optional[HotStandbyReplicator] = None,
+        intra_trade_monitor: IntraTradeMonitor | None = None,
+        post_trade_analyzer: PostTradeAnalyzer | None = None,
+        drawdown_tracker: DrawdownTracker | None = None,
+        shadow_engine: ShadowTradingEngine | None = None,
+        shadow_validator: ShadowDataValidator | None = None,
+        hot_standby: HotStandbyReplicator | None = None,
         initial_equity: float = float(os.getenv("ENGINE_INITIAL_EQUITY", "100000")),
     ) -> None:
         self._orch = orchestrator
@@ -185,7 +186,7 @@ class HopeFXEngine:
         # Optional — only active when a Redis client is available.
         # When present, every state change is replicated so a standby pod
         # can take over without replaying the full order book.
-        self._standby: Optional[HotStandbyReplicator] = hot_standby
+        self._standby: HotStandbyReplicator | None = hot_standby
 
         self._state = EngineState.IDLE
         self._tick_count = 0
@@ -196,8 +197,8 @@ class HopeFXEngine:
         self._last_tick_epoch: float = 0.0
         self._open_positions: dict[str, dict] = {}
         self._fill_history: list[FillRecord] = []
-        self._start_time: Optional[float] = None
-        self._loop_task: Optional[asyncio.Task] = None
+        self._start_time: float | None = None
+        self._loop_task: asyncio.Task | None = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -230,10 +231,8 @@ class HopeFXEngine:
         self._state = EngineState.HALTED
         if self._loop_task and not self._loop_task.done():
             self._loop_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._loop_task
-            except asyncio.CancelledError:
-                pass
 
         # Stop shadow components
         await self._shadow.stop()

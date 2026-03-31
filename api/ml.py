@@ -23,8 +23,8 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -298,9 +298,9 @@ class PredictResponse(BaseModel):
     symbol: str
     direction: str  # BUY | SELL | HOLD
     confidence: float  # 0–100
-    entry_price: Optional[float] = None
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    entry_price: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     features_used: int = 0
     model_id: str = "xgb_macro"
     generated_at: str
@@ -323,8 +323,8 @@ class ModelInfo(BaseModel):
     model_id: str
     name: str
     available: bool
-    size_kb: Optional[float] = None
-    trained_at: Optional[str] = None
+    size_kb: float | None = None
+    trained_at: str | None = None
 
 
 class FeatureEntry(BaseModel):
@@ -334,8 +334,8 @@ class FeatureEntry(BaseModel):
 
 class FeatureImportancesResponse(BaseModel):
     features: list[FeatureEntry]
-    model_id: Optional[str] = None
-    note: Optional[str] = None
+    model_id: str | None = None
+    note: str | None = None
 
 
 class RetrainResponse(BaseModel):
@@ -348,17 +348,17 @@ class MLHealthResponse(BaseModel):
 
     status: str  # "ok" | "degraded" | "unavailable"
     model_loaded: bool
-    model_id: Optional[str]
+    model_id: str | None
     feature_count: int
-    oos_accuracy: Optional[float]
-    last_trained_at: Optional[str]
+    oos_accuracy: float | None
+    last_trained_at: str | None
     predict_count: int
     fallback_count: int
     fallback_rate: float = 0.0
     non_neutral_rate: float = 0.0  # fraction of last N signals that were directional
     signal_window_size: int = 0  # number of signals in the rolling window
     last_latency_ms: float
-    uptime_seconds: Optional[float] = None
+    uptime_seconds: float | None = None
     calibrator_available: bool
     online_learning_enabled: bool
     mtf_fusion_enabled: bool
@@ -378,7 +378,7 @@ class MLEngineHealthResponse(BaseModel):
     mtf_store: dict[str, Any]
     saved_model_files_kb: dict[str, float]
     checked_at: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -739,10 +739,7 @@ async def get_feature_importances(user: TokenPayload = Depends(require_role("adm
             importances = model.feature_importances_.tolist()
             # Try to get feature names
             names = getattr(model, "feature_names_in_", None)
-            if names is None:
-                names = [f"feature_{i}" for i in range(len(importances))]
-            else:
-                names = list(names)
+            names = [f"feature_{i}" for i in range(len(importances))] if names is None else list(names)
 
             pairs = sorted(
                 zip(names, importances, strict=False),
@@ -793,6 +790,7 @@ async def trigger_retrain(
                     [sys.executable, script, "--years", "8"],
                     timeout=3600,
                     capture_output=True,
+                    check=False,
                 )
                 logger.info("Model retraining completed")
             else:
@@ -812,7 +810,7 @@ async def trigger_retrain(
     summary="Signal filter EV statistics — rolling win rate, avg win/loss, EV gate status",
 )
 async def signal_filter_stats(
-    symbol: Optional[str] = None,
+    symbol: str | None = None,
     user: TokenPayload = Depends(get_current_user),
 ):
     """
@@ -894,10 +892,10 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
         # Enrich with saved-model registry metadata
         saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
         meta_path = saved_dir / "advanced_oos_meta.json"
-        oos_accuracy: Optional[float] = None
+        oos_accuracy: float | None = None
         feature_count: int = 0
         model_file: str = "advanced_oos.pkl"
-        last_trained_at: Optional[str] = None
+        last_trained_at: str | None = None
 
         if meta_path.exists():
             try:

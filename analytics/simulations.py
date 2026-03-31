@@ -15,7 +15,6 @@ and adds the SimulationEngine wrapper used by the dashboard.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -37,7 +36,7 @@ class SimulationEngine:
         trade_pnls: list[float],
         initial_capital: float = 100_000.0,
         n_paths: int = 5000,
-        confidence_levels: Optional[list[float]] = None,
+        confidence_levels: list[float] | None = None,
         method: str = "iid",
     ) -> dict:
         """

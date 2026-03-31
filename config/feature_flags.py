@@ -37,7 +37,7 @@ from __future__ import annotations
 import logging
 import os
 from enum import Enum
-from typing import Any, Dict, Tuple
+from typing import Any
 from datetime import UTC
 
 logger = logging.getLogger(__name__)
@@ -714,7 +714,7 @@ def check_phase2_gate() -> tuple[bool, str]:
     (passed, reason) : bool and human-readable explanation.
     """
     import os
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     start_str = os.getenv("OANDA_PAPER_RUN_START_UTC", "")
     if not start_str:
@@ -752,7 +752,7 @@ def check_phase3_gate() -> tuple[bool, str]:
     (passed, reason) : bool and human-readable explanation.
     """
     import os
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     # Check fill count
     fill_count_str = os.getenv("OANDA_PAPER_FILL_COUNT", "0")
@@ -878,9 +878,9 @@ flags = FeatureFlags()
 __all__ = [
     "FeatureFlags",
     "FeatureStatus",
-    "flags",
     "check_phase2_gate",
     "check_phase3_gate",
     "check_phase4_gate",
     "check_sharpe_gate",
+    "flags",
 ]

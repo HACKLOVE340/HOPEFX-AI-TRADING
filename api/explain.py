@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -47,7 +46,7 @@ _EXPLAIN_LATEST_LIMIT = os.getenv("EXPLAIN_LATEST_RATE_LIMIT", "60/minute")
 def _get_limiter():
     """Return the slowapi Limiter from app state, or None if not configured."""
     try:
-        from fastapi import Request as _Req
+        from fastapi import Request as _Req  # noqa: F401
         from slowapi import Limiter
         from slowapi.util import get_remote_address
 
@@ -228,7 +227,7 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
         logger.debug("Live explanation failed (%s) — using template", exc)
 
     # Template fallback — always returns something useful
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     template_features = [
         FeatureImportance(

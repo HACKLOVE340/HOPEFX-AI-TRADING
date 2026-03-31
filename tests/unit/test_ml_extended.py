@@ -317,7 +317,7 @@ class TestEnsemblePredictorExtended:
         # Weights should still sum to ~1
         total_weight = sum(
             ensemble_no_lstm.model_weights.get(m, 0)
-            for m in ensemble_no_lstm.models.keys()
+            for m in ensemble_no_lstm.models
         )
         assert abs(total_weight - 1.0) < 0.01
 

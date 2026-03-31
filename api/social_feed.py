@@ -22,8 +22,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -108,7 +107,7 @@ def _publish_signal(signal: dict, username: str, trader_id: str) -> dict:
 async def get_feed(
     page: int = 1,
     limit: int = 20,
-    symbol: Optional[str] = None,
+    symbol: str | None = None,
 ):
     """Return paginated community signal feed (public — no auth required)."""
     items = [v for v in _feed_items.values() if v.get("is_public")]

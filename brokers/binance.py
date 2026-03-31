@@ -13,8 +13,8 @@ import hashlib
 import hmac
 import logging
 import time
-from datetime import datetime, timezone, UTC
-from typing import Any, Dict, List, Optional
+from datetime import datetime, UTC
+from typing import Any
 
 import requests
 
@@ -137,9 +137,9 @@ class BinanceConnector(BrokerConnector):
         side: OrderSide,
         quantity: float,
         order_type: OrderType = OrderType.MARKET,
-        price: Optional[float] = None,
-        stop_price: Optional[float] = None,
-    ) -> Optional[Order]:
+        price: float | None = None,
+        stop_price: float | None = None,
+    ) -> Order | None:
         """
         Place an order with Binance.
 
@@ -260,7 +260,7 @@ class BinanceConnector(BrokerConnector):
             logger.error(f"Failed to cancel order {order_id}: {e}")
             return False
 
-    def get_order(self, order_id: str, symbol: str = None) -> Optional[Order]:
+    def get_order(self, order_id: str, symbol: str = None) -> Order | None:
         """
         Get order details.
 
@@ -371,7 +371,7 @@ class BinanceConnector(BrokerConnector):
             logger.error(f"Failed to get positions: {e}")
             return []
 
-    def close_position(self, symbol: str, quantity: Optional[float] = None) -> bool:
+    def close_position(self, symbol: str, quantity: float | None = None) -> bool:
         """
         Close a position by selling the asset.
 
@@ -435,7 +435,7 @@ class BinanceConnector(BrokerConnector):
             logger.error(f"Failed to close position {symbol}: {e}")
             return False
 
-    def get_account_info(self) -> Optional[AccountInfo]:
+    def get_account_info(self) -> AccountInfo | None:
         """
         Get account information.
 
@@ -494,7 +494,7 @@ class BinanceConnector(BrokerConnector):
         symbol: str,
         timeframe: str = "1m",
         limit: int = 100,
-    ) -> Optional[list[dict[str, Any]]]:
+    ) -> list[dict[str, Any]] | None:
         """
         Get historical market data (klines/candlesticks).
 

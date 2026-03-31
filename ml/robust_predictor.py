@@ -13,9 +13,9 @@ import logging
 import warnings
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from enum import Enum
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from typing import Any
 
 import joblib
 import lightgbm as lgb
@@ -109,7 +109,7 @@ class RobustPredictor:
     - Automated model retraining triggers
     """
 
-    def __init__(self, config: Optional[ModelConfig] = None):
+    def __init__(self, config: ModelConfig | None = None):
         self.config = config or ModelConfig()
         self.models: dict[str, Any] = {}
         self.scalers: dict[str, StandardScaler] = {}
@@ -121,7 +121,7 @@ class RobustPredictor:
         # Performance tracking
         self.oos_predictions: list[dict] = []
         self.model_performance: dict[str, list[float]] = {}
-        self.last_retrain: Optional[datetime] = None
+        self.last_retrain: datetime | None = None
 
         # Stability checks
         self.feature_stability_threshold = (
@@ -149,7 +149,7 @@ class RobustPredictor:
         self,
         X: pd.DataFrame,
         y: pd.Series,
-        sample_weights: Optional[np.ndarray] = None,
+        sample_weights: np.ndarray | None = None,
     ) -> dict:
         """
         Train with walk-forward validation and overfitting checks.
@@ -206,7 +206,7 @@ class RobustPredictor:
         X: pd.DataFrame,
         y: pd.Series,
         regimes: np.ndarray,
-        sample_weights: Optional[np.ndarray],
+        sample_weights: np.ndarray | None,
     ) -> dict:
         """Perform purged walk-forward cross-validation"""
         n_samples = len(X)
@@ -264,7 +264,7 @@ class RobustPredictor:
         self,
         X: pd.DataFrame,
         y: pd.Series,
-        sample_weights: Optional[np.ndarray],
+        sample_weights: np.ndarray | None,
     ) -> dict[str, Any]:
         """Train diverse models for ensemble"""
         models = {}
@@ -314,7 +314,7 @@ class RobustPredictor:
     def predict(
         self,
         X: pd.DataFrame,
-        regime: Optional[Regime] = None,
+        regime: Regime | None = None,
     ) -> PredictionResult:
         """
         Make a regime-aware prediction with uncertainty quantification.
@@ -826,7 +826,7 @@ class RobustPredictor:
         self,
         X: pd.DataFrame,
         y: pd.Series,
-        sample_weights: Optional[np.ndarray],
+        sample_weights: np.ndarray | None,
     ):
         """Train final models on all available data"""
         self.models = self._train_ensemble(X, y, sample_weights)
@@ -925,13 +925,10 @@ class RobustPredictor:
             return True
 
         # Check time since last train
-        if (
+        return bool(
             self.last_retrain
             and (datetime.now(UTC) - self.last_retrain).days > 7
-        ):
-            return True
-
-        return False
+        )
 
     def save(self, path: str) -> str:
         """
@@ -1154,14 +1151,14 @@ class DriftDetector:
         self._check_every = check_every
         self._p_threshold = p_threshold
         self._window: deque[float] = deque(maxlen=window_size)
-        self._reference: Optional[np.ndarray] = None
+        self._reference: np.ndarray | None = None
         self._update_count: int = 0
 
     def set_reference(self, data: np.ndarray) -> None:
         """Set the reference (baseline) distribution."""
         self._reference = np.asarray(data, dtype=float).copy()
 
-    def update(self, value: float) -> Optional[DriftResult]:
+    def update(self, value: float) -> DriftResult | None:
         """
         Add a new observation.  Returns DriftResult when the window is full
         and it is time to check (every check_every calls), else None.

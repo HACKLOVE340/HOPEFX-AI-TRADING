@@ -33,13 +33,12 @@ dropped at the end of `build_feature_matrix()`.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
 
 import numpy as np
 import pandas as pd
 
 try:
-    from scipy.fft import rfft, rfftfreq
+    from scipy.fft import rfft, rfftfreq  # noqa: F401
 
     _SCIPY_AVAILABLE = True
 except ImportError:
@@ -673,8 +672,8 @@ def build_feature_matrix(
     df: pd.DataFrame,
     fourier_window: int = 128,
     fourier_components: int = 5,
-    lag_periods: Optional[list[int]] = None,
-    rolling_windows: Optional[list[int]] = None,
+    lag_periods: list[int] | None = None,
+    rolling_windows: list[int] | None = None,
     swing_lookback: int = 20,
     drop_na: bool = True,
     include_microstructure: bool = True,

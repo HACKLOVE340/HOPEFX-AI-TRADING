@@ -13,8 +13,7 @@ Advanced Copy Trading Engine
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
-from typing import Dict, List, Optional
+from datetime import datetime, UTC
 import uuid
 from enum import Enum
 
@@ -43,7 +42,7 @@ class TraderProfile:
     avg_loss: float
     sharpe_ratio: float
     verified: bool = False
-    verification_date: Optional[datetime] = None
+    verification_date: datetime | None = None
     followers_count: int = 0
     commission_rate: float = 0.2  # 20% commission on profits
 
@@ -99,7 +98,7 @@ class SignalMessage:
     lot_size: float
     confidence: float  # 0-1
     timestamp: datetime
-    expiration_time: Optional[datetime] = None
+    expiration_time: datetime | None = None
     notes: str = ""
 
 
@@ -119,8 +118,8 @@ class ExecutedTrade:
     take_profit: float
     status: TradeStatus
     entry_time: datetime
-    exit_time: Optional[datetime] = None
-    exit_price: Optional[float] = None
+    exit_time: datetime | None = None
+    exit_price: float | None = None
     pnl: float = 0.0
     pnl_percent: float = 0.0
     commission: float = 0.0
@@ -274,10 +273,7 @@ class CopyTradingEngine:
 
         # Check max drawdown
         current_drawdown = self._calculate_current_drawdown(follower.follower_id)
-        if current_drawdown >= follower.max_account_drawdown:
-            return False
-
-        return True
+        return current_drawdown < follower.max_account_drawdown
 
     def _calculate_lot_size(
         self, signal: SignalMessage, follower: FollowerConfig
@@ -294,7 +290,7 @@ class CopyTradingEngine:
 
     def close_trade(
         self, follower_id: str, trade_id: str, exit_price: float
-    ) -> Optional[ExecutedTrade]:
+    ) -> ExecutedTrade | None:
         """Close an active trade"""
         if follower_id not in self.active_trades:
             return None
