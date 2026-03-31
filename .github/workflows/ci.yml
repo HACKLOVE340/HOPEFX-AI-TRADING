@@ -277,11 +277,14 @@ jobs:
           bandit -r api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/ \
             -f json -o bandit-report.json || true
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5
-        with:
-          file: ./coverage.xml
-          fail_ci_if_error: false
+      - name: Upload coverage to Qlty
+        if: matrix.python-version == '3.11'
+        env:
+          QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_COVERAGE_TOKEN }}
+        run: |
+          curl -fsSL https://qlty.sh/install.sh | bash
+          export PATH="$HOME/.qlty/bin:$PATH"
+          qlty coverage publish --token "$QLTY_COVERAGE_TOKEN" coverage.xml
 
   frontend:
     runs-on: ubuntu-latest
