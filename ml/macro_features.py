@@ -209,7 +209,7 @@ def add_macro_features(
     # ── DXY (stationary: returns + z-scores) ─────────────────────────────────
     if _has("dxy"):
         dxy = macro["dxy"]
-        df["macro_dxy_ret"] = dxy.pct_change().fillna(0.0)
+        df["macro_dxy_ret"] = dxy.pct_change(fill_method=None).fillna(0.0)
         df["macro_dxy_z20"] = _zscore(dxy, lookback)
         df["macro_dxy_z60"] = _zscore(dxy, lookback * 3)
     else:
@@ -219,7 +219,7 @@ def add_macro_features(
     if _has("vix"):
         vix = macro["vix"]
         df["macro_vix_level"] = vix
-        df["macro_vix_ret"] = vix.pct_change().fillna(0.0)
+        df["macro_vix_ret"] = vix.pct_change(fill_method=None).fillna(0.0)
         df["macro_vix_z20"] = _zscore(vix, lookback)
         df["macro_vix_spike"] = (vix > 30).astype(float)
     else:
@@ -253,7 +253,7 @@ def add_macro_features(
     # ── Real rate proxy ───────────────────────────────────────────────────────
     # Rising 10Y yield + falling TIPS = rising real rates = bearish gold.
     if _has("tips"):
-        tips_ret = macro["tips"].pct_change().fillna(0.0)
+        tips_ret = macro["tips"].pct_change(fill_method=None).fillna(0.0)
         df["macro_real_rate_proxy"] = df["macro_yield_10y_chg"] - tips_ret
     else:
         df["macro_real_rate_proxy"] = df["macro_yield_10y_chg"]
@@ -266,13 +266,13 @@ def add_macro_features(
         ("macro_usdcny_ret", "usdcny"),
     ]:
         if _has(col_in):
-            df[col_out] = macro[col_in].pct_change().fillna(0.0)
+            df[col_out] = macro[col_in].pct_change(fill_method=None).fillna(0.0)
         else:
             df[col_out] = 0.0
 
     if _has("spx"):
         spx = macro["spx"]
-        df["macro_spx_ret"] = spx.pct_change().fillna(0.0)
+        df["macro_spx_ret"] = spx.pct_change(fill_method=None).fillna(0.0)
         df["macro_spx_z20"] = _zscore(spx, lookback)
     else:
         df["macro_spx_ret"] = df["macro_spx_z20"] = 0.0
@@ -317,7 +317,7 @@ def add_regime_features(df: pd.DataFrame, lookback: int = 60) -> pd.DataFrame:
     """
     df = df.copy()
     close = df["close"] if "close" in df.columns else df.iloc[:, 0]
-    ret = close.pct_change()
+    ret = close.pct_change(fill_method=None)
 
     # Trend direction vs 50-day SMA
     sma50 = close.rolling(50).mean()

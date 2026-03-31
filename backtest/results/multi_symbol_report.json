@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-03-30T14:23:07.112796+00:00",
+  "run_at": "2026-03-31T05:29:21.679536+00:00",
   "years": 3,
   "oos_frac": 0.4,
   "target_n": 600,
@@ -9,15 +9,15 @@
     {
       "symbol": "XAU/USD",
       "ticker": "GC=F",
-      "n_trades": 35,
-      "win_rate": 0.6571,
-      "mean_pnl_pct": 0.004823,
-      "std_pnl_pct": 0.018622,
-      "sharpe": 4.1117,
-      "max_drawdown": 0.0591,
-      "accuracy": 0.5812,
-      "f1": 0.7352,
-      "auc": 0.4971,
+      "n_trades": 13,
+      "win_rate": 0.6154,
+      "mean_pnl_pct": 0.005783,
+      "std_pnl_pct": 0.012548,
+      "sharpe": 7.3164,
+      "max_drawdown": 0.012,
+      "accuracy": 0.5848,
+      "f1": 0.738,
+      "auc": 0.5079,
       "oos_bars": 277,
       "train_bars": 416,
       "feature_count": 193
@@ -25,53 +25,74 @@
     {
       "symbol": "BTC/USD",
       "ticker": "BTC-USD",
-      "n_trades": 70,
-      "win_rate": 0.5143,
-      "mean_pnl_pct": 0.0036,
-      "std_pnl_pct": 0.02524,
-      "sharpe": 2.2643,
-      "max_drawdown": 0.1304,
-      "accuracy": 0.5145,
-      "f1": 0.5768,
-      "auc": 0.5128,
+      "n_trades": 87,
+      "win_rate": 0.4828,
+      "mean_pnl_pct": -2e-06,
+      "std_pnl_pct": 0.026216,
+      "sharpe": -0.0009,
+      "max_drawdown": 0.2386,
+      "accuracy": 0.5242,
+      "f1": 0.5276,
+      "auc": 0.5359,
       "oos_bars": 414,
-      "train_bars": 622,
+      "train_bars": 621,
       "feature_count": 193
     },
     {
       "symbol": "ETH/USD",
       "ticker": "ETH-USD",
-      "n_trades": 161,
-      "win_rate": 0.5093,
-      "mean_pnl_pct": 0.002433,
-      "std_pnl_pct": 0.040294,
-      "sharpe": 0.9586,
-      "max_drawdown": 0.5463,
-      "accuracy": 0.5411,
-      "f1": 0.6154,
-      "auc": 0.5346,
+      "n_trades": 136,
+      "win_rate": 0.5294,
+      "mean_pnl_pct": 0.002214,
+      "std_pnl_pct": 0.042862,
+      "sharpe": 0.8199,
+      "max_drawdown": 0.4261,
+      "accuracy": 0.529,
+      "f1": 0.6243,
+      "auc": 0.5141,
       "oos_bars": 414,
-      "train_bars": 622,
+      "train_bars": 621,
       "feature_count": 193
     }
   ],
   "pooled": {
-    "n_total_trades": 266,
-    "pooled_sharpe": 2.5831,
-    "pooled_sharpe_se": 0.1277,
-    "pooled_mean_pnl": 0.005322,
-    "pooled_std_pnl": 0.032704,
+    "n_total_trades": 236,
+    "pooled_sharpe": 1.339,
+    "pooled_sharpe_se": 0.0896,
+    "pooled_mean_pnl": 0.002943,
+    "pooled_std_pnl": 0.034888,
     "sharpe_gate_passed": false,
-    "sharpe_credible": false,
+    "sharpe_credible": true,
     "target_n": 600,
-    "n_required_for_se_010": 434,
-    "message": "Sharpe gate BLOCKED: N=266 < 600. SE=0.128 (SE<=0.10 requires N>=434).",
+    "n_required_for_se_010": 190,
+    "message": "[HONEST POOL \u2014 XAU/USD excluded] Sharpe gate BLOCKED: N=223 < 600. SE=0.088 (SE<=0.10 requires N>=174).",
     "_validation": {
-      "outlier_symbols": [],
-      "outlier_reasons": {},
-      "honest_pooled": null,
-      "gate_uses_honest_pool": false,
-      "note": "No outliers detected \u2014 full pool is authoritative."
+      "outlier_symbols": [
+        "XAU/USD"
+      ],
+      "outlier_reasons": {
+        "XAU/USD": "Sharpe=7.32 > 5.0 (implausible for daily bars)"
+      },
+      "honest_pooled": {
+        "n_total_trades": 223,
+        "pooled_sharpe": 1.2127,
+        "pooled_sharpe_se": 0.0882,
+        "pooled_mean_pnl": 0.002745,
+        "pooled_std_pnl": 0.035937,
+        "sharpe_gate_passed": false,
+        "sharpe_credible": true,
+        "target_n": 600,
+        "n_required_for_se_010": 174,
+        "message": "Sharpe gate BLOCKED: N=223 < 600. SE=0.088 (SE<=0.10 requires N>=174).",
+        "excluded_symbols": [
+          "XAU/USD"
+        ],
+        "exclusion_reasons": {
+          "XAU/USD": "Sharpe=7.32 > 5.0 (implausible for daily bars)"
+        }
+      },
+      "gate_uses_honest_pool": true,
+      "note": "Symbols ['XAU/USD'] have implausible Sharpe ratios and are excluded from the honest pooled Sharpe. The gate check uses the honest pool. These results must be independently validated before citing."
     }
   }
 }

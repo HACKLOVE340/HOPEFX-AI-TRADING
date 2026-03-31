@@ -144,7 +144,17 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning
+    # maxmemory: 512 MB cap prevents OOM on VPS. allkeys-lru evicts least-recently-used
+    # keys when full — safe for our TTL-based caching pattern.
+    # tcp-keepalive: detect dead connections within 60s.
+    command: >
+      redis-server
+      --save 60 1
+      --loglevel warning
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 60
+      --timeout 300
     volumes:
       - redis_data:/data
     ports:

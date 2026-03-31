@@ -511,7 +511,7 @@ class MacroCalendarEngine:
                 for e in self._events
                 if e.impact in (MacroImpact.HIGH, MacroImpact.MEDIUM)
             ]
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: self._redis.setex(
                     "hopefx:macro_calendar", 86400, json.dumps(payload)
@@ -523,11 +523,11 @@ class MacroCalendarEngine:
                 for e in self._events
                 if e.impact == MacroImpact.HIGH
             ]
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None, lambda: self._redis.delete("hopefx:news_events"),
             )
             if high_times:
-                await asyncio.get_event_loop().run_in_executor(
+                await asyncio.get_running_loop().run_in_executor(
                     None,
                     lambda: self._redis.rpush("hopefx:news_events", *high_times),
                 )

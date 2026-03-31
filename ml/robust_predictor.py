@@ -659,7 +659,7 @@ class RobustPredictor:
         for lag in [1, 2, 5, 10, 20]:
             features[f"return_lag_{lag}"] = X["close"].pct_change(lag).shift(1)
             features[f"volatility_{lag}"] = (
-                X["close"].pct_change().rolling(lag).std().shift(1)
+                X["close"].pct_change(fill_method=None).rolling(lag).std().shift(1)
             )
 
         # ── Technical indicators (past data only) ─────────────────────────────
@@ -1033,7 +1033,7 @@ class RegimeDetector:
 
     def detect(self, X: pd.DataFrame) -> np.ndarray:
         """Detect regime for each time point"""
-        returns = X["close"].pct_change()
+        returns = X["close"].pct_change(fill_method=None)
         volatility = returns.rolling(self.lookback).std()
         trend = (
             X["close"]

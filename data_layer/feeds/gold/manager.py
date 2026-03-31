@@ -357,7 +357,7 @@ class GoldFeedManager:
                 "epoch":      tick.timestamp.timestamp(),
             }
             serialised = json.dumps(payload)
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             # Publish to pub/sub channel for WebSocket consumers
             await loop.run_in_executor(
                 None,

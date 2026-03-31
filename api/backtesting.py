@@ -604,9 +604,9 @@ async def refresh_reconciled_investigation(
 
 
 class ReplayBacktestRequest(BaseModel):
-    start_date:      str   = Field(..., example="2022-01-01")
-    end_date:        str   = Field(..., example="2022-12-31")
-    symbol:          str   = Field("XAU_USD", example="XAU_USD")
+    start_date:      str   = Field(..., json_schema_extra={"example": "2022-01-01"})
+    end_date:        str   = Field(..., json_schema_extra={"example": "2022-12-31"})
+    symbol:          str   = Field("XAU_USD", json_schema_extra={"example": "XAU_USD"})
     initial_capital: float = Field(10_000.0, gt=0)
     strategy:        str   = Field("microstructure_heuristic",
                                    description="Strategy name registered in strategy registry")

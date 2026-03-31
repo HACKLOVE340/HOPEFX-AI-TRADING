@@ -902,9 +902,9 @@ class AdvancedRiskAnalytics:
         daily_return = expected_return / 252
         daily_vol = volatility / np.sqrt(252)
 
-        # Generate random walks
-        np.random.seed(42)  # Reproducibility
-        random_returns = np.random.normal(
+        # Generate random walks — use local RNG to avoid mutating global state
+        rng = np.random.default_rng(42)
+        random_returns = rng.normal(
             daily_return,
             daily_vol,
             (num_simulations, time_horizon),
@@ -974,9 +974,9 @@ class AdvancedRiskAnalytics:
         # Cholesky decomposition for correlated random variables
         L = np.linalg.cholesky(correlations)
 
-        # Generate correlated random returns
-        np.random.seed(42)
-        uncorrelated = np.random.normal(0, 1, (num_simulations, time_horizon, n_assets))
+        # Generate correlated random returns — use local RNG to avoid mutating global state
+        rng = np.random.default_rng(42)
+        uncorrelated = rng.standard_normal((num_simulations, time_horizon, n_assets))
         correlated = np.einsum("ijk,lk->ijl", uncorrelated, L)
 
         # Apply mean and volatility

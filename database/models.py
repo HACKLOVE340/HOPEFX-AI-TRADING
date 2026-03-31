@@ -31,7 +31,10 @@ try:
         create_engine,
     )
     from sqlalchemy.sql import func
-    from sqlalchemy.ext.declarative import declarative_base
+    try:
+        from sqlalchemy.orm import declarative_base
+    except ImportError:
+        from sqlalchemy.ext.declarative import declarative_base  # SQLAlchemy < 2.0
     from sqlalchemy.orm import relationship, sessionmaker
 
     SQLALCHEMY_AVAILABLE = True

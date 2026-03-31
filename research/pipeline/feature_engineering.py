@@ -518,7 +518,7 @@ def add_volume_profile(df: pd.DataFrame) -> pd.DataFrame:
     # Volume-weighted momentum
     sign_ret = np.sign(c.diff())
     d["vol_price_trend"] = (sign_ret * v).rolling(20).sum()
-    d["vol_weighted_ret"] = (c.pct_change() * v).rolling(5).sum()
+    d["vol_weighted_ret"] = (c.pct_change(fill_method=None) * v).rolling(5).sum()
 
     # Volume surge
     vol_mean = v.rolling(20).mean().replace(0, np.nan)
@@ -582,10 +582,10 @@ def add_microstructure_proxy(df: pd.DataFrame) -> pd.DataFrame:
     # Price impact proxy
     vol_mean = v.rolling(20).mean().replace(0, np.nan)
     vol_surge = (v / vol_mean).replace(0, np.nan)
-    d["price_impact"] = c.pct_change().abs() / vol_surge
+    d["price_impact"] = c.pct_change(fill_method=None).abs() / vol_surge
 
     # Amihud illiquidity ratio (|ret| / volume)
-    d["amihud"] = c.pct_change().abs() / v.replace(0, np.nan)
+    d["amihud"] = c.pct_change(fill_method=None).abs() / v.replace(0, np.nan)
     d["amihud_ma20"] = d["amihud"].rolling(20).mean()
 
     return d

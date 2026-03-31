@@ -547,15 +547,45 @@ class HopeFXEngine:
 
         Accumulates ticks into a rolling OHLCV window, then on every
         BARS_PER_SIGNAL tick fires brain.process_bar() → risk gate → order.
+
+        Price enrichment: NuclearStreamer delivers a single mid price with no
+        spread. We enrich bid/ask/spread from the data layer orchestrator's
+        consensus tick (which has real bid/ask from GoldAPI). This ensures the
+        OHLCV window has realistic spread-derived high/low rather than doji bars.
         """
         sym_key = symbol.replace("/", "_")
 
         if sym_key not in self._ohlcv_window:
             self._ohlcv_window[sym_key] = deque(maxlen=500)
 
+        # Enrich with real bid/ask from data layer orchestrator when available.
+        # NuclearStreamer delivers bid=ask=mid (no spread). The orchestrator's
+        # consensus tick has real bid/ask from GoldAPI — use it to compute a
+        # realistic spread for the OHLCV bar's high/low.
+        real_bid, real_ask, spread = bid, ask, 0.0
+        if self._dl_orchestrator:
+            try:
+                dl_tick = self._dl_orchestrator.get_latest_tick()
+                if dl_tick and dl_tick.is_valid():
+                    # Use orchestrator mid if NuclearStreamer price is within 0.5%
+                    # (sanity check — reject if sources diverge significantly)
+                    if abs(dl_tick.mid - mid) / max(mid, 1.0) < 0.005:
+                        real_bid = dl_tick.bid
+                        real_ask = dl_tick.ask
+                        spread   = dl_tick.spread
+                        mid      = dl_tick.mid
+            except Exception:
+                pass  # fall back to NuclearStreamer price
+
+        # Build OHLCV bar: use spread to give high/low realistic range.
+        # Without spread, every bar is a doji — the ML model gets zero ATR signal.
+        half_spread = spread / 2.0 if spread > 0 else mid * 0.0001
         self._ohlcv_window[sym_key].append({
-            "open": mid, "high": mid, "low": mid,
-            "close": mid, "volume": 1.0,
+            "open":   mid,
+            "high":   mid + half_spread,
+            "low":    mid - half_spread,
+            "close":  mid,
+            "volume": 1.0,
         })
 
         self._bar_count += 1

@@ -525,7 +525,7 @@ class MultiAssetBacktester:
         equity_df.set_index("timestamp", inplace=True)
 
         # Calculate performance metrics
-        returns = equity_df["equity"].pct_change().dropna()
+        returns = equity_df["equity"].pct_change(fill_method=None).dropna()
 
         print("\nBacktest complete:")
         print(f"  Final equity: ${equity_df['equity'].iloc[-1]:,.2f}")
