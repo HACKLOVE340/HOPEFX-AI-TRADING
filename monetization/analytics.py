@@ -701,7 +701,6 @@ class RevenueAnalytics:
             },
         }
 
-
     # ------------------------------------------------------------------
     # Prometheus helpers
     # ------------------------------------------------------------------
@@ -736,16 +735,16 @@ class RevenueAnalytics:
 
         Increments the hopefx_payment_failures_total Prometheus counter.
         """
-        logger.warning(
-            "analytics.payment_failure user=%s amount=%s", user_id, amount
-        )
+        logger.warning("analytics.payment_failure user=%s amount=%s", user_id, amount)
         if _PROM_AVAILABLE:
             try:
                 _PROM_PAYMENT_FAILURES.inc()
             except Exception as exc:
                 logger.debug("analytics.payment_failure_metric_failed: %s", exc)
 
-    def record_affiliate_commission(self, amount: float, affiliate_id: str = "") -> None:
+    def record_affiliate_commission(
+        self, amount: float, affiliate_id: str = ""
+    ) -> None:
         """
         Record an affiliate commission payout.
 
@@ -753,7 +752,8 @@ class RevenueAnalytics:
         """
         logger.info(
             "analytics.affiliate_commission affiliate=%s amount=%s",
-            affiliate_id, amount,
+            affiliate_id,
+            amount,
         )
         if _PROM_AVAILABLE:
             try:

@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 try:
     import stripe as _stripe  # type: ignore
+
     _STRIPE_AVAILABLE = True
 except ImportError:
     _stripe = None  # type: ignore
@@ -117,7 +118,8 @@ class Payment:
         self.status = PaymentStatus.PENDING
         logger.info(
             "payment.retry_scheduled id=%s attempt=%d next=%s",
-            self.payment_id, self.retry_count,
+            self.payment_id,
+            self.retry_count,
             self.next_retry_at.isoformat(),
         )
 
@@ -132,11 +134,15 @@ class Payment:
             "payment_method": self.payment_method,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
-            "processed_at": self.processed_at.isoformat() if self.processed_at else None,
+            "processed_at": self.processed_at.isoformat()
+            if self.processed_at
+            else None,
             "stripe_payment_intent_id": self.stripe_payment_intent_id,
             "error_message": self.error_message,
             "retry_count": self.retry_count,
-            "next_retry_at": self.next_retry_at.isoformat() if self.next_retry_at else None,
+            "next_retry_at": self.next_retry_at.isoformat()
+            if self.next_retry_at
+            else None,
         }
 
 
@@ -199,7 +205,11 @@ class PaymentProcessor:
         self._payments[payment_id] = payment
         logger.info(
             "payment.created id=%s user=%s tier=%s amount=%s code=%s",
-            payment_id, user_id, tier.value, invoice.amount, access_code_obj.code,
+            payment_id,
+            user_id,
+            tier.value,
+            invoice.amount,
+            access_code_obj.code,
         )
         return payment, invoice, access_code_obj
 
@@ -222,9 +232,7 @@ class PaymentProcessor:
         STRIPE_SECRET_KEY is not configured.
         """
         if not _STRIPE_AVAILABLE:
-            raise RuntimeError(
-                "stripe SDK not installed — run: pip install stripe"
-            )
+            raise RuntimeError("stripe SDK not installed — run: pip install stripe")
         if not self._stripe_api_key:
             raise RuntimeError(
                 "STRIPE_SECRET_KEY is not set. "
@@ -251,7 +259,9 @@ class PaymentProcessor:
                 )
             else:
                 intent = _stripe.PaymentIntent.create(**create_kwargs)
-            logger.info("stripe.payment_intent.created id=%s amount=%s", intent.id, amount)
+            logger.info(
+                "stripe.payment_intent.created id=%s amount=%s", intent.id, amount
+            )
             return intent.id
         except _stripe.error.StripeError as exc:
             logger.error("stripe.payment_intent.error: %s", exc)
@@ -296,22 +306,26 @@ class PaymentProcessor:
                 sub.status = SubscriptionStatus.ACTIVE
                 logger.info("subscription.activated sub_id=%s", sub.subscription_id)
 
-            self._handle_payment_succeeded({
-                "payment_id": payment_id,
-                "amount": float(payment.amount),
-                "user_id": payment.user_id,
-                "subscription_id": payment.subscription_id,
-            })
+            self._handle_payment_succeeded(
+                {
+                    "payment_id": payment_id,
+                    "amount": float(payment.amount),
+                    "user_id": payment.user_id,
+                    "subscription_id": payment.subscription_id,
+                }
+            )
             return True
 
         except Exception as exc:
             payment.mark_failed(str(exc))
-            self._handle_payment_failed({
-                "payment_id": payment_id,
-                "error": str(exc),
-                "user_id": payment.user_id,
-                "subscription_id": payment.subscription_id,
-            })
+            self._handle_payment_failed(
+                {
+                    "payment_id": payment_id,
+                    "error": str(exc),
+                    "user_id": payment.user_id,
+                    "subscription_id": payment.subscription_id,
+                }
+            )
             return False
 
     # ------------------------------------------------------------------
@@ -337,13 +351,18 @@ class PaymentProcessor:
         if payment.status != PaymentStatus.SUCCEEDED:
             logger.error(
                 "refund.invalid_status id=%s status=%s",
-                payment_id, payment.status,
+                payment_id,
+                payment.status,
             )
             return False
 
         refund_amount = amount or payment.amount
 
-        if _STRIPE_AVAILABLE and self._stripe_api_key and payment.stripe_payment_intent_id:
+        if (
+            _STRIPE_AVAILABLE
+            and self._stripe_api_key
+            and payment.stripe_payment_intent_id
+        ):
             _stripe.api_key = self._stripe_api_key
             refund_kwargs: Dict = {
                 "payment_intent": payment.stripe_payment_intent_id,
@@ -355,7 +374,9 @@ class PaymentProcessor:
                 refund = _stripe.Refund.create(**refund_kwargs)
                 logger.info(
                     "stripe.refund.created refund_id=%s payment_id=%s amount=%s",
-                    refund.id, payment_id, refund_amount,
+                    refund.id,
+                    payment_id,
+                    refund_amount,
                 )
             except _stripe.error.StripeError as exc:
                 logger.error("stripe.refund.error id=%s: %s", payment_id, exc)
@@ -364,7 +385,8 @@ class PaymentProcessor:
             logger.info(
                 "refund.logged_only id=%s amount=%s "
                 "(Stripe not configured — process manually in Stripe Dashboard)",
-                payment_id, refund_amount,
+                payment_id,
+                refund_amount,
             )
 
         payment.status = PaymentStatus.REFUNDED
@@ -399,14 +421,17 @@ class PaymentProcessor:
                     sub.suspend()
                     logger.warning(
                         "dunning.suspended user=%s sub=%s after %d retries",
-                        payment.user_id, payment.subscription_id, payment.retry_count,
+                        payment.user_id,
+                        payment.subscription_id,
+                        payment.retry_count,
                     )
                     self._send_dunning_final_email(payment)
                 continue
 
             logger.info(
                 "dunning.retry id=%s attempt=%d",
-                payment.payment_id, payment.retry_count + 1,
+                payment.payment_id,
+                payment.retry_count + 1,
             )
             success = self.process_payment(payment.payment_id)
             if not success and payment.retry_count < _MAX_RETRIES:
@@ -449,6 +474,7 @@ class PaymentProcessor:
 
         try:
             from notifications.email_triggers import send_daily_report_email
+
             sub = subscription_manager.get_subscription(subscription_id)
             recipient = getattr(sub, "email", "") if sub else ""
             if recipient:
@@ -473,11 +499,14 @@ class PaymentProcessor:
 
         logger.error(
             "webhook.payment_failed id=%s user=%s error=%s",
-            payment_id, user_id, error,
+            payment_id,
+            user_id,
+            error,
         )
 
         try:
             from notifications.email_triggers import send_risk_halt_email
+
             sub = subscription_manager.get_subscription(subscription_id)
             recipient = getattr(sub, "email", "") if sub else ""
             if recipient:
@@ -532,13 +561,15 @@ class PaymentProcessor:
     def _send_dunning_retry_email(self, payment: Payment) -> None:
         try:
             from notifications.email_triggers import send_risk_halt_email
+
             sub = subscription_manager.get_subscription(payment.subscription_id)
             recipient = getattr(sub, "email", "") if sub else ""
             if not recipient:
                 return
             next_str = (
                 payment.next_retry_at.strftime("%Y-%m-%d %H:%M UTC")
-                if payment.next_retry_at else "soon"
+                if payment.next_retry_at
+                else "soon"
             )
             send_risk_halt_email(
                 reason=(
@@ -556,6 +587,7 @@ class PaymentProcessor:
     def _send_dunning_final_email(self, payment: Payment) -> None:
         try:
             from notifications.email_triggers import send_risk_halt_email
+
             sub = subscription_manager.get_subscription(payment.subscription_id)
             recipient = getattr(sub, "email", "") if sub else ""
             if not recipient:
@@ -585,12 +617,22 @@ class PaymentProcessor:
 
     def get_payment_stats(self) -> Dict:
         total = len(self._payments)
-        succeeded = sum(1 for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED)
-        failed = sum(1 for p in self._payments.values() if p.status == PaymentStatus.FAILED)
-        pending = sum(1 for p in self._payments.values() if p.status == PaymentStatus.PENDING)
-        refunded = sum(1 for p in self._payments.values() if p.status == PaymentStatus.REFUNDED)
+        succeeded = sum(
+            1 for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED
+        )
+        failed = sum(
+            1 for p in self._payments.values() if p.status == PaymentStatus.FAILED
+        )
+        pending = sum(
+            1 for p in self._payments.values() if p.status == PaymentStatus.PENDING
+        )
+        refunded = sum(
+            1 for p in self._payments.values() if p.status == PaymentStatus.REFUNDED
+        )
         total_revenue = sum(
-            p.amount for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED
+            p.amount
+            for p in self._payments.values()
+            if p.status == PaymentStatus.SUCCEEDED
         )
         return {
             "total_payments": total,

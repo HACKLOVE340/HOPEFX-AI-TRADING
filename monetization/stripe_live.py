@@ -46,7 +46,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -54,27 +54,48 @@ logger = logging.getLogger(__name__)
 
 # ISO 4217 codes supported for presentment
 SUPPORTED_CURRENCIES = {
-    "USD", "EUR", "GBP", "AED", "NGN",
-    "JPY", "CHF", "CAD", "AUD", "SGD",
+    "USD",
+    "EUR",
+    "GBP",
+    "AED",
+    "NGN",
+    "JPY",
+    "CHF",
+    "CAD",
+    "AUD",
+    "SGD",
 }
 
 # Stripe minimum charge amounts in smallest currency unit (cents / kobo / etc.)
 # https://stripe.com/docs/currencies#minimum-and-maximum-charge-amounts
 CURRENCY_MINIMUMS: Dict[str, int] = {
-    "USD": 50,    # $0.50
-    "EUR": 50,    # €0.50
-    "GBP": 30,    # £0.30
-    "AED": 200,   # AED 2.00
+    "USD": 50,  # $0.50
+    "EUR": 50,  # €0.50
+    "GBP": 30,  # £0.30
+    "AED": 200,  # AED 2.00
     "NGN": 5000,  # ₦50.00
-    "JPY": 50,    # ¥50 (zero-decimal)
-    "CHF": 50,    # CHF 0.50
-    "CAD": 50,    # CA$0.50
-    "AUD": 50,    # A$0.50
-    "SGD": 50,    # S$0.50
+    "JPY": 50,  # ¥50 (zero-decimal)
+    "CHF": 50,  # CHF 0.50
+    "CAD": 50,  # CA$0.50
+    "AUD": 50,  # A$0.50
+    "SGD": 50,  # S$0.50
 }
 
 # Zero-decimal currencies (amount is already in smallest unit)
-ZERO_DECIMAL_CURRENCIES = {"JPY", "KRW", "VND", "BIF", "CLP", "GNF", "MGA", "PYG", "RWF", "UGX", "XAF", "XOF"}
+ZERO_DECIMAL_CURRENCIES = {
+    "JPY",
+    "KRW",
+    "VND",
+    "BIF",
+    "CLP",
+    "GNF",
+    "MGA",
+    "PYG",
+    "RWF",
+    "UGX",
+    "XAF",
+    "XOF",
+}
 
 # Static exchange rates vs USD (updated periodically — use a live FX API in production)
 _FX_RATES_VS_USD: Dict[str, float] = {
@@ -211,6 +232,7 @@ class StripeProductionClient:
         if self._key:
             try:
                 import stripe as _s
+
                 _s.api_key = self._key
                 _s.api_version = "2024-04-10"  # pin to stable version
                 self._stripe_available = True
@@ -288,6 +310,7 @@ class StripeProductionClient:
         if not self._stripe_available:
             # Simulation mode
             import uuid
+
             pi_id = f"pi_sim_{uuid.uuid4().hex[:20]}"
             logger.info(
                 "Stripe simulation: PI %s amount=%d %s", pi_id, amount_cents, currency
@@ -362,7 +385,9 @@ class StripeProductionClient:
                 error_message=str(exc),
             )
 
-    def verify_webhook(self, payload: bytes, sig_header: str) -> Optional[Dict[str, Any]]:
+    def verify_webhook(
+        self, payload: bytes, sig_header: str
+    ) -> Optional[Dict[str, Any]]:
         """
         Verify a Stripe webhook signature and return the event dict.
 
@@ -374,8 +399,11 @@ class StripeProductionClient:
             Parsed event dict, or None if signature verification fails.
         """
         if not self._webhook_secret:
-            logger.warning("STRIPE_WEBHOOK_SECRET not set — skipping signature verification")
+            logger.warning(
+                "STRIPE_WEBHOOK_SECRET not set — skipping signature verification"
+            )
             import json
+
             try:
                 return json.loads(payload)
             except Exception:
@@ -383,6 +411,7 @@ class StripeProductionClient:
 
         if not self._stripe_available:
             import json
+
             try:
                 return json.loads(payload)
             except Exception:
@@ -390,6 +419,7 @@ class StripeProductionClient:
 
         try:
             import stripe
+
             event = stripe.Webhook.construct_event(
                 payload, sig_header, self._webhook_secret
             )
@@ -430,20 +460,30 @@ class StripeProductionClient:
         amount = data.get("amount", 0)
         currency = data.get("currency", "usd").upper()
         customer = data.get("customer", "")
-        logger.info("Payment succeeded: PI=%s amount=%d %s customer=%s", pi_id, amount, currency, customer)
+        logger.info(
+            "Payment succeeded: PI=%s amount=%d %s customer=%s",
+            pi_id,
+            amount,
+            currency,
+            customer,
+        )
         return {"handled": True, "action": "payment_succeeded", "pi_id": pi_id}
 
     def _on_payment_failed(self, data: Dict) -> Dict:
         pi_id = data.get("id", "")
         error = data.get("last_payment_error", {})
-        logger.warning("Payment failed: PI=%s error=%s", pi_id, error.get("message", ""))
+        logger.warning(
+            "Payment failed: PI=%s error=%s", pi_id, error.get("message", "")
+        )
         return {"handled": True, "action": "payment_failed", "pi_id": pi_id}
 
     def _on_subscription_created(self, data: Dict) -> Dict:
         sub_id = data.get("id", "")
         customer = data.get("customer", "")
         status = data.get("status", "")
-        logger.info("Subscription created: %s customer=%s status=%s", sub_id, customer, status)
+        logger.info(
+            "Subscription created: %s customer=%s status=%s", sub_id, customer, status
+        )
         return {"handled": True, "action": "subscription_created", "sub_id": sub_id}
 
     def _on_subscription_updated(self, data: Dict) -> Dict:
@@ -477,7 +517,9 @@ class StripeProductionClient:
         fraud_type = data.get("fraud_type", "")
         logger.warning(
             "Radar fraud warning: %s PI=%s type=%s — flagging for manual review",
-            warning_id, pi_id, fraud_type,
+            warning_id,
+            pi_id,
+            fraud_type,
         )
         # In production: suspend the associated subscription, notify compliance team
         return {

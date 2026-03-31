@@ -522,7 +522,9 @@ class GeopoliticalRiskProvider:
                 )
                 events.extend(layer_events)
                 logger.debug(
-                    "World Monitor layer=%s returned %d features", layer, len(layer_events)
+                    "World Monitor layer=%s returned %d features",
+                    layer,
+                    len(layer_events),
                 )
             except requests.exceptions.HTTPError as exc:
                 msg = f"layer={layer} HTTP {exc.response.status_code}: {exc}"
@@ -561,11 +563,11 @@ class GeopoliticalRiskProvider:
 
     _SEVERITY_MAP: Dict[str, RiskSeverity] = {
         "critical": RiskSeverity.CRITICAL,
-        "high":     RiskSeverity.HIGH,
-        "medium":   RiskSeverity.MEDIUM,
+        "high": RiskSeverity.HIGH,
+        "medium": RiskSeverity.MEDIUM,
         "moderate": RiskSeverity.MEDIUM,
-        "low":      RiskSeverity.LOW,
-        "info":     RiskSeverity.INFO,
+        "low": RiskSeverity.LOW,
+        "info": RiskSeverity.INFO,
         "informational": RiskSeverity.INFO,
     }
 
@@ -579,25 +581,33 @@ class GeopoliticalRiskProvider:
         for feat in features:
             try:
                 props = feat.get("properties") or {}
-                geom  = feat.get("geometry") or {}
+                geom = feat.get("geometry") or {}
 
-                title       = str(props.get("title") or props.get("name") or "Untitled event")
-                description = str(props.get("description") or props.get("summary") or "")
-                region      = str(props.get("region") or props.get("area") or "Global")
+                title = str(props.get("title") or props.get("name") or "Untitled event")
+                description = str(
+                    props.get("description") or props.get("summary") or ""
+                )
+                region = str(props.get("region") or props.get("area") or "Global")
 
                 # Parse countries — may be a list or comma-separated string
                 raw_countries = props.get("countries") or props.get("country") or ""
                 if isinstance(raw_countries, list):
                     countries = [c.strip() for c in raw_countries if c]
                 else:
-                    countries = [c.strip() for c in str(raw_countries).split(",") if c.strip()]
+                    countries = [
+                        c.strip() for c in str(raw_countries).split(",") if c.strip()
+                    ]
 
                 # Parse severity
-                raw_sev  = str(props.get("severity") or props.get("level") or "medium").lower()
+                raw_sev = str(
+                    props.get("severity") or props.get("level") or "medium"
+                ).lower()
                 severity = self._SEVERITY_MAP.get(raw_sev, RiskSeverity.MEDIUM)
 
                 # Parse timestamp
-                raw_ts = props.get("date") or props.get("timestamp") or props.get("updated")
+                raw_ts = (
+                    props.get("date") or props.get("timestamp") or props.get("updated")
+                )
                 try:
                     ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
                     if ts.tzinfo is None:
@@ -613,7 +623,9 @@ class GeopoliticalRiskProvider:
                         coordinates = (float(coords[1]), float(coords[0]))
 
                 # Confidence from API quality score (0–1), default 0.8
-                confidence = float(props.get("confidence") or props.get("quality") or 0.8)
+                confidence = float(
+                    props.get("confidence") or props.get("quality") or 0.8
+                )
                 confidence = max(0.0, min(1.0, confidence))
 
                 event = GeopoliticalEvent(

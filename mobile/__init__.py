@@ -57,7 +57,7 @@ def create_wired_mobile(app_state: object) -> dict:
     """
     return {
         "trading_engine": MobileTradingEngine(app_state=app_state),
-        "analytics":      MobileAnalytics(app_state=app_state, enable_background_flush=True),
+        "analytics": MobileAnalytics(app_state=app_state, enable_background_flush=True),
     }
 
 

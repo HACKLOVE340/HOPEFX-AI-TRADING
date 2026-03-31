@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import ast
 import logging
-import secrets
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -34,10 +33,20 @@ from typing import Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # ── Forbidden imports that disqualify a strategy ─────────────────────────────
-_FORBIDDEN_MODULES = frozenset({
-    "os", "subprocess", "socket", "shutil", "ctypes",
-    "multiprocessing", "threading", "importlib", "exec", "eval",
-})
+_FORBIDDEN_MODULES = frozenset(
+    {
+        "os",
+        "subprocess",
+        "socket",
+        "shutil",
+        "ctypes",
+        "multiprocessing",
+        "threading",
+        "importlib",
+        "exec",
+        "eval",
+    }
+)
 
 
 class AuditStatus(str, Enum):
@@ -62,7 +71,7 @@ class AuditCheck:
     name: str
     passed: bool
     message: str
-    severity: str = "error"   # "error" | "warning" | "info"
+    severity: str = "error"  # "error" | "warning" | "info"
 
 
 @dataclass
@@ -85,12 +94,18 @@ class AuditReport:
             "status": self.status.value,
             "passed": self.passed,
             "checks": [
-                {"name": c.name, "passed": c.passed,
-                 "message": c.message, "severity": c.severity}
+                {
+                    "name": c.name,
+                    "passed": c.passed,
+                    "message": c.message,
+                    "severity": c.severity,
+                }
                 for c in self.checks
             ],
             "started_at": self.started_at.isoformat(),
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
             "reviewer_id": self.reviewer_id,
             "reviewer_notes": self.reviewer_notes,
         }
@@ -161,7 +176,9 @@ class StrategyAuditor:
     def _check_syntax(self, code: str) -> AuditCheck:
         try:
             ast.parse(code)
-            return AuditCheck("syntax_check", True, "Strategy code is syntactically valid")
+            return AuditCheck(
+                "syntax_check", True, "Strategy code is syntactically valid"
+            )
         except SyntaxError as e:
             return AuditCheck("syntax_check", False, f"Syntax error: {e}", "error")
 
@@ -186,44 +203,62 @@ class StrategyAuditor:
 
         if found:
             return AuditCheck(
-                "security_check", False,
-                f"Forbidden imports detected: {', '.join(found)}", "error"
+                "security_check",
+                False,
+                f"Forbidden imports detected: {', '.join(found)}",
+                "error",
             )
         return AuditCheck("security_check", True, "No forbidden imports found")
 
     def _check_sharpe(self, bt: Dict) -> AuditCheck:
         sharpe = float(bt.get("sharpe_ratio", 0))
         if sharpe >= self.MIN_SHARPE:
-            return AuditCheck("sharpe_gate", True, f"Sharpe {sharpe:.2f} >= {self.MIN_SHARPE}")
+            return AuditCheck(
+                "sharpe_gate", True, f"Sharpe {sharpe:.2f} >= {self.MIN_SHARPE}"
+            )
         return AuditCheck(
-            "sharpe_gate", False,
-            f"Sharpe {sharpe:.2f} below minimum {self.MIN_SHARPE}", "error"
+            "sharpe_gate",
+            False,
+            f"Sharpe {sharpe:.2f} below minimum {self.MIN_SHARPE}",
+            "error",
         )
 
     def _check_drawdown(self, bt: Dict) -> AuditCheck:
         dd = abs(float(bt.get("max_drawdown", 1.0)))
         if dd <= self.MAX_DRAWDOWN:
-            return AuditCheck("drawdown_gate", True, f"Max drawdown {dd:.1%} <= {self.MAX_DRAWDOWN:.0%}")
+            return AuditCheck(
+                "drawdown_gate",
+                True,
+                f"Max drawdown {dd:.1%} <= {self.MAX_DRAWDOWN:.0%}",
+            )
         return AuditCheck(
-            "drawdown_gate", False,
-            f"Max drawdown {dd:.1%} exceeds limit {self.MAX_DRAWDOWN:.0%}", "error"
+            "drawdown_gate",
+            False,
+            f"Max drawdown {dd:.1%} exceeds limit {self.MAX_DRAWDOWN:.0%}",
+            "error",
         )
 
     def _check_trade_count(self, bt: Dict) -> AuditCheck:
         trades = int(bt.get("total_trades", 0))
         if trades >= self.MIN_TRADES:
-            return AuditCheck("trade_count", True, f"{trades} trades >= minimum {self.MIN_TRADES}")
+            return AuditCheck(
+                "trade_count", True, f"{trades} trades >= minimum {self.MIN_TRADES}"
+            )
         return AuditCheck(
-            "trade_count", False,
-            f"Only {trades} trades — minimum {self.MIN_TRADES} required", "error"
+            "trade_count",
+            False,
+            f"Only {trades} trades — minimum {self.MIN_TRADES} required",
+            "error",
         )
 
     def _check_description(self, desc: str) -> AuditCheck:
         if len(desc.strip()) >= 100:
             return AuditCheck("description", True, "Description meets minimum length")
         return AuditCheck(
-            "description", False,
-            f"Description too short ({len(desc)} chars, minimum 100)", "warning"
+            "description",
+            False,
+            f"Description too short ({len(desc)} chars, minimum 100)",
+            "warning",
         )
 
     def _check_pricing(self, price: float) -> AuditCheck:
@@ -279,13 +314,19 @@ class SubmissionManager:
         else:
             sub.status = SubmissionStatus.REJECTED
             sub.rejection_reason = "; ".join(
-                c.message for c in report.checks if not c.passed and c.severity == "error"
+                c.message
+                for c in report.checks
+                if not c.passed and c.severity == "error"
             )
-            logger.warning("Strategy rejected: %s — %s", sub.submission_id, sub.rejection_reason)
+            logger.warning(
+                "Strategy rejected: %s — %s", sub.submission_id, sub.rejection_reason
+            )
 
         return sub
 
-    def manual_approve(self, submission_id: str, reviewer_id: str, notes: str = "") -> bool:
+    def manual_approve(
+        self, submission_id: str, reviewer_id: str, notes: str = ""
+    ) -> bool:
         sub = self._submissions.get(submission_id)
         if not sub:
             return False
@@ -317,8 +358,11 @@ class SubmissionManager:
         return [s for s in self._submissions.values() if s.creator_id == creator_id]
 
     def list_pending(self) -> List[StrategySubmission]:
-        return [s for s in self._submissions.values()
-                if s.status == SubmissionStatus.PENDING_REVIEW]
+        return [
+            s
+            for s in self._submissions.values()
+            if s.status == SubmissionStatus.PENDING_REVIEW
+        ]
 
 
 # Module-level singleton

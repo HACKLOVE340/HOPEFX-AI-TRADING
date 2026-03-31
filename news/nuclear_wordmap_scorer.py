@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -288,13 +287,15 @@ class NuclearWordMapScorer:
                     count = min(text_lower.count(term), 3)
                     contribution = weight * (1 + 0.2 * (count - 1))
                     cat_score = max(cat_score, contribution)
-                    matched_terms.append({
-                        "term": term,
-                        "category": category,
-                        "weight": weight,
-                        "count": count,
-                        "contribution": round(contribution, 3),
-                    })
+                    matched_terms.append(
+                        {
+                            "term": term,
+                            "category": category,
+                            "weight": weight,
+                            "count": count,
+                            "contribution": round(contribution, 3),
+                        }
+                    )
             if cat_score > 0:
                 category_scores[category] = round(cat_score, 3)
 
@@ -344,9 +345,12 @@ class NuclearWordMapScorer:
             logger.warning(
                 "NuclearWordMapScorer: severity=%d action=%s score=%.3f "
                 "categories=%s vol=%.2f sentiment=%.2f",
-                severity, action, raw_score,
+                severity,
+                action,
+                raw_score,
                 list(category_scores.keys()),
-                volatility, sentiment,
+                volatility,
+                sentiment,
             )
 
         return severity, action, round(raw_score, 4), meta
