@@ -116,7 +116,8 @@ jobs:
       - name: Secret Detection
         # Scans only the diff on push; full repo scan on schedule/PR.
         # --only-verified: only fail on secrets that are confirmed live.
-        uses: trufflesecurity/trufflehog@v3.88.1
+        # Pinned to SHA for supply-chain safety (tag: v3.88.1)
+        uses: trufflesecurity/trufflehog@d73edfb85d79432e3c767c407afdee59c9a34fde
         with:
           path: ./
           base: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || 'HEAD~1' }}
