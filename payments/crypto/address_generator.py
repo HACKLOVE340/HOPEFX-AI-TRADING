@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 # ── Derivation path constants ─────────────────────────────────────────────────
 
-_PATHS: Dict[str, str] = {
+_PATHS: dict[str, str] = {
     "BTC":         "m/84'/0'/0'/0/{index}",    # BIP84 native SegWit
     "ETH":         "m/44'/60'/0'/0/{index}",   # BIP44 Ethereum
     "USDT_ERC20":  "m/44'/60'/0'/0/{index}",   # ERC-20 shares ETH path
@@ -54,12 +54,12 @@ _SYMBOLS = {
 }
 
 # Semantic override for BTC (native SegWit)
-_SEMANTICS: Dict[str, str] = {
+_SEMANTICS: dict[str, str] = {
     "BTC": "p2wpkh",
 }
 
 # Environment variable that holds each currency's mnemonic
-_MNEMONIC_ENV: Dict[str, str] = {
+_MNEMONIC_ENV: dict[str, str] = {
     "BTC":        "BITCOIN_MNEMONIC",
     "ETH":        "ETHEREUM_MNEMONIC",
     "USDT_ERC20": "ETHEREUM_MNEMONIC",
@@ -103,10 +103,10 @@ class AddressGenerator:
 
     def __init__(self) -> None:
         # currency -> mnemonic (loaded lazily on first use)
-        self._mnemonics: Dict[str, str] = {}
+        self._mnemonics: dict[str, str] = {}
         # (currency, index) counter — shared across all users per currency
         # In production, persist this counter in the database.
-        self._counters: Dict[str, int] = {}
+        self._counters: dict[str, int] = {}
 
     def _get_mnemonic(self, currency: str) -> str:
         if currency not in self._mnemonics:

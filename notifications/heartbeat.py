@@ -49,7 +49,7 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ def _send_telegram_sync(token: str, chat_id: str, text: str) -> bool:
 # ── Status builder ────────────────────────────────────────────────────────────
 
 
-def _build_message(status: Dict[str, Any], uptime_seconds: float) -> str:
+def _build_message(status: dict[str, Any], uptime_seconds: float) -> str:
     """Build the heartbeat message from a status dict."""
     uptime = str(timedelta(seconds=int(uptime_seconds)))
     equity = status.get("equity", 0)
@@ -134,7 +134,7 @@ def _build_message(status: Dict[str, Any], uptime_seconds: float) -> str:
             f"  • {a}" for a in risk_alerts[:3]
         )
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     return (
         f"💓 <b>HOPEFX Heartbeat</b> — {now}\n"
@@ -166,7 +166,7 @@ class HeartbeatService:
         token: str = _TELEGRAM_TOKEN,
         chat_id: str = _TELEGRAM_CHAT_ID,
         interval_hours: float = _HEARTBEAT_INTERVAL_HOURS,
-        get_status_fn: Optional[Callable[[], Dict[str, Any]]] = None,
+        get_status_fn: Optional[Callable[[], dict[str, Any]]] = None,
         app_state: Any = None,
     ) -> None:
         self._token = token
@@ -180,7 +180,7 @@ class HeartbeatService:
         self._ping_count = 0
         self._last_ping: Optional[float] = None
 
-    def _get_status(self) -> Dict[str, Any]:
+    def _get_status(self) -> dict[str, Any]:
         """Collect current system status."""
         if self._get_status_fn is not None:
             try:
@@ -189,7 +189,7 @@ class HeartbeatService:
                 logger.debug("get_status_fn failed: %s", exc)
 
         # Try to read from app_state
-        status: Dict[str, Any] = {}
+        status: dict[str, Any] = {}
         if self._app_state is not None:
             try:
                 broker = getattr(self._app_state, "broker", None)
@@ -311,7 +311,7 @@ class HeartbeatService:
         self._send_ping()
 
     @property
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         return {
             "running": self._running,
             "ping_count": self._ping_count,
@@ -331,7 +331,7 @@ _heartbeat: Optional[HeartbeatService] = None
 
 
 def start_heartbeat(
-    get_status_fn: Optional[Callable[[], Dict[str, Any]]] = None,
+    get_status_fn: Optional[Callable[[], dict[str, Any]]] = None,
     app_state: Any = None,
     token: str = _TELEGRAM_TOKEN,
     chat_id: str = _TELEGRAM_CHAT_ID,

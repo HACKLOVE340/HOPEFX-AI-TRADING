@@ -9,7 +9,7 @@ USDT Payment Integration
 Handles USDT deposits and withdrawals on TRC20 (TRON) and ERC20 (Ethereum) networks.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Dict, Optional
 from enum import Enum
@@ -34,12 +34,12 @@ class USDTClient:
     NETWORK_FEE = Decimal("2.00")  # USD
 
     def __init__(self):
-        self.addresses: Dict[str, Dict] = {}
-        self.transactions: Dict[str, Dict] = {}
+        self.addresses: dict[str, dict] = {}
+        self.transactions: dict[str, dict] = {}
 
     def generate_deposit_address(
         self, user_id: str, network: USDTNetwork = USDTNetwork.TRC20
-    ) -> Dict:
+    ) -> dict:
         """Generate USDT deposit address"""
         try:
             # Generate network-specific address
@@ -53,7 +53,7 @@ class USDTClient:
             self.addresses[address] = {
                 "user_id": user_id,
                 "network": network.value,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             }
 
             logger.info(f"Generated USDT {network.value} address for user {user_id}")
@@ -76,7 +76,7 @@ class USDTClient:
         tx_hash: str,
         network: USDTNetwork,
         confirmations: int = 0,
-    ) -> Optional[Dict]:
+    ) -> Optional[dict]:
         """Process USDT deposit"""
         try:
             if amount < self.MIN_DEPOSIT:
@@ -93,7 +93,7 @@ class USDTClient:
                 "network": network.value,
                 "confirmations": confirmations,
                 "status": status,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             }
 
             self.transactions[tx_hash] = transaction
@@ -108,7 +108,7 @@ class USDTClient:
 
     def process_withdrawal(
         self, user_id: str, amount: Decimal, destination: str, network: USDTNetwork
-    ) -> Dict:
+    ) -> dict:
         """Process USDT withdrawal"""
         try:
             total_fee = self.NETWORK_FEE

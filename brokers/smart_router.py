@@ -12,7 +12,7 @@ Intelligent order routing across multiple brokers with best execution
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
@@ -33,7 +33,7 @@ class BrokerScore:
     reliability_score: float
     overall_score: float
 
-    def calculate(self, weights: Dict[str, float]):
+    def calculate(self, weights: dict[str, float]):
         """Calculate weighted overall score"""
         self.overall_score = (
             weights.get("latency", 0.25) * (1 / (1 + self.latency_ms / 100))
@@ -50,9 +50,9 @@ class SmartOrderRouter:
     """
 
     def __init__(self):
-        self.brokers: Dict[str, BrokerConnector] = {}
-        self.scores: Dict[str, BrokerScore] = {}
-        self.order_history: List[Dict] = []
+        self.brokers: dict[str, BrokerConnector] = {}
+        self.scores: dict[str, BrokerScore] = {}
+        self.order_history: list[dict] = []
         self.routing_rules = {
             "latency_weight": 0.25,
             "fill_rate_weight": 0.25,
@@ -74,7 +74,7 @@ class SmartOrderRouter:
             overall_score=0.0,
         )
 
-    async def route_order(self, order: Dict) -> Tuple[str, Dict]:
+    async def route_order(self, order: dict) -> tuple[str, dict]:
         """
         Determine optimal broker for order.
         Returns: (broker_id, routing_decision_metadata)
@@ -101,7 +101,7 @@ class SmartOrderRouter:
             "selected_broker": best_broker,
             "alternative_brokers": [r.broker_id for r in ranked[1:3]],
             "selection_reason": self._explain_selection(ranked[0]),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "expected_latency_ms": ranked[0].latency_ms,
             "expected_cost_bps": ranked[0].cost_score,
         }
@@ -118,9 +118,9 @@ class SmartOrderRouter:
         for broker_id, connector in self.brokers.items():
             try:
                 # Ping latency
-                start = datetime.now(timezone.utc)
+                start = datetime.now(UTC)
                 await connector.ping()
-                latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+                latency = (datetime.now(UTC) - start).total_seconds() * 1000
 
                 score = self.scores[broker_id]
                 score.latency_ms = 0.7 * score.latency_ms + 0.3 * latency  # EMA
@@ -157,7 +157,7 @@ class SmartOrderRouter:
 
         return ", ".join(reasons) if reasons else "balanced_score"
 
-    async def execute_with_fallback(self, order: Dict) -> Dict:
+    async def execute_with_fallback(self, order: dict) -> dict:
         """
         Execute order with automatic fallback to next best broker.
         Ensures execution even if primary broker fails.
@@ -204,7 +204,7 @@ class SmartOrderRouter:
     async def _execute_with_timeout(
         self,
         broker_id: str,
-        order: Dict,
+        order: dict,
         timeout_ms: int = 5000,
     ):
         """Execute with strict timeout"""
@@ -220,22 +220,22 @@ class BrokerConnector:
     def __init__(self, name: str, client):
         self.name = name
         self.client = client
-        self.latency_history: List[float] = []
-        self.fill_history: List[Dict] = []
+        self.latency_history: list[float] = []
+        self.fill_history: list[dict] = []
 
     async def ping(self) -> float:
         """Measure round-trip latency"""
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
         await self.client.get_server_time()
-        latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+        latency = (datetime.now(UTC) - start).total_seconds() * 1000
         self.latency_history.append(latency)
         if len(self.latency_history) > 1000:
             self.latency_history.pop(0)
         return latency
 
-    async def place_order(self, order: Dict) -> Dict:
+    async def place_order(self, order: dict) -> dict:
         """Place order with full tracking"""
-        start = datetime.now(timezone.utc)
+        start = datetime.now(UTC)
 
         result = await self.client.place_order(
             symbol=order["symbol"],
@@ -245,11 +245,11 @@ class BrokerConnector:
             price=order.get("price"),
         )
 
-        latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+        latency = (datetime.now(UTC) - start).total_seconds() * 1000
 
         # Track fill
         fill_record = {
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": datetime.now(UTC),
             "order_id": result.get("id"),
             "filled": result.get("status") == "FILLED",
             "slippage_bps": self._calculate_slippage(order, result),
@@ -259,7 +259,7 @@ class BrokerConnector:
 
         return result
 
-    def _calculate_slippage(self, order: Dict, result: Dict) -> float:
+    def _calculate_slippage(self, order: dict, result: dict) -> float:
         """Calculate execution slippage"""
         if "price" not in order or "avg_price" not in result:
             return 0
@@ -274,9 +274,9 @@ class BrokerConnector:
 
         return float(slippage)
 
-    async def get_recent_fills(self, hours: int = 1) -> List[Dict]:
+    async def get_recent_fills(self, hours: int = 1) -> list[dict]:
         """Get recent fill history"""
-        cutoff = datetime.now(timezone.utc) - __import__("datetime").timedelta(
+        cutoff = datetime.now(UTC) - __import__("datetime").timedelta(
             hours=hours,
         )
         return [f for f in self.fill_history if f["timestamp"] > cutoff]

@@ -383,7 +383,7 @@ class AdvancedFeatureEngineer:
     def _calculate_macd(
         self,
         prices: pd.Series,
-    ) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """Calculate MACD"""
         ema12 = prices.ewm(span=12).mean()
         ema26 = prices.ewm(span=26).mean()
@@ -398,7 +398,7 @@ class AdvancedFeatureEngineer:
         self,
         df: pd.DataFrame,
         period: int = 14,
-    ) -> Tuple[pd.Series, pd.Series]:
+    ) -> tuple[pd.Series, pd.Series]:
         """Calculate Stochastic Oscillator"""
         low_min = df["low"].rolling(period).min()
         high_max = df["high"].rolling(period).max()

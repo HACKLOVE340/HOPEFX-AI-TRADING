@@ -55,10 +55,10 @@ class MarketImpact:
     confidence: float  # 0 to 1
     expected_volatility: float  # Percentage
     direction_bias: Optional[str] = None  # 'bullish', 'bearish', or None
-    affected_symbols: Optional[List[str]] = None
+    affected_symbols: Optional[list[str]] = None
     timeframe: str = "intraday"  # 'intraday', 'short_term', 'medium_term'
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "level": self.level.value,
@@ -191,7 +191,7 @@ class ImpactPredictor:
         title: str,
         description: str,
         sentiment_score: Optional[float] = None,
-        symbols: Optional[List[str]] = None,
+        symbols: Optional[list[str]] = None,
     ) -> MarketImpact:
         """
         Predict market impact of a news event
@@ -368,7 +368,7 @@ class ImpactPredictor:
         else:
             return "intraday"
 
-    def batch_predict(self, articles: List[Dict]) -> List[MarketImpact]:
+    def batch_predict(self, articles: list[dict]) -> list[MarketImpact]:
         """
         Predict impact for multiple articles
 
@@ -391,8 +391,8 @@ class ImpactPredictor:
         return impacts
 
     def get_high_impact_events(
-        self, articles: List[Dict], min_level: ImpactLevel = ImpactLevel.HIGH
-    ) -> List[Dict]:
+        self, articles: list[dict], min_level: ImpactLevel = ImpactLevel.HIGH
+    ) -> list[dict]:
         """Filter articles for high-impact events"""
         high_impact = []
 

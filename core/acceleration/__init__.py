@@ -12,14 +12,14 @@ CUDA-powered inference for sub-millisecond predictions
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field  # noqa: F401
+from dataclasses import dataclass, field
 from typing import Dict, List
 
 import numpy as np
 
 try:
     import torch
-    import torch.nn as nn
+    from torch import nn
 
     HAS_TORCH = True
 except ImportError:
@@ -104,7 +104,7 @@ class GPUInferenceEngine:
         )
 
         self.batch_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
-        self.results: Dict[str, asyncio.Future] = {}
+        self.results: dict[str, asyncio.Future] = {}
         self.running = False
 
         print(
@@ -113,7 +113,7 @@ class GPUInferenceEngine:
         print(f"   Batch size: {self.config.batch_size}")
         print(f"   Mixed precision: {self.config.mixed_precision}")
 
-    async def infer(self, features: np.ndarray, request_id: str) -> Dict:
+    async def infer(self, features: np.ndarray, request_id: str) -> dict:
         """Async inference with automatic batching"""
         future = asyncio.Future()
         self.results[request_id] = future
@@ -153,7 +153,7 @@ class GPUInferenceEngine:
             if batch:
                 await self._process_batch(batch, ids)
 
-    async def _process_batch(self, batch: List[np.ndarray], ids: List[str]):
+    async def _process_batch(self, batch: list[np.ndarray], ids: list[str]):
         """Execute on GPU"""
         # Pad batch
         actual_size = len(batch)

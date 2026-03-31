@@ -40,7 +40,7 @@ import hashlib
 import logging
 import time
 from collections import deque
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from data_layer.feeds.news.alpha_vantage import AlphaVantageNewsFeed
@@ -67,7 +67,7 @@ _MAX_ARTICLE_AGE_H = float(os.getenv("SENT_MAX_ARTICLE_AGE_H", "24.0"))
 _DEDUP_WINDOW_H = float(os.getenv("SENT_DEDUP_WINDOW_H", "6.0"))
 
 # Poll intervals per feed (seconds)
-_POLL_INTERVALS: Dict[NewsSource, float] = {
+_POLL_INTERVALS: dict[NewsSource, float] = {
     NewsSource.FINNHUB: 60.0,
     NewsSource.FMP: 120.0,
     NewsSource.NEWSDATA: 300.0,
@@ -89,7 +89,7 @@ class NewsSentimentEngine:
     """
 
     def __init__(self) -> None:
-        self._feeds: Dict[NewsSource, NewsFeedBase] = {
+        self._feeds: dict[NewsSource, NewsFeedBase] = {
             NewsSource.FINNHUB: FinnhubFeed(),
             NewsSource.FMP: FMPFeed(),
             NewsSource.NEWSDATA: NewsDataFeed(),
@@ -100,17 +100,17 @@ class NewsSentimentEngine:
         self._articles: deque = deque(maxlen=_MAX_ARTICLE_HISTORY)
         self._sentiment_ema: float = 0.0
         self._prev_ema: float = 0.0
-        self._tasks: List[asyncio.Task] = []
+        self._tasks: list[asyncio.Task] = []
         self._running = False
         self._redis = None
         self._lineage = None
         self._lock = asyncio.Lock()
         self._article_count: int = 0
-        self._last_fetch_at: Dict[NewsSource, float] = {}
+        self._last_fetch_at: dict[NewsSource, float] = {}
         # Cross-feed deduplication: URL fingerprint → ingested_at epoch.
         # Prevents the same article appearing in Finnhub + FMP + NewsAPI
         # from being scored 3× and inflating the sentiment EMA.
-        self._seen_urls: Dict[str, float] = {}
+        self._seen_urls: dict[str, float] = {}
 
         # Prometheus
         self._prom_sentiment = None
@@ -228,10 +228,10 @@ class NewsSentimentEngine:
         return hashlib.sha256(key.encode()).hexdigest()[:20]
 
     async def _ingest_articles(
-        self, articles: List[NewsArticle], src: NewsSource
+        self, articles: list[NewsArticle], src: NewsSource
     ) -> None:
         """Update EMA, cache, and lineage for a batch of scored articles."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         max_age_cutoff = now - timedelta(hours=_MAX_ARTICLE_AGE_H)
         dedup_cutoff_epoch = time.time() - _DEDUP_WINDOW_H * 3600.0
 
@@ -315,7 +315,7 @@ class NewsSentimentEngine:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def get_ml_features(self, as_of: Optional[datetime] = None) -> Dict[str, float]:
+    def get_ml_features(self, as_of: Optional[datetime] = None) -> dict[str, float]:
         """
         Return 4 sentiment ML features.
 
@@ -324,7 +324,7 @@ class NewsSentimentEngine:
         When no articles are in memory (cold start), attempts to read the
         last cached features from Redis before returning neutral defaults.
         """
-        now = as_of or datetime.now(timezone.utc)
+        now = as_of or datetime.now(UTC)
         cutoff_1h = now - timedelta(hours=_ARTICLE_WINDOW_H)
 
         # Filter causally
@@ -390,9 +390,9 @@ class NewsSentimentEngine:
 
     def get_recent_articles(
         self, hours: float = 1.0, min_relevance: float = 0.1
-    ) -> List[NewsArticle]:
+    ) -> list[NewsArticle]:
         """Return recent gold-relevant articles."""
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
         return [
             a
             for a in self._articles
@@ -404,7 +404,7 @@ class NewsSentimentEngine:
         since: datetime,
         min_relevance: float = 0.0,
         source: Optional[Any] = None,
-    ) -> List[NewsArticle]:
+    ) -> list[NewsArticle]:
         """
         Return all articles published at or after `since`.
 
@@ -425,18 +425,18 @@ class NewsSentimentEngine:
         ]
         return sorted(results, key=lambda a: a.published_at)
 
-    def get_sentiment_snapshot(self) -> Dict[str, Any]:
+    def get_sentiment_snapshot(self) -> dict[str, Any]:
         """
         Return a point-in-time sentiment snapshot for caching and health checks.
 
         Includes the current EMA, momentum, article counts, and per-source
         article counts over the last hour.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff_1h = now - timedelta(hours=1.0)
         recent_1h = [a for a in self._articles if a.published_at >= cutoff_1h]
 
-        per_source: Dict[str, int] = {}
+        per_source: dict[str, int] = {}
         for a in recent_1h:
             per_source[a.source.value] = per_source.get(a.source.value, 0) + 1
 
@@ -470,7 +470,7 @@ class NewsSentimentEngine:
         self._article_count = 0
         logger.info("NewsSentimentEngine: in-memory cache flushed")
 
-    def health(self) -> Dict[str, Any]:
+    def health(self) -> dict[str, Any]:
         return {
             "running": self._running,
             "article_count": self._article_count,
@@ -490,7 +490,7 @@ class NewsSentimentEngine:
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     def _compute_bullish_ratio(self, hours: float = 1.0) -> float:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
         recent = [a for a in self._articles if a.published_at >= cutoff]
         if not recent:
             return 0.5

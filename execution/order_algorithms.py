@@ -33,7 +33,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -124,7 +124,7 @@ class PartialFillState:
     target_lots: float
     filled_lots: float = 0.0
     avg_price: float = 0.0
-    fills: List[Tuple[float, float]] = field(default_factory=list)  # (lots, price)
+    fills: list[tuple[float, float]] = field(default_factory=list)  # (lots, price)
     started_at: float = field(default_factory=time.monotonic)
 
     def add_fill(self, lots: float, price: float) -> None:
@@ -170,8 +170,8 @@ class PartialFillAggregator:
     """
 
     def __init__(self) -> None:
-        self._states: Dict[str, PartialFillState] = {}
-        self._callbacks: List[Callable[[PartialFillState], None]] = []
+        self._states: dict[str, PartialFillState] = {}
+        self._callbacks: list[Callable[[PartialFillState], None]] = []
 
     def register(
         self, parent_id: str, symbol: str, side: str, target_lots: float
@@ -259,7 +259,7 @@ class TWAPExecutor:
     def __init__(self, router: Any = None, lineage_store: Any = None) -> None:
         self._router = router
         self._lineage = lineage_store
-        self._child_orders: List[ChildOrder] = []
+        self._child_orders: list[ChildOrder] = []
 
     async def execute(
         self,
@@ -271,7 +271,7 @@ class TWAPExecutor:
         slices: int = _TWAP_DEFAULT_SLICES,
         mid_price: float = 0.0,
         **order_kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute a TWAP order. Returns aggregated fill result.
         """
@@ -303,7 +303,7 @@ class TWAPExecutor:
                 side=side,
                 lots=slice_lots,
                 algo="twap",
-                scheduled_at=datetime.now(timezone.utc),
+                scheduled_at=datetime.now(UTC),
             )
             self._child_orders.append(child)
 
@@ -320,7 +320,7 @@ class TWAPExecutor:
                     **order_kwargs,
                 }
                 try:
-                    child.sent_at = datetime.now(timezone.utc)
+                    child.sent_at = datetime.now(UTC)
                     result = await self._router.route(order_req)
                     child.status = result.get("status", "failed")
                     if child.status == "filled":
@@ -394,7 +394,7 @@ class VWAPExecutor:
         self._router = router
         self._lineage = lineage_store
 
-    def _compute_slice_weights(self, start_hour_utc: int, n_slices: int) -> List[float]:
+    def _compute_slice_weights(self, start_hour_utc: int, n_slices: int) -> list[float]:
         """Return normalised weights for n_slices starting at start_hour_utc."""
         hours = [(start_hour_utc + i) % 24 for i in range(n_slices)]
         raw = [_XAUUSD_VOLUME_PROFILE[h] for h in hours]
@@ -411,8 +411,8 @@ class VWAPExecutor:
         slices: int = _VWAP_SLICES,
         mid_price: float = 0.0,
         **order_kwargs: Any,
-    ) -> Dict[str, Any]:
-        start_hour = datetime.now(timezone.utc).hour
+    ) -> dict[str, Any]:
+        start_hour = datetime.now(UTC).hour
         weights = self._compute_slice_weights(start_hour, slices)
         interval_s = duration_s / slices
 

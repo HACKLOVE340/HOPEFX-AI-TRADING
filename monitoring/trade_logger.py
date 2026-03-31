@@ -53,7 +53,7 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Optional
 
@@ -137,7 +137,7 @@ _EQUITY_HEADERS = [
 
 
 def _today_str() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
 def _append_csv(path: Path, headers: list, row: dict) -> None:
@@ -239,9 +239,7 @@ class TradeLogger:
         # Standard forex: 0.0001
         if not pip_size:
             sym_upper = symbol.upper()
-            if "XAU" in sym_upper or "XAG" in sym_upper:
-                pip_size = 0.01
-            elif "JPY" in sym_upper:
+            if "XAU" in sym_upper or "XAG" in sym_upper or "JPY" in sym_upper:
                 pip_size = 0.01
             elif "BTC" in sym_upper or "ETH" in sym_upper:
                 pip_size = 1.0
@@ -250,7 +248,7 @@ class TradeLogger:
         slippage_pips = raw_slip / pip_size if pip_size > 0 else 0.0
         slippage_usd = raw_slip * lots * 100_000  # approximate for forex
 
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
         row = {
             "timestamp": ts,
             "symbol": symbol,
@@ -327,8 +325,7 @@ class TradeLogger:
 
         # Update trailing HWM for drawdown calculation
         with self._lock:
-            if equity > self._hwm:
-                self._hwm = equity
+            self._hwm = max(self._hwm, equity)
             drawdown_pct = (
                 (self._hwm - equity) / self._hwm * 100 if self._hwm > 0 else 0.0
             )
@@ -340,7 +337,7 @@ class TradeLogger:
             self._open_positions = open_positions
             self._drawdown_pct = drawdown_pct
 
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
         row = {
             "timestamp": ts,
             "equity": round(equity, 4),

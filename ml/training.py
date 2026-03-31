@@ -10,7 +10,7 @@ LSTM, XGBoost, Random Forest with model saving/loading, hyperparameter tuning, e
 
 import json
 import warnings
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -21,8 +21,8 @@ import pandas as pd
 warnings.filterwarnings("ignore")
 
 # sklearn imports
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor  # noqa: E402
-from sklearn.metrics import (  # noqa: E402
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
     f1_score,
@@ -32,8 +32,8 @@ from sklearn.metrics import (  # noqa: E402
     r2_score,
     recall_score,
 )
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, TimeSeriesSplit  # noqa: E402
-from sklearn.preprocessing import MinMaxScaler, StandardScaler  # noqa: E402
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, TimeSeriesSplit
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 # XGBoost
 try:
@@ -54,11 +54,11 @@ except ImportError:
 # Enhanced macro + regime features (DXY, VIX, yields, SPX cross-asset)
 try:
     from ml.macro_features import (
-        MACRO_COLUMNS,  # noqa: F401
+        MACRO_COLUMNS,
         add_macro_features,
         add_regime_features,
-        build_enhanced_feature_matrix,  # noqa: F401
-        fetch_macro_history,  # noqa: F401
+        build_enhanced_feature_matrix,
+        fetch_macro_history,
     )
 
     ENHANCED_MACRO_AVAILABLE = True
@@ -67,14 +67,14 @@ except ImportError:
 
 # TensorFlow/Keras
 try:
-    import tensorflow as tf  # noqa: F401
+    import tensorflow as tf
     from tensorflow.keras.callbacks import (
         EarlyStopping,
         ModelCheckpoint,
         ReduceLROnPlateau,
     )
-    from tensorflow.keras.layers import GRU, LSTM, Bidirectional, Dense, Dropout  # noqa: F401
-    from tensorflow.keras.models import Sequential, load_model, save_model  # noqa: F401
+    from tensorflow.keras.layers import GRU, LSTM, Bidirectional, Dense, Dropout
+    from tensorflow.keras.models import Sequential, load_model, save_model
     from tensorflow.keras.optimizers import Adam
 
     TENSORFLOW_AVAILABLE = True
@@ -99,7 +99,7 @@ class FeatureEngineer:
         self.include_regime = include_regime and ENHANCED_MACRO_AVAILABLE
         self.macro_df = macro_df  # pre-fetched macro data; None = skip macro
         self.scaler = StandardScaler()
-        self.feature_names: List[str] = []
+        self.feature_names: list[str] = []
 
     def create_features(
         self,
@@ -107,7 +107,7 @@ class FeatureEngineer:
         target_col: str = "close",
         prediction_horizon: int = 1,
         lookback_window: int = 20,
-    ) -> Tuple[pd.DataFrame, pd.Series]:
+    ) -> tuple[pd.DataFrame, pd.Series]:
         """
         Create feature matrix and target vector.
 
@@ -286,7 +286,7 @@ class FeatureEngineer:
         self,
         X_train: pd.DataFrame,
         X_test: Optional[pd.DataFrame] = None,
-    ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    ) -> tuple[np.ndarray, Optional[np.ndarray]]:
         """Scale features using StandardScaler"""
         X_train_scaled = self.scaler.fit_transform(X_train)
 
@@ -355,7 +355,7 @@ class LSTMModel:
         self,
         sequence_length: int = 60,
         n_features: int = 10,
-        lstm_units: List[int] = None,
+        lstm_units: list[int] = None,
         dropout_rate: float = 0.2,
         learning_rate: float = 0.001,
         model_name: str = "lstm_model",
@@ -411,7 +411,7 @@ class LSTMModel:
         self,
         data: np.ndarray,
         target: Optional[np.ndarray] = None,
-    ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    ) -> tuple[np.ndarray, Optional[np.ndarray]]:
         """Create sequences for LSTM input"""
         X, y = [], []
 
@@ -435,7 +435,7 @@ class LSTMModel:
         batch_size: int = 32,
         patience: int = 15,
         model_dir: str = "ml/checkpoints",
-    ) -> Dict:
+    ) -> dict:
         """Train LSTM model"""
 
         if self.model is None:
@@ -548,7 +548,7 @@ class LSTMModel:
 
         print(f"LSTM model loaded: {filepath}")
 
-    def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
+    def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]:
         """Evaluate model performance"""
         predictions = self.predict(X_test)
 
@@ -572,7 +572,7 @@ class XGBoostModel:
     def __init__(
         self,
         model_type: str = "classifier",  # 'classifier' or 'regressor'
-        params: Optional[Dict] = None,
+        params: Optional[dict] = None,
         model_name: str = "xgboost_model",
     ):
         if not XGBOOST_AVAILABLE:
@@ -584,7 +584,7 @@ class XGBoostModel:
         self.model: Optional[Any] = None
         self.feature_importance: Optional[pd.DataFrame] = None
 
-    def _default_params(self) -> Dict:
+    def _default_params(self) -> dict:
         """Default XGBoost parameters"""
         if self.model_type == "classifier":
             return {
@@ -626,7 +626,7 @@ class XGBoostModel:
         X_val: Optional[np.ndarray] = None,
         y_val: Optional[np.ndarray] = None,
         early_stopping_rounds: int = 10,
-    ) -> Dict:
+    ) -> dict:
         """Train XGBoost model"""
 
         if self.model is None:
@@ -646,7 +646,7 @@ class XGBoostModel:
         if X_val is not None and y_val is not None:
             eval_set.append((X_val, y_val))
 
-        fit_kwargs: Dict = {
+        fit_kwargs: dict = {
             "eval_set": eval_set,
             "verbose": False,
         }
@@ -749,7 +749,7 @@ class XGBoostModel:
 
         print(f"XGBoost model loaded: {filepath}")
 
-    def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
+    def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]:
         """Evaluate model performance"""
         predictions = self.predict(X_test)
 
@@ -824,7 +824,7 @@ class RandomForestModel:
             )
         return self.model
 
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> Dict:
+    def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> dict:
         """Train Random Forest model"""
 
         if self.model is None:
@@ -846,7 +846,7 @@ class RandomForestModel:
 
         # Return named importances so callers can log/inspect without a
         # separate feature list lookup.
-        named_imp: Dict[str, float] = {}
+        named_imp: dict[str, float] = {}
         if self.feature_importance is not None:
             named_imp = dict(
                 zip(
@@ -913,7 +913,7 @@ class RandomForestModel:
 
         print(f"Random Forest model loaded: {filepath}")
 
-    def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
+    def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]:
         """Evaluate model performance"""
         predictions = self.predict(X_test)
 
@@ -946,8 +946,8 @@ class EnsembleModel:
 
     def __init__(
         self,
-        models: Optional[Dict[str, Any]] = None,
-        weights: Optional[List[float]] = None,
+        models: Optional[dict[str, Any]] = None,
+        weights: Optional[list[float]] = None,
         voting: str = "soft",  # 'soft' or 'hard'
     ):
         self.models = models or {}
@@ -958,7 +958,7 @@ class EnsembleModel:
         """Add a model to ensemble"""
         self.models[name] = model
 
-    def predict(self, X_dict: Dict[str, np.ndarray]) -> np.ndarray:
+    def predict(self, X_dict: dict[str, np.ndarray]) -> np.ndarray:
         """
         Make ensemble predictions
 
@@ -1013,17 +1013,17 @@ class HyperparameterTuner:
 
     def __init__(self, model_type: str = "xgboost"):
         self.model_type = model_type
-        self.best_params: Optional[Dict] = None
+        self.best_params: Optional[dict] = None
         self.cv_results: Optional[pd.DataFrame] = None
 
     def tune_xgboost(
         self,
         X: np.ndarray,
         y: np.ndarray,
-        param_grid: Optional[Dict] = None,
+        param_grid: Optional[dict] = None,
         cv: int = 3,
         scoring: str = "f1",
-    ) -> Dict:
+    ) -> dict:
         """Grid search for XGBoost"""
 
         if not XGBOOST_AVAILABLE:
@@ -1072,11 +1072,11 @@ class HyperparameterTuner:
         self,
         X: np.ndarray,
         y: np.ndarray,
-        param_grid: Optional[Dict] = None,
+        param_grid: Optional[dict] = None,
         cv: int = 3,
         scoring: str = "f1",
         n_iter: int = 20,
-    ) -> Dict:
+    ) -> dict:
         """Random search for Random Forest"""
 
         if param_grid is None:
@@ -1141,19 +1141,19 @@ class MLEvaluationReport:
     def generate_report(
         self,
         model_name: str,
-        metrics: Dict[str, Any],
+        metrics: dict[str, Any],
         y_true: np.ndarray,
         y_pred: np.ndarray,
         feature_importance: Optional[pd.DataFrame] = None,
     ) -> str:
         """Generate comprehensive evaluation report"""
 
-        report_time = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        report_time = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         report_path = self.output_dir / f"{model_name}_evaluation_{report_time}.json"
 
         report = {
             "model_name": model_name,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "metrics": metrics,
             "predictions_sample": {
                 "y_true": y_true[:20].tolist(),
@@ -1229,11 +1229,11 @@ class MLEvaluationReport:
 # Convenience function for full ML pipeline
 def train_ml_pipeline(
     df: pd.DataFrame,
-    model_types: List[str] = None,
+    model_types: list[str] = None,
     prediction_horizon: int = 1,
     test_size: float = 0.2,
     model_dir: str = "ml/models",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Complete ML training pipeline
 
@@ -1304,15 +1304,15 @@ def train_ml_pipeline(
                 from datetime import timezone as _tz
 
                 _start = (
-                    pd.Timestamp(_idx.min()).to_pydatetime().replace(tzinfo=_tz.utc)
+                    pd.Timestamp(_idx.min()).to_pydatetime().replace(tzinfo=UTC)
                 )
-                _end = pd.Timestamp(_idx.max()).to_pydatetime().replace(tzinfo=_tz.utc)
+                _end = pd.Timestamp(_idx.max()).to_pydatetime().replace(tzinfo=UTC)
             else:
                 from datetime import datetime as _dt
                 from datetime import timedelta as _td
                 from datetime import timezone as _tz
 
-                _end = _dt.now(_tz.utc)
+                _end = _dt.now(UTC)
                 _start = _end - _td(days=len(df) + 30)
 
             macro_hist = fetch_macro_history(_start, _end, interval="1d")
@@ -1524,7 +1524,7 @@ def walk_forward_validate(
     gap: int = 20,
     prediction_horizon: int = 1,
     min_train_size: Optional[int] = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Walk-forward (anchored expanding-window) cross-validation for time-series ML.
 
@@ -1559,7 +1559,7 @@ def walk_forward_validate(
             f"got {n}.",
         )
 
-    fold_results: List[Dict[str, Any]] = []
+    fold_results: list[dict[str, Any]] = []
     FeatureEngineer()
 
     for fold in range(n_splits):

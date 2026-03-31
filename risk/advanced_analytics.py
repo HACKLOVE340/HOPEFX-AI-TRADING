@@ -33,7 +33,7 @@ callers to use the correct multi-day methods.  Set to False only in tests.
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -81,10 +81,10 @@ class VaRResult:
     # since real gold/FX returns have fat tails and volatility clustering.
     scaling_approximate: bool = False
     scaling_note: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
             "var_value": self.var_value,
             "confidence_level": self.confidence_level,
             "time_horizon": self.time_horizon,
@@ -110,9 +110,9 @@ class MonteCarloResult:
     max_loss: float
     simulated_paths: Optional[NDArray[np.float64]] = None
     num_simulations: int = 10000
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "expected_return": self.expected_return,
             "expected_volatility": self.expected_volatility,
@@ -133,10 +133,10 @@ class StressTestResult:
     scenario_name: str
     portfolio_impact: float  # Percentage impact
     dollar_impact: float  # Dollar impact
-    affected_positions: List[str]
+    affected_positions: list[str]
     risk_level: str  # 'low', 'medium', 'high', 'severe'
     recommendation: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -148,8 +148,8 @@ class DrawdownAnalysis:
     max_drawdown_duration: int  # Days
     current_drawdown_duration: int
     recovery_rate: float  # Historical recovery rate
-    drawdown_events: List[Dict[str, Any]]
-    underwater_periods: List[Dict[str, Any]]
+    drawdown_events: list[dict[str, Any]]
+    underwater_periods: list[dict[str, Any]]
 
 
 class AdvancedRiskAnalytics:
@@ -164,7 +164,7 @@ class AdvancedRiskAnalytics:
     - Risk-adjusted performance metrics
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[dict[str, Any]] = None):
         """
         Initialize risk analytics.
 
@@ -184,7 +184,7 @@ class AdvancedRiskAnalytics:
 
         logger.info("Advanced Risk Analytics initialized")
 
-    def _initialize_stress_scenarios(self) -> Dict[str, Dict[str, Any]]:
+    def _initialize_stress_scenarios(self) -> dict[str, dict[str, Any]]:
         """Initialize predefined stress test scenarios."""
         return {
             "market_crash_2008": {
@@ -943,11 +943,11 @@ class AdvancedRiskAnalytics:
 
     def simulate_portfolio_scenarios(
         self,
-        positions: Dict[str, Dict[str, Any]],
+        positions: dict[str, dict[str, Any]],
         correlations: Optional[NDArray[np.float64]] = None,
         time_horizon: int = 30,
         num_simulations: Optional[int] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Simulate portfolio scenarios with correlated assets.
 
@@ -1022,7 +1022,7 @@ class AdvancedRiskAnalytics:
 
     def run_stress_test(
         self,
-        portfolio: Dict[str, Dict[str, Any]],
+        portfolio: dict[str, dict[str, Any]],
         scenario_name: str,
     ) -> StressTestResult:
         """
@@ -1085,8 +1085,8 @@ class AdvancedRiskAnalytics:
 
     def run_all_stress_tests(
         self,
-        portfolio: Dict[str, Dict[str, Any]],
-    ) -> List[StressTestResult]:
+        portfolio: dict[str, dict[str, Any]],
+    ) -> list[StressTestResult]:
         """Run all stress test scenarios."""
         results = []
         for scenario_name in self.stress_scenarios.keys():
@@ -1154,7 +1154,7 @@ class AdvancedRiskAnalytics:
         self,
         drawdown: NDArray[np.float64],
         threshold: float = -0.05,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Identify significant drawdown events."""
         events = []
         in_drawdown = False
@@ -1190,7 +1190,7 @@ class AdvancedRiskAnalytics:
 
         return events
 
-    def _calculate_recovery_rate(self, drawdown_events: List[Dict[str, Any]]) -> float:
+    def _calculate_recovery_rate(self, drawdown_events: list[dict[str, Any]]) -> float:
         """Calculate historical recovery rate."""
         if not drawdown_events:
             return 1.0
@@ -1198,7 +1198,7 @@ class AdvancedRiskAnalytics:
         recovered = sum(1 for e in drawdown_events if e["recovered"])
         return recovered / len(drawdown_events)
 
-    def _calculate_underwater_periods(self, drawdown: NDArray[np.float64]) -> List[Dict[str, Any]]:
+    def _calculate_underwater_periods(self, drawdown: NDArray[np.float64]) -> list[dict[str, Any]]:
         """Calculate time spent underwater."""
         underwater = drawdown < 0
         periods = []
@@ -1430,7 +1430,7 @@ class AdvancedRiskAnalytics:
         returns: NDArray[np.float64],
         equity_curve: Optional[NDArray[np.float64]] = None,
         portfolio_value: Optional[float] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Calculate comprehensive risk metrics."""
 
         ec: NDArray[np.float64] = (

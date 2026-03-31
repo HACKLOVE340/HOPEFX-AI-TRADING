@@ -49,7 +49,7 @@ class HealthCheckService:
             self.alerts.append(f"API check failed: {exc}")
             return False
 
-    def check_database(self, db_connection: Optional[Any] = None) -> Union[bool, str]:
+    def check_database(self, db_connection: Optional[Any] = None) -> bool | str:
         conn = db_connection or self.db_connection
         if conn is None:
             return "unconfigured"
@@ -60,7 +60,7 @@ class HealthCheckService:
             self.alerts.append(f"Database check failed: {exc}")
             return False
 
-    def check_cache(self, cache_service: Optional[Any] = None) -> Union[bool, str]:
+    def check_cache(self, cache_service: Optional[Any] = None) -> bool | str:
         svc = cache_service or self.cache_service
         if svc is None:
             return "unconfigured"
@@ -73,7 +73,7 @@ class HealthCheckService:
 
     def check_broker_connections(
         self, broker: Optional[Any] = None
-    ) -> Union[bool, str]:
+    ) -> bool | str:
         b = broker or self.broker
         if b is None:
             return "unconfigured"

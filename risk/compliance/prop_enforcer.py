@@ -48,7 +48,7 @@ import logging
 import os
 import threading
 from dataclasses import dataclass
-from datetime import datetime, time as dtime, timezone
+from datetime import datetime, time as dtime, timezone, UTC
 from enum import Enum, auto
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
@@ -196,14 +196,14 @@ class PropEnforcer:
         # State
         self._halted: bool = False
         self._halt_reason: str = ""
-        self._breach_log: List[BreachRecord] = []
-        self._news_events: List[float] = []  # UTC timestamps of upcoming news
+        self._breach_log: list[BreachRecord] = []
+        self._news_events: list[float] = []  # UTC timestamps of upcoming news
 
         # External kill-switch callback (e.g. KillSwitch.activate)
         self._kill_switch_fn = kill_switch_fn
 
         # Breach callbacks
-        self._on_breach_callbacks: List[Callable[[BreachType, str], None]] = []
+        self._on_breach_callbacks: list[Callable[[BreachType, str], None]] = []
 
         logger.info(
             "PropEnforcer loaded — daily_dd=%.1f%% max_dd=%.1f%% news_blackout=%ds weekend_close=%s",
@@ -235,8 +235,7 @@ class PropEnforcer:
                 self._sod_equity = current_equity
             if start_of_day_equity is not None:
                 self._sod_equity = start_of_day_equity
-            if current_equity > self._high_water_mark:
-                self._high_water_mark = current_equity
+            self._high_water_mark = max(self._high_water_mark, current_equity)
 
     def daily_reset(self, new_equity: float) -> None:
         """
@@ -245,8 +244,7 @@ class PropEnforcer:
         """
         with self._lock:
             self._sod_equity = new_equity
-            if new_equity > self._high_water_mark:
-                self._high_water_mark = new_equity
+            self._high_water_mark = max(self._high_water_mark, new_equity)
             # Clear daily halt if it was a daily-DD breach (total-DD stays)
             if self._halted and self._halt_reason.startswith("DAILY_DD"):
                 self._halted = False
@@ -267,7 +265,7 @@ class PropEnforcer:
         """Register a callback invoked on every breach (breach_type, detail)."""
         self._on_breach_callbacks.append(callback)
 
-    def before_execute(self, instrument: str = "") -> Tuple[bool, str]:
+    def before_execute(self, instrument: str = "") -> tuple[bool, str]:
         """
         Gate check — call before placing any order.
 
@@ -281,7 +279,7 @@ class PropEnforcer:
             if self._halted:
                 return False, f"Trading halted: {self._halt_reason}"
 
-            now_utc = datetime.now(timezone.utc)
+            now_utc = datetime.now(UTC)
 
             # 2. Weekend window check
             if self.cfg.weekend_close and self._is_weekend_window(now_utc):
@@ -378,7 +376,7 @@ class PropEnforcer:
         """Record breach, optionally halt, fire callbacks, send Telegram alert."""
         record = BreachRecord(
             breach_type=breach_type,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             detail=detail,
         )
         self._breach_log.append(record)
@@ -423,7 +421,7 @@ class PropEnforcer:
             text = (
                 f"{emoji} <b>HOPEFX PropEnforcer — {breach_type.name}</b>\n"
                 f"{detail}\n"
-                f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                f"Time: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}"
             )
             data = urllib.parse.urlencode(
                 {"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
@@ -433,7 +431,7 @@ class PropEnforcer:
                 data=data,
                 method="POST",
             )
-            urllib.request.urlopen(req, timeout=8)  # nosec B310 - webhook URL validated as https:// in config  # noqa: S310
+            urllib.request.urlopen(req, timeout=8)  # nosec B310 - webhook URL validated as https:// in config
         except Exception as exc:
             logger.warning("PropEnforcer Telegram alert failed: %s", exc)
 

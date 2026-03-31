@@ -18,7 +18,7 @@ import os
 import re
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional, Any, Pattern
 from dataclasses import dataclass
 from enum import Enum
@@ -60,11 +60,11 @@ class AuditEvent:
     ip_address: Optional[str]
     resource: str
     action: str
-    details: Dict[str, Any]
+    details: dict[str, Any]
     timestamp: datetime
     success: bool
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for logging/storage"""
         return {
             "event_type": self.event_type.value,
@@ -92,7 +92,7 @@ class LogSanitizer:
     """
 
     # Default patterns to redact
-    DEFAULT_PATTERNS: Dict[str, Pattern] = {
+    DEFAULT_PATTERNS: dict[str, Pattern] = {
         "api_key": re.compile(
             r'(?i)(api[_-]?key|apikey)["\s:=]+["\']?([a-zA-Z0-9_\-]{20,})["\']?'
         ),
@@ -117,7 +117,7 @@ class LogSanitizer:
         self,
         enabled: bool = True,
         redact_emails: bool = False,
-        custom_patterns: Optional[Dict[str, Pattern]] = None,
+        custom_patterns: Optional[dict[str, Pattern]] = None,
         redaction_text: str = "[REDACTED]",
     ):
         """
@@ -170,8 +170,8 @@ class LogSanitizer:
         return sanitized
 
     def sanitize_dict(
-        self, data: Dict[str, Any], sensitive_keys: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+        self, data: dict[str, Any], sensitive_keys: Optional[list[str]] = None
+    ) -> dict[str, Any]:
         """
         Sanitize a dictionary by redacting sensitive keys.
 
@@ -244,7 +244,7 @@ class SecurityAuditor:
             audit_log_path: Path to the audit log file
         """
         self.enabled = enabled
-        self._events: List[AuditEvent] = []
+        self._events: list[AuditEvent] = []
         self._log_sanitizer = LogSanitizer()
 
         if log_to_file:
@@ -272,7 +272,7 @@ class SecurityAuditor:
         level: SecurityLevel = SecurityLevel.INFO,
         user_id: Optional[str] = None,
         ip_address: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        details: Optional[dict[str, Any]] = None,
     ) -> AuditEvent:
         """
         Log a security audit event.
@@ -304,7 +304,7 @@ class SecurityAuditor:
             resource=resource,
             action=action,
             details=safe_details,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             success=success,
         )
 
@@ -333,7 +333,7 @@ class SecurityAuditor:
         level: Optional[SecurityLevel] = None,
         since: Optional[datetime] = None,
         limit: int = 100,
-    ) -> List[AuditEvent]:
+    ) -> list[AuditEvent]:
         """Get filtered audit events"""
         events = self._events
 
@@ -362,20 +362,20 @@ class CredentialRotationTracker:
             rotation_days: Days until credentials should be rotated
         """
         self.rotation_days = rotation_days
-        self._credentials: Dict[str, datetime] = {}
+        self._credentials: dict[str, datetime] = {}
 
     def register_credential(
         self, credential_name: str, created_at: Optional[datetime] = None
     ) -> None:
         """Register a credential for rotation tracking"""
-        self._credentials[credential_name] = created_at or datetime.now(timezone.utc)
+        self._credentials[credential_name] = created_at or datetime.now(UTC)
         logger.info(f"Registered credential for rotation tracking: {credential_name}")
 
     def get_credential_age(self, credential_name: str) -> Optional[timedelta]:
         """Get the age of a credential"""
         if credential_name not in self._credentials:
             return None
-        return datetime.now(timezone.utc) - self._credentials[credential_name]
+        return datetime.now(UTC) - self._credentials[credential_name]
 
     def needs_rotation(self, credential_name: str) -> bool:
         """Check if a credential needs rotation"""
@@ -384,11 +384,11 @@ class CredentialRotationTracker:
             return False
         return age.days >= self.rotation_days
 
-    def get_rotation_status(self) -> Dict[str, Dict[str, Any]]:
+    def get_rotation_status(self) -> dict[str, dict[str, Any]]:
         """Get rotation status for all tracked credentials"""
         status = {}
         for name, created_at in self._credentials.items():
-            age = datetime.now(timezone.utc) - created_at
+            age = datetime.now(UTC) - created_at
             days_until_rotation = max(0, self.rotation_days - age.days)
 
             status[name] = {
@@ -405,7 +405,7 @@ class CredentialRotationTracker:
 
         return status
 
-    def get_credentials_needing_rotation(self) -> List[str]:
+    def get_credentials_needing_rotation(self) -> list[str]:
         """Get list of credentials that need rotation"""
         return [name for name in self._credentials if self.needs_rotation(name)]
 
@@ -432,7 +432,7 @@ class SecurityConfigValidator:
 
     def __init__(self):
         """Initialize security config validator"""
-        self.issues: List[Dict[str, str]] = []
+        self.issues: list[dict[str, str]] = []
 
     def validate(self) -> bool:
         """
@@ -505,7 +505,7 @@ class SecurityConfigValidator:
 
         return is_valid
 
-    def get_security_report(self) -> Dict[str, Any]:
+    def get_security_report(self) -> dict[str, Any]:
         """Generate a security configuration report"""
         is_valid = self.validate()
         app_env = os.getenv("APP_ENV", "development")
@@ -586,7 +586,7 @@ def generate_secure_salt(length: int = 16) -> str:
     return secrets.token_hex(length)
 
 
-def check_security_setup() -> Dict[str, Any]:
+def check_security_setup() -> dict[str, Any]:
     """
     Perform a comprehensive security setup check.
 

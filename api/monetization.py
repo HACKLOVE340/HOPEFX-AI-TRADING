@@ -23,7 +23,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 logger = logging.getLogger(__name__)
 
-from monetization import (  # noqa: E402
+from monetization import (
     BillingCycle,
     PartnerType,
     StrategyCategory,
@@ -67,7 +67,7 @@ class PricingTierResponse(BaseModel):
     monthly_price: float
     annual_price: float
     commission_rate: float
-    features: Dict[str, Any]
+    features: dict[str, Any]
 
 
 class SubscribeRequest(BaseModel):
@@ -139,7 +139,7 @@ class StrategyListRequest(BaseModel):
     price: float
     license_type: str = "purchase"
     min_tier: str = "starter"
-    tags: Optional[List[str]] = None
+    tags: Optional[list[str]] = None
 
 
 class StrategyPurchaseRequest(BaseModel):
@@ -191,7 +191,7 @@ class WhiteLabelRequest(BaseModel):
 # ==========================
 
 
-@router.get("/pricing", response_model=List[PricingTierResponse])
+@router.get("/pricing", response_model=list[PricingTierResponse])
 async def get_pricing():
     """
     Get all pricing tiers.
@@ -252,7 +252,7 @@ async def subscribe(request: SubscribeRequest):
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid tier or billing cycle: {str(e)}",
+            detail=f"Invalid tier or billing cycle: {e!s}",
         ) from e
 
     # Free tier - no payment needed
@@ -527,7 +527,7 @@ async def list_strategy(request: StrategyListRequest):
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid category, license type, or tier: {str(e)}",
+            detail=f"Invalid category, license type, or tier: {e!s}",
         ) from e
 
     strategy = strategy_marketplace.list_strategy(
@@ -879,7 +879,7 @@ async def get_enterprise_stats():
 
 
 @router.post("/webhook/stripe")
-async def stripe_webhook(payload: Dict[str, Any] = Body(...)):
+async def stripe_webhook(payload: dict[str, Any] = Body(...)):
     """
     Handle Stripe webhooks.
 
@@ -915,8 +915,8 @@ async def stripe_webhook(payload: Dict[str, Any] = Body(...)):
 # Strategy Submission & Audit
 # ==========================
 
-from monetization.marketplace_submission import submission_manager  # noqa: E402
-from monetization.revenue_split import revenue_engine, TransactionType  # noqa: E402
+from monetization.marketplace_submission import submission_manager
+from monetization.revenue_split import revenue_engine, TransactionType
 
 
 class SubmitStrategyRequest(BaseModel):
@@ -924,11 +924,11 @@ class SubmitStrategyRequest(BaseModel):
     name: str = Field(..., min_length=3, max_length=100)
     description: str = Field(..., min_length=100)
     strategy_code: str = Field(..., min_length=10)
-    backtest_results: Dict[str, Any]
+    backtest_results: dict[str, Any]
     price_monthly: float = Field(0.0, ge=0)
     price_yearly: float = Field(0.0, ge=0)
     category: str = "algorithmic"
-    tags: List[str] = []
+    tags: list[str] = []
 
 
 class ManualReviewRequest(BaseModel):

@@ -11,7 +11,7 @@ Simulates order execution with realistic fills, slippage, and commissions.
 
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional
 
 from backtesting.events import OrderEvent, FillEvent
@@ -29,7 +29,7 @@ class OrderResult:
 
 def create_audit_log(order: Order, result: OrderResult) -> dict:
     return {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "order_hash": hashlib.sha256(str(order).encode()).hexdigest(),
         "success": result.success,
         "fill_price": result.fill_price,

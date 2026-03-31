@@ -40,7 +40,7 @@ import logging
 import threading
 import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, Optional
 
 import os
@@ -176,7 +176,7 @@ class MicrostructureEngine:
                 return None
             return self._build_snapshot()
 
-    def get_ml_features(self) -> Dict[str, float]:
+    def get_ml_features(self) -> dict[str, float]:
         """
         Return 16 microstructure features for ML pipeline injection.
 
@@ -303,7 +303,7 @@ class MicrostructureEngine:
             last.bid_depth = max(bid_depth, 0.0)
             last.ask_depth = max(ask_depth, 0.0)
 
-    def health(self) -> Dict[str, object]:
+    def health(self) -> dict[str, object]:
         """
         Return a health summary dict for monitoring and the orchestrator health endpoint.
 
@@ -427,7 +427,7 @@ class MicrostructureEngine:
         # Auto-reset at UTC midnight — call _reset_session_unlocked() to avoid
         # deadlock: _process_tick is already called under self._lock, and the
         # public reset_session() also acquires self._lock.
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         if now_utc.day != self._last_session_day and self._last_session_day >= 0:
             self._reset_session_unlocked()
         self._last_session_day = now_utc.day
@@ -454,7 +454,7 @@ class MicrostructureEngine:
         if not ticks:
             return MicrostructureSnapshot(
                 symbol="XAU_USD",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 bid=0,
                 ask=0,
                 spread=0,
@@ -490,7 +490,7 @@ class MicrostructureEngine:
 
         return MicrostructureSnapshot(
             symbol="XAU_USD",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             bid=last.bid,
             ask=last.ask,
             spread=last.spread,
@@ -508,7 +508,7 @@ class MicrostructureEngine:
             tick_count=len(ticks),
         )
 
-    def _zero_features(self) -> Dict[str, float]:
+    def _zero_features(self) -> dict[str, float]:
         return {
             "micro_spread": 0.0,
             "micro_spread_pct": 0.0,

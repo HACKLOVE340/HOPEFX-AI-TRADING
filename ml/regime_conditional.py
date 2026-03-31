@@ -393,10 +393,10 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         self.hurst_col = hurst_col
         self.adx_col = adx_col
 
-        self._regime_models: Dict[int, Pipeline] = {}
+        self._regime_models: dict[int, Pipeline] = {}
         self._global_model: Optional[Pipeline] = None
-        self._regime_counts: Dict[int, int] = {}
-        self._feature_names: List[str] = []
+        self._regime_counts: dict[int, int] = {}
+        self._feature_names: list[str] = []
         self._is_fitted = False
 
     # ── Fitting ───────────────────────────────────────────────────────────────
@@ -478,7 +478,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
 
     # ── Evaluation ────────────────────────────────────────────────────────────
 
-    def evaluate(self, X: pd.DataFrame, y: pd.Series) -> Dict:
+    def evaluate(self, X: pd.DataFrame, y: pd.Series) -> dict:
         """
         Evaluate per-regime and overall accuracy, F1, and AUC.
 
@@ -491,7 +491,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         preds = self.predict(X)
         proba = self.predict_proba(X)[:, 1]
 
-        def _metrics(mask: np.ndarray, tag: str) -> Dict:
+        def _metrics(mask: np.ndarray, tag: str) -> dict:
             if mask.sum() < 2:
                 return {"n": int(mask.sum()), "note": "too few samples"}
             p = preds[mask]
@@ -572,7 +572,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         symbol: str = "XAU_USD",
         min_data_quality: float = 0.40,
         extra_features: Optional[pd.DataFrame] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Full end-to-end live prediction wired to the orchestrator.
 
@@ -796,7 +796,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         self,
         X: pd.DataFrame,
         min_data_quality: float = 0.40,
-    ) -> Dict:
+    ) -> dict:
         """
         Predict with live orchestrator data quality and sentiment gating.
 
@@ -891,7 +891,7 @@ def walk_forward_regime_eval(
     X: pd.DataFrame,
     y: pd.Series,
     n_splits: int = 5,
-) -> Dict:
+) -> dict:
     """
     Walk-forward cross-validation using RegimeConditionalModel.
 
@@ -902,7 +902,7 @@ def walk_forward_regime_eval(
     from sklearn.model_selection import TimeSeriesSplit
 
     tscv = TimeSeriesSplit(n_splits=n_splits, gap=1)
-    fold_results: List[Dict] = []
+    fold_results: list[dict] = []
 
     for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
         X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]

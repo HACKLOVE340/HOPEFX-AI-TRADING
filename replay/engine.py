@@ -8,7 +8,7 @@
 import logging
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Callable, Dict, List, Optional
 
 from replay.models import ReplaySpeed, ReplayState, ReplaySession, ReplayBar
@@ -29,13 +29,13 @@ class ChartReplayEngine:
     - Session recording and review
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[dict[str, Any]] = None):
         """Initialize replay engine."""
         self.config = config or {}
-        self.sessions: Dict[str, ReplaySession] = {}
+        self.sessions: dict[str, ReplaySession] = {}
         self.active_session_id: Optional[str] = None
-        self.data_cache: Dict[str, List[ReplayBar]] = {}
-        self.callbacks: Dict[str, List[Callable]] = {
+        self.data_cache: dict[str, list[ReplayBar]] = {}
+        self.callbacks: dict[str, list[Callable]] = {
             "on_bar": [],
             "on_trade": [],
             "on_state_change": [],
@@ -66,7 +66,7 @@ class ChartReplayEngine:
         Returns:
             New replay session
         """
-        session_id = f"replay_{len(self.sessions) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
+        session_id = f"replay_{len(self.sessions) + 1}_{int(datetime.now(UTC).timestamp())}"
 
         session = ReplaySession(
             session_id=session_id,
@@ -102,7 +102,7 @@ class ChartReplayEngine:
             f"Loaded {len(self.data_cache.get(data_key, []))} bars for {data_key}"
         )
 
-    def _generate_sample_data(self, session: ReplaySession) -> List[ReplayBar]:
+    def _generate_sample_data(self, session: ReplaySession) -> list[ReplayBar]:
         """
         Generate bar data for replay.
 
@@ -138,12 +138,12 @@ class ChartReplayEngine:
         delta = tf_map.get(session.timeframe, timedelta(hours=1))
 
         while current_time <= session.end_date:
-            change = random.uniform(-0.5, 0.5)  # nosec B311 - replay bar generation, not cryptographic  # noqa: S311
+            change = random.uniform(-0.5, 0.5)  # nosec B311 - replay bar generation, not cryptographic
             open_price = price
             close_price = price + change
-            high_price = max(open_price, close_price) + random.uniform(0, 0.3)  # nosec B311 - replay bar generation, not cryptographic  # noqa: S311
-            low_price = min(open_price, close_price) - random.uniform(0, 0.3)  # nosec B311 - replay bar generation, not cryptographic  # noqa: S311
-            volume = random.uniform(1000, 10000)  # nosec B311 - replay bar generation, not cryptographic  # noqa: S311
+            high_price = max(open_price, close_price) + random.uniform(0, 0.3)  # nosec B311 - replay bar generation, not cryptographic
+            low_price = min(open_price, close_price) - random.uniform(0, 0.3)  # nosec B311 - replay bar generation, not cryptographic
+            volume = random.uniform(1000, 10000)  # nosec B311 - replay bar generation, not cryptographic
 
             bars.append(
                 ReplayBar(
@@ -161,7 +161,7 @@ class ChartReplayEngine:
 
         return bars
 
-    def _fetch_yfinance_data(self, session: ReplaySession) -> List[ReplayBar]:
+    def _fetch_yfinance_data(self, session: ReplaySession) -> list[ReplayBar]:
         """
         Fetch real OHLCV data from yfinance for the replay session.
 
@@ -171,7 +171,7 @@ class ChartReplayEngine:
             import yfinance as yf
 
             # Map internal symbol to yfinance ticker (e.g. XAUUSD → GC=F)
-            _SYMBOL_MAP: Dict[str, str] = {
+            _SYMBOL_MAP: dict[str, str] = {
                 "XAUUSD": "GC=F",
                 "XAGUSD": "SI=F",
                 "EURUSD": "EURUSD=X",
@@ -181,7 +181,7 @@ class ChartReplayEngine:
             ticker = _SYMBOL_MAP.get(session.symbol.upper(), session.symbol)
 
             # Map replay timeframe to yfinance interval
-            _TF_MAP: Dict[str, str] = {
+            _TF_MAP: dict[str, str] = {
                 "1M": "1m",
                 "5M": "5m",
                 "15M": "15m",
@@ -209,7 +209,7 @@ class ChartReplayEngine:
                 logger.warning(f"yfinance returned no data for {ticker}")
                 return []
 
-            bars: List[ReplayBar] = []
+            bars: list[ReplayBar] = []
             for ts, row in df.iterrows():
                 bars.append(
                     ReplayBar(
@@ -314,7 +314,7 @@ class ChartReplayEngine:
         order_type: str = "MARKET",
         price: Optional[float] = None,
         session_id: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         Place a practice order in the replay session.
 
@@ -380,7 +380,7 @@ class ChartReplayEngine:
                 return bar
         return bars[-1] if bars else None
 
-    def _update_position(self, session: ReplaySession, trade: Dict[str, Any]):
+    def _update_position(self, session: ReplaySession, trade: dict[str, Any]):
         """Update session positions based on trade."""
         # Find existing position
         existing_pos = None
@@ -466,7 +466,7 @@ class ChartReplayEngine:
             except Exception as e:
                 logger.error(f"Callback error: {e}")
 
-    def get_session_summary(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_session_summary(self, session_id: Optional[str] = None) -> dict[str, Any]:
         """Get summary of replay session."""
         session = self._get_session(session_id)
         if not session:

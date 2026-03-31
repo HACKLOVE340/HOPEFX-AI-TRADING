@@ -50,7 +50,7 @@ class OptionsAnalyzer:
         strike_price: float,
         time_to_expiry: float,
         volatility: float,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Calculate option Greeks"""
         return {"delta": 0.5, "gamma": 0.03, "theta": -0.02, "vega": 0.15, "rho": 0.10}
 

@@ -10,7 +10,7 @@ Handles payments via Flutterwave (Nigeria) - Cards, Bank, Mobile Money.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Dict, Optional
 import logging
@@ -34,10 +34,10 @@ class FlutterwaveClient:
 
     def initialize_payment(
         self, user_id: str, amount: Decimal, currency: str = "USD"
-    ) -> Dict:
+    ) -> dict:
         """Initialize Flutterwave payment"""
         try:
-            tx_ref = f"FLW-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+            tx_ref = f"FLW-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
             fee = amount * self.FEE_PERCENT
 
             payment = {
@@ -58,7 +58,7 @@ class FlutterwaveClient:
             logger.error(f"Error initializing Flutterwave payment: {e}")
             raise
 
-    def verify_transaction(self, tx_ref: str) -> Dict:
+    def verify_transaction(self, tx_ref: str) -> dict:
         """Verify Flutterwave transaction"""
         payment = self.payments.get(tx_ref)
         if payment:
@@ -68,11 +68,11 @@ class FlutterwaveClient:
 
     def initiate_payout(
         self, user_id: str, amount: Decimal, bank_code: str, account_number: str
-    ) -> Dict:
+    ) -> dict:
         """Initiate bank payout"""
         try:
             transfer_ref = (
-                f"PAYOUT-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+                f"PAYOUT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
             )
 
             return {

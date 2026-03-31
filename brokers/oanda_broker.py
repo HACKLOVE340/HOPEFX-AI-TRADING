@@ -65,7 +65,7 @@ class OandaBroker:
         Optional: ``timeout_seconds`` (int, default 10).
     """
 
-    def __init__(self, config: Dict) -> None:
+    def __init__(self, config: dict) -> None:
         self._config = config
         self.connected: bool = False
         self._session: Optional[aiohttp.ClientSession] = None
@@ -142,7 +142,7 @@ class OandaBroker:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    async def get_account_info(self) -> Optional[Dict]:
+    async def get_account_info(self) -> Optional[dict]:
         """Return account summary as a plain dict."""
         if not self._assert_connected("get_account_info"):
             return None
@@ -168,7 +168,7 @@ class OandaBroker:
                 "leverage": acct.get("marginRate"),
             }
 
-    async def get_positions(self) -> List[Dict]:
+    async def get_positions(self) -> list[dict]:
         """Return all open positions."""
         if not self._assert_connected("get_positions"):
             return []
@@ -194,7 +194,7 @@ class OandaBroker:
                 )
             return positions
 
-    async def get_orders(self) -> List[Dict]:
+    async def get_orders(self) -> list[dict]:
         """Return all pending orders."""
         if not self._assert_connected("get_orders"):
             return []
@@ -219,7 +219,7 @@ class OandaBroker:
 
     # ── Order execution ───────────────────────────────────────────────────────
 
-    async def place_order(self, order_params: Dict) -> Dict:
+    async def place_order(self, order_params: dict) -> dict:
         """
         Place a trade order via the OANDA v20 Orders endpoint.
 
@@ -254,7 +254,7 @@ class OandaBroker:
         )
         client_id = order_params.get("client_id")
 
-        order_body: Dict = {
+        order_body: dict = {
             "type": order_type,
             "instrument": instrument,
             "units": units,
@@ -316,7 +316,7 @@ class OandaBroker:
             logger.error("OandaBroker.place_order network error: %s", exc)
             return {"success": False, "order_id": None, "comment": str(exc)}
 
-    async def close_trade(self, trade_id: str, units: Optional[str] = "ALL") -> Dict:
+    async def close_trade(self, trade_id: str, units: Optional[str] = "ALL") -> dict:
         """
         Close an open trade (full or partial).
 
@@ -344,7 +344,7 @@ class OandaBroker:
         except aiohttp.ClientError as exc:
             return {"success": False, "comment": str(exc)}
 
-    async def cancel_order(self, order_id: str) -> Dict:
+    async def cancel_order(self, order_id: str) -> dict:
         """Cancel a pending order by ID."""
         if not self._assert_connected("cancel_order"):
             return {"success": False, "comment": "Not connected"}
@@ -363,7 +363,7 @@ class OandaBroker:
         except aiohttp.ClientError as exc:
             return {"success": False, "comment": str(exc)}
 
-    async def get_tick(self, instrument: str = "XAU_USD") -> Optional[Dict]:
+    async def get_tick(self, instrument: str = "XAU_USD") -> Optional[dict]:
         """Return the latest bid/ask for *instrument*."""
         if not self._assert_connected("get_tick"):
             return None
@@ -402,7 +402,7 @@ class OandaBroker:
             return False
         return True
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         """Return a health snapshot for monitoring."""
         return {
             "broker": "oanda",

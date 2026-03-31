@@ -186,7 +186,7 @@ class NuclearStreamer:
         self._circuit_open_at: dict[str, Optional[float]] = {}
 
         # Subscribers notified on every validated tick.
-        self._subscribers: List[Any] = []
+        self._subscribers: list[Any] = []
 
         # Redis client (created lazily in run()).
         self._redis: Optional[Any] = None
@@ -342,7 +342,7 @@ class NuclearStreamer:
                 self._record_success(source)
             except asyncio.CancelledError:
                 break
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 self._record_failure(source)
                 logger.warning(
                     "Source '%s' disconnected: %s — reconnecting in %.0f s",
@@ -413,7 +413,7 @@ class NuclearStreamer:
         if self._redis:
             try:
                 await self._redis.rpush(_REDIS_QUEUE, json.dumps(payload))
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("Redis publish error: %s", exc)
 
         logger.debug(

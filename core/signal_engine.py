@@ -24,7 +24,7 @@ Phase chain (Phases 1–4 are optional and gated by feature flags):
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -179,7 +179,7 @@ _AUTO_TRADE = os.getenv("SIGNAL_ENGINE_AUTO_TRADE", "false").lower() == "true"
 async def _fetch_market_data(
     symbol: str,
     app_state: Any = None,
-) -> Optional[Dict[str, Any]]:
+) -> Optional[dict[str, Any]]:
     """
     Fetch latest OHLCV data for a symbol from the broker's market data feed.
 
@@ -210,7 +210,7 @@ async def _fetch_market_data(
                     "highs": highs,
                     "lows": lows,
                     "volumes": volumes,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
         except Exception as exc:
             logger.warning("Broker OHLCV fetch failed for %s: %s", symbol, exc)
@@ -251,15 +251,15 @@ async def run_signal_engine(app_state: Any) -> None:
 
 def _compute_signal(
     brain: Any,
-    data: Dict[str, Any],
+    data: dict[str, Any],
     symbol: str,
-) -> Optional[Dict[str, Any]]:
+) -> Optional[dict[str, Any]]:
     """
     Run StrategyBrain and return a signal dict, or None if no consensus.
 
     Returns dict with keys: direction, base_confidence, signal (raw object).
     """
-    result: Dict[str, Any] = brain.analyze_joint(data)
+    result: dict[str, Any] = brain.analyze_joint(data)
     if not result.get("consensus_reached"):
         logger.debug("No consensus for %s: %s", symbol, result.get("reason"))
         return None
@@ -280,7 +280,7 @@ def _compute_signal(
     }
 
 
-def _build_ohlcv_df(data: Dict[str, Any]) -> "pd.DataFrame":
+def _build_ohlcv_df(data: dict[str, Any]) -> "pd.DataFrame":
     """
     Reconstruct a rolling OHLCV DataFrame from the broker bar list.
 
@@ -346,7 +346,7 @@ def _fetch_macro_df(
     try:
         ohlcv_indexed = ohlcv_df.copy()
         if not isinstance(ohlcv_indexed.index, pd.DatetimeIndex):
-            end_ts = datetime.now(timezone.utc)
+            end_ts = datetime.now(UTC)
             idx = pd.date_range(
                 end=end_ts,
                 periods=len(ohlcv_indexed),
@@ -500,7 +500,7 @@ def _apply_deep_ensemble_blend(prob: float, ohlcv_df: Any, symbol: str) -> float
 
 def _predict_advanced(
     adv_predictor: Any,
-    data: Dict[str, Any],
+    data: dict[str, Any],
     symbol: str,
     app_state: Any,
 ) -> tuple:
@@ -535,7 +535,7 @@ def _predict_advanced(
 def _predict_basic(
     active_model: Any,
     model_ver: str,
-    data: Dict[str, Any],
+    data: dict[str, Any],
     symbol: str,
     base_confidence: float,
 ) -> tuple:
@@ -576,7 +576,7 @@ def _predict_basic(
 
 
 def _compute_ml_probability(
-    data: Dict[str, Any],
+    data: dict[str, Any],
     symbol: str,
     base_confidence: float,
     app_state: Any = None,
@@ -639,13 +639,13 @@ def notify_fill(
         logger.debug("notify_fill failed (non-fatal): %s", exc)
 
 
-def get_signal_engine_status() -> Dict[str, Any]:
+def get_signal_engine_status() -> dict[str, Any]:
     """
     Return a health-check dict for all active Phase 1–4 stores.
 
     Suitable for exposing via a /health or /status API endpoint.
     """
-    status: Dict[str, Any] = {
+    status: dict[str, Any] = {
         "ml_available": _ML_AVAILABLE,
         "symbols": _SYMBOLS,
         "interval_seconds": _INTERVAL_SECONDS,
@@ -697,7 +697,7 @@ def get_signal_engine_status() -> Dict[str, Any]:
 async def _publish_and_broadcast(
     app_state: Any,
     symbol: str,
-    signal_payload: Dict[str, Any],
+    signal_payload: dict[str, Any],
 ) -> None:
     """
     Publish a typed SignalEvent to the event bus and broadcast over WebSocket.
@@ -771,8 +771,8 @@ async def _publish_and_broadcast(
 async def _execute_if_approved(
     app_state: Any,
     symbol: str,
-    signal_payload: Dict[str, Any],
-    data: Optional[Dict[str, Any]] = None,
+    signal_payload: dict[str, Any],
+    data: Optional[dict[str, Any]] = None,
 ) -> None:
     """
     Apply risk filter and execute an auto-trade if approved.
@@ -828,9 +828,9 @@ async def _execute_if_approved(
     quantity: float = 0.0
     if risk_manager is not None:
         try:
-            account_info: Dict[str, Any] = await broker.get_account_info()
-            positions: List[Any] = await broker.get_positions()
-            positions_dicts: List[Dict[str, Any]] = [
+            account_info: dict[str, Any] = await broker.get_account_info()
+            positions: list[Any] = await broker.get_positions()
+            positions_dicts: list[dict[str, Any]] = [
                 {
                     "symbol": p.symbol,
                     "quantity": p.quantity,
@@ -933,7 +933,7 @@ async def _execute_if_approved(
                         import numpy as _np
 
                         h = _np.array(highs[-15:], dtype=float)
-                        l = _np.array(lows[-15:], dtype=float)  # noqa: E741
+                        l = _np.array(lows[-15:], dtype=float)
                         c = _np.array(closes_list[-15:], dtype=float)
                         tr = _np.maximum(
                             h[1:] - l[1:],
@@ -1160,7 +1160,7 @@ def _compute_atr(highs: list, lows: list, closes: list, entry_price: float) -> f
 
 def _resolve_sl_tp(
     signal: Any,
-    data: Dict[str, Any],
+    data: dict[str, Any],
     direction: str,
     entry_price: float,
 ) -> tuple:
@@ -1229,7 +1229,7 @@ async def _tick(app_state: Any) -> None:
     for sym in _SYMBOLS:
         symbol: str = sym.strip().upper()
 
-        data: Optional[Dict[str, Any]] = await _fetch_market_data(symbol, app_state=app_state)
+        data: Optional[dict[str, Any]] = await _fetch_market_data(symbol, app_state=app_state)
         if not data:
             continue
 
@@ -1248,7 +1248,7 @@ async def _tick(app_state: Any) -> None:
         entry_price      = getattr(signal, "entry_price", data["close"])
         sl_raw, tp_raw   = _resolve_sl_tp(signal, data, direction, entry_price)
 
-        signal_payload: Dict[str, Any] = {
+        signal_payload: dict[str, Any] = {
             "symbol":        symbol,
             "direction":     direction,
             "confidence":    base_confidence,
@@ -1257,7 +1257,7 @@ async def _tick(app_state: Any) -> None:
             "entry_price":   entry_price,
             "stop_loss":     round(sl_raw, 5) if sl_raw is not None else None,
             "take_profit":   round(tp_raw, 5) if tp_raw is not None else None,
-            "timestamp":     datetime.now(timezone.utc).isoformat(),
+            "timestamp":     datetime.now(UTC).isoformat(),
             "source":        "strategy_brain",
         }
 

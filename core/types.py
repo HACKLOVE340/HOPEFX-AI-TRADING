@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 import sys
 
@@ -156,7 +156,7 @@ class Order(BaseModel):
     filled_qty: Decimal = Decimal("0")
     avg_fill_price: Decimal | None = None
     time_in_force: TimeInForce = TimeInForce.GTC
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     venue: Venue = Venue.PAPER
     client_order_id: str | None = None
 

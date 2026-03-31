@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 def _load_recent_candles_from_csv(
     symbol: str = "XAU_USD",
     count: int = 60,
-) -> List[Dict]:
+) -> list[dict]:
     """
     Load the most recent ``count`` H1 candles from the local CSV file.
 
@@ -223,7 +223,7 @@ class AgentResult:
     strategy_name: str
     backtest: Optional[BacktestResult]
     iterations: int
-    conversation: List[Dict[str, str]] = field(default_factory=list)
+    conversation: list[dict[str, str]] = field(default_factory=list)
     error: Optional[str] = None
     strategy_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
 
@@ -231,7 +231,7 @@ class AgentResult:
 # ── sandbox execution ─────────────────────────────────────────────────────────
 
 
-def _compile_strategy(code: str) -> Tuple[Optional[Any], Optional[str]]:
+def _compile_strategy(code: str) -> tuple[Optional[Any], Optional[str]]:
     """
     Compile and instantiate a GeneratedStrategy from raw source code.
 
@@ -292,7 +292,7 @@ def _compile_strategy(code: str) -> Tuple[Optional[Any], Optional[str]]:
 
 def _run_backtest(
     strategy: Any,
-    candles: List[Dict],
+    candles: list[dict],
     initial_balance: float = 10_000.0,
     position_pct: float = 0.10,
     commission: float = 0.0035,  # 35 bps — realistic XAUUSD spread + commission
@@ -305,7 +305,7 @@ def _run_backtest(
     """
     try:
         import numpy as np
-        import pandas as pd  # noqa: F401
+        import pandas as pd
         from strategies.base import SignalType
     except ImportError as exc:
         return BacktestResult(0, 0, 0, 0, 0, error=str(exc))
@@ -314,7 +314,7 @@ def _run_backtest(
         return BacktestResult(0, 0, 0, 0, 0, error="Not enough candle data")
 
     balance = initial_balance
-    equity_curve: List[float] = [balance]
+    equity_curve: list[float] = [balance]
     position = 0.0  # positive = long units, negative = short units
     entry_price = 0.0
     wins = losses = 0
@@ -418,7 +418,7 @@ class LLMAgent:
         self.max_iterations = max_iterations
         self.target_sharpe = target_sharpe
         self.candle_fetcher = candle_fetcher
-        self._history: List[Dict[str, str]] = []
+        self._history: list[dict[str, str]] = []
         self._enable_rag = enable_rag
         self._vector_store = None  # lazy-initialised on first chat call
 
@@ -444,7 +444,7 @@ class LLMAgent:
         logger.info("LLM agent starting — prompt: %s", prompt[:80])
 
         # fetch candles once
-        candles: List[Dict] = []
+        candles: list[dict] = []
         if self.candle_fetcher:
             try:
                 candles = await self.candle_fetcher(symbol, timeframe, candle_count)
@@ -604,7 +604,7 @@ class LLMAgent:
         Returns an empty string when no live data is accessible.
         """
         try:
-            from app import app_state  # noqa: PLC0415
+            from app import app_state
 
             broker = getattr(app_state, "broker", None)
             if broker is None:
@@ -654,7 +654,7 @@ class LLMAgent:
                 self._vector_store = MarketVectorStore(persist_dir=persist_dir)
 
             # Load recent candles for context
-            candles: List[Dict] = []
+            candles: list[dict] = []
             if self.candle_fetcher:
                 try:
                     candles = await self.candle_fetcher("XAU_USD", "H1", 60)
@@ -686,8 +686,8 @@ class LLMAgent:
     # ── internals ─────────────────────────────────────────────────────────────
 
     async def _call_llm_with_messages(
-        self, messages: List[Dict[str, str]]
-    ) -> Tuple[str, Optional[str]]:
+        self, messages: list[dict[str, str]]
+    ) -> tuple[str, Optional[str]]:
         """Call GPT-4 with an explicit message list (used for RAG injection)."""
         try:
             response = await self._client.chat.completions.create(
@@ -699,7 +699,7 @@ class LLMAgent:
             content = response.choices[0].message.content.strip()
             if content.startswith("```"):
                 lines = content.splitlines()
-                content = "\n".join(l for l in lines if not l.startswith("```")).strip()  # noqa: E741
+                content = "\n".join(l for l in lines if not l.startswith("```")).strip()
             return content, None
         except openai.AuthenticationError:
             return "", "Invalid OpenAI API key"
@@ -710,7 +710,7 @@ class LLMAgent:
         except (OSError, ValueError, RuntimeError) as exc:
             return "", f"LLM call failed: {exc}"
 
-    async def _call_llm(self) -> Tuple[str, Optional[str]]:
+    async def _call_llm(self) -> tuple[str, Optional[str]]:
         """Call GPT-4 and return (content, error)."""
         try:
             response = await self._client.chat.completions.create(
@@ -723,7 +723,7 @@ class LLMAgent:
             # strip accidental markdown fences
             if content.startswith("```"):
                 lines = content.splitlines()
-                content = "\n".join(l for l in lines if not l.startswith("```")).strip()  # noqa: E741
+                content = "\n".join(l for l in lines if not l.startswith("```")).strip()
             self._history.append({"role": "assistant", "content": content})
             return content, None
         except openai.AuthenticationError:
@@ -787,7 +787,7 @@ def create_agent(
     fetcher = None
     if candle_source is not None:
 
-        async def fetcher(symbol: str, timeframe: str, count: int) -> List[Dict]:
+        async def fetcher(symbol: str, timeframe: str, count: int) -> list[dict]:
             return await candle_source.get_candles(symbol, timeframe, count)
 
     return LLMAgent(

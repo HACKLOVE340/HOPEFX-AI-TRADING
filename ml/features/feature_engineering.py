@@ -13,6 +13,6 @@ so that any code importing from ml.features.feature_engineering continues
 to work without modification.
 """
 
-from ml.features.advanced_features import AdvancedFeatureEngineer  # noqa: F401
+from ml.features.advanced_features import AdvancedFeatureEngineer
 
 __all__ = ["AdvancedFeatureEngineer"]

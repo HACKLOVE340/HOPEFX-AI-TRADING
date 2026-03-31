@@ -28,7 +28,7 @@ class PerformancePlotter:
     Create performance visualizations.
     """
 
-    def __init__(self, results: Dict):
+    def __init__(self, results: dict):
         """
         Initialize plotter.
 

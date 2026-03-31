@@ -197,18 +197,18 @@ class SignalFilter:
 
     def __init__(self) -> None:
         # Per-symbol rolling trade outcome windows
-        self._outcomes: Dict[str, Deque[_TradeOutcome]] = {}
+        self._outcomes: dict[str, deque[_TradeOutcome]] = {}
         # Global outcome window (used when per-symbol window is too small)
-        self._global_outcomes: Deque[_TradeOutcome] = deque(maxlen=_EV_WINDOW * 3)
+        self._global_outcomes: deque[_TradeOutcome] = deque(maxlen=_EV_WINDOW * 3)
         # Circuit-breaker state
-        self._cb_tripped: Dict[str, bool] = {}  # per-symbol trip state
+        self._cb_tripped: dict[str, bool] = {}  # per-symbol trip state
         self._cb_trip_count: int = 0
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def check(
         self,
-        signal: Dict[str, Any],
+        signal: dict[str, Any],
         ohlcv: Optional[Any] = None,
         symbol: Optional[str] = None,
     ) -> FilterResult:
@@ -288,7 +288,7 @@ class SignalFilter:
 
     def filter(
         self,
-        signal: Dict[str, Any],
+        signal: dict[str, Any],
         ohlcv: Optional[Any] = None,
         symbol: Optional[str] = None,
     ) -> FilterResult:
@@ -322,10 +322,10 @@ class SignalFilter:
             if len(recent) >= 5:
                 win_rate = sum(1 for o in recent if o.pnl_pct > 0) / len(recent)
                 _PROM.accuracy_gauge.labels(symbol=symbol).set(win_rate)
-        except Exception:  # nosec B110 - Prometheus metric failure must not affect signal filtering  # noqa: S110
+        except Exception:  # nosec B110 - Prometheus metric failure must not affect signal filtering
             pass
 
-    def ev_stats(self, symbol: Optional[str] = None) -> Dict[str, Any]:
+    def ev_stats(self, symbol: Optional[str] = None) -> dict[str, Any]:
         """Return EV statistics for monitoring/API exposure."""
         outcomes = list(self._outcomes.get(symbol or "", [])) or list(
             self._global_outcomes
@@ -354,7 +354,7 @@ class SignalFilter:
             "threshold": _EV_MIN,
         }
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Return aggregate filter statistics for health endpoints.
 
@@ -362,7 +362,7 @@ class SignalFilter:
         state, and current gate configuration.
         """
         global_stats = self.ev_stats(None)
-        per_symbol: Dict[str, Any] = {}
+        per_symbol: dict[str, Any] = {}
         for sym, dq in self._outcomes.items():
             if dq:
                 per_symbol[sym] = self.ev_stats(sym)
@@ -494,7 +494,7 @@ class SignalFilter:
                 # Strong OFI + sentiment alignment → trending
                 if abs(ofi) > 0.5 and abs(sentiment) > 0.3:
                     return "TRENDING"
-        except Exception:  # nosec B110 - feature unavailable; fall back to OHLCV regime  # noqa: S110
+        except Exception:  # nosec B110 - feature unavailable; fall back to OHLCV regime
             pass
 
         # Fall back to OHLCV-based regime
@@ -514,7 +514,7 @@ class SignalFilter:
                         return "MEAN_REVERTING"
                     if hurst > 0.55:
                         return "TRENDING"
-            except Exception:  # nosec B110 - Hurst computation unavailable; return unknown regime  # noqa: S110
+            except Exception:  # nosec B110 - Hurst computation unavailable; return unknown regime
                 pass
 
         return "unknown"
@@ -757,7 +757,7 @@ class SignalFilter:
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _extract_confidence(signal: Dict[str, Any]) -> float:
+    def _extract_confidence(signal: dict[str, Any]) -> float:
         """
         Extract normalised confidence [0, 1] from a signal dict.
 

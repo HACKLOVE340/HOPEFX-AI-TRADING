@@ -24,7 +24,7 @@ import logging
 import os
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -54,7 +54,7 @@ except ImportError:
     logger.error("xgboost not installed. Install: pip install xgboost>=2.0.0")
 
 try:
-    from sklearn.metrics import accuracy_score, classification_report, roc_auc_score  # noqa: F401
+    from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
     from sklearn.preprocessing import StandardScaler
 
     _SKLEARN = True
@@ -77,7 +77,7 @@ class StationarityResult:
     is_stationary: bool
     method: str = "ADF+KPSS"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "feature": self.feature,
             "adf_statistic": self.adf_statistic,
@@ -99,7 +99,7 @@ class WalkForwardFold:
     auc: float
     n_train: int
     n_test: int
-    feature_importances: Dict[str, float] = field(default_factory=dict)
+    feature_importances: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -112,13 +112,13 @@ class ValidationReport:
     n_total_oos_samples: int
     passes_accuracy_gate: bool  # >= 65%
     passes_pvalue_gate: bool  # < 0.001
-    folds: List[WalkForwardFold] = field(default_factory=list)
-    feature_importances: Dict[str, float] = field(default_factory=dict)
+    folds: list[WalkForwardFold] = field(default_factory=list)
+    feature_importances: dict[str, float] = field(default_factory=dict)
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        default_factory=lambda: datetime.now(UTC).isoformat(),
     )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "oos_accuracy": self.oos_accuracy,
             "oos_accuracy_std": self.oos_accuracy_std,
@@ -327,8 +327,8 @@ class StationarityTester:
     def test_dataframe(
         self,
         df: pd.DataFrame,
-        feature_cols: List[str],
-    ) -> Dict[str, StationarityResult]:
+        feature_cols: list[str],
+    ) -> dict[str, StationarityResult]:
         results = {}
         for col in feature_cols:
             results[col] = self.test(df[col], name=col)
@@ -369,7 +369,7 @@ class WalkForwardValidator:
     def split(
         self,
         n: int,
-    ) -> List[Tuple[range, range]]:
+    ) -> list[tuple[range, range]]:
         """
         Generate (train_indices, test_indices) for each fold.
         Train set expands; test set is the next contiguous window.
@@ -412,7 +412,7 @@ class XGBoostPredictor:
     # within the 120s pytest timeout without sacrificing code-path coverage.
     _CI_FAST: bool = os.environ.get("CI_FAST", "").lower() in ("1", "true", "yes")
 
-    DEFAULT_PARAMS: Dict[str, Any] = {
+    DEFAULT_PARAMS: dict[str, Any] = {
         "objective": "binary:logistic",
         "eval_metric": "auc",
         "learning_rate": 0.05,
@@ -428,7 +428,7 @@ class XGBoostPredictor:
         "verbosity": 0,
     }
 
-    def __init__(self, params: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, params: Optional[dict[str, Any]] = None) -> None:
         if not _XGB:
             raise ImportError("xgboost not installed.")
         base = dict(self.DEFAULT_PARAMS)
@@ -437,7 +437,7 @@ class XGBoostPredictor:
         self._params = {**base, **(params or {})}
         self._model: Optional[xgb.XGBClassifier] = None
         self._scaler: Optional[StandardScaler] = None
-        self._feature_names: List[str] = []
+        self._feature_names: list[str] = []
 
     def fit(
         self,
@@ -483,7 +483,7 @@ class XGBoostPredictor:
         proba = self.predict_proba(X)
         return (proba >= threshold).astype(int)
 
-    def get_feature_importances(self) -> Dict[str, float]:
+    def get_feature_importances(self) -> dict[str, float]:
         if self._model is None:
             return {}
         imp = self._model.feature_importances_
@@ -552,7 +552,7 @@ class MLPipeline:
         self._predictor = XGBoostPredictor()
 
         self._validation_report: Optional[ValidationReport] = None
-        self._stationary_features: List[str] = []
+        self._stationary_features: list[str] = []
 
     def run(self, df: pd.DataFrame) -> ValidationReport:
         """
@@ -651,15 +651,15 @@ class MLPipeline:
         self,
         X: pd.DataFrame,
         y: pd.Series,
-        feature_cols: List[str],
+        feature_cols: list[str],
     ) -> ValidationReport:
         n = len(X)
         splits = self._validator.split(n)
 
-        fold_results: List[WalkForwardFold] = []
-        all_oos_preds: List[int] = []
-        all_oos_true: List[int] = []
-        all_oos_proba: List[float] = []
+        fold_results: list[WalkForwardFold] = []
+        all_oos_preds: list[int] = []
+        all_oos_true: list[int] = []
+        all_oos_proba: list[float] = []
 
         for i, (train_idx, test_idx) in enumerate(splits):
             X_train = X.iloc[list(train_idx)]
@@ -718,7 +718,7 @@ class MLPipeline:
         p_value = float(binom_result.pvalue)
 
         # Aggregate feature importances (mean across folds)
-        all_imps: Dict[str, List[float]] = {}
+        all_imps: dict[str, list[float]] = {}
         for fold in fold_results:
             for feat, imp in fold.feature_importances.items():
                 all_imps.setdefault(feat, []).append(imp)

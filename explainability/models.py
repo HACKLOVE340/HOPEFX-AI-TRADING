@@ -58,10 +58,10 @@ class Explanation:
     prediction_class: str  # 'BUY', 'SELL', 'HOLD'
     confidence: float
     timestamp: datetime
-    feature_contributions: List[FeatureContribution]
-    decision_path: List[DecisionNode]
-    confidence_interval: Tuple[float, float]
-    key_factors: List[str]
+    feature_contributions: list[FeatureContribution]
+    decision_path: list[DecisionNode]
+    confidence_interval: tuple[float, float]
+    key_factors: list[str]
     natural_language: str
 
 
@@ -76,7 +76,7 @@ class ModelPerformanceExplanation:
     f1_score: float
     total_predictions: int
     correct_predictions: int
-    confusion_matrix: Dict[str, Dict[str, int]]
-    best_performing_conditions: List[str]
-    worst_performing_conditions: List[str]
-    feature_importance_history: List[Dict[str, float]]
+    confusion_matrix: dict[str, dict[str, int]]
+    best_performing_conditions: list[str]
+    worst_performing_conditions: list[str]
+    feature_importance_history: list[dict[str, float]]

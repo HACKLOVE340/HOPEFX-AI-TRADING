@@ -38,8 +38,8 @@ class DashboardWidget:
     widget_id: str
     widget_type: DashboardWidgetType
     title: str
-    position: Dict[str, int]
-    settings: Dict[str, Any] = field(default_factory=dict)
+    position: dict[str, int]
+    settings: dict[str, Any] = field(default_factory=dict)
     refresh_interval: int = 5
     enabled: bool = True
 
@@ -48,7 +48,7 @@ class DashboardWidget:
 class DashboardLayout:
     layout_id: str
     name: str
-    widgets: List[DashboardWidget]
+    widgets: list[DashboardWidget]
     created_at: datetime = field(default_factory=datetime.now)
     is_default: bool = False
 
@@ -65,14 +65,14 @@ class DashboardService:
 
     def __init__(
         self,
-        config: Optional[Dict[str, Any]] = None,
+        config: Optional[dict[str, Any]] = None,
         app_state: Any = None,
         orchestrator: Any = None,
     ):
         self.config = config or {}
         self._app_state = app_state
         self._orchestrator = orchestrator
-        self.layouts: Dict[str, DashboardLayout] = {}
+        self.layouts: dict[str, DashboardLayout] = {}
         self.active_layout_id: Optional[str] = None
         self._create_default_layout()
         logger.info("Dashboard service initialized")
@@ -127,7 +127,7 @@ class DashboardService:
         return None
 
     def create_layout(
-        self, name: str, widgets: List[DashboardWidget]
+        self, name: str, widgets: list[DashboardWidget]
     ) -> DashboardLayout:
         layout_id = f"layout_{len(self.layouts) + 1}"
         layout = DashboardLayout(layout_id=layout_id, name=name, widgets=widgets)
@@ -143,7 +143,7 @@ class DashboardService:
 
     # ── Widget dispatch ───────────────────────────────────────────────────────
 
-    def get_widget_data(self, widget_type: DashboardWidgetType) -> Dict[str, Any]:
+    def get_widget_data(self, widget_type: DashboardWidgetType) -> dict[str, Any]:
         handlers = {
             DashboardWidgetType.PORTFOLIO_SUMMARY: self._get_portfolio_summary,
             DashboardWidgetType.POSITION_LIST: self._get_positions,
@@ -190,7 +190,7 @@ class DashboardService:
             return None
 
     @staticmethod
-    def _to_dict(obj: Any) -> Optional[Dict[str, Any]]:
+    def _to_dict(obj: Any) -> Optional[dict[str, Any]]:
         if obj is None:
             return None
         if hasattr(obj, "__dict__"):
@@ -201,7 +201,7 @@ class DashboardService:
 
     # ── Data providers ────────────────────────────────────────────────────────
 
-    def _get_portfolio_summary(self) -> Dict[str, Any]:
+    def _get_portfolio_summary(self) -> dict[str, Any]:
         info = self._to_dict(self._safe_broker("get_account_info"))
         if info:
             balance = float(info.get("balance") or info.get("equity") or 0.0)
@@ -230,14 +230,14 @@ class DashboardService:
             "data_source": "none",
         }
 
-    def _get_positions(self) -> Dict[str, Any]:
+    def _get_positions(self) -> dict[str, Any]:
         raw = self._safe_broker("get_positions")
         if raw is not None:
             positions = [self._to_dict(p) for p in raw if self._to_dict(p) is not None]
             return {"positions": positions, "data_source": "broker"}
         return {"positions": [], "data_source": "none"}
 
-    def _get_performance_data(self) -> Dict[str, Any]:
+    def _get_performance_data(self) -> dict[str, Any]:
         trades_raw = self._safe_broker("get_trade_history") or []
         equity_curve = []
         running = 0.0
@@ -249,7 +249,7 @@ class DashboardService:
                 closed_at = d.get("closed_at") or d.get("close_time") or ""
                 equity_curve.append({"date": str(closed_at)[:10], "equity": running})
 
-        metrics: Dict[str, Any] = {}
+        metrics: dict[str, Any] = {}
         risk_raw = self._to_dict(self._safe_broker("get_risk_metrics"))
         if risk_raw:
             metrics = {
@@ -265,7 +265,7 @@ class DashboardService:
             "data_source": "broker" if trades_raw else "none",
         }
 
-    def _get_strategy_status(self) -> Dict[str, Any]:
+    def _get_strategy_status(self) -> dict[str, Any]:
         strategies_raw = None
         if self._app_state is not None:
             strategies_raw = getattr(self._app_state, "strategies", None)
@@ -286,7 +286,7 @@ class DashboardService:
             return {"strategies": strategies, "data_source": "app_state"}
         return {"strategies": [], "data_source": "none"}
 
-    def _get_risk_metrics(self) -> Dict[str, Any]:
+    def _get_risk_metrics(self) -> dict[str, Any]:
         raw = self._to_dict(self._safe_broker("get_risk_metrics"))
         if raw:
             return {**raw, "data_source": "broker"}
@@ -315,7 +315,7 @@ class DashboardService:
             "data_source": "none",
         }
 
-    def _get_market_overview(self) -> Dict[str, Any]:
+    def _get_market_overview(self) -> dict[str, Any]:
         symbols = ["XAUUSD", "EURUSD", "BTCUSD"]
         markets = []
 
@@ -347,7 +347,7 @@ class DashboardService:
 
         return {"markets": markets}
 
-    def _get_alerts(self) -> Dict[str, Any]:
+    def _get_alerts(self) -> dict[str, Any]:
         alerts_raw = None
         if self._app_state is not None:
             fn = getattr(self._app_state, "get_alerts", None)
@@ -362,7 +362,7 @@ class DashboardService:
             return {"alerts": alerts, "data_source": "app_state"}
         return {"alerts": [], "data_source": "none"}
 
-    def _get_news_feed(self) -> Dict[str, Any]:
+    def _get_news_feed(self) -> dict[str, Any]:
         sentiment_engine = None
         if self._orchestrator is not None:
             sentiment_engine = getattr(self._orchestrator, "_sentiment", None)
@@ -390,12 +390,12 @@ class DashboardService:
 
         return {"news": [], "data_source": "none"}
 
-    def _get_trade_history(self) -> Dict[str, Any]:
+    def _get_trade_history(self) -> dict[str, Any]:
         trades_raw = self._safe_broker("get_trade_history") or []
         trades = [self._to_dict(t) for t in trades_raw if self._to_dict(t) is not None]
         return {"trades": trades, "data_source": "broker" if trades else "none"}
 
-    def _get_order_book(self) -> Dict[str, Any]:
+    def _get_order_book(self) -> dict[str, Any]:
         raw = self._to_dict(self._safe_broker("get_order_book", "XAUUSD"))
         if raw:
             return {**raw, "data_source": "broker"}

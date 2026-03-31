@@ -90,18 +90,18 @@ class BootstrapResult:
     original_profit_factor: float
 
     # Bootstrap distributions (all paths)
-    sharpe_distribution: List[float] = field(default_factory=list)
-    max_dd_distribution: List[float] = field(default_factory=list)
-    cagr_distribution: List[float] = field(default_factory=list)
-    final_equity_distribution: List[float] = field(default_factory=list)
+    sharpe_distribution: list[float] = field(default_factory=list)
+    max_dd_distribution: list[float] = field(default_factory=list)
+    cagr_distribution: list[float] = field(default_factory=list)
+    final_equity_distribution: list[float] = field(default_factory=list)
 
     # Confidence intervals (95% and 99%)
-    sharpe_ci_95: Tuple[float, float] = (0.0, 0.0)
-    sharpe_ci_99: Tuple[float, float] = (0.0, 0.0)
-    max_dd_ci_95: Tuple[float, float] = (0.0, 0.0)
-    max_dd_ci_99: Tuple[float, float] = (0.0, 0.0)
-    cagr_ci_95: Tuple[float, float] = (0.0, 0.0)
-    final_equity_ci_95: Tuple[float, float] = (0.0, 0.0)
+    sharpe_ci_95: tuple[float, float] = (0.0, 0.0)
+    sharpe_ci_99: tuple[float, float] = (0.0, 0.0)
+    max_dd_ci_95: tuple[float, float] = (0.0, 0.0)
+    max_dd_ci_99: tuple[float, float] = (0.0, 0.0)
+    cagr_ci_95: tuple[float, float] = (0.0, 0.0)
+    final_equity_ci_95: tuple[float, float] = (0.0, 0.0)
 
     # Risk metrics
     ruin_probability: float = 0.0
@@ -114,7 +114,7 @@ class BootstrapResult:
     # Robustness score: fraction of paths with Sharpe > 0
     sharpe_positive_fraction: float = 0.0
 
-    def summary(self) -> Dict[str, object]:
+    def summary(self) -> dict[str, object]:
         """Return a JSON-serialisable summary dict."""
         return {
             "n_paths": self.n_paths,
@@ -165,7 +165,7 @@ class MonteCarloEngine:
 
     def run(
         self,
-        trade_pnls: List[float],
+        trade_pnls: list[float],
         initial_capital: float = 100_000.0,
         method: str = "iid",
     ) -> BootstrapResult:
@@ -201,10 +201,10 @@ class MonteCarloEngine:
         orig_pf = gross_profit / gross_loss if gross_loss > 0 else float("inf")
 
         # ── Bootstrap paths ───────────────────────────────────────────────────
-        sharpe_dist: List[float] = []
-        max_dd_dist: List[float] = []
-        cagr_dist: List[float] = []
-        final_equity_dist: List[float] = []
+        sharpe_dist: list[float] = []
+        max_dd_dist: list[float] = []
+        cagr_dist: list[float] = []
+        final_equity_dist: list[float] = []
         ruin_count = 0
 
         for _ in range(self.n_paths):
@@ -240,7 +240,7 @@ class MonteCarloEngine:
         final_arr = np.array(final_equity_dist)
 
         # ── Confidence intervals ──────────────────────────────────────────────
-        def ci(arr: np.ndarray, level: float) -> Tuple[float, float]:
+        def ci(arr: np.ndarray, level: float) -> tuple[float, float]:
             alpha = (1 - level) / 2 * 100
             return (
                 float(np.percentile(arr, alpha)),
@@ -361,7 +361,7 @@ class MonteCarloEngine:
 
 
 def run_bootstrap(
-    trade_pnls: List[float],
+    trade_pnls: list[float],
     initial_capital: float = 100_000.0,
     n_paths: int = MC_N_PATHS,
     method: str = "iid",

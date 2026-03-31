@@ -99,7 +99,7 @@ class CircuitBreaker:
     """
 
     # Global registry so the same breaker is reused across call sites
-    _registry: Dict[str, CircuitBreaker] = {}
+    _registry: dict[str, CircuitBreaker] = {}
 
     def __init__(
         self,
@@ -243,7 +243,7 @@ class CircuitBreaker:
     def failure_count(self) -> int:
         return self._failure_count
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "state": self._state.name,
@@ -271,7 +271,7 @@ class CircuitBreaker:
         return cls._registry[name]
 
     @classmethod
-    def all_statuses(cls) -> Dict[str, Dict]:
+    def all_statuses(cls) -> dict[str, dict]:
         return {name: cb.status() for name, cb in cls._registry.items()}
 
 

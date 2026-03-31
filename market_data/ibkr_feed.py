@@ -49,7 +49,7 @@ except ImportError:
 
 # Optional Redis
 try:
-    import redis  # type: ignore[import]  # noqa: F401
+    import redis  # type: ignore[import]
 
     _REDIS_AVAILABLE = True
 except ImportError:
@@ -92,7 +92,7 @@ class Tick:
         mid = self.mid
         return (self.spread / mid * 10000.0) if mid > 0 else 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "bid": self.bid,
@@ -122,7 +122,7 @@ class OHLCVBar:
     bar_close_ts: float  # Unix epoch of bar close (expected)
     is_closed: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "timeframe": self.timeframe,
@@ -156,7 +156,7 @@ class FeedHealth:
     last_error: Optional[str]
     timestamp: float = field(default_factory=time.time)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "status": self.status.value,
             "last_tick_ts": self.last_tick_ts,
@@ -193,9 +193,9 @@ class TickValidator:
         self._max_jump_pct = max_jump_pct
         self._max_age_sec = max_age_sec
         self._max_spread_bps = max_spread_bps
-        self._last_prices: Dict[str, float] = {}
+        self._last_prices: dict[str, float] = {}
 
-    def validate(self, tick: Tick) -> Tuple[bool, str]:
+    def validate(self, tick: Tick) -> tuple[bool, str]:
         """
         Returns (is_valid, reason).
         reason is empty string on success.
@@ -237,7 +237,7 @@ class TickValidator:
 # OHLCV bar aggregator
 # ---------------------------------------------------------------------------
 
-_TIMEFRAME_SECONDS: Dict[str, int] = {
+_TIMEFRAME_SECONDS: dict[str, int] = {
     "1m": 60,
     "5m": 300,
     "15m": 900,
@@ -258,7 +258,7 @@ class OHLCVAggregator:
     def __init__(
         self,
         symbol: str,
-        timeframes: List[str],
+        timeframes: list[str],
         on_bar_closed: Optional[Callable[[OHLCVBar], None]] = None,
     ) -> None:
         self._symbol = symbol
@@ -267,7 +267,7 @@ class OHLCVAggregator:
         self._lock = threading.RLock()
 
         # Current open bar per timeframe
-        self._open_bars: Dict[str, Optional[OHLCVBar]] = {tf: None for tf in timeframes}
+        self._open_bars: dict[str, Optional[OHLCVBar]] = dict.fromkeys(timeframes)
 
     def on_tick(self, tick: Tick) -> None:
         """Process a tick and update/close bars as needed."""
@@ -422,7 +422,7 @@ class IBKRMarketDataFeed:
         self,
         ibkr_connector,
         symbol: str = "XAUUSD",
-        timeframes: Optional[List[str]] = None,
+        timeframes: Optional[list[str]] = None,
         redis_client=None,
         redis_key_prefix: str = "hopefx:",
         on_tick: Optional[Callable[[Tick], None]] = None,
@@ -686,7 +686,7 @@ class IBKRMarketDataFeed:
                 return self._tick_buffer[-1]
             return None
 
-    def get_recent_ticks(self, n: int = 100) -> List[Tick]:
+    def get_recent_ticks(self, n: int = 100) -> list[Tick]:
         """Return up to *n* most recent validated ticks."""
         with self._lock:
             buf = list(self._tick_buffer)

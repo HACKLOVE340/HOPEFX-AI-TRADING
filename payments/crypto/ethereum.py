@@ -9,7 +9,7 @@ Ethereum Payment Integration
 Handles Ethereum (ETH) deposits and withdrawals.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Dict, Optional
 import logging
@@ -26,10 +26,10 @@ class EthereumClient:
     NETWORK_FEE = Decimal("0.005")  # ETH
 
     def __init__(self):
-        self.addresses: Dict[str, Dict] = {}
-        self.transactions: Dict[str, Dict] = {}
+        self.addresses: dict[str, dict] = {}
+        self.transactions: dict[str, dict] = {}
 
-    def generate_deposit_address(self, user_id: str) -> Dict:
+    def generate_deposit_address(self, user_id: str) -> dict:
         """Generate Ethereum deposit address"""
         try:
             address_hash = hashlib.sha256(f"ETH{user_id}".encode()).hexdigest()
@@ -37,7 +37,7 @@ class EthereumClient:
 
             self.addresses[address] = {
                 "user_id": user_id,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             }
 
             logger.info(f"Generated Ethereum address for user {user_id}")
@@ -55,7 +55,7 @@ class EthereumClient:
 
     def process_deposit(
         self, user_id: str, amount: Decimal, tx_hash: str, confirmations: int = 0
-    ) -> Optional[Dict]:
+    ) -> Optional[dict]:
         """Process Ethereum deposit"""
         try:
             if amount < self.MIN_DEPOSIT:
@@ -74,7 +74,7 @@ class EthereumClient:
                 "amount": float(amount),
                 "confirmations": confirmations,
                 "status": status,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             }
 
             self.transactions[tx_hash] = transaction
@@ -87,7 +87,7 @@ class EthereumClient:
 
     def process_withdrawal(
         self, user_id: str, amount: Decimal, destination: str
-    ) -> Dict:
+    ) -> dict:
         """Process Ethereum withdrawal"""
         try:
             total_fee = self.NETWORK_FEE

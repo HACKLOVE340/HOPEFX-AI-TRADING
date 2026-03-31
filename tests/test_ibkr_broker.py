@@ -76,7 +76,7 @@ def _make_mock_ib():
     return ib
 
 
-from contextlib import contextmanager  # noqa: E402
+from contextlib import contextmanager
 
 
 _MISSING = object()  # sentinel

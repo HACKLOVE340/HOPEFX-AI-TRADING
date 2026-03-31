@@ -21,7 +21,7 @@ All write endpoints require admin role.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -46,7 +46,7 @@ class ScenarioResultOut(BaseModel):
 class ChaosRunResponse(BaseModel):
     run_id: str
     started_at: str
-    scenarios: List[ScenarioResultOut]
+    scenarios: list[ScenarioResultOut]
     total: int
     passed: int
     failed: int
@@ -61,7 +61,7 @@ class MutationRunResponse(BaseModel):
 
 class MutationResultOut(BaseModel):
     engine: str
-    modules: List[str]
+    modules: list[str]
     total: int
     killed: int
     survived: int
@@ -86,10 +86,10 @@ class ChaosStatusResponse(BaseModel):
 
 # ── In-memory state (replaced on each run) ───────────────────────────────────
 
-_last_chaos_results: List[Dict] = []
+_last_chaos_results: list[dict] = []
 _last_chaos_run_at: Optional[str] = None
 _mutation_running: bool = False
-_last_mutation_report: Optional[Dict] = None
+_last_mutation_report: Optional[dict] = None
 
 
 # ── Dependency: get ChaosController from app state ───────────────────────────
@@ -135,7 +135,7 @@ async def run_all_chaos_scenarios(
     import uuid
 
     run_id = str(uuid.uuid4())[:8]
-    started_at = datetime.now(timezone.utc).isoformat()
+    started_at = datetime.now(UTC).isoformat()
 
     logger.warning("CHAOS RUN %s started by API", run_id)
 
@@ -218,8 +218,8 @@ async def run_single_scenario(
     )
 
 
-@router.get("/results", response_model=List[ScenarioResultOut])
-async def get_chaos_results() -> List[ScenarioResultOut]:
+@router.get("/results", response_model=list[ScenarioResultOut])
+async def get_chaos_results() -> list[ScenarioResultOut]:
     """Return results from the last chaos run."""
     if not _last_chaos_results:
         return []

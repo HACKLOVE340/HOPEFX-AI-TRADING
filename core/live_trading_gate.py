@@ -50,7 +50,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -71,13 +71,13 @@ class GateResult:
     """Result of a live trading gate check."""
 
     allowed: bool
-    checks: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    checks: dict[str, dict[str, Any]] = field(default_factory=dict)
     reason: str = ""
     checked_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "allowed": self.allowed,
             "reason": self.reason,
@@ -96,7 +96,7 @@ class LiveTradingGate:
 
     # ── Individual checks ─────────────────────────────────────────────────────
 
-    def _check_kill_switch(self) -> Tuple[bool, str]:
+    def _check_kill_switch(self) -> tuple[bool, str]:
         """Check 1: Kill-switch must be inactive."""
         try:
             from kill_switch import KillSwitch
@@ -109,7 +109,7 @@ class LiveTradingGate:
             logger.debug("Kill-switch check failed: %s", exc)
             return False, f"Kill-switch check unavailable: {exc}"
 
-    def _check_paper_clock(self) -> Tuple[bool, str]:
+    def _check_paper_clock(self) -> tuple[bool, str]:
         """Check 2: 30-day paper trading clock must be complete."""
         try:
             from brokers.oanda_paper_clock import get_clock
@@ -140,7 +140,7 @@ class LiveTradingGate:
             logger.debug("Paper clock check failed: %s", exc)
             return False, f"Paper clock unavailable: {exc}"
 
-    def _check_oos_accuracy(self) -> Tuple[bool, str]:
+    def _check_oos_accuracy(self) -> tuple[bool, str]:
         """Check 3: OOS accuracy >= threshold and p-value < threshold."""
         meta_paths = [
             ROOT / "ml" / "saved_models" / "advanced_oos_meta.json",
@@ -179,7 +179,7 @@ class LiveTradingGate:
             "OOS metadata not found. Run: python ml/train_advanced.py --years 50 --oos-years 3"
         )
 
-    def _check_sharpe_gate(self) -> Tuple[bool, str]:
+    def _check_sharpe_gate(self) -> tuple[bool, str]:
         """Check 4: N >= 600 pooled trades (Sharpe SE gate)."""
         # First check multi-symbol backtest report
         report_path = ROOT / "backtest" / "results" / "multi_symbol_report.json"
@@ -253,7 +253,7 @@ class LiveTradingGate:
             "Run: python backtest/multi_symbol_backtest.py --years 10"
         )
 
-    def _check_feature_flag(self) -> Tuple[bool, str]:
+    def _check_feature_flag(self) -> tuple[bool, str]:
         """Check 5: FEATURE_LIVE_TRADING=true must be set."""
         # Re-read env at check time (allows runtime toggle)
         enabled = os.getenv("FEATURE_LIVE_TRADING", "false").lower() == "true"
@@ -282,7 +282,7 @@ class LiveTradingGate:
             ("feature_flag", self._check_feature_flag),
         ]
 
-        checks: Dict[str, Dict[str, Any]] = {}
+        checks: dict[str, dict[str, Any]] = {}
         all_passed = True
         first_failure = ""
 
@@ -315,7 +315,7 @@ class LiveTradingGate:
 
         return wrapper
 
-    def status_dict(self) -> Dict[str, Any]:
+    def status_dict(self) -> dict[str, Any]:
         """Return gate status as a dict for the /api/status endpoint."""
         result = self.check()
         return result.to_dict()

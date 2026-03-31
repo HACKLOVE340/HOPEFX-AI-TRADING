@@ -9,7 +9,7 @@ Bank Transfer Integration
 Direct bank transfer handling for Nigerian banks.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Dict
 import logging
@@ -32,7 +32,7 @@ class BankTransferClient:
             "057": "Zenith Bank",
         }
 
-    def validate_account(self, bank_code: str, account_number: str) -> Dict:
+    def validate_account(self, bank_code: str, account_number: str) -> dict:
         """Validate bank account"""
         try:
             bank_name = self.nigerian_banks.get(bank_code, "Unknown Bank")
@@ -54,10 +54,10 @@ class BankTransferClient:
 
     def initiate_transfer(
         self, user_id: str, amount: Decimal, bank_code: str, account_number: str
-    ) -> Dict:
+    ) -> dict:
         """Initiate bank transfer"""
         try:
-            transfer_id = f"BT-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+            transfer_id = f"BT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
 
             # Validate account
             validation = self.validate_account(bank_code, account_number)
@@ -78,7 +78,7 @@ class BankTransferClient:
                 "account_number": account_number,
                 "account_name": validation["account_name"],
                 "status": "pending",
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             }
 
             self.transfers[transfer_id] = transfer
@@ -89,7 +89,7 @@ class BankTransferClient:
             logger.error(f"Error initiating bank transfer: {e}")
             raise
 
-    def get_transfer_status(self, transfer_id: str) -> Dict:
+    def get_transfer_status(self, transfer_id: str) -> dict:
         """Get transfer status"""
         return self.transfers.get(transfer_id, {"status": "not_found"})
 

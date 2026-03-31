@@ -6,7 +6,7 @@
 """nocode/builder.py — No-code strategy builder logic."""
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 import logging
 import re
 
@@ -40,11 +40,11 @@ class NoCodeStrategyBuilder:
     - Export to Python code
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[dict[str, Any]] = None):
         """Initialize strategy builder."""
         self.config = config or {}
-        self.strategies: Dict[str, NoCodeStrategy] = {}
-        self.templates: Dict[str, NoCodeStrategy] = {}
+        self.strategies: dict[str, NoCodeStrategy] = {}
+        self.templates: dict[str, NoCodeStrategy] = {}
 
         # Initialize built-in templates
         self._create_templates()
@@ -123,7 +123,7 @@ class NoCodeStrategyBuilder:
         Returns:
             New strategy object
         """
-        strategy_id = f"strategy_{len(self.strategies) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
+        strategy_id = f"strategy_{len(self.strategies) + 1}_{int(datetime.now(UTC).timestamp())}"
 
         strategy = NoCodeStrategy(
             strategy_id=strategy_id,
@@ -142,8 +142,8 @@ class NoCodeStrategyBuilder:
         self,
         strategy_id: str,
         name: str,
-        conditions: List[Dict[str, Any]],
-        action: Dict[str, Any],
+        conditions: list[dict[str, Any]],
+        action: dict[str, Any],
         logic: str = "AND",
     ) -> Optional[StrategyRule]:
         """
@@ -209,12 +209,12 @@ class NoCodeStrategyBuilder:
         )
 
         strategy.rules.append(rule)
-        strategy.updated_at = datetime.now(timezone.utc)
+        strategy.updated_at = datetime.now(UTC)
 
         logger.info(f"Added rule '{name}' to strategy {strategy_id}")
         return rule
 
-    def _parse_indicator(self, ind_def: Dict[str, Any]) -> Indicator:
+    def _parse_indicator(self, ind_def: dict[str, Any]) -> Indicator:
         """Parse indicator definition."""
         return Indicator(
             indicator_type=IndicatorType[ind_def["type"]],
@@ -291,7 +291,7 @@ class NoCodeStrategyBuilder:
         logger.info(f"Parsed strategy from plain English: {len(strategy.rules)} rules")
         return strategy
 
-    def _parse_conditions(self, text: str, action: str) -> List[Dict[str, Any]]:
+    def _parse_conditions(self, text: str, action: str) -> list[dict[str, Any]]:
         """Parse conditions from text."""
         conditions = []
 
@@ -358,7 +358,7 @@ class NoCodeStrategyBuilder:
         code = f'''"""
 Auto-generated strategy: {strategy.name}
 Description: {strategy.description}
-Generated: {datetime.now(timezone.utc).isoformat()}
+Generated: {datetime.now(UTC).isoformat()}
 """
 
 from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
@@ -409,7 +409,7 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
         words = re.findall(r"[a-zA-Z0-9]+", name)
         return "".join(word.capitalize() for word in words) + "Strategy"
 
-    def get_available_indicators(self) -> List[Dict[str, Any]]:
+    def get_available_indicators(self) -> list[dict[str, Any]]:
         """Get list of available indicators for the builder."""
         indicators = []
         for ind_type in IndicatorType:
@@ -441,7 +441,7 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
         }
         return descriptions.get(ind_type, "Technical indicator")
 
-    def get_templates(self) -> List[Dict[str, Any]]:
+    def get_templates(self) -> list[dict[str, Any]]:
         """Get list of available strategy templates."""
         return [
             {

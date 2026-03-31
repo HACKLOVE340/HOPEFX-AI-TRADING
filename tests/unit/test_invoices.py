@@ -8,7 +8,7 @@ Tests for Invoice Generation System
 """
 
 from decimal import Decimal
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from monetization.invoices import Invoice, InvoiceStatus, InvoiceGenerator
 from monetization.pricing import SubscriptionTier
 
@@ -92,7 +92,7 @@ class TestInvoice:
         )
 
         # Set due date in the past
-        invoice.due_date = datetime.now(timezone.utc) - timedelta(days=1)
+        invoice.due_date = datetime.now(UTC) - timedelta(days=1)
         invoice.status = InvoiceStatus.PENDING
 
         assert invoice.is_overdue() is True
@@ -109,7 +109,7 @@ class TestInvoice:
         )
 
         # Set due date in the future
-        invoice.due_date = datetime.now(timezone.utc) + timedelta(days=30)
+        invoice.due_date = datetime.now(UTC) + timedelta(days=30)
         invoice.status = InvoiceStatus.PENDING
 
         assert invoice.is_overdue() is False
@@ -125,7 +125,7 @@ class TestInvoice:
             amount=Decimal("29.00"),
         )
 
-        invoice.due_date = datetime.now(timezone.utc) - timedelta(days=10)
+        invoice.due_date = datetime.now(UTC) - timedelta(days=10)
         invoice.mark_paid()
 
         assert invoice.is_overdue() is False

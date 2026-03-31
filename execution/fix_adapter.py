@@ -153,15 +153,14 @@ class CircuitBreaker:
                         latency_ms,
                         self.threshold_ms,
                     )
-            else:
-                if self._open:
-                    elapsed = time.monotonic() - (self._opened_at or 0)
-                    if elapsed >= self.reset_after_sec:
-                        self._open = False
-                        logger.info(
-                            "circuit_breaker.CLOSED latency=%.1f ms",
-                            latency_ms,
-                        )
+            elif self._open:
+                elapsed = time.monotonic() - (self._opened_at or 0)
+                if elapsed >= self.reset_after_sec:
+                    self._open = False
+                    logger.info(
+                        "circuit_breaker.CLOSED latency=%.1f ms",
+                        latency_ms,
+                    )
 
     @property
     def is_open(self) -> bool:

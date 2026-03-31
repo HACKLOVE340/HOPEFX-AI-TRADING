@@ -84,7 +84,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -138,7 +138,7 @@ class AlgoFillReport:
     num_child_orders: int
     duration_seconds: float
     status: AlgoStatus
-    child_orders: List[ChildOrder] = field(default_factory=list)
+    child_orders: list[ChildOrder] = field(default_factory=list)
 
 
 class AlgoOrder(ABC):
@@ -161,8 +161,8 @@ class AlgoOrder(ABC):
 
         self.status = AlgoStatus.PENDING
         self.filled_quantity: float = 0.0
-        self.child_orders: List[ChildOrder] = []
-        self._fill_prices: List[tuple[float, float]] = []  # (qty, price)
+        self.child_orders: list[ChildOrder] = []
+        self._fill_prices: list[tuple[float, float]] = []  # (qty, price)
         self._started_at: Optional[float] = None
         self._completed_at: Optional[float] = None
         self._task: Optional[asyncio.Task] = None
@@ -378,7 +378,7 @@ class VWAPOrder(AlgoOrder):
     """
 
     # Intraday volume profiles (24 hourly buckets, normalised to sum=1)
-    _PROFILES: Dict[str, List[float]] = {
+    _PROFILES: dict[str, list[float]] = {
         "flat": [1 / 24] * 24,
         "u_shaped": [
             # Higher volume at London open (7-9 UTC), NY open (13-15 UTC),
@@ -425,7 +425,7 @@ class VWAPOrder(AlgoOrder):
         self.num_slices = max(1, num_slices)
         self._interval = duration_seconds / self.num_slices
 
-    def _get_volume_weights(self, start_hour_utc: int) -> List[float]:
+    def _get_volume_weights(self, start_hour_utc: int) -> list[float]:
         """Get volume weights for the execution window starting at start_hour_utc."""
         profile = self._PROFILES.get(ALGO_VWAP_PROFILE, self._PROFILES["u_shaped"])
         # Extract the relevant hours for this execution window
@@ -438,9 +438,9 @@ class VWAPOrder(AlgoOrder):
         total = sum(weights) or 1.0
         return [w / total for w in weights]
 
-    def _compute_slice_quantities(self) -> List[float]:
+    def _compute_slice_quantities(self) -> list[float]:
         """Compute per-slice quantities based on volume profile."""
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         weights = self._get_volume_weights(now_utc.hour)
 
         # Distribute slices across volume buckets
@@ -619,9 +619,9 @@ class AlgoOrderManager:
 
     def __init__(self, broker_submit_fn: Optional[Callable] = None) -> None:
         self._broker_submit = broker_submit_fn
-        self._active: Dict[str, AlgoOrder] = {}
-        self._completed: Dict[str, AlgoFillReport] = {}
-        self._tasks: Dict[str, asyncio.Task] = {}
+        self._active: dict[str, AlgoOrder] = {}
+        self._completed: dict[str, AlgoFillReport] = {}
+        self._tasks: dict[str, asyncio.Task] = {}
 
     def set_broker_submit_fn(self, fn: Callable) -> None:
         """Wire in the broker submission function after construction."""
@@ -742,7 +742,7 @@ class AlgoOrderManager:
             return True
         return False
 
-    def get_status(self, algo_id: str) -> Optional[Dict[str, Any]]:
+    def get_status(self, algo_id: str) -> Optional[dict[str, Any]]:
         """Return status dict for an active or completed algo order."""
         order = self._active.get(algo_id)
         if order:
@@ -768,7 +768,7 @@ class AlgoOrderManager:
             }
         return None
 
-    def get_all_active(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_active(self) -> dict[str, dict[str, Any]]:
         """Return status for all active algo orders."""
         return {aid: self.get_status(aid) for aid in self._active}
 

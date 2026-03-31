@@ -45,7 +45,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 from typing import Dict, List, Optional
@@ -94,9 +94,9 @@ class SaleTransaction:
     currency: str
     transaction_type: TransactionType
     stripe_payment_intent_id: Optional[str]
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "transaction_id": self.transaction_id,
             "strategy_id": self.strategy_id,
@@ -138,12 +138,12 @@ class PayoutRecord:
     currency: str
     status: PayoutStatus
     stripe_transfer_id: Optional[str]
-    transaction_ids: List[str]
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    transaction_ids: list[str]
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: Optional[datetime] = None
     failure_reason: Optional[str] = None
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "payout_id": self.payout_id,
             "creator_id": self.creator_id,
@@ -176,9 +176,9 @@ class RevenueSplitEngine:
         self.creator_share_pct = Decimal("1.00") - platform_fee_pct
         self.min_payout_usd = min_payout_usd
 
-        self._transactions: Dict[str, SaleTransaction] = {}
-        self._balances: Dict[str, CreatorBalance] = {}
-        self._payouts: Dict[str, PayoutRecord] = {}
+        self._transactions: dict[str, SaleTransaction] = {}
+        self._balances: dict[str, CreatorBalance] = {}
+        self._payouts: dict[str, PayoutRecord] = {}
 
     # ── Sales ─────────────────────────────────────────────────────────────────
 
@@ -310,7 +310,7 @@ class RevenueSplitEngine:
             stripe_account_id,
         )
 
-    def process_weekly_payouts(self) -> List[PayoutRecord]:
+    def process_weekly_payouts(self) -> list[PayoutRecord]:
         """
         Process payouts for all eligible creators.
 
@@ -321,7 +321,7 @@ class RevenueSplitEngine:
         Returns:
             List of PayoutRecord objects created this cycle.
         """
-        payouts: List[PayoutRecord] = []
+        payouts: list[PayoutRecord] = []
 
         for creator_id, bal in self._balances.items():
             if not bal.is_payout_eligible:
@@ -349,7 +349,7 @@ class RevenueSplitEngine:
             else:
                 # Simulation mode
                 payout.status = PayoutStatus.PAID
-                payout.completed_at = datetime.now(timezone.utc)
+                payout.completed_at = datetime.now(UTC)
                 logger.info(
                     "Payout simulated (Stripe unavailable): creator=%s amount=%.2f",
                     creator_id,
@@ -361,7 +361,7 @@ class RevenueSplitEngine:
             if payout.status == PayoutStatus.PAID:
                 bal.total_paid_usd += amount
                 bal.pending_usd = Decimal("0.00")
-                bal.last_payout_at = datetime.now(timezone.utc)
+                bal.last_payout_at = datetime.now(UTC)
 
             payouts.append(payout)
 
@@ -384,7 +384,7 @@ class RevenueSplitEngine:
             )
             payout.stripe_transfer_id = transfer.id
             payout.status = PayoutStatus.PAID
-            payout.completed_at = datetime.now(timezone.utc)
+            payout.completed_at = datetime.now(UTC)
             logger.info(
                 "Stripe transfer completed: creator=%s transfer=%s amount=%.2f",
                 payout.creator_id,
@@ -405,13 +405,13 @@ class RevenueSplitEngine:
     def get_creator_balance(self, creator_id: str) -> CreatorBalance:
         return self._get_or_create_balance(creator_id)
 
-    def get_creator_transactions(self, creator_id: str) -> List[SaleTransaction]:
+    def get_creator_transactions(self, creator_id: str) -> list[SaleTransaction]:
         return [t for t in self._transactions.values() if t.creator_id == creator_id]
 
-    def get_creator_payouts(self, creator_id: str) -> List[PayoutRecord]:
+    def get_creator_payouts(self, creator_id: str) -> list[PayoutRecord]:
         return [p for p in self._payouts.values() if p.creator_id == creator_id]
 
-    def get_platform_revenue(self) -> Dict:
+    def get_platform_revenue(self) -> dict:
         """Return aggregate platform revenue metrics."""
         total_gross = sum(
             t.gross_amount for t in self._transactions.values() if t.gross_amount > 0

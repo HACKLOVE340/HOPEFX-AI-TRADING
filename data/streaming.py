@@ -18,7 +18,7 @@ import logging
 import threading
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Callable, Dict, List, Optional, Set
 from dataclasses import dataclass, field
 from enum import Enum
@@ -56,7 +56,7 @@ class Tick:
     def spread(self) -> float:
         return round(self.ask - self.bid, 5)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp.isoformat(),
@@ -86,7 +86,7 @@ class AggregatedBar:
     buy_volume: float = 0.0
     sell_volume: float = 0.0
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "timeframe": self.timeframe,
@@ -109,9 +109,9 @@ class StreamEvent:
     event_type: str  # 'tick', 'bar', 'connected', 'disconnected', 'error'
     symbol: Optional[str]
     timestamp: datetime
-    data: Dict = field(default_factory=dict)
+    data: dict = field(default_factory=dict)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "event_type": self.event_type,
             "symbol": self.symbol,
@@ -129,7 +129,7 @@ class TickAggregator:
 
     def __init__(self, timeframe_minutes: int = 1):
         self._tf_minutes = timeframe_minutes
-        self._open_bars: Dict[str, Dict] = {}
+        self._open_bars: dict[str, dict] = {}
 
     def _bar_key(self, ts: datetime) -> datetime:
         mins = (ts.minute // self._tf_minutes) * self._tf_minutes
@@ -190,7 +190,7 @@ class TickAggregator:
 
         return completed
 
-    def get_open_bar(self, symbol: str) -> Optional[Dict]:
+    def get_open_bar(self, symbol: str) -> Optional[dict]:
         """Get the currently open bar for a symbol."""
         return self._open_bars.get(symbol)
 
@@ -216,7 +216,7 @@ class StreamingService:
         service.publish_tick(Tick('XAUUSD', datetime.now(timezone.utc), 1950.0, 1950.1, 1950.05))
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize streaming service.
 
@@ -235,19 +235,19 @@ class StreamingService:
 
         # State
         self._status = StreamStatus.DISCONNECTED
-        self._subscriptions: Dict[str, Set] = defaultdict(set)
-        self._global_listeners: List[Callable] = []
+        self._subscriptions: dict[str, set] = defaultdict(set)
+        self._global_listeners: list[Callable] = []
 
         # Tick buffers per symbol
-        self._tick_buffers: Dict[str, deque] = {}
+        self._tick_buffers: dict[str, deque] = {}
 
         # Bar aggregators per timeframe
-        self._aggregators: Dict[int, TickAggregator] = {
+        self._aggregators: dict[int, TickAggregator] = {
             tf: TickAggregator(tf) for tf in self._timeframes
         }
 
         # Completed bars per symbol per timeframe
-        self._bars: Dict[str, Dict[str, deque]] = defaultdict(
+        self._bars: dict[str, dict[str, deque]] = defaultdict(
             lambda: defaultdict(lambda: deque(maxlen=500))
         )
 
@@ -293,7 +293,7 @@ class StreamingService:
             else:
                 self._subscriptions[symbol].discard(callback)
 
-    def get_subscriptions(self) -> List[str]:
+    def get_subscriptions(self) -> list[str]:
         """Get list of subscribed symbols."""
         with self._lock:
             return list(self._subscriptions.keys())
@@ -343,7 +343,7 @@ class StreamingService:
 
     def _dispatch(self, event: StreamEvent) -> None:
         """Dispatch an event to all relevant subscribers."""
-        listeners: List[Callable] = []
+        listeners: list[Callable] = []
         with self._lock:
             if event.symbol:
                 listeners = list(self._subscriptions.get(event.symbol, set()))
@@ -359,7 +359,7 @@ class StreamingService:
     # DATA RETRIEVAL
     # ================================================================
 
-    def get_recent_ticks(self, symbol: str, n: int = 100) -> List[Tick]:
+    def get_recent_ticks(self, symbol: str, n: int = 100) -> list[Tick]:
         """Get the most recent N ticks for a symbol."""
         with self._lock:
             buf = self._tick_buffers.get(symbol)
@@ -373,7 +373,7 @@ class StreamingService:
         symbol: str,
         timeframe: str = "1m",
         limit: int = 100,
-    ) -> List[AggregatedBar]:
+    ) -> list[AggregatedBar]:
         """
         Get aggregated bars for a symbol.
 
@@ -411,7 +411,7 @@ class StreamingService:
         event = StreamEvent(
             event_type="connected",
             symbol=None,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         self._dispatch(event)
         logger.info("Streaming Service connected")
@@ -422,7 +422,7 @@ class StreamingService:
         event = StreamEvent(
             event_type="disconnected",
             symbol=None,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         self._dispatch(event)
         logger.info("Streaming Service disconnected")
@@ -465,7 +465,7 @@ class StreamingService:
     # UTILITY
     # ================================================================
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get streaming service statistics."""
         with self._lock:
             return {

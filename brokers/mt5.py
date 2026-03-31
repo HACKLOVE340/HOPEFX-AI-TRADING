@@ -16,7 +16,7 @@ Supported:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 try:
@@ -75,7 +75,7 @@ class MT5Connector(BrokerConnector):
         }
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Initialize MT5 connector.
 
@@ -95,7 +95,7 @@ class MT5Connector(BrokerConnector):
         self.password = config.get("password")
         self.timeout = config.get("timeout", 60000)
         self.portable = config.get("portable", False)
-        self.path = config.get("path", None)
+        self.path = config.get("path")
 
         self.connected = False
         self.account_info = None
@@ -117,10 +117,9 @@ class MT5Connector(BrokerConnector):
                 if not mt5.initialize(path=self.path, portable=self.portable):
                     logger.error(f"MT5 initialize failed: {mt5.last_error()}")
                     return False
-            else:
-                if not mt5.initialize(portable=self.portable):
-                    logger.error(f"MT5 initialize failed: {mt5.last_error()}")
-                    return False
+            elif not mt5.initialize(portable=self.portable):
+                logger.error(f"MT5 initialize failed: {mt5.last_error()}")
+                return False
 
             # Login to server
             authorized = mt5.login(
@@ -277,7 +276,7 @@ class MT5Connector(BrokerConnector):
                 if hasattr(result, "volume")
                 else quantity,
                 average_price=result.price if hasattr(result, "price") else price,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 metadata={
                     "mt5_order": result.order,
                     "mt5_deal": result.deal if hasattr(result, "deal") else None,
@@ -325,7 +324,7 @@ class MT5Connector(BrokerConnector):
             logger.error(f"Get order error: {e}")
             return None
 
-    def get_positions(self, symbol: Optional[str] = None) -> List[Position]:
+    def get_positions(self, symbol: Optional[str] = None) -> list[Position]:
         """Get open positions."""
         if not self.connected:
             return []
@@ -436,7 +435,7 @@ class MT5Connector(BrokerConnector):
                 margin_used=account.margin,
                 margin_available=account.margin_free,
                 positions_count=len(mt5.positions_get() or []),
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
         except Exception as e:
@@ -448,7 +447,7 @@ class MT5Connector(BrokerConnector):
         symbol: str,
         timeframe: str = "H1",
         count: int = 100,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Optional[list[dict[str, Any]]]:
         """
         Get historical market data.
 
@@ -503,7 +502,7 @@ class MT5Connector(BrokerConnector):
             logger.error(f"Get market data error: {e}")
             return None
 
-    def get_symbols(self) -> List[str]:
+    def get_symbols(self) -> list[str]:
         """Get all available symbols."""
         if not self.connected:
             return []

@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -71,16 +71,16 @@ class StripeCustomer:
         user_id: str,
         email: str,
         name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> None:
         self.customer_id = customer_id
         self.user_id = user_id
         self.email = email
         self.name = name
         self.metadata = metadata or {}
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "customer_id": self.customer_id,
             "user_id": self.user_id,
@@ -99,7 +99,7 @@ class StripePaymentIntent:
         amount: int,  # cents
         currency: str,
         status: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> None:
         self.intent_id = intent_id
         self.customer_id = customer_id
@@ -107,10 +107,10 @@ class StripePaymentIntent:
         self.currency = currency
         self.status = status
         self.metadata = metadata or {}
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.client_secret: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "intent_id": self.intent_id,
             "customer_id": self.customer_id,
@@ -143,9 +143,9 @@ class StripeSubscription:
         self.current_period_start = current_period_start
         self.current_period_end = current_period_end
         self.cancel_at_period_end = cancel_at_period_end
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "subscription_id": self.subscription_id,
             "customer_id": self.customer_id,
@@ -172,7 +172,7 @@ class StripeIntegration:
     """
 
     # Price IDs loaded from env vars configured in the Stripe Dashboard.
-    PRICE_IDS: Dict[tuple, Optional[str]] = {
+    PRICE_IDS: dict[tuple, Optional[str]] = {
         (SubscriptionTier.FREE, BillingCycle.MONTHLY): None,
         (SubscriptionTier.STARTER, BillingCycle.MONTHLY): os.getenv(
             "STRIPE_PRICE_STARTER_MONTHLY", "price_starter_monthly"
@@ -246,7 +246,7 @@ class StripeIntegration:
         user_id: str,
         email: str,
         name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> StripeCustomer:
         """Create a Stripe customer and return the domain model."""
         self._require_stripe()
@@ -294,13 +294,13 @@ class StripeIntegration:
         currency: str = "usd",
         tier: Optional[SubscriptionTier] = None,
         billing_cycle: BillingCycle = BillingCycle.MONTHLY,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> StripePaymentIntent:
         """Create a Stripe PaymentIntent and return the domain model."""
         self._require_stripe()
         try:
             amount_cents = int(amount * 100)
-            intent_metadata: Dict[str, Any] = {
+            intent_metadata: dict[str, Any] = {
                 "tier": tier.value if tier else "",
                 "billing_cycle": billing_cycle.value,
                 **(metadata or {}),
@@ -355,7 +355,7 @@ class StripeIntegration:
         billing_cycle: BillingCycle = BillingCycle.MONTHLY,
         success_url: str = "https://app.hopefx.ai/success",
         cancel_url: str = "https://app.hopefx.ai/cancel",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create a Stripe Checkout session for subscription purchase."""
         self._require_stripe()
         price_id = self.PRICE_IDS.get((tier, billing_cycle))
@@ -413,10 +413,10 @@ class StripeIntegration:
                 billing_cycle=billing_cycle,
                 status=sub.status,
                 current_period_start=datetime.fromtimestamp(
-                    sub.current_period_start, tz=timezone.utc
+                    sub.current_period_start, tz=UTC
                 ),
                 current_period_end=datetime.fromtimestamp(
-                    sub.current_period_end, tz=timezone.utc
+                    sub.current_period_end, tz=UTC
                 ),
             )
             logger.info("Created subscription: %s", result.subscription_id)
@@ -437,10 +437,10 @@ class StripeIntegration:
                 billing_cycle=BillingCycle.MONTHLY,
                 status=sub.status,
                 current_period_start=datetime.fromtimestamp(
-                    sub.current_period_start, tz=timezone.utc
+                    sub.current_period_start, tz=UTC
                 ),
                 current_period_end=datetime.fromtimestamp(
-                    sub.current_period_end, tz=timezone.utc
+                    sub.current_period_end, tz=UTC
                 ),
                 cancel_at_period_end=sub.cancel_at_period_end,
             )
@@ -448,7 +448,7 @@ class StripeIntegration:
             logger.error("Error retrieving subscription %s: %s", subscription_id, exc)
             return None
 
-    def list_customer_subscriptions(self, customer_id: str) -> List[StripeSubscription]:
+    def list_customer_subscriptions(self, customer_id: str) -> list[StripeSubscription]:
         """List all subscriptions for a customer from Stripe."""
         self._require_stripe()
         try:
@@ -463,10 +463,10 @@ class StripeIntegration:
                         billing_cycle=BillingCycle.MONTHLY,
                         status=sub.status,
                         current_period_start=datetime.fromtimestamp(
-                            sub.current_period_start, tz=timezone.utc
+                            sub.current_period_start, tz=UTC
                         ),
                         current_period_end=datetime.fromtimestamp(
-                            sub.current_period_end, tz=timezone.utc
+                            sub.current_period_end, tz=UTC
                         ),
                         cancel_at_period_end=sub.cancel_at_period_end,
                     )
@@ -502,11 +502,11 @@ class StripeIntegration:
         self,
         payment_intent_id: str,
         amount: Optional[Decimal] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Issue a full or partial refund for a PaymentIntent."""
         self._require_stripe()
         try:
-            params: Dict[str, Any] = {"payment_intent": payment_intent_id}
+            params: dict[str, Any] = {"payment_intent": payment_intent_id}
             if amount is not None:
                 params["amount"] = int(amount * 100)
             refund = _stripe.Refund.create(**params)
@@ -540,8 +540,8 @@ class StripeIntegration:
             return False
 
     def handle_webhook(
-        self, event_type: str, event_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, event_type: str, event_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Dispatch a verified Stripe webhook event to the appropriate handler."""
         handlers = {
             StripeWebhookEvent.PAYMENT_INTENT_SUCCEEDED.value: self._handle_payment_success,
@@ -559,35 +559,35 @@ class StripeIntegration:
         logger.info("Unhandled webhook event type: %s", event_type)
         return {"status": "ignored", "event_type": event_type}
 
-    def _handle_payment_success(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_payment_success(self, data: dict[str, Any]) -> dict[str, Any]:
         logger.info("Payment succeeded: %s", data.get("id"))
         return {"status": "success", "action": "payment_confirmed"}
 
-    def _handle_payment_failed(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_payment_failed(self, data: dict[str, Any]) -> dict[str, Any]:
         logger.warning("Payment failed: %s", data.get("id"))
         return {"status": "failed", "action": "payment_retry_needed"}
 
-    def _handle_checkout_completed(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_checkout_completed(self, data: dict[str, Any]) -> dict[str, Any]:
         logger.info("Checkout completed: %s", data.get("id"))
         return {"status": "success", "action": "subscription_activated"}
 
-    def _handle_subscription_created(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_subscription_created(self, data: dict[str, Any]) -> dict[str, Any]:
         logger.info("Subscription created: %s", data.get("id"))
         return {"status": "success", "action": "access_granted"}
 
-    def _handle_subscription_updated(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_subscription_updated(self, data: dict[str, Any]) -> dict[str, Any]:
         logger.info("Subscription updated: %s", data.get("id"))
         return {"status": "success", "action": "access_updated"}
 
-    def _handle_subscription_deleted(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_subscription_deleted(self, data: dict[str, Any]) -> dict[str, Any]:
         logger.info("Subscription deleted: %s", data.get("id"))
         return {"status": "success", "action": "access_revoked"}
 
-    def _handle_invoice_paid(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_invoice_paid(self, data: dict[str, Any]) -> dict[str, Any]:
         logger.info("Invoice paid: %s", data.get("id"))
         return {"status": "success", "action": "invoice_confirmed"}
 
-    def _handle_invoice_failed(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_invoice_failed(self, data: dict[str, Any]) -> dict[str, Any]:
         logger.warning("Invoice payment failed: %s", data.get("id"))
         return {"status": "failed", "action": "payment_retry_needed"}
 

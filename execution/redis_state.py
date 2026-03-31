@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ _POSITION_INDEX = "hopefx:positions:index"
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class RedisStateStore:
@@ -53,7 +53,7 @@ class RedisStateStore:
     # Orders
     # ------------------------------------------------------------------
 
-    def save_order(self, order: Dict[str, Any]) -> None:
+    def save_order(self, order: dict[str, Any]) -> None:
         """Persist an order dict keyed by its ID."""
         order_id = str(order.get("id") or order.get("order_id", ""))
         if not order_id:
@@ -77,9 +77,9 @@ class RedisStateStore:
         except Exception as exc:
             logger.error("RedisStateStore.remove_order error: %s", exc)
 
-    def load_orders(self) -> List[Dict[str, Any]]:
+    def load_orders(self) -> list[dict[str, Any]]:
         """Return all persisted open orders."""
-        orders: List[Dict[str, Any]] = []
+        orders: list[dict[str, Any]] = []
         try:
             order_ids = self._r.smembers(_ORDER_INDEX)
             for oid in order_ids:
@@ -96,7 +96,7 @@ class RedisStateStore:
     # Positions
     # ------------------------------------------------------------------
 
-    def save_position(self, position: Dict[str, Any]) -> None:
+    def save_position(self, position: dict[str, Any]) -> None:
         """Persist a position dict keyed by its symbol."""
         symbol = str(position.get("symbol", ""))
         if not symbol:
@@ -122,9 +122,9 @@ class RedisStateStore:
         except Exception as exc:
             logger.error("RedisStateStore.remove_position error: %s", exc)
 
-    def load_positions(self) -> List[Dict[str, Any]]:
+    def load_positions(self) -> list[dict[str, Any]]:
         """Return all persisted open positions."""
-        positions: List[Dict[str, Any]] = []
+        positions: list[dict[str, Any]] = []
         try:
             symbols = self._r.smembers(_POSITION_INDEX)
             for sym in symbols:
@@ -141,7 +141,7 @@ class RedisStateStore:
     # Boot restore
     # ------------------------------------------------------------------
 
-    def load_state_on_boot(self) -> Dict[str, List[Dict[str, Any]]]:
+    def load_state_on_boot(self) -> dict[str, list[dict[str, Any]]]:
         """
         Load all persisted orders and positions at startup.
 
@@ -171,7 +171,7 @@ class AsyncRedisStateStore:
     def __init__(self, redis_client) -> None:
         self._r = redis_client
 
-    async def save_order(self, order: Dict[str, Any]) -> None:
+    async def save_order(self, order: dict[str, Any]) -> None:
         order_id = str(order.get("id") or order.get("order_id", ""))
         if not order_id:
             logger.warning("AsyncRedisStateStore.save_order: order has no ID, skipping")
@@ -191,8 +191,8 @@ class AsyncRedisStateStore:
         except Exception as exc:
             logger.error("AsyncRedisStateStore.remove_order error: %s", exc)
 
-    async def load_orders(self) -> List[Dict[str, Any]]:
-        orders: List[Dict[str, Any]] = []
+    async def load_orders(self) -> list[dict[str, Any]]:
+        orders: list[dict[str, Any]] = []
         try:
             order_ids = await self._r.smembers(_ORDER_INDEX)
             for oid in order_ids:
@@ -205,7 +205,7 @@ class AsyncRedisStateStore:
             logger.error("AsyncRedisStateStore.load_orders error: %s", exc)
         return orders
 
-    async def save_position(self, position: Dict[str, Any]) -> None:
+    async def save_position(self, position: dict[str, Any]) -> None:
         symbol = str(position.get("symbol", ""))
         if not symbol:
             logger.warning(
@@ -227,8 +227,8 @@ class AsyncRedisStateStore:
         except Exception as exc:
             logger.error("AsyncRedisStateStore.remove_position error: %s", exc)
 
-    async def load_positions(self) -> List[Dict[str, Any]]:
-        positions: List[Dict[str, Any]] = []
+    async def load_positions(self) -> list[dict[str, Any]]:
+        positions: list[dict[str, Any]] = []
         try:
             symbols = await self._r.smembers(_POSITION_INDEX)
             for sym in symbols:
@@ -241,7 +241,7 @@ class AsyncRedisStateStore:
             logger.error("AsyncRedisStateStore.load_positions error: %s", exc)
         return positions
 
-    async def load_state_on_boot(self) -> Dict[str, List[Dict[str, Any]]]:
+    async def load_state_on_boot(self) -> dict[str, list[dict[str, Any]]]:
         """Load all persisted orders and positions at startup."""
         orders = await self.load_orders()
         positions = await self.load_positions()

@@ -63,7 +63,7 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -89,8 +89,8 @@ class BarValidationResult:
     accepted: bool
     sources_agreed: int
     sources_total: int
-    prices: Dict[str, float]  # source_name → close price
-    flags: List[str] = field(default_factory=list)
+    prices: dict[str, float]  # source_name → close price
+    flags: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -102,8 +102,8 @@ class ValidationReport:
     total_bars: int
     accepted_bars: int
     rejected_bars: int
-    sources_used: List[str]
-    rejection_reasons: Dict[str, int]  # flag → count
+    sources_used: list[str]
+    rejection_reasons: dict[str, int]  # flag → count
     coverage_pct: float
 
     def summary(self) -> str:
@@ -206,7 +206,7 @@ async def _fetch_yfinance(
     interval = _interval_map.get(timeframe, "1h")
 
     try:
-        since_dt = datetime.fromtimestamp(since_ms / 1000, tz=timezone.utc)
+        since_dt = datetime.fromtimestamp(since_ms / 1000, tz=UTC)
         # yfinance is synchronous — run in executor
         loop = asyncio.get_event_loop()
         data = await loop.run_in_executor(
@@ -287,7 +287,7 @@ async def _fetch_alpha_vantage(
         for dt_str, vals in ts.items():
             try:
                 dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(
-                    tzinfo=timezone.utc
+                    tzinfo=UTC
                 )
                 rows.append(
                     {
@@ -341,7 +341,7 @@ class MultiSourceValidator:
         symbol: str,
         timeframe: str,
         since_ms: int,
-    ) -> Dict[str, pd.DataFrame]:
+    ) -> dict[str, pd.DataFrame]:
         """
         Fetch OHLCV from all available sources in parallel.
 
@@ -354,7 +354,7 @@ class MultiSourceValidator:
             "alpha_vantage": _fetch_alpha_vantage(symbol, timeframe),
         }
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
-        sources: Dict[str, pd.DataFrame] = {}
+        sources: dict[str, pd.DataFrame] = {}
         for name, result in zip(tasks.keys(), results, strict=False):
             if isinstance(result, pd.DataFrame) and not result.empty:
                 sources[name] = result
@@ -372,10 +372,10 @@ class MultiSourceValidator:
 
     def validate(
         self,
-        sources: Dict[str, pd.DataFrame],
+        sources: dict[str, pd.DataFrame],
         symbol: str,
         timeframe: str,
-    ) -> Tuple[pd.DataFrame, ValidationReport]:
+    ) -> tuple[pd.DataFrame, ValidationReport]:
         """
         Cross-validate bars across sources and return only accepted bars.
 
@@ -425,14 +425,14 @@ class MultiSourceValidator:
         primary_name = max(sources, key=lambda k: len(sources[k]))
         primary = sources[primary_name].copy()
 
-        bar_results: List[BarValidationResult] = []
-        rejection_reasons: Dict[str, int] = {}
+        bar_results: list[BarValidationResult] = []
+        rejection_reasons: dict[str, int] = {}
 
         prev_close: Optional[float] = None
 
         for ts, row in primary.iterrows():
-            flags: List[str] = []
-            prices: Dict[str, float] = {primary_name: float(row["close"])}
+            flags: list[str] = []
+            prices: dict[str, float] = {primary_name: float(row["close"])}
 
             # ── Collect close prices from all sources at this timestamp ───────
             for src_name, src_df in sources.items():

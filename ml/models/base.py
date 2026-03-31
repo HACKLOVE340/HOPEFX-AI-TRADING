@@ -14,7 +14,7 @@ import logging
 import os
 import joblib
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -31,7 +31,7 @@ class BaseMLModel(ABC):
     the required methods.
     """
 
-    def __init__(self, name: str, config: Optional[Dict] = None):
+    def __init__(self, name: str, config: Optional[dict] = None):
         """
         Initialize the ML model.
 
@@ -45,7 +45,7 @@ class BaseMLModel(ABC):
         self.is_trained = False
         self.training_history = []
         self.metadata = {
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "version": "1.0.0",
             "name": name,
         }
@@ -54,7 +54,6 @@ class BaseMLModel(ABC):
     @abstractmethod
     def build(self) -> None:
         """Build the model architecture."""
-        pass
 
     @abstractmethod
     def train(
@@ -63,7 +62,7 @@ class BaseMLModel(ABC):
         y_train: np.ndarray,
         X_val: Optional[np.ndarray] = None,
         y_val: Optional[np.ndarray] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Train the model.
 
@@ -76,7 +75,6 @@ class BaseMLModel(ABC):
         Returns:
             Training history/metrics
         """
-        pass
 
     @abstractmethod
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -89,9 +87,8 @@ class BaseMLModel(ABC):
         Returns:
             Predictions
         """
-        pass
 
-    def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
+    def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]:
         """
         Evaluate model performance.
 
@@ -216,7 +213,7 @@ class BaseMLModel(ABC):
 
         self.logger.info(f"Model loaded from {filepath}")
 
-    def get_feature_importance(self) -> Optional[Dict[str, float]]:
+    def get_feature_importance(self) -> Optional[dict[str, float]]:
         """
         Get feature importance if supported by the model.
 

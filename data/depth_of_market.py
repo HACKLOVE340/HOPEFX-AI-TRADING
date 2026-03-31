@@ -17,7 +17,7 @@ Inspired by: MT5, Bookmap, NinjaTrader DOM features
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field, asdict
 from collections import deque
@@ -41,9 +41,9 @@ class OrderBookLevel:
     price: float
     size: float
     order_count: int = 1
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "price": self.price,
             "size": self.size,
@@ -59,9 +59,9 @@ class OrderBook:
     """
 
     symbol: str
-    bids: List[OrderBookLevel] = field(default_factory=list)
-    asks: List[OrderBookLevel] = field(default_factory=list)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    bids: list[OrderBookLevel] = field(default_factory=list)
+    asks: list[OrderBookLevel] = field(default_factory=list)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     sequence: int = 0
 
     @property
@@ -147,7 +147,7 @@ class OrderBook:
         """Number of price levels available."""
         return max(len(self.bids), len(self.asks))
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "bids": [level.to_dict() for level in self.bids],
@@ -193,15 +193,15 @@ class OrderBookAnalysis:
     ask_depth_10: float
 
     # Support/Resistance levels
-    key_bid_levels: List[Dict]  # High volume bid levels
-    key_ask_levels: List[Dict]  # High volume ask levels
+    key_bid_levels: list[dict]  # High volume bid levels
+    key_ask_levels: list[dict]  # High volume ask levels
 
     # Signals
     buying_pressure: str  # 'strong', 'moderate', 'weak'
     selling_pressure: str
     market_bias: str  # 'bullish', 'bearish', 'neutral'
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return asdict(self)
 
 
@@ -235,7 +235,7 @@ class DepthOfMarketService:
         analysis = dom_service.get_order_book_analysis('XAUUSD')
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize DOM service.
 
@@ -245,11 +245,11 @@ class DepthOfMarketService:
         self.config = config or {}
 
         # Order books by symbol
-        self._order_books: Dict[str, OrderBook] = {}
+        self._order_books: dict[str, OrderBook] = {}
 
         # Historical snapshots
         self._history_size = self.config.get("history_size", 100)
-        self._history: Dict[str, deque] = {}
+        self._history: dict[str, deque] = {}
 
         # Sequence counter
         self._sequence = 0
@@ -270,8 +270,8 @@ class DepthOfMarketService:
     def update_order_book(
         self,
         symbol: str,
-        bids: List[Tuple[float, float]],
-        asks: List[Tuple[float, float]],
+        bids: list[tuple[float, float]],
+        asks: list[tuple[float, float]],
         timestamp: Optional[datetime] = None,
     ):
         """
@@ -301,7 +301,7 @@ class DepthOfMarketService:
                 symbol=symbol,
                 bids=bid_levels,
                 asks=ask_levels,
-                timestamp=timestamp or datetime.now(timezone.utc),
+                timestamp=timestamp or datetime.now(UTC),
                 sequence=self._sequence,
             )
 
@@ -341,7 +341,7 @@ class DepthOfMarketService:
                     else:
                         # Update level
                         level.size = size
-                        level.timestamp = datetime.now(timezone.utc)
+                        level.timestamp = datetime.now(UTC)
                     return
 
             # Add new level if size > 0
@@ -392,12 +392,12 @@ class DepthOfMarketService:
 
             return order_book
 
-    def get_order_book_dict(self, symbol: str, levels: int = 10) -> Optional[Dict]:
+    def get_order_book_dict(self, symbol: str, levels: int = 10) -> Optional[dict]:
         """Get order book as dictionary."""
         order_book = self.get_order_book(symbol, levels)
         return order_book.to_dict() if order_book else None
 
-    def get_best_bid_ask(self, symbol: str) -> Optional[Dict]:
+    def get_best_bid_ask(self, symbol: str) -> Optional[dict]:
         """Get best bid and ask for a symbol."""
         with self._lock:
             if symbol not in self._order_books:
@@ -496,8 +496,8 @@ class DepthOfMarketService:
             )
 
     def _find_key_levels(
-        self, levels: List[OrderBookLevel], top_n: int = 3
-    ) -> List[Dict]:
+        self, levels: list[OrderBookLevel], top_n: int = 3
+    ) -> list[dict]:
         """Find key price levels with high volume."""
         if not levels:
             return []
@@ -528,7 +528,7 @@ class DepthOfMarketService:
 
     def get_dom_visualization_data(
         self, symbol: str, levels: int = 20
-    ) -> Optional[Dict]:
+    ) -> Optional[dict]:
         """
         Get data formatted for DOM visualization.
 
@@ -629,7 +629,7 @@ class DepthOfMarketService:
     # HISTORY & SNAPSHOTS
     # ================================================================
 
-    def get_order_book_history(self, symbol: str, limit: int = 50) -> List[Dict]:
+    def get_order_book_history(self, symbol: str, limit: int = 50) -> list[dict]:
         """Get historical order book snapshots."""
         with self._lock:
             if symbol not in self._history:
@@ -638,7 +638,7 @@ class DepthOfMarketService:
             snapshots = list(self._history[symbol])[-limit:]
             return [ob.to_dict() for ob in snapshots]
 
-    def get_imbalance_history(self, symbol: str, limit: int = 50) -> List[Dict]:
+    def get_imbalance_history(self, symbol: str, limit: int = 50) -> list[dict]:
         """Get imbalance history for a symbol."""
         with self._lock:
             if symbol not in self._history:
@@ -659,7 +659,7 @@ class DepthOfMarketService:
     # UTILITY
     # ================================================================
 
-    def get_symbols(self) -> List[str]:
+    def get_symbols(self) -> list[str]:
         """Get list of symbols with order books."""
         with self._lock:
             return list(self._order_books.keys())
@@ -678,7 +678,7 @@ class DepthOfMarketService:
             self._order_books.clear()
             self._history.clear()
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get service statistics."""
         with self._lock:
             return {

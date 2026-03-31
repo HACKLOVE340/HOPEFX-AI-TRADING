@@ -14,7 +14,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Dict, List, Optional
 
@@ -43,7 +43,7 @@ class AuditRecord:
     category: str  # ORDER, RISK, STRATEGY, etc.
     actor: str  # System component or user
     action: str
-    data: Dict
+    data: dict
     hash_chain: str  # Link to previous record
     signature: Optional[str] = None
 
@@ -56,12 +56,12 @@ class ImmutableAuditLog:
 
     def __init__(self, log_path: str = "data/audit/"):
         self.log_path = log_path
-        self.records: List[AuditRecord] = []
+        self.records: list[AuditRecord] = []
         self.sequence = 0
         self.last_hash = "0" * 64  # Genesis hash
 
     def append(
-        self, level: AuditLevel, category: str, actor: str, action: str, data: Dict
+        self, level: AuditLevel, category: str, actor: str, action: str, data: dict
     ):
         """Append immutable audit record."""
         self.sequence += 1
@@ -70,7 +70,7 @@ class ImmutableAuditLog:
         # Previously _calculate_hash() called datetime.now() independently,
         # producing a different timestamp than the one stored in the record,
         # which caused verify_integrity() to always return False.
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
         # Compute hash using the same timestamp that will be stored
         chain_hash = self._calculate_hash(data, timestamp)
@@ -95,7 +95,7 @@ class ImmutableAuditLog:
 
         return record
 
-    def _calculate_hash(self, data: Dict, timestamp: str) -> str:
+    def _calculate_hash(self, data: dict, timestamp: str) -> str:
         """
         Calculate the hash for a new record being appended.
 
@@ -122,7 +122,7 @@ class ImmutableAuditLog:
 
         _os.makedirs(self.log_path, exist_ok=True)
         filename = (
-            f"{self.log_path}audit_{datetime.now(timezone.utc).strftime('%Y-%m')}.jsonl"
+            f"{self.log_path}audit_{datetime.now(UTC).strftime('%Y-%m')}.jsonl"
         )
         try:
             loop = asyncio.get_running_loop()
@@ -213,7 +213,7 @@ class ImmutableAuditLog:
 
     def export_for_regulator(
         self, start_date: datetime, end_date: datetime
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Export compliant audit trail for regulatory review"""
         return [
             {
@@ -240,7 +240,7 @@ class TradeReporting:
         self.audit_log = ImmutableAuditLog()
         self.reporting_obligations = self._load_obligations()
 
-    def _load_obligations(self) -> Dict:
+    def _load_obligations(self) -> dict:
         """Load regulatory requirements"""
         obligations = {
             "US": {
@@ -258,7 +258,7 @@ class TradeReporting:
         }
         return obligations.get(self.jurisdiction, {})
 
-    def report_trade(self, trade: Dict):
+    def report_trade(self, trade: dict):
         """Log trade and trigger regulatory reporting if needed"""
         # Always audit
         self.audit_log.append(
@@ -273,7 +273,7 @@ class TradeReporting:
         if self._requires_immediate_reporting(trade):
             asyncio.create_task(self._submit_to_regulator(trade))
 
-    def _requires_immediate_reporting(self, trade: Dict) -> bool:
+    def _requires_immediate_reporting(self, trade: dict) -> bool:
         """Check if trade requires immediate regulatory reporting"""
         # Large trader threshold
         if trade.get("size", 0) > self.reporting_obligations.get("cftc", {}).get(
@@ -287,7 +287,7 @@ class TradeReporting:
 
         return False
 
-    async def _submit_to_regulator(self, trade: Dict):
+    async def _submit_to_regulator(self, trade: dict):
         """
         Submit trade to the appropriate regulatory endpoint.
 
@@ -340,9 +340,9 @@ class TradeReporting:
                 record.report_id,
             )
 
-    def generate_daily_report(self) -> Dict:
+    def generate_daily_report(self) -> dict:
         """Generate end-of-day compliance report"""
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
 
         trades_today = [
             r

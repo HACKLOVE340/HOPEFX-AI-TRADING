@@ -11,7 +11,7 @@ Web interface for monitoring the Master Control Core
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 
 class DashboardServer:
@@ -34,7 +34,7 @@ class DashboardServer:
             return {
                 "orchestra": self.orchestra.get_heatmap_data(),
                 "events": self.event_bus.get_metrics(),
-                "time": datetime.now(timezone.utc).isoformat(),
+                "time": datetime.now(UTC).isoformat(),
             }
 
         @self.app.websocket("/ws")
@@ -112,4 +112,4 @@ class DashboardServer:
     def run(self, port=8080):
         import uvicorn
 
-        uvicorn.run(self.app, host="0.0.0.0", port=port)  # nosec B104 - container deployment requires 0.0.0.0  # noqa: S104
+        uvicorn.run(self.app, host="0.0.0.0", port=port)  # nosec B104 - container deployment requires 0.0.0.0

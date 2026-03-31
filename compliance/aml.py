@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from decimal import Decimal
 from typing import Optional
 
@@ -130,26 +130,25 @@ class AMLGate:
                     risk_score=1.0,
                     flags=["DB_UNAVAILABLE"],
                 )
-        else:
-            # No session factory configured — block all DB-dependent withdrawals
-            # above the KYC threshold (rules 3-5 cannot be evaluated).
-            if amount > KYC_THRESHOLD:
-                logger.error(
-                    "AML: no DB session factory configured — blocking withdrawal "
-                    "of %s for user %s (cannot evaluate velocity/daily rules). "
-                    "Call init_aml_gate(session_factory) at startup.",
-                    amount,
-                    user_id,
-                )
-                return AMLDecision(
-                    allowed=False,
-                    reason=(
-                        "Withdrawal temporarily unavailable: compliance checks "
-                        "require database connectivity. Contact support."
-                    ),
-                    risk_score=1.0,
-                    flags=["NO_DB_SESSION"],
-                )
+        # No session factory configured — block all DB-dependent withdrawals
+        # above the KYC threshold (rules 3-5 cannot be evaluated).
+        elif amount > KYC_THRESHOLD:
+            logger.error(
+                "AML: no DB session factory configured — blocking withdrawal "
+                "of %s for user %s (cannot evaluate velocity/daily rules). "
+                "Call init_aml_gate(session_factory) at startup.",
+                amount,
+                user_id,
+            )
+            return AMLDecision(
+                allowed=False,
+                reason=(
+                    "Withdrawal temporarily unavailable: compliance checks "
+                    "require database connectivity. Contact support."
+                ),
+                risk_score=1.0,
+                flags=["NO_DB_SESSION"],
+            )
 
         # ── Approved ──────────────────────────────────────────────────────────
         if flags:
@@ -199,7 +198,7 @@ class AMLGate:
                     "reason": decision.reason,
                     "risk_score": decision.risk_score,
                     "flags": decision.flags,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
         except Exception as exc:
@@ -216,7 +215,7 @@ class AMLGate:
         """DB-backed rules. Returns AMLDecision to block, or None to continue."""
         from database.models import WalletTransaction
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         day_start = now - timedelta(hours=24)
 
         with self._sf() as session:

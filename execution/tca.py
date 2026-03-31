@@ -33,7 +33,7 @@ import math
 import os
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -72,7 +72,7 @@ class MarketImpactModel:
         avg_daily_volume: Decimal,
         volatility: float,
         spread_bps: float,
-    ) -> Tuple[Decimal, Decimal]:
+    ) -> tuple[Decimal, Decimal]:
         """
         Calculate expected market impact.
 
@@ -107,7 +107,7 @@ class TCAMetrics:
     benchmark_type: BenchmarkType = BenchmarkType.ARRIVAL
 
     # Execution
-    fills: List[Fill] = field(default_factory=list)
+    fills: list[Fill] = field(default_factory=list)
     avg_fill_price: Decimal = Decimal("0")
     total_commission: Decimal = Decimal("0")
     total_slippage: Decimal = Decimal("0")
@@ -150,7 +150,7 @@ class TCAMetrics:
         """Net alpha after costs (requires signal prediction vs realized)."""
         return Decimal("0")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "order_id": self.order_id,
             "symbol": self.symbol,
@@ -192,7 +192,7 @@ class MarketContextProvider:
 
     def __init__(self) -> None:
         # In-memory tick volume accumulator: symbol → list of (timestamp, volume)
-        self._tick_volumes: Dict[str, List[Tuple[datetime, float]]] = defaultdict(list)
+        self._tick_volumes: dict[str, list[tuple[datetime, float]]] = defaultdict(list)
         self._redis_cache: Optional[Any] = None
 
     def _get_redis_cache(self) -> Optional[Any]:
@@ -216,7 +216,7 @@ class MarketContextProvider:
         if len(self._tick_volumes[symbol]) > 100_000:
             self._tick_volumes[symbol] = self._tick_volumes[symbol][-100_000:]
 
-    def get_adv(self, symbol: str) -> Tuple[float, str]:
+    def get_adv(self, symbol: str) -> tuple[float, str]:
         """
         Return (adv, source) for *symbol*.
 
@@ -263,7 +263,7 @@ class MarketContextProvider:
         # 4. Global fallback
         return _DEFAULT_ADV, "default"
 
-    def get_volatility(self, symbol: str) -> Tuple[float, str]:
+    def get_volatility(self, symbol: str) -> tuple[float, str]:
         """
         Return (daily_volatility_fraction, source) for *symbol*.
 
@@ -320,14 +320,14 @@ class TCAEngine:
         self.market_context = market_context or MarketContextProvider()
         self.window_size = window_size
 
-        self._active_orders: Dict[str, Dict[str, Any]] = {}
-        self._completed: List[TCAMetrics] = []
+        self._active_orders: dict[str, dict[str, Any]] = {}
+        self._completed: list[TCAMetrics] = []
 
         # VWAP/TWAP caches: symbol → list of (datetime, price, volume)
-        self._vwap_cache: Dict[str, List[Tuple[datetime, Decimal, Decimal]]] = {}
-        self._twap_cache: Dict[str, List[Tuple[datetime, Decimal]]] = {}
+        self._vwap_cache: dict[str, list[tuple[datetime, Decimal, Decimal]]] = {}
+        self._twap_cache: dict[str, list[tuple[datetime, Decimal]]] = {}
 
-        self._cost_callbacks: List[Callable[[TCAMetrics], None]] = []
+        self._cost_callbacks: list[Callable[[TCAMetrics], None]] = []
 
     def register_cost_callback(self, cb: Callable[[TCAMetrics], None]) -> None:
         """Register callback for expensive trades."""
@@ -349,11 +349,11 @@ class TCAEngine:
             "side": side,
             "quantity": quantity,
             "arrival_price": arrival_price,
-            "arrival_time": datetime.now(timezone.utc),
+            "arrival_time": datetime.now(UTC),
             "benchmark": benchmark,
             "expected_alpha_bps": expected_advantage_bps,
             "fills": [],
-            "decision_time": datetime.now(timezone.utc),
+            "decision_time": datetime.now(UTC),
         }
         logger.debug("TCA tracking started: %s", order_id)
 
@@ -366,7 +366,7 @@ class TCAEngine:
         order = self._active_orders[order_id]
         order["fills"].append(fill)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if not order.get("first_fill_time"):
             order["first_fill_time"] = now
             order["time_to_first_fill_ms"] = (
@@ -543,7 +543,7 @@ class TCAEngine:
         return Decimal("0")
 
     def _create_cancelled_metrics(
-        self, order: Dict[str, Any], order_id: str
+        self, order: dict[str, Any], order_id: str
     ) -> TCAMetrics:
         """Create metrics for a cancelled/rejected order."""
         return TCAMetrics(
@@ -564,7 +564,7 @@ class TCAEngine:
         Called by the execution engine on every tick.
         """
         symbol = tick.symbol
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Feed tick volume into ADV estimator
         self.market_context.accumulate_tick(
@@ -587,7 +587,7 @@ class TCAEngine:
         if len(self._twap_cache[symbol]) > 10_000:
             self._twap_cache[symbol].pop(0)
 
-    def get_stats(self, n: int = 100) -> Dict[str, Any]:
+    def get_stats(self, n: int = 100) -> dict[str, Any]:
         """Rolling execution quality statistics."""
         recent = self._completed[-n:]
         if not recent:

@@ -10,7 +10,7 @@ This strategy uses RSI to identify overbought and oversold conditions.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict
 
 import pandas as pd
@@ -54,7 +54,7 @@ class RSIStrategy(BaseStrategy):
             f"oversold={oversold}, overbought={overbought}",
         )
 
-    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute RSI from OHLCV data dict."""
         prices = data.get("prices") or data.get("close")
         if prices is None:
@@ -82,7 +82,7 @@ class RSIStrategy(BaseStrategy):
                 SignalType.BUY,
                 self.config.symbol,
                 price,
-                datetime.now(timezone.utc),
+                datetime.now(UTC),
                 confidence=min(0.95, 0.5 + (self.oversold - rsi) / self.oversold * 0.4),
             )
         if rsi > self.overbought:
@@ -90,7 +90,7 @@ class RSIStrategy(BaseStrategy):
                 SignalType.SELL,
                 self.config.symbol,
                 price,
-                datetime.now(timezone.utc),
+                datetime.now(UTC),
                 confidence=min(
                     0.95,
                     0.5 + (rsi - self.overbought) / (100 - self.overbought) * 0.4,
@@ -98,7 +98,7 @@ class RSIStrategy(BaseStrategy):
             )
         return None
 
-    def generate_signal_from_data(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+    def generate_signal_from_data(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """Legacy helper used by backtesting — returns dict signal."""
         return self._generate_dict_signal(market_data)
 
@@ -120,7 +120,7 @@ class RSIStrategy(BaseStrategy):
         rsi = 100 - (100 / (1 + rs))
         return rsi
 
-    def _generate_dict_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+    def _generate_dict_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """Generate dict-style signal from OHLCV DataFrame (used by backtesting)."""
         try:
             if len(market_data) < self.period + 1:
@@ -128,7 +128,7 @@ class RSIStrategy(BaseStrategy):
                     "type": "HOLD",
                     "confidence": 0.0,
                     "reason": "Insufficient data for RSI calculation",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
 
             # Calculate RSI
@@ -145,7 +145,7 @@ class RSIStrategy(BaseStrategy):
                     "type": "HOLD",
                     "confidence": 0.0,
                     "reason": "RSI calculation resulted in NaN",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
 
             signal_type = "HOLD"
@@ -210,7 +210,7 @@ class RSIStrategy(BaseStrategy):
                 "type": signal_type,
                 "confidence": confidence,
                 "reason": reason,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "metadata": {
                     "rsi": current_rsi,
                     "previous_rsi": previous_rsi,
@@ -225,6 +225,6 @@ class RSIStrategy(BaseStrategy):
             return {
                 "type": "HOLD",
                 "confidence": 0.0,
-                "reason": f"Error: {str(e)}",
-                "timestamp": datetime.now(timezone.utc),
+                "reason": f"Error: {e!s}",
+                "timestamp": datetime.now(UTC),
             }

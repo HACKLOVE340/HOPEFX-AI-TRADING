@@ -34,12 +34,12 @@ class SimulationEngine:
 
     def monte_carlo_simulation(
         self,
-        trade_pnls: List[float],
+        trade_pnls: list[float],
         initial_capital: float = 100_000.0,
         n_paths: int = 5000,
-        confidence_levels: Optional[List[float]] = None,
+        confidence_levels: Optional[list[float]] = None,
         method: str = "iid",
-    ) -> Dict:
+    ) -> dict:
         """
         Bootstrap Monte Carlo over actual trade P&L sequence.
 
@@ -78,11 +78,11 @@ class SimulationEngine:
 
     def genetic_algorithm_optimization(
         self,
-        parameters: Dict,
+        parameters: dict,
         fitness_function,
         population_size: int = 100,
         generations: int = 50,
-    ) -> Dict:
+    ) -> dict:
         """
         Genetic algorithm parameter optimisation.
 

@@ -52,7 +52,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, Optional, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -100,12 +100,12 @@ class LiveConnectionManager:
     """
 
     def __init__(self) -> None:
-        self._connections: Dict[str, WebSocket] = {}
-        self._subscriptions: Dict[str, Set[str]] = {}
+        self._connections: dict[str, WebSocket] = {}
+        self._subscriptions: dict[str, set[str]] = {}
         # connection_id → user_id (None until auth message received)
-        self._user_ids: Dict[str, Optional[str]] = {}
+        self._user_ids: dict[str, Optional[str]] = {}
         # connection_id → heartbeat miss count
-        self._hb_misses: Dict[str, int] = {}
+        self._hb_misses: dict[str, int] = {}
         self._counter = 0
 
     def _new_id(self) -> str:
@@ -222,7 +222,7 @@ def get_live_manager() -> LiveConnectionManager:
 
 # Symbol config: vol and spread used only when no live price is available.
 # Keys use the slash format the frontend expects (XAU/USD etc.).
-_SYMBOLS: Dict[str, Dict[str, float]] = {
+_SYMBOLS: dict[str, dict[str, float]] = {
     "XAU/USD": {"price": 3300.0, "vol": 0.012, "spread": 0.30},
     "EUR/USD": {"price": 1.0820, "vol": 0.006, "spread": 0.0001},
     "GBP/USD": {"price": 1.2940, "vol": 0.007, "spread": 0.0002},
@@ -231,7 +231,7 @@ _SYMBOLS: Dict[str, Dict[str, float]] = {
 }
 
 # Slash → no-slash lookup for broker.market_prices keys
-_BROKER_KEY: Dict[str, str] = {
+_BROKER_KEY: dict[str, str] = {
     "XAU/USD": "XAUUSD",
     "EUR/USD": "EURUSD",
     "GBP/USD": "GBPUSD",
@@ -239,7 +239,7 @@ _BROKER_KEY: Dict[str, str] = {
     "BTC/USD": "BTC/USD",
 }
 
-_open_prices: Dict[str, float] = {sym: cfg["price"] for sym, cfg in _SYMBOLS.items()}
+_open_prices: dict[str, float] = {sym: cfg["price"] for sym, cfg in _SYMBOLS.items()}
 _prices_seeded = False
 
 
@@ -249,7 +249,7 @@ def _seed_from_broker() -> None:
     if _prices_seeded:
         return
     try:
-        from app import app_state  # noqa: PLC0415
+        from app import app_state
 
         broker = getattr(app_state, "broker", None)
         market_prices = getattr(broker, "market_prices", {}) if broker else {}
@@ -275,7 +275,7 @@ def _get_live_price(symbol: str) -> Optional[float]:
     Returns None if neither is available.
     """
     try:
-        from app import app_state  # noqa: PLC0415
+        from app import app_state
 
         # 1. Price engine (real ticks)
         pe = getattr(app_state, "price_engine", None)
@@ -329,7 +329,7 @@ def _make_tick(symbol: str) -> Optional[dict]:
             "ask": round(mid + half, 5),
             "mid": round(mid, 5),
             "spread": cfg["spread"],
-            "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
             "change_pct": round(change, 3),
         },
     }
@@ -378,7 +378,7 @@ async def _eventbus_tick_broadcaster() -> None:
                 },
             }
             await _manager.broadcast("prices", tick)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning(
             "WS live: EventBus tick stream failed (%s) — broadcasting no_live_feed.",
             exc,
@@ -537,7 +537,7 @@ async def _eventbus_signal_broadcaster() -> None:
                 },
             }
             await _manager.broadcast("signals", signal)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("WS live: EventBus signal stream failed: %s", exc)
 
 
@@ -561,7 +561,7 @@ async def _broadcast_no_live_feed() -> None:
                         "No live broker connection. "
                         "Connect a broker in Settings to receive real-time prices."
                     ),
-                    "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+                    "timestamp": int(datetime.now(UTC).timestamp() * 1000),
                 },
             )
         await asyncio.sleep(_NO_FEED_INTERVAL)
@@ -597,7 +597,7 @@ async def _price_broadcaster_live_only() -> None:
                         "message": (
                             f"No live price for {symbol}. Connect a broker in Settings."
                         ),
-                        "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+                        "timestamp": int(datetime.now(UTC).timestamp() * 1000),
                     },
                 )
         if not any_live:
@@ -698,7 +698,7 @@ async def ws_live(websocket: WebSocket) -> None:
             "type": "connected",
             "connection_id": cid,
             "auth_required": WS_AUTH_REQUIRED,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         },
     )
 
@@ -859,7 +859,7 @@ async def ws_live_stats() -> dict:
     return {
         "connections": _manager.connection_count,
         "symbols": list(_SYMBOLS.keys()),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 

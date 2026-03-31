@@ -11,7 +11,7 @@ and potential reversals.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict
 
 import pandas as pd
@@ -50,7 +50,7 @@ class BollingerBandsStrategy(BaseStrategy):
             f"Bollinger Bands Strategy initialized: period={period}, std_dev={std_dev}",
         )
 
-    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute Bollinger Bands from OHLCV data dict."""
         prices = data.get("prices") or data.get("close")
         if prices is None:
@@ -94,7 +94,7 @@ class BollingerBandsStrategy(BaseStrategy):
                 SignalType.BUY,
                 self.config.symbol,
                 price,
-                datetime.now(timezone.utc),
+                datetime.now(UTC),
                 confidence=conf,
             )
         if price > upper:
@@ -103,12 +103,12 @@ class BollingerBandsStrategy(BaseStrategy):
                 SignalType.SELL,
                 self.config.symbol,
                 price,
-                datetime.now(timezone.utc),
+                datetime.now(UTC),
                 confidence=conf,
             )
         return None
 
-    def _generate_dict_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+    def _generate_dict_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """Generate dict-style signal from OHLCV DataFrame (used by backtesting)."""
         try:
             if len(market_data) < self.period:
@@ -116,7 +116,7 @@ class BollingerBandsStrategy(BaseStrategy):
                     "type": "HOLD",
                     "confidence": 0.0,
                     "reason": "Insufficient data",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
 
             close = market_data["close"]
@@ -226,7 +226,7 @@ class BollingerBandsStrategy(BaseStrategy):
                 "type": signal_type,
                 "confidence": confidence,
                 "reason": reason,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "metadata": {
                     "price": current_price,
                     "upper_band": current_upper,
@@ -243,6 +243,6 @@ class BollingerBandsStrategy(BaseStrategy):
             return {
                 "type": "HOLD",
                 "confidence": 0.0,
-                "reason": f"Error: {str(e)}",
-                "timestamp": datetime.now(timezone.utc),
+                "reason": f"Error: {e!s}",
+                "timestamp": datetime.now(UTC),
             }

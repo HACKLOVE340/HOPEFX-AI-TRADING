@@ -13,7 +13,7 @@ Tests for:
 - Alert management
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 
 class TestAlertConditionType:
@@ -171,7 +171,7 @@ class TestAlert:
             name="Test",
             symbol="XAUUSD",
             conditions=[condition],
-            expires_at=datetime.now(timezone.utc)
+            expires_at=datetime.now(UTC)
             - timedelta(hours=1),  # Expired 1 hour ago
         )
         assert alert.is_active() is False
@@ -188,7 +188,7 @@ class TestAlert:
             symbol="XAUUSD",
             conditions=[condition],
             cooldown_minutes=5,
-            last_triggered_at=datetime.now(timezone.utc)
+            last_triggered_at=datetime.now(UTC)
             - timedelta(minutes=2),  # 2 min ago
         )
 

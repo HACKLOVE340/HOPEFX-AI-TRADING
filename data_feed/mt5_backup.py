@@ -63,7 +63,7 @@ class MT5Backup:
         MT5 symbol to quote (default: ``XAUUSD``).
     """
 
-    def __init__(self, config: Dict, symbol: str = "XAUUSD") -> None:
+    def __init__(self, config: dict, symbol: str = "XAUUSD") -> None:
         self._config = config
         self.symbol = symbol
         self.connected: bool = False
@@ -170,7 +170,7 @@ class MT5Backup:
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         """Return a health snapshot for monitoring."""
         return {
             "provider": "mt5_demo",

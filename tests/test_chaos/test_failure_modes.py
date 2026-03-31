@@ -117,7 +117,7 @@ class TestKillSwitchFailureModes:
         from kill_switch import KillSwitch
 
         tmp = Path(tempfile.mkdtemp())
-        return KillSwitch(flag_file=tmp / "ks.flag", deactivation_token="test-tok")  # noqa: S106
+        return KillSwitch(flag_file=tmp / "ks.flag", deactivation_token="test-tok")
 
     def test_double_activate_stays_active(self):
         ks = self._ks()
@@ -138,7 +138,7 @@ class TestKillSwitchFailureModes:
         ks = self._ks()
         ks.activate("test")
         with pytest.raises(PermissionError):
-            ks.deactivate(token="wrong-token")  # noqa: S106
+            ks.deactivate(token="wrong-token")
 
     def test_status_always_returns_dict(self):
         ks = self._ks()
@@ -151,8 +151,8 @@ class TestKillSwitchFailureModes:
         assert ks.is_active() is False
         # Deactivating an already-inactive switch should not raise
         try:
-            ks.deactivate(token="test-tok")  # noqa: S106
-        except Exception:  # noqa: S110
+            ks.deactivate(token="test-tok")
+        except Exception:
             pass  # Some implementations may raise on double-deactivate — acceptable
 
 

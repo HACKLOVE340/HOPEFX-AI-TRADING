@@ -39,7 +39,7 @@ from __future__ import annotations
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Deque, Dict, List, Optional
 
 import pandas as pd
@@ -51,7 +51,7 @@ _MAX_BARS = int(os.getenv("OHLCV_STORE_MAX_BARS", "500"))
 _REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 
-def _bars_to_df(bars: List[Dict[str, Any]]) -> Optional[pd.DataFrame]:
+def _bars_to_df(bars: list[dict[str, Any]]) -> Optional[pd.DataFrame]:
     """
     Convert a list of bar dicts to a DatetimeIndex OHLCV DataFrame.
 
@@ -68,7 +68,7 @@ def _bars_to_df(bars: List[Dict[str, Any]]) -> Optional[pd.DataFrame]:
             if ts_raw is None:
                 continue
             if isinstance(ts_raw, (int, float)):
-                ts = datetime.fromtimestamp(float(ts_raw), tz=timezone.utc)
+                ts = datetime.fromtimestamp(float(ts_raw), tz=UTC)
             else:
                 ts = pd.to_datetime(ts_raw, utc=True)
             rows.append(
@@ -103,7 +103,7 @@ class OHLCVStore:
         self._timeframe = timeframe
         self._max_bars = max_bars
         # Per-symbol in-memory ring buffers
-        self._buffers: Dict[str, Deque[Dict[str, Any]]] = {}
+        self._buffers: dict[str, deque[dict[str, Any]]] = {}
         # Redis cache (lazy-connected)
         self._cache = None
         self._redis_ok = False
@@ -161,7 +161,7 @@ class OHLCVStore:
         raw_list = list(buf)[-bars:]
         return _bars_to_df(raw_list)
 
-    def push(self, symbol: str, bar: Dict[str, Any]) -> None:
+    def push(self, symbol: str, bar: dict[str, Any]) -> None:
         """
         Store a newly closed OHLCV bar.
 
@@ -171,7 +171,7 @@ class OHLCVStore:
         # Ensure bar has a timestamp key
         if "bar_open_ts" not in bar and "ts" not in bar:
             bar = dict(bar)
-            bar["bar_open_ts"] = datetime.now(timezone.utc).timestamp()
+            bar["bar_open_ts"] = datetime.now(UTC).timestamp()
 
         # In-memory ring buffer
         if symbol not in self._buffers:
@@ -191,11 +191,11 @@ class OHLCVStore:
         buf = self._buffers.get(symbol)
         return len(buf) if buf else 0
 
-    def symbols(self) -> List[str]:
+    def symbols(self) -> list[str]:
         """Return all symbols with in-memory bars."""
         return list(self._buffers.keys())
 
-    def health(self) -> Dict[str, Any]:
+    def health(self) -> dict[str, Any]:
         return {
             "redis_ok": self._redis_ok,
             "timeframe": self._timeframe,

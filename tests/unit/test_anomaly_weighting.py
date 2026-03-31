@@ -91,7 +91,7 @@ class TestAnomalyWeighter:
         X_outlier = np.array([[100.0, 100.0, 100.0, 100.0, 100.0]])
         aw = self._cls(contamination=0.05)
         aw.fit(X_normal)
-        assert aw.flag(X_outlier)[0] == True  # noqa: E712 — np.True_ != True identity
+        assert aw.flag(X_outlier)[0] == True
 
     def test_raises_before_fit(self):
         aw = self._cls()
@@ -172,7 +172,7 @@ class TestAnomalyWeightStore:
         mock_weighter._threshold = 0.0
         mock_weighter._scaler = None
 
-        import unittest.mock as mock
+        from unittest import mock
 
         # Patch decision_scores to return a very anomalous score
         with mock.patch.object(

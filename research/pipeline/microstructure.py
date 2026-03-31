@@ -67,7 +67,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Deque, Dict, List, Optional
 
 import numpy as np
@@ -81,7 +81,7 @@ try:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from data.order_book import OrderBook, OrderBookLevel  # noqa: F401
+    from data.order_book import OrderBook, OrderBookLevel
 
     OB_AVAILABLE = True
 except ImportError:
@@ -171,7 +171,7 @@ class MicrostructureFeatures:
     def __init__(self, max_snapshots: int = 500, n_levels: int = 10):
         self.max_snapshots = max_snapshots
         self.n_levels = n_levels
-        self._records: Deque[Dict] = deque(maxlen=max_snapshots)
+        self._records: deque[dict] = deque(maxlen=max_snapshots)
 
     def push_snapshot(
         self,
@@ -193,7 +193,7 @@ class MicrostructureFeatures:
         trade_volume : Volume of last trade
         is_buy       : True = buyer-initiated, False = seller-initiated, None = unknown
         """
-        ts = timestamp or datetime.now(timezone.utc)
+        ts = timestamp or datetime.now(UTC)
 
         # Normalise to lists of (price, size) tuples
         if OB_AVAILABLE and hasattr(book, "bids"):
@@ -228,7 +228,7 @@ class MicrostructureFeatures:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _compute_from_records(records: List[Dict], n_levels: int = 10) -> pd.DataFrame:
+def _compute_from_records(records: list[dict], n_levels: int = 10) -> pd.DataFrame:
     """Convert a list of snapshot dicts to a feature DataFrame."""
     rows = []
     for rec in records:
@@ -437,7 +437,7 @@ def attach_microstructure(
     ms_cols = [c for c in ms_df.columns if c.startswith("ms_")]
 
     # Resample: use mean for most features, last for directional ones
-    agg = {c: "mean" for c in ms_cols}
+    agg = dict.fromkeys(ms_cols, "mean")
     for c in ["ms_large_trade", "ms_quote_stuff"]:
         if c in ms_cols:
             agg[c] = "max"  # flag is True if it happened at any point in the bar

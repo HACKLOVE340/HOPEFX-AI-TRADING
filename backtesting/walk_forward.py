@@ -27,9 +27,9 @@ class WalkForwardResult:
     train_end: datetime
     test_start: datetime
     test_end: datetime
-    train_performance: Dict
-    test_performance: Dict
-    parameter_values: Dict
+    train_performance: dict
+    test_performance: dict
+    parameter_values: dict
     is_overfit: bool
 
 
@@ -50,14 +50,14 @@ class WalkForwardEngine:
         self.test_size = test_size
         self.purge_size = purge_size
         self.step_size = step_size
-        self.results: List[WalkForwardResult] = []
+        self.results: list[WalkForwardResult] = []
 
     def run(
         self,
         data: pd.DataFrame,
         strategy_factory: Callable[..., Any],
-        parameter_grid: List[Dict[str, Any]],
-    ) -> List[WalkForwardResult]:
+        parameter_grid: list[dict[str, Any]],
+    ) -> list[WalkForwardResult]:
         """
         Run walk-forward optimization.
 
@@ -130,8 +130,8 @@ class WalkForwardEngine:
         self,
         train_data: pd.DataFrame,
         strategy_factory: Callable[..., Any],
-        parameter_grid: List[Dict[str, Any]],
-    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        parameter_grid: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Find best parameters on training data."""
         best_score = -np.inf
         best_params = None
@@ -150,7 +150,7 @@ class WalkForwardEngine:
 
         return best_params, best_perf
 
-    def _evaluate_strategy(self, data: pd.DataFrame, strategy: Any) -> Dict[str, Any]:
+    def _evaluate_strategy(self, data: pd.DataFrame, strategy: Any) -> dict[str, Any]:
         """Evaluate strategy performance."""
         trades = []
         position = 0
@@ -199,22 +199,20 @@ class WalkForwardEngine:
             else 0,
         }
 
-    def _calculate_max_drawdown(self, equity: List[float]) -> float:
+    def _calculate_max_drawdown(self, equity: list[float]) -> float:
         """Calculate maximum drawdown."""
         peak = equity[0]
         max_dd = 0
 
         for value in equity:
-            if value > peak:
-                peak = value
+            peak = max(peak, value)
             dd = (peak - value) / peak
-            if dd > max_dd:
-                max_dd = dd
+            max_dd = max(max_dd, dd)
 
         return max_dd
 
     def _detect_overfit(
-        self, train_perf: Dict[str, Any], test_perf: Dict[str, Any]
+        self, train_perf: dict[str, Any], test_perf: dict[str, Any]
     ) -> bool:
         """Detect if strategy is overfit."""
         # Sharpe ratio degradation
@@ -233,7 +231,7 @@ class WalkForwardEngine:
 
         return False
 
-    def get_aggregate_stats(self) -> Dict[str, Any]:
+    def get_aggregate_stats(self) -> dict[str, Any]:
         """Aggregate statistics across all windows."""
         if not self.results:
             return {}

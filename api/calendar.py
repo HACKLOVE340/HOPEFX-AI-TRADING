@@ -20,7 +20,7 @@ GET  /api/calendar/auto-pause       — get current auto-pause config
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query
@@ -34,17 +34,17 @@ router = APIRouter(prefix="/api/calendar", tags=["Economic Calendar"])
 _AUTO_PAUSE_KEY = "calendar:auto_pause"
 
 # Default auto-pause config — used when no persisted value exists
-_AUTO_PAUSE_DEFAULTS: Dict[str, Any] = {
+_AUTO_PAUSE_DEFAULTS: dict[str, Any] = {
     "enabled": False,
     "minutes_before": 30,
     "min_importance": "high",
 }
 
 # In-process cache — refreshed from shared store on every read
-_auto_pause_config: Dict[str, Any] = dict(_AUTO_PAUSE_DEFAULTS)
+_auto_pause_config: dict[str, Any] = dict(_AUTO_PAUSE_DEFAULTS)
 
 
-def _get_auto_pause() -> Dict[str, Any]:
+def _get_auto_pause() -> dict[str, Any]:
     """Read auto-pause config from the shared config store (Redis → DB → defaults)."""
     global _auto_pause_config
     try:
@@ -59,7 +59,7 @@ def _get_auto_pause() -> Dict[str, Any]:
     return dict(_auto_pause_config)
 
 
-def _save_auto_pause(config: Dict[str, Any], changed_by: str = "api") -> None:
+def _save_auto_pause(config: dict[str, Any], changed_by: str = "api") -> None:
     """Persist auto-pause config to the shared config store (Redis + DB)."""
     global _auto_pause_config
     _auto_pause_config = dict(config)
@@ -84,7 +84,7 @@ def _seed_calendar():
     )
 
     cal = EconomicCalendar()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     seed_events = [
         # Today / tomorrow
@@ -228,7 +228,7 @@ class AutoPauseConfig(BaseModel):
 
 
 def _event_to_out(event: Any) -> EventOut:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     delta = event.scheduled_time - now
     minutes_until = max(0, int(delta.total_seconds() / 60))
     is_high = event.importance.value in ("high", "critical")
@@ -250,14 +250,14 @@ def _event_to_out(event: Any) -> EventOut:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
-@router.get("/upcoming", response_model=List[EventOut])
+@router.get("/upcoming", response_model=list[EventOut])
 async def get_upcoming(
     hours: int = Query(168, ge=1, le=720, description="Look-ahead window in hours"),
     importance: Optional[str] = Query(
         None,
         description="Filter: low|medium|high|critical",
     ),
-) -> List[EventOut]:
+) -> list[EventOut]:
     """Return upcoming economic events within the specified window."""
     try:
         from news.economic_calendar import EventImportance
@@ -279,14 +279,14 @@ async def get_upcoming(
         return []
 
 
-@router.get("/today", response_model=List[EventOut])
-async def get_today() -> List[EventOut]:
+@router.get("/today", response_model=list[EventOut])
+async def get_today() -> list[EventOut]:
     """Return today's economic events."""
     return await get_upcoming(hours=24)
 
 
-@router.get("/high-impact", response_model=List[EventOut])
-async def get_high_impact() -> List[EventOut]:
+@router.get("/high-impact", response_model=list[EventOut])
+async def get_high_impact() -> list[EventOut]:
     """Return HIGH and CRITICAL events in the next 48 hours."""
     return await get_upcoming(hours=48, importance="high")
 
@@ -379,8 +379,8 @@ class FomcRegimeStatus(BaseModel):
     notes: str
 
 
-@router.get("/fomc", response_model=List[FomcEvent])
-async def get_fomc_calendar(upcoming_only: bool = True) -> List[FomcEvent]:
+@router.get("/fomc", response_model=list[FomcEvent])
+async def get_fomc_calendar(upcoming_only: bool = True) -> list[FomcEvent]:
     """
     Return FOMC meeting dates with countdown timers.
 
@@ -388,7 +388,7 @@ async def get_fomc_calendar(upcoming_only: bool = True) -> List[FomcEvent]:
     The next meeting is flagged with is_next=True.
     Meetings within 2 hours of statement release are flagged is_within_2h=True.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     events = []
     for date_str in _FOMC_DATES:
         dt = datetime.fromisoformat(f"{date_str}T18:00:00+00:00")
@@ -435,7 +435,7 @@ async def set_fomc_regime(body: FomcRegimeOverride) -> FomcRegimeStatus:
             detail="outcome must be hawkish | dovish | neutral",
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires = now + timedelta(hours=48)
 
     multiplier = {"hawkish": 0.8, "dovish": 1.2, "neutral": 1.0}[outcome]
@@ -495,7 +495,7 @@ async def get_fomc_regime() -> FomcRegimeStatus:
     # Auto-expire
     if _fomc_regime_override.get("active") and _fomc_regime_override.get("expires_at"):
         expires = datetime.fromisoformat(_fomc_regime_override["expires_at"])
-        if datetime.now(timezone.utc) > expires:
+        if datetime.now(UTC) > expires:
             _fomc_regime_override.update(
                 {
                     "active": False,

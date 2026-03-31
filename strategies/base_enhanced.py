@@ -11,7 +11,7 @@ and adds MCC integration.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -28,7 +28,7 @@ class StrategyConfig:
     enabled: bool = True
 
     # New fields (optional for existing strategies)
-    regime_preference: List[str] = None  # ["trending", "ranging"]
+    regime_preference: list[str] = None  # ["trending", "ranging"]
     correlation_group: str = "default"  # For diversification
 
     def __post_init__(self):
@@ -47,7 +47,7 @@ class StrategySignal:
         target_price: Optional[Decimal] = None,
         stop_loss: Optional[Decimal] = None,
         take_profit: Optional[Decimal] = None,
-        metadata: Optional[Dict] = None,
+        metadata: Optional[dict] = None,
     ):
         self.action = action
         self.strength = max(0.0, min(1.0, strength))
@@ -56,7 +56,7 @@ class StrategySignal:
         self.stop_loss = stop_loss
         self.take_profit = take_profit
         self.metadata = metadata or {}
-        self.timestamp = datetime.now(timezone.utc)
+        self.timestamp = datetime.now(UTC)
 
     def is_valid(self) -> bool:
         return self.action in ["BUY", "SELL", "HOLD"] and self.confidence > 0.5
@@ -78,7 +78,7 @@ class EnhancedStrategy(ABC):
             "total_pnl": Decimal("0"),
             "current_drawdown": Decimal("0"),
         }
-        self.price_history: List[tuple] = []  # (timestamp, price)
+        self.price_history: list[tuple] = []  # (timestamp, price)
         self.max_history = 1000
 
         # MCC integration hooks
@@ -129,7 +129,6 @@ class EnhancedStrategy(ABC):
         Your existing generate_signal() goes here.
         Return StrategySignal instead of raw dict.
         """
-        pass
 
     def on_trade_completed(self, pnl: Decimal):
         """Called by MCC when trade closes"""
@@ -141,7 +140,7 @@ class EnhancedStrategy(ABC):
         else:
             self.performance["losses"] += 1
 
-    def get_metrics(self) -> Dict:
+    def get_metrics(self) -> dict:
         """Performance metrics for MCC"""
         trades = self.performance["trades"]
         return {

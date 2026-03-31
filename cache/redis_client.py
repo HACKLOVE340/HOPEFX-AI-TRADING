@@ -245,7 +245,7 @@ async def _ping_or_reset() -> None:
         _connection_mode = "none"
 
 
-async def get_health() -> Dict[str, Any]:
+async def get_health() -> dict[str, Any]:
     """
     Return a health snapshot for the current Redis connection.
 
@@ -260,7 +260,7 @@ async def get_health() -> Dict[str, Any]:
         await client.ping()
         latency_ms = (time.monotonic() - latency_start) * 1000
 
-        info: Dict[str, Any] = {
+        info: dict[str, Any] = {
             "mode": _connection_mode,
             "connected": True,
             "latency_ms": round(latency_ms, 2),

@@ -46,7 +46,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import List, Tuple
 
@@ -91,7 +91,7 @@ def download_data(
 
     if interval in ("15m", "30m", "5m", "1m"):
         # Chunk into 50-day windows to stay within yfinance limits
-        chunks: List[pd.DataFrame] = []
+        chunks: list[pd.DataFrame] = []
         cursor = pd.Timestamp(start)
         end_dt = pd.Timestamp(end)
         window = pd.Timedelta(days=50)
@@ -186,7 +186,7 @@ def run_backtest(
     sl_atr_mult: float = 1.5,
     tp_atr_mult: float = 3.0,
     commission_pct: float = 0.0002,  # 0.02% round-trip (realistic for futures)
-) -> Tuple[pd.DataFrame, dict]:
+) -> tuple[pd.DataFrame, dict]:
     """
     Event-driven backtest.
 
@@ -196,7 +196,7 @@ def run_backtest(
     balance = initial_balance
     peak_bal = initial_balance
     max_dd = 0.0
-    trades: List[dict] = []
+    trades: list[dict] = []
 
     in_trade = False
     entry_price = 0.0
@@ -221,11 +221,9 @@ def run_backtest(
                 r_mult = tp_atr_mult / sl_atr_mult if hit_tp else -1.0
                 pnl = risk_amount * r_mult - balance * commission_pct
                 balance += pnl
-                if balance > peak_bal:
-                    peak_bal = balance
+                peak_bal = max(peak_bal, balance)
                 dd = (peak_bal - balance) / peak_bal if peak_bal > 0 else 0.0
-                if dd > max_dd:
-                    max_dd = dd
+                max_dd = max(max_dd, dd)
 
                 trades.append(
                     {
@@ -315,7 +313,7 @@ def monte_carlo(trades_df: pd.DataFrame, n_runs: int = 1000, seed: int = 42) -> 
     # Use pnl_pct (normalised) so DD is meaningful regardless of balance scale
     pnls = trades_df["pnl_pct"].values / 100.0  # convert to fraction
 
-    max_dds: List[float] = []
+    max_dds: list[float] = []
     for _ in range(n_runs):
         shuffled = rng.permutation(pnls)
         equity = np.cumprod(1 + shuffled)  # compound returns
@@ -368,7 +366,7 @@ def print_summary(label: str, summary: dict, mc: dict) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
     p = argparse.ArgumentParser(description="Volume-boost GC=F backtest 2022-2026")
     p.add_argument("--symbol", default="GC=F")
     p.add_argument("--start", default="2022-01-01")
@@ -403,7 +401,7 @@ def main() -> None:
         logger.info("=== Run 2: 15m bars (last 60 days) ===")
         from datetime import timedelta
 
-        start_15m = (datetime.now(timezone.utc) - timedelta(days=58)).strftime(
+        start_15m = (datetime.now(UTC) - timedelta(days=58)).strftime(
             "%Y-%m-%d"
         )
         df_15m = download_data(args.symbol, start_15m, args.end, "15m")

@@ -62,7 +62,7 @@ import pathlib
 import signal
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
@@ -79,7 +79,7 @@ def _get_chart_engine():
             from charting.nuclear_ai_chart_engine import get_chart_engine
 
             _chart_engine = get_chart_engine()
-        except Exception as _exc:  # noqa: BLE001
+        except Exception as _exc:
             logger.debug("Chart engine unavailable (optional): %s", _exc)
     return _chart_engine
 
@@ -126,7 +126,7 @@ async def _telegram(token: str, chat_id: str, text: str) -> None:
                 json={"chat_id": chat_id, "text": text},
                 timeout=aiohttp.ClientTimeout(total=10),
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("Telegram send failed: %s", exc)
 
 
@@ -157,8 +157,7 @@ class DrawdownMonitor:
     def update(self, equity: float) -> float:
         """Update peak and return current drawdown fraction (0.0 = no drawdown)."""
         self._last_equity = equity
-        if equity > self._peak:
-            self._peak = equity
+        self._peak = max(self._peak, equity)
         if self._peak <= 0:
             return 0.0
         return max(0.0, (self._peak - equity) / self._peak)
@@ -197,7 +196,7 @@ class DailyReporter:
         self._last_day: int = -1
 
     async def maybe_send(self, status: dict) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if now.hour != DAILY_REPORT_HOUR_UTC or now.day == self._last_day:
             return
         self._last_day = now.day
@@ -376,7 +375,7 @@ class LifeSupervisor:
             "Nuclear supervisor in poll mode (no register_news_callback on engine)"
         )
 
-    async def on_news_event(self, event: Dict[str, Any]) -> None:
+    async def on_news_event(self, event: dict[str, Any]) -> None:
         """
         Callback invoked by the engine (or news feed) on each new event.
 
@@ -503,7 +502,7 @@ class LifeSupervisor:
             equity = status.get("equity", self._initial_bal)
             balance = status.get("balance", self._initial_bal)
             self._chart_engine.record_equity_point(equity, balance, self._nuclear_annotation())
-        except Exception as _exc:  # noqa: BLE001
+        except Exception as _exc:
             logger.debug(_SUPPRESSED_EXC_MSG, _exc)  # chart engine errors must never crash the supervisor
 
     def _nuclear_info_str(self) -> str:
@@ -551,7 +550,7 @@ class LifeSupervisor:
                 if tl:
                     status["fill_count"] = tl.stats.get("fill_count", 0)
                 return status
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("Status read error: %s", exc)
         return {
             "equity": self._initial_bal,
@@ -588,13 +587,13 @@ class LifeSupervisor:
             try:
                 if self._engine and hasattr(self._engine, "stop"):
                     await self._engine.stop()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning("Engine stop error: %s", exc)
             finally:
                 self._engine_task.cancel()
                 try:
                     await self._engine_task
-                except (asyncio.CancelledError, Exception):  # noqa: S110
+                except (asyncio.CancelledError, Exception):
                     pass
         logger.info("Engine stopped.")
 
@@ -642,7 +641,7 @@ class LifeSupervisor:
             except Exception as _exc:
                 logger.debug(_SUPPRESSED_EXC_MSG, _exc)
         state = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "trading_mode": self._trading_mode,
             "equity": status.get("equity", self._initial_bal),
             "balance": status.get("balance", self._initial_bal),

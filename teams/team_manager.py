@@ -13,7 +13,7 @@ Multi-User Team Management
 from dataclasses import dataclass
 from typing import Dict, List
 from enum import Enum
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 import logging
 import uuid
 
@@ -47,15 +47,15 @@ class Team:
         self.team_id = team_id
         self.name = name
         self.creator_id = creator_id
-        self.members: Dict[str, TeamMember] = {}
-        self.created_at = datetime.now(timezone.utc)
+        self.members: dict[str, TeamMember] = {}
+        self.created_at = datetime.now(UTC)
         self.strategies = []
 
     def add_member(
         self, user_id: str, username: str, email: str, role: UserRole = UserRole.TRADER
     ) -> TeamMember:
         """Add team member"""
-        member = TeamMember(user_id, username, email, role, datetime.now(timezone.utc))
+        member = TeamMember(user_id, username, email, role, datetime.now(UTC))
         self.members[user_id] = member
         logger.info(f"Member added: {username} ({role.value})")
         return member
@@ -80,11 +80,11 @@ class Team:
         """Get team member"""
         return self.members.get(user_id)
 
-    def list_members(self) -> List[TeamMember]:
+    def list_members(self) -> list[TeamMember]:
         """List all members"""
         return list(self.members.values())
 
-    def share_strategy(self, strategy_id: str, with_users: List[str]):
+    def share_strategy(self, strategy_id: str, with_users: list[str]):
         """Share strategy with team members"""
         for user_id in with_users:
             if user_id in self.members:
@@ -95,7 +95,7 @@ class TeamManager:
     """Manage teams"""
 
     def __init__(self):
-        self.teams: Dict[str, Team] = {}
+        self.teams: dict[str, Team] = {}
 
     def create_team(self, name: str, creator_id: str) -> Team:
         """Create new team"""
@@ -109,6 +109,6 @@ class TeamManager:
         """Get team"""
         return self.teams.get(team_id)
 
-    def list_user_teams(self, user_id: str) -> List[Team]:
+    def list_user_teams(self, user_id: str) -> list[Team]:
         """List teams for user"""
         return [t for t in self.teams.values() if user_id in t.members]

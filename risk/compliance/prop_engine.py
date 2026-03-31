@@ -34,7 +34,7 @@ import json
 import logging
 import threading
 from dataclasses import dataclass
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timezone, UTC
 from enum import Enum, auto
 from pathlib import Path
 from typing import Callable, Optional
@@ -187,8 +187,7 @@ class PropComplianceEngine:
         """Call after every fill or mark-to-market update."""
         with self._lock:
             self._current_equity = equity
-            if equity > self._high_water_mark:
-                self._high_water_mark = equity
+            self._high_water_mark = max(self._high_water_mark, equity)
 
     # ------------------------------------------------------------------
     # News calendar
@@ -214,7 +213,7 @@ class PropComplianceEngine:
             (True, "") if order is allowed.
             (False, reason) if blocked; also triggers kill-switch/pause.
         """
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
 
         if self.kill_switch.is_active:
             return False, "Kill switch active"
@@ -341,7 +340,7 @@ class PropComplianceEngine:
         import time as _time
 
         while True:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             # Seconds until next midnight UTC
             next_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
             from datetime import timedelta

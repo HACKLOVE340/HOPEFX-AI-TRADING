@@ -17,7 +17,7 @@ This strategy implements Smart Money Concepts including:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from .base import BaseStrategy, Signal, SignalType, StrategyConfig
@@ -67,7 +67,7 @@ class SMCICTStrategy(BaseStrategy):
 
         logger.info(f"SMC ICT Strategy initialized for {config.symbol}")
 
-    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Analyze market using Smart Money Concepts.
 
@@ -117,14 +117,14 @@ class SMCICTStrategy(BaseStrategy):
                 "liquidity_zones": liquidity_zones,
                 "premium_discount": premium_discount,
                 "ote_levels": ote_levels,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
             }
 
         except Exception as e:
             logger.error(f"Error in SMC ICT analysis: {e}")
             return {"error": str(e)}
 
-    def generate_signal(self, analysis: Dict[str, Any]) -> Optional[Signal]:
+    def generate_signal(self, analysis: dict[str, Any]) -> Optional[Signal]:
         """
         Generate trading signal based on SMC analysis.
 
@@ -269,7 +269,7 @@ class SMCICTStrategy(BaseStrategy):
             logger.error(f"Error generating SMC ICT signal: {e}")
             return None
 
-    def _analyze_market_structure(self, prices: List[Dict]) -> Dict[str, Any]:
+    def _analyze_market_structure(self, prices: list[dict]) -> dict[str, Any]:
         """Analyze market structure for BOS/CHoCh"""
         try:
             # Simple structure analysis - identify higher highs/lows or lower highs/lows
@@ -320,7 +320,7 @@ class SMCICTStrategy(BaseStrategy):
             logger.error(f"Error analyzing market structure: {e}")
             return {"trend": "neutral", "type": "unknown", "strength": 0}
 
-    def _identify_order_blocks(self, prices: List[Dict]) -> Dict[str, List[float]]:
+    def _identify_order_blocks(self, prices: list[dict]) -> dict[str, list[float]]:
         """Identify bullish and bearish order blocks"""
         bullish_obs = []
         bearish_obs = []
@@ -354,7 +354,7 @@ class SMCICTStrategy(BaseStrategy):
             "bearish": bearish_obs[-5:] if bearish_obs else [],
         }
 
-    def _identify_fair_value_gaps(self, prices: List[Dict]) -> Dict[str, List[Dict]]:
+    def _identify_fair_value_gaps(self, prices: list[dict]) -> dict[str, list[dict]]:
         """Identify Fair Value Gaps (imbalances)"""
         bullish_fvgs = []
         bearish_fvgs = []
@@ -397,7 +397,7 @@ class SMCICTStrategy(BaseStrategy):
             "bearish": bearish_fvgs[-3:] if bearish_fvgs else [],
         }
 
-    def _analyze_liquidity(self, prices: List[Dict]) -> Dict[str, Any]:
+    def _analyze_liquidity(self, prices: list[dict]) -> dict[str, Any]:
         """Analyze liquidity sweeps/raids"""
         try:
             recent_highs = [p["high"] for p in prices[-20:]]
@@ -426,7 +426,7 @@ class SMCICTStrategy(BaseStrategy):
             logger.error(f"Error analyzing liquidity: {e}")
             return {"swept_above": False, "swept_below": False}
 
-    def _calculate_premium_discount(self, prices: List[Dict]) -> Dict[str, Any]:
+    def _calculate_premium_discount(self, prices: list[dict]) -> dict[str, Any]:
         """Calculate if price is in premium or discount zone"""
         try:
             # Use recent range to determine premium/discount
@@ -460,9 +460,9 @@ class SMCICTStrategy(BaseStrategy):
 
     def _calculate_ote_levels(
         self,
-        prices: List[Dict],
-        structure: Dict,
-    ) -> Dict[str, List[float]]:
+        prices: list[dict],
+        structure: dict,
+    ) -> dict[str, list[float]]:
         """Calculate Optimal Trade Entry levels (Fibonacci retracement)"""
         try:
             recent_high = max(p["high"] for p in prices[-50:])
@@ -496,7 +496,7 @@ class SMCICTStrategy(BaseStrategy):
     def _price_near_level(
         self,
         price: float,
-        levels: List[float],
+        levels: list[float],
         threshold: float = 0.001,
     ) -> bool:
         """Check if price is near any of the given levels"""
@@ -505,7 +505,7 @@ class SMCICTStrategy(BaseStrategy):
                 return True
         return False
 
-    def _price_in_fvg(self, price: float, fvgs: List[Dict]) -> bool:
+    def _price_in_fvg(self, price: float, fvgs: list[dict]) -> bool:
         """Check if price is inside any Fair Value Gap"""
         for fvg in fvgs:
             if fvg["bottom"] <= price <= fvg["top"]:

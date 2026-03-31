@@ -206,7 +206,7 @@ class LSTMSignalLayer:
 
     # ── Neutral response ──────────────────────────────────────────────────────
 
-    def _neutral(self, ohlcv, reason: str, t0: float) -> Dict[str, Any]:
+    def _neutral(self, ohlcv, reason: str, t0: float) -> dict[str, Any]:
         self._abstain_count += 1
         last_close = 0.0
         try:
@@ -235,7 +235,7 @@ class LSTMSignalLayer:
         macro_df=None,
         symbol: str = "XAUUSD",
         **_kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Run LSTM inference on the OHLCV window.
 

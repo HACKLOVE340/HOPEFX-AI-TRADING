@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -510,7 +511,7 @@ async def get_transactions(
         if isinstance(d, (int, float)):
             from datetime import datetime, timezone
 
-            return datetime.fromtimestamp(d, tz=timezone.utc).isoformat()
+            return datetime.fromtimestamp(d, tz=UTC).isoformat()
         return str(d)
 
     transactions.sort(key=_sort_key, reverse=True)

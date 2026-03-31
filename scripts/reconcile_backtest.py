@@ -43,7 +43,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import timezone
+from datetime import timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -128,8 +128,8 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         try:
             from ml.train_advanced import fetch_macro
 
-            start_dt = df.index[0].to_pydatetime().replace(tzinfo=timezone.utc)
-            end_dt = df.index[-1].to_pydatetime().replace(tzinfo=timezone.utc)
+            start_dt = df.index[0].to_pydatetime().replace(tzinfo=UTC)
+            end_dt = df.index[-1].to_pydatetime().replace(tzinfo=UTC)
             macro_df = fetch_macro(start_dt, end_dt)
             if macro_df is not None:
                 logger.info("Macro data loaded: %d rows, %d series", *macro_df.shape)
@@ -296,7 +296,7 @@ def run_backtest(
     prices: pd.Series,
     hold_bars: int = HOLD_BARS,
     round_trip_cost: float = ROUND_TRIP_COST_USD,
-) -> Tuple[List[Dict], pd.Series]:
+) -> tuple[list[dict], pd.Series]:
     """
     Simulate trades using fixed hold_bars exit.
 
@@ -310,10 +310,10 @@ def run_backtest(
     trades : list of trade dicts
     equity : daily equity curve
     """
-    trades: List[Dict] = []
+    trades: list[dict] = []
     equity = pd.Series(INITIAL_BALANCE, index=prices.index, dtype=float)
     balance = INITIAL_BALANCE
-    open_trade: Optional[Dict] = None
+    open_trade: Optional[dict] = None
 
     price_arr = prices.values
     sig_arr = signals["signal"].values
@@ -375,10 +375,10 @@ def run_backtest(
 
 
 def compute_metrics(
-    trades: List[Dict],
+    trades: list[dict],
     equity: pd.Series,
     mc_runs: int = 200,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Compute P&L metrics and Monte Carlo drawdown distribution."""
     if not trades:
         return {"error": "no trades generated"}
@@ -567,7 +567,7 @@ def main() -> int:
     logger.info("Detailed trade log → %s", RECONCILED_OUT)
 
     # Update monte_carlo_results.json with reconciled daily result
-    mc_data: Dict[str, Any] = {}
+    mc_data: dict[str, Any] = {}
     if MONTE_CARLO_OUT.exists():
         try:
             mc_data = json.loads(MONTE_CARLO_OUT.read_text())

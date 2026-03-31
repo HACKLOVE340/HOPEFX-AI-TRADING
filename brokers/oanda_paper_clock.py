@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -125,14 +125,14 @@ class OandaPaperClock:
         else:
             started_utc_str = None
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         started_utc_str = started_utc_str or now.isoformat()
 
         # Parse to compute live_gate_opens
         try:
             started_dt = datetime.fromisoformat(started_utc_str.replace("Z", "+00:00"))
             if started_dt.tzinfo is None:
-                started_dt = started_dt.replace(tzinfo=timezone.utc)
+                started_dt = started_dt.replace(tzinfo=UTC)
         except Exception:
             started_dt = now
 
@@ -176,7 +176,7 @@ class OandaPaperClock:
         self,
         trade_return: float,
         symbol: str = "UNKNOWN",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Record a confirmed fill's fractional P&L and update the Sharpe tracker.
 
@@ -226,7 +226,7 @@ class OandaPaperClock:
 
         return status
 
-    def sharpe_status(self) -> Dict[str, Any]:
+    def sharpe_status(self) -> dict[str, Any]:
         """
         Return the current SharpeProgressTracker snapshot.
 
@@ -257,7 +257,7 @@ class OandaPaperClock:
 
     # ── Status ────────────────────────────────────────────────────────────────
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         """
         Return the current clock status dict.
 
@@ -298,8 +298,8 @@ class OandaPaperClock:
                 started_str = data.get("started_utc", "")
                 started_dt = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
                 if started_dt.tzinfo is None:
-                    started_dt = started_dt.replace(tzinfo=timezone.utc)
-                now = datetime.now(timezone.utc)
+                    started_dt = started_dt.replace(tzinfo=UTC)
+                now = datetime.now(UTC)
                 elapsed = (now - started_dt).total_seconds() / 86400.0
                 target = float(data.get("target_days", _TARGET_DAYS))
                 remaining = max(0.0, target - elapsed)
@@ -326,8 +326,8 @@ class OandaPaperClock:
             started_str = data.get("started_utc", "")
             started_dt = datetime.fromisoformat(started_str.replace("Z", "+00:00"))
             if started_dt.tzinfo is None:
-                started_dt = started_dt.replace(tzinfo=timezone.utc)
-            now = datetime.now(timezone.utc)
+                started_dt = started_dt.replace(tzinfo=UTC)
+            now = datetime.now(UTC)
             elapsed = (now - started_dt).total_seconds() / 86400.0
             target = float(data.get("target_days", _TARGET_DAYS))
             remaining = max(0.0, target - elapsed)
@@ -398,7 +398,7 @@ def get_clock() -> OandaPaperClock:
 # ── Startup validation ────────────────────────────────────────────────────────
 
 
-def validate_oanda_account_at_startup() -> Dict[str, Any]:
+def validate_oanda_account_at_startup() -> dict[str, Any]:
     """
     Validate OANDA account state at server startup.
 

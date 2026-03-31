@@ -42,7 +42,7 @@ import sys
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -103,7 +103,7 @@ class PositionSizingResult:
     impact_f: float = 1.0  # macro impact scaling factor
     dd_f: float = 1.0  # drawdown scaling factor
     lineage_id: str = ""
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Convenience: allow attribute access as .size (legacy callers)
     @property
@@ -170,7 +170,7 @@ class RiskAssessment:
     daily_dd_pct: float = 0.0
     open_positions: int = 0
     var_95: float = 0.0
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # Alias: tests and downstream callers use .can_trade
     @property
@@ -214,7 +214,7 @@ class TradeAssessment:
     reason: str = ""
     drawdown: float = 0.0
     daily_dd: float = 0.0
-    messages: List[str] = field(default_factory=list)
+    messages: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -289,7 +289,7 @@ class SizedOrder:
     take_profit_usd: float
     risk_usd: float
     lineage_id: str
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -319,13 +319,12 @@ class RiskState:
         )
 
     def update_equity(self, equity: float) -> None:
-        today = datetime.now(timezone.utc).day
+        today = datetime.now(UTC).day
         if today != self.trade_day:
             self.day_open_equity = equity
             self.trade_day = today
         self.account_equity = equity
-        if equity > self.peak_equity:
-            self.peak_equity = equity
+        self.peak_equity = max(self.peak_equity, equity)
 
 
 @dataclass
@@ -380,7 +379,7 @@ class _MinimalSignal:
 # Static pairwise correlation table for major FX pairs (approximate values).
 # Used by RiskManager.check_correlation_risk() — defined at module level so it
 # is not re-allocated on every call.
-_FX_PAIR_CORRELATIONS: Dict[tuple, float] = {
+_FX_PAIR_CORRELATIONS: dict[tuple, float] = {
     ("EURUSD", "GBPUSD"): 0.87,
     ("EURUSD", "AUDUSD"): 0.72,
     ("EURUSD", "NZDUSD"): 0.68,
@@ -436,10 +435,10 @@ class RiskManager:
             account_equity=equity,
             peak_equity=equity,
             day_open_equity=equity,
-            trade_day=datetime.now(timezone.utc).day,
+            trade_day=datetime.now(UTC).day,
         )
         self._pnl_history: deque = deque(maxlen=_VAR_WINDOW)
-        self._sizing_history: List[Dict] = []
+        self._sizing_history: list[dict] = []
         self._halt: bool = False
         self._halt_reason: str = ""
 
@@ -456,7 +455,7 @@ class RiskManager:
         self._amber_warned: bool = False
 
         # Mutable open-positions list (tests append dicts to rm.open_positions).
-        self._open_positions_list: List[Any] = []
+        self._open_positions_list: list[Any] = []
 
         # Precise drawdown tracker (trailing HWM + daily reset)
         try:
@@ -712,7 +711,7 @@ class RiskManager:
             "impact_f": impact_f,
             "dd_f": dd_f,
             "kelly_f": kelly_f,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         })
 
         self._write_sizing_lineage(sized)
@@ -738,12 +737,12 @@ class RiskManager:
         return self._config
 
     @property
-    def open_positions(self) -> List[Any]:
+    def open_positions(self) -> list[Any]:
         """Mutable list proxy for open positions (tests append to rm.open_positions)."""
         return self._open_positions_list
 
     @open_positions.setter
-    def open_positions(self, value: List[Any]) -> None:
+    def open_positions(self, value: list[Any]) -> None:
         """Replace the open-positions list (used by tests to set up state)."""
         self._open_positions_list = list(value)
         self._state.open_positions = len(self._open_positions_list)
@@ -1037,7 +1036,7 @@ class RiskManager:
                 logger.debug("RiskManager: orchestrator tick fetch failed: %s", exc)
         return getattr(signal, "data_quality", 1.0)
 
-    def _get_orchestrator_features(self, signal) -> Dict:
+    def _get_orchestrator_features(self, signal) -> dict:
         """Authoritative source: orchestrator ML features."""
         if self._orch is not None:
             try:
@@ -1090,7 +1089,7 @@ class RiskManager:
                         "halt": self._halt,
                         "halted": self._halt,  # alias for test compatibility
                         "reason": self._halt_reason,
-                        "persisted_at": datetime.now(timezone.utc).isoformat(),
+                        "persisted_at": datetime.now(UTC).isoformat(),
                     },
                     indent=2,
                 )
@@ -1132,7 +1131,7 @@ class RiskManager:
 
     def _halt_trading(
         self, reason: str, duration_hours: Optional[float] = None
-    ) -> None:  # noqa: ARG002
+    ) -> None:
         self._halt = True
         self._trading_halted = True
         self._halt_reason = reason
@@ -1202,14 +1201,14 @@ class RiskManager:
         raw = (p * b - (1.0 - p)) / b if b > 0 else 0.0
         return float(np.clip(raw, 0.0, self._config.kelly_fraction))
 
-    def _apply_risk_limits(self, pct: float, equity: float) -> float:  # noqa: ARG002
+    def _apply_risk_limits(self, pct: float, equity: float) -> float:
         """Clamp position size fraction to [0, max_position_size_pct]."""
         return float(np.clip(pct, 0.0, self._config.max_position_size_pct))
 
     def _apply_correlation_penalty(
         self,
-        symbol: str,  # noqa: ARG002
-        existing_positions: List[Any],  # noqa: ARG002
+        symbol: str,
+        existing_positions: list[Any],
         base_pct: float,
     ) -> float:
         """
@@ -1250,7 +1249,7 @@ class RiskManager:
         take_profit_price: float,
         account_equity: float,
         volatility: float,
-        existing_positions: List[Any],  # noqa: ARG002
+        existing_positions: list[Any],
     ) -> PositionSizingResult:
         """
         Full position-size calculation with halt, R/R, and sizing checks.
@@ -1287,7 +1286,7 @@ class RiskManager:
 
     # ── can_open_position ─────────────────────────────────────────────────────
 
-    def can_open_position(self, size: float) -> tuple:  # noqa: ARG002
+    def can_open_position(self, size: float) -> tuple:
         """
         Quick pre-trade gate: returns (True, "approved") or (False, reason).
 
@@ -1371,7 +1370,7 @@ class RiskManager:
         level: str,
         dd: float,
         daily_dd: float,
-        messages: Optional[List[str]] = None,
+        messages: Optional[list[str]] = None,
     ) -> TradeAssessment:
         """Build a blocked TradeAssessment — eliminates repeated kwarg blocks."""
         return TradeAssessment(
@@ -1385,8 +1384,8 @@ class RiskManager:
 
     def assess_risk(
         self,
-        account_info: Dict[str, Any],
-        positions: List[Any],
+        account_info: dict[str, Any],
+        positions: list[Any],
     ) -> TradeAssessment:
         """
         Lightweight trade-readiness check from raw account info dict.
@@ -1597,7 +1596,7 @@ class RiskManager:
             return RiskLevel.MEDIUM
         return RiskLevel.LOW
 
-    def check_drawdown(  # noqa: F811
+    def check_drawdown(
         self,
         equity_curve: Any = None,
         max_dd: float = None,
@@ -1638,7 +1637,7 @@ class RiskManager:
 
     def check_correlation_risk(
         self,
-        positions: List[Any],
+        positions: list[Any],
         max_correlation: float = 0.80,
     ) -> RiskCheckResult:
         """
@@ -1687,7 +1686,7 @@ class RiskManager:
 
     def check_concentration(
         self,
-        positions: List[Any],
+        positions: list[Any],
         account: Any,
         max_single: float = 0.40,
     ) -> RiskCheckResult:
@@ -1834,7 +1833,7 @@ class RiskManager:
 
         return (True, "ok")
 
-    def metrics(self) -> Dict[str, Any]:
+    def metrics(self) -> dict[str, Any]:
         return {
             "account_equity": round(self._state.account_equity, 2),
             "peak_equity": round(self._state.peak_equity, 2),
@@ -1890,7 +1889,7 @@ class RiskManager:
 
     # ── Position registry ─────────────────────────────────────────────────────
 
-    def register_position(self, position: Dict[str, Any]) -> None:
+    def register_position(self, position: dict[str, Any]) -> None:
         """Register an open position in the internal list."""
         self._open_positions_list.append(position)
         self._state.open_positions = len(self._open_positions_list)
@@ -1904,21 +1903,20 @@ class RiskManager:
         self._state.daily_pnl += pnl
         self._state.total_pnl += pnl
         self._state.account_equity += pnl
-        if self._state.account_equity > self._state.peak_equity:
-            self._state.peak_equity = self._state.account_equity
+        self._state.peak_equity = max(self._state.peak_equity, self._state.account_equity)
         if self._dd_tracker is not None:
             self._dd_tracker.update(equity=self._state.account_equity)
 
     # ── Extended validate_trade ───────────────────────────────────────────────
 
-    def validate_trade(  # type: ignore[override]  # noqa: F811
+    def validate_trade(  # type: ignore[override]
         self,
-        symbol: str,  # noqa: ARG002
+        symbol: str,
         quantity: float = 0.0,
-        direction: str = "buy",  # noqa: ARG002
+        direction: str = "buy",
         *,
         size: Optional[float] = None,
-        side: Optional[str] = None,  # noqa: ARG002
+        side: Optional[str] = None,
     ) -> tuple[bool, str]:
         """Return (allowed, reason) for a proposed trade.
 
@@ -1955,12 +1953,12 @@ class RiskManager:
 
     # ── Extended check_risk_limits (returns violations list) ─────────────────
 
-    def check_risk_limits(self) -> tuple[bool, List[str]]:  # type: ignore[override]  # noqa: F811
+    def check_risk_limits(self) -> tuple[bool, list[str]]:  # type: ignore[override]
         """Return (within_limits: bool, violations: List[str]).
 
         Evaluates drawdown, daily loss, open-position count, and halt state.
         """
-        violations: List[str] = []
+        violations: list[str] = []
         cfg = self._config
         state = self._state
 
@@ -1997,7 +1995,7 @@ class RiskManager:
 
     # ── can_open_position (extended — human-readable reasons) ─────────────────
 
-    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]  # noqa: F811
+    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]
         """Return (True, 'approved') or (False, human-readable reason)."""
         if self._halt or self._trading_halted:
             return False, f"halted:{self._halt_reason}"
@@ -2086,7 +2084,7 @@ class RiskManager:
 
     # ── Reporting ─────────────────────────────────────────────────────────────
 
-    def get_risk_metrics(self) -> Dict[str, Any]:
+    def get_risk_metrics(self) -> dict[str, Any]:
         """Return a dict of current risk metrics for monitoring/reporting."""
         peak = self._state.peak_equity
         current = self._state.account_equity
@@ -2102,7 +2100,7 @@ class RiskManager:
             "halt": self._halt,
         }
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Return a full status dict including config and current state."""
         return {
             "config": {

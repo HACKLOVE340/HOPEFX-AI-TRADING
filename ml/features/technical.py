@@ -32,7 +32,7 @@ class TechnicalFeatureEngineer:
     - Statistical features
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize feature engineer.
 
@@ -40,7 +40,7 @@ class TechnicalFeatureEngineer:
             config: Configuration with feature settings
         """
         self.config = config or {}
-        self.feature_names: List[str] = []
+        self.feature_names: list[str] = []
         self.logger = logging.getLogger(__name__)
 
     def create_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -375,7 +375,7 @@ class TechnicalFeatureEngineer:
 
         return labels
 
-    def get_feature_groups(self) -> Dict[str, List[str]]:
+    def get_feature_groups(self) -> dict[str, list[str]]:
         """
         Get features grouped by type.
 

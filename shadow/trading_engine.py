@@ -47,7 +47,7 @@ import os
 import random
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -167,8 +167,8 @@ class ShadowTradingEngine:
         self._equity: float = initial_balance
         self._peak: float = initial_balance
         self._pnl: float = 0.0
-        self._fills: List[ShadowFill] = []
-        self._positions: List[ShadowPosition] = []
+        self._fills: list[ShadowFill] = []
+        self._positions: list[ShadowPosition] = []
         self._simulator = PaperFillSimulator()
         self._started: bool = False
         self._start_ts: float = time.time()
@@ -214,7 +214,7 @@ class ShadowTradingEngine:
             requested=mid,
             fill_price=fill_price,
             slippage_bps=slippage_bps,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         self._fills.append(fill)
         self._positions.append(
@@ -225,7 +225,7 @@ class ShadowTradingEngine:
                 entry_price=fill_price,
                 stop_loss=stop_loss,
                 take_profit=take_profit,
-                opened_at=datetime.now(timezone.utc),
+                opened_at=datetime.now(UTC),
                 signal_id=signal_id,
             )
         )
@@ -332,7 +332,7 @@ class ShadowTradingEngine:
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
-    def health(self) -> Dict[str, Any]:
+    def health(self) -> dict[str, Any]:
         closed_fills = [f for f in self._fills if f.closed]
         wins = [f for f in closed_fills if f.pnl > 0]
         now = time.time()
@@ -354,7 +354,7 @@ class ShadowTradingEngine:
             ),
         }
 
-    def get_comparison_report(self) -> Dict[str, Any]:
+    def get_comparison_report(self) -> dict[str, Any]:
         """Paper-vs-live comparison report."""
         closed = [f for f in self._fills if f.closed]
         return {

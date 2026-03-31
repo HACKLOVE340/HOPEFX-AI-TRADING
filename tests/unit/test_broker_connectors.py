@@ -75,22 +75,22 @@ _ib_stub.StopOrder = MagicMock
 sys.modules.setdefault("ib_insync", _ib_stub)
 
 # Now import brokers (stubs are already in sys.modules)
-from brokers.alpaca import AlpacaConnector  # noqa: E402
-from brokers.binance import BinanceConnector  # noqa: E402
-from brokers.oanda import OANDAConnector  # noqa: E402
-from brokers.mt5 import MT5Connector  # noqa: E402
-from brokers.interactive_brokers import InteractiveBrokersConnector  # noqa: E402
+from brokers.alpaca import AlpacaConnector
+from brokers.binance import BinanceConnector
+from brokers.oanda import OANDAConnector
+from brokers.mt5 import MT5Connector
+from brokers.interactive_brokers import InteractiveBrokersConnector
 
 # ---------------------------------------------------------------------------
 # Override module-level availability flags so connectors are constructable
 # even though the real packages aren't installed in this environment.
 # ---------------------------------------------------------------------------
-import brokers.mt5 as _mt5_module  # noqa: E402
+import brokers.mt5 as _mt5_module
 
 _mt5_module.MT5_AVAILABLE = True
 _mt5_module.mt5 = _mt5_stub
 
-import brokers.interactive_brokers as _ib_module  # noqa: E402
+import brokers.interactive_brokers as _ib_module
 
 _ib_module.IB_AVAILABLE = True
 _ib_module.IB = MagicMock
@@ -101,18 +101,18 @@ _ib_module.Option = MagicMock
 _ib_module.MarketOrder = MagicMock
 _ib_module.LimitOrder = MagicMock
 _ib_module.StopOrder = MagicMock
-from brokers.advanced_orders import (  # noqa: E402
+from brokers.advanced_orders import (
     AdvancedOrderManager,
     OrderSide as AdvOrderSide,
     OrderType as AdvOrderType,
     OrderStatus as AdvOrderStatus,
 )
-from brokers.factory import BrokerFactory  # noqa: E402
-from brokers.prop_firms.ftmo import FTMOConnector  # noqa: E402
-from brokers.prop_firms.myforexfunds import MyForexFundsConnector  # noqa: E402
-from brokers.prop_firms.the5ers import The5ersConnector  # noqa: E402
-from brokers.prop_firms.topstep import TopstepTraderConnector  # noqa: E402
-from brokers.base import OrderType, OrderSide, OrderStatus  # noqa: E402
+from brokers.factory import BrokerFactory
+from brokers.prop_firms.ftmo import FTMOConnector
+from brokers.prop_firms.myforexfunds import MyForexFundsConnector
+from brokers.prop_firms.the5ers import The5ersConnector
+from brokers.prop_firms.topstep import TopstepTraderConnector
+from brokers.base import OrderType, OrderSide, OrderStatus
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +154,7 @@ class TestAlpacaConnector:
     def test_initialization_paper(self):
         broker = AlpacaConnector(ALPACA_CONFIG)
         assert broker.api_key == "test_key"
-        assert broker.api_secret == "test_secret"  # noqa: S105
+        assert broker.api_secret == "test_secret"
         assert broker.paper is True
         assert broker.base_url == AlpacaConnector.PAPER_URL
         assert not broker.connected
@@ -1442,7 +1442,7 @@ class TestAdvancedOrderManager:
         )
         assert len(scaled.levels) == 4
         assert len(scaled.child_orders) == 4
-        assert sum(l["quantity"] for l in scaled.levels) == pytest.approx(  # noqa: E741
+        assert sum(l["quantity"] for l in scaled.levels) == pytest.approx(
             10000, rel=1e-5
         )
 

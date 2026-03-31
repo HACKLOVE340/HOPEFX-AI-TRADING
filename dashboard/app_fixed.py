@@ -60,7 +60,7 @@ def set_state(state) -> None:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _equity_curve() -> List[Dict[str, Any]]:
+def _equity_curve() -> list[dict[str, Any]]:
     """
     Build an equity curve from real closed trade history.
 
@@ -75,7 +75,7 @@ def _equity_curve() -> List[Dict[str, Any]]:
         if not trades:
             return []
         cum = 0.0
-        points: List[Dict[str, Any]] = []
+        points: list[dict[str, Any]] = []
         for i, t in enumerate(trades):
             cum += float(t.get("pnl", 0))
             points.append({"x": i, "y": round(cum, 2)})

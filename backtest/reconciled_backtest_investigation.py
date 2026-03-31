@@ -44,7 +44,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -67,7 +67,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def load_reconciled_trades() -> List[Dict[str, Any]]:
+def load_reconciled_trades() -> list[dict[str, Any]]:
     """Load the trade list from data/reconciled_backtest.json."""
     path = DATA_DIR / "reconciled_backtest.json"
     if not path.exists():
@@ -85,7 +85,7 @@ def load_reconciled_trades() -> List[Dict[str, Any]]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _sharpe(pnls: List[float], cost: float = 0.0) -> float:
+def _sharpe(pnls: list[float], cost: float = 0.0) -> float:
     """Annualised Sharpe ratio from a list of per-trade P&Ls (daily bars)."""
     if len(pnls) < 2:
         return 0.0
@@ -98,7 +98,7 @@ def _sharpe(pnls: List[float], cost: float = 0.0) -> float:
     return float((arr.mean() / std) * np.sqrt(252))
 
 
-def _win_rate(pnls: List[float], cost: float = 0.0) -> float:
+def _win_rate(pnls: list[float], cost: float = 0.0) -> float:
     net = [p - cost for p in pnls]
     if not net:
         return 0.0
@@ -106,13 +106,13 @@ def _win_rate(pnls: List[float], cost: float = 0.0) -> float:
 
 
 def _total_return(
-    pnls: List[float], cost: float = 0.0, initial: float = 100_000.0
+    pnls: list[float], cost: float = 0.0, initial: float = 100_000.0
 ) -> float:
     net = sum(p - cost for p in pnls)
     return net / initial * 100.0
 
 
-def _accuracy_pnl_correlation(trades: List[Dict]) -> Dict[str, Any]:
+def _accuracy_pnl_correlation(trades: list[dict]) -> dict[str, Any]:
     """
     Measure correlation between model's predicted direction and actual P&L sign.
 
@@ -159,10 +159,10 @@ def _accuracy_pnl_correlation(trades: List[Dict]) -> Dict[str, Any]:
 
 
 def sweep_confidence_thresholds(
-    trades: List[Dict],
-    thresholds: List[float],
+    trades: list[dict],
+    thresholds: list[float],
     cost: float = 70.0,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Filter trades by signal_prob >= threshold and recompute metrics.
 
@@ -237,11 +237,11 @@ def _load_xauusd_daily() -> Optional[pd.DataFrame]:
 
 
 def sweep_hold_periods(
-    trades: List[Dict],
-    hold_periods: List[int],
+    trades: list[dict],
+    hold_periods: list[int],
     cost: float = 70.0,
     ohlcv: Optional[pd.DataFrame] = None,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Re-simulate trades with different hold periods using actual OHLCV data.
 
@@ -311,9 +311,9 @@ def sweep_hold_periods(
 
 
 def sweep_costs(
-    trades: List[Dict],
-    costs: List[float],
-) -> List[Dict[str, Any]]:
+    trades: list[dict],
+    costs: list[float],
+) -> list[dict[str, Any]]:
     """Show how different round-trip costs affect the strategy."""
     pnls_gross = [t["pnl_usd"] for t in trades]
     results = []
@@ -337,7 +337,7 @@ def sweep_costs(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _format_summary(results: Dict[str, Any]) -> str:
+def _format_summary(results: dict[str, Any]) -> str:
     lines = [
         "=" * 72,
         "RECONCILED BACKTEST ROOT CAUSE INVESTIGATION",
@@ -416,7 +416,7 @@ def _format_summary(results: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _diagnose(results: Dict[str, Any]) -> List[str]:
+def _diagnose(results: dict[str, Any]) -> list[str]:
     """Generate a plain-English diagnosis from the sweep results."""
     diag = []
 
@@ -504,7 +504,7 @@ def _diagnose(results: Dict[str, Any]) -> List[str]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def run_investigation(smoke: bool = False) -> Dict[str, Any]:
+def run_investigation(smoke: bool = False) -> dict[str, Any]:
     """Run all four investigations and return the combined results dict."""
     trades = load_reconciled_trades()
 
@@ -539,8 +539,8 @@ def run_investigation(smoke: bool = False) -> Dict[str, Any]:
     cost_sweep = sweep_costs(trades, costs)
     logger.info("Cost sweep done (%d cost levels)", len(cost_sweep))
 
-    results: Dict[str, Any] = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+    results: dict[str, Any] = {
+        "generated_at": datetime.now(UTC).isoformat(),
         "source_file": "data/reconciled_backtest.json",
         "baseline": baseline,
         "confidence_sweep": conf_sweep,

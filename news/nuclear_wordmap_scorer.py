@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 # Loaded from WORDMAP.json if it contains a nuclear_risk section;
 # otherwise the built-in dictionary below is used.
 
-_BUILTIN_NUCLEAR_KEYWORDS: Dict[str, Dict[str, float]] = {
+_BUILTIN_NUCLEAR_KEYWORDS: dict[str, dict[str, float]] = {
     # ── Nuclear / WMD ────────────────────────────────────────────────────────
     "nuclear": {
         "nuclear war": 10.0,
@@ -196,7 +196,7 @@ _BUILTIN_NUCLEAR_KEYWORDS: Dict[str, Dict[str, float]] = {
 }
 
 # Severity → action mapping
-_SEVERITY_ACTIONS: Dict[int, str] = {
+_SEVERITY_ACTIONS: dict[int, str] = {
     0: "normal",
     1: "normal",
     2: "normal",
@@ -253,7 +253,7 @@ class NuclearWordMapScorer:
         text: str,
         volatility: float = 1.0,
         sentiment: float = 0.0,
-    ) -> Tuple[int, str, float, Dict]:
+    ) -> tuple[int, str, float, dict]:
         """
         Score a news event.
 
@@ -276,8 +276,8 @@ class NuclearWordMapScorer:
         text_lower = re.sub(r"[^\w\s]", " ", text_lower)
 
         # ── Step 1: WORDMAP keyword matching ─────────────────────────────────
-        category_scores: Dict[str, float] = {}
-        matched_terms: List[Dict] = []
+        category_scores: dict[str, float] = {}
+        matched_terms: list[dict] = []
 
         for category, terms in self._keywords.items():
             cat_score = 0.0
@@ -358,14 +358,14 @@ class NuclearWordMapScorer:
     def get_keyword_count(self) -> int:
         return sum(len(v) for v in self._keywords.values())
 
-    def get_categories(self) -> List[str]:
+    def get_categories(self) -> list[str]:
         return list(self._keywords.keys())
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
     def _load_keywords(
         self, wordmap_path: Optional[str | Path]
-    ) -> Dict[str, Dict[str, float]]:
+    ) -> dict[str, dict[str, float]]:
         """
         Load keywords from WORDMAP.json (nuclear_risk section) merged with
         the built-in dictionary.  Falls back to built-in only if file is

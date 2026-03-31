@@ -22,7 +22,7 @@ class Portfolio:
     """Represents a constructed portfolio."""
 
     name: str
-    assets: Dict[str, float]  # symbol -> weight
+    assets: dict[str, float]  # symbol -> weight
     rebalancing: str = "monthly"
 
     @property
@@ -37,16 +37,16 @@ class Portfolio:
 class PortfolioManager:
     """Portfolio construction, optimization, and risk analytics."""
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         self.config = config or {}
-        self.portfolios: Dict[str, Portfolio] = {}
+        self.portfolios: dict[str, Portfolio] = {}
 
     # ── Construction ─────────────────────────────────────────────────────────
 
     def create_portfolio(
         self,
         name: str,
-        assets: Dict[str, float],
+        assets: dict[str, float],
         rebalancing: str = "monthly",
     ) -> Portfolio:
         """Create and register a portfolio."""
@@ -66,8 +66,8 @@ class PortfolioManager:
         self,
         returns: pd.DataFrame,
         method: str = "sharpe",
-        constraints: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        constraints: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Optimize portfolio weights.
 
@@ -81,7 +81,7 @@ class PortfolioManager:
         n = len(assets)
 
         if method == "equal":
-            w = {a: 1.0 / n for a in assets}
+            w = dict.fromkeys(assets, 1.0 / n)
             mu = returns.mean()
             returns.std()
             port_ret = sum(w[a] * mu[a] for a in assets)
@@ -97,7 +97,7 @@ class PortfolioManager:
 
         # Random search for max Sharpe with guaranteed max_weight constraint.
         best_sharpe = -np.inf
-        best_weights: Dict[str, float] = {}
+        best_weights: dict[str, float] = {}
         rng = np.random.default_rng(42)
         cov = returns.cov().values
         mu = returns.mean().values
@@ -168,9 +168,9 @@ class PortfolioManager:
 
     def calculate_risk_contribution(
         self,
-        weights: Dict[str, float],
+        weights: dict[str, float],
         cov_matrix: pd.DataFrame,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Compute each asset's fractional contribution to total portfolio variance.
 

@@ -54,9 +54,9 @@ class SelfTradePrevention:
         self.allow_intentional = allow_intentional
 
         # Track resting orders
-        self.resting_orders: Dict[str, List[Order]] = {}  # symbol -> orders
+        self.resting_orders: dict[str, list[Order]] = {}  # symbol -> orders
 
-    def check_self_trade(self, new_order: Order) -> Optional[Dict]:
+    def check_self_trade(self, new_order: Order) -> Optional[dict]:
         """
         Check if new order would self-match with resting orders
         Returns action to take if self-trade detected
@@ -78,9 +78,7 @@ class SelfTradePrevention:
                 continue
 
             # Check if prices cross
-            if new_order.side == "buy" and new_order.price >= resting.price:
-                return self._handle_cross(new_order, resting)
-            elif new_order.side == "sell" and new_order.price <= resting.price:
+            if new_order.side == "buy" and new_order.price >= resting.price or new_order.side == "sell" and new_order.price <= resting.price:
                 return self._handle_cross(new_order, resting)
 
         return None
@@ -102,7 +100,7 @@ class SelfTradePrevention:
 
         return False
 
-    def _handle_cross(self, new_order: Order, resting_order: Order) -> Dict:
+    def _handle_cross(self, new_order: Order, resting_order: Order) -> dict:
         """Determine action when self-trade detected"""
         logger.warning(
             f"Self-trade detected: {new_order.id} vs {resting_order.id} "

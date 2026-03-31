@@ -20,7 +20,7 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
@@ -45,9 +45,9 @@ class WebSocketMessage:
 
     event: str
     channel: str
-    data: Dict[str, Any]
+    data: dict[str, Any]
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        default_factory=lambda: datetime.now(UTC).isoformat(),
     )
     sequence: int = 0
 
@@ -62,12 +62,12 @@ class ConnectionInfo:
 
     connection_id: str
     connected_at: datetime
-    subscriptions: Set[str] = field(default_factory=set)
+    subscriptions: set[str] = field(default_factory=set)
     user_id: Optional[str] = None
     authenticated: bool = False
     messages_sent: int = 0
     messages_received: int = 0
-    last_heartbeat: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_heartbeat: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class WebSocketManager:
@@ -100,7 +100,7 @@ class WebSocketManager:
         manager.unregister_connection(conn_id)
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize WebSocket manager.
 
@@ -110,11 +110,11 @@ class WebSocketManager:
         self.config = config or {}
 
         # Connection storage (using weak references to allow GC)
-        self._connections: Dict[str, Any] = {}
-        self._connection_info: Dict[str, ConnectionInfo] = {}
+        self._connections: dict[str, Any] = {}
+        self._connection_info: dict[str, ConnectionInfo] = {}
 
         # Channel subscriptions: channel -> set of connection_ids
-        self._channels: Dict[str, Set[str]] = {}
+        self._channels: dict[str, set[str]] = {}
 
         # Message sequence counter
         self._sequence = 0
@@ -125,9 +125,9 @@ class WebSocketManager:
         self._rate_limit = self.config.get("rate_limit", 100)  # msgs per second
 
         # Event callbacks
-        self._on_connect_callbacks: List[Callable] = []
-        self._on_disconnect_callbacks: List[Callable] = []
-        self._on_message_callbacks: List[Callable] = []
+        self._on_connect_callbacks: list[Callable] = []
+        self._on_disconnect_callbacks: list[Callable] = []
+        self._on_message_callbacks: list[Callable] = []
 
         # Statistics
         self._stats = {
@@ -162,13 +162,13 @@ class WebSocketManager:
         """
         if connection_id is None:
             connection_id = (
-                f"ws_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+                f"ws_{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}"
             )
 
         self._connections[connection_id] = websocket
         self._connection_info[connection_id] = ConnectionInfo(
             connection_id=connection_id,
-            connected_at=datetime.now(timezone.utc),
+            connected_at=datetime.now(UTC),
             user_id=user_id,
             authenticated=user_id is not None,
         )
@@ -219,7 +219,7 @@ class WebSocketManager:
         """Get information about a connection."""
         return self._connection_info.get(connection_id)
 
-    def get_active_connections(self) -> List[str]:
+    def get_active_connections(self) -> list[str]:
         """Get list of active connection IDs."""
         return list(self._connections.keys())
 
@@ -318,11 +318,11 @@ class WebSocketManager:
         logger.debug(f"Unsubscribed {connection_id} from {channel}")
         return True
 
-    def get_channel_subscribers(self, channel: str) -> Set[str]:
+    def get_channel_subscribers(self, channel: str) -> set[str]:
         """Get all subscribers for a channel."""
         return self._channels.get(channel, set()).copy()
 
-    def get_available_channels(self) -> List[str]:
+    def get_available_channels(self) -> list[str]:
         """Get list of all active channels."""
         return list(self._channels.keys())
 
@@ -333,9 +333,9 @@ class WebSocketManager:
     async def broadcast(
         self,
         channel: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         event: str = "update",
-        exclude: Optional[Set[str]] = None,
+        exclude: Optional[set[str]] = None,
     ):
         """
         Broadcast a message to all subscribers of a channel.
@@ -365,7 +365,7 @@ class WebSocketManager:
                 continue
             await self._send_to_connection(conn_id, message)
 
-    async def broadcast_to_all(self, data: Dict[str, Any], event: str = "broadcast"):
+    async def broadcast_to_all(self, data: dict[str, Any], event: str = "broadcast"):
         """
         Broadcast a message to all connected clients.
 
@@ -388,7 +388,7 @@ class WebSocketManager:
     async def send_to_user(
         self,
         user_id: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         event: str = "message",
     ):
         """
@@ -448,7 +448,7 @@ class WebSocketManager:
     # MESSAGE HANDLING
     # ================================================================
 
-    async def handle_message(self, connection_id: str, message: str) -> Optional[Dict]:
+    async def handle_message(self, connection_id: str, message: str) -> Optional[dict]:
         """
         Handle an incoming WebSocket message.
 
@@ -492,11 +492,11 @@ class WebSocketManager:
             # Heartbeat response
             if connection_id in self._connection_info:
                 self._connection_info[connection_id].last_heartbeat = datetime.now(
-                    timezone.utc,
+                    UTC,
                 )
             return {
                 "action": "pong",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
         elif action == "auth":
@@ -513,7 +513,7 @@ class WebSocketManager:
 
         return None
 
-    async def _handle_auth(self, connection_id: str, token: Optional[str]) -> Dict:
+    async def _handle_auth(self, connection_id: str, token: Optional[str]) -> dict:
         """Validate JWT bearer token and mark connection authenticated.
 
         Any JWT decode failure (wrong secret, expired, malformed) is a hard
@@ -552,7 +552,7 @@ class WebSocketManager:
         while True:
             await asyncio.sleep(self._heartbeat_interval)
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             timeout = self._heartbeat_interval * 2
 
             dead_connections = []
@@ -595,7 +595,7 @@ class WebSocketManager:
                 "bid": bid,
                 "ask": ask,
                 "spread": round(ask - bid, 5),
-                "timestamp": (timestamp or datetime.now(timezone.utc)).isoformat(),
+                "timestamp": (timestamp or datetime.now(UTC)).isoformat(),
             },
             event="price",
         )
@@ -603,8 +603,8 @@ class WebSocketManager:
     async def broadcast_orderbook_update(
         self,
         symbol: str,
-        bids: List[Dict],
-        asks: List[Dict],
+        bids: list[dict],
+        asks: list[dict],
         timestamp: Optional[datetime] = None,
     ):
         """Broadcast order book update for a symbol."""
@@ -615,7 +615,7 @@ class WebSocketManager:
                 "symbol": symbol,
                 "bids": bids,
                 "asks": asks,
-                "timestamp": (timestamp or datetime.now(timezone.utc)).isoformat(),
+                "timestamp": (timestamp or datetime.now(UTC)).isoformat(),
             },
             event="orderbook",
         )
@@ -638,19 +638,19 @@ class WebSocketManager:
                 "quantity": quantity,
                 "side": side,
                 "trade_id": trade_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
             event="trade",
         )
 
-    async def broadcast_signal(self, symbol: str, signal_data: Dict[str, Any]):
+    async def broadcast_signal(self, symbol: str, signal_data: dict[str, Any]):
         """Broadcast trading signal."""
         # Broadcast to symbol-specific channel
         await self.broadcast(f"signals:{symbol}", signal_data, event="signal")
         # Also broadcast to all-signals channel
         await self.broadcast("signals:all", signal_data, event="signal")
 
-    async def broadcast_alert(self, user_id: Optional[str], alert_data: Dict[str, Any]):
+    async def broadcast_alert(self, user_id: Optional[str], alert_data: dict[str, Any]):
         """Broadcast alert notification."""
         if user_id:
             # Send to specific user
@@ -679,7 +679,7 @@ class WebSocketManager:
     # STATISTICS
     # ================================================================
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get WebSocket server statistics."""
         return {
             **self._stats,
@@ -725,7 +725,7 @@ def create_websocket_router(manager: WebSocketManager):
                     {
                         "event": "connected",
                         "connection_id": connection_id,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                     },
                 ),
             )

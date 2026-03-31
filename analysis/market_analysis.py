@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Any, Tuple
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timezone, UTC
 from enum import Enum
 import logging
 
@@ -57,10 +57,10 @@ class RegimeAnalysis:
     volatility_percentile: float
     volume_state: str  # 'high', 'normal', 'low'
     regime_duration: int  # Bars in current regime
-    transition_probability: Dict[str, float]
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    transition_probability: dict[str, float]
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "current_regime": self.current_regime.value,
             "regime_strength": self.regime_strength,
@@ -80,8 +80,8 @@ class TimeframeAnalysis:
     timeframe: str
     trend: str  # 'bullish', 'bearish', 'neutral'
     trend_strength: float
-    support_levels: List[float]
-    resistance_levels: List[float]
+    support_levels: list[float]
+    resistance_levels: list[float]
     key_level_proximity: float  # Distance to nearest key level
     momentum: float  # -1 to 1
     volume_trend: str
@@ -94,11 +94,11 @@ class ConfluenceAnalysis:
     overall_bias: str  # 'bullish', 'bearish', 'neutral'
     confidence: float  # 0-1
     timeframe_alignment: float  # % of timeframes agreeing
-    timeframe_analyses: Dict[str, TimeframeAnalysis]
-    key_confluence_levels: List[Dict]
+    timeframe_analyses: dict[str, TimeframeAnalysis]
+    key_confluence_levels: list[dict]
     recommended_action: str
     risk_level: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -110,9 +110,9 @@ class SessionAnalysis:
     time_remaining_minutes: int
     typical_volatility: float
     typical_volume: float
-    best_pairs: List[str]
-    session_range: Dict[str, float]
-    key_times: List[str]
+    best_pairs: list[str]
+    session_range: dict[str, float]
+    key_times: list[str]
 
 
 @dataclass
@@ -122,9 +122,9 @@ class VolumeProfile:
     poc: float  # Point of Control (highest volume price)
     value_area_high: float
     value_area_low: float
-    hvm_levels: List[float]  # High Volume Nodes
-    lvm_levels: List[float]  # Low Volume Nodes
-    volume_distribution: Dict[float, float]
+    hvm_levels: list[float]  # High Volume Nodes
+    lvm_levels: list[float]  # Low Volume Nodes
+    volume_distribution: dict[float, float]
 
 
 class MarketRegimeDetector:
@@ -140,7 +140,7 @@ class MarketRegimeDetector:
     - Choppy: Erratic price action
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize regime detector.
 
@@ -199,7 +199,7 @@ class MarketRegimeDetector:
 
             # Update history
             self.regime_history.append(
-                {"regime": regime, "timestamp": datetime.now(timezone.utc)}
+                {"regime": regime, "timestamp": datetime.now(UTC)}
             )
             self.regime_history = self.regime_history[-1000:]  # Keep last 1000
 
@@ -267,7 +267,7 @@ class MarketRegimeDetector:
         percentile = (historical_atr < current_atr).sum() / len(historical_atr) * 100
         return float(percentile)
 
-    def _calculate_trend(self, prices: pd.DataFrame) -> Dict[str, Any]:
+    def _calculate_trend(self, prices: pd.DataFrame) -> dict[str, Any]:
         """Calculate trend direction and strength."""
         close = prices["close"]
 
@@ -326,8 +326,8 @@ class MarketRegimeDetector:
             return "normal"
 
     def _classify_regime(
-        self, adx: float, volatility_pct: float, trend: Dict, prices: pd.DataFrame
-    ) -> Tuple[MarketRegime, float]:
+        self, adx: float, volatility_pct: float, trend: dict, prices: pd.DataFrame
+    ) -> tuple[MarketRegime, float]:
         """Classify market regime based on indicators."""
 
         close = prices["close"]
@@ -381,7 +381,7 @@ class MarketRegimeDetector:
 
     def _calculate_transition_probability(
         self, current_regime: MarketRegime
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Calculate regime transition probabilities based on history."""
         if len(self.regime_history) < 10:
             # Default probabilities
@@ -425,7 +425,7 @@ class MultiTimeframeAnalyzer:
     - Entry timing based on MTF analysis
     """
 
-    def __init__(self, timeframes: List[str] = None, config: Optional[Dict] = None):
+    def __init__(self, timeframes: list[str] = None, config: Optional[dict] = None):
         """
         Initialize MTF analyzer.
 
@@ -452,7 +452,7 @@ class MultiTimeframeAnalyzer:
         logger.info(f"MTF Analyzer initialized with timeframes: {self.timeframes}")
 
     def analyze_confluence(
-        self, data_by_timeframe: Dict[str, pd.DataFrame]
+        self, data_by_timeframe: dict[str, pd.DataFrame]
     ) -> ConfluenceAnalysis:
         """
         Analyze confluence across multiple timeframes.
@@ -598,7 +598,7 @@ class MultiTimeframeAnalyzer:
 
     def _find_support_levels(
         self, data: pd.DataFrame, num_levels: int = 3
-    ) -> List[float]:
+    ) -> list[float]:
         """Find support levels using swing lows."""
         lows = data["low"].to_numpy()
         levels = []
@@ -617,7 +617,7 @@ class MultiTimeframeAnalyzer:
 
     def _find_resistance_levels(
         self, data: pd.DataFrame, num_levels: int = 3
-    ) -> List[float]:
+    ) -> list[float]:
         """Find resistance levels using swing highs."""
         highs = data["high"].to_numpy()
         levels = []
@@ -634,8 +634,8 @@ class MultiTimeframeAnalyzer:
         return levels[-num_levels:] if levels else []
 
     def _find_confluence_levels(
-        self, tf_analyses: Dict[str, TimeframeAnalysis]
-    ) -> List[Dict]:
+        self, tf_analyses: dict[str, TimeframeAnalysis]
+    ) -> list[dict]:
         """Find levels that appear on multiple timeframes."""
         all_supports = []
         all_resistances = []
@@ -702,8 +702,8 @@ class MultiTimeframeAnalyzer:
         bias: str,
         confidence: float,
         alignment: float,
-        analyses: Dict[str, TimeframeAnalysis],
-    ) -> Tuple[str, str]:
+        analyses: dict[str, TimeframeAnalysis],
+    ) -> tuple[str, str]:
         """Generate trading recommendation."""
 
         if confidence > 0.7 and alignment > 0.7:
@@ -770,10 +770,10 @@ class SessionAnalyzer:
         """Initialize session analyzer."""
         logger.info("Session Analyzer initialized")
 
-    def get_current_session(self, utc_time: datetime = None) -> List[TradingSession]:
+    def get_current_session(self, utc_time: datetime = None) -> list[TradingSession]:
         """Get currently active trading sessions."""
         if utc_time is None:
-            utc_time = datetime.now(timezone.utc)
+            utc_time = datetime.now(UTC)
 
         current_time = utc_time.time()
         active_sessions = []
@@ -782,9 +782,8 @@ class SessionAnalyzer:
             if start <= end:  # Normal case
                 if start <= current_time <= end:
                     active_sessions.append(session)
-            else:  # Wraps around midnight
-                if current_time >= start or current_time <= end:
-                    active_sessions.append(session)
+            elif current_time >= start or current_time <= end:
+                active_sessions.append(session)
 
         return active_sessions
 
@@ -793,7 +792,7 @@ class SessionAnalyzer:
     ) -> SessionAnalysis:
         """Analyze a specific trading session."""
         if utc_time is None:
-            utc_time = datetime.now(timezone.utc)
+            utc_time = datetime.now(UTC)
 
         start, end = self.SESSIONS[session]
         current_time = utc_time.time()
@@ -856,7 +855,7 @@ class SessionAnalyzer:
             key_times=key_times_map.get(session, []),
         )
 
-    def get_optimal_trading_times(self, pair: str) -> List[str]:
+    def get_optimal_trading_times(self, pair: str) -> list[str]:
         """Get optimal trading times for a specific pair."""
         optimal_sessions = []
 

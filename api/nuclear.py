@@ -109,7 +109,7 @@ def _get_kill_switch():
 @router.get(
     "/status",
     summary="Nuclear supervisor + risk orchestrator status",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def get_nuclear_status(
     _user: TokenPayload = Depends(require_role("trader")),
@@ -134,7 +134,7 @@ async def get_nuclear_status(
 @router.post(
     "/resume",
     summary="Manually resume trading after nuclear halt",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def manual_resume(
     req: NuclearResumeRequest,
@@ -171,7 +171,7 @@ async def manual_resume(
 @router.post(
     "/set_risk",
     summary="Override the global max-risk fraction",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def set_max_risk(
     req: NuclearSetRiskRequest,
@@ -194,7 +194,7 @@ async def set_max_risk(
 @router.post(
     "/hedge/activate",
     summary="Activate hedge mode on a symbol",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def activate_hedge(
     req: NuclearHedgeRequest,
@@ -213,7 +213,7 @@ async def activate_hedge(
 @router.post(
     "/hedge/deactivate",
     summary="Deactivate hedge mode and close all hedge positions",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def deactivate_hedge(
     _user: TokenPayload = Depends(require_role("admin")),
@@ -230,7 +230,7 @@ async def deactivate_hedge(
 @router.get(
     "/history",
     summary="Last N nuclear supervisor events",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def get_event_history(
     n: int = 20,
@@ -247,7 +247,7 @@ async def get_event_history(
 @router.post(
     "/kill_switch/activate",
     summary="Manually activate the kill switch",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def activate_kill_switch(
     reason: str = "manual activation via API",
@@ -262,7 +262,7 @@ async def activate_kill_switch(
 @router.post(
     "/kill_switch/deactivate",
     summary="Deactivate the kill switch",
-    response_model=Dict[str, Any],
+    response_model=dict[str, Any],
 )
 async def deactivate_kill_switch(
     token: Optional[str] = None,

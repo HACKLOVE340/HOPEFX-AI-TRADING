@@ -49,7 +49,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Dict, List, Optional
 
@@ -88,7 +88,7 @@ class ValidationReport:
     status: ValidationStatus
     oos_sample_size: int
     live_sample_size: int
-    checks: List[CheckResult] = field(default_factory=list)
+    checks: list[CheckResult] = field(default_factory=list)
     psi: Optional[float] = None
     ks_statistic: Optional[float] = None
     ks_p_value: Optional[float] = None
@@ -122,7 +122,7 @@ class ValidationReport:
             lines.append(f"  {icon} {c.name}: {c.message}")
         return "\n".join(lines)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "timestamp": self.timestamp.isoformat(),
             "status": self.status.value,
@@ -183,12 +183,12 @@ class SignalDistributionValidator:
         self.mean_drift_sigma = mean_drift_sigma
         self.min_samples = min_samples
 
-        self._oos_signals: List[SignalRecord] = []
-        self._live_signals: List[SignalRecord] = []
+        self._oos_signals: list[SignalRecord] = []
+        self._live_signals: list[SignalRecord] = []
 
     # ── Reference data ────────────────────────────────────────────────────────
 
-    def set_oos_reference(self, signals: List[SignalRecord]) -> None:
+    def set_oos_reference(self, signals: list[SignalRecord]) -> None:
         """Set the OOS backtest signal distribution as the reference."""
         self._oos_signals = list(signals)
         logger.info(
@@ -209,7 +209,7 @@ class SignalDistributionValidator:
 
     def validate(
         self,
-        live_signals: Optional[List[SignalRecord]] = None,
+        live_signals: Optional[list[SignalRecord]] = None,
     ) -> ValidationReport:
         """
         Run all distribution checks and return a ValidationReport.
@@ -225,7 +225,7 @@ class SignalDistributionValidator:
         oos = self._oos_signals
 
         report = ValidationReport(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             status=ValidationStatus.INSUFFICIENT_DATA,
             oos_sample_size=len(oos),
             live_sample_size=len(live),
@@ -251,7 +251,7 @@ class SignalDistributionValidator:
         oos_conf = np.array([s.confidence for s in oos], dtype=float)
         live_conf = np.array([s.confidence for s in live], dtype=float)
 
-        checks: List[CheckResult] = []
+        checks: list[CheckResult] = []
 
         # 1. KS test on raw scores
         ks_stat, ks_p = _stats.ks_2samp(oos_scores, live_scores)

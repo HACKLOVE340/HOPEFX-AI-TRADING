@@ -52,6 +52,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ class ForexTradingEnv:
 
     def __init__(
         self,
-        candles: List[Dict],
+        candles: list[dict],
         initial_balance: float = 10_000.0,
         position_pct: float = 0.10,
         commission: float = 0.0035,  # 35 bps round-trip (spread + broker fee)
@@ -143,8 +144,8 @@ class ForexTradingEnv:
         self._window = W
 
         # pre-compute feature vectors for every valid window
-        self._features: List[np.ndarray] = []
-        self._prices: List[float] = []
+        self._features: list[np.ndarray] = []
+        self._prices: list[float] = []
         for i in range(W, len(df)):
             window = df.iloc[i - W : i]
             vec = _compute_features(window)
@@ -172,7 +173,7 @@ class ForexTradingEnv:
         self._entry_price = 0.0
         self._balance = initial_balance
         self._steps_held = 0
-        self._pnl_history: List[float] = []
+        self._pnl_history: list[float] = []
 
     # ── Gymnasium API ─────────────────────────────────────────────────────────
 
@@ -355,7 +356,7 @@ class RLAgent:
         """Train PPO on the given environment."""
         try:
             from stable_baselines3 import PPO
-            from stable_baselines3.common.env_checker import check_env  # noqa: F401
+            from stable_baselines3.common.env_checker import check_env
         except ImportError:
             raise ImportError(
                 "stable-baselines3 required: pip install stable-baselines3",
@@ -399,8 +400,8 @@ class RLAgent:
 
     def predict(
         self,
-        candles: List[Dict],
-    ) -> Tuple[int, float]:
+        candles: list[dict],
+    ) -> tuple[int, float]:
         """
         Predict the next action given recent candles.
 
@@ -445,7 +446,7 @@ class RLAgent:
 
     # ── evaluation ────────────────────────────────────────────────────────────
 
-    def evaluate(self, env: ForexTradingEnv) -> Dict[str, float]:
+    def evaluate(self, env: ForexTradingEnv) -> dict[str, float]:
         """Run one full episode and return performance metrics."""
         if self._model is None:
             raise RuntimeError("Model not trained or loaded")
@@ -581,7 +582,7 @@ class RLAgentTrainer:
             model_path=self.agent.model_path,
         )
 
-    def predict(self, candles: List[Dict]) -> Tuple[int, float]:
+    def predict(self, candles: list[dict]) -> tuple[int, float]:
         """Predict action from recent candles. 0=HOLD 1=BUY 2=SELL."""
         return self.agent.predict(candles)
 
@@ -613,7 +614,7 @@ class WalkForwardResult:
     symbol: str
     timeframe: str
     n_folds: int
-    folds: List[WalkForwardFold]
+    folds: list[WalkForwardFold]
     avg_sharpe: float
     avg_return: float
     avg_drawdown: float
@@ -632,7 +633,7 @@ class WalkForwardResult:
 
 
 def walk_forward_eval(
-    candles: List[Dict],
+    candles: list[dict],
     symbol: str = "XAU_USD",
     timeframe: str = "H1",
     n_folds: int = 5,
@@ -673,7 +674,7 @@ def walk_forward_eval(
 
     total = len(df)
     fold_size = total // n_folds
-    folds_results: List[WalkForwardFold] = []
+    folds_results: list[WalkForwardFold] = []
 
     logger.info(
         "Walk-forward eval: %d candles, %d folds, %d steps/fold",
@@ -763,7 +764,7 @@ def walk_forward_eval(
 
     from datetime import datetime, timezone as tz
 
-    completed_at = datetime.now(tz.utc).isoformat()
+    completed_at = datetime.now(UTC).isoformat()
 
     result = WalkForwardResult(
         symbol=symbol,

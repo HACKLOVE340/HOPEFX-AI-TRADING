@@ -239,7 +239,7 @@ class TestAdvancedRiskAnalytics:
         assert isinstance(result, MonteCarloResult)
         assert result.num_simulations == 500
         assert result.max_gain > result.max_loss
-        assert 0 < result.var_95
+        assert result.var_95 > 0
 
     def test_run_monte_carlo_with_paths(self, analytics):
         result = analytics.run_monte_carlo_simulation(

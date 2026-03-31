@@ -60,8 +60,8 @@ def test_kill_switch_trigger(tmp_path):
         ks.deactivate(token=None)
 
     # Deactivation with the correct token should succeed
-    ks._deactivation_token = "test-secret"  # noqa: S105
-    ks.deactivate(token="test-secret")  # noqa: S106
+    ks._deactivation_token = "test-secret"
+    ks.deactivate(token="test-secret")
     assert not ks.is_active()
 
 
@@ -90,7 +90,7 @@ def test_risk_manager_signal_validation(tmp_path):
 # Pure arithmetic tests — no external dependencies
 # ---------------------------------------------------------------------------
 
-import unittest  # noqa: E402
+import unittest
 
 
 class TestRiskCalculations(unittest.TestCase):

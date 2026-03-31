@@ -36,11 +36,11 @@ class Portfolio:
         self.cash = initial_capital
         self.equity = initial_capital
 
-        self.positions: Dict[str, float] = {}  # symbol -> quantity
-        self.avg_prices: Dict[str, float] = {}  # symbol -> avg entry price
+        self.positions: dict[str, float] = {}  # symbol -> quantity
+        self.avg_prices: dict[str, float] = {}  # symbol -> avg entry price
 
-        self.equity_curve: List[Dict] = []
-        self.trade_history: List[Dict] = []
+        self.equity_curve: list[dict] = []
+        self.trade_history: list[dict] = []
 
         self.total_trades = 0
         self.winning_trades = 0
@@ -48,7 +48,7 @@ class Portfolio:
 
         logger.info(f"Initialized portfolio with ${initial_capital:,.2f}")
 
-    def update_fill(self, fill: FillEvent, current_prices: Dict[str, float]):
+    def update_fill(self, fill: FillEvent, current_prices: dict[str, float]):
         """
         Update portfolio based on fill event.
 
@@ -77,19 +77,18 @@ class Portfolio:
                 self.avg_prices[fill.symbol] = total_cost / new_position
             else:
                 self.avg_prices[fill.symbol] = fill.fill_price
-        else:
-            # Selling - check if closing position
-            if new_position == 0:
-                # Position closed
-                pnl = (
-                    fill.fill_price - self.avg_prices.get(fill.symbol, fill.fill_price)
-                ) * fill.quantity
-                self._record_trade(fill, pnl)
-                if fill.symbol in self.avg_prices:
-                    del self.avg_prices[fill.symbol]
-            elif new_position < 0 and old_position >= 0:
-                # Flipped to short
-                self.avg_prices[fill.symbol] = fill.fill_price
+        # Selling - check if closing position
+        elif new_position == 0:
+            # Position closed
+            pnl = (
+                fill.fill_price - self.avg_prices.get(fill.symbol, fill.fill_price)
+            ) * fill.quantity
+            self._record_trade(fill, pnl)
+            if fill.symbol in self.avg_prices:
+                del self.avg_prices[fill.symbol]
+        elif new_position < 0 and old_position >= 0:
+            # Flipped to short
+            self.avg_prices[fill.symbol] = fill.fill_price
 
         self.positions[fill.symbol] = new_position
 
@@ -120,7 +119,7 @@ class Portfolio:
 
         self.trade_history.append(trade)
 
-    def _update_equity(self, current_prices: Dict[str, float]):
+    def _update_equity(self, current_prices: dict[str, float]):
         """Update total equity based on current prices."""
         position_value = 0
 
@@ -130,7 +129,7 @@ class Portfolio:
 
         self.equity = self.cash + position_value
 
-    def update_timeindex(self, timestamp: datetime, current_prices: Dict[str, float]):
+    def update_timeindex(self, timestamp: datetime, current_prices: dict[str, float]):
         """
         Update equity curve at each time step.
 
@@ -165,7 +164,7 @@ class Portfolio:
 
         return pd.DataFrame(self.trade_history)
 
-    def get_holdings(self) -> Dict[str, Dict]:
+    def get_holdings(self) -> dict[str, dict]:
         """Get current holdings details."""
         holdings = {}
 

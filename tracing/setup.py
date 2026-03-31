@@ -225,7 +225,7 @@ def _instrument_aiohttp() -> None:
 # ── W3C trace context propagation through Redis pub/sub ──────────────────────
 
 
-def inject_trace_context() -> Dict[str, str]:
+def inject_trace_context() -> dict[str, str]:
     """
     Extract the current span's W3C traceparent/tracestate into a dict.
 
@@ -234,7 +234,7 @@ def inject_trace_context() -> Dict[str, str]:
 
     Returns an empty dict when OTel is disabled or no span is active.
     """
-    headers: Dict[str, str] = {}
+    headers: dict[str, str] = {}
     if not _ENABLED:
         return headers
     try:
@@ -246,7 +246,7 @@ def inject_trace_context() -> Dict[str, str]:
     return headers
 
 
-def extract_trace_context(carrier: Dict[str, str]) -> Any:
+def extract_trace_context(carrier: dict[str, str]) -> Any:
     """
     Restore a trace context from a dict embedded in a Redis message.
 

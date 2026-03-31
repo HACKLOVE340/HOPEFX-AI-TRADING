@@ -9,7 +9,7 @@ Pydantic v2 domain models with strict validation.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -34,7 +34,7 @@ class TickData(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     symbol: str = Field(pattern=r"^[A-Z]{3,6}$")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     bid: Decimal = Field(decimal_places=5, gt=0)
     ask: Decimal = Field(decimal_places=5, gt=0)
     mid: Decimal = Field(decimal_places=5, gt=0)
@@ -115,8 +115,8 @@ class Order(BaseModel):
     broker_id: str | None = Field(default=None)
     strategy_id: str | None = Field(default=None)
     metadata: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def is_filled(self) -> bool:
@@ -141,7 +141,7 @@ class Position(BaseModel):
     unrealized_pnl: Decimal = Field(default=Decimal("0"))
     realized_pnl: Decimal = Field(default=Decimal("0"))
     open_orders: list[UUID] = Field(default_factory=list)
-    opened_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    opened_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     closed_at: datetime | None = Field(default=None)
 
     def calculate_unrealized_pnl(self, current_price: Decimal) -> Decimal:
@@ -163,7 +163,7 @@ class Signal(BaseModel):
     strength: float = Field(ge=0, le=1)
     confidence: float = Field(ge=0, le=1)
     features: dict[str, float] = Field(default_factory=dict)
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -183,7 +183,7 @@ class Account(BaseModel):
     total_pnl: Decimal = Field(default=Decimal("0"))
     max_drawdown: Decimal = Field(default=Decimal("0"))
     prop_firm: PropFirm = Field(default=PropFirm.NONE)
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # Aliases expected by src.strategies.base and tests

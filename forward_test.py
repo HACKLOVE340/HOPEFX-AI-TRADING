@@ -34,7 +34,7 @@ import asyncio
 import logging
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional
 
 import pandas as pd
@@ -56,7 +56,7 @@ logger = logging.getLogger("forward_test")
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class RealRiskManager:
@@ -145,9 +145,9 @@ class EMAStrategy:
     def __init__(self, fast: int = 9, slow: int = 21) -> None:
         self._fast = fast
         self._slow = slow
-        self._closes: List[float] = []
+        self._closes: list[float] = []
 
-    def _ema(self, prices: List[float], period: int) -> float:
+    def _ema(self, prices: list[float], period: int) -> float:
         if len(prices) < period:
             return prices[-1] if prices else 0.0
         k = 2.0 / (period + 1)
@@ -196,7 +196,7 @@ class PaperOrderGateway:
     def __init__(self, risk: RealRiskManager) -> None:
         self._risk = risk
         self._position: Optional[Position] = None
-        self._trades: List[Dict] = []
+        self._trades: list[dict] = []
 
     @property
     def position(self) -> Optional[Position]:
@@ -285,7 +285,7 @@ class PaperOrderGateway:
         return pnl
 
     @property
-    def trade_log(self) -> List[Dict]:
+    def trade_log(self) -> list[dict]:
         return list(self._trades)
 
 
@@ -314,7 +314,7 @@ class ForwardTestHarness:
         self._risk = RealRiskManager()
         self._strategy = EMAStrategy()
         self._gateway = PaperOrderGateway(self._risk)
-        self._metrics: Dict = {
+        self._metrics: dict = {
             "bars_processed": 0,
             "signals_generated": 0,
             "trades_opened": 0,
@@ -343,7 +343,7 @@ class ForwardTestHarness:
         )
         return df
 
-    async def run(self) -> Dict:
+    async def run(self) -> dict:
         logger.info("=" * 60)
         logger.info(
             "HOPEFX FORWARD TEST — Real Dukascopy Replay  [%s → %s  %s]",
@@ -464,15 +464,15 @@ def _parse_args() -> argparse.Namespace:
 async def _async_main() -> int:
     args = _parse_args()
 
-    now = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    now = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     if args.end:
-        end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=UTC)
     else:
         end = now
 
     if args.start:
-        start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=UTC)
     else:
         start = end - timedelta(days=args.days)
 

@@ -16,21 +16,21 @@ from __future__ import annotations
 
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
 def _make_jwt(
-    sub: str = "user123", role: str = "trader", secret: str = "test-secret"  # noqa: S107
+    sub: str = "user123", role: str = "trader", secret: str = "test-secret"
 ) -> str:
     import jwt
 
     payload = {
         "sub": sub,
         "role": role,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+        "iat": datetime.now(UTC),
     }
     return jwt.encode(payload, secret, algorithm="HS256")
 
@@ -57,7 +57,7 @@ class TestAuthService:
         """JWT encode → decode must preserve sub and role."""
         import jwt
 
-        secret = "test-secret-key"  # noqa: S105
+        secret = "test-secret-key"
         token = _make_jwt("alice", "admin", secret)
         payload = jwt.decode(token, secret, algorithms=["HS256"])
         assert payload["sub"] == "alice"
@@ -67,10 +67,10 @@ class TestAuthService:
         """Expired JWT must raise DecodeError / ExpiredSignatureError."""
         import jwt
 
-        secret = "test-secret-key"  # noqa: S105
+        secret = "test-secret-key"
         payload = {
             "sub": "bob",
-            "exp": datetime.now(timezone.utc) - timedelta(seconds=1),
+            "exp": datetime.now(UTC) - timedelta(seconds=1),
         }
         token = jwt.encode(payload, secret, algorithm="HS256")
         with pytest.raises(jwt.ExpiredSignatureError):
@@ -80,7 +80,7 @@ class TestAuthService:
         """JWT signed with wrong secret must fail verification."""
         import jwt
 
-        token = _make_jwt("carol", secret="correct-secret")  # noqa: S106
+        token = _make_jwt("carol", secret="correct-secret")
         with pytest.raises(jwt.InvalidSignatureError):
             jwt.decode(token, "wrong-secret", algorithms=["HS256"])
 

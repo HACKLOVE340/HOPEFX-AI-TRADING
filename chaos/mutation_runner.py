@@ -54,7 +54,7 @@ import subprocess  # nosec B404 - list-form call with sys.executable; no shell=T
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -93,7 +93,7 @@ class MutantResult:
 class MutationReport:
     """Full mutation testing report."""
 
-    modules: List[str]
+    modules: list[str]
     total: int
     killed: int
     survived: int
@@ -104,9 +104,9 @@ class MutationReport:
     min_score: float
     duration_s: float
     engine: str  # "mutmut" | "builtin_ast"
-    mutants: List[MutantResult] = field(default_factory=list)
+    mutants: list[MutantResult] = field(default_factory=list)
     generated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
     def summary(self) -> str:
@@ -127,7 +127,7 @@ class MutationTestRunner:
 
     def __init__(
         self,
-        modules: Optional[List[str]] = None,
+        modules: Optional[list[str]] = None,
         timeout_s: float = _TIMEOUT_S,
         min_score: float = _MIN_SCORE,
         report_path: Path = _REPORT_PATH,
@@ -280,7 +280,7 @@ class MutationTestRunner:
           - Negate return values: return x → return not x (bool returns only)
           - Off-by-one: numeric literals n → n+1, n-1
         """
-        mutants: List[MutantResult] = []
+        mutants: list[MutantResult] = []
         killed = survived = timeouts = errors = 0
 
         for module_dir in self._modules:
@@ -331,7 +331,7 @@ class MutationTestRunner:
             mutants=mutants,
         )
 
-    def _generate_mutants(self, py_file: Path) -> List[Dict[str, Any]]:
+    def _generate_mutants(self, py_file: Path) -> list[dict[str, Any]]:
         """Parse a Python file and generate mutation descriptors."""
         try:
             source = py_file.read_text()
@@ -397,7 +397,7 @@ class MutationTestRunner:
         # Cap per-file mutants to avoid combinatorial explosion
         return mutants[:20]
 
-    async def _test_mutant(self, py_file: Path, mutant: Dict[str, Any]) -> str:
+    async def _test_mutant(self, py_file: Path, mutant: dict[str, Any]) -> str:
         """
         Apply a single mutation, run pytest, restore original, return status.
 
@@ -437,7 +437,7 @@ class MutationTestRunner:
             # Always restore original source
             py_file.write_text(original_source)
 
-    def _apply_mutation(self, source: str, mutant: Dict[str, Any]) -> str:
+    def _apply_mutation(self, source: str, mutant: dict[str, Any]) -> str:
         """Apply a single mutation to source text via token replacement."""
         op_map = {
             "Gt": ">",

@@ -22,6 +22,7 @@ import asyncio
 import logging
 import os
 from typing import TYPE_CHECKING, Any, Optional
+from datetime import UTC
 
 if TYPE_CHECKING:
     pass  # AppState is duck-typed; no circular import needed
@@ -49,7 +50,7 @@ async def init_env(s: Any) -> bool:
             "SECURITY_JWT_SECRET not set — using dev default (not for production)",
         )
         os.environ["SECURITY_JWT_SECRET"] = (  # nosec B105 - dev-only fallback, warning logged above
-            "dev-jwt-secret-minimum-32-characters-long!!"  # noqa: S105
+            "dev-jwt-secret-minimum-32-characters-long!!"
         )
     try:
         from core.env_validator import validate_and_report
@@ -182,8 +183,8 @@ async def init_hourly_trainer(s: Any) -> Any:
 
     Best-effort — a training failure never blocks the signal engine.
     """
-    from api.admin import log_activity  # noqa: PLC0415
-    from ml.hourly_trainer import get_hourly_trainer  # noqa: PLC0415
+    from api.admin import log_activity
+    from ml.hourly_trainer import get_hourly_trainer
 
     trainer = get_hourly_trainer()
     s.hourly_trainer = trainer
@@ -469,7 +470,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     else:
         started_utc_str = None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if started_utc_str:
         try:
             from datetime import datetime as _dt
@@ -616,7 +617,7 @@ async def init_prop_enforcer(s: Any) -> Any:
     try:
         ks = getattr(s, "kill_switch", None)
         if ks is not None:
-            kill_fn = lambda reason: ks.activate(reason)  # noqa: E731
+            kill_fn = lambda reason: ks.activate(reason)
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
 
@@ -901,14 +902,14 @@ async def init_inference_engine(s: Any) -> Any:
     blocks startup.
     """
     try:
-        from api.admin import log_activity  # noqa: PLC0415
+        from api.admin import log_activity
     except Exception:
 
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
 
     try:
-        from ml.inference_engine import get_inference_engine  # noqa: PLC0415
+        from ml.inference_engine import get_inference_engine
 
         engine = get_inference_engine()
         # Warm up the predictor and calibrator lazy loaders
@@ -1173,7 +1174,7 @@ async def init_signal_engine(s: Any) -> Any:
     # Post a startup alert to Discord so the community knows the engine is live.
     # Best-effort — a missing webhook URL or network error must not block startup.
     try:
-        from notifications.discord_bot import discord_signal_bot  # noqa: PLC0415
+        from notifications.discord_bot import discord_signal_bot
 
         broker_type = os.getenv("BROKER_TYPE", "paper")
         env_label = os.getenv("APP_ENV", "development")
@@ -1400,7 +1401,7 @@ async def init_daily_online_learner(s: Any) -> Any:
 
         while True:
             try:
-                now = _dt.now(_tz.utc)
+                now = _dt.now(UTC)
                 # Sleep until next 00:05 UTC
                 next_run = now.replace(hour=0, minute=5, second=0, microsecond=0)
                 if next_run <= now:

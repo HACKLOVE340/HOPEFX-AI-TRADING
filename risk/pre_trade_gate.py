@@ -34,7 +34,7 @@ import logging
 import os
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
@@ -75,7 +75,7 @@ class TradeBlocked(Exception):
         self,
         reason_code: str,
         detail: str,
-        checks_failed: Optional[List[str]] = None,
+        checks_failed: Optional[list[str]] = None,
     ) -> None:
         self.reason_code = reason_code
         self.detail = detail
@@ -109,7 +109,7 @@ class GateOrder:
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
     strategy_id: str = "unknown"
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.side not in ("BUY", "SELL"):
@@ -130,8 +130,8 @@ class GateResult:
     """Returned by gate.check() only when ALL checks pass."""
 
     order: GateOrder
-    checks_passed: List[str]
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    checks_passed: list[str]
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     cvar: Optional[float] = None
     drawdown_pct: Optional[float] = None
 
@@ -171,7 +171,7 @@ class PreTradeGate:
             RiskManagerError — if the risk manager itself throws unexpectedly.
             ValueError — if order fields are invalid (caller bug).
         """
-        checks_passed: List[str] = []
+        checks_passed: list[str] = []
         cvar: Optional[float] = None
         drawdown_pct: Optional[float] = None
 
@@ -278,7 +278,7 @@ class PreTradeGate:
         self,
         name: str,
         fn,
-        checks_passed: List[str],
+        checks_passed: list[str],
     ) -> None:
         """
         Execute a check function.  On TradeBlocked, re-raise.
@@ -309,7 +309,7 @@ class PreTradeGate:
         self,
         name: str,
         fn,
-        checks_passed: List[str],
+        checks_passed: list[str],
     ) -> Optional[float]:
         """Like _run_check but fn() returns an Optional[float] metric."""
         try:

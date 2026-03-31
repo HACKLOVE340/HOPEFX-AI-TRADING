@@ -109,7 +109,6 @@ class TestTradeExecution(unittest.TestCase):
     def test_position_closing(self):
         """Test closing position"""
         # Test closing logic
-        pass
 
 
 if __name__ == "__main__":

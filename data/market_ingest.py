@@ -28,7 +28,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional
 
 # ccxt.pro for async WebSocket streaming
@@ -119,7 +119,7 @@ class _StalenessGuard:
                     "reason": "stale_feed",
                     "symbol": SYMBOL,
                     "age_s": round(age, 2),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
 
@@ -203,7 +203,7 @@ class MarketIngest:
 
             except asyncio.CancelledError:
                 break
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error(
                     "MarketIngest WS error: %s — reconnecting in %.1f s", exc, backoff
                 )
@@ -213,7 +213,7 @@ class MarketIngest:
                 if self._exchange:
                     try:
                         await self._exchange.close()
-                    except Exception as close_exc:  # noqa: BLE001
+                    except Exception as close_exc:
                         logger.debug(
                             "MarketIngest: error closing stale exchange on reconnect: %s",
                             close_exc,
@@ -256,7 +256,7 @@ class MarketIngest:
                                 await self._emit_tick(bid, ask)
                         else:
                             logger.warning("REST poll HTTP %d", resp.status)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.error("REST poll error: %s", exc)
 
                 await asyncio.sleep(REST_POLL_S)
@@ -292,7 +292,7 @@ class MarketIngest:
             "ask": round(ask, 5),
             "mid": round((bid + ask) / 2, 5),
             "spread": round(ask - bid, 5),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "seq": self._tick_count,
         }
         if extra:

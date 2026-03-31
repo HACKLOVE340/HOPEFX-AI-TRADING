@@ -39,7 +39,7 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # In-memory device token registry: user_id → list of FCM tokens
-_device_tokens: Dict[str, List[str]] = {}
+_device_tokens: dict[str, list[str]] = {}
 
 
 def _load_firebase_admin() -> Optional[Any]:
@@ -56,7 +56,7 @@ def _load_firebase_admin() -> Optional[Any]:
         from firebase_admin import credentials, messaging  # type: ignore[import]
 
         # Already initialised (e.g. called twice at startup)
-        if firebase_admin._apps:  # noqa: SLF001
+        if firebase_admin._apps:
             return messaging
 
         cred = None
@@ -86,7 +86,7 @@ def _load_firebase_admin() -> Optional[Any]:
             cred = credentials.ApplicationDefault()
             logger.info("FCM: using Application Default Credentials")
 
-        options: Dict[str, Any] = {}
+        options: dict[str, Any] = {}
         project_id = os.getenv("FIREBASE_PROJECT_ID", "")
         if project_id:
             options["projectId"] = project_id
@@ -154,7 +154,7 @@ class PushNotificationManager:
             tokens.remove(fcm_token)
         return True
 
-    def get_tokens(self, user_id: str) -> List[str]:
+    def get_tokens(self, user_id: str) -> list[str]:
         return _device_tokens.get(user_id, [])
 
     # ── Core send ─────────────────────────────────────────────────────────────
@@ -165,7 +165,7 @@ class PushNotificationManager:
         title: str,
         body: str,
         category: str = "general",
-        data: Optional[Dict[str, Any]] = None,
+        data: Optional[dict[str, Any]] = None,
     ) -> bool:
         tokens = self.get_tokens(user_id)
 
@@ -184,10 +184,10 @@ class PushNotificationManager:
 
     def _send_admin(
         self,
-        tokens: List[str],
+        tokens: list[str],
         title: str,
         body: str,
-        data: Dict[str, str],
+        data: dict[str, str],
     ) -> bool:
         """Send via Firebase Admin SDK (v1 API — OAuth2 authenticated)."""
         try:
@@ -228,14 +228,14 @@ class PushNotificationManager:
 
     def _send_legacy(
         self,
-        tokens: List[str],
+        tokens: list[str],
         title: str,
         body: str,
-        data: Dict[str, str],
+        data: dict[str, str],
     ) -> bool:
         """Send via legacy FCM HTTP API (server key)."""
         try:
-            import urllib.request  # noqa: PLC0415
+            import urllib.request
 
             results = []
             for token in tokens:
@@ -255,7 +255,7 @@ class PushNotificationManager:
                         "Content-Type": "application/json",
                     },
                 )
-                with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - FCM/APNs https:// endpoint  # noqa: S310
+                with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - FCM/APNs https:// endpoint
                     result = json.loads(resp.read())
                     results.append(result)
                     if result.get("failure"):

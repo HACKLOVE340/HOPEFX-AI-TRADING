@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -51,9 +51,9 @@ class MobileAnalytics:
     ) -> None:
         self._app_state = app_state
         self._db = db
-        self._buffer: List[Dict[str, Any]] = []
+        self._buffer: list[dict[str, Any]] = []
         self._lock = threading.Lock()
-        self._session_counts: Dict[str, int] = defaultdict(int)
+        self._session_counts: dict[str, int] = defaultdict(int)
         self._flush_timer: Optional[threading.Timer] = None
 
         if enable_background_flush:
@@ -74,7 +74,7 @@ class MobileAnalytics:
         self,
         user_id: str,
         event_type: str,
-        properties: Optional[Dict[str, Any]] = None,
+        properties: Optional[dict[str, Any]] = None,
         session_id: Optional[str] = None,
     ) -> None:
         """
@@ -83,12 +83,12 @@ class MobileAnalytics:
         Buffers the event and flushes to DB when buffer reaches _BUFFER_LIMIT
         or when flush() is called explicitly.
         """
-        event: Dict[str, Any] = {
+        event: dict[str, Any] = {
             "user_id": user_id,
             "event_type": event_type,
             "properties": properties or {},
             "session_id": session_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         with self._lock:
@@ -106,7 +106,7 @@ class MobileAnalytics:
         duration_ms: Optional[int] = None,
     ) -> None:
         """Track a screen view with optional dwell time."""
-        props: Dict[str, Any] = {"screen": screen_name}
+        props: dict[str, Any] = {"screen": screen_name}
         if duration_ms is not None:
             props["duration_ms"] = duration_ms
         self.track_event(user_id, "screen_view", props, session_id)
@@ -122,7 +122,7 @@ class MobileAnalytics:
         latency_ms: Optional[int] = None,
     ) -> None:
         """Track a trading action (place_order, cancel_order, close_position)."""
-        props: Dict[str, Any] = {
+        props: dict[str, Any] = {
             "action": action,
             "symbol": symbol,
         }
@@ -167,7 +167,7 @@ class MobileAnalytics:
         stack_trace: Optional[str] = None,
     ) -> None:
         """Track a client-side error."""
-        props: Dict[str, Any] = {
+        props: dict[str, Any] = {
             "error_type": error_type,
             "message": message,
         }
@@ -191,7 +191,7 @@ class MobileAnalytics:
         context: Optional[str] = None,
     ) -> None:
         """Track a performance metric (e.g. WS latency, render time)."""
-        props: Dict[str, Any] = {"metric": metric, "value_ms": value_ms}
+        props: dict[str, Any] = {"metric": metric, "value_ms": value_ms}
         if context:
             props["context"] = context
         self.track_event(user_id, "performance", props)

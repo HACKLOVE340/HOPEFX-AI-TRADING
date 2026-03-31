@@ -29,7 +29,7 @@ import logging
 import threading
 import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, Optional, Tuple
 
 import os
@@ -120,7 +120,7 @@ class DataQualityEngine:
     """
 
     def __init__(self) -> None:
-        self._sources: Dict[FeedSource, _SourceState] = {
+        self._sources: dict[FeedSource, _SourceState] = {
             src: _SourceState(src) for src in FeedSource
         }
         self._global_seq = 0
@@ -357,8 +357,8 @@ class DataQualityEngine:
         return validated
 
     def cross_source_consensus(
-        self, ticks: Dict[FeedSource, GoldTick]
-    ) -> Tuple[float, float, Dict[FeedSource, float]]:
+        self, ticks: dict[FeedSource, GoldTick]
+    ) -> tuple[float, float, dict[FeedSource, float]]:
         """
         Compute weighted consensus mid price from multiple live feeds.
 
@@ -387,7 +387,7 @@ class DataQualityEngine:
             return 0.0, 0.0, {}
 
         # Raw weights: confidence / latency_p95 / spread
-        weights: Dict[FeedSource, float] = {}
+        weights: dict[FeedSource, float] = {}
         for src, t in valid.items():
             state = self._sources[src]
             lat = max(state.p95_latency(), 1.0)
@@ -401,7 +401,7 @@ class DataQualityEngine:
         consensus_p1 = sum(t.mid * norm_w[s] for s, t in valid.items())
 
         # Identify and exclude outliers (hard exclusion, not just weight penalty)
-        inliers: Dict[FeedSource, GoldTick] = {}
+        inliers: dict[FeedSource, GoldTick] = {}
         for src, t in valid.items():
             diff_pct = abs(t.mid - consensus_p1) / max(consensus_p1, 1.0)
             if diff_pct > CROSS_SOURCE_MAX_DIFF:
@@ -419,7 +419,7 @@ class DataQualityEngine:
                         self._prom_rejected.labels(
                             source=src.value, reason="cross_source_outlier"
                         ).inc()
-                    except Exception:  # nosec B110 - Prometheus metric failure must not affect quality engine  # noqa: S110
+                    except Exception:  # nosec B110 - Prometheus metric failure must not affect quality engine
                         pass
             else:
                 inliers[src] = t
@@ -449,7 +449,7 @@ class DataQualityEngine:
 
         return consensus, conf, norm_w2
 
-    def get_source_health(self) -> Dict[str, dict]:
+    def get_source_health(self) -> dict[str, dict]:
         out = {}
         for src, state in self._sources.items():
             out[src.value] = {
@@ -478,14 +478,14 @@ class DataQualityEngine:
             return None
         return max(candidates, key=lambda x: x[1].confidence)[0]
 
-    def latency_report(self) -> Dict[str, Dict[str, float]]:
+    def latency_report(self) -> dict[str, dict[str, float]]:
         """
         Return per-source latency percentiles (p50/p95/p99) in milliseconds.
 
         Used by monitoring dashboards and the health endpoint.
         Returns empty dict for sources with no latency observations.
         """
-        report: Dict[str, Dict[str, float]] = {}
+        report: dict[str, dict[str, float]] = {}
         for src, state in self._sources.items():
             if not state.latencies_ms:
                 continue
@@ -528,7 +528,7 @@ class DataQualityEngine:
             logger.info("DQE: source %s force-marked stale", source.value)
 
     def generate_report(self, symbol: str) -> QualityReport:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         recent = list(self._report_window)
         accepted = sum(1 for r in recent if r[0] == "accept")
         rejected = sum(1 for r in recent if r[0] == "reject")

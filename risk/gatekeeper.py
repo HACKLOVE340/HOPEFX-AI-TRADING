@@ -41,7 +41,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from typing import Dict, List
 
 from core.event_bus import bus, CH_SIGNAL, CH_BREACH
@@ -71,7 +71,7 @@ DAILY_DD_LIMIT_PCT: float = _DAILY_DD_LIMIT
 class GateResult:
     passed: bool
     reason: str = ""
-    failures: List[Dict] = field(default_factory=list)
+    failures: list[dict] = field(default_factory=list)
 
 
 # ── News calendar ─────────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ class _NewsCalendar:
     _BLACKOUT_MINUTES: int = int(os.getenv("NEWS_BLACKOUT_MINUTES", "30"))
 
     def __init__(self) -> None:
-        self._events: List[datetime] = []
+        self._events: list[datetime] = []
 
     def add_event(self, dt: datetime) -> None:
         """Register a high-impact event datetime (timezone-aware)."""
@@ -102,12 +102,12 @@ class _NewsCalendar:
         window = (
             window_minutes if window_minutes is not None else self._BLACKOUT_MINUTES
         )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = timedelta(minutes=window)
         for ev in self._events:
             # Normalise naive datetimes to UTC
             if ev.tzinfo is None:
-                ev = ev.replace(tzinfo=timezone.utc)
+                ev = ev.replace(tzinfo=UTC)
             if abs(now - ev) <= cutoff:
                 return True
         return False
@@ -125,16 +125,15 @@ class _EquityTracker:
         self._peak = initial
         self._current = initial
         self._day_open = initial
-        self._day = datetime.now(timezone.utc).day
+        self._day = datetime.now(UTC).day
 
     def update(self, equity: float) -> None:
-        today = datetime.now(timezone.utc).day
+        today = datetime.now(UTC).day
         if today != self._day:
             self._day_open = equity
             self._day = today
         self._current = equity
-        if equity > self._peak:
-            self._peak = equity
+        self._peak = max(self._peak, equity)
 
     @property
     def daily_dd(self) -> float:
@@ -174,7 +173,7 @@ class Gatekeeper:
         self._kill_active: bool = False
         self._paused_until: float = 0.0
         self._daily_trades: int = 0
-        self._trade_day: int = datetime.now(timezone.utc).day
+        self._trade_day: int = datetime.now(UTC).day
         self._running: bool = False
         self._pass_count: int = 0
         self._block_count: int = 0
@@ -274,7 +273,7 @@ class Gatekeeper:
                 "direction": signal.get("direction"),
                 "confidence": signal.get("confidence"),
                 "mid": signal.get("mid"),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "signal_ref": signal.get("tick_seq"),
             }
             logger.info(
@@ -294,7 +293,7 @@ class Gatekeeper:
                 "signal": signal,
                 "daily_dd": round(self._equity.daily_dd * 100, 4),
                 "max_dd": round(self._equity.max_dd * 100, 4),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
             await bus.publish_breach(breach)
             if primary != "kill_switch_active":
@@ -302,7 +301,7 @@ class Gatekeeper:
 
     # ── Core checks ───────────────────────────────────────────────────────────
 
-    def _run_checks_on_signal(self, signal) -> List[Dict]:
+    def _run_checks_on_signal(self, signal) -> list[dict]:
         """Run checks against an ExecutionSignal object (direct mode)."""
         equity = getattr(self, "_equity", _EquityTracker(0))
         return self._run_checks_params(
@@ -319,7 +318,7 @@ class Gatekeeper:
             spread=getattr(signal, "tick_spread", 0.0),
         )
 
-    def _run_checks_on_dict(self, signal: dict) -> List[Dict]:
+    def _run_checks_on_dict(self, signal: dict) -> list[dict]:
         """Run checks against a signal dict (event-bus mode)."""
         equity = getattr(self, "_equity", _EquityTracker(0))
         return self._run_checks_params(
@@ -336,7 +335,7 @@ class Gatekeeper:
             spread=float(signal.get("spread", 0.0)),
         )
 
-    def _run_checks(self, signal) -> List[Dict]:
+    def _run_checks(self, signal) -> list[dict]:
         """Unified entry-point: accepts a signal dict or ExecutionSignal object.
 
         This is the method called by tests and external code that has a
@@ -360,8 +359,8 @@ class Gatekeeper:
         daily_trades: int,
         confidence: float,
         spread: float,
-    ) -> List[Dict]:
-        failures: List[Dict] = []
+    ) -> list[dict]:
+        failures: list[dict] = []
 
         # 1. Kill switch
         if kill_active:
@@ -526,13 +525,13 @@ class Gatekeeper:
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _reset_daily_counter(self) -> None:
-        today = datetime.now(timezone.utc).day
+        today = datetime.now(UTC).day
         if today != self._trade_day:
             self._daily_trades = 0
             self._trade_day = today
 
     def _write_rejection_lineage(
-        self, signal, reason: str, failures: List[Dict]
+        self, signal, reason: str, failures: list[dict]
     ) -> None:
         if self._lineage is None:
             return

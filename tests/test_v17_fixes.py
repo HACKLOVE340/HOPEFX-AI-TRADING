@@ -18,6 +18,7 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from datetime import UTC
 
 # ---------------------------------------------------------------------------
 # Ensure test env vars are set before any app module is imported
@@ -63,7 +64,7 @@ class TestWebSocketAuthBypass:
         # Manually register a connection using the correct dataclass fields
         mgr._connection_info["conn-2"] = ConnectionInfo(
             connection_id="conn-2",
-            connected_at=datetime.now(timezone.utc),
+            connected_at=datetime.now(UTC),
         )
         with patch("api.auth._decode_token", side_effect=Exception("expired")):
             await mgr._handle_auth("conn-2", "bad-token")
@@ -93,7 +94,7 @@ class TestWebSocketAuthBypass:
         mgr = self._make_manager()
         mgr._connection_info["conn-5"] = ConnectionInfo(
             connection_id="conn-5",
-            connected_at=datetime.now(timezone.utc),
+            connected_at=datetime.now(UTC),
         )
         fake_payload = MagicMock()
         fake_payload.sub = "user-123"

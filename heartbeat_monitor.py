@@ -36,7 +36,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -49,19 +49,19 @@ class ComponentStatus:
     name: str
     timeout_sec: float
     critical: bool
-    last_beat: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_beat: datetime = field(default_factory=lambda: datetime.now(UTC))
     missed_beats: int = 0
     alive: bool = True
 
     # ------------------------------------------------------------------ #
     def update(self) -> None:
         """Record a fresh heartbeat."""
-        self.last_beat = datetime.now(timezone.utc)
+        self.last_beat = datetime.now(UTC)
         self.missed_beats = 0
         self.alive = True
 
     def seconds_since_last_beat(self) -> float:
-        return (datetime.now(timezone.utc) - self.last_beat).total_seconds()
+        return (datetime.now(UTC) - self.last_beat).total_seconds()
 
     def is_overdue(self) -> bool:
         return self.seconds_since_last_beat() > self.timeout_sec
@@ -97,8 +97,8 @@ class HeartbeatMonitor:
     ) -> None:
         self._check_interval = check_interval_sec
         self._kill_switch = kill_switch
-        self._components: Dict[str, ComponentStatus] = {}
-        self._alert_callbacks: List[Callable[[ComponentStatus], None]] = []
+        self._components: dict[str, ComponentStatus] = {}
+        self._alert_callbacks: list[Callable[[ComponentStatus], None]] = []
         self._running: bool = False
         self._task: Optional[asyncio.Task] = None
 
@@ -164,7 +164,7 @@ class HeartbeatMonitor:
             return
         self._components[name].update()
 
-    def status(self) -> List[dict]:
+    def status(self) -> list[dict]:
         """Return a JSON-serialisable snapshot of all component statuses."""
         return [s.to_dict() for s in self._components.values()]
 
@@ -263,9 +263,8 @@ class HeartbeatMonitor:
                     self._kill_switch.activate(
                         f"critical component '{status.name}' heartbeat timeout"
                     )
-            else:
-                # Component recovered
-                if not status.alive:
-                    status.alive = True
-                    status.missed_beats = 0
-                    logger.info("🟢 Component '%s' heartbeat restored", status.name)
+            # Component recovered
+            elif not status.alive:
+                status.alive = True
+                status.missed_beats = 0
+                logger.info("🟢 Component '%s' heartbeat restored", status.name)

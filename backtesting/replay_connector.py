@@ -59,7 +59,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Callable, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -80,46 +80,46 @@ class StressRegime:
 
 
 # Built-in stress regimes covering major market dislocations
-STRESS_REGIMES: List[StressRegime] = [
+STRESS_REGIMES: list[StressRegime] = [
     StressRegime(
         name="covid_crash_2020",
-        start=datetime(2020, 2, 20, tzinfo=timezone.utc),
-        end=datetime(2020, 4, 30, tzinfo=timezone.utc),
+        start=datetime(2020, 2, 20, tzinfo=UTC),
+        end=datetime(2020, 4, 30, tzinfo=UTC),
         description="COVID-19 market crash — extreme vol, liquidity crunch",
         expected_vol_mult=4.0,
     ),
     StressRegime(
         name="gold_flash_crash_2021",
-        start=datetime(2021, 8, 9, tzinfo=timezone.utc),
-        end=datetime(2021, 8, 13, tzinfo=timezone.utc),
+        start=datetime(2021, 8, 9, tzinfo=UTC),
+        end=datetime(2021, 8, 13, tzinfo=UTC),
         description="Gold flash crash — $100 drop in minutes, thin liquidity",
         expected_vol_mult=3.5,
     ),
     StressRegime(
         name="fed_rate_shock_2022",
-        start=datetime(2022, 3, 1, tzinfo=timezone.utc),
-        end=datetime(2022, 6, 30, tzinfo=timezone.utc),
+        start=datetime(2022, 3, 1, tzinfo=UTC),
+        end=datetime(2022, 6, 30, tzinfo=UTC),
         description="Fed 75bps hike cycle — USD surge, gold selloff",
         expected_vol_mult=2.5,
     ),
     StressRegime(
         name="ukraine_war_spike_2022",
-        start=datetime(2022, 2, 24, tzinfo=timezone.utc),
-        end=datetime(2022, 3, 15, tzinfo=timezone.utc),
+        start=datetime(2022, 2, 24, tzinfo=UTC),
+        end=datetime(2022, 3, 15, tzinfo=UTC),
         description="Russia-Ukraine war onset — gold safe-haven spike",
         expected_vol_mult=3.0,
     ),
     StressRegime(
         name="svb_banking_crisis_2023",
-        start=datetime(2023, 3, 8, tzinfo=timezone.utc),
-        end=datetime(2023, 3, 31, tzinfo=timezone.utc),
+        start=datetime(2023, 3, 8, tzinfo=UTC),
+        end=datetime(2023, 3, 31, tzinfo=UTC),
         description="SVB collapse — risk-off, gold bid, rate vol",
         expected_vol_mult=2.0,
     ),
     StressRegime(
         name="normal_baseline_2019",
-        start=datetime(2019, 6, 1, tzinfo=timezone.utc),
-        end=datetime(2019, 8, 31, tzinfo=timezone.utc),
+        start=datetime(2019, 6, 1, tzinfo=UTC),
+        end=datetime(2019, 8, 31, tzinfo=UTC),
         description="Normal market baseline — low vol, trending gold",
         expected_vol_mult=1.0,
     ),
@@ -149,7 +149,7 @@ class ReplayDataHandler:
         self._replay = replay_engine
         self._symbol = symbol
         self._speed = speed
-        self._ticks: List[Any] = []  # pre-loaded GoldTick list
+        self._ticks: list[Any] = []  # pre-loaded GoldTick list
 
     def preload(
         self,
@@ -196,8 +196,8 @@ class ReplayDataHandler:
         self,
         start_date: datetime,
         end_date: datetime,
-        symbols: List[str],
-    ) -> Iterator[Tuple[datetime, str, Any]]:
+        symbols: list[str],
+    ) -> Iterator[tuple[datetime, str, Any]]:
         """
         Synchronous iterator yielding (timestamp, symbol, TickData) tuples.
 
@@ -236,7 +236,7 @@ class ReplayBacktestRunner:
     def __init__(
         self,
         strategy_fn: Callable,
-        symbols: Optional[List[str]] = None,
+        symbols: Optional[list[str]] = None,
         initial_capital: float = 10_000.0,
         data_frequency: str = "tick",
         leverage: float = 1.0,
@@ -329,9 +329,9 @@ class StressReport:
     regimes_run: int
     regimes_passed: int
     regimes_failed: int
-    results: List[RegimeResult]
+    results: list[RegimeResult]
     generated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
     def worst_drawdown(self) -> float:
@@ -373,7 +373,7 @@ class RegimeShiftStressTester:
         strategy_fn: Callable,
         strategy_name: str = "unnamed",
         initial_capital: float = 10_000.0,
-        regimes: Optional[List[StressRegime]] = None,
+        regimes: Optional[list[StressRegime]] = None,
         replay_engine: Optional[Any] = None,
         max_drawdown_threshold: float = 0.20,
     ) -> None:
@@ -390,7 +390,7 @@ class RegimeShiftStressTester:
 
         Returns StressReport with per-regime metrics.
         """
-        results: List[RegimeResult] = []
+        results: list[RegimeResult] = []
 
         for regime in self._regimes:
             logger.info(

@@ -19,7 +19,7 @@ Real-time trade tape (time & sales) with:
 import logging
 import threading
 from collections import deque
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 
@@ -40,7 +40,7 @@ class ExecutedTrade:
     is_aggressive_sell: bool = False
     is_large_trade: bool = False
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "timestamp": self.timestamp.isoformat(),
             "symbol": self.symbol,
@@ -65,7 +65,7 @@ class TradeVelocity:
     buy_trades_pct: float
     sell_trades_pct: float
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "trades_per_minute": self.trades_per_minute,
@@ -90,7 +90,7 @@ class AggressorStats:
     sell_pct: float
     net_aggression: float  # positive = buy-side dominant
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "total_trades": self.total_trades,
@@ -124,7 +124,7 @@ class TimeAndSalesService:
         velocity = service.get_trade_velocity('XAUUSD')
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize Time & Sales service.
 
@@ -140,10 +140,10 @@ class TimeAndSalesService:
         self._velocity_window_minutes = self.config.get("velocity_window_minutes", 5)
 
         # Circular buffers per symbol
-        self._trades: Dict[str, deque] = {}
+        self._trades: dict[str, deque] = {}
 
         # Large trade alert callbacks
-        self._large_trade_callbacks: List = []
+        self._large_trade_callbacks: list = []
 
         # Thread safety
         self._lock = threading.RLock()
@@ -182,7 +182,7 @@ class TimeAndSalesService:
             ExecutedTrade object
         """
         side = side.lower()
-        ts = timestamp or datetime.now(timezone.utc)
+        ts = timestamp or datetime.now(UTC)
 
         # Determine aggressor flags
         is_aggressive_buy = False
@@ -236,7 +236,7 @@ class TimeAndSalesService:
     # TRADE RETRIEVAL
     # ================================================================
 
-    def get_recent_trades(self, symbol: str, n: int = 100) -> List[ExecutedTrade]:
+    def get_recent_trades(self, symbol: str, n: int = 100) -> list[ExecutedTrade]:
         """
         Get the most recent N trades for a symbol.
 
@@ -259,7 +259,7 @@ class TimeAndSalesService:
         symbol: str,
         start_time: datetime,
         end_time: Optional[datetime] = None,
-    ) -> List[ExecutedTrade]:
+    ) -> list[ExecutedTrade]:
         """
         Filter trades by time range.
 
@@ -271,7 +271,7 @@ class TimeAndSalesService:
         Returns:
             List of matching ExecutedTrade objects
         """
-        end = end_time or datetime.now(timezone.utc)
+        end = end_time or datetime.now(UTC)
         with self._lock:
             buffer = self._trades.get(symbol)
             if buffer is None:
@@ -285,7 +285,7 @@ class TimeAndSalesService:
         symbol: str,
         min_size: Optional[float] = None,
         lookback_minutes: int = 60,
-    ) -> List[ExecutedTrade]:
+    ) -> list[ExecutedTrade]:
         """
         Get large trades above a size threshold.
 
@@ -298,7 +298,7 @@ class TimeAndSalesService:
             List of large ExecutedTrade objects
         """
         threshold = min_size if min_size is not None else self._large_trade_threshold
-        start = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        start = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = self.get_trades_by_time(symbol, start_time=start)
         return [t for t in trades if t.size >= threshold]
 
@@ -322,7 +322,7 @@ class TimeAndSalesService:
             TradeVelocity or None if insufficient data
         """
         window = window_minutes or self._velocity_window_minutes
-        start = datetime.now(timezone.utc) - timedelta(minutes=window)
+        start = datetime.now(UTC) - timedelta(minutes=window)
         trades = self.get_trades_by_time(symbol, start_time=start)
 
         if not trades:
@@ -363,7 +363,7 @@ class TimeAndSalesService:
         Returns:
             AggressorStats or None if no data
         """
-        start = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        start = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = self.get_trades_by_time(symbol, start_time=start)
 
         if not trades:
@@ -398,7 +398,7 @@ class TimeAndSalesService:
         symbol: str,
         bins: int = 20,
         lookback_minutes: int = 60,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Get trade distribution by price level (histogram).
 
@@ -410,7 +410,7 @@ class TimeAndSalesService:
         Returns:
             List of histogram buckets with price/volume info
         """
-        start = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        start = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = self.get_trades_by_time(symbol, start_time=start)
 
         if not trades:
@@ -431,7 +431,7 @@ class TimeAndSalesService:
             ]
 
         bucket_size = (max_p - min_p) / bins
-        buckets: Dict[int, Dict] = {}
+        buckets: dict[int, dict] = {}
 
         for trade in trades:
             idx = min(int((trade.price - min_p) / bucket_size), bins - 1)
@@ -458,7 +458,7 @@ class TimeAndSalesService:
         self,
         symbol: str,
         lookback_minutes: int = 60,
-    ) -> Dict:
+    ) -> dict:
         """
         Get comprehensive trade statistics.
 
@@ -469,7 +469,7 @@ class TimeAndSalesService:
         Returns:
             Dict with trade statistics
         """
-        start = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        start = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = self.get_trades_by_time(symbol, start_time=start)
 
         if not trades:
@@ -500,7 +500,7 @@ class TimeAndSalesService:
     # UTILITY
     # ================================================================
 
-    def get_symbols(self) -> List[str]:
+    def get_symbols(self) -> list[str]:
         """Get list of symbols with trade data."""
         with self._lock:
             return list(self._trades.keys())
@@ -521,7 +521,7 @@ class TimeAndSalesService:
         with self._lock:
             self._trades.clear()
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get service statistics."""
         with self._lock:
             return {

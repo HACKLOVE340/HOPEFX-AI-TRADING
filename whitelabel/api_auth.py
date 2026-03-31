@@ -79,7 +79,7 @@ except Exception:
 
 # ── In-memory fallback counters ───────────────────────────────────────────────
 # {key_hash: {"min_count": int, "min_reset": float, "day_count": int, "day_reset": float}}
-_mem_counters: Dict[str, Dict[str, float]] = defaultdict(
+_mem_counters: dict[str, dict[str, float]] = defaultdict(
     lambda: {"min_count": 0, "min_reset": 0.0, "day_count": 0, "day_reset": 0.0}
 )
 
@@ -88,7 +88,7 @@ _mem_counters: Dict[str, Dict[str, float]] = defaultdict(
 # Maps SHA-256(api_key) → (tenant_id, tier_name)
 # In production this should be a database table. Here it's an in-process dict
 # populated by the whitelabel admin API when keys are generated.
-_key_store: Dict[str, tuple[str, TierName]] = {}
+_key_store: dict[str, tuple[str, TierName]] = {}
 
 
 def register_api_key(raw_key: str, tenant_id: str, tier: TierName) -> str:
@@ -134,7 +134,7 @@ class TenantContext:
     key_hash: str  # for rate-limit counter keying
 
     @property
-    def allowed_features(self) -> Set[str]:
+    def allowed_features(self) -> set[str]:
         return self.tier_config.allowed_features
 
     def has_feature(self, feature: str) -> bool:

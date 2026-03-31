@@ -14,16 +14,16 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 
 def _utcnow() -> datetime:
     """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
-from database.models import Base  # noqa: E402
+from database.models import Base
 
-from sqlalchemy import (  # noqa: E402
+from sqlalchemy import (
     Column,
     String,
     Boolean,
@@ -32,7 +32,7 @@ from sqlalchemy import (  # noqa: E402
     ForeignKey,
     Index,
 )
-from sqlalchemy.orm import relationship  # noqa: E402
+from sqlalchemy.orm import relationship
 
 
 class UserRole(str, enum.Enum):

@@ -16,7 +16,7 @@ import time
 import json
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 try:
     import requests
@@ -44,11 +44,11 @@ try:
     from sendgrid import SendGridAPIClient
     from sendgrid.helpers.mail import (
         Mail,
-        From,  # noqa: F401
-        To,  # noqa: F401
-        Subject,  # noqa: F401
+        From,
+        To,
+        Subject,
         HtmlContent,
-        PlainTextContent,  # noqa: F401
+        PlainTextContent,
     )
 
     SENDGRID_AVAILABLE = True
@@ -73,12 +73,12 @@ class Notification:
     level: NotificationLevel
     title: str
     message: str
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
-    channels: List[str] = field(default_factory=list)
+    channels: list[str] = field(default_factory=list)
     id: str = field(default_factory=lambda: str(int(time.time() * 1000)))
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "level": self.level.value,
@@ -107,12 +107,12 @@ class NotificationChannel(abc.ABC):
     TELEGRAM = "telegram"
     EMAIL = "email"
 
-    def __init__(self, name: str, config: Dict[str, Any]):
+    def __init__(self, name: str, config: dict[str, Any]):
         self.name = name
         self.config = config
         self.enabled = config.get("enabled", True)
         self.rate_limit_seconds = config.get("rate_limit_seconds", 60)
-        self._last_send_time: Dict[str, float] = {}
+        self._last_send_time: dict[str, float] = {}
         self._lock = asyncio.Lock()
 
     @abc.abstractmethod
@@ -145,7 +145,7 @@ class NotificationChannel(abc.ABC):
 class DiscordChannel(NotificationChannel):
     """Discord webhook notifications"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__("discord", config)
         self.webhook_url = config.get("webhook_url")
         if not self.webhook_url:
@@ -173,7 +173,7 @@ class DiscordChannel(NotificationChannel):
             "title": notification.title,
             "description": notification.message[:2000],  # Discord limit
             "color": colors.get(notification.level, 0x808080),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "fields": [],
         }
 
@@ -208,7 +208,7 @@ class DiscordChannel(NotificationChannel):
 class TelegramChannel(NotificationChannel):
     """Telegram bot notifications"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__("telegram", config)
         self.bot_token = config.get("bot_token")
         self.chat_id = config.get("chat_id")
@@ -287,14 +287,14 @@ class EmailChannel(NotificationChannel):
     DB table and checked before every send.
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__("email", config)
         self.smtp_host = config.get("smtp_host")
         self.smtp_port = config.get("smtp_port", 587)
         self.username = config.get("username")
         self.password = config.get("password")
         self.from_addr = config.get("from_addr") or os.getenv("SMTP_FROM", "")
-        self.to_addrs: List[str] = config.get("to_addrs", [])
+        self.to_addrs: list[str] = config.get("to_addrs", [])
 
         # Determine send mode
         self.sendgrid_api_key: Optional[str] = os.getenv(
@@ -426,7 +426,7 @@ class EmailChannel(NotificationChannel):
 
     def _send_via_sendgrid(
         self,
-        recipients: List[str],
+        recipients: list[str],
         subject: str,
         body: str,
         html_body: Optional[str] = None,
@@ -457,7 +457,7 @@ class EmailChannel(NotificationChannel):
 
     def _send_via_smtp(
         self,
-        recipients: List[str],
+        recipients: list[str],
         subject: str,
         body: str,
         html_body: Optional[str] = None,
@@ -483,7 +483,7 @@ class EmailChannel(NotificationChannel):
 class ConsoleChannel(NotificationChannel):
     """Console output for development"""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__("console", config)
         self.colors = {
             NotificationLevel.DEBUG: "\033[90m",  # Gray
@@ -520,9 +520,9 @@ class NotificationManager:
     - Deduplication
     """
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: dict[str, Any] = None):
         self.config = config or {}
-        self.channels: Dict[str, NotificationChannel] = {}
+        self.channels: dict[str, NotificationChannel] = {}
         self._notification_queue: asyncio.Queue = asyncio.Queue()
         self._processed_ids: set = set()
         self._max_history = 1000
@@ -531,7 +531,7 @@ class NotificationManager:
         self._lock = asyncio.Lock()
 
         # Sync API: list of enabled channel names
-        self.enabled_channels: List[str] = [NotificationChannel.CONSOLE]
+        self.enabled_channels: list[str] = [NotificationChannel.CONSOLE]
         if self.config.get("discord_enabled") or self.config.get("discord_webhook_url"):
             self.enabled_channels.append(NotificationChannel.DISCORD)
         if self.config.get("telegram_enabled") or self.config.get("telegram_bot_token"):
@@ -540,7 +540,7 @@ class NotificationManager:
             self.enabled_channels.append(NotificationChannel.EMAIL)
 
         # Notification history for sync API
-        self.notification_history: List[Dict[str, Any]] = []
+        self.notification_history: list[dict[str, Any]] = []
 
         self._initialize_channels()
 
@@ -616,8 +616,8 @@ class NotificationManager:
         level: str,
         title: str,
         message: str = "",
-        data: Dict[str, Any] = None,
-        channels: Optional[List[str]] = None,
+        data: dict[str, Any] = None,
+        channels: Optional[list[str]] = None,
         bypass_rate_limit: bool = False,
     ) -> bool:
         """
@@ -702,8 +702,8 @@ class NotificationManager:
         self,
         message: str,
         level: "NotificationLevel" = None,
-        channels: List[str] = None,
-        metadata: Dict = None,
+        channels: list[str] = None,
+        metadata: dict = None,
     ) -> None:
         """Synchronous send — dispatches to each requested channel, swallowing errors."""
         targets = channels if channels is not None else self.enabled_channels
@@ -738,7 +738,7 @@ class NotificationManager:
         side: str = None,
         trade_id: str = None,
         pnl: float = None,
-        channels: List[str] = None,
+        channels: list[str] = None,
         **kwargs,
     ) -> None:
         """Send a trade notification."""
@@ -746,7 +746,7 @@ class NotificationManager:
         msg = f"{direction} {quantity} {symbol} @ {price}"
         if pnl is not None:
             msg += f" | PnL: {pnl:+.2f}"
-        meta: Dict[str, Any] = {"symbol": symbol, "price": price, "quantity": quantity}
+        meta: dict[str, Any] = {"symbol": symbol, "price": price, "quantity": quantity}
         if action:
             meta["action"] = action
         if side:
@@ -766,7 +766,7 @@ class NotificationManager:
         price: float = None,
         confidence: float = None,
         strength: float = None,
-        channels: List[str] = None,
+        channels: list[str] = None,
         **kwargs,
     ) -> None:
         """Send a trading signal notification."""
@@ -776,7 +776,7 @@ class NotificationManager:
         conf = confidence if confidence is not None else strength
         if conf is not None:
             msg += f" conf={conf:.2f}"
-        meta: Dict[str, Any] = {"symbol": symbol, "signal_type": signal_type}
+        meta: dict[str, Any] = {"symbol": symbol, "signal_type": signal_type}
         if strategy:
             meta["strategy"] = strategy
         if price is not None:
@@ -801,7 +801,7 @@ class NotificationManager:
         log_fn(f"[NOTIFICATION] {message}")
 
     def _send_discord(
-        self, message: str, level: "NotificationLevel" = None, metadata: Dict = None
+        self, message: str, level: "NotificationLevel" = None, metadata: dict = None
     ) -> None:
         """Send message to Discord webhook (sync)."""
         if requests is None:
@@ -814,13 +814,13 @@ class NotificationManager:
         if not webhook_url.startswith("https://"):
             logger.warning(f"Rejecting non-HTTPS Discord webhook: {webhook_url}")
             return
-        embed: Dict[str, Any] = {"description": message}
+        embed: dict[str, Any] = {"description": message}
         if metadata:
             embed["fields"] = [
                 {"name": str(k), "value": str(v), "inline": True}
                 for k, v in metadata.items()
             ]
-        payload: Dict[str, Any] = {"embeds": [embed]}
+        payload: dict[str, Any] = {"embeds": [embed]}
         try:
             resp = requests.post(webhook_url, json=payload, timeout=5)
             resp.raise_for_status()
@@ -828,7 +828,7 @@ class NotificationManager:
             logger.error(f"Discord send failed: {exc}")
 
     def _send_telegram(
-        self, message: str, level: "NotificationLevel" = None, metadata: Dict = None
+        self, message: str, level: "NotificationLevel" = None, metadata: dict = None
     ) -> None:
         """Send message via Telegram Bot API (sync)."""
         if requests is None:
@@ -851,7 +851,7 @@ class NotificationManager:
             logger.error(f"Telegram send failed: {exc}")
 
     def _send_email(
-        self, message: str, level: "NotificationLevel" = None, metadata: Dict = None
+        self, message: str, level: "NotificationLevel" = None, metadata: dict = None
     ) -> None:
         """Send email notification — SendGrid primary, SMTP fallback (sync)."""
         to_addr = (
@@ -915,7 +915,7 @@ class NotificationManager:
         except Exception as exc:
             logger.error("SMTP send failed: %s", exc)
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get notification manager status"""
         return {
             "running": self._running,
@@ -940,7 +940,7 @@ def get_notification_manager() -> Optional[NotificationManager]:
     return _notification_manager
 
 
-def init_notification_manager(config: Dict[str, Any]) -> NotificationManager:
+def init_notification_manager(config: dict[str, Any]) -> NotificationManager:
     """Initialize global notification manager"""
     global _notification_manager
     _notification_manager = NotificationManager(config)

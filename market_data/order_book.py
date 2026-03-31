@@ -51,7 +51,7 @@ import logging
 import os
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -84,8 +84,8 @@ class OrderBookSnapshot:
 
     symbol: str
     timestamp: datetime
-    bids: List[BookLevel]  # sorted descending by price
-    asks: List[BookLevel]  # sorted ascending by price
+    bids: list[BookLevel]  # sorted descending by price
+    asks: list[BookLevel]  # sorted ascending by price
     mid_price: float = 0.0
     spread_bps: float = 0.0
 
@@ -152,7 +152,7 @@ class OrderBookSnapshot:
         # ── Price pressure ────────────────────────────────────────────────────
         self.price_pressure = self.obi * self.spread_bps
 
-    def to_ml_features(self) -> Dict[str, float]:
+    def to_ml_features(self) -> dict[str, float]:
         """
         Return a flat dict of ML-ready features.
 
@@ -193,20 +193,20 @@ class OrderBook:
     def __init__(self, symbol: str, max_levels: int = L2_DEPTH_LEVELS) -> None:
         self.symbol = symbol
         self.max_levels = max_levels
-        self._bids: Dict[float, float] = {}  # price → size
-        self._asks: Dict[float, float] = {}
+        self._bids: dict[float, float] = {}  # price → size
+        self._asks: dict[float, float] = {}
         self._cumulative_delta: float = 0.0
         self._last_snapshot: Optional[OrderBookSnapshot] = None
         self._update_count: int = 0
         self._last_update: Optional[datetime] = None
 
         # Rolling history for spread z-score
-        self._spread_history: Deque[float] = deque(maxlen=20)
+        self._spread_history: deque[float] = deque(maxlen=20)
 
     def apply_snapshot(
         self,
-        bids: List[Tuple[float, float]],
-        asks: List[Tuple[float, float]],
+        bids: list[tuple[float, float]],
+        asks: list[tuple[float, float]],
         timestamp: Optional[datetime] = None,
     ) -> OrderBookSnapshot:
         """
@@ -257,7 +257,7 @@ class OrderBook:
 
     def _build_snapshot(self, timestamp: Optional[datetime]) -> OrderBookSnapshot:
         """Build and cache a new snapshot from current book state."""
-        ts = timestamp or datetime.now(timezone.utc)
+        ts = timestamp or datetime.now(UTC)
 
         sorted_bids = sorted(self._bids.items(), key=lambda x: -x[0])
         sorted_asks = sorted(self._asks.items(), key=lambda x: x[0])
@@ -307,11 +307,11 @@ class OandaL2Feed:
         self._practice = os.getenv("OANDA_PRACTICE", "true").lower() == "true"
         self._base_url = self.PRACTICE_URL if self._practice else self.LIVE_URL
         self._session: Optional[Any] = None
-        self._books: Dict[str, OrderBook] = {}
+        self._books: dict[str, OrderBook] = {}
         self._running = False
-        self._poll_tasks: Dict[str, asyncio.Task] = {}
+        self._poll_tasks: dict[str, asyncio.Task] = {}
 
-    async def start(self, symbols: List[str]) -> None:
+    async def start(self, symbols: list[str]) -> None:
         """Start polling L2 snapshots for the given symbols."""
         try:
             import aiohttp
@@ -409,13 +409,13 @@ class IBKROrderBookFeed:
         self._port = int(os.getenv("IBKR_PORT", "7497"))
         self._client_id = int(os.getenv("IBKR_CLIENT_ID", "2"))
         self._ib: Optional[Any] = None
-        self._books: Dict[str, OrderBook] = {}
-        self._tickers: Dict[str, Any] = {}
+        self._books: dict[str, OrderBook] = {}
+        self._tickers: dict[str, Any] = {}
 
-    async def start(self, symbols: List[str]) -> None:
+    async def start(self, symbols: list[str]) -> None:
         """Connect to TWS and subscribe to market depth."""
         try:
-            from ib_insync import IB, Forex, Contract  # noqa: F401
+            from ib_insync import IB, Forex, Contract
         except ImportError:
             logger.warning("ib_insync not installed — IBKR L2 feed disabled")
             return
@@ -485,11 +485,11 @@ class MockL2Feed:
                 "Set L2_PROVIDER=oanda or L2_PROVIDER=ibkr and configure the "
                 "corresponding credentials (OANDA_API_KEY / IBKR_HOST)."
             )
-        self._books: Dict[str, OrderBook] = {}
-        self._tasks: Dict[str, asyncio.Task] = {}
+        self._books: dict[str, OrderBook] = {}
+        self._tasks: dict[str, asyncio.Task] = {}
         self._running = False
 
-    async def start(self, symbols: List[str]) -> None:
+    async def start(self, symbols: list[str]) -> None:
         self._running = True
         for symbol in symbols:
             self._books[symbol] = OrderBook(symbol)
@@ -550,9 +550,9 @@ class OrderBookFeed:
     def __init__(self, provider: Optional[str] = None) -> None:
         self._provider_name = provider or L2_PROVIDER
         self._provider: Optional[Any] = None
-        self._symbols: List[str] = []
+        self._symbols: list[str] = []
 
-    async def start(self, symbols: List[str]) -> None:
+    async def start(self, symbols: list[str]) -> None:
         """Start the L2 feed for the given symbols."""
         self._symbols = symbols
 
@@ -592,7 +592,7 @@ class OrderBookFeed:
             return None
         return self._provider.get_snapshot(symbol)
 
-    def get_ml_features(self, symbol: str) -> Dict[str, float]:
+    def get_ml_features(self, symbol: str) -> dict[str, float]:
         """
         Return ML-ready microstructure features for a symbol.
 

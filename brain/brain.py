@@ -18,7 +18,7 @@ import logging
 import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from collections import deque
 import copy
@@ -56,9 +56,9 @@ class BrainState:
 
     timestamp: float
     system_state: SystemState
-    market_regime: Dict[str, MarketRegime] = field(default_factory=dict)
-    active_positions: Dict[str, Any] = field(default_factory=dict)
-    pending_orders: List[Dict] = field(default_factory=list)
+    market_regime: dict[str, MarketRegime] = field(default_factory=dict)
+    active_positions: dict[str, Any] = field(default_factory=dict)
+    pending_orders: list[dict] = field(default_factory=list)
     account_balance: float = 0.0
     equity: float = 0.0
     margin_used: float = 0.0
@@ -74,7 +74,7 @@ class BrainState:
     latency_ms: float = 0.0
     cycle_time_ms: float = 0.0
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "timestamp": self.timestamp,
             "system_state": self.system_state.value,
@@ -152,7 +152,7 @@ class CircuitBreaker:
 
             return False
 
-    def get_status(self) -> Dict:
+    def get_status(self) -> dict:
         """Get circuit breaker status"""
         return {
             "is_open": self.is_open,
@@ -176,7 +176,7 @@ class HOPEFXBrain:
     6. Graceful degradation: Components can fail individually
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         self.config = config or {}
 
         # State initialization
@@ -578,7 +578,7 @@ class HOPEFXBrain:
         (std_close / mean_close) * 100 if mean_close > 0 else 0
 
         # ATR approximation
-        atr = sum(h - l for h, l in zip(highs[-14:], lows[-14:], strict=False)) / 14  # noqa: E741
+        atr = sum(h - l for h, l in zip(highs[-14:], lows[-14:], strict=False)) / 14
 
         # Classification
         current_price = closes[-1]
@@ -726,7 +726,7 @@ class HOPEFXBrain:
             {
                 "equity": self.state.equity,
                 "open_positions": self.state.open_trades_count,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -806,7 +806,7 @@ class HOPEFXBrain:
         except Exception as e:
             logger.error(f"Strategy decision error: {e}")
 
-    def _publish_to_signal_service(self, signal: Dict) -> None:
+    def _publish_to_signal_service(self, signal: dict) -> None:
         """
         Push a brain strategy signal into RealTimeSignalService.
 
@@ -816,7 +816,7 @@ class HOPEFXBrain:
         Non-blocking — failures are logged and swallowed.
         """
         try:
-            from api.signals import SignalDirection, _get_signal_service  # noqa: PLC0415
+            from api.signals import SignalDirection, _get_signal_service
 
             action = signal.get("action", "")
             symbol = signal.get("symbol", "")
@@ -857,7 +857,7 @@ class HOPEFXBrain:
         except Exception as exc:
             logger.debug("Signal service publish failed (non-fatal): %s", exc)
 
-    async def _execute_signal(self, signal: Dict):
+    async def _execute_signal(self, signal: dict):
         """Execute a trading signal - SAFE VERSION"""
         async with self._decision_lock:
             try:
@@ -918,7 +918,7 @@ class HOPEFXBrain:
             except Exception as e:
                 logger.error(f"Signal execution error: {e}")
 
-    async def _safe_notify(self, level: str, message: str, data: Dict = None):
+    async def _safe_notify(self, level: str, message: str, data: dict = None):
         """Safe notification with error handling"""
         if not self.notification_manager:
             return
@@ -1012,15 +1012,15 @@ class HOPEFXBrain:
         """Get current state (deep copy to prevent external modification)"""
         return copy.deepcopy(self.state)
 
-    def get_decision_history(self, limit: int = 100) -> List[Dict]:
+    def get_decision_history(self, limit: int = 100) -> list[dict]:
         """Get recent decision history"""
         return list(self.decision_history)[-limit:]
 
-    def get_error_history(self, limit: int = 50) -> List[Dict]:
+    def get_error_history(self, limit: int = 50) -> list[dict]:
         """Get recent error history"""
         return list(self.error_history)[-limit:]
 
-    def get_health(self) -> Dict:
+    def get_health(self) -> dict:
         """Get health status"""
         return {
             "running": self._running,

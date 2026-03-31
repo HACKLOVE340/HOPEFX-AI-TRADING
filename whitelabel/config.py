@@ -50,7 +50,7 @@ class TierConfig:
     # Data access
     max_history_days: int  # historical data lookback
     # Feature flags available at this tier
-    allowed_features: Set[str]
+    allowed_features: set[str]
     # Revenue share (fraction of subscription revenue paid to reseller)
     revenue_share_pct: float
     # Monthly platform fee (USD)
@@ -59,7 +59,7 @@ class TierConfig:
 
 # ── Tier definitions ──────────────────────────────────────────────────────────
 
-TIER_CONFIGS: Dict[TierName, TierConfig] = {
+TIER_CONFIGS: dict[TierName, TierConfig] = {
     TierName.STARTER: TierConfig(
         name=TierName.STARTER,
         requests_per_minute=60,

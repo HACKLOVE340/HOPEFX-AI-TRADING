@@ -175,7 +175,7 @@ class Order:
     filled_quantity: float = 0.0
     average_price: Optional[float] = None
     timestamp: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
 
     @property
     def average_fill_price(self) -> Optional[float]:
@@ -228,7 +228,7 @@ class BrokerConnector(ABC):
     - get_market_data()
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Initialize broker connector.
 
@@ -253,7 +253,6 @@ class BrokerConnector(ABC):
         Returns:
             True if connection successful
         """
-        pass
 
     @abstractmethod
     def disconnect(self) -> bool:
@@ -263,7 +262,6 @@ class BrokerConnector(ABC):
         Returns:
             True if disconnection successful
         """
-        pass
 
     @abstractmethod
     def place_order(
@@ -291,7 +289,6 @@ class BrokerConnector(ABC):
         Returns:
             Order object
         """
-        pass
 
     @abstractmethod
     def cancel_order(self, order_id: str) -> bool:
@@ -304,7 +301,6 @@ class BrokerConnector(ABC):
         Returns:
             True if cancellation successful
         """
-        pass
 
     @abstractmethod
     def get_order(self, order_id: str) -> Optional[Order]:
@@ -317,17 +313,15 @@ class BrokerConnector(ABC):
         Returns:
             Order object or None
         """
-        pass
 
     @abstractmethod
-    def get_positions(self) -> List[Position]:
+    def get_positions(self) -> list[Position]:
         """
         Get all open positions.
 
         Returns:
             List of Position objects
         """
-        pass
 
     @abstractmethod
     def close_position(self, symbol: str) -> bool:
@@ -340,7 +334,6 @@ class BrokerConnector(ABC):
         Returns:
             True if closure successful
         """
-        pass
 
     @abstractmethod
     def get_account_info(self) -> AccountInfo:
@@ -350,7 +343,6 @@ class BrokerConnector(ABC):
         Returns:
             AccountInfo object
         """
-        pass
 
     @abstractmethod
     def get_market_data(
@@ -358,7 +350,7 @@ class BrokerConnector(ABC):
         symbol: str,
         timeframe: str = "1h",
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get market data (OHLCV).
 
@@ -370,7 +362,6 @@ class BrokerConnector(ABC):
         Returns:
             List of OHLCV dictionaries
         """
-        pass
 
     def is_connected(self) -> bool:
         """

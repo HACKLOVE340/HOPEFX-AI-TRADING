@@ -32,7 +32,7 @@ Endpoints
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -48,10 +48,10 @@ router = APIRouter(prefix="/api/online-learner", tags=["Online Learner"])
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _get_registry() -> Dict[str, Any]:
+def _get_registry() -> dict[str, Any]:
     """Return the module-level learner registry from ml.online_learner."""
     try:
-        from ml.online_learner import _learner_registry  # noqa: PLC0415
+        from ml.online_learner import _learner_registry
 
         return _learner_registry
     except ImportError as exc:
@@ -64,7 +64,7 @@ def _get_registry() -> Dict[str, Any]:
 def _get_learner(symbol: str):
     """Return or create the SklearnOnlineLearner for symbol."""
     try:
-        from ml.online_learner import get_online_learner  # noqa: PLC0415
+        from ml.online_learner import get_online_learner
 
         return get_online_learner(symbol=symbol)
     except ImportError as exc:
@@ -77,7 +77,7 @@ def _get_learner(symbol: str):
 def _fetch_bars(symbol: str, lookback: int = 200):
     """Fetch recent OHLCV bars for symbol via yfinance."""
     try:
-        import yfinance as yf  # noqa: PLC0415
+        import yfinance as yf
 
         # Map internal symbol names to yfinance tickers
         ticker_map = {
@@ -125,7 +125,7 @@ class LearnerStatusItem(BaseModel):
 
 
 class LearnerStatusResponse(BaseModel):
-    learners: List[LearnerStatusItem]
+    learners: list[LearnerStatusItem]
     count: int
     checked_at: str
 
@@ -164,8 +164,8 @@ class Phase3StatusItem(BaseModel):
 
 class DiagnosticsResponse(BaseModel):
     checked_at: str
-    sklearn_layer: List[LearnerStatusItem]
-    phase3_layer: List[Phase3StatusItem]
+    sklearn_layer: list[LearnerStatusItem]
+    phase3_layer: list[Phase3StatusItem]
 
 
 class ResetRequest(BaseModel):
@@ -182,11 +182,11 @@ class ResetResponse(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
-def _get_phase3_items(symbol: Optional[str] = None) -> List[Phase3StatusItem]:
+def _get_phase3_items(symbol: Optional[str] = None) -> list[Phase3StatusItem]:
     """Collect Phase-3 OnlineLearnerStore status for all registered symbols."""
-    items: List[Phase3StatusItem] = []
+    items: list[Phase3StatusItem] = []
     try:
-        from research.pipeline.online_learning import list_online_learners  # noqa: PLC0415
+        from research.pipeline.online_learning import list_online_learners
 
         stores = list_online_learners()
         for sym, snap in stores.items():
@@ -231,7 +231,7 @@ async def online_learner_status(
     """
     registry = _get_registry()
 
-    items: List[LearnerStatusItem] = []
+    items: list[LearnerStatusItem] = []
     for sym, learner in registry.items():
         if symbol is not None and sym.upper() != symbol.upper():
             continue
@@ -263,7 +263,7 @@ async def online_learner_status(
     return LearnerStatusResponse(
         learners=items,
         count=len(items),
-        checked_at=datetime.now(timezone.utc).isoformat(),
+        checked_at=datetime.now(UTC).isoformat(),
     )
 
 
@@ -306,7 +306,7 @@ async def partial_fit(
             detail=f"partial_fit raised: {exc}",
         ) from exc
 
-    updated_at = datetime.now(timezone.utc).isoformat()
+    updated_at = datetime.now(UTC).isoformat()
     # Stamp last_fit_at on the learner for status reporting
     learner._last_fit_at = updated_at  # type: ignore[attr-defined]
 
@@ -350,7 +350,7 @@ async def online_learner_diagnostics(
     """
     # Layer A — sklearn
     registry = _get_registry()
-    sklearn_items: List[LearnerStatusItem] = []
+    sklearn_items: list[LearnerStatusItem] = []
     for sym, learner in registry.items():
         if symbol is not None and sym.upper() != symbol.upper():
             continue
@@ -380,7 +380,7 @@ async def online_learner_diagnostics(
     phase3_items = _get_phase3_items(symbol=symbol)
 
     return DiagnosticsResponse(
-        checked_at=datetime.now(timezone.utc).isoformat(),
+        checked_at=datetime.now(UTC).isoformat(),
         sklearn_layer=sklearn_items,
         phase3_layer=phase3_items,
     )
@@ -405,9 +405,9 @@ async def reset_online_learner(
 
     Requires admin role.
     """
-    reset_at = datetime.now(timezone.utc).isoformat()
+    reset_at = datetime.now(UTC).isoformat()
     try:
-        from research.pipeline.online_learning import reset_online_learner as _reset  # noqa: PLC0415
+        from research.pipeline.online_learning import reset_online_learner as _reset
 
         removed = _reset(symbol=req.symbol)
     except Exception as exc:

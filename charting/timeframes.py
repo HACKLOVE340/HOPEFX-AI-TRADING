@@ -56,6 +56,6 @@ class TimeframeManager:
         }
         return mapping.get(timeframe, 60)
 
-    def list_timeframes(self) -> List[str]:
+    def list_timeframes(self) -> list[str]:
         """List supported timeframes"""
         return self.supported_timeframes

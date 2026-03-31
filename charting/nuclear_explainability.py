@@ -60,11 +60,11 @@ class ExplainResult:
     """Full explainability output for one nuclear decision."""
 
     summary: str  # one-sentence decision summary
-    feature_scores: List[FeatureScore]  # SHAP-style importance list
-    decision_trace: List[str]  # step-by-step reasoning chain
+    feature_scores: list[FeatureScore]  # SHAP-style importance list
+    decision_trace: list[str]  # step-by-step reasoning chain
     risk_narrative: str  # plain-English risk assessment
     action_advice: str  # what the operator should do now
-    confidence_breakdown: Dict[str, float]  # sub-scores that built confidence
+    confidence_breakdown: dict[str, float]  # sub-scores that built confidence
     severity: int
     action: str
     rl_action_label: str
@@ -73,7 +73,7 @@ class ExplainResult:
 
 # ─── Historical analog database ───────────────────────────────────────────────
 
-_ANALOGS: Dict[int, Tuple[str, str]] = {
+_ANALOGS: dict[int, tuple[str, str]] = {
     10: (
         "2022 Russia-Ukraine nuclear threat (Feb 24)",
         "Gold +12% in 48h, then -8% reversal. VIX +45%. USD safe-haven bid. "
@@ -108,7 +108,7 @@ _ANALOGS: Dict[int, Tuple[str, str]] = {
 
 # ─── Action advice templates ──────────────────────────────────────────────────
 
-_ACTION_ADVICE: Dict[str, str] = {
+_ACTION_ADVICE: dict[str, str] = {
     "nuclear_mode": (
         "IMMEDIATE ACTION REQUIRED: All positions have been liquidated. "
         "Do NOT re-enter until nuclear level drops to 0 and trading is manually resumed. "
@@ -147,8 +147,8 @@ class NuclearExplainabilityEngine:
         action: str,
         rl_action: int,
         rl_loaded: bool,
-        meta: Dict,
-        risk_data: Optional[Dict] = None,
+        meta: dict,
+        risk_data: Optional[dict] = None,
         price: float = 0.0,
     ) -> ExplainResult:
         """
@@ -236,14 +236,14 @@ class NuclearExplainabilityEngine:
     def _build_feature_scores(
         self,
         severity: int,
-        matched_terms: List[Dict],
-        category_scores: Dict[str, float],
+        matched_terms: list[dict],
+        category_scores: dict[str, float],
         base_score: float,
         vol_factor: float,
         sentiment_factor: float,
-        risk_data: Dict,
-    ) -> List[FeatureScore]:
-        scores: List[FeatureScore] = []
+        risk_data: dict,
+    ) -> list[FeatureScore]:
+        scores: list[FeatureScore] = []
         total = max(base_score * vol_factor + sentiment_factor, 0.001)
 
         # Top matched keywords
@@ -326,14 +326,14 @@ class NuclearExplainabilityEngine:
         rl_action: int,
         rl_label: str,
         rl_loaded: bool,
-        matched_terms: List[Dict],
-        category_scores: Dict[str, float],
+        matched_terms: list[dict],
+        category_scores: dict[str, float],
         vol_factor: float,
         sentiment_factor: float,
         confidence: float,
-        risk_data: Dict,
-    ) -> List[str]:
-        trace: List[str] = []
+        risk_data: dict,
+    ) -> list[str]:
+        trace: list[str] = []
 
         # Step 1: WORDMAP scoring
         trace.append(
@@ -417,7 +417,7 @@ class NuclearExplainabilityEngine:
         self,
         severity: int,
         action: str,
-        risk_data: Dict,
+        risk_data: dict,
         price: float,
     ) -> str:
         cvar = risk_data.get("cvar_95", 0.0)
@@ -460,7 +460,7 @@ class NuclearExplainabilityEngine:
 
     # ── Serialise to dict (for JSON broadcast) ────────────────────────────────
 
-    def explain_to_dict(self, *args, **kwargs) -> Dict:
+    def explain_to_dict(self, *args, **kwargs) -> dict:
         result = self.explain(*args, **kwargs)
         return {
             "summary": result.summary,

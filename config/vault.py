@@ -135,7 +135,6 @@ class SecureVault:
     def rotate_key(self, new_password: str) -> None:
         """Rotate encryption key (re-encrypt all data)."""
         # Implementation for key rotation with data migration
-        pass
 
     def secure_delete(self) -> None:
         """Securely wipe vault keys from keyring and memory."""

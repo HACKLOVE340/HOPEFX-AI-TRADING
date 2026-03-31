@@ -18,7 +18,7 @@ Inspired by: TradingView alerts, MT5 alerts, cTrader alerts
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -100,7 +100,7 @@ class AlertCondition:
     period: Optional[int] = None  # Timeframe/period
     operator: str = ">"  # Comparison operator
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "type": self.type.value,
             "threshold": self.threshold,
@@ -120,12 +120,12 @@ class Alert:
     id: str
     name: str
     symbol: str
-    conditions: List[AlertCondition]
+    conditions: list[AlertCondition]
     priority: AlertPriority = AlertPriority.MEDIUM
     status: AlertStatus = AlertStatus.ACTIVE
 
     # Notification settings
-    notify_channels: List[str] = field(default_factory=lambda: ["web"])
+    notify_channels: list[str] = field(default_factory=lambda: ["web"])
     message_template: Optional[str] = None
 
     # Timing settings
@@ -134,7 +134,7 @@ class Alert:
     max_triggers: int = 0  # 0 = unlimited
 
     # State
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_triggered_at: Optional[datetime] = None
     trigger_count: int = 0
     last_value: Optional[float] = None
@@ -142,7 +142,7 @@ class Alert:
 
     # User/ownership
     user_id: Optional[str] = None
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
     def is_active(self) -> bool:
         """Check if alert is currently active."""
@@ -150,7 +150,7 @@ class Alert:
             return False
 
         # Check expiration
-        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
+        if self.expires_at and datetime.now(UTC) > self.expires_at:
             return False
 
         # Check max triggers
@@ -165,9 +165,9 @@ class Alert:
             return False
 
         cooldown_end = self.last_triggered_at + timedelta(minutes=self.cooldown_minutes)
-        return datetime.now(timezone.utc) < cooldown_end
+        return datetime.now(UTC) < cooldown_end
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "name": self.name,
@@ -205,9 +205,9 @@ class AlertTrigger:
     condition_type: str
     message: str
     priority: str
-    notify_channels: List[str]
+    notify_channels: list[str]
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "alert_id": self.alert_id,
             "alert_name": self.alert_name,
@@ -253,7 +253,7 @@ class AlertEngine:
         await alert_engine.start_monitoring()
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize alert engine.
 
@@ -263,18 +263,18 @@ class AlertEngine:
         self.config = config or {}
 
         # Alert storage
-        self._alerts: Dict[str, Alert] = {}
-        self._alerts_by_symbol: Dict[str, List[str]] = {}
+        self._alerts: dict[str, Alert] = {}
+        self._alerts_by_symbol: dict[str, list[str]] = {}
 
         # History
         self._history_size = self.config.get("history_size", 1000)
-        self._trigger_history: List[AlertTrigger] = []
+        self._trigger_history: list[AlertTrigger] = []
 
         # Notification callbacks
-        self._notification_handlers: List[Callable] = []
+        self._notification_handlers: list[Callable] = []
 
         # Indicator cache
-        self._indicator_cache: Dict[str, Dict[str, float]] = {}
+        self._indicator_cache: dict[str, dict[str, float]] = {}
 
         # Thread safety
         self._lock = threading.RLock()
@@ -307,13 +307,13 @@ class AlertEngine:
         indicator: Optional[str] = None,
         period: Optional[int] = None,
         priority: AlertPriority = AlertPriority.MEDIUM,
-        notify_channels: Optional[List[str]] = None,
+        notify_channels: Optional[list[str]] = None,
         message_template: Optional[str] = None,
         expires_in_hours: Optional[int] = None,
         cooldown_minutes: int = 5,
         max_triggers: int = 0,
         user_id: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
     ) -> Alert:
         """
         Create a new alert.
@@ -351,7 +351,7 @@ class AlertEngine:
 
             expires_at = None
             if expires_in_hours:
-                expires_at = datetime.now(timezone.utc) + timedelta(
+                expires_at = datetime.now(UTC) + timedelta(
                     hours=expires_in_hours
                 )
 
@@ -391,7 +391,7 @@ class AlertEngine:
         self,
         name: str,
         symbol: str,
-        conditions: List[AlertCondition],
+        conditions: list[AlertCondition],
         require_all: bool = True,
         **kwargs,
     ) -> Alert:
@@ -490,7 +490,7 @@ class AlertEngine:
         user_id: Optional[str] = None,
         status: Optional[AlertStatus] = None,
         priority: Optional[AlertPriority] = None,
-    ) -> List[Alert]:
+    ) -> list[Alert]:
         """Get alerts with optional filters."""
         with self._lock:
             alerts = list(self._alerts.values())
@@ -506,7 +506,7 @@ class AlertEngine:
 
             return alerts
 
-    def get_active_alerts(self, symbol: Optional[str] = None) -> List[Alert]:
+    def get_active_alerts(self, symbol: Optional[str] = None) -> list[Alert]:
         """Get all active alerts."""
         return [a for a in self.get_alerts(symbol=symbol) if a.is_active()]
 
@@ -515,8 +515,8 @@ class AlertEngine:
     # ================================================================
 
     def check_alerts(
-        self, market_data: Dict[str, Dict[str, Any]]
-    ) -> List[AlertTrigger]:
+        self, market_data: dict[str, dict[str, Any]]
+    ) -> list[AlertTrigger]:
         """
         Check all active alerts against market data.
 
@@ -564,7 +564,7 @@ class AlertEngine:
         return triggered
 
     def _check_alert_conditions(
-        self, alert: Alert, data: Dict[str, Any]
+        self, alert: Alert, data: dict[str, Any]
     ) -> Optional[AlertTrigger]:
         """Check if alert conditions are met."""
         price = data.get("price", 0)
@@ -616,7 +616,7 @@ class AlertEngine:
         condition: AlertCondition,
         price: float,
         volume: float,
-        indicators: Dict[str, float],
+        indicators: dict[str, float],
         spread: float,
         imbalance: float,
         previous_value: Optional[float],
@@ -709,7 +709,7 @@ class AlertEngine:
         self, alert: Alert, trigger_value: float, condition: AlertCondition
     ) -> AlertTrigger:
         """Create an alert trigger record."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Update alert state
         alert.last_triggered_at = now
@@ -794,7 +794,7 @@ class AlertEngine:
         symbol: Optional[str] = None,
         alert_id: Optional[str] = None,
         limit: int = 50,
-    ) -> List[AlertTrigger]:
+    ) -> list[AlertTrigger]:
         """Get trigger history."""
         history = self._trigger_history.copy()
 
@@ -805,7 +805,7 @@ class AlertEngine:
 
         return history[-limit:]
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get alert engine statistics."""
         with self._lock:
             return {
@@ -881,7 +881,7 @@ def create_alert_router(alert_engine: AlertEngine):
         threshold_2: Optional[float] = None
         indicator: Optional[str] = None
         priority: str = "medium"
-        notify_channels: List[str] = ["web"]
+        notify_channels: list[str] = ["web"]
         expires_in_hours: Optional[int] = None
         cooldown_minutes: int = 5
         max_triggers: int = 0

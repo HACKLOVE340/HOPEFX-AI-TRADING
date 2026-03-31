@@ -23,7 +23,7 @@ Covered modules
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -305,7 +305,7 @@ class TestGatekeeperChecks:
         gk._kill_active = False
         gk._paused_until = None
         gk._daily_trades = 0
-        gk._trade_day = datetime.now(timezone.utc).day
+        gk._trade_day = datetime.now(UTC).day
         gk._running = True
         gk._pass_count = 0
         gk._block_count = 0
@@ -358,7 +358,7 @@ class TestGatekeeperChecks:
     def test_news_blackout_blocks(self):
         gk = self._make_gk()
         # Inject a news event happening right now
-        gk._calendar._events = [datetime.now(timezone.utc)]
+        gk._calendar._events = [datetime.now(UTC)]
         failures = gk._run_checks(self._signal())
         assert any(f["reason"] == "news_blackout" for f in failures)
 
@@ -512,7 +512,7 @@ class TestNewsCalendarFeed:
         events = _static_fallback()
         assert isinstance(events, list)
         # All events should be in the future
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for e in events:
             assert e > now
 
@@ -522,7 +522,7 @@ class TestNewsCalendarFeed:
         from datetime import datetime, timezone
 
         feed = NewsCalendarFeed()
-        events = [datetime.now(timezone.utc) + timedelta(hours=i) for i in range(3)]
+        events = [datetime.now(UTC) + timedelta(hours=i) for i in range(3)]
 
         mock_pipe = AsyncMock()
         mock_pipe.__aenter__ = AsyncMock(return_value=mock_pipe)

@@ -17,7 +17,7 @@ This module handles:
 import logging
 import secrets
 import string
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from decimal import Decimal
 from typing import Optional, Dict, List, Any
 from enum import Enum
@@ -105,7 +105,7 @@ class Affiliate:
         code: str,
         level: AffiliateLevel = AffiliateLevel.BRONZE,
         status: AffiliateStatus = AffiliateStatus.PENDING,
-        payment_details: Optional[Dict[str, Any]] = None,
+        payment_details: Optional[dict[str, Any]] = None,
     ):
         self.affiliate_id = affiliate_id
         self.user_id = user_id
@@ -113,7 +113,7 @@ class Affiliate:
         self.level = level
         self.status = status
         self.payment_details = payment_details or {}
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.approved_at: Optional[datetime] = None
         self.total_referrals = 0
         self.total_revenue = Decimal("0.00")
@@ -130,7 +130,7 @@ class Affiliate:
     def approve(self) -> None:
         """Approve affiliate application"""
         self.status = AffiliateStatus.ACTIVE
-        self.approved_at = datetime.now(timezone.utc)
+        self.approved_at = datetime.now(UTC)
         logger.info(f"Affiliate {self.affiliate_id} approved")
 
     def suspend(self) -> None:
@@ -165,7 +165,7 @@ class Affiliate:
             return True
         return False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             "affiliate_id": self.affiliate_id,
@@ -198,9 +198,9 @@ class Referral:
         self.referred_user_id = referred_user_id
         self.status = status
         self.tier = tier
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.converted_at: Optional[datetime] = None
-        self.expires_at = datetime.now(timezone.utc) + timedelta(
+        self.expires_at = datetime.now(UTC) + timedelta(
             days=90
         )  # 90-day cookie
         self.subscription_amount: Optional[Decimal] = None
@@ -208,7 +208,7 @@ class Referral:
 
     def is_expired(self) -> bool:
         """Check if referral tracking has expired"""
-        return datetime.now(timezone.utc) > self.expires_at
+        return datetime.now(UTC) > self.expires_at
 
     def convert(
         self,
@@ -218,7 +218,7 @@ class Referral:
     ) -> Decimal:
         """Mark referral as converted and calculate commission"""
         self.status = ReferralStatus.CONVERTED
-        self.converted_at = datetime.now(timezone.utc)
+        self.converted_at = datetime.now(UTC)
         self.tier = tier
         self.subscription_amount = subscription_amount
         self.commission_amount = subscription_amount * commission_rate
@@ -233,7 +233,7 @@ class Referral:
         """Mark referral commission as paid"""
         self.status = ReferralStatus.PAID
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             "referral_id": self.referral_id,
@@ -271,7 +271,7 @@ class Payout:
         self.amount = amount
         self.payment_method = payment_method
         self.status = status
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.processed_at: Optional[datetime] = None
         self.transaction_id: Optional[str] = None
         self.notes: str = ""
@@ -285,7 +285,7 @@ class Payout:
     def complete(self) -> None:
         """Mark payout as completed"""
         self.status = PayoutStatus.COMPLETED
-        self.processed_at = datetime.now(timezone.utc)
+        self.processed_at = datetime.now(UTC)
         logger.info(f"Payout {self.payout_id} completed")
 
     def fail(self, reason: str) -> None:
@@ -294,7 +294,7 @@ class Payout:
         self.notes = reason
         logger.error(f"Payout {self.payout_id} failed: {reason}")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             "payout_id": self.payout_id,
@@ -318,11 +318,11 @@ class AffiliateManager:
     MIN_PAYOUT = Decimal("100.00")
 
     def __init__(self):
-        self._affiliates: Dict[str, Affiliate] = {}
-        self._referrals: Dict[str, Referral] = {}
-        self._payouts: Dict[str, Payout] = {}
-        self._affiliate_codes: Dict[str, str] = {}  # code -> affiliate_id
-        self._user_affiliates: Dict[str, str] = {}  # user_id -> affiliate_id
+        self._affiliates: dict[str, Affiliate] = {}
+        self._referrals: dict[str, Referral] = {}
+        self._payouts: dict[str, Payout] = {}
+        self._affiliate_codes: dict[str, str] = {}  # code -> affiliate_id
+        self._user_affiliates: dict[str, str] = {}  # user_id -> affiliate_id
 
     def _generate_affiliate_code(self, length: int = 8) -> str:
         """Generate unique affiliate code"""
@@ -335,7 +335,7 @@ class AffiliateManager:
     def create_affiliate(
         self,
         user_id: str,
-        payment_details: Optional[Dict[str, Any]] = None,
+        payment_details: Optional[dict[str, Any]] = None,
         custom_code: Optional[str] = None,
     ) -> Affiliate:
         """Create a new affiliate account"""
@@ -485,7 +485,7 @@ class AffiliateManager:
 
     def get_affiliate_referrals(
         self, affiliate_id: str, status: Optional[ReferralStatus] = None
-    ) -> List[Referral]:
+    ) -> list[Referral]:
         """Get all referrals for an affiliate"""
         referrals = [
             ref for ref in self._referrals.values() if ref.affiliate_id == affiliate_id
@@ -603,7 +603,7 @@ class AffiliateManager:
 
     def get_affiliate_payouts(
         self, affiliate_id: str, status: Optional[PayoutStatus] = None
-    ) -> List[Payout]:
+    ) -> list[Payout]:
         """Get all payouts for an affiliate"""
         payouts = [p for p in self._payouts.values() if p.affiliate_id == affiliate_id]
         if status:
@@ -612,14 +612,14 @@ class AffiliateManager:
 
     def get_all_affiliates(
         self, status: Optional[AffiliateStatus] = None
-    ) -> List[Affiliate]:
+    ) -> list[Affiliate]:
         """Get all affiliates"""
         affiliates = list(self._affiliates.values())
         if status:
             affiliates = [a for a in affiliates if a.status == status]
         return affiliates
 
-    def get_leaderboard(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_leaderboard(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get top affiliates leaderboard"""
         active = self.get_all_affiliates(AffiliateStatus.ACTIVE)
         sorted_affiliates = sorted(
@@ -639,7 +639,7 @@ class AffiliateManager:
             for idx, a in enumerate(sorted_affiliates[:limit])
         ]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get overall affiliate program statistics"""
         affiliates = list(self._affiliates.values())
         referrals = list(self._referrals.values())

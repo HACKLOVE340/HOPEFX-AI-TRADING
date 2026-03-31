@@ -10,7 +10,7 @@ Multi-asset backtesting, portfolio optimization, correlation analysis, risk metr
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import json
@@ -19,7 +19,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Visualization
-import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.pyplot as plt
 
 try:
     import seaborn as sns
@@ -47,7 +47,7 @@ class PortfolioAnalytics:
         self.risk_free_rate = risk_free_rate
         self.returns_data: Optional[pd.DataFrame] = None
         self.weights: Optional[np.ndarray] = None
-        self.assets: List[str] = []
+        self.assets: list[str] = []
 
     def load_returns_data(self, returns_df: pd.DataFrame):
         """Load historical returns data for analysis"""
@@ -101,7 +101,7 @@ class PortfolioAnalytics:
             raise ValueError("No returns data loaded")
         return self.returns_data.cov()
 
-    def portfolio_performance(self, weights: np.ndarray) -> Tuple[float, float, float]:
+    def portfolio_performance(self, weights: np.ndarray) -> tuple[float, float, float]:
         """
         Calculate portfolio return, volatility, and Sharpe ratio
 
@@ -135,7 +135,7 @@ class PortfolioAnalytics:
         max_sharpe: bool = True,
         allow_short: bool = False,
         max_position_size: float = 0.5,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Optimize portfolio weights using mean-variance optimization
 
@@ -308,7 +308,7 @@ class PortfolioAnalytics:
         plt.show()
         return df
 
-    def calculate_risk_metrics(self, weights: np.ndarray) -> Dict[str, float]:
+    def calculate_risk_metrics(self, weights: np.ndarray) -> dict[str, float]:
         """
         Calculate comprehensive risk metrics for portfolio
         """
@@ -400,7 +400,7 @@ class PortfolioAnalytics:
         """Generate comprehensive portfolio report"""
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
         # Calculate metrics
         metrics = self.calculate_risk_metrics(weights)
@@ -410,7 +410,7 @@ class PortfolioAnalytics:
 
         # Create report
         report = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "assets": self.assets,
             "weights": dict(zip(self.assets, weights.round(4), strict=False)),
             "performance": {
@@ -458,10 +458,10 @@ class MultiAssetBacktester:
         self.initial_capital = initial_capital
         self.commission_rate = commission_rate
 
-        self.positions: Dict[str, float] = {}
+        self.positions: dict[str, float] = {}
         self.cash = initial_capital
-        self.equity_history: List[Dict] = []
-        self.trades: List[Dict] = []
+        self.equity_history: list[dict] = []
+        self.trades: list[dict] = []
 
     def run_backtest(
         self,
@@ -593,7 +593,7 @@ class MultiAssetBacktester:
         """Save backtest results"""
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
         # Save equity curve
         equity_df = pd.DataFrame(self.equity_history)
@@ -667,7 +667,7 @@ class RiskAnalyzer:
 
         return result
 
-    def stress_test(self, scenarios: Dict[str, float]) -> pd.DataFrame:
+    def stress_test(self, scenarios: dict[str, float]) -> pd.DataFrame:
         """
         Run stress tests on portfolio
 
@@ -876,7 +876,7 @@ def _pa_optimize(
 ):
     """Optimize portfolio weights (random-search max-Sharpe)."""
     n = len(assets)
-    best = {"sharpe": -float("inf"), "weights": {a: 1 / n for a in assets}}
+    best = {"sharpe": -float("inf"), "weights": dict.fromkeys(assets, 1 / n)}
     rng = np.random.default_rng(42)
     for _ in range(2000):
         w = rng.dirichlet(np.ones(n))

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/journal", tags=["Trade Journal"])
 
 # In-memory fallback
-_entries: Dict[str, dict] = {}
+_entries: dict[str, dict] = {}
 
 _JOURNAL_PREFIX = "journal_entry"
 
@@ -78,22 +78,22 @@ class JournalEntry(BaseModel):
     opened_at: str
     closed_at: Optional[str] = None
     notes: str = ""
-    tags: List[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     emotion: Optional[str] = None
     followed_rules: bool = True
     rule_deviation: Optional[str] = None
     screenshot_url: Optional[str] = None
     created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        default_factory=lambda: datetime.now(UTC).isoformat(),
     )
     updated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        default_factory=lambda: datetime.now(UTC).isoformat(),
     )
 
 
 class JournalUpdate(BaseModel):
     notes: Optional[str] = None
-    tags: Optional[List[str]] = None
+    tags: Optional[list[str]] = None
     emotion: Optional[str] = None
     followed_rules: Optional[bool] = None
     rule_deviation: Optional[str] = None
@@ -116,8 +116,8 @@ class JournalStats(BaseModel):
     avg_pnl: float
     best_trade_pnl: float
     worst_trade_pnl: float
-    by_tag: List[TagStats]
-    by_emotion: List[TagStats]
+    by_tag: list[TagStats]
+    by_emotion: list[TagStats]
     rule_deviation_count: int
 
 
@@ -134,7 +134,7 @@ def _save_entry(entry: dict) -> None:
     db_set(_entry_key(tid), entry, changed_by="journal")
 
 
-def _load_all_entries() -> Dict[str, dict]:
+def _load_all_entries() -> dict[str, dict]:
     """Load all journal entries from DB into the in-memory cache."""
     if _entries:
         return _entries
@@ -149,7 +149,7 @@ def _load_all_entries() -> Dict[str, dict]:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
-@router.get("/trades", response_model=List[JournalEntry])
+@router.get("/trades", response_model=list[JournalEntry])
 async def list_trades(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -157,7 +157,7 @@ async def list_trades(
     emotion: Optional[str] = None,
     symbol: Optional[str] = None,
     user: TokenPayload = Depends(get_current_user),
-) -> List[JournalEntry]:
+) -> list[JournalEntry]:
     entries = list(_load_all_entries().values())
     if tag:
         entries = [e for e in entries if tag in e.get("tags", [])]
@@ -181,7 +181,7 @@ async def create_entry(
     _load_all_entries()
     if not entry.trade_id:
         entry.trade_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     entry.created_at = now
     entry.updated_at = now
     _save_entry(entry.model_dump())
@@ -211,7 +211,7 @@ async def update_entry(
     entry = entries[trade_id]
     for field, value in update.model_dump(exclude_none=True).items():
         entry[field] = value
-    entry["updated_at"] = datetime.now(timezone.utc).isoformat()
+    entry["updated_at"] = datetime.now(UTC).isoformat()
     _save_entry(entry)
     return JournalEntry(**entry)
 
@@ -281,10 +281,10 @@ async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalSt
     )
 
 
-@router.get("/mistakes", response_model=List[JournalEntry])
+@router.get("/mistakes", response_model=list[JournalEntry])
 async def get_mistakes(
     user: TokenPayload = Depends(get_current_user),
-) -> List[JournalEntry]:
+) -> list[JournalEntry]:
     """Trades where the user deviated from their rules."""
     entries = _load_all_entries()
     mistakes = [e for e in entries.values() if not e.get("followed_rules", True)]

@@ -45,7 +45,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, Optional
 
@@ -71,7 +71,7 @@ SUPPORTED_CURRENCIES = {
 
 # Stripe minimum charge amounts in smallest currency unit (cents / kobo / etc.)
 # https://stripe.com/docs/currencies#minimum-and-maximum-charge-amounts
-CURRENCY_MINIMUMS: Dict[str, int] = {
+CURRENCY_MINIMUMS: dict[str, int] = {
     "USD": 50,  # $0.50
     "EUR": 50,  # €0.50
     "GBP": 30,  # £0.30
@@ -108,7 +108,7 @@ ZERO_DECIMAL_CURRENCIES = {
 #            the in-process cache is empty.  These are intentionally stale;
 #            never rely on them for production billing.
 
-_FX_EMERGENCY_FALLBACK: Dict[str, float] = {
+_FX_EMERGENCY_FALLBACK: dict[str, float] = {
     "USD": 1.0,
     "EUR": 0.92,
     "GBP": 0.79,
@@ -122,12 +122,12 @@ _FX_EMERGENCY_FALLBACK: Dict[str, float] = {
 }
 
 # In-process TTL cache — avoids hammering the FX API on every charge
-_FX_CACHE: Dict[str, float] = {}
+_FX_CACHE: dict[str, float] = {}
 _FX_CACHE_TS: float = 0.0
 _FX_CACHE_TTL: int = int(os.getenv("FX_RATE_TTL_SECONDS", "3600"))  # 1 hour default
 
 
-def _fetch_rates_openexchangerates() -> Optional[Dict[str, float]]:
+def _fetch_rates_openexchangerates() -> Optional[dict[str, float]]:
     """Fetch USD-base rates from Open Exchange Rates."""
     app_id = os.getenv("OPEN_EXCHANGE_RATES_APP_ID", "").strip()
     if not app_id:
@@ -140,7 +140,7 @@ def _fetch_rates_openexchangerates() -> Optional[Dict[str, float]]:
         )
         resp.raise_for_status()
         data = resp.json()
-        rates: Dict[str, float] = data.get("rates", {})
+        rates: dict[str, float] = data.get("rates", {})
         rates["USD"] = 1.0
         logger.debug("FX rates refreshed from Open Exchange Rates")
         return rates
@@ -149,7 +149,7 @@ def _fetch_rates_openexchangerates() -> Optional[Dict[str, float]]:
         return None
 
 
-def _fetch_rates_fixer() -> Optional[Dict[str, float]]:
+def _fetch_rates_fixer() -> Optional[dict[str, float]]:
     """Fetch EUR-base rates from Fixer.io and convert to USD base."""
     api_key = os.getenv("FIXER_API_KEY", "").strip()
     if not api_key:
@@ -168,12 +168,12 @@ def _fetch_rates_fixer() -> Optional[Dict[str, float]]:
         if not data.get("success"):
             logger.warning("Fixer.io error: %s", data.get("error"))
             return None
-        eur_rates: Dict[str, float] = data.get("rates", {})
+        eur_rates: dict[str, float] = data.get("rates", {})
         usd_per_eur = eur_rates.get("USD", 1.0)
         if usd_per_eur == 0:
             return None
         # Convert EUR-base to USD-base
-        usd_rates: Dict[str, float] = {
+        usd_rates: dict[str, float] = {
             ccy: rate / usd_per_eur
             for ccy, rate in eur_rates.items()
         }
@@ -185,7 +185,7 @@ def _fetch_rates_fixer() -> Optional[Dict[str, float]]:
         return None
 
 
-def _get_fx_rates() -> Dict[str, float]:
+def _get_fx_rates() -> dict[str, float]:
     """
     Return USD-base FX rates, refreshing from live APIs when the TTL expires.
 
@@ -298,9 +298,9 @@ class PaymentResult:
     error_code: Optional[str] = None
     error_message: Optional[str] = None
     radar_risk_score: Optional[int] = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "success": self.success,
             "payment_intent_id": self.payment_intent_id,
@@ -364,7 +364,7 @@ class StripeProductionClient:
         amount_usd: Decimal,
         currency: str = "USD",
         description: str = "HopeFX subscription",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
         user_ip: Optional[str] = None,
         user_agent: Optional[str] = None,
         idempotency_key: Optional[str] = None,
@@ -435,7 +435,7 @@ class StripeProductionClient:
         try:
             import stripe
 
-            pi_params: Dict[str, Any] = {
+            pi_params: dict[str, Any] = {
                 "amount": amount_cents,
                 "currency": currency.lower(),
                 "customer": customer_id,
@@ -463,7 +463,7 @@ class StripeProductionClient:
                 if user_agent:
                     pi_params["metadata"]["user_agent"] = user_agent[:200]
 
-            kwargs: Dict[str, Any] = {}
+            kwargs: dict[str, Any] = {}
             if idempotency_key:
                 kwargs["idempotency_key"] = idempotency_key
 
@@ -495,7 +495,7 @@ class StripeProductionClient:
 
     def verify_webhook(
         self, payload: bytes, sig_header: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         Verify a Stripe webhook signature and return the event dict.
 
@@ -536,7 +536,7 @@ class StripeProductionClient:
             logger.warning("Stripe webhook verification failed: %s", exc)
             return None
 
-    def handle_webhook_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
+    def handle_webhook_event(self, event: dict[str, Any]) -> dict[str, Any]:
         """
         Dispatch a verified Stripe webhook event to the appropriate handler.
 
@@ -563,7 +563,7 @@ class StripeProductionClient:
         logger.debug("Unhandled Stripe event: %s", event_type)
         return {"handled": False, "event_type": event_type}
 
-    def _on_payment_succeeded(self, data: Dict) -> Dict:
+    def _on_payment_succeeded(self, data: dict) -> dict:
         pi_id = data.get("id", "")
         amount = data.get("amount", 0)
         currency = data.get("currency", "usd").upper()
@@ -577,7 +577,7 @@ class StripeProductionClient:
         )
         return {"handled": True, "action": "payment_succeeded", "pi_id": pi_id}
 
-    def _on_payment_failed(self, data: Dict) -> Dict:
+    def _on_payment_failed(self, data: dict) -> dict:
         pi_id = data.get("id", "")
         error = data.get("last_payment_error", {})
         logger.warning(
@@ -585,7 +585,7 @@ class StripeProductionClient:
         )
         return {"handled": True, "action": "payment_failed", "pi_id": pi_id}
 
-    def _on_subscription_created(self, data: Dict) -> Dict:
+    def _on_subscription_created(self, data: dict) -> dict:
         sub_id = data.get("id", "")
         customer = data.get("customer", "")
         status = data.get("status", "")
@@ -594,31 +594,31 @@ class StripeProductionClient:
         )
         return {"handled": True, "action": "subscription_created", "sub_id": sub_id}
 
-    def _on_subscription_updated(self, data: Dict) -> Dict:
+    def _on_subscription_updated(self, data: dict) -> dict:
         sub_id = data.get("id", "")
         status = data.get("status", "")
         logger.info("Subscription updated: %s status=%s", sub_id, status)
         return {"handled": True, "action": "subscription_updated", "sub_id": sub_id}
 
-    def _on_subscription_deleted(self, data: Dict) -> Dict:
+    def _on_subscription_deleted(self, data: dict) -> dict:
         sub_id = data.get("id", "")
         customer = data.get("customer", "")
         logger.info("Subscription cancelled: %s customer=%s", sub_id, customer)
         return {"handled": True, "action": "subscription_cancelled", "sub_id": sub_id}
 
-    def _on_invoice_paid(self, data: Dict) -> Dict:
+    def _on_invoice_paid(self, data: dict) -> dict:
         inv_id = data.get("id", "")
         amount = data.get("amount_paid", 0)
         currency = data.get("currency", "usd").upper()
         logger.info("Invoice paid: %s amount=%d %s", inv_id, amount, currency)
         return {"handled": True, "action": "invoice_paid", "invoice_id": inv_id}
 
-    def _on_invoice_failed(self, data: Dict) -> Dict:
+    def _on_invoice_failed(self, data: dict) -> dict:
         inv_id = data.get("id", "")
         logger.warning("Invoice payment failed: %s", inv_id)
         return {"handled": True, "action": "invoice_failed", "invoice_id": inv_id}
 
-    def _on_radar_fraud_warning(self, data: Dict) -> Dict:
+    def _on_radar_fraud_warning(self, data: dict) -> dict:
         """Handle Stripe Radar early fraud warning — flag the payment for review."""
         warning_id = data.get("id", "")
         pi_id = data.get("payment_intent", "")
@@ -638,7 +638,7 @@ class StripeProductionClient:
             "fraud_type": fraud_type,
         }
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self) -> dict[str, Any]:
         """Return safe public configuration (no secret keys)."""
         return {
             "mode": self.mode,

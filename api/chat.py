@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +161,7 @@ async def chat_status(user: TokenPayload = Depends(get_current_user)):
     llm_available = False
     llm_error: Optional[str] = None
     try:
-        from brain.llm_agent import LLMAgent  # noqa: F401
+        from brain.llm_agent import LLMAgent
 
         llm_available = True
     except ImportError as exc:
@@ -181,5 +182,5 @@ async def chat_status(user: TokenPayload = Depends(get_current_user)):
         "active_sessions": len(user_sessions),
         "max_history_turns": int(os.getenv("CHAT_MAX_HISTORY_TURNS", "20")),
         "error": llm_error,
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": datetime.now(UTC).isoformat(),
     }

@@ -33,7 +33,7 @@ class CryptoWalletManager:
             "ETH": Decimal("0"),
         }
 
-    def get_balance(self, currency: str) -> Dict:
+    def get_balance(self, currency: str) -> dict:
         """Get wallet balances"""
         return {
             "currency": currency,

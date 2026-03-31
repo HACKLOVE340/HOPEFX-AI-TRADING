@@ -12,7 +12,7 @@ strategy development, and data analysis.
 
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 import logging
 import json
@@ -49,7 +49,7 @@ class NotebookCell:
     execution_count: int = 0
     execution_time: Optional[float] = None
     error_message: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -59,11 +59,11 @@ class ResearchNotebook:
     notebook_id: str
     title: str
     description: str
-    cells: List[NotebookCell]
+    cells: list[NotebookCell]
     created_at: datetime
     updated_at: datetime
     author: str
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     is_template: bool = False
     version: int = 1
 
@@ -82,11 +82,11 @@ class ResearchNotebookEngine:
     - Template library
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[dict[str, Any]] = None):
         """Initialize research notebook engine."""
         self.config = config or {}
-        self.notebooks: Dict[str, ResearchNotebook] = {}
-        self.templates: Dict[str, ResearchNotebook] = {}
+        self.notebooks: dict[str, ResearchNotebook] = {}
+        self.templates: dict[str, ResearchNotebook] = {}
 
         # Initialize built-in templates
         self._create_templates()
@@ -298,15 +298,15 @@ print("Feature engineering functions ready")
         Returns:
             New notebook object
         """
-        notebook_id = f"nb_{len(self.notebooks) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
+        notebook_id = f"nb_{len(self.notebooks) + 1}_{int(datetime.now(UTC).timestamp())}"
 
         notebook = ResearchNotebook(
             notebook_id=notebook_id,
             title=title,
             description=description,
             cells=[],
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             author=author,
             is_template=is_template,
         )
@@ -339,7 +339,7 @@ print("Feature engineering functions ready")
         cell = NotebookCell(cell_id=cell_id, cell_type=cell_type, content=content)
 
         notebook.cells.append(cell)
-        notebook.updated_at = datetime.now(timezone.utc)
+        notebook.updated_at = datetime.now(UTC)
 
         return cell
 
@@ -347,8 +347,8 @@ print("Feature engineering functions ready")
         self,
         notebook_id: str,
         cell_id: str,
-        execution_context: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        execution_context: Optional[dict[str, Any]] = None,
+    ) -> Optional[dict[str, Any]]:
         """
         Execute a code cell.
 
@@ -376,7 +376,7 @@ print("Feature engineering functions ready")
         cell.status = CellStatus.RUNNING
         cell.execution_count += 1
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             # In production, this would use a sandboxed Python executor
@@ -392,7 +392,7 @@ print("Feature engineering functions ready")
             cell.error_message = str(e)
             cell.output = None
 
-        cell.execution_time = (datetime.now(timezone.utc) - start_time).total_seconds()
+        cell.execution_time = (datetime.now(UTC) - start_time).total_seconds()
 
         return {
             "cell_id": cell_id,
@@ -422,13 +422,13 @@ print("Feature engineering functions ready")
 
         try:
             with contextlib.redirect_stdout(stdout_capture):
-                exec(compile(code, "<cell>", "exec"), exec_globals)  # noqa: S102  # nosec B102 - research notebook cell executor; code is user-authored research, not untrusted input
+                exec(compile(code, "<cell>", "exec"), exec_globals)  # nosec B102 - research notebook cell executor; code is user-authored research, not untrusted input
             output = stdout_capture.getvalue()
             return output if output else "Cell executed successfully (no output)"
         except Exception as exc:
             raise RuntimeError(f"Cell execution error: {exc}") from exc
 
-    def execute_all(self, notebook_id: str) -> List[Dict[str, Any]]:
+    def execute_all(self, notebook_id: str) -> list[dict[str, Any]]:
         """Execute all cells in order."""
         notebook = self.notebooks.get(notebook_id)
         if not notebook:
@@ -510,7 +510,7 @@ print("Feature engineering functions ready")
 
         return None
 
-    def get_templates(self) -> List[Dict[str, Any]]:
+    def get_templates(self) -> list[dict[str, Any]]:
         """Get available templates."""
         return [
             {
@@ -525,9 +525,9 @@ print("Feature engineering functions ready")
     def search_notebooks(
         self,
         query: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
         author: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search notebooks."""
         results = []
 
@@ -584,7 +584,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         title: str
         description: str
         author: str = "user"
-        tags: List[str] = []
+        tags: list[str] = []
 
     class AddCellRequest(BaseModel):
         cell_type: str = "code"

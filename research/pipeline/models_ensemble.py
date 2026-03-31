@@ -104,7 +104,7 @@ class SHAPFeatureSelector:
 
     def __init__(self, n_features: int = 50):
         self.n_features = n_features
-        self.selected_features_: Optional[List[str]] = None
+        self.selected_features_: Optional[list[str]] = None
         self.importances_: Optional[pd.Series] = None
 
     def fit(self, model, X: pd.DataFrame, y: np.ndarray) -> SHAPFeatureSelector:
@@ -236,7 +236,7 @@ def walk_forward_eval(
     X: np.ndarray,
     y: np.ndarray,
     n_splits: int = 5,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Time-series cross-validation.  Returns mean AUC and log-loss.
     """
@@ -288,7 +288,7 @@ class EnsemblePredictor:
         self.scaler = StandardScaler()
         self.selector = SHAPFeatureSelector(n_features=n_features)
         self.stack_: Optional[StackingClassifier] = None
-        self._feature_cols: Optional[List[str]] = None
+        self._feature_cols: Optional[list[str]] = None
 
     def _build_base_estimators(self, X: np.ndarray, y: np.ndarray) -> list:
         estimators = []
@@ -413,10 +413,10 @@ class EnsemblePredictor:
     def predict(self, X: pd.DataFrame, threshold: float = 0.5) -> np.ndarray:
         return (self.predict_proba(X) >= threshold).astype(int)
 
-    def evaluate(self, X: pd.DataFrame, y: np.ndarray) -> Dict[str, float]:
+    def evaluate(self, X: pd.DataFrame, y: np.ndarray) -> dict[str, float]:
         prob = self.predict_proba(X)
         preds = (prob >= 0.5).astype(int)
-        result: Dict[str, float] = {
+        result: dict[str, float] = {
             "auc": float(roc_auc_score(y, prob)),
             "logloss": float(log_loss(y, prob)),
             "accuracy": float(accuracy_score(y, preds)),
@@ -439,7 +439,7 @@ class EnsemblePredictor:
             obj = joblib.load(path)
         except Exception:
             with open(path, "rb") as f:
-                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback  # noqa: S301
+                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
             raise TypeError(f"Expected EnsemblePredictor, got {type(obj)}")
         logger.info("Ensemble loaded ← %s", path)
@@ -575,7 +575,7 @@ class DeepEnsembleStore:
                         self._scaler = joblib.load(self.scaler_path)
                     except Exception:
                         with open(self.scaler_path, "rb") as f:
-                            self._scaler = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback  # noqa: S301
+                            self._scaler = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
                     logger.debug(
                         "DeepEnsembleStore: scaler loaded ← %s", self.scaler_path
                     )
@@ -754,7 +754,7 @@ class DeepEnsembleStore:
     def p_value(self) -> float:
         return self._p_value
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         return {
             "active": self._active,
             "model_path": str(self.model_path),

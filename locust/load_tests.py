@@ -61,7 +61,7 @@ _SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
 _SIGNAL_SYM = os.getenv("SIGNAL_SYMBOL", "XAUUSD")
 
 
-def _auth_headers() -> Dict[str, str]:
+def _auth_headers() -> dict[str, str]:
     h = {"Content-Type": "application/json", "Accept": "application/json"}
     if _AUTH_TOKEN:
         h["Authorization"] = f"Bearer {_AUTH_TOKEN}"
@@ -103,7 +103,7 @@ class PublicUser(HttpUser):
 
     @task(4)
     def market_data(self):
-        symbol = random.choice(_SYMBOLS)  # nosec B311 - load test symbol selection, not cryptographic  # noqa: S311
+        symbol = random.choice(_SYMBOLS)  # nosec B311 - load test symbol selection, not cryptographic
         with self.client.get(
             f"/api/market-data/{symbol}",
             catch_response=True,
@@ -243,9 +243,9 @@ class AuthenticatedTrader(HttpUser):
 
     @task(2)
     def place_order(self):
-        symbol = random.choice(_SYMBOLS)  # nosec B311 - load test symbol selection, not cryptographic  # noqa: S311
-        side = random.choice(["buy", "sell"])  # nosec B311 - load test side selection, not cryptographic  # noqa: S311
-        qty = round(random.uniform(0.01, 0.1), 2)  # nosec B311 - load test quantity, not cryptographic  # noqa: S311
+        symbol = random.choice(_SYMBOLS)  # nosec B311 - load test symbol selection, not cryptographic
+        side = random.choice(["buy", "sell"])  # nosec B311 - load test side selection, not cryptographic
+        qty = round(random.uniform(0.01, 0.1), 2)  # nosec B311 - load test quantity, not cryptographic
 
         with self.client.post(
             "/api/trading/order",

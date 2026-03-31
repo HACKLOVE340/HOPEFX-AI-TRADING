@@ -12,7 +12,7 @@ import logging
 import uuid
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from collections import defaultdict
 import asyncio
@@ -66,10 +66,10 @@ class DomainEvent:
     aggregate_type: str  # e.g., "trade", "order", "position"
     timestamp: datetime
     version: int
-    payload: Dict[str, Any]
-    metadata: Dict[str, Any]
+    payload: dict[str, Any]
+    metadata: dict[str, Any]
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "event_id": self.event_id,
             "event_type": self.event_type.value,
@@ -87,15 +87,15 @@ class DomainEvent:
         event_type: EventType,
         aggregate_id: str,
         aggregate_type: str,
-        payload: Dict[str, Any],
-        metadata: Optional[Dict] = None,
+        payload: dict[str, Any],
+        metadata: Optional[dict] = None,
     ) -> "DomainEvent":
         return cls(
             event_id=str(uuid.uuid4()),
             event_type=event_type,
             aggregate_id=aggregate_id,
             aggregate_type=aggregate_type,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             version=1,  # Would be incremented for aggregate versioning
             payload=payload,
             metadata=metadata or {},
@@ -114,14 +114,14 @@ class EventStore:
     """
 
     def __init__(self):
-        self._subscribers: Dict[EventType, List[Callable]] = defaultdict(list)
-        self._event_buffer: List[DomainEvent] = []
+        self._subscribers: dict[EventType, list[Callable]] = defaultdict(list)
+        self._event_buffer: list[DomainEvent] = []
         self._buffer_lock = asyncio.Lock()
         self._flush_task: Optional[asyncio.Task] = None
         self._running = False
 
         # In-memory store for quick access (limited size)
-        self._recent_events: List[DomainEvent] = []
+        self._recent_events: list[DomainEvent] = []
         self._max_memory_events = 10000
 
     async def start(self):
@@ -186,11 +186,11 @@ class EventStore:
         self,
         aggregate_id: Optional[str] = None,
         aggregate_type: Optional[str] = None,
-        event_types: Optional[List[EventType]] = None,
+        event_types: Optional[list[EventType]] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         limit: int = 100,
-    ) -> List[DomainEvent]:
+    ) -> list[DomainEvent]:
         """
         Query events with filters
         """
@@ -269,7 +269,7 @@ class EventStore:
         else:
             logger.debug(f"Would flush {len(events_to_flush)} events (no database)")
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get event store statistics"""
         return {
             "buffered_events": len(self._event_buffer),
@@ -296,8 +296,8 @@ async def publish_event(
     event_type: EventType,
     aggregate_id: str,
     aggregate_type: str,
-    payload: Dict[str, Any],
-    metadata: Optional[Dict] = None,
+    payload: dict[str, Any],
+    metadata: Optional[dict] = None,
 ):
     """Convenience function to publish event"""
     event = DomainEvent.create(
@@ -313,7 +313,7 @@ async def publish_event(
 
 # ── Typed event bus integration ───────────────────────────────────────────────
 # Re-export the typed event system so callers can import from one place.
-from events.typed_events import (  # noqa: E402
+from events.typed_events import (
     EventEnvelope,
     PriceTickEvent,
     SignalEvent,

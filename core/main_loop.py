@@ -40,7 +40,7 @@ import os
 import pathlib
 import signal
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -86,7 +86,7 @@ class MainLoop:
     async def run(self) -> None:
         """Start all sub-systems and block until shutdown."""
         load_dotenv(override=False)
-        self._start_time = datetime.now(timezone.utc)
+        self._start_time = datetime.now(UTC)
 
         # Register OS signal handlers
         loop = asyncio.get_running_loop()
@@ -157,7 +157,7 @@ class MainLoop:
         ]:
             try:
                 await coro
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning("MainLoop: %s stop error: %s", name, exc)
 
         await self._checkpoint()
@@ -185,12 +185,12 @@ class MainLoop:
     async def _checkpoint(self) -> None:
         """Write final state snapshot to disk."""
         uptime_s = (
-            (datetime.now(timezone.utc) - self._start_time).total_seconds()
+            (datetime.now(UTC) - self._start_time).total_seconds()
             if self._start_time
             else 0
         )
         state = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "uptime_s": round(uptime_s, 1),
             "ingest_ticks": self._ingest.tick_count,
             "signals": self._strategy.metrics().get("signal_count", 0),

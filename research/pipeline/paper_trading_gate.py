@@ -52,7 +52,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -85,13 +85,13 @@ class PaperTradingGate:
         self._state_path = Path(
             state_path or os.getenv("PAPER_GATE_STATE_PATH", _DEFAULT_STATE_PATH)
         )
-        self._state: Dict = self._load_state()
+        self._state: dict = self._load_state()
 
     # ── State persistence ─────────────────────────────────────────────────────
 
-    def _load_state(self) -> Dict:
+    def _load_state(self) -> dict:
         """Load state from disk, falling back to env vars if file missing."""
-        default: Dict = {
+        default: dict = {
             "run_start_utc": os.getenv("OANDA_PAPER_RUN_START_UTC", ""),
             "fill_count": int(os.getenv("OANDA_PAPER_FILL_COUNT", "0")),
             "fills": [],  # list of {ts, pnl} dicts
@@ -133,9 +133,9 @@ class PaperTradingGate:
         ts : UTC datetime. Defaults to now.
         """
         if ts is None:
-            ts = datetime.now(timezone.utc)
+            ts = datetime.now(UTC)
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.replace(tzinfo=UTC)
         self._state["run_start_utc"] = ts.isoformat()
         self._save_state()
         logger.info("PaperTradingGate: run start set to %s", ts.isoformat())
@@ -149,7 +149,7 @@ class PaperTradingGate:
         try:
             dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
             return dt
         except ValueError:
             return None
@@ -160,7 +160,7 @@ class PaperTradingGate:
         start = self.run_start
         if start is None:
             return 0
-        return (datetime.now(timezone.utc) - start).days
+        return (datetime.now(UTC) - start).days
 
     # ── Fill tracking ─────────────────────────────────────────────────────────
 
@@ -179,7 +179,7 @@ class PaperTradingGate:
         self._state["fill_count"] = self._state.get("fill_count", 0) + 1
         self._state.setdefault("fills", []).append(
             {
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
                 "pnl": float(pnl),
             }
         )
@@ -216,7 +216,7 @@ class PaperTradingGate:
 
     # ── Gate checks ───────────────────────────────────────────────────────────
 
-    def phase2_ready(self) -> Tuple[bool, str]:
+    def phase2_ready(self) -> tuple[bool, str]:
         """
         Check whether Phase 2 (anomaly weighting) gate is satisfied.
 
@@ -248,7 +248,7 @@ class PaperTradingGate:
 
         return True, (f"Phase 2 gate passed: {self.elapsed_days} days elapsed.")
 
-    def phase3_ready(self) -> Tuple[bool, str]:
+    def phase3_ready(self) -> tuple[bool, str]:
         """
         Check whether Phase 3 (online learning) gate is satisfied.
 
@@ -278,7 +278,7 @@ class PaperTradingGate:
             f"{self.fill_count} fills."
         )
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         """Return a full status dict for health-check endpoints."""
         p2_ok, p2_reason = self.phase2_ready()
         p3_ok, p3_reason = self.phase3_ready()

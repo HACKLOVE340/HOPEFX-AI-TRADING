@@ -13,7 +13,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from enum import Enum, auto
 from typing import Callable, Dict, List, Optional, Set
@@ -57,14 +57,14 @@ class Order:
     status: OrderStatus = OrderStatus.CREATED
     filled_quantity: Decimal = Decimal("0")
     avg_fill_price: Optional[Decimal] = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: Optional[datetime] = None
     parent_order_id: Optional[str] = None  # For OCO, bracket orders
-    child_orders: List[str] = field(default_factory=list)
+    child_orders: list[str] = field(default_factory=list)
     strategy_id: str = "unknown"
-    tags: List[str] = field(default_factory=list)
-    metadata: Dict = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
 
     @property
     def remaining_quantity(self) -> Decimal:
@@ -125,12 +125,12 @@ class OrderLifecycleManager:
     }
 
     def __init__(self, event_bus=None, broker=None):
-        self.orders: Dict[str, Order] = {}
-        self.active_orders: Set[str] = set()
-        self.order_history: List[Dict] = []
+        self.orders: dict[str, Order] = {}
+        self.active_orders: set[str] = set()
+        self.order_history: list[dict] = []
         self.event_bus = event_bus
         self._broker = broker  # BrokerConnector instance; None = paper/backtest mode
-        self._callbacks: Dict[OrderStatus, List[Callable]] = {
+        self._callbacks: dict[OrderStatus, list[Callable]] = {
             status: [] for status in OrderStatus
         }
 
@@ -238,7 +238,7 @@ class OrderLifecycleManager:
             total_value = (prev_filled * order.avg_fill_price) + (fill_qty * fill_price)
             order.avg_fill_price = total_value / order.filled_quantity
 
-        order.updated_at = datetime.now(timezone.utc)
+        order.updated_at = datetime.now(UTC)
 
         # Determine new status
         if order.filled_quantity >= order.quantity:
@@ -264,7 +264,7 @@ class OrderLifecycleManager:
 
     def expire_orders(self):
         """Expire GTD and DAY orders"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for order_id in list(self.active_orders):
             order = self.orders[order_id]
             if order.expires_at and now > order.expires_at:
@@ -281,11 +281,11 @@ class OrderLifecycleManager:
 
         # Execute transition
         order.status = new_status
-        order.updated_at = datetime.now(timezone.utc)
+        order.updated_at = datetime.now(UTC)
 
         # Log
         event = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "order_id": order.id,
             "from_status": current.name,
             "to_status": new_status.name,
@@ -319,7 +319,7 @@ class OrderLifecycleManager:
         logger.info("Order %s: %s -> %s", order.id[:8], current.name, new_status.name)
         return True
 
-    def get_order_book(self, symbol: str) -> Dict:
+    def get_order_book(self, symbol: str) -> dict:
         """Get current order book for symbol"""
         buys = []
         sells = []
@@ -345,7 +345,7 @@ class OrderLifecycleManager:
             "symbol": symbol,
             "bids": sorted(buys, key=lambda x: x["price"] or 0, reverse=True),
             "asks": sorted(sells, key=lambda x: x["price"] or float("inf")),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
 
@@ -357,7 +357,7 @@ class ComplexOrderManager:
     def __init__(self, oms: OrderLifecycleManager):
         self.oms = oms
 
-    def create_oco(self, orders: List[Order]) -> str:
+    def create_oco(self, orders: list[Order]) -> str:
         """
         One-Cancels-Other order.
         When one fills, others are automatically cancelled.

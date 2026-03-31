@@ -63,6 +63,7 @@ from .geopolitical_risk import (
     create_self_hosted_setup,
     get_custom_layer_config,
 )
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +212,7 @@ def create_news_router():
             from datetime import datetime, timezone, timedelta
 
             calendar = EconomicCalendar()
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             cutoff = now + timedelta(hours=hours_ahead)
             events = calendar.get_upcoming_events()
             upcoming = []
@@ -219,7 +220,7 @@ def create_news_router():
                 try:
                     evt_time = evt.scheduled_time
                     if evt_time.tzinfo is None:
-                        evt_time = evt_time.replace(tzinfo=timezone.utc)
+                        evt_time = evt_time.replace(tzinfo=UTC)
                     if now <= evt_time <= cutoff:
                         upcoming.append(
                             {

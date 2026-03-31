@@ -38,7 +38,7 @@ import logging
 import math
 import random
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -59,10 +59,10 @@ def set_state(state) -> None:
 
 
 # ── In-memory stores ──────────────────────────────────────────────────────────
-_ab_tests: Dict[str, dict] = {}
-_shared_results: Dict[str, dict] = {}  # slug → backtest result
-_indicators: Dict[str, dict] = {}
-_mc_cache: Dict[str, dict] = {}  # run_id → monte carlo result
+_ab_tests: dict[str, dict] = {}
+_shared_results: dict[str, dict] = {}  # slug → backtest result
+_indicators: dict[str, dict] = {}
+_mc_cache: dict[str, dict] = {}  # run_id → monte carlo result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ def _run_real_backtest(
     Raises ValueError when the strategy is not registered or data is unavailable.
     """
     try:
-        from backtesting.engine_config import BacktestEngine  # noqa: PLC0415
+        from backtesting.engine_config import BacktestEngine
 
         engine = BacktestEngine()
         result = engine.run(
@@ -155,7 +155,7 @@ async def start_ab_test(
         "symbol": req.symbol,
         "duration_days": req.duration_days,
         "status": "completed",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "strategy_a": result_a,
         "strategy_b": result_b,
         "winner": winner,
@@ -191,7 +191,7 @@ async def share_backtest(run_id: str, user: TokenPayload = Depends(get_current_u
     Generate a public share URL for a completed backtest result.
     Returns 404 when the run_id does not correspond to a real backtest.
     """
-    from api.backtesting import _results  # noqa: PLC0415
+    from api.backtesting import _results
 
     result = _results.get(run_id)
     if not result:
@@ -204,7 +204,7 @@ async def share_backtest(run_id: str, user: TokenPayload = Depends(get_current_u
     _shared_results[slug] = {
         **result,
         "shared_by": user.sub,
-        "shared_at": datetime.now(timezone.utc).isoformat(),
+        "shared_at": datetime.now(UTC).isoformat(),
         "slug": slug,
     }
     base_url = "https://hopefx.io"
@@ -284,7 +284,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
 
     # Paper broker fallback
     try:
-        from app import app_state  # noqa: PLC0415
+        from app import app_state
 
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_market_data"):
@@ -309,7 +309,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     )
 
 
-def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
+def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     """
     Safe formula evaluator using AST-based parsing — no eval() or exec().
 
@@ -409,15 +409,15 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
     lows = ohlcv["low"]
     volumes = ohlcv["volume"]
 
-    def sma(data: List[float], n: int) -> List[float]:
-        result: List = [None] * (n - 1)
+    def sma(data: list[float], n: int) -> list[float]:
+        result: list = [None] * (n - 1)
         for i in range(n - 1, len(data)):
             result.append(sum(data[i - n + 1 : i + 1]) / n)
         return result
 
-    def ema(data: List[float], n: int) -> List[float]:
+    def ema(data: list[float], n: int) -> list[float]:
         k = 2 / (n + 1)
-        result: List = [None] * (n - 1)
+        result: list = [None] * (n - 1)
         ema_val = sum(data[:n]) / n
         result.append(ema_val)
         for price in data[n:]:
@@ -425,8 +425,8 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> List[dict]:
             result.append(ema_val)
         return result
 
-    def rsi(data: List[float], n: int = 14) -> List[float]:
-        result: List = [None] * n
+    def rsi(data: list[float], n: int = 14) -> list[float]:
+        result: list = [None] * n
         gains, losses = [], []
         for i in range(1, len(data)):
             diff = data[i] - data[i - 1]
@@ -558,7 +558,7 @@ async def save_indicator(
         "formula": req.formula,
         "symbol": req.symbol,
         "color": req.color,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     return _indicators[ind_id]
 
@@ -598,7 +598,7 @@ async def get_correlation(
     sym_list = [s.strip() for s in symbols.split(",")]
 
     # ── Collect real return series ────────────────────────────────────────────
-    series: Dict[str, List[float]] = {}
+    series: dict[str, list[float]] = {}
 
     # 1. Price engine
     pe = getattr(app_state, "price_engine", None) if app_state else None
@@ -681,7 +681,7 @@ async def get_correlation(
         series[sym] = series[sym][-min_len:]
 
     # ── Compute correlation matrix ────────────────────────────────────────────
-    def corr(a: List[float], b: List[float]) -> float:
+    def corr(a: list[float], b: list[float]) -> float:
         n = len(a)
         ma, mb = sum(a) / n, sum(b) / n
         num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
@@ -714,7 +714,7 @@ async def get_correlation(
         "window": min_len,
         "matrix": matrix,
         "insights": insights[:5],
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -735,8 +735,8 @@ async def get_cot_gold():
 
         # CFTC public data API — gold futures (COMEX, code 088691)
         url = "https://publicreporting.cftc.gov/api/explore/dataset/com_disagg_txt_2024/records/?where=cftc_commodity_code%3D%22088691%22&limit=1&sort=-report_date_as_yyyy_mm_dd"
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})  # noqa: S310
-        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - hardcoded https:// CFTC public API URL  # noqa: S310
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 - hardcoded https:// CFTC public API URL
             data = json.loads(resp.read())
             if data.get("records"):
                 rec = data["records"][0]["record"]["fields"]
@@ -788,7 +788,7 @@ def _run_monte_carlo(
     simulations: int,
 ) -> dict:
     # Use OS entropy so each run produces independent results
-    rng = random.Random()  # nosec B311 - Monte Carlo simulation, not cryptographic use  # noqa: S311
+    rng = random.Random()  # nosec B311 - Monte Carlo simulation, not cryptographic use
     final_equities = []
     ruin_count = 0
     ruin_threshold = initial_capital * 0.5  # 50% drawdown = ruin
@@ -850,7 +850,7 @@ async def run_monte_carlo(
     Run Monte Carlo simulation on a completed backtest result.
     Returns 404 when the run_id does not correspond to a real backtest.
     """
-    from api.backtesting import _results  # noqa: PLC0415
+    from api.backtesting import _results
 
     result = _results.get(run_id)
     if not result:
@@ -878,7 +878,7 @@ async def run_monte_carlo(
         win_rate, avg_win, avg_loss, n_trades, capital, req.simulations
     )
     mc["run_id"] = run_id
-    mc["computed_at"] = datetime.now(timezone.utc).isoformat()
+    mc["computed_at"] = datetime.now(UTC).isoformat()
     _mc_cache[run_id] = mc
     return mc
 

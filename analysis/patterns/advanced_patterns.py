@@ -69,9 +69,9 @@ class PatternSignal:
     formation_bars: int
     risk_reward_ratio: float
     timestamp: pd.Timestamp
-    additional_data: Dict[str, Any] = field(default_factory=dict)
+    additional_data: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             "pattern_type": self.pattern_type.value,
@@ -103,7 +103,7 @@ class AdvancedPatternDetector:
 
     def detect_all_patterns(
         self, df: pd.DataFrame, min_confidence: float = 0.7
-    ) -> List[PatternSignal]:
+    ) -> list[PatternSignal]:
         """
         Detect all patterns in price data
 
@@ -152,7 +152,7 @@ class AdvancedPatternDetector:
 
     def _detect_head_shoulders(
         self, high: np.ndarray, low: np.ndarray, close: np.ndarray, index: pd.Index
-    ) -> List[PatternSignal]:
+    ) -> list[PatternSignal]:
         """Detect Head & Shoulders patterns"""
         patterns = []
 
@@ -235,7 +235,7 @@ class AdvancedPatternDetector:
 
     def _detect_double_patterns(
         self, high: np.ndarray, low: np.ndarray, close: np.ndarray, index: pd.Index
-    ) -> List[PatternSignal]:
+    ) -> list[PatternSignal]:
         """Detect Double Top/Bottom patterns"""
         patterns = []
 
@@ -339,7 +339,7 @@ class AdvancedPatternDetector:
 
     def _detect_triangles(
         self, high: np.ndarray, low: np.ndarray, close: np.ndarray, index: pd.Index
-    ) -> List[PatternSignal]:
+    ) -> list[PatternSignal]:
         """Detect triangle patterns (ascending, descending, symmetrical)"""
         patterns = []
 
@@ -443,7 +443,7 @@ class AdvancedPatternDetector:
 
     def _detect_wedges(
         self, high: np.ndarray, low: np.ndarray, close: np.ndarray, index: pd.Index
-    ) -> List[PatternSignal]:
+    ) -> list[PatternSignal]:
         """Detect wedge patterns (rising, falling)"""
         patterns = []
 
@@ -520,7 +520,7 @@ class AdvancedPatternDetector:
 
     def _detect_flags_pennants(
         self, high: np.ndarray, low: np.ndarray, close: np.ndarray, index: pd.Index
-    ) -> List[PatternSignal]:
+    ) -> list[PatternSignal]:
         """Detect flag and pennant patterns"""
         patterns = []
 
@@ -603,7 +603,7 @@ class AdvancedPatternDetector:
 
     def _detect_rectangles(
         self, high: np.ndarray, low: np.ndarray, close: np.ndarray, index: pd.Index
-    ) -> List[PatternSignal]:
+    ) -> list[PatternSignal]:
         """Detect rectangle patterns"""
         patterns = []
 
@@ -667,7 +667,7 @@ class AdvancedPatternDetector:
 
     def _detect_harmonic_patterns(
         self, high: np.ndarray, low: np.ndarray, close: np.ndarray, index: pd.Index
-    ) -> List[PatternSignal]:
+    ) -> list[PatternSignal]:
         """
         Detect Harmonic patterns (Gartley, Butterfly, Crab, Bat)
         Uses Fibonacci ratios
@@ -834,7 +834,7 @@ class AdvancedPatternDetector:
 
     def _detect_support_resistance(
         self, high: np.ndarray, low: np.ndarray, close: np.ndarray, index: pd.Index
-    ) -> List[PatternSignal]:
+    ) -> list[PatternSignal]:
         """Identify key support and resistance levels"""
         patterns = []
 

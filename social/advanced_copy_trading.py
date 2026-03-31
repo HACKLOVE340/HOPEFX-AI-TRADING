@@ -13,7 +13,7 @@ Advanced Copy Trading Engine
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional
 import uuid
 from enum import Enum
@@ -130,11 +130,11 @@ class CopyTradingEngine:
     """Enterprise copy trading system"""
 
     def __init__(self):
-        self.traders: Dict[str, TraderProfile] = {}
-        self.followers: Dict[str, FollowerConfig] = {}
-        self.active_trades: Dict[str, List[ExecutedTrade]] = {}
-        self.trade_history: List[ExecutedTrade] = []
-        self.signals_queue: List[SignalMessage] = []
+        self.traders: dict[str, TraderProfile] = {}
+        self.followers: dict[str, FollowerConfig] = {}
+        self.active_trades: dict[str, list[ExecutedTrade]] = {}
+        self.trade_history: list[ExecutedTrade] = []
+        self.signals_queue: list[SignalMessage] = []
 
     def register_trader(
         self,
@@ -163,7 +163,7 @@ class CopyTradingEngine:
         """Verify trader identity"""
         if trader_id in self.traders:
             self.traders[trader_id].verified = True
-            self.traders[trader_id].verification_date = datetime.now(timezone.utc)
+            self.traders[trader_id].verification_date = datetime.now(UTC)
             return True
         return False
 
@@ -202,7 +202,7 @@ class CopyTradingEngine:
         self._broadcast_signal(signal)
         return True
 
-    def _broadcast_signal(self, signal: SignalMessage) -> Dict[str, Dict]:
+    def _broadcast_signal(self, signal: SignalMessage) -> dict[str, dict]:
         """Broadcast signal to all followers"""
         results = {}
 
@@ -238,7 +238,7 @@ class CopyTradingEngine:
                     stop_loss=signal.stop_loss,
                     take_profit=signal.take_profit,
                     status=TradeStatus.OPEN,
-                    entry_time=datetime.now(timezone.utc),
+                    entry_time=datetime.now(UTC),
                 )
 
                 self.active_trades[follower.follower_id].append(trade)
@@ -314,7 +314,7 @@ class CopyTradingEngine:
                 trade.pnl_percent = pnl_percent
                 trade.commission = commission
                 trade.status = TradeStatus.CLOSED
-                trade.exit_time = datetime.now(timezone.utc)
+                trade.exit_time = datetime.now(UTC)
 
                 # Move to history
                 self.trade_history.append(trade)
@@ -347,7 +347,7 @@ class CopyTradingEngine:
 
         return max(0, (peak_equity - current_equity) / peak_equity)
 
-    def get_trader_performance(self, trader_id: str) -> Dict:
+    def get_trader_performance(self, trader_id: str) -> dict:
         """Get trader performance metrics"""
         trader = self.traders.get(trader_id)
 
@@ -380,7 +380,7 @@ class CopyTradingEngine:
             else 0,
         }
 
-    def get_follower_performance(self, follower_id: str) -> Dict:
+    def get_follower_performance(self, follower_id: str) -> dict:
         """Get follower performance metrics"""
         follower = self.followers.get(follower_id)
 

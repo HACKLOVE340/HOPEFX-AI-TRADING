@@ -32,7 +32,7 @@ import ast
 import pathlib
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import List
 
 # Ensure repo root is on sys.path so data_layer imports work when the
@@ -48,9 +48,9 @@ YELLOW = "\033[93m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
 
-passed: List[str] = []
-failed: List[str] = []
-warned: List[str] = []
+passed: list[str] = []
+failed: list[str] = []
+warned: list[str] = []
 
 
 def ok(msg: str) -> None:
@@ -114,7 +114,7 @@ for path in sorted(pathlib.Path(".").rglob("*.py")):
         continue
     try:
         src = path.read_text()
-    except Exception:  # nosec B112 - skip unreadable file in audit scan  # noqa: S112
+    except Exception:  # nosec B112 - skip unreadable file in audit scan
         continue
     for line in src.splitlines():
         stripped = line.strip()
@@ -514,7 +514,7 @@ for path in sorted(pathlib.Path(".").rglob("*.py")):
         continue
     try:
         src = path.read_text()
-    except Exception:  # nosec B112 - skip unreadable file in audit scan  # noqa: S112
+    except Exception:  # nosec B112 - skip unreadable file in audit scan
         continue
     for i, line in enumerate(src.splitlines(), 1):
         if re.match(r"\s*except\s*:\s*pass\s*$", line):
@@ -545,7 +545,7 @@ for path in sorted(pathlib.Path(".").rglob("*.py")):
         continue
     try:
         src = path.read_text()
-    except Exception:  # nosec B112 - skip unreadable file in audit scan  # noqa: S112
+    except Exception:  # nosec B112 - skip unreadable file in audit scan
         continue
     for i, line in enumerate(src.splitlines(), 1):
         stripped = line.strip()
@@ -645,7 +645,7 @@ try:
     # Create two articles with the same URL (simulating Finnhub + FMP duplicate)
     from data_layer.types import NewsArticle, NewsSource
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     art1 = NewsArticle(
         article_id="a1",
         headline="Gold surges on Fed pivot fears",
@@ -711,7 +711,7 @@ try:
 
     tick = GoldTick(
         symbol="XAU_USD",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         bid=2350.0,
         ask=2350.5,
         mid=2350.25,
@@ -752,7 +752,7 @@ try:
     ticks = [
         GoldTick(
             symbol="XAU_USD",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             bid=2350.0 + i * 0.1,
             ask=2350.5 + i * 0.1,
             mid=2350.25 + i * 0.1,

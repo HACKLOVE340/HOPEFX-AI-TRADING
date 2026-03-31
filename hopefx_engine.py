@@ -212,7 +212,7 @@ class HopeFXEngine:
         self._dl_orchestrator = None
 
         # Rolling OHLCV window per symbol
-        self._ohlcv_window: Dict[str, deque] = {}
+        self._ohlcv_window: dict[str, deque] = {}
         self._min_bars = int(_optional("PREDICTOR_MIN_BARS", "100"))
 
         self._running = False
@@ -222,7 +222,7 @@ class HopeFXEngine:
         # News events are pushed here by _on_news_event() and drained by the
         # nuclear supervisor via register_news_callback() or poll mode.
         self._news_queue: asyncio.Queue = asyncio.Queue(maxsize=500)
-        self._news_callbacks: List = []  # coroutine functions registered externally
+        self._news_callbacks: list = []  # coroutine functions registered externally
 
     # ── nuclear supervisor hooks ──────────────────────────────────────────────
 
@@ -597,7 +597,7 @@ class HopeFXEngine:
                         _real_ask = dl_tick.ask
                         spread = dl_tick.spread
                         mid = dl_tick.mid
-            except Exception:  # nosec B110 - intentional fallback to NuclearStreamer price  # noqa: S110
+            except Exception:  # nosec B110 - intentional fallback to NuclearStreamer price
                 pass  # fall back to NuclearStreamer price
 
         # Build OHLCV bar: use spread to give high/low realistic range.
@@ -897,7 +897,7 @@ class HopeFXEngine:
 
     # ── status / snapshot helpers ─────────────────────────────────────────────
 
-    def _get_status(self) -> Dict:
+    def _get_status(self) -> dict:
         tl_stats = self._trade_logger.stats if self._trade_logger else {}
         brain_stats = self._brain.stats if self._brain else {}
         last_decision = (
@@ -921,7 +921,7 @@ class HopeFXEngine:
             "brain_signal_rate": brain_stats.get("signal_rate", 0),
         }
 
-    def _get_equity_for_snapshot(self) -> Dict:
+    def _get_equity_for_snapshot(self) -> dict:
         tl = self._trade_logger
         if tl:
             s = tl.stats

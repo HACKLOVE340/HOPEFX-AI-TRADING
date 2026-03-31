@@ -29,7 +29,7 @@ import logging
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 import requests
 import json
 
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 def _utc_now() -> datetime:
     """Get current UTC time (timezone-aware)."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class GeopoliticalEventType(Enum):
@@ -85,18 +85,18 @@ class GeopoliticalEvent:
     title: str
     description: str
     region: str
-    countries: List[str]
-    coordinates: Optional[Tuple[float, float]] = None  # (lat, lon)
+    countries: list[str]
+    coordinates: Optional[tuple[float, float]] = None  # (lat, lon)
     timestamp: datetime = field(default_factory=_utc_now)
     source: str = "worldmonitor"
     confidence: float = 0.8
 
     # Trading impact assessment
     gold_impact: Optional[GoldImpact] = None
-    affected_currencies: List[str] = field(default_factory=list)
+    affected_currencies: list[str] = field(default_factory=list)
     risk_score: float = 0.0  # 0-100
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "event_type": self.event_type.value,
@@ -123,10 +123,10 @@ class CountryRisk:
     country_name: str
     instability_index: float  # 0-100 (higher = more unstable)
     trend: str  # 'increasing', 'stable', 'decreasing'
-    risk_factors: List[str]
+    risk_factors: list[str]
     last_updated: datetime = field(default_factory=_utc_now)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "country_code": self.country_code,
@@ -147,13 +147,13 @@ class GeopoliticalRiskAssessment:
     active_conflicts: int
     sanctions_count: int
     hotspots: int
-    high_risk_regions: List[str]
-    key_events: List[GeopoliticalEvent]
-    country_risks: Dict[str, CountryRisk]
-    trading_recommendations: List[str]
+    high_risk_regions: list[str]
+    key_events: list[GeopoliticalEvent]
+    country_risks: dict[str, CountryRisk]
+    trading_recommendations: list[str]
     timestamp: datetime = field(default_factory=_utc_now)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "global_risk_score": self.global_risk_score,
@@ -306,7 +306,7 @@ class GeopoliticalRiskProvider:
         "Canada": "CA",
     }
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize geopolitical risk provider.
 
@@ -343,7 +343,7 @@ class GeopoliticalRiskProvider:
 
     def get_current_events(
         self, force_refresh: bool = False
-    ) -> List[GeopoliticalEvent]:
+    ) -> list[GeopoliticalEvent]:
         """
         Get current geopolitical events.
 
@@ -370,12 +370,12 @@ class GeopoliticalRiskProvider:
 
             # Update cache
             self._cache["events"] = events
-            self._cache_timestamp = datetime.now(timezone.utc)
+            self._cache_timestamp = datetime.now(UTC)
 
             # Store in history
             self.event_history.extend(events)
             # Keep only last 7 days
-            cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+            cutoff = datetime.now(UTC) - timedelta(days=7)
             self.event_history = [e for e in self.event_history if e.timestamp > cutoff]
 
         except Exception as e:
@@ -432,7 +432,7 @@ class GeopoliticalRiskProvider:
             trading_recommendations=recommendations,
         )
 
-    def get_gold_trading_signal(self) -> Dict[str, Any]:
+    def get_gold_trading_signal(self) -> dict[str, Any]:
         """
         Get geopolitical-based gold trading signal.
 
@@ -467,10 +467,10 @@ class GeopoliticalRiskProvider:
             "active_conflicts": assessment.active_conflicts,
             "key_regions": assessment.high_risk_regions[:3],
             "recommendations": assessment.trading_recommendations,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
-    def _fetch_events_from_source(self) -> List[GeopoliticalEvent]:
+    def _fetch_events_from_source(self) -> list[GeopoliticalEvent]:
         """
         Fetch live events from the World Monitor API.
 
@@ -499,12 +499,12 @@ class GeopoliticalRiskProvider:
         timeout = int(self.config.get("request_timeout", 15))
         _is_production = _os.getenv("APP_ENV", "production").lower() == "production"
 
-        headers: Dict[str, str] = {"Accept": "application/json"}
+        headers: dict[str, str] = {"Accept": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        events: List[GeopoliticalEvent] = []
-        fetch_errors: List[str] = []
+        events: list[GeopoliticalEvent] = []
+        fetch_errors: list[str] = []
 
         for layer in self.data_layers:
             url = (
@@ -566,7 +566,7 @@ class GeopoliticalRiskProvider:
         logger.info("Fetched %d geopolitical events from World Monitor", len(events))
         return events
 
-    def _fetch_events_from_gdelt(self) -> List[GeopoliticalEvent]:
+    def _fetch_events_from_gdelt(self) -> list[GeopoliticalEvent]:
         """
         Fetch geopolitical events from the GDELT Project GKG API.
 
@@ -590,7 +590,7 @@ class GeopoliticalRiskProvider:
             resp.raise_for_status()
             data = resp.json()
             articles = data.get("articles", [])
-            events: List[GeopoliticalEvent] = []
+            events: list[GeopoliticalEvent] = []
             for article in articles:
                 title = article.get("title", "")
                 url_str = article.get("url", "")
@@ -599,10 +599,10 @@ class GeopoliticalRiskProvider:
                 try:
                     # GDELT seendate format: YYYYMMDDTHHMMSSZ
                     ts = datetime.strptime(seendate, "%Y%m%dT%H%M%SZ").replace(
-                        tzinfo=timezone.utc
+                        tzinfo=UTC
                     )
                 except (ValueError, TypeError):
-                    ts = datetime.now(timezone.utc)
+                    ts = datetime.now(UTC)
 
                 event = GeopoliticalEvent(
                     event_id=f"gdelt_{hash(url_str) & 0xFFFFFFFF:08x}",
@@ -625,7 +625,7 @@ class GeopoliticalRiskProvider:
 
     # ── Severity / type mapping helpers ──────────────────────────────────────
 
-    _SEVERITY_MAP: Dict[str, RiskSeverity] = {
+    _SEVERITY_MAP: dict[str, RiskSeverity] = {
         "critical": RiskSeverity.CRITICAL,
         "high": RiskSeverity.HIGH,
         "medium": RiskSeverity.MEDIUM,
@@ -636,11 +636,11 @@ class GeopoliticalRiskProvider:
     }
 
     def _parse_geojson_features(
-        self, features: List[Dict], layer: str
-    ) -> List[GeopoliticalEvent]:
+        self, features: list[dict], layer: str
+    ) -> list[GeopoliticalEvent]:
         """Convert World Monitor GeoJSON features to GeopoliticalEvent objects."""
         event_type = self.LAYER_MAPPING.get(layer, GeopoliticalEventType.HOTSPOT)
-        parsed: List[GeopoliticalEvent] = []
+        parsed: list[GeopoliticalEvent] = []
 
         for feat in features:
             try:
@@ -675,12 +675,12 @@ class GeopoliticalRiskProvider:
                 try:
                     ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
                     if ts.tzinfo is None:
-                        ts = ts.replace(tzinfo=timezone.utc)
+                        ts = ts.replace(tzinfo=UTC)
                 except (TypeError, ValueError):
-                    ts = datetime.now(timezone.utc)
+                    ts = datetime.now(UTC)
 
                 # Parse coordinates [lon, lat] → (lat, lon)
-                coordinates: Optional[Tuple[float, float]] = None
+                coordinates: Optional[tuple[float, float]] = None
                 if geom.get("type") == "Point":
                     coords = geom.get("coordinates", [])
                     if len(coords) >= 2:
@@ -805,7 +805,7 @@ class GeopoliticalRiskProvider:
 
         return min(100, score)
 
-    def _get_affected_currencies(self, event: GeopoliticalEvent) -> List[str]:
+    def _get_affected_currencies(self, event: GeopoliticalEvent) -> list[str]:
         """Determine currencies affected by an event"""
         currencies = []
 
@@ -822,7 +822,7 @@ class GeopoliticalRiskProvider:
 
         return list(set(currencies))
 
-    def _calculate_global_risk(self, events: List[GeopoliticalEvent]) -> float:
+    def _calculate_global_risk(self, events: list[GeopoliticalEvent]) -> float:
         """Calculate overall global risk score"""
         if not events:
             return 20.0  # Base risk level
@@ -852,7 +852,7 @@ class GeopoliticalRiskProvider:
         return min(100, avg_risk + risk_boost)
 
     def _determine_gold_outlook(
-        self, events: List[GeopoliticalEvent], global_risk: float
+        self, events: list[GeopoliticalEvent], global_risk: float
     ) -> GoldImpact:
         """Determine overall gold outlook based on events"""
         if not events:
@@ -887,7 +887,7 @@ class GeopoliticalRiskProvider:
         else:
             return GoldImpact.NEUTRAL
 
-    def _identify_high_risk_regions(self, events: List[GeopoliticalEvent]) -> List[str]:
+    def _identify_high_risk_regions(self, events: list[GeopoliticalEvent]) -> list[str]:
         """Identify regions with highest risk"""
         region_scores = {}
 
@@ -903,8 +903,8 @@ class GeopoliticalRiskProvider:
         return [region for region, score in sorted_regions[:5] if score >= 30]
 
     def _get_country_risks(
-        self, events: List[GeopoliticalEvent]
-    ) -> Dict[str, CountryRisk]:
+        self, events: list[GeopoliticalEvent]
+    ) -> dict[str, CountryRisk]:
         """Calculate risk for individual countries"""
         country_risks = {}
 
@@ -936,10 +936,10 @@ class GeopoliticalRiskProvider:
 
     def _generate_trading_recommendations(
         self,
-        events: List[GeopoliticalEvent],
+        events: list[GeopoliticalEvent],
         global_risk: float,
         gold_outlook: GoldImpact,
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate trading recommendations based on geopolitical situation"""
         recommendations = []
 
@@ -1031,7 +1031,7 @@ class GeopoliticalRiskProvider:
         if self._cache_timestamp is None:
             return False
 
-        age = (datetime.now(timezone.utc) - self._cache_timestamp).total_seconds()
+        age = (datetime.now(UTC) - self._cache_timestamp).total_seconds()
         return age < self.cache_ttl
 
 
@@ -1077,7 +1077,7 @@ class WorldMonitorIntegration:
         "datacenters",  # Major data centers
     ]
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """Initialize World Monitor integration"""
         self.config = config or {}
         self.base_url = "https://worldmonitor.app"
@@ -1088,7 +1088,7 @@ class WorldMonitorIntegration:
         self,
         view: str = "global",
         time_range: str = "7d",
-        layers: Optional[List[str]] = None,
+        layers: Optional[list[str]] = None,
         lat: Optional[float] = None,
         lon: Optional[float] = None,
         zoom: Optional[float] = None,
@@ -1137,7 +1137,7 @@ class WorldMonitorIntegration:
 
         return url
 
-    def get_gold_relevant_views(self) -> Dict[str, str]:
+    def get_gold_relevant_views(self) -> dict[str, str]:
         """
         Get World Monitor URLs for regions most relevant to gold trading.
 
@@ -1234,7 +1234,7 @@ class WorldMonitorAPIClient:
         "flights": 0.5,
     }
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize World Monitor API client.
 
@@ -1268,15 +1268,15 @@ class WorldMonitorAPIClient:
             self.layer_weights.update(self.config["custom_weights"])
 
         # Cache for API responses
-        self._cache: Dict[str, Any] = {}
-        self._cache_timestamps: Dict[str, datetime] = {}
+        self._cache: dict[str, Any] = {}
+        self._cache_timestamps: dict[str, datetime] = {}
         self.cache_ttl = self.config.get("cache_ttl", 300)  # 5 minutes
 
         logger.info(f"WorldMonitorAPIClient initialized with base_url: {self.base_url}")
 
     def _make_request(
-        self, endpoint: str, params: Optional[Dict] = None
-    ) -> Optional[Dict]:
+        self, endpoint: str, params: Optional[dict] = None
+    ) -> Optional[dict]:
         """
         Make API request to World Monitor.
 
@@ -1309,8 +1309,8 @@ class WorldMonitorAPIClient:
             return None
 
     def _get_cached_or_fetch(
-        self, layer: str, params: Optional[Dict] = None
-    ) -> Optional[Dict]:
+        self, layer: str, params: Optional[dict] = None
+    ) -> Optional[dict]:
         """Get data from cache or fetch from API."""
         cache_key = f"{layer}:{json.dumps(params or {}, sort_keys=True)}"
 
@@ -1318,7 +1318,7 @@ class WorldMonitorAPIClient:
         if cache_key in self._cache:
             cache_time = self._cache_timestamps.get(cache_key)
             if cache_time:
-                age = (datetime.now(timezone.utc) - cache_time).total_seconds()
+                age = (datetime.now(UTC) - cache_time).total_seconds()
                 if age < self.cache_ttl:
                     return self._cache[cache_key]
 
@@ -1332,11 +1332,11 @@ class WorldMonitorAPIClient:
 
         if data:
             self._cache[cache_key] = data
-            self._cache_timestamps[cache_key] = datetime.now(timezone.utc)
+            self._cache_timestamps[cache_key] = datetime.now(UTC)
 
         return data
 
-    def get_conflicts(self, region: Optional[str] = None) -> List[Dict]:
+    def get_conflicts(self, region: Optional[str] = None) -> list[dict]:
         """
         Get active conflict events from ACLED.
 
@@ -1356,7 +1356,7 @@ class WorldMonitorAPIClient:
             return data.get("events", data.get("data", []))
         return []
 
-    def get_country_intel(self, country: Optional[str] = None) -> Dict:
+    def get_country_intel(self, country: Optional[str] = None) -> dict:
         """
         Get country-level intelligence including risk scores and sanctions.
 
@@ -1373,7 +1373,7 @@ class WorldMonitorAPIClient:
         data = self._get_cached_or_fetch("country_intel", params)
         return data or {}
 
-    def get_military_theater(self, theater: Optional[str] = None) -> Dict:
+    def get_military_theater(self, theater: Optional[str] = None) -> dict:
         """
         Get military force posture by theater.
 
@@ -1394,7 +1394,7 @@ class WorldMonitorAPIClient:
 
     def get_news_intel(
         self, topic: Optional[str] = None, hours: int = 24
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Get global news intelligence from GDELT.
 
@@ -1415,7 +1415,7 @@ class WorldMonitorAPIClient:
             return data.get("articles", data.get("news", []))
         return []
 
-    def get_outages(self) -> List[Dict]:
+    def get_outages(self) -> list[dict]:
         """
         Get current internet/infrastructure outages.
 
@@ -1428,7 +1428,7 @@ class WorldMonitorAPIClient:
             return data.get("outages", [])
         return []
 
-    def get_satellite_fires(self, region: Optional[str] = None) -> List[Dict]:
+    def get_satellite_fires(self, region: Optional[str] = None) -> list[dict]:
         """
         Get satellite fire detections from NASA FIRMS.
 
@@ -1448,7 +1448,7 @@ class WorldMonitorAPIClient:
             return data.get("fires", [])
         return []
 
-    def get_military_flights(self, region: Optional[str] = None) -> List[Dict]:
+    def get_military_flights(self, region: Optional[str] = None) -> list[dict]:
         """
         Get military flight tracking data from OpenSky.
 
@@ -1468,7 +1468,7 @@ class WorldMonitorAPIClient:
             return data.get("flights", data.get("aircraft", []))
         return []
 
-    def get_all_layers(self) -> Dict[str, Any]:
+    def get_all_layers(self) -> dict[str, Any]:
         """
         Fetch data from all enabled layers.
 
@@ -1485,7 +1485,7 @@ class WorldMonitorAPIClient:
 
         return results
 
-    def calculate_gold_risk_score(self) -> Dict[str, Any]:
+    def calculate_gold_risk_score(self) -> dict[str, Any]:
         """
         Calculate gold-relevant risk score from all layers.
 
@@ -1538,7 +1538,7 @@ class WorldMonitorAPIClient:
             "global_risk_score": round(final_score, 1),
             "gold_outlook": outlook.value,
             "layer_scores": layer_scores,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     def clear_cache(self):
@@ -1668,7 +1668,7 @@ echo "API endpoints at: http://localhost:5173/api/"
 """
 
     @staticmethod
-    def generate_hopefx_config(self_hosted_url: str = "http://localhost:5173") -> Dict:
+    def generate_hopefx_config(self_hosted_url: str = "http://localhost:5173") -> dict:
         """
         Generate HOPEFX configuration for self-hosted World Monitor.
 
@@ -1785,7 +1785,7 @@ class CustomDataLayerConfig:
         },
     }
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize custom layer configuration.
 
@@ -1801,11 +1801,11 @@ class CustomDataLayerConfig:
                 else:
                     self.layers[layer] = settings
 
-    def get_enabled_layers(self) -> List[str]:
+    def get_enabled_layers(self) -> list[str]:
         """Get list of enabled layer names."""
         return [name for name, cfg in self.layers.items() if cfg.get("enabled", False)]
 
-    def get_layer_weights(self) -> Dict[str, float]:
+    def get_layer_weights(self) -> dict[str, float]:
         """Get weight dictionary for enabled layers."""
         return {
             name: cfg["weight"]
@@ -1840,7 +1840,7 @@ class CustomDataLayerConfig:
         if layer in self.layers:
             self.layers[layer]["alert_threshold"] = threshold
 
-    def get_gold_optimized_config(self) -> Dict:
+    def get_gold_optimized_config(self) -> dict:
         """
         Get configuration optimized for gold (XAU/USD) trading.
 
@@ -1866,7 +1866,7 @@ class CustomDataLayerConfig:
 
         return gold_config
 
-    def to_provider_config(self) -> Dict:
+    def to_provider_config(self) -> dict:
         """Convert to GeopoliticalRiskProvider configuration format."""
         return {
             "data_layers": self.get_enabled_layers(),
@@ -1880,7 +1880,7 @@ _api_client = None
 
 
 def get_geopolitical_provider(
-    config: Optional[Dict] = None,
+    config: Optional[dict] = None,
 ) -> GeopoliticalRiskProvider:
     """Get or create global geopolitical risk provider"""
     global _geopolitical_provider
@@ -1889,7 +1889,7 @@ def get_geopolitical_provider(
     return _geopolitical_provider
 
 
-def get_api_client(config: Optional[Dict] = None) -> WorldMonitorAPIClient:
+def get_api_client(config: Optional[dict] = None) -> WorldMonitorAPIClient:
     """
     Get or create global World Monitor API client.
 
@@ -1905,7 +1905,7 @@ def get_api_client(config: Optional[Dict] = None) -> WorldMonitorAPIClient:
     return _api_client
 
 
-def get_gold_geopolitical_signal() -> Dict[str, Any]:
+def get_gold_geopolitical_signal() -> dict[str, Any]:
     """
     Convenience function to get geopolitical-based gold trading signal.
 
@@ -1916,7 +1916,7 @@ def get_gold_geopolitical_signal() -> Dict[str, Any]:
     return provider.get_gold_trading_signal()
 
 
-def get_gold_signal_from_api(config: Optional[Dict] = None) -> Dict[str, Any]:
+def get_gold_signal_from_api(config: Optional[dict] = None) -> dict[str, Any]:
     """
     Get gold trading signal using direct World Monitor API.
 
@@ -1943,7 +1943,7 @@ def create_self_hosted_setup() -> str:
 
 
 def get_custom_layer_config(
-    gold_optimized: bool = True, custom_layers: Optional[Dict] = None
+    gold_optimized: bool = True, custom_layers: Optional[dict] = None
 ) -> CustomDataLayerConfig:
     """
     Get custom data layer configuration.

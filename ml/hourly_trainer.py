@@ -41,7 +41,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -76,7 +76,7 @@ class HourlyTrainer:
         enabled: bool = _ENABLED,
         interval_secs: int = _INTERVAL_SECS,
         full_retrain_hrs: int = _FULL_RETRAIN_HRS,
-        symbols: Optional[List[str]] = None,
+        symbols: Optional[list[str]] = None,
         model_dir: str = _MODEL_DIR,
     ) -> None:
         self.enabled = enabled
@@ -85,7 +85,7 @@ class HourlyTrainer:
         self.symbols = symbols or _SYMBOLS
         self.model_dir = model_dir
 
-        self._last_full_retrain: Dict[str, float] = {}  # symbol → epoch
+        self._last_full_retrain: dict[str, float] = {}  # symbol → epoch
         self._online_update_count: int = 0
         self._full_retrain_count: int = 0
         self._running: bool = False
@@ -117,7 +117,7 @@ class HourlyTrainer:
         if self._task and not self._task.done():
             self._task.cancel()
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         """Return current trainer state for the admin dashboard."""
         return {
             "enabled": self.enabled,
@@ -128,7 +128,7 @@ class HourlyTrainer:
             "online_update_count": self._online_update_count,
             "full_retrain_count": self._full_retrain_count,
             "last_full_retrain": {
-                sym: datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+                sym: datetime.fromtimestamp(ts, tz=UTC).isoformat()
                 for sym, ts in self._last_full_retrain.items()
             },
         }
@@ -182,7 +182,7 @@ class HourlyTrainer:
         the model current without a full retrain.
         """
         try:
-            from ml.online_learner import get_online_learner  # noqa: PLC0415
+            from ml.online_learner import get_online_learner
 
             learner = get_online_learner(symbol)
             if learner is None:
@@ -245,9 +245,9 @@ class HourlyTrainer:
                 exc_info=True,
             )
 
-    def _run_pipeline_sync(self, symbol: str) -> Dict[str, Any]:
+    def _run_pipeline_sync(self, symbol: str) -> dict[str, Any]:
         """Synchronous wrapper around run_training.run_pipeline (runs in thread)."""
-        from ml.run_training import run_pipeline  # noqa: PLC0415
+        from ml.run_training import run_pipeline
 
         return run_pipeline(
             symbol=symbol,
@@ -258,7 +258,7 @@ class HourlyTrainer:
     async def _reload_live_inference(self, symbol: str) -> None:
         """Reload the live inference model after a full retrain."""
         try:
-            from ml.live_inference import LiveInference  # noqa: PLC0415
+            from ml.live_inference import LiveInference
 
             infer = LiveInference(symbol=symbol, model_dir=self.model_dir)
             infer.reload()
@@ -269,7 +269,7 @@ class HourlyTrainer:
     async def _fetch_recent_bars(self, symbol: str, n: int = 24):
         """Fetch the last N H1 bars from the local CSV."""
         try:
-            import pandas as pd  # noqa: PLC0415
+            import pandas as pd
 
             csv_path = Path(f"data/{symbol}_H1.csv")
             if not csv_path.exists():
@@ -289,7 +289,7 @@ _hourly_trainer: Optional[HourlyTrainer] = None
 
 def get_hourly_trainer() -> HourlyTrainer:
     """Return the module-level HourlyTrainer singleton (created on first call)."""
-    global _hourly_trainer  # noqa: PLW0603
+    global _hourly_trainer
     if _hourly_trainer is None:
         _hourly_trainer = HourlyTrainer()
     return _hourly_trainer

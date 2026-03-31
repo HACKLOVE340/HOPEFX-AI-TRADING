@@ -30,8 +30,8 @@ def _make_risk_manager(**overrides):
     """Build a minimal mock risk manager that passes all checks by default."""
     rm = MagicMock()
     rm._trading_halted = overrides.get("_trading_halted", False)
-    rm._halt_reason = overrides.get("_halt_reason", None)
-    rm._halt_until = overrides.get("_halt_until", None)
+    rm._halt_reason = overrides.get("_halt_reason")
+    rm._halt_until = overrides.get("_halt_until")
     rm.daily_pnl = overrides.get("daily_pnl", 0.0)
     rm.daily_starting_equity = overrides.get("daily_starting_equity", 100_000.0)
     rm.current_drawdown = overrides.get("current_drawdown", 0.0)

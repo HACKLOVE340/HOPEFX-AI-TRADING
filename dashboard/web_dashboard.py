@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 from typing import Dict, Optional, Any, Set
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from collections import deque
 
 try:
@@ -25,8 +25,8 @@ except ImportError:
     AIOHTTP_AVAILABLE = False
 
 try:
-    import plotly  # noqa: F401
-    import plotly.graph_objs as go  # noqa: F401
+    import plotly
+    import plotly.graph_objs as go
 
     PLOTLY_AVAILABLE = True
 except ImportError:
@@ -41,7 +41,7 @@ class DashboardWebSocketManager:
     """
 
     def __init__(self):
-        self.clients: Set[web.WebSocketResponse] = set()
+        self.clients: set[web.WebSocketResponse] = set()
         self._lock = asyncio.Lock()
         self._running = False
         self._broadcast_task: Optional[asyncio.Task] = None
@@ -58,7 +58,7 @@ class DashboardWebSocketManager:
             self.clients.discard(ws)
             logger.info(f"Dashboard client disconnected. Total: {len(self.clients)}")
 
-    async def broadcast(self, message: Dict):
+    async def broadcast(self, message: dict):
         """Broadcast message to all clients"""
         if not self.clients:
             return
@@ -88,7 +88,7 @@ class DashboardWebSocketManager:
                 await self.broadcast(
                     {
                         "type": "update",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "data": data,
                     }
                 )
@@ -113,14 +113,14 @@ class DashboardDataSource:
 
     def __init__(self, trading_app):
         self.app = trading_app
-        self._price_history: Dict[str, deque] = {
+        self._price_history: dict[str, deque] = {
             symbol: deque(maxlen=100)
             for symbol in getattr(trading_app, "symbols", ["EURUSD", "XAUUSD"])
         }
         self._trade_history: deque = deque(maxlen=50)
-        self._performance_metrics: Dict[str, Any] = {}
+        self._performance_metrics: dict[str, Any] = {}
 
-    async def get_dashboard_data(self) -> Dict:
+    async def get_dashboard_data(self) -> dict:
         """Compile all dashboard data"""
         try:
             # Account info
@@ -197,21 +197,21 @@ class DashboardDataSource:
                 "brain_state": brain_state,
                 "prices": price_data,
                 "recent_signals": recent_signals,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
         except Exception as e:
             logger.error(f"Error compiling dashboard data: {e}")
             return {"error": str(e)}
 
-    def record_trade(self, trade: Dict):
+    def record_trade(self, trade: dict):
         """Record trade for history"""
         self._trade_history.append(
-            {**trade, "timestamp": datetime.now(timezone.utc).isoformat()}
+            {**trade, "timestamp": datetime.now(UTC).isoformat()}
         )
 
 
-def create_dashboard_app(trading_app, host: str = "0.0.0.0", port: int = 8081):  # nosec B104 - host configurable via parameter  # noqa: S104
+def create_dashboard_app(trading_app, host: str = "0.0.0.0", port: int = 8081):  # nosec B104 - host configurable via parameter
     """Create and configure dashboard web application"""
     if not AIOHTTP_AVAILABLE:
         logger.error("aiohttp required for dashboard")
@@ -847,7 +847,7 @@ async def chart_data_handler(request):
     )
 
 
-async def start_dashboard(trading_app, host: str = "0.0.0.0", port: int = 8081):  # nosec B104 - host configurable via parameter  # noqa: S104
+async def start_dashboard(trading_app, host: str = "0.0.0.0", port: int = 8081):  # nosec B104 - host configurable via parameter
     """Start dashboard server"""
     app, host, port = create_dashboard_app(trading_app, host, port)
 

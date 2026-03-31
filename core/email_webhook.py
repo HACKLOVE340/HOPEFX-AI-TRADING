@@ -128,7 +128,7 @@ def register_email_webhook(app: FastAPI) -> None:
             "unsubscribe",
             "group_unsubscribe",
         }
-        suppressed: List[str] = []
+        suppressed: list[str] = []
 
         for event in events:
             event_type = event.get("event", "")

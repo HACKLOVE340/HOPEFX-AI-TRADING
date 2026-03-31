@@ -50,7 +50,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -93,7 +93,7 @@ class ActiveFault:
     injected_at: float
     duration_s: float
     magnitude: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_expired(self) -> bool:
@@ -116,9 +116,9 @@ class FaultInjector:
     """
 
     def __init__(self) -> None:
-        self._active: Dict[FaultType, ActiveFault] = {}
-        self._history: List[Dict[str, Any]] = []
-        self._callbacks: Dict[FaultType, List[Callable]] = {}
+        self._active: dict[FaultType, ActiveFault] = {}
+        self._history: list[dict[str, Any]] = []
+        self._callbacks: dict[FaultType, list[Callable]] = {}
 
     # ── Injection API ─────────────────────────────────────────────────────────
 
@@ -150,7 +150,7 @@ class FaultInjector:
         self._history.append(
             {
                 "fault_type": fault_type.value,
-                "injected_at": datetime.now(timezone.utc).isoformat(),
+                "injected_at": datetime.now(UTC).isoformat(),
                 "duration_s": duration_s,
                 "magnitude": magnitude,
                 **metadata,
@@ -267,7 +267,7 @@ class FaultInjector:
             frozen_ts = fault.metadata.get("frozen_ts")
             if frozen_ts is None:
                 fault.metadata["frozen_ts"] = getattr(
-                    tick, "timestamp", datetime.now(timezone.utc)
+                    tick, "timestamp", datetime.now(UTC)
                 )
             try:
                 object.__setattr__(tick, "timestamp", fault.metadata["frozen_ts"])
@@ -281,7 +281,7 @@ class FaultInjector:
             from datetime import timedelta
 
             skew_s = fault.magnitude * fault.metadata.get("direction_sign", 1)
-            ts = getattr(tick, "timestamp", datetime.now(timezone.utc))
+            ts = getattr(tick, "timestamp", datetime.now(UTC))
             try:
                 object.__setattr__(tick, "timestamp", ts + timedelta(seconds=skew_s))
             except (AttributeError, TypeError):
@@ -318,7 +318,7 @@ class FaultInjector:
         if expired and _PROM_OK:
             _prom_active_faults.set(len(self._active))
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         self._prune_expired()
         return {
             "active_faults": {

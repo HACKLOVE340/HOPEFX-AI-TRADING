@@ -32,7 +32,7 @@ class LSTMPricePredictor(BaseMLModel):
     - Price movement prediction
     """
 
-    def __init__(self, name: str = "LSTM_Predictor", config: Optional[Dict] = None):
+    def __init__(self, name: str = "LSTM_Predictor", config: Optional[dict] = None):
         """
         Initialize LSTM model.
 
@@ -107,7 +107,7 @@ class LSTMPricePredictor(BaseMLModel):
             self.logger.error(f"Error building LSTM model: {e}")
             raise
 
-    def _prepare_sequences(self, data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _prepare_sequences(self, data: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
         Prepare sequences for LSTM training.
 
@@ -130,7 +130,7 @@ class LSTMPricePredictor(BaseMLModel):
         X: np.ndarray,
         y: np.ndarray,
         fit: bool = True,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Scale data using MinMaxScaler.
 
@@ -165,7 +165,7 @@ class LSTMPricePredictor(BaseMLModel):
         y_train: np.ndarray,
         X_val: Optional[np.ndarray] = None,
         y_val: Optional[np.ndarray] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Train LSTM model.
 

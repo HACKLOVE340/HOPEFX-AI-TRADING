@@ -49,7 +49,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -162,7 +162,7 @@ async def on_ready():
 
 @tree.command(name="join", description="Join the HOPEFX beta challenge program")
 async def join_cmd(interaction: discord.Interaction):
-    testers: Dict[str, Any] = _load_json(TESTERS_FILE, {})
+    testers: dict[str, Any] = _load_json(TESTERS_FILE, {})
     uid = str(interaction.user.id)
 
     if uid in testers:
@@ -178,7 +178,7 @@ async def join_cmd(interaction: discord.Interaction):
         "discord_id": uid,
         "username": str(interaction.user),
         "display_name": interaction.user.display_name,
-        "joined_at": datetime.now(timezone.utc).isoformat(),
+        "joined_at": datetime.now(UTC).isoformat(),
         "passed": False,
         "results": [],
     }
@@ -212,7 +212,7 @@ async def result_cmd(
     drawdown_pct: float,
     trading_days: int,
 ):
-    testers: Dict[str, Any] = _load_json(TESTERS_FILE, {})
+    testers: dict[str, Any] = _load_json(TESTERS_FILE, {})
     uid = str(interaction.user.id)
 
     if uid not in testers:
@@ -225,7 +225,7 @@ async def result_cmd(
 
     # Record result
     result_entry = {
-        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "submitted_at": datetime.now(UTC).isoformat(),
         "pnl_pct": pnl_pct,
         "drawdown_pct": drawdown_pct,
         "trading_days": trading_days,
@@ -235,11 +235,11 @@ async def result_cmd(
     testers[uid]["results"].append(result_entry)
     if passed and not testers[uid]["passed"]:
         testers[uid]["passed"] = True
-        testers[uid]["passed_at"] = datetime.now(timezone.utc).isoformat()
+        testers[uid]["passed_at"] = datetime.now(UTC).isoformat()
     _save_json(TESTERS_FILE, testers)
 
     # Also append to challenge_results.json for audit trail
-    all_results: List[dict] = _load_json(RESULTS_FILE, [])
+    all_results: list[dict] = _load_json(RESULTS_FILE, [])
     all_results.append(
         {
             "discord_id": uid,
@@ -263,7 +263,7 @@ async def result_cmd(
             color=discord.Color.gold(),
         )
         embed.set_footer(
-            text=f"Submitted {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
+            text=f"Submitted {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}"
         )
 
         await interaction.response.send_message(embed=embed)
@@ -316,7 +316,7 @@ async def result_cmd(
 
 @tree.command(name="leaderboard", description="Top 10 beta testers by P&L")
 async def leaderboard_cmd(interaction: discord.Interaction):
-    testers: Dict[str, Any] = _load_json(TESTERS_FILE, {})
+    testers: dict[str, Any] = _load_json(TESTERS_FILE, {})
 
     if not testers:
         await interaction.response.send_message(
@@ -325,7 +325,7 @@ async def leaderboard_cmd(interaction: discord.Interaction):
         return
 
     # Best result per tester
-    rows: List[dict] = []
+    rows: list[dict] = []
     for uid, t in testers.items():
         if not t.get("results"):
             continue
@@ -405,7 +405,7 @@ async def status_cmd(interaction: discord.Interaction):
 
 @tree.command(name="stats", description="Show challenge program statistics")
 async def stats_cmd(interaction: discord.Interaction):
-    testers: Dict[str, Any] = _load_json(TESTERS_FILE, {})
+    testers: dict[str, Any] = _load_json(TESTERS_FILE, {})
     total = len(testers)
     passed = sum(1 for t in testers.values() if t.get("passed"))
     active = sum(1 for t in testers.values() if t.get("results"))

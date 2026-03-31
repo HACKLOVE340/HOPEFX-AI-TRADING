@@ -15,7 +15,7 @@ Tests for:
 import pytest
 import numpy as np
 import pandas as pd
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 
 # ================================================================
@@ -790,7 +790,7 @@ class TestPriceLevel:
             level_type="support",
             strength=0.8,
             touch_count=3,
-            last_touch=datetime(2024, 1, 15, tzinfo=timezone.utc),
+            last_touch=datetime(2024, 1, 15, tzinfo=UTC),
             method="swing",
             is_active=True,
             description="Test support level",
@@ -843,7 +843,7 @@ class TestPriceLevel:
 
     def test_to_dict_last_touch_iso_string(self):
         """to_dict() serialises datetime last_touch as ISO string."""
-        ts = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+        ts = datetime(2024, 6, 1, 12, 0, 0, tzinfo=UTC)
         level = self._make_level(last_touch=ts)
         d = level.to_dict()
         assert isinstance(d["last_touch"], str)

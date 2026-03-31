@@ -44,7 +44,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum, auto
 from typing import Dict
 
@@ -53,7 +53,7 @@ from core.event_bus import bus
 logger = logging.getLogger(__name__)
 
 # ── config ────────────────────────────────────────────────────────────────────
-import os as _os  # noqa: E402
+import os as _os
 
 FAILURE_THRESHOLD: int = int(_os.environ.get("FAULT_FAILURE_THRESHOLD", "3"))
 RECOVER_S: float = float(_os.environ.get("FAULT_RECOVER_S", "30"))
@@ -192,7 +192,7 @@ class FaultGuard:
     """
 
     def __init__(self) -> None:
-        self._modules: Dict[str, _ModuleState] = {}
+        self._modules: dict[str, _ModuleState] = {}
         self._running: bool = False
 
     # ── registration ──────────────────────────────────────────────────────────
@@ -291,10 +291,10 @@ class FaultGuard:
                     "module": module,
                     "detail": detail,
                     "state": self.state_of(module),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("FaultGuard: breach publish failed: %s", exc)
 
     # ── metrics ───────────────────────────────────────────────────────────────

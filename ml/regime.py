@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import joblib
-import pickle  # noqa: S301
+import pickle
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path

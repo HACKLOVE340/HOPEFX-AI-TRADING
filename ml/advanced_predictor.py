@@ -188,7 +188,7 @@ class AdvancedPredictor:
         self._feature_names: Optional[list] = None
         self._n_features: int = 176
         self._adapter: Optional[_SGDAdapter] = None
-        self._meta: Dict[str, Any] = {}
+        self._meta: dict[str, Any] = {}
         self._lock = threading.Lock()
         self._predict_count: int = 0
         self._abstain_count: int = 0
@@ -370,7 +370,7 @@ class AdvancedPredictor:
         return self._version
 
     @property
-    def meta(self) -> Dict[str, Any]:
+    def meta(self) -> dict[str, Any]:
         return dict(self._meta)
 
     # ── Feature building ──────────────────────────────────────────────────────
@@ -445,7 +445,7 @@ class AdvancedPredictor:
         symbol: str = "XAUUSD",
         mtf_df: Optional[pd.DataFrame] = None,
         as_of: Optional[pd.Timestamp] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Full inference pipeline. Returns a signal dict.
 
@@ -572,7 +572,7 @@ class AdvancedPredictor:
         ohlcv: pd.DataFrame,
         reason: str = "unknown",
         t0: float = 0.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         last_close = 0.0
         try:
             last_close = float(ohlcv.iloc[-1].get("close", ohlcv.iloc[-1].iloc[-1]))
@@ -638,7 +638,7 @@ class AdvancedPredictor:
     # ── Stats ─────────────────────────────────────────────────────────────────
 
     @property
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         return {
             "predict_count": self._predict_count,
             "abstain_count": self._abstain_count,
@@ -730,7 +730,7 @@ class HybridEnsemblePredictor:
     def _check_components(self) -> None:
         """Probe which components are available without loading models."""
         try:
-            import xgboost  # noqa: F401
+            import xgboost
 
             self._has_xgb = True
         except ImportError:
@@ -738,7 +738,7 @@ class HybridEnsemblePredictor:
             logger.warning("HybridEnsemble: xgboost not available")
 
         try:
-            import torch  # noqa: F401
+            import torch
 
             self._has_lstm = True
         except ImportError:
@@ -746,7 +746,7 @@ class HybridEnsemblePredictor:
             logger.debug("HybridEnsemble: torch not available — LSTM disabled")
 
         try:
-            import stable_baselines3  # noqa: F401
+            import stable_baselines3
 
             self._has_rl = True
         except ImportError:
@@ -790,7 +790,7 @@ class HybridEnsemblePredictor:
             return 0.5
         try:
             from research.pipeline.models_deep import DeepPredictor
-            import torch  # noqa: F401
+            import torch
 
             model_path = Path(__file__).parent / "saved_models" / "lstm_predictor.pt"
             if not model_path.exists():
@@ -852,7 +852,7 @@ class HybridEnsemblePredictor:
                     meta_input = self._meta_scaler.transform(meta_input)
                 blended = float(self._meta.predict(meta_input)[0])
                 return float(np.clip(blended, 0.0, 1.0))
-            except Exception:  # nosec B110 - meta-model failure falls through to weighted average  # noqa: S110
+            except Exception:  # nosec B110 - meta-model failure falls through to weighted average
                 pass
 
         # Weighted average fallback
@@ -889,7 +889,7 @@ class HybridEnsemblePredictor:
         logger.info("HybridEnsemble meta-blender trained on %d samples", len(y))
 
     @property
-    def component_status(self) -> Dict[str, Any]:
+    def component_status(self) -> dict[str, Any]:
         w_xgb, w_lstm, w_rl = self._effective_weights()
         return {
             "xgb_available": self._has_xgb,

@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -118,7 +118,7 @@ class ConfigStore:
             if record:
                 record.value_json = serialised
                 record.changed_by = changed_by
-                record.updated_at = datetime.now(timezone.utc)
+                record.updated_at = datetime.now(UTC)
             else:
                 record = ConfigStoreModel(
                     key=key,

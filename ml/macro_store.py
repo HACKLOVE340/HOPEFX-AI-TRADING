@@ -65,7 +65,7 @@ logger = logging.getLogger(__name__)
 _MACRO_DIR = Path(os.getenv("MACRO_DATA_DIR", "data/macro"))
 
 # Known macro series and their CSV filenames (relative to _MACRO_DIR)
-_DEFAULT_SERIES: Dict[str, str] = {
+_DEFAULT_SERIES: dict[str, str] = {
     "dxy": "dxy_daily.csv",
     "us10y": "us10y_daily.csv",
     "us2y": "us2y_daily.csv",
@@ -86,13 +86,13 @@ class MacroStore:
 
     def __init__(self) -> None:
         # series_name → pd.Series(float, index=DatetimeIndex[daily])
-        self._series: Dict[str, pd.Series] = {}
+        self._series: dict[str, pd.Series] = {}
 
     # ── Ingestion ─────────────────────────────────────────────────────────────
 
     def load_csv(
         self,
-        path: Union[str, Path],
+        path: str | Path,
         series_name: str,
         date_col: str = "date",
         value_col: str = "value",
@@ -132,7 +132,7 @@ class MacroStore:
     def update(
         self,
         series_name: str,
-        date: Union[str, date, datetime],
+        date: str | date | datetime,
         value: float,
     ) -> None:
         """
@@ -199,7 +199,7 @@ class MacroStore:
             )
             return pd.DataFrame(index=ohlcv_h1.index)
 
-        aligned_cols: Dict[str, pd.Series] = {}
+        aligned_cols: dict[str, pd.Series] = {}
         for name in names:
             if name not in self._series:
                 logger.debug("MacroStore: series %r not loaded — filling with 0", name)
@@ -225,9 +225,9 @@ class MacroStore:
 
     # ── Introspection ─────────────────────────────────────────────────────────
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         """Return the latest value for each loaded series."""
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         for name, series in self._series.items():
             if series.empty:
                 out[name] = None

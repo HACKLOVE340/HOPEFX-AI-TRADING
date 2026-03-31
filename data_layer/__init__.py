@@ -39,8 +39,8 @@ the MarketDataOrchestrator singleton.
 
 from __future__ import annotations
 
-from data_layer.orchestrator import MarketDataOrchestrator, orchestrator  # noqa: F401
-from data_layer.types import (  # noqa: F401
+from data_layer.orchestrator import MarketDataOrchestrator, orchestrator
+from data_layer.types import (
     Direction,
     FeedHealth,
     FeedSource,

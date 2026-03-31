@@ -69,7 +69,7 @@ class StartupValidationError(RuntimeError):
 # ---------------------------------------------------------------------------
 
 
-def _validate_jwt(errors: List[str]) -> None:
+def _validate_jwt(errors: list[str]) -> None:
     jwt_val = _jwt_secret_value()
     if not jwt_val:
         errors.append(
@@ -87,7 +87,7 @@ def _validate_jwt(errors: List[str]) -> None:
         )
 
 
-def _validate_database(errors: List[str]) -> None:
+def _validate_database(errors: list[str]) -> None:
     db_url = _env("DATABASE_URL")
     db_host = _env("DB_HOST")
     db_pass = _env("DB_PASSWORD")
@@ -107,7 +107,7 @@ def _validate_database(errors: List[str]) -> None:
         )
 
 
-def _validate_redis(errors: List[str]) -> None:
+def _validate_redis(errors: list[str]) -> None:
     redis_url = _env("REDIS_URL")
     redis_host = _env("REDIS_HOST")
 
@@ -129,7 +129,7 @@ def _validate_redis(errors: List[str]) -> None:
         )
 
 
-def _validate_encryption_key(errors: List[str]) -> None:
+def _validate_encryption_key(errors: list[str]) -> None:
     enc_key = _env("CONFIG_ENCRYPTION_KEY")
     if not enc_key:
         errors.append(
@@ -146,7 +146,7 @@ def _validate_encryption_key(errors: List[str]) -> None:
         )
 
 
-def _validate_broker(errors: List[str], dev_mode: bool) -> None:
+def _validate_broker(errors: list[str], dev_mode: bool) -> None:
     broker_type = _env("BROKER_TYPE") or "paper"
     broker_type = broker_type.lower()
     valid_broker_types = {"paper", "oanda", "ibkr", "ccxt", "fix"}
@@ -167,7 +167,7 @@ def _validate_broker(errors: List[str], dev_mode: bool) -> None:
         _validate_oanda_credentials(errors)
 
 
-def _validate_oanda_credentials(errors: List[str]) -> None:
+def _validate_oanda_credentials(errors: list[str]) -> None:
     oanda_key = _env("BROKER_OANDA_TOKEN") or _env("OANDA_API_KEY")
     oanda_acct = _env("BROKER_OANDA_ACCOUNT") or _env("OANDA_ACCOUNT_ID")
     if not oanda_key:
@@ -180,7 +180,7 @@ def _validate_oanda_credentials(errors: List[str]) -> None:
         )
 
 
-def _validate_kill_switch_token(errors: List[str]) -> None:
+def _validate_kill_switch_token(errors: list[str]) -> None:
     ks_token = _env("HOPEFX_KILL_SWITCH_TOKEN")
     if not ks_token:
         errors.append(
@@ -197,7 +197,7 @@ def _validate_kill_switch_token(errors: List[str]) -> None:
         )
 
 
-def _validate_llm_backend(errors: List[str]) -> None:
+def _validate_llm_backend(errors: list[str]) -> None:
     """Validate LLM backend config; warn (not error) when API key is absent."""
     llm_backend = (_env("LLM_BACKEND") or "anthropic").lower()
     valid_backends = {"anthropic", "openai"}
@@ -231,7 +231,7 @@ def _validate_llm_backend(errors: List[str]) -> None:
         )
 
 
-def _validate_argocd_webhook(errors: List[str]) -> None:
+def _validate_argocd_webhook(errors: list[str]) -> None:
     argocd_webhook = _env("ARGOCD_ROLLBACK_WEBHOOK")
     if not argocd_webhook:
         logger.warning(
@@ -246,7 +246,7 @@ def _validate_argocd_webhook(errors: List[str]) -> None:
         )
 
 
-def _validate_optional_vars(errors: List[str]) -> None:
+def _validate_optional_vars(errors: list[str]) -> None:
     sentry_dsn = _env("SENTRY_DSN")
     if sentry_dsn and not sentry_dsn.startswith("https://"):
         errors.append(
@@ -257,7 +257,7 @@ def _validate_optional_vars(errors: List[str]) -> None:
     _validate_ibkr_port(errors)
 
 
-def _validate_mobile_cors(errors: List[str]) -> None:
+def _validate_mobile_cors(errors: list[str]) -> None:
     mobile_cors = _env("MOBILE_CORS_ORIGINS")
     if not mobile_cors:
         return
@@ -274,7 +274,7 @@ def _validate_mobile_cors(errors: List[str]) -> None:
         )
 
 
-def _validate_ibkr_port(errors: List[str]) -> None:
+def _validate_ibkr_port(errors: list[str]) -> None:
     ibkr_port = _env("IBKR_PORT")
     if not ibkr_port:
         return
@@ -287,7 +287,7 @@ def _validate_ibkr_port(errors: List[str]) -> None:
         )
 
 
-def _validate_cors_wildcard(errors: List[str]) -> None:
+def _validate_cors_wildcard(errors: list[str]) -> None:
     allowed_origins = _env("ALLOWED_ORIGINS")
     origins = [o.strip() for o in allowed_origins.split(",") if o.strip()]
     if "*" in origins:
@@ -314,7 +314,7 @@ def validate_environment(*, strict: bool = True) -> None:
     Raises:
         StartupValidationError: when strict=False and validation fails.
     """
-    errors: List[str] = []
+    errors: list[str] = []
     dev_mode = _is_dev()
 
     _validate_jwt(errors)

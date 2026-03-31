@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -52,26 +52,26 @@ _TEAM_KEY = "accounts:team:{tid}"
 _TIDX_KEY = "accounts:team_index:{uid}"
 
 
-def _load_sub_accounts(user_id: str) -> Dict[str, Any]:
+def _load_sub_accounts(user_id: str) -> dict[str, Any]:
     """Load sub-accounts for a user from DB; return empty dict on miss."""
     from api.db_store import db_get
 
     return db_get(_SUB_KEY.format(uid=user_id)) or {}
 
 
-def _save_sub_accounts(user_id: str, accounts: Dict[str, Any]) -> None:
+def _save_sub_accounts(user_id: str, accounts: dict[str, Any]) -> None:
     from api.db_store import db_set
 
     db_set(_SUB_KEY.format(uid=user_id), accounts, changed_by=user_id)
 
 
-def _load_team(team_id: str) -> Optional[Dict[str, Any]]:
+def _load_team(team_id: str) -> Optional[dict[str, Any]]:
     from api.db_store import db_get
 
     return db_get(_TEAM_KEY.format(tid=team_id))
 
 
-def _save_team(team: Dict[str, Any]) -> None:
+def _save_team(team: dict[str, Any]) -> None:
     from api.db_store import db_set
 
     db_set(
@@ -146,7 +146,7 @@ class UpdateMemberRoleRequest(BaseModel):
 @router.get("/sub-accounts")
 async def list_sub_accounts(
     user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List all sub-accounts owned by the current user."""
     accounts = list(_load_sub_accounts(user.sub).values())
     return {"accounts": accounts, "total": len(accounts)}
@@ -156,7 +156,7 @@ async def list_sub_accounts(
 async def create_sub_account(
     req: CreateSubAccountRequest,
     user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a new sub-account under the current user."""
     existing = _load_sub_accounts(user.sub)
     if len(existing) >= 10:
@@ -165,7 +165,7 @@ async def create_sub_account(
             detail="Maximum 10 sub-accounts per user",
         )
     acc_id = str(uuid.uuid4())
-    account: Dict[str, Any] = {
+    account: dict[str, Any] = {
         "account_id": acc_id,
         "owner_id": user.sub,
         "label": req.label,
@@ -175,7 +175,7 @@ async def create_sub_account(
         "daily_pnl": 0.0,
         "role": "trader",
         "active": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     existing[acc_id] = account
     _save_sub_accounts(user.sub, existing)
@@ -188,7 +188,7 @@ async def update_sub_account(
     account_id: str,
     req: UpdateSubAccountRequest,
     user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Update sub-account label or active status."""
     existing = _load_sub_accounts(user.sub)
     acc = existing.get(account_id)
@@ -227,7 +227,7 @@ async def delete_sub_account(
 
 
 @router.get("/teams")
-async def list_teams(user: TokenPayload = Depends(get_current_user)) -> Dict[str, Any]:
+async def list_teams(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
     """List teams the current user belongs to."""
     team_ids = _load_team_index(user.sub)
     teams = [t for tid in team_ids if (t := _load_team(tid)) is not None]
@@ -238,21 +238,21 @@ async def list_teams(user: TokenPayload = Depends(get_current_user)) -> Dict[str
 async def create_team(
     req: CreateTeamRequest,
     user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a new team. The creator is automatically added as admin."""
     team_id = str(uuid.uuid4())
-    team: Dict[str, Any] = {
+    team: dict[str, Any] = {
         "team_id": team_id,
         "name": req.name,
         "creator_id": user.sub,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "members": [
             {
                 "user_id": user.sub,
                 "username": getattr(user, "username", user.sub),
                 "email": getattr(user, "email", ""),
                 "role": "admin",
-                "joined_at": datetime.now(timezone.utc).isoformat(),
+                "joined_at": datetime.now(UTC).isoformat(),
             }
         ],
     }
@@ -267,7 +267,7 @@ async def invite_member(
     team_id: str,
     req: InviteMemberRequest,
     user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Invite a member to a team. Requires admin or manager role in the team."""
     team = _load_team(team_id)
     if not team:
@@ -285,7 +285,7 @@ async def invite_member(
         "username": req.username,
         "email": req.email,
         "role": req.role,
-        "joined_at": datetime.now(timezone.utc).isoformat(),
+        "joined_at": datetime.now(UTC).isoformat(),
     }
     team["members"].append(member)
     _save_team(team)
@@ -299,7 +299,7 @@ async def update_member_role(
     member_id: str,
     req: UpdateMemberRoleRequest,
     user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Change a team member's role. Requires admin role."""
     team = _load_team(team_id)
     if not team:

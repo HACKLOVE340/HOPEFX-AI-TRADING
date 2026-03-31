@@ -34,7 +34,7 @@ from __future__ import annotations
 import logging
 import threading
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from brokers.base import (
@@ -85,9 +85,9 @@ class BrokerHealth:
         self.last_error = last_error
         self.is_primary = is_primary
         self.mode = mode
-        self.timestamp = datetime.now(timezone.utc)
+        self.timestamp = datetime.now(UTC)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "connected": self.connected,
@@ -122,11 +122,11 @@ class BrokerManager:
         self._kill_switch = kill_switch
         self._enable_fix = enable_fix
 
-        self._brokers: Dict[str, BrokerConnector] = {}
+        self._brokers: dict[str, BrokerConnector] = {}
         self._active_name: Optional[str] = None
         self._lock = threading.RLock()
-        self._consecutive_failures: Dict[str, int] = {}
-        self._last_errors: Dict[str, Optional[str]] = {}
+        self._consecutive_failures: dict[str, int] = {}
+        self._last_errors: dict[str, Optional[str]] = {}
 
         # FIX bridge (optional low-latency path)
         self._fix_bridge = None
@@ -227,9 +227,9 @@ class BrokerManager:
     # Connection lifecycle
     # ------------------------------------------------------------------
 
-    def connect_all(self) -> Dict[str, bool]:
+    def connect_all(self) -> dict[str, bool]:
         """Connect all registered brokers. Returns {name: success}."""
-        results: Dict[str, bool] = {}
+        results: dict[str, bool] = {}
         with self._lock:
             brokers = dict(self._brokers)
         for name, broker in brokers.items():
@@ -359,7 +359,7 @@ class BrokerManager:
     # Position operations
     # ------------------------------------------------------------------
 
-    def get_positions(self) -> List[Position]:
+    def get_positions(self) -> list[Position]:
         """Return all open positions from the active broker."""
         broker = self._require_connected_broker()
         try:
@@ -382,11 +382,11 @@ class BrokerManager:
             self._record_failure(exc)
             raise
 
-    def close_all_positions(self) -> Dict[str, bool]:
+    def close_all_positions(self) -> dict[str, bool]:
         """Close all open positions. Returns {symbol: success}."""
         self._check_kill_switch("close_all_positions")
         broker = self._require_connected_broker()
-        results: Dict[str, bool] = {}
+        results: dict[str, bool] = {}
         try:
             positions = broker.get_positions()
         except Exception as exc:
@@ -436,7 +436,7 @@ class BrokerManager:
         timeframe: str = "1 hour",
         limit: int = 100,
         **kwargs,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return historical OHLCV bars from the active broker."""
         broker = self._require_connected_broker()
         try:
@@ -449,14 +449,14 @@ class BrokerManager:
     # Health monitoring
     # ------------------------------------------------------------------
 
-    def heartbeat(self) -> Dict[str, BrokerHealth]:
+    def heartbeat(self) -> dict[str, BrokerHealth]:
         """
         Check health of all registered brokers.
 
         Returns a dict of {broker_name: BrokerHealth}.
         Does NOT raise — health check failures are logged and returned.
         """
-        results: Dict[str, BrokerHealth] = {}
+        results: dict[str, BrokerHealth] = {}
         with self._lock:
             brokers = dict(self._brokers)
             active = self._active_name
@@ -507,7 +507,7 @@ class BrokerManager:
     # FIX bridge (low-latency path)
     # ------------------------------------------------------------------
 
-    async def place_order_fix(self, order: object) -> Dict[str, object]:
+    async def place_order_fix(self, order: object) -> dict[str, object]:
         """
         Submit order via FIX 4.4 bridge (low-latency path).
 

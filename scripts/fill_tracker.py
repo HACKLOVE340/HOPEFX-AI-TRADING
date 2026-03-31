@@ -46,7 +46,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -100,25 +100,25 @@ class OANDATransactionClient:
             "Content-Type": "application/json",
         }
 
-    def _get(self, path: str) -> Dict[str, Any]:
+    def _get(self, path: str) -> dict[str, Any]:
         import urllib.request
 
         url = f"{self.base_url}{path}"
-        req = urllib.request.Request(url, headers=self._headers)  # noqa: S310
+        req = urllib.request.Request(url, headers=self._headers)
         try:
-            with urllib.request.urlopen(req, timeout=20) as resp:  # nosec B310 - API URL is always https://  # noqa: S310
+            with urllib.request.urlopen(req, timeout=20) as resp:  # nosec B310 - API URL is always https://
                 return json.loads(resp.read())
         except Exception as exc:
             raise RuntimeError(f"OANDA API error on {path}: {exc}") from exc
 
-    def fetch_fills_since(self, from_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def fetch_fills_since(self, from_id: Optional[int] = None) -> list[dict[str, Any]]:
         """
         Fetch all ORDER_FILL transactions since `from_id` (exclusive).
 
         Returns a list of fill dicts, each containing:
             id, time, instrument, units, price, pl, account_balance
         """
-        fills: List[Dict[str, Any]] = []
+        fills: list[dict[str, Any]] = []
         page_size = 900  # OANDA max per page
 
         # Build query params
@@ -177,7 +177,7 @@ class OANDATransactionClient:
 # ── Ledger management ─────────────────────────────────────────────────────────
 
 
-def _load_ledger() -> Dict[str, Any]:
+def _load_ledger() -> dict[str, Any]:
     """Load the persistent fill ledger from disk."""
     if FILL_LEDGER.exists():
         try:
@@ -194,21 +194,21 @@ def _load_ledger() -> Dict[str, Any]:
     }
 
 
-def _save_ledger(ledger: Dict[str, Any]) -> None:
+def _save_ledger(ledger: dict[str, Any]) -> None:
     """Persist the fill ledger atomically."""
-    ledger["last_sync_at"] = datetime.now(timezone.utc).isoformat()
+    ledger["last_sync_at"] = datetime.now(UTC).isoformat()
     tmp = FILL_LEDGER.with_suffix(".tmp")
     tmp.write_text(json.dumps(ledger, indent=2))
     tmp.replace(FILL_LEDGER)
 
 
-def _update_gate_file(ledger: Dict[str, Any]) -> None:
+def _update_gate_file(ledger: dict[str, Any]) -> None:
     """Write paper_trading_gate.json with current gate status."""
     fill_count = ledger["fill_count"]
     gate_passed = fill_count >= FILL_GATE_TARGET
     pct = min(100.0, fill_count / FILL_GATE_TARGET * 100)
 
-    existing: Dict[str, Any] = {}
+    existing: dict[str, Any] = {}
     if GATE_FILE.exists():
         try:
             existing = json.loads(GATE_FILE.read_text())
@@ -226,7 +226,7 @@ def _update_gate_file(ledger: Dict[str, Any]) -> None:
         "last_sync_at": ledger["last_sync_at"],
         "phase3_enabled_at": (
             existing.get("phase3_enabled_at")
-            or (datetime.now(timezone.utc).isoformat() if gate_passed else None)
+            or (datetime.now(UTC).isoformat() if gate_passed else None)
         ),
     }
     GATE_FILE.write_text(json.dumps(gate, indent=2))
@@ -235,7 +235,7 @@ def _update_gate_file(ledger: Dict[str, Any]) -> None:
 # ── Sync logic ────────────────────────────────────────────────────────────────
 
 
-def sync_fills(client: OANDATransactionClient, ledger: Dict[str, Any]) -> int:
+def sync_fills(client: OANDATransactionClient, ledger: dict[str, Any]) -> int:
     """
     Fetch new fills from OANDA and merge into the ledger.
 
@@ -276,7 +276,7 @@ def sync_fills(client: OANDATransactionClient, ledger: Dict[str, Any]) -> int:
 # ── Report ────────────────────────────────────────────────────────────────────
 
 
-def print_report(ledger: Dict[str, Any]) -> None:
+def print_report(ledger: dict[str, Any]) -> None:
     """Print a human-readable gate status report."""
     fill_count = ledger["fill_count"]
     gate_passed = fill_count >= FILL_GATE_TARGET

@@ -31,7 +31,7 @@ order requests through the main app's TradeExecutor so pre-trade risk checks
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict
 
 import jwt
@@ -69,7 +69,7 @@ class APIGateway:
 
         # Security
         self.security = HTTPBearer()
-        self.rate_limits: Dict[str, Dict] = {}  # in-process fallback only
+        self.rate_limits: dict[str, dict] = {}  # in-process fallback only
 
         # Redis client for distributed rate limiting (optional)
         self._redis_client = None
@@ -145,7 +145,7 @@ class APIGateway:
                     )
             else:
                 # In-process fallback (single-worker only)
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 limit = self.rate_limits.get(client_ip, {"count": 0, "reset_time": now})
                 if (now - limit["reset_time"]).total_seconds() > _WINDOW:
                     limit = {"count": 0, "reset_time": now}
@@ -174,7 +174,7 @@ class APIGateway:
         async def health():
             return {
                 "status": "healthy",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "version": "3.0",
                 "components": {
                     "mcc": self.mcc.health
@@ -198,7 +198,7 @@ class APIGateway:
                 else {},
                 "orchestra": self.orchestra.get_heatmap_data(),
                 "portfolio": self.pms.get_portfolio_summary(),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
         # Strategy control
@@ -255,7 +255,7 @@ class APIGateway:
         # Order management
         @self.app.post("/api/v1/orders")
         async def create_order(
-            order: Dict,
+            order: dict,
             credentials: HTTPAuthorizationCredentials = Depends(self.security),
         ):
             self._verify_token(credentials.credentials, required_role="trader")
@@ -281,7 +281,7 @@ class APIGateway:
             # Route through the main app's TradeExecutor so all pre-trade risk
             # checks (PreTradeGate, drawdown limits, position sizing) apply.
             try:
-                from app import app_state  # noqa: PLC0415
+                from app import app_state
 
                 trade_executor = getattr(app_state, "trade_executor", None)
                 if trade_executor is None:
@@ -312,7 +312,7 @@ class APIGateway:
                     "commission": result.commission,
                     "latency_ms": result.latency_ms,
                     "message": result.message,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
 
             except HTTPException:
@@ -339,7 +339,7 @@ class APIGateway:
                 while True:
                     # Send portfolio updates
                     data = {
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "portfolio": self.pms.get_portfolio_summary(),
                         "heatmap": self.orchestra.get_heatmap_data(),
                     }
@@ -389,13 +389,13 @@ class APIGateway:
         payload = {
             "user_id": user_id,
             "role": role,
-            "iat": datetime.now(timezone.utc),
-            "exp": datetime.now(timezone.utc) + timedelta(hours=expires_hours),
+            "iat": datetime.now(UTC),
+            "exp": datetime.now(UTC) + timedelta(hours=expires_hours),
         }
 
         return jwt.encode(payload, self.auth_secret, algorithm="HS256")
 
-    def run(self, host: str = "0.0.0.0", port: int = 8443):  # nosec B104 - host configurable via parameter  # noqa: S104
+    def run(self, host: str = "0.0.0.0", port: int = 8443):  # nosec B104 - host configurable via parameter
         """Run with SSL/TLS"""
         import uvicorn
 
@@ -428,7 +428,7 @@ def build_gateway_app():
             app.mount("/gateway", _gw)
     """
     try:
-        from app import app_state  # noqa: PLC0415
+        from app import app_state
 
         mcc = getattr(app_state, "mcc", None)
         orchestra = getattr(app_state, "orchestra", None)

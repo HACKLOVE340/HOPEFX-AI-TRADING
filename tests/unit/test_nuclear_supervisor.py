@@ -441,7 +441,7 @@ class TestEngineKillSwitchHooks:
 
         os.environ["APP_ENV"] = "test"
         os.environ["SECURITY_JWT_SECRET"] = (
-            "test-only-jwt-secret-key-minimum-32-chars!!"  # noqa: S105
+            "test-only-jwt-secret-key-minimum-32-chars!!"
         )
         from hopefx_engine import validate_startup_environment
 
@@ -457,7 +457,7 @@ class TestEngineKillSwitchHooks:
         original = os.environ.get("SECURITY_JWT_SECRET")
         try:
             os.environ["APP_ENV"] = "test"
-            os.environ["SECURITY_JWT_SECRET"] = "short"  # noqa: S105
+            os.environ["SECURITY_JWT_SECRET"] = "short"
             from hopefx_engine import validate_startup_environment
 
             issues = validate_startup_environment()

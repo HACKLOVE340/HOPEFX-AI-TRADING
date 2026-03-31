@@ -11,7 +11,7 @@ Trader Profiles Management
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional, Dict
 
 
@@ -40,7 +40,7 @@ class TraderProfile:
     avg_loss: float = 0.0
     sharpe_ratio: float = 0.0
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "trader_id": self.trader_id,
@@ -70,7 +70,7 @@ class TraderProfileManager:
     """Manage trader profiles"""
 
     def __init__(self):
-        self.profiles: Dict[str, TraderProfile] = {}
+        self.profiles: dict[str, TraderProfile] = {}
 
     def create_profile(
         self, trader_id: str, username: str, email: str
@@ -80,8 +80,8 @@ class TraderProfileManager:
             trader_id=trader_id,
             username=username,
             email=email,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         self.profiles[trader_id] = profile
         return profile
@@ -96,7 +96,7 @@ class TraderProfileManager:
             if hasattr(profile, key):
                 setattr(profile, key, value)
 
-        profile.updated_at = datetime.now(timezone.utc)
+        profile.updated_at = datetime.now(UTC)
         return profile
 
     def get_profile(self, trader_id: str) -> Optional[TraderProfile]:

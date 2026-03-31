@@ -27,13 +27,13 @@ Provides endpoints for:
 - Paper Trading Dashboard
 """
 
-import asyncio  # noqa: E402
-import logging  # noqa: E402
-import os  # noqa: E402
-import sys  # noqa: E402
-from contextlib import asynccontextmanager  # noqa: E402
-from pathlib import Path  # noqa: E402
-from typing import Optional  # noqa: E402
+import asyncio
+import logging
+import os
+import sys
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Optional
 
 # Logger must be defined before any module-level try/except blocks that use it.
 logging.basicConfig(
@@ -41,11 +41,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, HTTPException, status  # noqa: E402
-from fastapi.responses import JSONResponse  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
-import uvicorn  # noqa: E402
+from fastapi import FastAPI, HTTPException, status
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+import uvicorn
 
 # Add project root to path
 project_root = Path(__file__).parent
@@ -58,7 +58,7 @@ _is_dev_env = os.getenv("APP_ENV", "development").lower() in ("development", "de
 _env_file = project_root / ".env"
 if _is_dev_env and not _env_file.exists():
     try:
-        from scripts.bootstrap_dev import bootstrap as _bootstrap  # noqa: E402
+        from scripts.bootstrap_dev import bootstrap as _bootstrap
 
         _bootstrap(verbose=True)
         # Reload env vars from the newly created .env
@@ -73,18 +73,18 @@ if _is_dev_env and not _env_file.exists():
 
 # ── Startup validation — fail loud before any connections are opened ──────────
 # Import here so the check runs before broker/DB/Redis init.
-from config.startup_validator import validate_environment  # noqa: E402
+from config.startup_validator import validate_environment
 
 validate_environment(strict=True)  # calls sys.exit(1) on failure
 
-from api.admin import (  # noqa: E402
+from api.admin import (
     log_activity,
     apply_persisted_risk_settings,
 )
-from api.platform import setup_rate_limiting, init_sentry  # noqa: E402
-from api.signals import create_signals_router as _create_signals_router  # noqa: E402
-from config.feature_flags import flags as feature_flags  # noqa: E402
-from kill_switch import KillSwitch, create_kill_switch_router  # noqa: E402
+from api.platform import setup_rate_limiting, init_sentry
+from api.signals import create_signals_router as _create_signals_router
+from config.feature_flags import flags as feature_flags
+from kill_switch import KillSwitch, create_kill_switch_router
 
 _signals_router = _create_signals_router()
 
@@ -153,7 +153,7 @@ app = FastAPI(
 )
 
 # All router registrations extracted to core/router_registry.py
-from core.router_registry import register_routers as _register_routers  # noqa: E402
+from core.router_registry import register_routers as _register_routers
 
 _register_routers(
     app,
@@ -273,7 +273,7 @@ except Exception as _otel_err:
 
 
 # AppState extracted to core/app_state.py — re-exported here for backwards compat
-from core.app_state import AppState, app_state  # noqa: E402, F401
+from core.app_state import AppState, app_state
 
 
 class ErrorResponse(BaseModel):
@@ -304,7 +304,7 @@ def get_db() -> Session:
 
 
 # Background task implementations extracted to core/background_tasks.py
-from core.background_tasks import nuclear_price_bridge as _nuclear_price_bridge  # noqa: E402
+from core.background_tasks import nuclear_price_bridge as _nuclear_price_bridge
 
 
 @asynccontextmanager
@@ -359,7 +359,7 @@ app.router.lifespan_context = lifespan
 
 
 # Stress tests and component registry builder extracted to core/startup_factories.py
-from core.startup_factories import (  # noqa: E402
+from core.startup_factories import (
     build_component_registry as _build_component_registry,
 )
 
@@ -428,7 +428,7 @@ def _push_state_to_api_modules(state) -> None:
 def _start_data_layer_orchestrator(state) -> None:
     """Start the data layer orchestrator as a background task (non-fatal)."""
     try:
-        from data_layer.orchestrator import orchestrator  # noqa: PLC0415
+        from data_layer.orchestrator import orchestrator
 
         asyncio.create_task(orchestrator.start(), name="data_layer_orchestrator")
         logger.info("Data layer orchestrator starting in background")
@@ -439,7 +439,7 @@ def _start_data_layer_orchestrator(state) -> None:
 def _init_kyc_gateway(state) -> None:
     """Wire KYCGateway with ComplianceManager (non-fatal)."""
     try:
-        from compliance.kyc_provider import init_kyc_gateway, get_kyc_gateway  # noqa: PLC0415
+        from compliance.kyc_provider import init_kyc_gateway, get_kyc_gateway
 
         _cm = getattr(state, "compliance_manager", None)
         if _cm is not None:
@@ -455,7 +455,7 @@ def _init_kyc_gateway(state) -> None:
 async def _start_l2_feed(state) -> None:
     """Start L2 order book feed and depth bridge (non-fatal)."""
     try:
-        from market_data.order_book import get_order_book_feed  # noqa: PLC0415
+        from market_data.order_book import get_order_book_feed
 
         _l2_symbols = os.getenv("L2_SYMBOLS", "XAU_USD,EUR_USD").split(",")
         _l2_feed = get_order_book_feed()
@@ -479,7 +479,7 @@ async def _start_l2_feed(state) -> None:
 
 async def _run_l2_depth_bridge(l2_feed, l2_symbols: list) -> None:
     """Push L2 snapshots into MicrostructureEngine on each interval tick."""
-    from data_layer.orchestrator import orchestrator as _dl_orch  # noqa: PLC0415
+    from data_layer.orchestrator import orchestrator as _dl_orch
 
     _interval = float(os.getenv("L2_SNAPSHOT_INTERVAL", "1.0"))
     while True:
@@ -500,7 +500,7 @@ async def _run_l2_depth_bridge(l2_feed, l2_symbols: list) -> None:
 def _start_sharpe_circuit_breaker(state) -> None:
     """Start Sharpe circuit breaker background task (non-fatal)."""
     try:
-        from ml.sharpe_circuit_breaker import get_sharpe_cb  # noqa: PLC0415
+        from ml.sharpe_circuit_breaker import get_sharpe_cb
 
         _scb_task = asyncio.create_task(get_sharpe_cb().run(), name="sharpe_circuit_breaker")
         if hasattr(state, "background_tasks"):
@@ -533,7 +533,7 @@ def _mount_gateway(fastapi_app) -> None:
     if os.getenv("ENABLE_GATEWAY", "false").lower() != "true":
         return
     try:
-        from api.gateway import build_gateway_app  # noqa: PLC0415
+        from api.gateway import build_gateway_app
 
         _gw_app = build_gateway_app()
         if _gw_app is not None:
@@ -595,7 +595,7 @@ async def shutdown_event():
 
 
 # /health and /status extracted to core/health.py
-from core.health import register_health_routes as _register_health_routes  # noqa: E402
+from core.health import register_health_routes as _register_health_routes
 
 _register_health_routes(app, app_state, kill_switch)
 
@@ -637,9 +637,9 @@ async def global_exception_handler(request, exc):
 # ── Middleware, page routes, and email webhook ────────────────────────────────
 # Extracted to core/ modules to keep app.py under 300 lines.
 
-from core.middleware import register_all as _register_middleware  # noqa: E402
-from core.email_webhook import register_email_webhook  # noqa: E402
-from core.page_routes import register_page_routes  # noqa: E402
+from core.middleware import register_all as _register_middleware
+from core.email_webhook import register_email_webhook
+from core.page_routes import register_page_routes
 
 _register_middleware(app)
 register_email_webhook(app)

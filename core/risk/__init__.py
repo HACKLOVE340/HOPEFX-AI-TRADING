@@ -11,7 +11,7 @@ Monte Carlo simulation with GARCH volatility and copula correlation
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple  # noqa: F401
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -173,7 +173,7 @@ class MonteCarloRiskEngine:
         garch.fit(returns)
         self.garch_models[symbol] = garch
 
-    def calculate_portfolio_risk(self, weights: Dict[str, float]) -> RiskMetrics:
+    def calculate_portfolio_risk(self, weights: dict[str, float]) -> RiskMetrics:
         """Calculate full risk metrics via Monte Carlo"""
         # Simulate using copula for dependencies
         copula_sims = self.copula.simulate(self.n_sims)
@@ -212,7 +212,7 @@ class MonteCarloRiskEngine:
             correlation_stress=float(self._stress_correlation(weights)),
         )
 
-    def _stress_correlation(self, weights: Dict[str, float]) -> float:
+    def _stress_correlation(self, weights: dict[str, float]) -> float:
         """Calculate correlation under stress (tail dependence)"""
         # Simplified: use historical correlation in worst 5% of days
         if len(self.historical_returns) < 100:
@@ -245,8 +245,8 @@ class RealTimeRiskMonitor:
 
     def update_portfolio(
         self,
-        positions: Dict[str, Decimal],
-        prices: Dict[str, Decimal],
+        positions: dict[str, Decimal],
+        prices: dict[str, Decimal],
     ):
         """Recalculate risk with current positions"""
         total_value = sum(positions[s] * prices[s] for s in positions)
@@ -259,7 +259,7 @@ class RealTimeRiskMonitor:
         self.current_risk = self.risk_engine.calculate_portfolio_risk(weights)
         return self._check_limits()
 
-    def _check_limits(self) -> List[str]:
+    def _check_limits(self) -> list[str]:
         """Check if any risk limits breached"""
         if not self.current_risk:
             return []
@@ -280,7 +280,7 @@ class RealTimeRiskMonitor:
 
         return violations
 
-    def _trigger_kill_switch(self, violations: List[str]):
+    def _trigger_kill_switch(self, violations: list[str]):
         """Emergency position reduction"""
         print(f"🚨 RISK LIMIT BREACH: {', '.join(violations)}")
         self.kill_switch_triggered = True

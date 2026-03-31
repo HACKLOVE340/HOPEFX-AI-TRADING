@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=15.0, connect=5.0)
 
 # Keywords that indicate gold/macro relevance — used for pre-filtering
-GOLD_KEYWORDS: Set[str] = {
+GOLD_KEYWORDS: set[str] = {
     "gold",
     "xau",
     "bullion",
@@ -89,7 +89,7 @@ class NewsFeedBase(ABC):
     def __init__(self) -> None:
         self._api_key: str = os.getenv(self._api_key_env, "")
         self._session: Optional[aiohttp.ClientSession] = None
-        self._seen_ids: Set[str] = set()
+        self._seen_ids: set[str] = set()
         self._last_call_ts: float = 0.0
         self._total_fetched: int = 0
         self._total_errors: int = 0
@@ -121,7 +121,7 @@ class NewsFeedBase(ABC):
             try:
                 async with session.get(url, params=params, headers=headers) as resp:
                     if resp.status == 429:
-                        wait = backoff + random.uniform(0, 1.0)  # nosec B311 - rate-limit retry jitter, not cryptographic  # noqa: S311
+                        wait = backoff + random.uniform(0, 1.0)  # nosec B311 - rate-limit retry jitter, not cryptographic
                         logger.warning(
                             "%s rate-limited — sleeping %.1fs", self.name.value, wait
                         )
@@ -132,7 +132,7 @@ class NewsFeedBase(ABC):
                     return await resp.json(content_type=None)
             except (TimeoutError, aiohttp.ClientError) as exc:
                 self._total_errors += 1
-                wait = backoff + random.uniform(0, 0.5)  # nosec B311 - retry jitter, not cryptographic  # noqa: S311
+                wait = backoff + random.uniform(0, 0.5)  # nosec B311 - retry jitter, not cryptographic
                 logger.warning(
                     "%s HTTP error attempt=%d: %s — retry %.1fs",
                     self.name.value,
@@ -147,7 +147,7 @@ class NewsFeedBase(ABC):
                     raise
 
     @abstractmethod
-    async def fetch_articles(self, limit: int = 50) -> List[NewsArticle]:
+    async def fetch_articles(self, limit: int = 50) -> list[NewsArticle]:
         """Fetch latest gold-relevant news articles."""
         ...
 

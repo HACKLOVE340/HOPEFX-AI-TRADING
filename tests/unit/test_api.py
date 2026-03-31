@@ -17,7 +17,7 @@ Tests for:
 import json
 import pytest
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import Optional
 from unittest.mock import patch
@@ -206,7 +206,7 @@ class TestTradingEndpoints:
 # api/admin.py
 # ============================================================
 
-from api.admin import (  # noqa: E402
+from api.admin import (
     log_activity,
     _load_persisted_risk_settings,
     _check_module,
@@ -215,9 +215,9 @@ from api.admin import (  # noqa: E402
 )
 
 
-import os as _os  # noqa: E402
-import time as _time  # noqa: E402
-import jwt as _jwt  # noqa: E402
+import os as _os
+import time as _time
+import jwt as _jwt
 
 
 def _admin_token() -> str:
@@ -395,7 +395,7 @@ class TestAdminEndpoints:
 # api/signals.py
 # ============================================================
 
-from api.signals import (  # noqa: E402
+from api.signals import (
     TradingSignal,
     SignalStrength,
     SignalDirection,
@@ -432,7 +432,7 @@ class TestTradingSignalDataclass:
     """Unit tests for the TradingSignal dataclass."""
 
     def _build_signal(self) -> TradingSignal:
-        expiry = datetime.now(timezone.utc) + timedelta(minutes=30)
+        expiry = datetime.now(UTC) + timedelta(minutes=30)
         return TradingSignal(
             id="SIG-TEST-001",
             symbol="XAUUSD",
@@ -489,7 +489,7 @@ class TestTradingSignalDataclass:
         assert sig.is_valid is True
 
     def test_is_valid_expired(self):
-        expiry = datetime.now(timezone.utc) - timedelta(minutes=1)
+        expiry = datetime.now(UTC) - timedelta(minutes=1)
         sig = TradingSignal(
             id="SIG-EXP-001",
             symbol="XAUUSD",
@@ -609,7 +609,7 @@ class TestRealTimeSignalService:
     def test_get_active_signals_removes_expired(self):
         sig = _make_signal(self.svc)
         # Force expiry
-        sig.expiry = datetime.now(timezone.utc) - timedelta(seconds=1)
+        sig.expiry = datetime.now(UTC) - timedelta(seconds=1)
         signals = self.svc.get_active_signals()
         assert sig.id not in [s.id for s in signals]
 
@@ -736,7 +736,7 @@ class TestSignalAnalytics:
 
     def test_record_signal(self):
         analytics = SignalAnalytics()
-        expiry = datetime.now(timezone.utc) + timedelta(minutes=30)
+        expiry = datetime.now(UTC) + timedelta(minutes=30)
         sig = TradingSignal(
             id="SIG-ANA-001",
             symbol="XAUUSD",
@@ -803,7 +803,7 @@ class TestCalculateStrength:
 # api/monetization.py — Pydantic model tests
 # ============================================================
 
-from api.monetization import (  # noqa: E402
+from api.monetization import (
     PricingTierResponse,
     SubscribeRequest,
     SubscribeResponse,
@@ -1067,7 +1067,7 @@ class TestMonetizationEndpoints:
 # api/websocket_server.py
 # ============================================================
 
-from api.websocket_server import (  # noqa: E402
+from api.websocket_server import (
     WebSocketManager,
     WebSocketMessage,
     ConnectionInfo,

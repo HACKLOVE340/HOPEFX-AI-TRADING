@@ -22,7 +22,7 @@ class TopstepTraderConnector(MT5Connector):
         "TopstepTrader-Demo",
     ]
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         if "server" not in config:
             config = dict(config)
             config["server"] = self.TOPSTEP_SERVERS[0]
@@ -30,7 +30,7 @@ class TopstepTraderConnector(MT5Connector):
         self.account_type = config.get("account_type", "combine")
         logger.info(f"TopstepTrader initialized: {self.account_type} account")
 
-    def get_topstep_rules(self) -> Dict[str, Any]:
+    def get_topstep_rules(self) -> dict[str, Any]:
         return {
             "max_daily_loss": "$2,000-$3,000",
             "max_trailing_drawdown": "$3,000-$4,000",

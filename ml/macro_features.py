@@ -41,7 +41,7 @@ Bug fixes vs prior version
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -50,7 +50,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 # ── Yahoo Finance tickers ─────────────────────────────────────────────────────
-_MACRO_TICKERS: Dict[str, str] = {
+_MACRO_TICKERS: dict[str, str] = {
     "dxy": "DX-Y.NYB",  # US Dollar Index
     "vix": "^VIX",  # CBOE Volatility Index (starts ~1990)
     "yield_10y": "^TNX",  # US 10-year Treasury yield
@@ -64,7 +64,7 @@ _MACRO_TICKERS: Dict[str, str] = {
 }
 
 # Columns always present in the output (filled with 0 if unavailable)
-MACRO_COLUMNS: List[str] = [
+MACRO_COLUMNS: list[str] = [
     "macro_dxy_ret",
     "macro_dxy_z20",
     "macro_dxy_z60",
@@ -101,7 +101,7 @@ def fetch_macro_history(
     Only forward-fill is applied — never backward-fill — so pre-history bars
     (e.g. pre-1990 VIX) remain NaN and are zeroed downstream after reindex.
     """
-    end = end or datetime.now(timezone.utc)
+    end = end or datetime.now(UTC)
 
     try:
         import yfinance as yf
@@ -109,7 +109,7 @@ def fetch_macro_history(
         logger.warning("yfinance not installed — macro features unavailable")
         return pd.DataFrame()
 
-    frames: Dict[str, pd.Series] = {}
+    frames: dict[str, pd.Series] = {}
     for name, ticker in _MACRO_TICKERS.items():
         try:
             raw = yf.download(

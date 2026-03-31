@@ -13,7 +13,7 @@ Falls back to in-memory storage when no DB session factory is available.
 import hashlib
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Dict, List
 
@@ -35,8 +35,8 @@ class ComplianceManager:
 
     def __init__(self, session_factory=None):
         self._session_factory = session_factory
-        self._kyc_records: Dict[str, Dict] = {}
-        self._audit_log: List[Dict] = []
+        self._kyc_records: dict[str, dict] = {}
+        self._audit_log: list[dict] = []
         self._sequence = 0
         self._last_hash = "0" * 64
 
@@ -46,8 +46,8 @@ class ComplianceManager:
 
     # ── KYC ──────────────────────────────────────────────────────────────────
 
-    def submit_kyc(self, user_id: str, document_type: str) -> Dict:
-        now = datetime.now(timezone.utc)
+    def submit_kyc(self, user_id: str, document_type: str) -> dict:
+        now = datetime.now(UTC)
         record = {
             "user_id": user_id,
             "status": KYCStatus.PENDING.value,
@@ -89,7 +89,7 @@ class ComplianceManager:
         return record
 
     def approve_kyc(self, user_id: str) -> bool:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if user_id in self._kyc_records:
             self._kyc_records[user_id]["status"] = KYCStatus.APPROVED.value
             self._kyc_records[user_id]["verified_at"] = now.isoformat()
@@ -112,7 +112,7 @@ class ComplianceManager:
         return True
 
     def reject_kyc(self, user_id: str, reason: str = "") -> bool:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if user_id in self._kyc_records:
             self._kyc_records[user_id]["status"] = KYCStatus.REJECTED.value
 
@@ -156,18 +156,18 @@ class ComplianceManager:
 
     # ── Trade logging ─────────────────────────────────────────────────────────
 
-    def log_trade(self, user_id: str, trade_data: Dict):
+    def log_trade(self, user_id: str, trade_data: dict):
         self._log_audit("ORDER", user_id, "trade_executed", trade_data)
 
     # ── Audit log ─────────────────────────────────────────────────────────────
 
-    def _log_audit(self, category: str, actor: str, action: str, data: Dict):
+    def _log_audit(self, category: str, actor: str, action: str, data: dict):
         self._sequence += 1
         record_str = json.dumps(
             {
                 "seq": self._sequence,
                 "prev": self._last_hash,
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
                 "data": data,
             },
             sort_keys=True,
@@ -178,7 +178,7 @@ class ComplianceManager:
 
         entry = {
             "sequence_number": self._sequence,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": "COMPLIANCE",
             "category": category,
             "actor": actor,
@@ -208,7 +208,7 @@ class ComplianceManager:
             except Exception as exc:
                 logger.error("Audit log DB write failed: %s", exc)
 
-    def get_audit_log(self, limit: int = 100) -> List[Dict]:
+    def get_audit_log(self, limit: int = 100) -> list[dict]:
         if self._session_factory:
             try:
                 from database.models import AuditLogEntry

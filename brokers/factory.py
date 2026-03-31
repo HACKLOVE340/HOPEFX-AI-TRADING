@@ -32,7 +32,7 @@ _DEFAULT_BROKER = os.getenv("BROKER", "paper").lower()
 class BrokerFactory:
     """Factory for creating broker instances."""
 
-    _brokers: Dict[str, type] = {}
+    _brokers: dict[str, type] = {}
 
     @classmethod
     def _ensure_registered(cls) -> None:
@@ -136,7 +136,7 @@ class BrokerFactory:
         logger.info(f"Broker registered: {name}")
 
     @classmethod
-    def create_broker(cls, name: str = None, config: Dict = None):
+    def create_broker(cls, name: str = None, config: dict = None):
         """
         Create a broker instance by name (case-insensitive).
 
@@ -166,7 +166,7 @@ class BrokerFactory:
         return list(cls._brokers.keys())
 
     @classmethod
-    def get_broker_info(cls, name: str) -> Dict:
+    def get_broker_info(cls, name: str) -> dict:
         cls._ensure_registered()
         broker_class = cls._brokers.get(name.lower())
         if not broker_class:
@@ -207,7 +207,7 @@ class BrokerFactory:
         if cfg is None:
             return None
 
-        brokers_section: Dict = cfg.get("brokers", {})
+        brokers_section: dict = cfg.get("brokers", {})
         resolved_name = (
             name or os.getenv("BROKER") or brokers_section.get("default", "prop_mt5")
         )
@@ -261,7 +261,7 @@ class BrokerFactory:
             return None
 
     @staticmethod
-    def _load_yaml_config(path: str) -> Optional[Dict]:
+    def _load_yaml_config(path: str) -> Optional[dict]:
         """Load and return the YAML config, or None if the file is missing."""
         config_path = Path(path)
         if not config_path.exists():

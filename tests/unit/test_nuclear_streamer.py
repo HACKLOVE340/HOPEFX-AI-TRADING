@@ -54,8 +54,8 @@ class _Collector:
     """Subscriber that records every price delivered via on_new_price."""
 
     def __init__(self):
-        self.prices: List[float] = []
-        self.errors: List[Exception] = []
+        self.prices: list[float] = []
+        self.errors: list[Exception] = []
 
     async def on_new_price(self, price: float) -> None:
         self.prices.append(price)

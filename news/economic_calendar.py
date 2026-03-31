@@ -19,7 +19,7 @@ import logging
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class EconomicEvent:
     currency: Optional[str] = None
     description: Optional[str] = None
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "title": self.title,
@@ -124,7 +124,7 @@ class EconomicCalendar:
     }
 
     def __init__(self):
-        self.events: List[EconomicEvent] = []
+        self.events: list[EconomicEvent] = []
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def add_event(self, event: EconomicEvent):
@@ -134,7 +134,7 @@ class EconomicCalendar:
 
     def get_upcoming_events(
         self, hours_ahead: int = 24, min_importance: Optional[EventImportance] = None
-    ) -> List[EconomicEvent]:
+    ) -> list[EconomicEvent]:
         """
         Get upcoming events
 
@@ -145,7 +145,7 @@ class EconomicCalendar:
         Returns:
             List of upcoming events
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now + timedelta(hours=hours_ahead)
 
         upcoming = [
@@ -171,9 +171,9 @@ class EconomicCalendar:
 
     def get_events_by_currency(
         self, currency: str, days_ahead: int = 7
-    ) -> List[EconomicEvent]:
+    ) -> list[EconomicEvent]:
         """Get events for a specific currency"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now + timedelta(days=days_ahead)
 
         return [
@@ -182,13 +182,13 @@ class EconomicCalendar:
             if event.currency == currency and now <= event.scheduled_time <= cutoff
         ]
 
-    def get_high_impact_events(self, hours_ahead: int = 24) -> List[EconomicEvent]:
+    def get_high_impact_events(self, hours_ahead: int = 24) -> list[EconomicEvent]:
         """Get high and critical importance events"""
         return self.get_upcoming_events(
             hours_ahead=hours_ahead, min_importance=EventImportance.HIGH
         )
 
-    def check_upcoming_events(self, warning_hours: int = 2) -> Dict:
+    def check_upcoming_events(self, warning_hours: int = 2) -> dict:
         """
         Check for upcoming high-impact events
 
@@ -229,7 +229,7 @@ class EconomicCalendar:
         """
         Create sample economic events for testing
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         sample_events = [
             EconomicEvent(
@@ -309,7 +309,7 @@ class EconomicCalendar:
         self.logger.warning(f"Event not found: {title}")
         return None
 
-    def get_event_summary(self, days_ahead: int = 7) -> Dict:
+    def get_event_summary(self, days_ahead: int = 7) -> dict:
         """Get summary of upcoming events"""
         upcoming = self.get_upcoming_events(hours_ahead=days_ahead * 24)
 

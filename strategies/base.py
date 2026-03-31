@@ -49,7 +49,7 @@ class Signal:
     price: float
     timestamp: datetime
     confidence: float  # 0.0 to 1.0
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
 
     def __post_init__(self):
         """Validate signal data"""
@@ -67,7 +67,7 @@ class StrategyConfig:
     enabled: bool = True
     risk_per_trade: float = 1.0  # Percentage
     max_positions: int = 3
-    parameters: Optional[Dict[str, Any]] = None
+    parameters: Optional[dict[str, Any]] = None
 
 
 class BaseStrategy(ABC):
@@ -121,7 +121,7 @@ class BaseStrategy(ABC):
         return self.performance_metrics
 
     @abstractmethod
-    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Analyze market data.
 
@@ -131,10 +131,9 @@ class BaseStrategy(ABC):
         Returns:
             Analysis results
         """
-        pass
 
     @abstractmethod
-    def generate_signal(self, analysis: Dict[str, Any]) -> Optional[Signal]:
+    def generate_signal(self, analysis: dict[str, Any]) -> Optional[Signal]:
         """
         Generate trading signal based on analysis.
 
@@ -144,9 +143,8 @@ class BaseStrategy(ABC):
         Returns:
             Signal if conditions are met, None otherwise
         """
-        pass
 
-    def on_bar(self, bar: Dict[str, Any]) -> Optional[Signal]:
+    def on_bar(self, bar: dict[str, Any]) -> Optional[Signal]:
         """
         Process new bar data.
 
@@ -202,7 +200,7 @@ class BaseStrategy(ABC):
         self.signals_history.append(signal)
         self.performance_metrics["total_signals"] += 1
 
-    def get_performance_metrics(self) -> Dict[str, Any]:
+    def get_performance_metrics(self) -> dict[str, Any]:
         """
         Get strategy performance metrics.
 

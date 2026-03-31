@@ -49,8 +49,8 @@ class ReplaySession:
     state: ReplayState = ReplayState.IDLE
     initial_balance: float = 100000.0
     current_balance: float = 100000.0
-    trades: List[Dict[str, Any]] = field(default_factory=list)
-    positions: List[Dict[str, Any]] = field(default_factory=list)
+    trades: list[dict[str, Any]] = field(default_factory=list)
+    positions: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
 
 

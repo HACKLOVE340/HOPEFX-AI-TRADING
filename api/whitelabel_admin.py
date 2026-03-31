@@ -83,7 +83,7 @@ def _seed_demo():
 _seed_demo()
 
 # In-memory API key store: tenant_id → hashed key (shown once at creation)
-_api_keys: Dict[str, str] = {}
+_api_keys: dict[str, str] = {}
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ class CreateTenantBody(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     owner_email: str
     trial_days: int = Field(0, ge=0, le=365)
-    features: List[str] = []
+    features: list[str] = []
     primary_color: Optional[str] = None
     logo_url: Optional[str] = None
 

@@ -402,7 +402,7 @@ class AdvancedModelPredictor:
         symbol: str = "XAUUSD",
         threshold_long: float = 0.58,
         threshold_short: float = 0.42,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Return a signal dict for the signal engine.
 
@@ -452,9 +452,10 @@ def get_advanced_predictor() -> AdvancedModelPredictor:
 
 # ── LiveInferenceLoop ─────────────────────────────────────────────────────────
 
-import asyncio  # noqa: E402
-import threading  # noqa: E402
-from typing import Callable, List  # noqa: E402
+import asyncio
+import threading
+from typing import Callable, List
+from datetime import UTC
 
 
 class LiveInferenceLoop:
@@ -504,19 +505,19 @@ class LiveInferenceLoop:
         self.threshold_short = threshold_short
 
         self._predictor = get_advanced_predictor()
-        self._callbacks: List[Callable[[Dict[str, Any]], None]] = []
+        self._callbacks: list[Callable[[dict[str, Any]], None]] = []
         self._running: bool = False
         self._tick_count: int = 0
         self._error_count: int = 0
-        self._last_signal: Optional[Dict[str, Any]] = None
+        self._last_signal: Optional[dict[str, Any]] = None
         self._lock = threading.Lock()
 
-    def add_callback(self, fn: Callable[[Dict[str, Any]], None]) -> None:
+    def add_callback(self, fn: Callable[[dict[str, Any]], None]) -> None:
         """Register a callback invoked on every filtered signal."""
         with self._lock:
             self._callbacks.append(fn)
 
-    def remove_callback(self, fn: Callable[[Dict[str, Any]], None]) -> None:
+    def remove_callback(self, fn: Callable[[dict[str, Any]], None]) -> None:
         with self._lock:
             self._callbacks = [c for c in self._callbacks if c is not fn]
 
@@ -580,8 +581,8 @@ class LiveInferenceLoop:
             return None
 
     def _apply_signal_filter(
-        self, signal: Dict[str, Any], ohlcv: pd.DataFrame
-    ) -> Dict[str, Any]:
+        self, signal: dict[str, Any], ohlcv: pd.DataFrame
+    ) -> dict[str, Any]:
         """
         Run SignalFilter gates and annotate the signal dict.
 
@@ -636,7 +637,7 @@ class LiveInferenceLoop:
             return
 
         signal["symbol"] = self.symbol
-        signal["ts"] = datetime.now(timezone.utc).isoformat()
+        signal["ts"] = datetime.now(UTC).isoformat()
         signal = self._apply_signal_filter(signal, ohlcv)
 
         with self._lock:
@@ -685,7 +686,7 @@ class LiveInferenceLoop:
         self._running = False
 
     @property
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "symbol": self.symbol,

@@ -106,7 +106,7 @@ def db_delete(key: str) -> bool:
         return False
 
 
-def db_keys_prefix(prefix: str) -> List[str]:
+def db_keys_prefix(prefix: str) -> list[str]:
     """Return all keys that start with the given prefix."""
     try:
         from database.models import Configuration

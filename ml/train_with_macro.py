@@ -55,7 +55,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -83,7 +83,7 @@ def fetch_gold_ohlcv(symbol: str, years: int) -> pd.DataFrame:
     """
     import yfinance as yf
 
-    end = datetime.now(timezone.utc)
+    end = datetime.now(UTC)
     start = end - timedelta(days=years * 365)
     logger.info(
         "Requesting %d years of %s daily data (%s → %s)",
@@ -142,7 +142,7 @@ def build_features(
     ohlcv: pd.DataFrame,
     macro_df: Optional[pd.DataFrame],
     prediction_horizon: int = 1,
-) -> Tuple[pd.DataFrame, pd.Series]:
+) -> tuple[pd.DataFrame, pd.Series]:
     """Build feature matrix and binary direction target."""
     # ml/training/ directory shadows ml/training.py — import directly from the file
     import importlib.util as _ilu
@@ -225,7 +225,7 @@ def walk_forward_eval(
     y: pd.Series,
     n_splits: int = 5,
     model_type: str = "xgb",
-) -> Dict:
+) -> dict:
     """
     Walk-forward cross-validation.
 
@@ -417,7 +417,7 @@ def oos_eval(
     X_oos: pd.DataFrame,
     y_oos: pd.Series,
     model_type: str = "xgb",
-) -> Dict:
+) -> dict:
     """
     Train on X_train/y_train, evaluate on a completely held-out X_oos/y_oos.
 
@@ -608,7 +608,7 @@ def main():
 
     # ── Fetch data ────────────────────────────────────────────────────────────
     ohlcv = fetch_gold_ohlcv(args.symbol, args.years)
-    end_dt = datetime.now(timezone.utc)
+    end_dt = datetime.now(UTC)
     start_dt = end_dt - timedelta(days=args.years * 365)
 
     macro_df = None
@@ -666,7 +666,7 @@ def main():
         "sample_count": len(X),
         "cv_sample_count": len(X_cv),
         "oos_sample_count": oos_n,
-        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "trained_at": datetime.now(UTC).isoformat(),
     }
 
     for model_type in ("xgb", "rf"):

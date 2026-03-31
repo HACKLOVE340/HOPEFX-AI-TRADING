@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -76,7 +76,7 @@ class TestDailyReporter:
             sent.append(text)
 
         # Simulate hour != 0
-        now = datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
         with patch("connect_to_life.datetime") as mock_dt, patch(
             "connect_to_life._telegram", fake_telegram
         ):
@@ -93,7 +93,7 @@ class TestDailyReporter:
         async def fake_telegram(token, chat, text):
             sent.append(text)
 
-        now = datetime(2025, 1, 15, 0, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 1, 15, 0, 0, 0, tzinfo=UTC)
         with patch("connect_to_life.datetime") as mock_dt, patch(
             "connect_to_life._telegram", fake_telegram
         ):
@@ -121,7 +121,7 @@ class TestDailyReporter:
         async def fake_telegram(token, chat, text):
             sent.append(text)
 
-        now = datetime(2025, 1, 15, 0, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 1, 15, 0, 0, 0, tzinfo=UTC)
         with patch("connect_to_life.datetime") as mock_dt, patch(
             "connect_to_life._telegram", fake_telegram
         ):
@@ -365,7 +365,7 @@ class TestOnEngineDone:
 class TestConstants:
     def test_default_dd_hard_stop_is_3_percent(self):
         # Default must be 3% — changing this affects live risk management
-        assert DD_HARD_STOP_PCT == pytest.approx(0.03)
+        assert pytest.approx(0.03) == DD_HARD_STOP_PCT
 
     def test_poll_interval_is_positive(self):
         assert POLL_INTERVAL > 0

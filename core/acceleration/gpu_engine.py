@@ -173,7 +173,7 @@ class MonteCarloRiskEngine:
         garch.fit(returns)
         self.garch_models[symbol] = garch
 
-    def calculate_portfolio_risk(self, weights: Dict[str, float]) -> RiskMetrics:
+    def calculate_portfolio_risk(self, weights: dict[str, float]) -> RiskMetrics:
         """Calculate full risk metrics via Monte Carlo"""
         # Simulate using copula for dependencies
         copula_sims = self.copula.simulate(self.n_sims)
@@ -212,7 +212,7 @@ class MonteCarloRiskEngine:
             correlation_stress=float(self._stress_correlation(weights)),
         )
 
-    def _stress_correlation(self, weights: Dict[str, float]) -> float:
+    def _stress_correlation(self, weights: dict[str, float]) -> float:
         """Calculate correlation under stress (tail dependence)"""
         # Simplified: use historical correlation in worst 5% of days
         if len(self.historical_returns) < 100:
@@ -245,8 +245,8 @@ class RealTimeRiskMonitor:
 
     def update_portfolio(
         self,
-        positions: Dict[str, Decimal],
-        prices: Dict[str, Decimal],
+        positions: dict[str, Decimal],
+        prices: dict[str, Decimal],
     ):
         """Recalculate risk with current positions"""
         total_value = sum(positions[s] * prices[s] for s in positions)
@@ -259,7 +259,7 @@ class RealTimeRiskMonitor:
         self.current_risk = self.risk_engine.calculate_portfolio_risk(weights)
         return self._check_limits()
 
-    def _check_limits(self) -> List[str]:
+    def _check_limits(self) -> list[str]:
         """Check if any risk limits breached"""
         if not self.current_risk:
             return []
@@ -280,7 +280,7 @@ class RealTimeRiskMonitor:
 
         return violations
 
-    def _trigger_kill_switch(self, violations: List[str]):
+    def _trigger_kill_switch(self, violations: list[str]):
         """Emergency position reduction"""
         print(f"🚨 RISK LIMIT BREACH: {', '.join(violations)}")
         self.kill_switch_triggered = True
@@ -292,12 +292,12 @@ class RealTimeRiskMonitor:
 # Falls back to CPU when CUDA / torch is unavailable.
 # ---------------------------------------------------------------------------
 
-import logging as _logging  # noqa: E402
-from pathlib import Path as _Path  # noqa: E402
-from typing import List as _List  # noqa: E402
-from typing import Optional as _Optional  # noqa: E402
+import logging as _logging
+from pathlib import Path as _Path
+from typing import List as _List
+from typing import Optional as _Optional
 
-import numpy as _np  # noqa: E402
+import numpy as _np
 
 _gpu_logger = _logging.getLogger(__name__)
 
@@ -486,7 +486,7 @@ class GPUInferenceEngine:
             f"Default search paths checked: {self._DEFAULT_ONNX}, {self._DEFAULT_PT}"
         )
 
-    def batch_predict(self, feature_batches: _List[_np.ndarray]) -> _List[_np.ndarray]:
+    def batch_predict(self, feature_batches: list[_np.ndarray]) -> list[_np.ndarray]:
         """Run predict() on each batch and return a list of output arrays."""
         return [self.predict(b) for b in feature_batches]
 

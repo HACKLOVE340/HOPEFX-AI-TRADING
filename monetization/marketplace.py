@@ -10,7 +10,7 @@ Strategy listings, pricing engine, subscription management, license validation
 
 import json
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -53,8 +53,8 @@ class StrategyListing:
     tier: SubscriptionTier
     status: StrategyStatus
     category: str
-    tags: List[str]
-    performance_metrics: Dict[str, float]
+    tags: list[str]
+    performance_metrics: dict[str, float]
     created_at: datetime
     updated_at: datetime
     rating: float = 0.0
@@ -63,7 +63,7 @@ class StrategyListing:
     total_revenue: float = 0.0
     is_featured: bool = False
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "strategy_id": self.strategy_id,
             "creator_id": self.creator_id,
@@ -301,7 +301,7 @@ class MarketplaceDatabase:
         tier: Optional[SubscriptionTier] = None,
         min_rating: float = 0.0,
         sort_by: str = "rating",
-    ) -> List[StrategyListing]:
+    ) -> list[StrategyListing]:
         """Search strategies with filters"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -338,7 +338,7 @@ class PricingEngine:
     """Dynamic pricing and discount engine"""
 
     def __init__(self):
-        self.discounts: Dict[str, Any] = {}
+        self.discounts: dict[str, Any] = {}
 
     def calculate_price(
         self,
@@ -347,7 +347,7 @@ class PricingEngine:
         billing_cycle: str = "monthly",
         user_id: Optional[str] = None,
         coupon_code: Optional[str] = None,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Calculate final price with discounts
 
@@ -431,7 +431,7 @@ class LicenseManager:
             user_id=user_id,
             strategy_id=strategy_id,
             subscription_id=subscription_id,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             expires_at=expires_at,
             is_active=True,
             max_activations=max_activations,
@@ -466,7 +466,7 @@ class LicenseManager:
 
     def validate_license(
         self, key: str, user_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Validate license key
 
@@ -502,7 +502,7 @@ class LicenseManager:
             }
 
         # Check expiration
-        if datetime.now(timezone.utc) > license_data["expires_at"]:
+        if datetime.now(UTC) > license_data["expires_at"]:
             return {
                 "valid": False,
                 "message": "License has expired",
@@ -545,7 +545,7 @@ class LicenseManager:
                 last_used = ?
             WHERE license_id = ?
         """,
-            (datetime.now(timezone.utc).isoformat(), license_id),
+            (datetime.now(UTC).isoformat(), license_id),
         )
         conn.commit()
         conn.close()
@@ -602,7 +602,7 @@ class SubscriptionManager:
 
         # Create subscription
         subscription_id = secrets.token_hex(16)
-        start_date = datetime.now(timezone.utc)
+        start_date = datetime.now(UTC)
 
         if billing_cycle == "monthly":
             end_date = start_date + timedelta(days=30)
@@ -707,7 +707,7 @@ class SubscriptionManager:
             WHERE user_id = ? AND strategy_id = ? AND is_active = 1
             AND end_date > ?
         """,
-            (user_id, strategy_id, datetime.now(timezone.utc).isoformat()),
+            (user_id, strategy_id, datetime.now(UTC).isoformat()),
         )
         row = cursor.fetchone()
         conn.close()
@@ -731,8 +731,8 @@ class MarketplaceAPI:
         price_monthly: float,
         price_yearly: float,
         category: str,
-        tags: List[str],
-        performance_metrics: Dict[str, float],
+        tags: list[str],
+        performance_metrics: dict[str, float],
     ) -> StrategyListing:
         """List new strategy on marketplace"""
         import uuid
@@ -751,8 +751,8 @@ class MarketplaceAPI:
             category=category,
             tags=tags,
             performance_metrics=performance_metrics,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         self.db.save_strategy(strategy)
@@ -765,13 +765,13 @@ class MarketplaceAPI:
         strategy = self.db.get_strategy(strategy_id)
         if strategy:
             strategy.status = StrategyStatus.ACTIVE
-            strategy.updated_at = datetime.now(timezone.utc)
+            strategy.updated_at = datetime.now(UTC)
             self.db.save_strategy(strategy)
             print(f"✅ Strategy {strategy_id} approved")
             return True
         return False
 
-    def get_featured_strategies(self, limit: int = 10) -> List[StrategyListing]:
+    def get_featured_strategies(self, limit: int = 10) -> list[StrategyListing]:
         """Get featured strategies"""
         conn = sqlite3.connect(self.db.db_path)
         cursor = conn.cursor()
@@ -789,7 +789,7 @@ class MarketplaceAPI:
 
         return [self.db._row_to_strategy(row) for row in rows]
 
-    def get_creator_stats(self, creator_id: str) -> Dict:
+    def get_creator_stats(self, creator_id: str) -> dict:
         """Get creator statistics"""
         conn = sqlite3.connect(self.db.db_path)
         cursor = conn.cursor()
@@ -826,7 +826,7 @@ if __name__ == "__main__":
 
 
 # ── Compatibility aliases expected by monetization/__init__.py ────────────────
-import enum as _enum  # noqa: E402
+import enum as _enum
 
 
 class StrategyCategory(_enum.Enum):
@@ -858,9 +858,9 @@ class PurchaseStatus(_enum.Enum):
 
 
 # Dataclass-style aliases
-from dataclasses import dataclass  # noqa: E402
-from typing import List, Optional  # noqa: E402
-from datetime import datetime  # noqa: E402
+from dataclasses import dataclass
+from typing import List, Optional
+from datetime import datetime, UTC
 
 
 @dataclass
@@ -873,7 +873,7 @@ class MarketplaceStrategy:
     price: float = 0.0
     author_id: str = ""
     status: StrategyStatus = StrategyStatus.ACTIVE
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -882,7 +882,7 @@ class StrategyPurchase:
     user_id: str = ""
     strategy_id: str = ""
     status: PurchaseStatus = PurchaseStatus.ACTIVE
-    purchased_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    purchased_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -892,12 +892,12 @@ class StrategyReview:
     strategy_id: str = ""
     rating: int = 5
     comment: str = ""
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ── Full StrategyMarketplace implementation expected by tests ─────────────────
-import uuid as _uuid  # noqa: E402
-from decimal import Decimal as _Decimal  # noqa: E402
+import uuid as _uuid
+from decimal import Decimal as _Decimal
 
 
 @dataclass
@@ -956,10 +956,10 @@ class StrategyMarketplace:
     """In-memory strategy marketplace — full API used by tests."""
 
     def __init__(self, config=None):
-        self._strategies: Dict[str, _StrategyListing] = {}
-        self._purchases: Dict[str, _Purchase] = {}
-        self._licenses: Dict[str, set] = {}  # buyer_id → {strategy_id}
-        self._reviews: Dict[str, _Review] = {}
+        self._strategies: dict[str, _StrategyListing] = {}
+        self._purchases: dict[str, _Purchase] = {}
+        self._licenses: dict[str, set] = {}  # buyer_id → {strategy_id}
+        self._reviews: dict[str, _Review] = {}
         self.config = config or {}
 
     def _list_strategy_internal(
@@ -999,9 +999,7 @@ class StrategyMarketplace:
         payment_method: str = "wallet",
     ) -> Optional[_Purchase]:
         # Handle reversed positional call: purchase_strategy(strategy_id, buyer_id)
-        if buyer_id and not strategy_id and buyer_id in self._strategies:
-            buyer_id, strategy_id = strategy_id, buyer_id
-        elif (
+        if buyer_id and not strategy_id and buyer_id in self._strategies or (
             buyer_id
             and strategy_id
             and buyer_id in self._strategies
@@ -1188,4 +1186,4 @@ class StrategyPerformance:
     calmar_ratio: float = 0.0
     profit_factor: float = 0.0
     period_days: int = 90
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))

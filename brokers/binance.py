@@ -13,7 +13,7 @@ import hashlib
 import hmac
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -52,7 +52,7 @@ class BinanceConnector(BrokerConnector):
     LIVE_URL = "https://api.binance.com"
     TESTNET_URL = "https://testnet.binance.vision"
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Initialize Binance connector.
 
@@ -317,7 +317,7 @@ class BinanceConnector(BrokerConnector):
             logger.error(f"Failed to get order {order_id}: {e}")
             return None
 
-    def get_positions(self) -> List[Position]:
+    def get_positions(self) -> list[Position]:
         """
         Get all open positions (non-zero balances).
 
@@ -361,7 +361,7 @@ class BinanceConnector(BrokerConnector):
                         current_price=0.0,  # Would need separate price call
                         unrealized_pnl=0.0,  # Not calculated for spot
                         realized_pnl=0.0,
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                     )
                     positions.append(position)
 
@@ -480,7 +480,7 @@ class BinanceConnector(BrokerConnector):
                 margin_used=0.0,  # Not applicable for spot
                 margin_available=total_balance,
                 positions_count=positions_count,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
             return info
@@ -494,7 +494,7 @@ class BinanceConnector(BrokerConnector):
         symbol: str,
         timeframe: str = "1m",
         limit: int = 100,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Optional[list[dict[str, Any]]]:
         """
         Get historical market data (klines/candlesticks).
 
@@ -541,7 +541,7 @@ class BinanceConnector(BrokerConnector):
             logger.error(f"Failed to get market data for {symbol}: {e}")
             return None
 
-    def _generate_signature(self, params: Dict) -> str:
+    def _generate_signature(self, params: dict) -> str:
         """Generate HMAC SHA256 signature for Binance API"""
         query_string = "&".join([f"{k}={v}" for k, v in params.items()])
         signature = hmac.new(

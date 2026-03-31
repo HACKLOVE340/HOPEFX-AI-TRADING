@@ -16,7 +16,7 @@ class RiskAnalyzer:
 
     def calculate_var(
         self,
-        portfolio_returns: List[float],
+        portfolio_returns: list[float],
         confidence_level: float = 0.95,
         method: str = "historical",
     ) -> float:
@@ -51,7 +51,7 @@ class RiskAnalyzer:
         return mean - z_score * std
 
     def calculate_cvar(
-        self, portfolio_returns: List[float], confidence_level: float = 0.95
+        self, portfolio_returns: list[float], confidence_level: float = 0.95
     ) -> float:
         """Calculate Conditional VaR (Expected Shortfall)"""
         var = self.calculate_var(portfolio_returns, confidence_level)
@@ -60,7 +60,7 @@ class RiskAnalyzer:
 
     def risk_attribution(
         self, portfolio_weights: np.ndarray, covariance_matrix: np.ndarray
-    ) -> Dict:
+    ) -> dict:
         """Calculate risk attribution"""
         portfolio_variance = portfolio_weights.T @ covariance_matrix @ portfolio_weights
         marginal_risk = covariance_matrix @ portfolio_weights

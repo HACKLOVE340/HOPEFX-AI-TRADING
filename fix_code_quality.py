@@ -26,7 +26,7 @@ def fix_trailing_whitespace(file_path):
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(fixed_content)
 
-    return len([l for l in lines if l != l.rstrip()])  # noqa: E741
+    return len([l for l in lines if l != l.rstrip()])
 
 
 def fix_blank_lines(file_path):

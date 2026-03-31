@@ -24,7 +24,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -93,7 +93,7 @@ class PropFirmMetrics:
     monthly_loss_limit: float
     remaining_monthly_loss: float
     leverage: int = 100
-    last_update: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_update: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -108,7 +108,7 @@ class PropFirmTrade:
     quantity: float = 0.0
     pnl: float = 0.0
     pnl_percentage: float = 0.0
-    entry_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    entry_time: datetime = field(default_factory=lambda: datetime.now(UTC))
     exit_time: Optional[datetime] = None
     duration_seconds: int = 0
     status: str = "open"  # open, closed, cancelled
@@ -173,22 +173,22 @@ class BasePropFirmBroker(ABC):
         price: Optional[float] = None,
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Place an order and return the broker's response dict."""
 
     @abstractmethod
-    async def close_trade(self, trade_id: str) -> Dict[str, Any]:
+    async def close_trade(self, trade_id: str) -> dict[str, Any]:
         """Close an open trade by ID and return the broker's response dict."""
 
     @abstractmethod
-    async def get_open_trades(self) -> List[PropFirmTrade]:
+    async def get_open_trades(self) -> list[PropFirmTrade]:
         """Return all currently open trades."""
 
     @abstractmethod
-    async def get_trade_history(self, limit: int = 100) -> List[PropFirmTrade]:
+    async def get_trade_history(self, limit: int = 100) -> list[PropFirmTrade]:
         """Return the most recent closed trades, newest first."""
 
-    async def check_risk_violations(self) -> Tuple[bool, Optional[str]]:
+    async def check_risk_violations(self) -> tuple[bool, Optional[str]]:
         """Check for risk limit violations"""
         metrics = await self.get_metrics()
 
@@ -232,10 +232,10 @@ class FTMOBroker(BasePropFirmBroker):
         self,
         method: str,
         endpoint: str,
-        data: Optional[Dict] = None,
-    ) -> Dict[str, str]:
+        data: Optional[dict] = None,
+    ) -> dict[str, str]:
         """Generate FTMO API signature"""
-        timestamp = str(int(datetime.now(timezone.utc).timestamp() * 1000))
+        timestamp = str(int(datetime.now(UTC).timestamp() * 1000))
         self._nonce += 1
 
         sig_string = f"{method.upper()}{endpoint}{timestamp}{self._nonce}"
@@ -331,7 +331,7 @@ class FTMOBroker(BasePropFirmBroker):
         price: Optional[float] = None,
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Place order on FTMO with risk checks"""
 
         if not self.session:
@@ -382,7 +382,7 @@ class FTMOBroker(BasePropFirmBroker):
             logger.error(f"Failed to place FTMO order: {e}")
             raise
 
-    async def get_open_trades(self) -> List[PropFirmTrade]:
+    async def get_open_trades(self) -> list[PropFirmTrade]:
         """Get open trades"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -419,7 +419,7 @@ class FTMOBroker(BasePropFirmBroker):
             logger.error(f"Failed to fetch FTMO open trades: {e}")
             raise
 
-    async def close_trade(self, trade_id: str) -> Dict[str, Any]:
+    async def close_trade(self, trade_id: str) -> dict[str, Any]:
         """Close specific trade"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -441,7 +441,7 @@ class FTMOBroker(BasePropFirmBroker):
             logger.error(f"Failed to close FTMO trade: {e}")
             raise
 
-    async def get_trade_history(self, limit: int = 100) -> List[PropFirmTrade]:
+    async def get_trade_history(self, limit: int = 100) -> list[PropFirmTrade]:
         """Get closed trades history"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -568,7 +568,7 @@ class The5ersBroker(BasePropFirmBroker):
         price: Optional[float] = None,
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Place order on The5ers"""
 
         if not self.session:
@@ -609,7 +609,7 @@ class The5ersBroker(BasePropFirmBroker):
             logger.error(f"Failed to place The5ers order: {e}")
             raise
 
-    async def get_open_trades(self) -> List[PropFirmTrade]:
+    async def get_open_trades(self) -> list[PropFirmTrade]:
         """Get open trades on The5ers"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -649,7 +649,7 @@ class The5ersBroker(BasePropFirmBroker):
             logger.error(f"Failed to fetch The5ers positions: {e}")
             raise
 
-    async def close_trade(self, trade_id: str) -> Dict[str, Any]:
+    async def close_trade(self, trade_id: str) -> dict[str, Any]:
         """Close position on The5ers"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -674,7 +674,7 @@ class The5ersBroker(BasePropFirmBroker):
             logger.error(f"Failed to close The5ers position: {e}")
             raise
 
-    async def get_trade_history(self, limit: int = 100) -> List[PropFirmTrade]:
+    async def get_trade_history(self, limit: int = 100) -> list[PropFirmTrade]:
         """Get trade history from The5ers"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -741,7 +741,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
         self.base_url = self.SANDBOX_URL if sandbox else self.BASE_URL
         self.secret_key = secret_key
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         """Get authenticated headers"""
         return {
             "Authorization": f"ApiKey {self.api_key}",
@@ -811,7 +811,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
         price: Optional[float] = None,
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Place order on MyForexFunds"""
 
         if not self.session:
@@ -849,7 +849,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
             logger.error(f"Failed to place MyForexFunds order: {e}")
             raise
 
-    async def get_open_trades(self) -> List[PropFirmTrade]:
+    async def get_open_trades(self) -> list[PropFirmTrade]:
         """Get open trades on MyForexFunds"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -886,7 +886,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
             logger.error(f"Failed to fetch MyForexFunds trades: {e}")
             raise
 
-    async def close_trade(self, trade_id: str) -> Dict[str, Any]:
+    async def close_trade(self, trade_id: str) -> dict[str, Any]:
         """Close trade on MyForexFunds"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -908,7 +908,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
             logger.error(f"Failed to close MyForexFunds trade: {e}")
             raise
 
-    async def get_trade_history(self, limit: int = 100) -> List[PropFirmTrade]:
+    async def get_trade_history(self, limit: int = 100) -> list[PropFirmTrade]:
         """Get trade history from MyForexFunds"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -973,7 +973,7 @@ class TopStepBroker(BasePropFirmBroker):
         self.base_url = self.SANDBOX_URL if sandbox else self.BASE_URL
         self.secret_key = secret_key
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         """Get authenticated headers"""
         # TopStep uses OAuth2 or API key
         return {
@@ -1046,7 +1046,7 @@ class TopStepBroker(BasePropFirmBroker):
         price: Optional[float] = None,
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Place order on TopStep"""
 
         if not self.session:
@@ -1084,7 +1084,7 @@ class TopStepBroker(BasePropFirmBroker):
             logger.error(f"Failed to place TopStep order: {e}")
             raise
 
-    async def get_open_trades(self) -> List[PropFirmTrade]:
+    async def get_open_trades(self) -> list[PropFirmTrade]:
         """Get open positions on TopStep"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -1121,7 +1121,7 @@ class TopStepBroker(BasePropFirmBroker):
             logger.error(f"Failed to fetch TopStep positions: {e}")
             raise
 
-    async def close_trade(self, trade_id: str) -> Dict[str, Any]:
+    async def close_trade(self, trade_id: str) -> dict[str, Any]:
         """Close position on TopStep"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -1143,7 +1143,7 @@ class TopStepBroker(BasePropFirmBroker):
             logger.error(f"Failed to close TopStep position: {e}")
             raise
 
-    async def get_trade_history(self, limit: int = 100) -> List[PropFirmTrade]:
+    async def get_trade_history(self, limit: int = 100) -> list[PropFirmTrade]:
         """Get trade history from TopStep"""
         if not self.session:
             raise RuntimeError("Session not initialized")

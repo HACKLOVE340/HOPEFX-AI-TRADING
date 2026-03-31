@@ -53,7 +53,7 @@ class BacktestConfig:
 
     start_date: datetime
     end_date: datetime
-    symbols: List[str]
+    symbols: list[str]
     initial_capital: float = 100000.0
     # Commission: $7 round-trip is realistic for XAUUSD CFD/futures (was $5)
     commission_per_trade: float = 7.0
@@ -90,9 +90,9 @@ class BacktestResult:
     # sharpe_ratio: trade-level Sharpe (mean/std of net_pnl * sqrt(252/avg_hold_days)).
     # This is the credible number.  Bar-level Sharpe is inflated by flat no-trade days.
     sharpe_ratio: float
-    equity_curve: List[Dict]
-    trades: List[Dict]
-    metrics: Dict[str, float]
+    equity_curve: list[dict]
+    trades: list[dict]
+    metrics: dict[str, float]
     # Extended risk-adjusted metrics (Area 1)
     sortino_ratio: float = 0.0
     calmar_ratio: float = 0.0
@@ -115,7 +115,7 @@ class BacktestResult:
     mc_p95_final: float = 0.0
     mc_ruin_probability: float = 0.0
     # Regime breakdown (Area 1)
-    regime_breakdown: Dict[str, Any] = field(default_factory=dict)
+    regime_breakdown: dict[str, Any] = field(default_factory=dict)
 
 
 class HistoricalDataLoader:
@@ -123,7 +123,7 @@ class HistoricalDataLoader:
 
     def __init__(self, data_source: str = "database"):
         self.data_source = data_source
-        self._cache: Dict[str, pd.DataFrame] = {}
+        self._cache: dict[str, pd.DataFrame] = {}
 
     async def load_data(
         self, symbol: str, timeframe: str, start: datetime, end: datetime
@@ -188,9 +188,9 @@ class SimulatedBroker:
     def __init__(self, config: BacktestConfig):
         self.config = config
         self.cash = config.initial_capital
-        self.positions: Dict[str, Dict] = {}
-        self.trades: List[Dict] = []
-        self.equity_curve: List[Dict] = []
+        self.positions: dict[str, dict] = {}
+        self.trades: list[dict] = []
+        self.equity_curve: list[dict] = []
         self.current_time: Optional[datetime] = None
         self.total_overnight_cost: float = 0.0
 
@@ -238,7 +238,7 @@ class SimulatedBroker:
         current_price: float,
         bar_high: float = 0.0,
         bar_low: float = 0.0,
-    ) -> Dict:
+    ) -> dict:
         """Simulate market order execution"""
         # Apply slippage (variable model uses bar range)
         slippage = self._calculate_slippage(current_price, bar_high, bar_low)
@@ -431,7 +431,7 @@ class SimulatedBroker:
             }
         )
 
-    def update_prices(self, prices: Dict[str, float]):
+    def update_prices(self, prices: dict[str, float]):
         """Update position prices for P&L calculation"""
         for symbol, price in prices.items():
             if symbol in self.positions:
@@ -453,11 +453,11 @@ class BacktestEngine:
         self.config = config
         self.data_loader = HistoricalDataLoader()
         self.broker = SimulatedBroker(config)
-        self.strategies: List[Any] = []
+        self.strategies: list[Any] = []
         self.results: Optional[BacktestResult] = None
 
         # Event log
-        self.events: List[Dict] = []
+        self.events: list[dict] = []
 
     def add_strategy(self, strategy: Any):
         """Add strategy to backtest"""
@@ -475,7 +475,7 @@ class BacktestEngine:
         )
 
         # Load data for all symbols
-        all_data: Dict[str, pd.DataFrame] = {}
+        all_data: dict[str, pd.DataFrame] = {}
         for symbol in self.config.symbols:
             df = await self.data_loader.load_data(
                 symbol, "1h", self.config.start_date, self.config.end_date
@@ -499,8 +499,8 @@ class BacktestEngine:
             self.broker.update_time(timestamp)
 
             # Build current price snapshot and bar data for variable slippage
-            current_prices: Dict[str, float] = {}
-            current_bars: Dict[str, Dict] = {}
+            current_prices: dict[str, float] = {}
+            current_bars: dict[str, dict] = {}
             for symbol, df in all_data.items():
                 mask = df["timestamp"] <= timestamp
                 if mask.any():
@@ -544,7 +544,7 @@ class BacktestEngine:
 
     def _kelly_position_size(
         self,
-        signal: Dict,
+        signal: dict,
         current_price: float,
     ) -> float:
         """
@@ -605,10 +605,10 @@ class BacktestEngine:
 
     def _process_signal(
         self,
-        signal: Dict,
+        signal: dict,
         timestamp: datetime,
-        prices: Dict[str, float],
-        bar_data: Optional[Dict[str, Dict]] = None,
+        prices: dict[str, float],
+        bar_data: Optional[dict[str, dict]] = None,
     ) -> None:
         """
         Process a trading signal.
@@ -685,7 +685,7 @@ class BacktestEngine:
         trade_returns: np.ndarray,
         n_simulations: int = 1000,
         ruin_threshold: float = 0.5,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Bootstrap Monte Carlo over trade returns.
 
@@ -707,7 +707,7 @@ class BacktestEngine:
 
         n_trades = len(trade_returns)
         rng = np.random.default_rng(seed=42)
-        final_equities: List[float] = []
+        final_equities: list[float] = []
         ruin_count = 0
 
         for _ in range(n_simulations):
@@ -739,7 +739,7 @@ class BacktestEngine:
 
     def _classify_regime(
         self,
-        equity_curve: List[Dict],
+        equity_curve: list[dict],
         entry_idx: int,
         lookback: int = 60,
     ) -> str:
@@ -776,14 +776,14 @@ class BacktestEngine:
 
     def _compute_regime_breakdown(
         self,
-        trades: List[Dict],
-        equity_curve: List[Dict],
-    ) -> Dict[str, Any]:
+        trades: list[dict],
+        equity_curve: list[dict],
+    ) -> dict[str, Any]:
         """
         Compute per-regime win_rate and avg_pnl across all trades.
         Each trade's entry regime is classified using the equity curve index.
         """
-        regime_trades: Dict[str, List[float]] = {
+        regime_trades: dict[str, list[float]] = {
             "trending_bull": [],
             "trending_bear": [],
             "ranging": [],
@@ -794,7 +794,7 @@ class BacktestEngine:
             regime = self._classify_regime(equity_curve, i)
             regime_trades[regime].append(trade.get("net_pnl", 0.0))
 
-        breakdown: Dict[str, Any] = {}
+        breakdown: dict[str, Any] = {}
         for regime, pnls in regime_trades.items():
             if not pnls:
                 continue
@@ -851,11 +851,9 @@ class BacktestEngine:
         peak = initial_equity
         max_drawdown = 0.0
         for equity in equity_values:
-            if equity > peak:
-                peak = equity
+            peak = max(peak, equity)
             dd = (peak - equity) / peak if peak > 0 else 0.0
-            if dd > max_drawdown:
-                max_drawdown = dd
+            max_drawdown = max(max_drawdown, dd)
 
         # ── Bar returns (used for Sortino/Omega/Tail only) ────────────
         # NOTE: bar-level Sharpe is intentionally NOT used as the primary
@@ -997,7 +995,7 @@ class BacktestEngine:
         )
 
         # ── Aggregate metrics dict ────────────────────────────────────
-        metrics: Dict[str, Any] = {
+        metrics: dict[str, Any] = {
             "avg_trade_pnl": total_pnl / total_trades,
             "avg_winning_trade": gross_profit / winning_trades
             if winning_trades > 0
@@ -1065,7 +1063,7 @@ class BacktestEngine:
             regime_breakdown=regime_breakdown,
         )
 
-    def _max_consecutive(self, trades: List[Dict], trade_type: str) -> int:
+    def _max_consecutive(self, trades: list[dict], trade_type: str) -> int:
         """Calculate max consecutive wins or losses"""
         max_streak = 0
         current_streak = 0
@@ -1169,7 +1167,7 @@ NOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is inflated
 # Convenience functions
 async def run_backtest(
     strategy: Any,
-    symbols: List[str],
+    symbols: list[str],
     start_date: datetime,
     end_date: datetime,
     initial_capital: float = 100000.0,

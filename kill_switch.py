@@ -29,7 +29,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -108,7 +108,7 @@ class KillSwitch:
         self._reason: str = ""
         self._activated_at: Optional[datetime] = None
 
-        self._callbacks: List[Callable[[str], None]] = []
+        self._callbacks: list[Callable[[str], None]] = []
         self._running: bool = False
         self._task: Optional[asyncio.Task] = None
         # Background task that subscribes to Redis CH_BREACH for cross-pod propagation
@@ -289,7 +289,7 @@ class KillSwitch:
             return  # already active – avoid duplicate log spam
         self._active = True
         self._reason = reason
-        self._activated_at = datetime.now(timezone.utc)
+        self._activated_at = datetime.now(UTC)
 
         logger.critical(
             "KILL SWITCH ACTIVATED — reason: %s | time: %s",
@@ -390,10 +390,10 @@ class KillSwitch:
         def _is_stale(activated_at: Optional[datetime]) -> bool:
             if activated_at is None:
                 return False
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             # Make activated_at timezone-aware if it isn't already
             if activated_at.tzinfo is None:
-                activated_at = activated_at.replace(tzinfo=timezone.utc)
+                activated_at = activated_at.replace(tzinfo=UTC)
             return (now - activated_at) > _STALE_THRESHOLD
 
         # Primary: JSON state file (written by _persist_state)
@@ -423,7 +423,7 @@ class KillSwitch:
 
                     self._active = True
                     self._reason = reason
-                    self._activated_at = activated_at or datetime.now(timezone.utc)
+                    self._activated_at = activated_at or datetime.now(UTC)
                     logger.critical(
                         "Kill switch restored from persisted state — reason: %s | "
                         "originally activated: %s",
@@ -452,7 +452,7 @@ class KillSwitch:
 
                 self._active = True
                 self._reason = reason
-                self._activated_at = activated_at or datetime.now(timezone.utc)
+                self._activated_at = activated_at or datetime.now(UTC)
                 logger.critical(
                     "Kill switch activated from flag file at startup — reason: %s",
                     reason,
@@ -511,12 +511,12 @@ class KillSwitch:
         payload = {
             "type": "kill_switch",
             "reason": reason,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # ── Step 1: Write to transactional outbox (at-least-once guarantee) ──
         try:
-            from core.outbox import write_outbox_event_standalone  # noqa: PLC0415
+            from core.outbox import write_outbox_event_standalone
 
             write_outbox_event_standalone(
                 event_type="KILL_SWITCH",
@@ -528,7 +528,7 @@ class KillSwitch:
 
         # ── Step 2: Immediate Redis publish (best-effort, low latency) ────────
         try:
-            from core.event_bus import bus as _redis_bus  # noqa: PLC0415
+            from core.event_bus import bus as _redis_bus
 
             try:
                 loop = asyncio.get_running_loop()
@@ -552,7 +552,7 @@ class KillSwitch:
         # ── Step 3: Fallback — legacy in-process event bus ────────────────────
         if self._event_bus is not None:
             try:
-                from core.event_bus import DomainEvent  # noqa: PLC0415
+                from core.event_bus import DomainEvent
 
                 event = DomainEvent.create(
                     "KILL_SWITCH",
@@ -590,7 +590,7 @@ class KillSwitch:
         the kill switch on Pod A does not affect Pods B and C.
         """
         try:
-            from core.event_bus import bus as _redis_bus, CH_BREACH  # noqa: PLC0415
+            from core.event_bus import bus as _redis_bus, CH_BREACH
         except ImportError:
             logger.warning(
                 "Kill switch: could not import Redis EventBus — cross-pod propagation disabled"
@@ -749,7 +749,7 @@ class KillSwitch:
             "data": {
                 "kill_switch_active": "true",
                 "kill_switch_reason": reason,
-                "kill_switch_timestamp": datetime.now(timezone.utc).isoformat(),
+                "kill_switch_timestamp": datetime.now(UTC).isoformat(),
             }
         }
 

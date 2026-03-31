@@ -20,7 +20,7 @@ class Indicator(abc.ABC):
         self.period = period
 
     @abc.abstractmethod
-    def calculate(self, data: List[float]) -> List[float]:
+    def calculate(self, data: list[float]) -> list[float]:
         """Compute indicator values over *data*. Must return a list of the same length."""
 
 
@@ -30,7 +30,7 @@ class SMA(Indicator):
     def __init__(self, name: str = "SMA", period: int = 14):
         super().__init__(name, period)
 
-    def calculate(self, data: List[float]) -> List[float]:
+    def calculate(self, data: list[float]) -> list[float]:
         if len(data) < self.period:
             return []
         result = []
@@ -46,7 +46,7 @@ class EMA(Indicator):
     def __init__(self, name: str = "EMA", period: int = 14):
         super().__init__(name, period)
 
-    def calculate(self, data: List[float]) -> List[float]:
+    def calculate(self, data: list[float]) -> list[float]:
         if len(data) < self.period:
             return []
         k = 2.0 / (self.period + 1)
@@ -64,7 +64,7 @@ class RSI(Indicator):
     def __init__(self, name: str = "RSI", period: int = 14):
         super().__init__(name, period)
 
-    def calculate(self, data: List[float]) -> List[float]:
+    def calculate(self, data: list[float]) -> list[float]:
         if len(data) <= self.period:
             return []
         gains, losses = [], []
@@ -93,7 +93,7 @@ class IndicatorLibrary:
     """Registry of available indicators."""
 
     def __init__(self):
-        self.indicators: Dict[str, Type[Indicator]] = {
+        self.indicators: dict[str, type[Indicator]] = {
             "SMA": SMA,
             "EMA": EMA,
             "RSI": RSI,
@@ -106,10 +106,10 @@ class IndicatorLibrary:
         period = params.get("period", 14)
         return cls(name=name, period=period)
 
-    def list_indicators(self) -> List[str]:
+    def list_indicators(self) -> list[str]:
         return list(self.indicators.keys())
 
-    def register(self, name: str, cls: Type[Indicator]) -> None:
+    def register(self, name: str, cls: type[Indicator]) -> None:
         self.indicators[name.upper()] = cls
 
 

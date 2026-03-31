@@ -27,7 +27,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any, Union
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from collections import deque, defaultdict
 import logging
@@ -37,8 +37,8 @@ import warnings
 # ML/DL Libraries
 try:
     import tensorflow as tf
-    from tensorflow import keras  # noqa: F401
-    from tensorflow.keras.models import Model, Sequential, load_model  # noqa: F401
+    from tensorflow import keras
+    from tensorflow.keras.models import Model, Sequential, load_model
     from tensorflow.keras.layers import (
         LSTM,
         GRU,
@@ -46,10 +46,10 @@ try:
         Dropout,
         BatchNormalization,
         Input,
-        Concatenate,  # noqa: F401
-        Multiply,  # noqa: F401
+        Concatenate,
+        Multiply,
         Add,
-        Attention,  # noqa: F401
+        Attention,
         Conv1D,
         MaxPooling1D,
         GlobalAveragePooling1D,
@@ -60,12 +60,12 @@ try:
         EarlyStopping,
         ReduceLROnPlateau,
         ModelCheckpoint,
-        TensorBoard,  # noqa: F401
+        TensorBoard,
         TerminateOnNaN,
     )
-    from tensorflow.keras.optimizers import Adam, AdamW  # noqa: F401
+    from tensorflow.keras.optimizers import Adam, AdamW
     from tensorflow.keras.regularizers import l1_l2
-    from tensorflow.keras.losses import Huber  # noqa: F401
+    from tensorflow.keras.losses import Huber
 
     TENSORFLOW_AVAILABLE = True
 except ImportError:
@@ -73,11 +73,11 @@ except ImportError:
     warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
 
 try:
-    import torch  # noqa: F401
-    import torch.nn as nn  # noqa: F401
-    from torch.utils.data import DataLoader, Dataset, TensorDataset  # noqa: F401
-    from torch.optim import AdamW as TorchAdamW  # noqa: F401
-    from torch.optim.lr_scheduler import ReduceLROnPlateau as TorchReduceLROnPlateau  # noqa: F401
+    import torch
+    from torch import nn
+    from torch.utils.data import DataLoader, Dataset, TensorDataset
+    from torch.optim import AdamW as TorchAdamW
+    from torch.optim.lr_scheduler import ReduceLROnPlateau as TorchReduceLROnPlateau
 
     PYTORCH_AVAILABLE = True
 except ImportError:
@@ -86,21 +86,21 @@ except ImportError:
 try:
     from sklearn.ensemble import (
         RandomForestClassifier,
-        GradientBoostingClassifier,  # noqa: F401
-        ExtraTreesClassifier,  # noqa: F401
-        VotingClassifier,  # noqa: F401
-        StackingClassifier,  # noqa: F401
+        GradientBoostingClassifier,
+        ExtraTreesClassifier,
+        VotingClassifier,
+        StackingClassifier,
     )
-    from sklearn.preprocessing import RobustScaler, StandardScaler, QuantileTransformer  # noqa: F401
-    from sklearn.model_selection import TimeSeriesSplit, cross_val_score  # noqa: F401
+    from sklearn.preprocessing import RobustScaler, StandardScaler, QuantileTransformer
+    from sklearn.model_selection import TimeSeriesSplit, cross_val_score
     from sklearn.metrics import (
-        accuracy_score,  # noqa: F401
-        precision_recall_fscore_support,  # noqa: F401
-        log_loss,  # noqa: F401
-        brier_score_loss,  # noqa: F401
-        roc_auc_score,  # noqa: F401
-        mean_squared_error,  # noqa: F401
-        mean_absolute_error,  # noqa: F401
+        accuracy_score,
+        precision_recall_fscore_support,
+        log_loss,
+        brier_score_loss,
+        roc_auc_score,
+        mean_squared_error,
+        mean_absolute_error,
     )
     from sklearn.calibration import CalibratedClassifierCV
     from sklearn.feature_selection import SelectFromModel, mutual_info_classif
@@ -124,14 +124,14 @@ except ImportError:
     LIGHTGBM_AVAILABLE = False
 
 try:
-    import optuna  # noqa: F401
+    import optuna
 
     OPTUNA_AVAILABLE = True
 except ImportError:
     OPTUNA_AVAILABLE = False
 
 try:
-    import shap  # noqa: F401
+    import shap
 
     SHAP_AVAILABLE = True
 except ImportError:
@@ -182,7 +182,7 @@ class ModelConfig:
     prediction_horizon: int = 5
 
     # Network architecture
-    hidden_units: List[int] = field(default_factory=lambda: [128, 64, 32])
+    hidden_units: list[int] = field(default_factory=lambda: [128, 64, 32])
     dropout_rate: float = 0.2
     recurrent_dropout: float = 0.1
     attention_heads: int = 4
@@ -213,12 +213,12 @@ class Prediction:
     target: PredictionTarget
 
     # Point prediction
-    prediction: Union[str, float, int]
+    prediction: str | float | int
     confidence: float  # 0-1
 
     # Probabilistic outputs
-    probabilities: Optional[Dict[str, float]] = None
-    quantiles: Optional[Dict[str, float]] = None
+    probabilities: Optional[dict[str, float]] = None
+    quantiles: Optional[dict[str, float]] = None
 
     # Uncertainty decomposition
     epistemic_uncertainty: float = 0.0  # Model uncertainty (reducible)
@@ -226,15 +226,15 @@ class Prediction:
     total_uncertainty: float = 0.0
 
     # Prediction intervals
-    prediction_interval: Optional[Tuple[float, float]] = None
-    confidence_80: Optional[Tuple[float, float]] = None
-    confidence_95: Optional[Tuple[float, float]] = None
+    prediction_interval: Optional[tuple[float, float]] = None
+    confidence_80: Optional[tuple[float, float]] = None
+    confidence_95: Optional[tuple[float, float]] = None
 
     # Model metadata
     model_version: str = "unknown"
     model_architecture: str = "unknown"
-    features_used: List[str] = field(default_factory=list)
-    feature_importance: Dict[str, float] = field(default_factory=dict)
+    features_used: list[str] = field(default_factory=list)
+    feature_importance: dict[str, float] = field(default_factory=dict)
 
     # Performance tracking
     inference_time_ms: float = 0.0
@@ -263,7 +263,7 @@ class Prediction:
         )
         return self.confidence >= 0.6 and self.total_uncertainty < unc_thresh
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization"""
         return {
             "symbol": self.symbol,
@@ -298,21 +298,21 @@ class AdvancedFeatureEngineer:
 
     def __init__(
         self,
-        lookback_windows: Optional[List[int]] = None,
+        lookback_windows: Optional[list[int]] = None,
         enable_microstructure: bool = True,
     ):
         self.windows = lookback_windows or [5, 10, 20, 50, 100, 200]
         self.enable_microstructure = enable_microstructure
 
         self.scaler = RobustScaler()
-        self.feature_names: List[str] = []
+        self.feature_names: list[str] = []
         self.is_fitted = False
 
         # Feature importance tracking
-        self.feature_importance: Dict[str, float] = {}
+        self.feature_importance: dict[str, float] = {}
 
         # Cached calculations
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
 
     def create_features(
         self, df: pd.DataFrame, fit: bool = False, symbol: str = "unknown"
@@ -546,7 +546,7 @@ class AdvancedFeatureEngineer:
         X: pd.DataFrame,
         y: Optional[pd.Series] = None,
         n_repeats: int = 5,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Extract feature importance from a fitted model.
 
@@ -557,7 +557,7 @@ class AdvancedFeatureEngineer:
            Permutation is repeated `n_repeats` times and averaged to reduce
            variance from random shuffling.
         """
-        importance_dict: Dict[str, float] = {}
+        importance_dict: dict[str, float] = {}
 
         if hasattr(model, "feature_importances_"):
             for name, imp in zip(self.feature_names, model.feature_importances_, strict=False):
@@ -576,7 +576,7 @@ class AdvancedFeatureEngineer:
             rng = np.random.default_rng(seed=42)
 
             for i, feature in enumerate(self.feature_names):
-                drop_scores: List[float] = []
+                drop_scores: list[float] = []
                 for _ in range(n_repeats):
                     X_permuted = X.copy()
                     X_permuted.iloc[:, i] = rng.permutation(
@@ -640,7 +640,7 @@ class AdvancedFeatureEngineer:
         y: pd.Series,
         method: str = "mutual_info",
         n_features: int = 50,
-    ) -> List[str]:
+    ) -> list[str]:
         """Select top features using statistical methods"""
         if not SKLEARN_AVAILABLE:
             return list(X.columns)[:n_features]
@@ -871,7 +871,7 @@ class DeepLearningModel:
 
     def create_sequences(
         self, X: np.ndarray, y: np.ndarray, sequence_length: Optional[int] = None
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Create time series sequences for training"""
         seq_len = sequence_length or self.config.sequence_length
 
@@ -894,7 +894,7 @@ class DeepLearningModel:
         X_val: Optional[np.ndarray] = None,
         y_val: Optional[np.ndarray] = None,
         sample_weights: Optional[np.ndarray] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Train model with early stopping and learning rate scheduling.
         """
@@ -974,7 +974,7 @@ class DeepLearningModel:
             "training_time_per_epoch": None,  # Would track actual time
         }
 
-    def _prepare_targets(self, y: np.ndarray) -> Dict[str, np.ndarray]:
+    def _prepare_targets(self, y: np.ndarray) -> dict[str, np.ndarray]:
         """Prepare multi-output targets"""
         # Direction classification (3 classes: down, neutral, up)
         y_direction = np.digitize(y, bins=[-0.001, 0.001])
@@ -1011,7 +1011,7 @@ class DeepLearningModel:
         if not self.is_trained or self.model is None:
             raise RuntimeError("Model not trained")
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         # Ensure correct shape
         if len(X.shape) == 2:
@@ -1062,12 +1062,12 @@ class DeepLearningModel:
         aleatoric = float(stats["volatility"]["mean"][0][0])  # Data noise
 
         inference_time = (
-            datetime.now(timezone.utc) - start_time
+            datetime.now(UTC) - start_time
         ).total_seconds() * 1000
 
         return Prediction(
             symbol="unknown",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             target=PredictionTarget.DIRECTION,
             prediction=predicted_direction,
             confidence=confidence,
@@ -1166,12 +1166,12 @@ class EnsemblePredictor:
 
     def __init__(
         self,
-        models: Optional[Dict[str, Any]] = None,
+        models: Optional[dict[str, Any]] = None,
         meta_learner: Optional[Any] = None,
     ):
-        self.models: Dict[str, Any] = models or {}
-        self.weights: Dict[str, float] = {}
-        self.performance_history: Dict[str, deque] = {}
+        self.models: dict[str, Any] = models or {}
+        self.weights: dict[str, float] = {}
+        self.performance_history: dict[str, deque] = {}
 
         self.meta_learner = meta_learner
         self.use_stacking = meta_learner is not None
@@ -1180,10 +1180,10 @@ class EnsemblePredictor:
         self.is_fitted = False
 
         # Calibration
-        self.calibrators: Dict[str, Any] = {}
+        self.calibrators: dict[str, Any] = {}
 
         # Feature importance aggregation
-        self.ensemble_feature_importance: Dict[str, float] = {}
+        self.ensemble_feature_importance: dict[str, float] = {}
 
     def add_model(self, name: str, model: Any, weight: float = 1.0):
         """Add model to ensemble"""
@@ -1230,7 +1230,7 @@ class EnsemblePredictor:
 
         # Train each model — track val accuracy explicitly per model
         logger.info(f"Training {len(self.models)} models...")
-        val_scores: Dict[str, float] = {}
+        val_scores: dict[str, float] = {}
 
         for name, model in self.models.items():
             logger.info(f"Training {name}...")
@@ -1292,7 +1292,7 @@ class EnsemblePredictor:
         self,
         X_val: pd.DataFrame,
         y_val: pd.Series,
-        val_scores: Optional[Dict[str, float]] = None,
+        val_scores: Optional[dict[str, float]] = None,
     ):
         """
         Optimize ensemble weights from actual validation accuracy scores.
@@ -1303,7 +1303,7 @@ class EnsemblePredictor:
         """
         logger.info("Optimizing ensemble weights...")
 
-        scores: Dict[str, float] = {}
+        scores: dict[str, float] = {}
         for name in self.models:
             if val_scores and name in val_scores:
                 scores[name] = val_scores[name]
@@ -1318,7 +1318,7 @@ class EnsemblePredictor:
         if not scores:
             logger.warning("No validation scores available; using uniform weights")
             n = len(self.models)
-            self.weights = {name: 1.0 / n for name in self.models}
+            self.weights = dict.fromkeys(self.models, 1.0 / n)
             return
 
         # Softmax weighting: exp(score) / sum(exp(scores))
@@ -1377,7 +1377,7 @@ class EnsemblePredictor:
         if not self.is_fitted:
             raise RuntimeError("Ensemble not fitted")
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         # Create features
         X_features = self.feature_engineer.create_features(X)
@@ -1442,7 +1442,7 @@ class EnsemblePredictor:
         if not model_predictions:
             return Prediction(
                 symbol="unknown",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 target=PredictionTarget.DIRECTION,
                 prediction="neutral",
                 confidence=0.0,
@@ -1477,12 +1477,12 @@ class EnsemblePredictor:
         )
 
         inference_time = (
-            datetime.now(timezone.utc) - start_time
+            datetime.now(UTC) - start_time
         ).total_seconds() * 1000
 
         return Prediction(
             symbol="unknown",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             target=PredictionTarget.DIRECTION,
             prediction=final_prediction,
             confidence=confidence,
@@ -1515,7 +1515,7 @@ class EnsemblePredictor:
         first_key = list(self.models.keys())[0]
         if len(self.performance_history[first_key]) % 50 == 0:
             # Build per-model accuracy scores from the last 20 entries in history
-            recent_scores: Dict[str, float] = {
+            recent_scores: dict[str, float] = {
                 name: float(np.mean(list(self.performance_history[name])[-20:]))
                 for name in self.models
                 if self.performance_history.get(name)
@@ -1535,9 +1535,9 @@ class EnsemblePredictor:
 
 
 def calibrate_uncertainty_threshold(
-    predictions: List["Prediction"],
-    actuals: List[bool],
-    sweep: Optional[List[float]] = None,
+    predictions: list["Prediction"],
+    actuals: list[bool],
+    sweep: Optional[list[float]] = None,
 ) -> float:
     """
     Find the uncertainty threshold that maximises F1 on a validation set.
@@ -1621,7 +1621,7 @@ class EnhancedMLPredictor:
         # Components
         self.feature_engineer = AdvancedFeatureEngineer()
         self.ensemble: Optional[EnsemblePredictor] = None
-        self.models: Dict[str, Any] = {}
+        self.models: dict[str, Any] = {}
 
         # State
         self.is_fitted = False
@@ -1638,7 +1638,7 @@ class EnhancedMLPredictor:
         logger.info(f"  Auto-optimize: {self.auto_optimize}")
 
     def build_ensemble(
-        self, model_types: Optional[List[str]] = None, use_stacking: bool = False
+        self, model_types: Optional[list[str]] = None, use_stacking: bool = False
     ):
         """Build ensemble with specified model types"""
         model_types = model_types or ["lstm", "xgboost", "random_forest"]
@@ -1928,12 +1928,12 @@ class EnhancedMLPredictor:
             logger.error("Predictor not fitted - call fit() first")
             return None
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         try:
             prediction = self.ensemble.predict(df)
             prediction.inference_time_ms = (
-                datetime.now(timezone.utc) - start_time
+                datetime.now(UTC) - start_time
             ).total_seconds() * 1000
 
             # Record prediction
@@ -2026,7 +2026,7 @@ class EnhancedMLPredictor:
 
                 if self._consecutive_degraded_windows >= consecutive_windows_required:
                     last_retrain = getattr(self, "_last_retrain_time", None)
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
                     cooldown_hours = 24
                     if (
                         last_retrain is None
@@ -2052,7 +2052,7 @@ class EnhancedMLPredictor:
                 # Reset consecutive counter when performance recovers
                 self._consecutive_degraded_windows = 0
 
-    def get_model_report(self) -> Dict[str, Any]:
+    def get_model_report(self) -> dict[str, Any]:
         """Generate comprehensive model report"""
         if not self.is_fitted:
             return {"status": "not_fitted"}

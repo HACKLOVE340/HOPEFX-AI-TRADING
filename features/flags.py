@@ -16,6 +16,6 @@ Do not add new flag definitions here.  Add them to
 ``config/feature_flags.py`` instead.
 """
 
-from config.feature_flags import FeatureFlags, FeatureStatus, flags  # noqa: F401
+from config.feature_flags import FeatureFlags, FeatureStatus, flags
 
 __all__ = ["FeatureFlags", "FeatureStatus", "flags"]

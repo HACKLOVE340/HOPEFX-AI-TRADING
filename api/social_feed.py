@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -36,9 +36,9 @@ router = APIRouter(prefix="/api/feed", tags=["Social Feed"])
 
 # ── In-memory stores ──────────────────────────────────────────────────────────
 
-_feed_items: Dict[str, dict] = {}  # signal_id → feed item
-_reactions: Dict[str, Dict[str, str]] = {}  # signal_id → {user_id: "up"|"down"}
-_comments: Dict[str, List[dict]] = {}  # signal_id → list of comments
+_feed_items: dict[str, dict] = {}  # signal_id → feed item
+_reactions: dict[str, dict[str, str]] = {}  # signal_id → {user_id: "up"|"down"}
+_comments: dict[str, list[dict]] = {}  # signal_id → list of comments
 _opted_in: set = set()  # user_ids who opted into public feed
 
 # ── Persistence helpers ───────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ def _publish_signal(signal: dict, username: str, trader_id: str) -> dict:
         "thumbs_down": 0,
         "comment_count": 0,
         "is_public": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     _feed_items[sid] = item
     _reactions[sid] = {}
@@ -179,7 +179,7 @@ async def add_comment(
         "user_id": user.sub,
         "username": getattr(user, "username", user.sub),
         "text": body.text,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     _comments[signal_id].append(comment)
     _feed_items[signal_id]["comment_count"] = len(_comments[signal_id])
@@ -239,7 +239,7 @@ async def feed_status(user: TokenPayload = Depends(get_current_user)):
     # Follower count from profile store
     follower_count = 0
     try:
-        from social.profiles import TraderProfileManager as _TPM  # noqa: PLC0415
+        from social.profiles import TraderProfileManager as _TPM
 
         mgr = _TPM()
         profile = mgr.get_profile(user.sub)
@@ -262,7 +262,7 @@ async def feed_status(user: TokenPayload = Depends(get_current_user)):
 # Mounted at /api/social so CopyTrading.tsx and Leaderboard.tsx can call
 # GET /api/social/leaderboard without a prefix conflict with /api/feed.
 
-from fastapi import Query as _Query  # noqa: E402
+from fastapi import Query as _Query
 
 leaderboard_router = APIRouter(prefix="/api/social", tags=["Social Feed"])
 

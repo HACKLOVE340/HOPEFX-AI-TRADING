@@ -88,7 +88,7 @@ import json
 import logging
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -141,7 +141,7 @@ class ModelRegistry:
 
     # ── Manifest I/O ──────────────────────────────────────────────────────────
 
-    def _load(self) -> Dict[str, Any]:
+    def _load(self) -> dict[str, Any]:
         """Load the manifest from disk, returning an empty skeleton if absent."""
         if not self._path.exists():
             return {
@@ -164,7 +164,7 @@ class ModelRegistry:
                 "versions": {},
             }
 
-    def _save(self, manifest: Dict[str, Any]) -> None:
+    def _save(self, manifest: dict[str, Any]) -> None:
         """Atomically write the manifest via a temp-file rename."""
         tmp_fd, tmp_path = tempfile.mkstemp(
             dir=self._path.parent, prefix=".registry_tmp_", suffix=".json"
@@ -194,7 +194,7 @@ class ModelRegistry:
         feature_count: int = 0,
         notes: str = "",
         state: str = "staging",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Register a model artifact in the manifest.
 
@@ -236,11 +236,11 @@ class ModelRegistry:
         logger.info("ModelRegistry: computing SHA-256 for %s …", file_path.name)
         digest = sha256_file(file_path)
 
-        entry: Dict[str, Any] = {
+        entry: dict[str, Any] = {
             "name": name,
             "file": str(file_path),
             "sha256": digest,
-            "registered_at": datetime.now(timezone.utc).isoformat(),
+            "registered_at": datetime.now(UTC).isoformat(),
             "promoted_at": None,
             "state": state,
             "oos_accuracy": round(float(oos_accuracy), 6),
@@ -266,7 +266,7 @@ class ModelRegistry:
 
     # ── Promotion gate ────────────────────────────────────────────────────────
 
-    def _gate_check(self, entry: Dict[str, Any]) -> Tuple[bool, str]:
+    def _gate_check(self, entry: dict[str, Any]) -> tuple[bool, str]:
         """
         Evaluate promotion gate for *entry*.
 
@@ -298,7 +298,7 @@ class ModelRegistry:
             f"Gate passed: acc={acc:.4f}, p={pval:.6f}, sharpe_ok={sharpe_ok}"
         )
 
-    def promote(self, name: str) -> Dict[str, Any]:
+    def promote(self, name: str) -> dict[str, Any]:
         """
         Promote *name* to production state.
 
@@ -342,7 +342,7 @@ class ModelRegistry:
                 )
 
         # Promote
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         entry["state"] = "production"
         entry["promoted_at"] = now
         manifest["active_version"] = name
@@ -401,7 +401,7 @@ class ModelRegistry:
 
     # ── Integrity verification ────────────────────────────────────────────────
 
-    def verify(self, name: str) -> Tuple[bool, str]:
+    def verify(self, name: str) -> tuple[bool, str]:
         """
         Verify the SHA-256 digest of a registered model version.
 
@@ -428,7 +428,7 @@ class ModelRegistry:
             )
         return True, f"Integrity OK: {name}  sha256={actual[:16]}…"
 
-    def verify_active(self) -> Tuple[bool, str]:
+    def verify_active(self) -> tuple[bool, str]:
         """Verify the integrity of the currently active production model."""
         manifest = self._load()
         active = manifest.get("active_version")
@@ -438,7 +438,7 @@ class ModelRegistry:
 
     # ── Queries ───────────────────────────────────────────────────────────────
 
-    def active_version(self) -> Optional[Dict[str, Any]]:
+    def active_version(self) -> Optional[dict[str, Any]]:
         """Return the active production version entry, or None."""
         manifest = self._load()
         name = manifest.get("active_version")
@@ -453,11 +453,11 @@ class ModelRegistry:
             return None
         return Path(entry["file"])
 
-    def list_versions(self) -> Dict[str, Dict[str, Any]]:
+    def list_versions(self) -> dict[str, dict[str, Any]]:
         """Return all registered versions keyed by name."""
         return dict(self._load()["versions"])
 
-    def get_version(self, name: str) -> Optional[Dict[str, Any]]:
+    def get_version(self, name: str) -> Optional[dict[str, Any]]:
         """Return a single version entry by name, or None."""
         return self._load()["versions"].get(name)
 
@@ -478,7 +478,7 @@ class ModelRegistry:
         model_path: Optional[Path] = None,
         name: str = "advanced_oos_v1",
         promote: bool = False,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         Seed the registry from an existing ``advanced_oos_meta.json``.
 
@@ -514,7 +514,7 @@ class ModelRegistry:
             return None
 
         # Parse meta
-        meta: Dict[str, Any] = {}
+        meta: dict[str, Any] = {}
         if meta_path.exists():
             try:
                 meta = json.loads(meta_path.read_text())

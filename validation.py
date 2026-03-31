@@ -116,7 +116,7 @@ class OrderValidator:
 
     def _check_position_risk(
         self, order: Order, current_price: float, account_balance: float
-    ) -> Tuple[Optional[ValidationResult], float]:
+    ) -> tuple[Optional[ValidationResult], float]:
         position_value = order.qty * current_price
         risk_pct = position_value / account_balance if account_balance > 0 else 1.0
         if risk_pct > self.max_position_risk:
@@ -352,12 +352,11 @@ class PropFirmValidator:
 
     def check_limits(
         self, current_equity: float, open_pnl: float = 0.0
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         total_equity = current_equity + open_pnl
         denominator = self.initial_balance if self.initial_balance > 0 else current_equity
 
-        if total_equity > self.peak_equity:
-            self.peak_equity = total_equity
+        self.peak_equity = max(self.peak_equity, total_equity)
 
         if self.peak_equity > 0:
             drawdown = (self.peak_equity - total_equity) / self.peak_equity
@@ -386,7 +385,7 @@ class PropFirmValidator:
 
         return True, "Within limits"
 
-    def check_profit_target(self, current_equity: float) -> Tuple[bool, float]:
+    def check_profit_target(self, current_equity: float) -> tuple[bool, float]:
         if self.initial_balance <= 0:
             return False, 0.0
         profit_pct = (current_equity - self.initial_balance) / self.initial_balance
@@ -394,13 +393,13 @@ class PropFirmValidator:
         return target_met, profit_pct
 
     def record_trade_day(self, trade_date: Optional[str] = None) -> None:
-        from datetime import date as _date  # noqa: PLC0415
+        from datetime import date as _date
 
         if trade_date is None:
             trade_date = _date.today().isoformat()
         self._trading_days.add(trade_date)
 
-    def check_min_trading_days(self) -> Tuple[bool, int]:
+    def check_min_trading_days(self) -> tuple[bool, int]:
         days_traded = len(self._trading_days)
         met = days_traded >= self.rules["min_trading_days"]
         return met, days_traded

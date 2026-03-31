@@ -20,7 +20,7 @@ Features:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -41,7 +41,7 @@ class StrategyBrain:
     - Risk-adjusted position sizing recommendations
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[dict[str, Any]] = None):
         """
         Initialize Strategy Brain.
 
@@ -63,13 +63,13 @@ class StrategyBrain:
         )  # 60% weight to signal confidence
 
         # Strategy tracking
-        self.strategies: Dict[str, BaseStrategy] = {}
-        self.strategy_performance: Dict[str, Dict[str, float]] = {}
-        self.strategy_weights: Dict[str, float] = {}
+        self.strategies: dict[str, BaseStrategy] = {}
+        self.strategy_performance: dict[str, dict[str, float]] = {}
+        self.strategy_weights: dict[str, float] = {}
 
         # Signal history
-        self.signal_history: List[Dict[str, Any]] = []
-        self.consensus_signals: List[Signal] = []
+        self.signal_history: list[dict[str, Any]] = []
+        self.consensus_signals: list[Signal] = []
 
         # Statistics
         self.stats = {
@@ -120,7 +120,7 @@ class StrategyBrain:
             self._recalculate_weights()
             logger.info(f"Strategy Brain: Unregistered {strategy_name}")
 
-    def analyze_joint(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze_joint(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Perform joint analysis using all registered strategies.
 
@@ -184,7 +184,7 @@ class StrategyBrain:
             # Record in history
             self.signal_history.append(
                 {
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                     "strategy_signals": strategy_signals,
                     "consensus": consensus_result,
                     "data_snapshot": data.get("prices", [])[-1]
@@ -205,9 +205,9 @@ class StrategyBrain:
 
     def _calculate_consensus(
         self,
-        strategy_signals: Dict[str, Signal],
-        data: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        strategy_signals: dict[str, Signal],
+        data: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Calculate consensus from multiple strategy signals.
 
@@ -291,7 +291,7 @@ class StrategyBrain:
                     signal_type=SignalType.BUY,
                     symbol=list(strategy_signals.values())[0].symbol,
                     price=avg_price,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     confidence=min(consensus_confidence, 1.0),
                     metadata={
                         "type": "consensus",
@@ -325,7 +325,7 @@ class StrategyBrain:
                     signal_type=SignalType.SELL,
                     symbol=list(strategy_signals.values())[0].symbol,
                     price=avg_price,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     confidence=min(consensus_confidence, 1.0),
                     metadata={
                         "type": "consensus",
@@ -440,11 +440,9 @@ class StrategyBrain:
         else:
             # Equal weights if no performance data
             equal_weight = 1.0 / len(self.strategies)
-            self.strategy_weights = {
-                name: equal_weight for name in self.strategies.keys()
-            }
+            self.strategy_weights = dict.fromkeys(self.strategies.keys(), equal_weight)
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """
         Get brain statistics.
 
@@ -470,7 +468,7 @@ class StrategyBrain:
             "strategy_performance": self.strategy_performance.copy(),
         }
 
-    def get_strategy_correlations(self) -> Dict[str, Dict[str, float]]:
+    def get_strategy_correlations(self) -> dict[str, dict[str, float]]:
         """
         Calculate correlation between strategies based on signal history.
 

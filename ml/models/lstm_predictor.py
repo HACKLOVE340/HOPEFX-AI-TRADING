@@ -26,12 +26,12 @@ try:
     from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
     from tensorflow.keras.layers import (
         LSTM,
-        Attention,  # noqa: F401
-        Bidirectional,  # noqa: F401
-        Concatenate,  # noqa: F401
+        Attention,
+        Bidirectional,
+        Concatenate,
         Dense,
         Dropout,
-        Input,  # noqa: F401
+        Input,
     )
     from tensorflow.keras.models import Model, Sequential
     from tensorflow.keras.optimizers import Adam
@@ -132,7 +132,7 @@ class LSTMPredictor:
         self,
         data: np.ndarray,
         target_index: int = 0,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Prepare data for LSTM training
 
@@ -216,7 +216,7 @@ class LSTMPredictor:
         self,
         X_test: np.ndarray,
         confidence_interval: float = 0.95,
-    ) -> List[PredictionResult]:
+    ) -> list[PredictionResult]:
         """
         Make predictions on test data
 
@@ -266,7 +266,7 @@ class LSTMPredictor:
         target_index: int = 0,
         initial_train_size: int = 200,
         step_size: int = 50,
-    ) -> Dict:
+    ) -> dict:
         """
         Perform walk-forward validation
 
@@ -324,7 +324,7 @@ class EnsembleLSTMPredictor:
 
     def __init__(self, num_models: int = 3):
         self.num_models = num_models
-        self.models: List[LSTMPredictor] = []
+        self.models: list[LSTMPredictor] = []
 
     def train_ensemble(
         self,

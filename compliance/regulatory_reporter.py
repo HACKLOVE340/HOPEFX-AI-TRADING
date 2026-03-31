@@ -58,7 +58,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -119,7 +119,7 @@ class ReportRecord:
     jurisdiction: str
     endpoint: str
     trade_id: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     submitted_at: str
     status: str  # "submitted" | "failed" | "dlq" | "suppressed"
     attempts: int = 0
@@ -142,7 +142,7 @@ class DeadLetterQueue:
     def enqueue(self, record: ReportRecord) -> None:
         """Persist a failed report to the DLQ."""
         filename = (
-            self._path / f"dlq_{datetime.now(timezone.utc).strftime('%Y-%m')}.jsonl"
+            self._path / f"dlq_{datetime.now(UTC).strftime('%Y-%m')}.jsonl"
         )
         entry = (
             json.dumps(
@@ -174,7 +174,7 @@ class DeadLetterQueue:
                 "RegulatoryReporter: DLQ write FAILED — report LOST: %s", exc
             )
 
-    def drain(self) -> List[Dict]:
+    def drain(self) -> list[dict]:
         """Return all DLQ entries and clear the queue files."""
         entries = []
         for dlq_file in sorted(self._path.glob("dlq_*.jsonl")):
@@ -198,7 +198,7 @@ class DeadLetterQueue:
             try:
                 with open(dlq_file) as fh:
                     count += sum(1 for line in fh if line.strip())
-            except Exception:  # nosec B110 - file read failure is non-fatal for DLQ depth  # noqa: S110
+            except Exception:  # nosec B110 - file read failure is non-fatal for DLQ depth
                 pass
         return count
 
@@ -219,9 +219,9 @@ class RegulatoryReporter:
 
     def __init__(self) -> None:
         self._dlq = DeadLetterQueue()
-        self._records: List[ReportRecord] = []
+        self._records: list[ReportRecord] = []
 
-    async def submit(self, trade: Dict[str, Any]) -> ReportRecord:
+    async def submit(self, trade: dict[str, Any]) -> ReportRecord:
         """
         Submit a trade to the appropriate regulatory endpoint.
 
@@ -241,7 +241,7 @@ class RegulatoryReporter:
                 endpoint="suppressed:prop_firm_mode",
                 trade_id=trade_id,
                 payload=trade,
-                submitted_at=datetime.now(timezone.utc).isoformat(),
+                submitted_at=datetime.now(UTC).isoformat(),
                 status="suppressed",
             )
             self._records.append(record)
@@ -259,7 +259,7 @@ class RegulatoryReporter:
                 endpoint="suppressed:reporting_disabled",
                 trade_id=trade_id,
                 payload=trade,
-                submitted_at=datetime.now(timezone.utc).isoformat(),
+                submitted_at=datetime.now(UTC).isoformat(),
                 status="suppressed",
             )
             self._records.append(record)
@@ -329,7 +329,7 @@ class RegulatoryReporter:
     # ── CFTC SDR (DTCC GTR) ───────────────────────────────────────────────────
 
     async def _submit_cftc_sdr(
-        self, trade: Dict, report_id: str, trade_id: str
+        self, trade: dict, report_id: str, trade_id: str
     ) -> ReportRecord:
         """Submit to DTCC GTR (CFTC Swap Data Repository)."""
         payload = self._build_cftc_payload(trade, report_id)
@@ -346,7 +346,7 @@ class RegulatoryReporter:
             endpoint=_DTCC_GTR_ENDPOINT,
             trade_id=trade_id,
             payload=payload,
-            submitted_at=datetime.now(timezone.utc).isoformat(),
+            submitted_at=datetime.now(UTC).isoformat(),
             status="pending",
         )
 
@@ -368,18 +368,18 @@ class RegulatoryReporter:
 
         return record
 
-    def _build_cftc_payload(self, trade: Dict, report_id: str) -> Dict:
+    def _build_cftc_payload(self, trade: dict, report_id: str) -> dict:
         """Build CFTC SDR-compliant payload (DTCC GTR format)."""
         return {
             "reportId": report_id,
             "reportType": "NEW",
             "assetClass": "CO",  # Commodity (gold)
             "productType": "SPOT",
-            "tradeDate": trade.get("filled_at", datetime.now(timezone.utc).isoformat())[
+            "tradeDate": trade.get("filled_at", datetime.now(UTC).isoformat())[
                 :10
             ],
             "effectiveDate": trade.get(
-                "filled_at", datetime.now(timezone.utc).isoformat()
+                "filled_at", datetime.now(UTC).isoformat()
             )[:10],
             "notionalAmount": trade.get("notional_usd", 0.0),
             "notionalCurrency": "USD",
@@ -393,13 +393,13 @@ class RegulatoryReporter:
             "cleared": "N",
             "collateralisation": "UNCOLL",
             "deliveryType": "CASH",
-            "submissionTimestamp": datetime.now(timezone.utc).isoformat(),
+            "submissionTimestamp": datetime.now(UTC).isoformat(),
         }
 
     # ── SEC CAT ───────────────────────────────────────────────────────────────
 
     async def _submit_sec_cat(
-        self, trade: Dict, report_id: str, trade_id: str
+        self, trade: dict, report_id: str, trade_id: str
     ) -> ReportRecord:
         """Submit to SEC Consolidated Audit Trail."""
         payload = self._build_cat_payload(trade, report_id)
@@ -415,7 +415,7 @@ class RegulatoryReporter:
             endpoint=_CAT_ENDPOINT,
             trade_id=trade_id,
             payload=payload,
-            submitted_at=datetime.now(timezone.utc).isoformat(),
+            submitted_at=datetime.now(UTC).isoformat(),
             status="pending",
         )
 
@@ -437,13 +437,13 @@ class RegulatoryReporter:
 
         return record
 
-    def _build_cat_payload(self, trade: Dict, report_id: str) -> Dict:
+    def _build_cat_payload(self, trade: dict, report_id: str) -> dict:
         """Build SEC CAT-compliant payload."""
         return {
             "catReportId": report_id,
             "firmId": _CAT_FIRM_ID or "HOPEFX",
             "eventTimestamp": trade.get(
-                "filled_at", datetime.now(timezone.utc).isoformat()
+                "filled_at", datetime.now(UTC).isoformat()
             ),
             "eventType": "MENO",  # Manual Entry New Order
             "symbol": trade.get("symbol", "XAUUSD"),
@@ -458,7 +458,7 @@ class RegulatoryReporter:
     # ── MiFID II ──────────────────────────────────────────────────────────────
 
     async def _submit_mifid_ii(
-        self, trade: Dict, report_id: str, trade_id: str
+        self, trade: dict, report_id: str, trade_id: str
     ) -> ReportRecord:
         """Submit to ESMA MiFID II transaction reporting endpoint."""
         payload = self._build_mifid_payload(trade, report_id)
@@ -474,7 +474,7 @@ class RegulatoryReporter:
             endpoint=_ESMA_ENDPOINT,
             trade_id=trade_id,
             payload=payload,
-            submitted_at=datetime.now(timezone.utc).isoformat(),
+            submitted_at=datetime.now(UTC).isoformat(),
             status="pending",
         )
 
@@ -496,7 +496,7 @@ class RegulatoryReporter:
 
         return record
 
-    def _build_mifid_payload(self, trade: Dict, report_id: str) -> Dict:
+    def _build_mifid_payload(self, trade: dict, report_id: str) -> dict:
         """Build MiFID II Article 26 transaction report."""
         return {
             "transactionReferenceNumber": report_id,
@@ -504,7 +504,7 @@ class RegulatoryReporter:
             "executingEntityId": _ESMA_LEI or "HOPEFX_LEI",
             "investmentFirmId": _ESMA_LEI or "HOPEFX_LEI",
             "tradingDateTime": trade.get(
-                "filled_at", datetime.now(timezone.utc).isoformat()
+                "filled_at", datetime.now(UTC).isoformat()
             ),
             "tradingCapacity": "DEAL",  # Dealing on own account
             "quantity": trade.get("quantity", 0.0),
@@ -524,8 +524,8 @@ class RegulatoryReporter:
     async def _submit_with_retry(
         self,
         endpoint: str,
-        payload: Dict,
-        headers: Dict,
+        payload: dict,
+        headers: dict,
         record: ReportRecord,
     ) -> tuple[bool, Optional[int], Optional[str]]:
         """
@@ -574,8 +574,8 @@ class RegulatoryReporter:
     async def _http_post(
         self,
         endpoint: str,
-        payload: Dict,
-        headers: Dict,
+        payload: dict,
+        headers: dict,
     ) -> tuple[bool, Optional[int], Optional[str]]:
         """
         POST payload to endpoint. Returns (success, status_code, error_msg).
@@ -610,14 +610,14 @@ class RegulatoryReporter:
                 if _parsed.scheme not in ("http", "https"):
                     raise ValueError(f"Regulatory endpoint must use http/https, got {_parsed.scheme!r}")
                 data = json.dumps(payload).encode()
-                req = urllib.request.Request(  # noqa: S310
+                req = urllib.request.Request(
                     endpoint,
                     data=data,
                     headers={**headers, "Content-Type": "application/json"},
                     method="POST",
                 )
                 try:
-                    with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:  # nosec B310 - scheme validated above  # noqa: S310
+                    with urllib.request.urlopen(req, timeout=_TIMEOUT_S) as resp:  # nosec B310 - scheme validated above
                         return True, resp.status, None
                 except urllib.error.HTTPError as e:
                     return False, e.code, str(e)
@@ -630,14 +630,14 @@ class RegulatoryReporter:
         except Exception as exc:
             return False, None, str(exc)
 
-    def _build_headers(self, jurisdiction: str) -> Dict:
+    def _build_headers(self, jurisdiction: str) -> dict:
         if jurisdiction == "EU":
             return {"Authorization": f"Bearer {_ESMA_API_KEY}", "X-LEI": _ESMA_LEI}
         return {"Authorization": f"Bearer {_DTCC_GTR_API_KEY}"}
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         submitted = [r for r in self._records if r.status == "submitted"]
         failed = [r for r in self._records if r.status == "dlq"]
         suppressed = [r for r in self._records if r.status == "suppressed"]

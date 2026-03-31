@@ -16,7 +16,7 @@ New code should import from backtesting directly:
     from backtesting import BacktestConfig, BacktestEngine, SimulatedBroker
 """
 
-from backtesting.engine_config import (  # noqa: F401
+from backtesting.engine_config import (
     BacktestConfig,
     BacktestEngine,
     BacktestResult,

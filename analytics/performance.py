@@ -16,7 +16,7 @@ Comprehensive performance analytics including:
 
 from typing import Dict, List, Any, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from enum import Enum
 import numpy as np
 import logging
@@ -54,7 +54,7 @@ class TradeRecord:
     duration_minutes: int
     max_favorable_excursion: float
     max_adverse_excursion: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -124,14 +124,14 @@ class PerformanceReport:
     worst_day: float
     longest_winning_streak: int
     longest_losing_streak: int
-    trades_by_symbol: Dict[str, int]
-    trades_by_strategy: Dict[str, int]
-    pnl_by_symbol: Dict[str, float]
-    pnl_by_strategy: Dict[str, float]
-    equity_curve: List[EquityPoint]
-    monthly_returns: Dict[str, float]
+    trades_by_symbol: dict[str, int]
+    trades_by_strategy: dict[str, int]
+    pnl_by_symbol: dict[str, float]
+    pnl_by_strategy: dict[str, float]
+    equity_curve: list[EquityPoint]
+    monthly_returns: dict[str, float]
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "period": self.period.value,
             "start_date": self.start_date.isoformat(),
@@ -192,15 +192,15 @@ class PerformanceAnalytics:
         self.risk_free_rate = risk_free_rate
 
         # Trade records
-        self.trades: List[TradeRecord] = []
+        self.trades: list[TradeRecord] = []
 
         # Equity curve
-        self.equity_curve: List[EquityPoint] = []
+        self.equity_curve: list[EquityPoint] = []
         self.high_water_mark = initial_equity
 
         # Daily returns for metric calculations
-        self.daily_returns: List[float] = []
-        self.daily_equity: List[Tuple[datetime, float]] = []
+        self.daily_returns: list[float] = []
+        self.daily_equity: list[tuple[datetime, float]] = []
 
         # Initialize with starting point
         self._record_equity_point(initial_equity, 0, 0)
@@ -217,8 +217,7 @@ class PerformanceAnalytics:
         self.current_equity += trade.pnl
 
         # Update high water mark
-        if self.current_equity > self.high_water_mark:
-            self.high_water_mark = self.current_equity
+        self.high_water_mark = max(self.high_water_mark, self.current_equity)
 
         # Record equity point
         drawdown = self.high_water_mark - self.current_equity
@@ -239,7 +238,7 @@ class PerformanceAnalytics:
         )
 
         point = EquityPoint(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             equity=equity,
             cash=equity - open_pnl,
             open_pnl=open_pnl,
@@ -251,9 +250,9 @@ class PerformanceAnalytics:
         self.equity_curve.append(point)
 
         # Update daily equity for return calculations
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         if not self.daily_equity or self.daily_equity[-1][0].date() != today:
-            self.daily_equity.append((datetime.now(timezone.utc), equity))
+            self.daily_equity.append((datetime.now(UTC), equity))
 
             # Calculate daily return
             if len(self.daily_equity) >= 2:
@@ -276,7 +275,7 @@ class PerformanceAnalytics:
             PerformanceReport object
         """
         # Filter trades by period
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start_date = self._get_period_start(period, now)
         filtered_trades = [t for t in self.trades if t.exit_time >= start_date]
 
@@ -379,8 +378,8 @@ class PerformanceAnalytics:
         )
 
     def compare_strategies(
-        self, strategies: List[str] = None
-    ) -> Dict[str, StrategyPerformance]:
+        self, strategies: list[str] = None
+    ) -> dict[str, StrategyPerformance]:
         """
         Compare performance across strategies.
 
@@ -454,7 +453,7 @@ class PerformanceAnalytics:
 
         return results
 
-    def get_equity_curve_data(self, interval: str = "trade") -> List[Dict]:
+    def get_equity_curve_data(self, interval: str = "trade") -> list[dict]:
         """
         Get equity curve data for charting.
 
@@ -483,7 +482,7 @@ class PerformanceAnalytics:
         else:
             return []
 
-    def get_trade_distribution(self) -> Dict[str, Any]:
+    def get_trade_distribution(self) -> dict[str, Any]:
         """Get trade distribution data for charting."""
         pnls = [t.pnl for t in self.trades]
 
@@ -495,8 +494,7 @@ class PerformanceAnalytics:
         max_pnl = max(pnls)
         num_bins = min(20, len(pnls) // 5 + 1)
 
-        if num_bins < 2:
-            num_bins = 2
+        num_bins = max(num_bins, 2)
 
         bin_width = (max_pnl - min_pnl) / num_bins if max_pnl != min_pnl else 1
 
@@ -528,7 +526,7 @@ class PerformanceAnalytics:
             },
         }
 
-    def get_time_analysis(self) -> Dict[str, Any]:
+    def get_time_analysis(self) -> dict[str, Any]:
         """Analyze performance by time (hour, day of week, etc.)."""
         if not self.trades:
             return {}
@@ -589,7 +587,7 @@ class PerformanceAnalytics:
         else:  # ALL_TIME
             return datetime.min
 
-    def _get_period_returns(self, start_date: datetime) -> List[float]:
+    def _get_period_returns(self, start_date: datetime) -> list[float]:
         """Get daily returns for a period."""
         return [
             r
@@ -597,7 +595,7 @@ class PerformanceAnalytics:
             if dt >= start_date
         ]
 
-    def _calculate_sharpe_ratio(self, trades: List[TradeRecord]) -> float:
+    def _calculate_sharpe_ratio(self, trades: list[TradeRecord]) -> float:
         """Calculate Sharpe ratio for trades."""
         if len(trades) < 2:
             return 0.0
@@ -616,7 +614,7 @@ class PerformanceAnalytics:
         daily_rf = self.risk_free_rate / 252
         return np.sqrt(252) * (mean_return - daily_rf) / std_return
 
-    def _calculate_sortino_ratio(self, trades: List[TradeRecord]) -> float:
+    def _calculate_sortino_ratio(self, trades: list[TradeRecord]) -> float:
         """Calculate Sortino ratio for trades."""
         if len(trades) < 2:
             return 0.0
@@ -634,9 +632,9 @@ class PerformanceAnalytics:
         daily_rf = self.risk_free_rate / 252
         return np.sqrt(252) * (np.mean(returns) - daily_rf) / downside_std
 
-    def _calculate_max_drawdown(self, period: MetricPeriod) -> Tuple[float, float]:
+    def _calculate_max_drawdown(self, period: MetricPeriod) -> tuple[float, float]:
         """Calculate max drawdown for period."""
-        start_date = self._get_period_start(period, datetime.now(timezone.utc))
+        start_date = self._get_period_start(period, datetime.now(UTC))
         period_points = [p for p in self.equity_curve if p.timestamp >= start_date]
 
         if not period_points:
@@ -647,7 +645,7 @@ class PerformanceAnalytics:
 
         return max_dd, max_dd_pct
 
-    def _calculate_strategy_max_drawdown(self, trades: List[TradeRecord]) -> float:
+    def _calculate_strategy_max_drawdown(self, trades: list[TradeRecord]) -> float:
         """Calculate max drawdown for strategy trades."""
         if not trades:
             return 0.0
@@ -658,15 +656,13 @@ class PerformanceAnalytics:
 
         for trade in sorted(trades, key=lambda t: t.exit_time):
             equity += trade.pnl
-            if equity > peak:
-                peak = equity
+            peak = max(peak, equity)
             dd = peak - equity
-            if dd > max_dd:
-                max_dd = dd
+            max_dd = max(max_dd, dd)
 
         return max_dd
 
-    def _calculate_streaks(self, trades: List[TradeRecord]) -> Tuple[int, int]:
+    def _calculate_streaks(self, trades: list[TradeRecord]) -> tuple[int, int]:
         """Calculate winning and losing streaks."""
         if not trades:
             return 0, 0
@@ -688,7 +684,7 @@ class PerformanceAnalytics:
 
         return max_win_streak, max_loss_streak
 
-    def _group_count_by(self, trades: List[TradeRecord], field: str) -> Dict[str, int]:
+    def _group_count_by(self, trades: list[TradeRecord], field: str) -> dict[str, int]:
         """Group and count trades by field."""
         result = {}
         for trade in trades:
@@ -696,7 +692,7 @@ class PerformanceAnalytics:
             result[key] = result.get(key, 0) + 1
         return result
 
-    def _group_pnl_by(self, trades: List[TradeRecord], field: str) -> Dict[str, float]:
+    def _group_pnl_by(self, trades: list[TradeRecord], field: str) -> dict[str, float]:
         """Group and sum PnL by field."""
         result = {}
         for trade in trades:
@@ -704,7 +700,7 @@ class PerformanceAnalytics:
             result[key] = result.get(key, 0.0) + trade.pnl
         return result
 
-    def _calculate_monthly_returns(self, trades: List[TradeRecord]) -> Dict[str, float]:
+    def _calculate_monthly_returns(self, trades: list[TradeRecord]) -> dict[str, float]:
         """Calculate monthly returns."""
         monthly = {}
         for trade in trades:
@@ -712,7 +708,7 @@ class PerformanceAnalytics:
             monthly[key] = monthly.get(key, 0.0) + trade.pnl
         return monthly
 
-    def _calculate_skewness(self, values: List[float]) -> float:
+    def _calculate_skewness(self, values: list[float]) -> float:
         """Calculate skewness of distribution."""
         if len(values) < 3:
             return 0.0
@@ -723,7 +719,7 @@ class PerformanceAnalytics:
             return 0.0
         return (n / ((n - 1) * (n - 2))) * sum(((x - mean) / std) ** 3 for x in values)
 
-    def _calculate_kurtosis(self, values: List[float]) -> float:
+    def _calculate_kurtosis(self, values: list[float]) -> float:
         """Calculate kurtosis of distribution."""
         if len(values) < 4:
             return 0.0
@@ -736,7 +732,7 @@ class PerformanceAnalytics:
             ((x - mean) / std) ** 4 for x in values
         ) - (3 * (n - 1) ** 2) / ((n - 2) * (n - 3))
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get quick performance summary."""
         total_trades = len(self.trades)
         winners = len([t for t in self.trades if t.pnl > 0])

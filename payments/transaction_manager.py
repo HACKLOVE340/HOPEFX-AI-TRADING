@@ -10,7 +10,7 @@ Handles complete transaction lifecycle including recording, validation,
 status tracking, reversal, and reporting.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from decimal import Decimal
 from enum import Enum
 from typing import Dict, List, Optional, Any
@@ -57,13 +57,13 @@ class Transaction:
     wallet_type: str  # subscription or commission
     status: TransactionStatus = TransactionStatus.PENDING
     reference: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: Optional[datetime] = None
     failed_reason: Optional[str] = None
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "transaction_id": self.transaction_id,
@@ -90,9 +90,9 @@ class TransactionManager:
     """Manages transaction lifecycle and tracking"""
 
     def __init__(self):
-        self.transactions: Dict[str, Transaction] = {}
-        self.user_transactions: Dict[
-            str, List[str]
+        self.transactions: dict[str, Transaction] = {}
+        self.user_transactions: dict[
+            str, list[str]
         ] = {}  # user_id -> [transaction_ids]
 
     def record_transaction(
@@ -105,7 +105,7 @@ class TransactionManager:
         method: str,
         wallet_type: str,
         reference: Optional[str] = None,
-        metadata: Optional[Dict] = None,
+        metadata: Optional[dict] = None,
     ) -> Transaction:
         """
         Record a new transaction
@@ -130,7 +130,7 @@ class TransactionManager:
                 raise ValueError("Amount must be positive")
 
             # Generate transaction ID
-            transaction_id = f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+            transaction_id = f"TXN-{datetime.now(UTC).strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
 
             # Create transaction
             transaction = Transaction(
@@ -185,10 +185,10 @@ class TransactionManager:
                 return False
 
             transaction.status = status
-            transaction.updated_at = datetime.now(timezone.utc)
+            transaction.updated_at = datetime.now(UTC)
 
             if status == TransactionStatus.COMPLETED:
-                transaction.completed_at = datetime.now(timezone.utc)
+                transaction.completed_at = datetime.now(UTC)
             elif status == TransactionStatus.FAILED:
                 transaction.failed_reason = failed_reason
 
@@ -273,13 +273,13 @@ class TransactionManager:
                 metadata={
                     "original_transaction": transaction_id,
                     "reversal_reason": reason,
-                    "reversed_at": datetime.now(timezone.utc).isoformat(),
+                    "reversed_at": datetime.now(UTC).isoformat(),
                 },
             )
 
             # Mark original as reversed
             original.status = TransactionStatus.REVERSED
-            original.updated_at = datetime.now(timezone.utc)
+            original.updated_at = datetime.now(UTC)
             original.metadata["reversed_by"] = reversal.transaction_id
             original.metadata["reversal_reason"] = reason
 
@@ -302,7 +302,7 @@ class TransactionManager:
         type: Optional[TransactionType] = None,
         status: Optional[TransactionStatus] = None,
         limit: int = 100,
-    ) -> List[Transaction]:
+    ) -> list[Transaction]:
         """
         Get user's transactions
 
@@ -338,7 +338,7 @@ class TransactionManager:
         user_id: str,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-    ) -> Dict:
+    ) -> dict:
         """
         Generate transaction statement
 
@@ -351,9 +351,9 @@ class TransactionManager:
             Statement dictionary
         """
         if not start_date:
-            start_date = datetime.now(timezone.utc) - timedelta(days=30)
+            start_date = datetime.now(UTC) - timedelta(days=30)
         if not end_date:
-            end_date = datetime.now(timezone.utc)
+            end_date = datetime.now(UTC)
 
         # Get all transactions in date range
         all_transactions = self.get_user_transactions(user_id, limit=10000)
@@ -401,7 +401,7 @@ class TransactionManager:
             "transactions": [t.to_dict() for t in transactions],
         }
 
-    def get_statistics(self) -> Dict:
+    def get_statistics(self) -> dict:
         """Get overall transaction statistics"""
         total_transactions = len(self.transactions)
 

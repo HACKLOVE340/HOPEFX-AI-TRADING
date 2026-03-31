@@ -24,7 +24,7 @@ class DataHandler:
     Loads, validates, and provides access to OHLCV data.
     """
 
-    def __init__(self, data_source, symbols: List[str], start_date: str, end_date: str):
+    def __init__(self, data_source, symbols: list[str], start_date: str, end_date: str):
         """
         Initialize data handler.
 
@@ -39,7 +39,7 @@ class DataHandler:
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date)
 
-        self.data: Dict[str, pd.DataFrame] = {}
+        self.data: dict[str, pd.DataFrame] = {}
         self.current_index = 0
         self.continue_backtest = True
 

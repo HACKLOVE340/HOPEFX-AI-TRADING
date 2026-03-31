@@ -8,7 +8,7 @@ Tests for Time & Sales Service (data/time_and_sales.py)
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 
 class TestExecutedTrade:
@@ -18,7 +18,7 @@ class TestExecutedTrade:
         from data.time_and_sales import ExecutedTrade
 
         trade = ExecutedTrade(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             symbol="XAUUSD",
             price=1950.0,
             size=100.0,
@@ -36,7 +36,7 @@ class TestExecutedTrade:
         from data.time_and_sales import ExecutedTrade
 
         trade = ExecutedTrade(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             symbol="XAUUSD",
             price=1950.0,
             size=100.0,
@@ -165,7 +165,7 @@ class TestTimeAndSalesService:
         from data.time_and_sales import TimeAndSalesService
 
         service = TimeAndSalesService()
-        base = datetime.now(timezone.utc) - timedelta(minutes=30)
+        base = datetime.now(UTC) - timedelta(minutes=30)
 
         # Old trade
         service.add_trade(
@@ -185,7 +185,7 @@ class TestTimeAndSalesService:
         from data.time_and_sales import TimeAndSalesService
 
         service = TimeAndSalesService(config={"large_trade_threshold": 100})
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         service.add_trade(
             "XAUUSD", 1950.0, 500.0, "buy", timestamp=now - timedelta(minutes=5)
         )
@@ -205,7 +205,7 @@ class TestTimeAndSalesService:
         from data.time_and_sales import TimeAndSalesService
 
         service = TimeAndSalesService(config={"velocity_window_minutes": 5})
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for i in range(10):
             service.add_trade(
                 "XAUUSD",
@@ -226,7 +226,7 @@ class TestTimeAndSalesService:
         from data.time_and_sales import TimeAndSalesService
 
         service = TimeAndSalesService()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for _ in range(7):
             service.add_trade(
                 "XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5)
@@ -253,7 +253,7 @@ class TestTimeAndSalesService:
         from data.time_and_sales import TimeAndSalesService
 
         service = TimeAndSalesService()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for i in range(20):
             service.add_trade(
                 "XAUUSD",
@@ -278,7 +278,7 @@ class TestTimeAndSalesService:
         from data.time_and_sales import TimeAndSalesService
 
         service = TimeAndSalesService()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for i in range(10):
             service.add_trade(
                 "XAUUSD",

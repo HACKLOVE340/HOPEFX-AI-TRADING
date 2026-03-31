@@ -17,16 +17,16 @@ import queue
 import threading
 import traceback
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 logger = logging.getLogger(__name__)
-from pathlib import Path  # noqa: E402
-from dataclasses import dataclass  # noqa: E402
-from enum import Enum  # noqa: E402
-import socket  # noqa: E402
+from pathlib import Path
+from dataclasses import dataclass
+from enum import Enum
+import socket
 
 try:
-    from pythonjsonlogger import jsonlogger  # noqa: F401
+    from pythonjsonlogger import jsonlogger
 
     JSON_LOGGER_AVAILABLE = True
 except ImportError:
@@ -57,9 +57,9 @@ class LogContext:
     user_id: Optional[str] = None
     session_id: Optional[str] = None
     trace_id: Optional[str] = None
-    extra: Dict[str, Any] = None
+    extra: dict[str, Any] = None
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "component": self.component,
             "request_id": self.request_id,
@@ -81,7 +81,7 @@ class StructuredLogFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         log_dict = {
             "timestamp": datetime.fromtimestamp(
-                record.created, tz=timezone.utc
+                record.created, tz=UTC
             ).isoformat(),
             "level": record.levelname,
             "logger": record.name,
@@ -187,7 +187,7 @@ class AsyncLogHandler(logging.Handler):
             except Exception as e:
                 print(f"Error processing log: {e}", file=sys.stderr)
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get handler statistics"""
         return {
             "queue_size": self.queue.qsize(),
@@ -228,9 +228,9 @@ class HOPEFXLogger:
             if self._initialized:
                 return
 
-            self._loggers: Dict[str, logging.Logger] = {}
+            self._loggers: dict[str, logging.Logger] = {}
             self._context = threading.local()
-            self._async_handlers: List[AsyncLogHandler] = []
+            self._async_handlers: list[AsyncLogHandler] = []
             self._metrics = {"logs_emitted": 0, "logs_dropped": 0, "errors": 0}
 
             self._initialized = True
@@ -370,11 +370,11 @@ class HOPEFXLogger:
         logger.addFilter(ContextFilter())
         return logger
 
-    def audit(self, event: str, details: Dict[str, Any]):
+    def audit(self, event: str, details: dict[str, Any]):
         """Log audit event"""
         self._audit_logger.info(f"AUDIT: {event}", extra={"audit_details": details})
 
-    def get_metrics(self) -> Dict:
+    def get_metrics(self) -> dict:
         """Get logging metrics"""
         metrics = self._metrics.copy()
         metrics["async_handlers"] = [
@@ -398,7 +398,7 @@ def get_logger(name: str) -> logging.Logger:
     return HOPEFXLogger().get_logger(name)
 
 
-def audit(event: str, details: Dict[str, Any]):
+def audit(event: str, details: dict[str, Any]):
     """Log audit event"""
     HOPEFXLogger().audit(event, details)
 

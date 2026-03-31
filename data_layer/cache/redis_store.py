@@ -48,7 +48,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-_OHLCV_TTL: Dict[str, int] = {
+_OHLCV_TTL: dict[str, int] = {
     "1m": 300,
     "5m": 900,
     "15m": 1800,
@@ -301,7 +301,7 @@ class DataLayerRedisStore:
 
     # ── Tick cache ────────────────────────────────────────────────────────────
 
-    def set_tick(self, symbol: str, tick_dict: Dict[str, Any]) -> None:
+    def set_tick(self, symbol: str, tick_dict: dict[str, Any]) -> None:
         """Cache the latest validated tick and push to history."""
         key = self._key("tick", symbol)
         payload = json.dumps(tick_dict)
@@ -320,7 +320,7 @@ class DataLayerRedisStore:
             except Exception as exc:
                 logger.debug("Redis tick_history error: %s", exc)
 
-    def get_tick(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_tick(self, symbol: str) -> Optional[dict[str, Any]]:
         raw = self._safe_get(self._key("tick", symbol))
         if raw:
             try:
@@ -329,7 +329,7 @@ class DataLayerRedisStore:
                 return None
         return None
 
-    def get_tick_history(self, symbol: str, limit: int = 500) -> List[Dict[str, Any]]:
+    def get_tick_history(self, symbol: str, limit: int = 500) -> list[dict[str, Any]]:
         """Return the last N ticks from history (oldest first)."""
         if not self._r:
             return []
@@ -343,7 +343,7 @@ class DataLayerRedisStore:
 
     # ── OHLCV cache ───────────────────────────────────────────────────────────
 
-    def set_ohlcv_bar(self, symbol: str, timeframe: str, bar: Dict[str, Any]) -> None:
+    def set_ohlcv_bar(self, symbol: str, timeframe: str, bar: dict[str, Any]) -> None:
         ttl = _OHLCV_TTL.get(timeframe, 3600)
 
         # Latest bar string
@@ -365,7 +365,7 @@ class DataLayerRedisStore:
 
     def get_ohlcv_bars(
         self, symbol: str, timeframe: str, limit: int = 200
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         if not self._r:
             return []
         try:
@@ -376,7 +376,7 @@ class DataLayerRedisStore:
             logger.debug("Redis ohlcv get error: %s", exc)
             return []
 
-    def get_latest_bar(self, symbol: str, timeframe: str) -> Optional[Dict[str, Any]]:
+    def get_latest_bar(self, symbol: str, timeframe: str) -> Optional[dict[str, Any]]:
         raw = self._safe_get(self._key("ohlcv_latest", symbol, timeframe))
         if raw:
             try:
@@ -387,28 +387,28 @@ class DataLayerRedisStore:
 
     # ── Microstructure cache ──────────────────────────────────────────────────
 
-    def set_microstructure(self, symbol: str, snap: Dict[str, Any]) -> None:
+    def set_microstructure(self, symbol: str, snap: dict[str, Any]) -> None:
         self._safe_set(self._key("micro", symbol), json.dumps(snap), _MICRO_TTL)
 
-    def get_microstructure(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_microstructure(self, symbol: str) -> Optional[dict[str, Any]]:
         raw = self._safe_get(self._key("micro", symbol))
         return json.loads(raw) if raw else None
 
     # ── Sentiment cache ───────────────────────────────────────────────────────
 
-    def set_sentiment(self, signal: Dict[str, float]) -> None:
+    def set_sentiment(self, signal: dict[str, float]) -> None:
         self._safe_set(self._key("sentiment"), json.dumps(signal), _SENTIMENT_TTL)
 
-    def get_sentiment(self) -> Optional[Dict[str, float]]:
+    def get_sentiment(self) -> Optional[dict[str, float]]:
         raw = self._safe_get(self._key("sentiment"))
         return json.loads(raw) if raw else None
 
     # ── Macro features cache ──────────────────────────────────────────────────
 
-    def set_macro_features(self, features: Dict[str, float]) -> None:
+    def set_macro_features(self, features: dict[str, float]) -> None:
         self._safe_set(self._key("macro_features"), json.dumps(features), _MACRO_TTL)
 
-    def get_macro_features(self) -> Optional[Dict[str, float]]:
+    def get_macro_features(self) -> Optional[dict[str, float]]:
         raw = self._safe_get(self._key("macro_features"))
         return json.loads(raw) if raw else None
 
@@ -426,21 +426,21 @@ class DataLayerRedisStore:
 
     # ── Quality report cache ──────────────────────────────────────────────────
 
-    def set_quality_report(self, symbol: str, report: Dict[str, Any]) -> None:
+    def set_quality_report(self, symbol: str, report: dict[str, Any]) -> None:
         self._safe_set(
             self._key("quality_report", symbol), json.dumps(report), _QUALITY_TTL
         )
 
-    def get_quality_report(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_quality_report(self, symbol: str) -> Optional[dict[str, Any]]:
         raw = self._safe_get(self._key("quality_report", symbol))
         return json.loads(raw) if raw else None
 
     # ── Feed health cache ─────────────────────────────────────────────────────
 
-    def set_feed_health(self, health: Dict[str, Any]) -> None:
+    def set_feed_health(self, health: dict[str, Any]) -> None:
         self._safe_set(self._key("feed_health"), json.dumps(health), _HEALTH_TTL)
 
-    def get_feed_health(self) -> Optional[Dict[str, Any]]:
+    def get_feed_health(self) -> Optional[dict[str, Any]]:
         raw = self._safe_get(self._key("feed_health"))
         return json.loads(raw) if raw else None
 
@@ -459,7 +459,7 @@ class DataLayerRedisStore:
         except Exception:
             return None
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         total = self._hits + self._misses
         return {
             "hits": self._hits,
@@ -471,7 +471,7 @@ class DataLayerRedisStore:
             "memory_mb": self.memory_usage_mb(),
         }
 
-    def health(self) -> Dict[str, Any]:
+    def health(self) -> dict[str, Any]:
         """
         Return a health dict suitable for monitoring dashboards.
 
@@ -503,7 +503,7 @@ class DataLayerRedisStore:
 
     # ── Batch / pipeline operations ───────────────────────────────────────────
 
-    def set_many(self, items: Dict[str, Any], ttl: int = 300) -> int:
+    def set_many(self, items: dict[str, Any], ttl: int = 300) -> int:
         """
         Write multiple key→value pairs in a single Redis pipeline.
 
@@ -535,7 +535,7 @@ class DataLayerRedisStore:
             logger.debug("DataLayerRedisStore.set_many error: %s", exc)
             return 0
 
-    def get_many(self, keys: List[str]) -> Dict[str, Any]:
+    def get_many(self, keys: list[str]) -> dict[str, Any]:
         """
         Fetch multiple keys in a single Redis pipeline.
 
@@ -556,7 +556,7 @@ class DataLayerRedisStore:
             for fk in full_keys:
                 pipe.get(fk)
             results = pipe.execute()
-            out: Dict[str, Any] = {}
+            out: dict[str, Any] = {}
             for suffix, raw in zip(keys, results, strict=False):
                 if raw is not None:
                     try:
@@ -598,7 +598,7 @@ class DataLayerRedisStore:
             logger.debug("DataLayerRedisStore.flush_all error: %s", exc)
             return 0
 
-    def get_memory_info(self) -> Dict[str, Any]:
+    def get_memory_info(self) -> dict[str, Any]:
         """
         Return detailed Redis memory diagnostics.
 

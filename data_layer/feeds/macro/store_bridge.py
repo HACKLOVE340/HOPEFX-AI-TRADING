@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, Optional
 
 from data_layer.feeds.macro.fred import FREDFeed, FRED_SERIES, fred_feed
@@ -141,7 +141,7 @@ class MacroStoreBridge:
             if loaded > 0:
                 self._loaded = True
                 self._series_loaded = loaded
-                self._last_refresh = datetime.now(timezone.utc)
+                self._last_refresh = datetime.now(UTC)
                 logger.info(
                     "MacroStoreBridge: CSV fallback loaded %d series from data/macro/",
                     loaded,
@@ -180,7 +180,7 @@ class MacroStoreBridge:
 
             self._loaded = True
             self._series_loaded = loaded
-            self._last_refresh = datetime.now(timezone.utc)
+            self._last_refresh = datetime.now(UTC)
 
             if self._prom_series_count:
                 self._prom_series_count.set(loaded)
@@ -204,7 +204,7 @@ class MacroStoreBridge:
     async def _daily_refresh_loop(self) -> None:
         """Refresh FRED data daily at 18:00 UTC (after US market close)."""
         while self._running:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             target = now.replace(hour=18, minute=0, second=0, microsecond=0)
             if target <= now:
                 target = target + timedelta(days=1)
@@ -216,7 +216,7 @@ class MacroStoreBridge:
             await asyncio.sleep(wait_s)
             await self._load_fred_into_store()
 
-    def get_ml_features(self) -> Dict[str, float]:
+    def get_ml_features(self) -> dict[str, float]:
         """
         Return latest macro values as flat ML features.
 
@@ -228,7 +228,7 @@ class MacroStoreBridge:
             from ml.macro_store import macro_store
 
             snap = macro_store.snapshot()
-            features: Dict[str, float] = {}
+            features: dict[str, float] = {}
             for name, info in snap.items():
                 if info and info.get("value") is not None:
                     features[f"macro_{name}"] = float(info["value"])
@@ -239,7 +239,7 @@ class MacroStoreBridge:
             logger.debug("MacroStoreBridge.get_ml_features error: %s", exc)
             return {}
 
-    def snapshot(self) -> Dict[str, object]:
+    def snapshot(self) -> dict[str, object]:
         """
         Return a full macro snapshot for caching and health endpoints.
 
@@ -254,7 +254,7 @@ class MacroStoreBridge:
         except Exception:
             raw_snap = {}
 
-        series_detail: Dict[str, object] = {}
+        series_detail: dict[str, object] = {}
         for name, info in raw_snap.items():
             if info:
                 series_detail[name] = {

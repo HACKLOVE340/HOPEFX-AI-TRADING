@@ -39,7 +39,7 @@ class TestKillSwitch:
         return KillSwitch(
             flag_file=tmp_path / "ks.flag",
             poll_interval_sec=0.05,
-            deactivation_token="test-token-abc",  # noqa: S106
+            deactivation_token="test-token-abc",
         )
 
     def test_initial_state_inactive(self, tmp_path):
@@ -489,7 +489,7 @@ class TestCompliance:
 
 
 class TestMonteCarlo:
-    def _pnls(self, n: int = 200) -> List[float]:
+    def _pnls(self, n: int = 200) -> list[float]:
         rng = np.random.default_rng(42)
         return list(rng.normal(50, 200, n))
 

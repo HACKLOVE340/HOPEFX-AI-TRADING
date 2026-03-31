@@ -86,7 +86,7 @@ class MetalsDevFeed(GoldFeedBase):
         during the connection window.
         """
         try:
-            import websockets  # type: ignore[import]  # noqa: F401
+            import websockets  # type: ignore[import]
         except ImportError:
             logger.debug("Metals.dev WebSocket: websockets package not installed")
             return
@@ -136,7 +136,7 @@ class MetalsDevFeed(GoldFeedBase):
                 # Full-jitter exponential backoff — avoids thundering herd on
                 # server-side restarts and prevents tight reconnect loops on
                 # auth failures (which would burn through rate limits).
-                wait = random.uniform(0, min(backoff, _MAX_BACKOFF))  # nosec B311 - reconnect backoff jitter, not cryptographic  # noqa: S311
+                wait = random.uniform(0, min(backoff, _MAX_BACKOFF))  # nosec B311 - reconnect backoff jitter, not cryptographic
                 logger.warning(
                     "Metals.dev WS disconnected: %s — reconnecting in %.1fs",
                     exc,

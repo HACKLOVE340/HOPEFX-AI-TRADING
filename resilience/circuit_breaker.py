@@ -12,7 +12,7 @@ Prevents cascade failures and ensures system stability
 import asyncio
 from typing import Dict, Callable, Optional
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum, auto
 
 
@@ -53,7 +53,7 @@ class CircuitBreaker:
             # Check if we should try half-open
             if self.last_failure_time:
                 elapsed = (
-                    datetime.now(timezone.utc) - self.last_failure_time
+                    datetime.now(UTC) - self.last_failure_time
                 ).total_seconds()
                 if elapsed > self.config.timeout_seconds:
                     self.state = CircuitState.HALF_OPEN
@@ -97,7 +97,7 @@ class CircuitBreaker:
         self.total_calls += 1
         self.total_failures += 1
         self.failures += 1
-        self.last_failure_time = datetime.now(timezone.utc)
+        self.last_failure_time = datetime.now(UTC)
 
         if self.state == CircuitState.HALF_OPEN:
             print(f"❌ Circuit {self.name}: OPEN (recovery failed)")
@@ -108,7 +108,7 @@ class CircuitBreaker:
                 print(f"🚫 Circuit {self.name}: OPEN ({self.failures} failures)")
                 self.state = CircuitState.OPEN
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         return {
             "name": self.name,
             "state": self.state.name,
@@ -125,7 +125,6 @@ class CircuitBreaker:
 class CircuitBreakerOpen(Exception):
     """Exception when circuit is open"""
 
-    pass
 
 
 class Bulkhead:
@@ -158,7 +157,7 @@ class Bulkhead:
                 finally:
                     self.active_count -= 1
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         return {
             "name": self.name,
             "active": self.active_count,
@@ -177,7 +176,7 @@ class TimeoutManager:
 
     def __init__(self, default_timeout: float = 30.0):
         self.default_timeout = default_timeout
-        self.timeouts: Dict[str, float] = {
+        self.timeouts: dict[str, float] = {
             "market_data": 1.0,  # 1 second for price updates
             "order_entry": 5.0,  # 5 seconds for order submission
             "risk_calculation": 10.0,  # 10 seconds for risk

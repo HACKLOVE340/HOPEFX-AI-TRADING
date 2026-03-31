@@ -46,7 +46,7 @@ import asyncio
 import collections
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Deque, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -62,9 +62,9 @@ class _VersionWindow:
 
     def __init__(self, name: str, maxlen: int) -> None:
         self.name = name
-        self.pnl_window: Deque[float] = collections.deque(maxlen=maxlen)
+        self.pnl_window: collections.deque[float] = collections.deque(maxlen=maxlen)
         self.total_trades: int = 0
-        self.promoted_at: datetime = datetime.now(timezone.utc)
+        self.promoted_at: datetime = datetime.now(UTC)
 
     def record(self, pnl: float) -> None:
         self.pnl_window.append(pnl)
@@ -91,7 +91,7 @@ class ModelPerformanceMonitor:
     """
 
     def __init__(self) -> None:
-        self._windows: Dict[str, _VersionWindow] = {}
+        self._windows: dict[str, _VersionWindow] = {}
         self._current_version: Optional[str] = None
         self._previous_version: Optional[str] = None
         self._running = False
@@ -135,7 +135,7 @@ class ModelPerformanceMonitor:
             self._windows[version] = _VersionWindow(version, WINDOW_TRADES)
         self._windows[version].record(pnl)
 
-    def get_stats(self) -> Dict[str, dict]:
+    def get_stats(self) -> dict[str, dict]:
         """Return current rolling stats for all tracked versions."""
         return {
             name: {
@@ -215,7 +215,7 @@ class ModelPerformanceMonitor:
 
     def _should_rollback(
         self, cur_mean: float, prev_mean: Optional[float]
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """
         Determine whether to roll back the current model.
 
@@ -306,7 +306,7 @@ class ModelPerformanceMonitor:
                     "reverted_to": previous,
                     "reason": reason,
                     "rollback_count": self._rollback_count,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
         except Exception as exc:

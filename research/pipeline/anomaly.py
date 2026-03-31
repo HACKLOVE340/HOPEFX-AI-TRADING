@@ -264,7 +264,7 @@ class AnomalyWeighter:
             obj = joblib.load(path)
         except Exception:
             with open(path, "rb") as f:
-                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback  # noqa: S301
+                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
             raise TypeError(f"Expected AnomalyWeighter, got {type(obj)}")
         logger.info("AnomalyWeighter loaded ← %s", path)

@@ -21,7 +21,7 @@ try:
     from sqlalchemy.orm import sessionmaker, Session
     from sqlalchemy.pool import QueuePool
     from sqlalchemy.exc import (
-        SQLAlchemyError,  # noqa: F401
+        SQLAlchemyError,
         OperationalError,
         TimeoutError as SATimeoutError,
     )
@@ -348,7 +348,7 @@ class DatabaseMigrationManager:
             base.metadata.drop_all(conn)
         logger.info("Database tables dropped")
 
-    def get_table_stats(self) -> Dict[str, int]:
+    def get_table_stats(self) -> dict[str, int]:
         """Get row counts for all tables"""
         stats = {}
 
@@ -400,7 +400,7 @@ def init_db_manager(connection_string: str, **kwargs) -> DatabaseManager:
 # the codebase (get_db, engine, SessionLocal).  They are backed by a lazy
 # singleton so the first import does not require DATABASE_URL to be set.
 
-import os as _os  # noqa: E402
+import os as _os
 
 
 def _default_db_url() -> str:

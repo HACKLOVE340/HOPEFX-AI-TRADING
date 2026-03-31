@@ -28,21 +28,21 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 
 def _utcnow() -> datetime:
     """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
-from typing import AsyncGenerator, List, Optional  # noqa: E402
+    return datetime.now(UTC)
+from typing import AsyncGenerator, List, Optional
 
-import strawberry  # noqa: E402
-from strawberry.fastapi import GraphQLRouter  # noqa: E402
-from strawberry.subscriptions import (  # noqa: E402
+import strawberry
+from strawberry.fastapi import GraphQLRouter
+from strawberry.subscriptions import (
     GRAPHQL_TRANSPORT_WS_PROTOCOL,
     GRAPHQL_WS_PROTOCOL,
 )
-from strawberry.types import Info  # noqa: E402
+from strawberry.types import Info
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +226,7 @@ class RiskStatus:
     margin_used_pct: float
     total_exposure_pct: float
     risk_level: str
-    messages: List[str]
+    messages: list[str]
     prop_firm_enabled: bool
     prop_firm_name: str
 
@@ -355,7 +355,7 @@ class Query:
         info: Info,
         symbol: str = "XAU/USD",
         limit: int = 10,
-    ) -> List[TradingData]:
+    ) -> list[TradingData]:
         _require_auth(info)
         state = _get_broker_state()
         if state and hasattr(state, "broker"):
@@ -384,7 +384,7 @@ class Query:
         return []
 
     @strawberry.field(description="Open positions")
-    def positions(self, info: Info) -> List[Position]:
+    def positions(self, info: Info) -> list[Position]:
         _require_auth(info)
         state = _get_broker_state()
         if state and hasattr(state, "broker"):
@@ -412,7 +412,7 @@ class Query:
         return []
 
     @strawberry.field(description="Recent closed trades")
-    def trades(self, info: Info, limit: int = 20) -> List[Trade]:
+    def trades(self, info: Info, limit: int = 20) -> list[Trade]:
         _require_auth(info)
         state = _get_broker_state()
         if state and hasattr(state, "broker"):
@@ -439,7 +439,7 @@ class Query:
         return []
 
     @strawberry.field(description="Recent AI signals")
-    def signals(self, info: Info, limit: int = 5) -> List[Signal]:
+    def signals(self, info: Info, limit: int = 5) -> list[Signal]:
         _require_auth(info)
         # Pull from the live ML predictor signal history
         try:
@@ -447,7 +447,7 @@ class Query:
 
             pred = get_predictor()
             history = getattr(pred, "signal_history", None) or []
-            results: List[Signal] = []
+            results: list[Signal] = []
             for sig in history[: min(limit, len(history))]:
                 results.append(
                     Signal(

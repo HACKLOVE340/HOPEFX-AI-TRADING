@@ -58,7 +58,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -177,7 +177,7 @@ def send_trade_fill_email(
         fill_price=f"{fill_price:,.2f}",
         net_pnl=f"{net_pnl:+,.2f}" if net_pnl is not None else "Open trade",
         commission=f"{commission:.2f}",
-        filled_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        filled_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
     )
 
 
@@ -244,7 +244,7 @@ def send_risk_halt_email(
         reason=reason,
         drawdown_pct=f"{drawdown_pct:.2f}%",
         limit_pct=f"{limit_pct:.2f}%",
-        halted_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        halted_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
     )
 
 
@@ -282,7 +282,7 @@ def send_payment_confirmation_email(
         invoice_id=invoice_id,
         access_code=access_code,
         expires_at=expires_at,
-        confirmed_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        confirmed_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
     )
 
 
@@ -311,7 +311,7 @@ def send_subscription_cancelled_email(
         plan=plan,
         access_until=access_until,
         data_deleted_at=data_deleted_at,
-        cancelled_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        cancelled_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
     )
 
 
@@ -343,7 +343,7 @@ def send_subscription_renewal_email(
         amount=f"{amount:,.2f}",
         currency=currency,
         next_renewal=next_renewal,
-        renewed_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        renewed_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
     )
 
 
@@ -369,5 +369,5 @@ def send_trial_expiry_warning_email(
         template="trial_expiry_warning.html",
         days_remaining=days_remaining,
         upgrade_url=upgrade_url,
-        sent_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        sent_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
     )

@@ -53,7 +53,7 @@ def risk(tmp_path):
 def ks(tmp_path):
     return KillSwitch(
         flag_file=tmp_path / "ks.flag",
-        deactivation_token="test-token-abc",  # noqa: S106
+        deactivation_token="test-token-abc",
     )
 
 
@@ -178,20 +178,20 @@ def test_kill_switch_activate_deactivate(ks):
     assert ks.is_active() is True
     assert "integration test" in ks.reason
 
-    ks.deactivate(token="test-token-abc")  # noqa: S106
+    ks.deactivate(token="test-token-abc")
     assert ks.is_active() is False
 
 
 def test_kill_switch_persists_across_instances(tmp_path):
     """State written by one instance is read by a new instance."""
     flag = tmp_path / "ks_persist.flag"
-    ks1 = KillSwitch(flag_file=flag, deactivation_token="tok")  # noqa: S106
+    ks1 = KillSwitch(flag_file=flag, deactivation_token="tok")
     ks1.activate("persistence test")
 
-    ks2 = KillSwitch(flag_file=flag, deactivation_token="tok")  # noqa: S106
+    ks2 = KillSwitch(flag_file=flag, deactivation_token="tok")
     assert ks2.is_active() is True
 
-    ks2.deactivate(token="tok")  # noqa: S106
+    ks2.deactivate(token="tok")
     assert ks2.is_active() is False
 
 
@@ -542,7 +542,7 @@ class TestKillSwitchIntegration:
         if tmp_path is None:
             tmp_path = Path(tempfile.mkdtemp())
         flag = tmp_path / "ks_test.flag"
-        return KillSwitch(flag_file=flag, deactivation_token="test-token-123")  # noqa: S106
+        return KillSwitch(flag_file=flag, deactivation_token="test-token-123")
 
     def test_inactive_by_default(self):
         ks = self._make_ks()
@@ -556,7 +556,7 @@ class TestKillSwitchIntegration:
     def test_deactivate_restores_state(self):
         ks = self._make_ks()
         ks.activate("test")
-        ks.deactivate(token="test-token-123")  # noqa: S106
+        ks.deactivate(token="test-token-123")
         assert ks.is_active() is False
 
     def test_status_dict_structure(self):

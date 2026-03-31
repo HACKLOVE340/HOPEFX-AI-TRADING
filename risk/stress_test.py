@@ -50,7 +50,7 @@ class StressScenario:
 
 
 # Historical and hypothetical scenarios calibrated to XAUUSD
-SCENARIOS: List[StressScenario] = [
+SCENARIOS: list[StressScenario] = [
     StressScenario(
         name="COVID_CRASH_2020",
         description="Gold flash crash March 2020 — forced liquidations, margin calls",
@@ -162,7 +162,7 @@ class StressTester:
         leverage: float = 1.0,
         equity: Optional[float] = None,
         max_loss_pct: float = 0.20,
-        scenarios: Optional[List[StressScenario]] = None,
+        scenarios: Optional[list[StressScenario]] = None,
     ) -> None:
         if position_value < 0:
             raise ValueError("position_value must be >= 0")
@@ -190,7 +190,7 @@ class StressTester:
             breaches_gate=breaches_gate,
         )
 
-    def run_all(self) -> List[StressResult]:
+    def run_all(self) -> list[StressResult]:
         """Run all scenarios and return results sorted by P&L (worst first)."""
         results = [self._apply(s) for s in self.scenarios]
         results.sort(key=lambda r: r.pnl_usd)
@@ -202,14 +202,14 @@ class StressTester:
         )
         return results
 
-    def worst_case(self, results: Optional[List[StressResult]] = None) -> StressResult:
+    def worst_case(self, results: Optional[list[StressResult]] = None) -> StressResult:
         """Return the scenario with the largest USD loss."""
         r = results or self.run_all()
         return min(r, key=lambda x: x.pnl_usd)
 
     def gate_check(
         self,
-        results: Optional[List[StressResult]] = None,
+        results: Optional[list[StressResult]] = None,
         equity: Optional[float] = None,
         max_loss_pct: Optional[float] = None,
     ) -> bool:
@@ -239,7 +239,7 @@ class StressTester:
             return False
         return True
 
-    def summary(self, results: Optional[List[StressResult]] = None) -> Dict:
+    def summary(self, results: Optional[list[StressResult]] = None) -> dict:
         """Return a JSON-serialisable summary of all scenario results."""
         r = results or self.run_all()
         return {
@@ -279,7 +279,7 @@ def run_all_scenarios(
     equity: float,
     leverage: float = 1.0,
     max_loss_pct: float = 0.20,
-) -> Dict:
+) -> dict:
     """
     Run all stress scenarios and return a summary dict.
 

@@ -32,7 +32,7 @@ class XAUUSDDataGenerator:
         self.candles_per_day = candles_per_day
         self.base_price = 2000.0
 
-    def generate(self) -> List[Dict]:
+    def generate(self) -> list[dict]:
         """Generate synthetic tick data."""
         data = []
         price = self.base_price
@@ -56,7 +56,7 @@ class XAUUSDDataGenerator:
                 high_p = max(open_p, price) + volatility * 0.5
                 low_p = min(open_p, price) - volatility * 0.5
                 close_p = price
-                volume = random.randint(1000, 10000)  # nosec B311 - example data generation, not cryptographic  # noqa: S311
+                volume = random.randint(1000, 10000)  # nosec B311 - example data generation, not cryptographic
 
                 data.append(
                     {
@@ -81,7 +81,7 @@ class MovingAverageCrossover:
         self.prices = []
         self.position = None  # None, 'long', 'short'
 
-    def on_data(self, candle: Dict) -> str:
+    def on_data(self, candle: dict) -> str:
         """Process new candle and return signal."""
         self.prices.append(candle["close"])
 
@@ -106,7 +106,7 @@ class MovingAverageCrossover:
 class BacktestEngine:
     """Simple backtesting engine."""
 
-    def __init__(self, data: List[Dict], strategy, initial_capital=10000.0):
+    def __init__(self, data: list[dict], strategy, initial_capital=10000.0):
         self.data = data
         self.strategy = strategy
         self.initial_capital = initial_capital
@@ -117,7 +117,7 @@ class BacktestEngine:
         self.commission = 0.001  # 0.1%
         self.slippage = 0.05  # $0.05 slippage for XAUUSD
 
-    def run(self) -> Dict:
+    def run(self) -> dict:
         """Run backtest and return results."""
         logger.info("Starting backtest...")
 
@@ -146,7 +146,7 @@ class BacktestEngine:
 
         return self._calculate_metrics()
 
-    def _enter_position(self, candle: Dict, side: str):
+    def _enter_position(self, candle: dict, side: str):
         """Enter a position."""
         entry_price = candle["close"] + self.slippage
         qty = (self.capital * 0.95) / entry_price  # Use 95% of capital
@@ -163,7 +163,7 @@ class BacktestEngine:
 
         logger.info(f"ENTER LONG: {qty:.4f} @ {entry_price:.2f}")
 
-    def _exit_position(self, candle: Dict):
+    def _exit_position(self, candle: dict):
         """Exit current position."""
         if self.position is None:
             return
@@ -196,7 +196,7 @@ class BacktestEngine:
         logger.info(f"EXIT: @ {exit_price:.2f} | P&L: ${net_pnl:.2f}")
         self.position = None
 
-    def _calculate_equity(self, candle: Dict) -> float:
+    def _calculate_equity(self, candle: dict) -> float:
         """Calculate current equity."""
         if self.position is None:
             return self.capital
@@ -204,7 +204,7 @@ class BacktestEngine:
         current_value = self.position["qty"] * candle["close"]
         return self.capital + current_value
 
-    def _calculate_metrics(self) -> Dict:
+    def _calculate_metrics(self) -> dict:
         """Calculate performance metrics."""
         if not self.trades:
             return {"error": "No trades executed"}
@@ -219,11 +219,9 @@ class BacktestEngine:
         peak = self.initial_capital
         max_dd = 0
         for equity in equity_values:
-            if equity > peak:
-                peak = equity
+            peak = max(peak, equity)
             dd = (peak - equity) / peak
-            if dd > max_dd:
-                max_dd = dd
+            max_dd = max(max_dd, dd)
 
         # Calculate Sharpe (simplified, assuming 252 trading days)
         if len(equity_values) > 1:
@@ -348,8 +346,7 @@ def main():
         peak = metrics["initial_capital"]
         drawdowns = []
         for equity in [e["equity"] for e in engine.equity_curve[::24]]:
-            if equity > peak:
-                peak = equity
+            peak = max(peak, equity)
             drawdowns.append((peak - equity) / peak * 100)
 
         axes[1].fill_between(

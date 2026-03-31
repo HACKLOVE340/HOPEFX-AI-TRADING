@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class MobileTradingEngine:
         self._app_state = app_state
         self._broker = broker
         # In-memory preset store (persisted externally by caller if needed)
-        self._presets: Dict[str, Dict[str, Any]] = {}
+        self._presets: dict[str, dict[str, Any]] = {}
 
     # ── Broker access ─────────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ class MobileTradingEngine:
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
         comment: str = "mobile",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Place an order via the real broker (async)."""
         broker = self._get_broker()
         if broker is None:
@@ -134,7 +134,7 @@ class MobileTradingEngine:
                 "price": price or result.get("entry_price"),
                 "stop_loss": stop_loss,
                 "take_profit": take_profit,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         except Exception as exc:
             logger.error(
@@ -153,7 +153,7 @@ class MobileTradingEngine:
         user_id: str,
         preset_id: str,
         confirm: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute a quick order from a saved preset.
         Preset must be registered via save_preset() first.
@@ -202,7 +202,7 @@ class MobileTradingEngine:
                 "preview": preset,
             }
 
-    def save_preset(self, preset_id: str, preset: Dict[str, Any]) -> None:
+    def save_preset(self, preset_id: str, preset: dict[str, Any]) -> None:
         """Save a quick-order preset."""
         required = {"symbol", "side", "quantity"}
         missing = required - set(preset.keys())
@@ -217,7 +217,7 @@ class MobileTradingEngine:
             return True
         return False
 
-    def list_presets(self) -> List[Dict[str, Any]]:
+    def list_presets(self) -> list[dict[str, Any]]:
         return [{"preset_id": k, **v} for k, v in self._presets.items()]
 
     # ── Position management ───────────────────────────────────────────────────
@@ -227,7 +227,7 @@ class MobileTradingEngine:
         user_id: str,
         position_id: str,
         quantity: Optional[float] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Close a specific position via the real broker (async)."""
         broker = self._get_broker()
         if broker is None:
@@ -261,7 +261,7 @@ class MobileTradingEngine:
                 if isinstance(result, dict)
                 else None,
                 "pnl": result.get("pnl") if isinstance(result, dict) else None,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         except Exception as exc:
             logger.error(
@@ -272,7 +272,7 @@ class MobileTradingEngine:
     async def close_all_positions_async(
         self,
         user_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Close all open positions via the real broker (async)."""
         broker = self._get_broker()
         if broker is None:
@@ -283,7 +283,7 @@ class MobileTradingEngine:
             }
 
         # Fetch open positions first
-        positions: List[Dict[str, Any]] = []
+        positions: list[dict[str, Any]] = []
         try:
             fn = getattr(broker, "get_positions", None) or getattr(
                 broker, "get_open_trades", None
@@ -297,7 +297,7 @@ class MobileTradingEngine:
             )
 
         closed = 0
-        errors: List[str] = []
+        errors: list[str] = []
         for pos in positions:
             pos_id = pos.get("id") or pos.get("position_id") or pos.get("trade_id")
             if not pos_id:
@@ -320,14 +320,14 @@ class MobileTradingEngine:
             "status": "completed" if not errors else "partial",
             "positions_closed": closed,
             "errors": errors,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     def close_all_positions(
         self,
         user_id: str,
         confirm_required: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Sync wrapper for close_all_positions_async."""
         if confirm_required:
             return {
@@ -352,7 +352,7 @@ class MobileTradingEngine:
 
     # ── Order cancellation ────────────────────────────────────────────────────
 
-    async def cancel_order_async(self, user_id: str, order_id: str) -> Dict[str, Any]:
+    async def cancel_order_async(self, user_id: str, order_id: str) -> dict[str, Any]:
         """Cancel a pending order via the real broker (async)."""
         broker = self._get_broker()
         if broker is None:
@@ -377,7 +377,7 @@ class MobileTradingEngine:
             return {
                 "status": "cancelled",
                 "order_id": order_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         except Exception as exc:
             logger.error(
@@ -387,7 +387,7 @@ class MobileTradingEngine:
 
     # ── Position / order queries ──────────────────────────────────────────────
 
-    async def get_positions_async(self, user_id: str) -> List[Dict[str, Any]]:
+    async def get_positions_async(self, user_id: str) -> list[dict[str, Any]]:
         """Fetch open positions from the real broker (async)."""
         broker = self._get_broker()
         if broker is None:
@@ -404,7 +404,7 @@ class MobileTradingEngine:
             logger.warning("MobileTradingEngine.get_positions_async: %s", exc)
             return []
 
-    async def get_orders_async(self, user_id: str) -> List[Dict[str, Any]]:
+    async def get_orders_async(self, user_id: str) -> list[dict[str, Any]]:
         """Fetch open orders from the real broker (async)."""
         broker = self._get_broker()
         if broker is None:

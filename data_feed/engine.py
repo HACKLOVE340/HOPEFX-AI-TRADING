@@ -37,7 +37,7 @@ import asyncio
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -93,20 +93,18 @@ class ProductionDataEngine:
         self.price_history: deque = deque(
             maxlen=int(self._cfg.get("history_size", 5000))
         )
-        self.subscribers: List[Any] = []
+        self.subscribers: list[Any] = []
         self.is_running: bool = True
 
         # Provider management
-        self._fallback_order: List[str] = self._cfg.get(
+        self._fallback_order: list[str] = self._cfg.get(
             "fallback_order", ["goldapi", "metalpriceapi", "mt5_demo"]
         )
         self.active_provider: str = self._cfg.get("primary", self._fallback_order[0])
 
         # Per-provider failure counters and circuit-breaker open timestamps.
-        self._fail_count: Dict[str, int] = {p: 0 for p in self._fallback_order}
-        self._circuit_open_at: Dict[str, Optional[datetime]] = {
-            p: None for p in self._fallback_order
-        }
+        self._fail_count: dict[str, int] = dict.fromkeys(self._fallback_order, 0)
+        self._circuit_open_at: dict[str, Optional[datetime]] = dict.fromkeys(self._fallback_order)
 
         # HTTP session (created in start())
         self._session: Optional[aiohttp.ClientSession] = None
@@ -171,7 +169,7 @@ class ProductionDataEngine:
                 self._fail_count[provider] = self._fail_count.get(provider, 0) + 1
                 threshold = int(self._cfg.get("circuit_breaker_threshold", 5))
                 if self._fail_count[provider] >= threshold:
-                    self._circuit_open_at[provider] = datetime.now(tz=timezone.utc)
+                    self._circuit_open_at[provider] = datetime.now(tz=UTC)
                     logger.warning(
                         "Circuit breaker OPEN for provider '%s' after %d failures",
                         provider,
@@ -185,7 +183,7 @@ class ProductionDataEngine:
 
     def _pick_provider(self) -> str:
         """Return the active provider, skipping any with an open circuit breaker."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         for candidate in self._fallback_order:
             open_at = self._circuit_open_at.get(candidate)
             if open_at is None:
@@ -202,7 +200,7 @@ class ProductionDataEngine:
 
     def _get_next_provider(self, current: str) -> str:
         """Return the next provider in the fallback order after *current*."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         try:
             idx = self._fallback_order.index(current)
         except ValueError:
@@ -250,7 +248,7 @@ class ProductionDataEngine:
                     max_retries,
                     exc,
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error(
                     "Provider '%s' unexpected error (attempt %d/%d): %s",
                     provider,
@@ -309,7 +307,7 @@ class ProductionDataEngine:
 
     def _record_price(self, price: float) -> None:
         self.current_price = price
-        self.last_update = datetime.now(tz=timezone.utc)
+        self.last_update = datetime.now(tz=UTC)
         self.price_history.append((price, self.last_update))
 
     async def _broadcast(self, price: float) -> None:
@@ -333,7 +331,7 @@ class ProductionDataEngine:
         while self.is_running:
             await asyncio.sleep(15)
             if self.last_update is not None:
-                age = (datetime.now(tz=timezone.utc) - self.last_update).total_seconds()
+                age = (datetime.now(tz=UTC) - self.last_update).total_seconds()
                 if age > 30:
                     logger.warning(
                         "Data feed stale (%.0f s) — forcing provider rotation", age
@@ -343,7 +341,7 @@ class ProductionDataEngine:
     # ── Config loading ────────────────────────────────────────────────────────
 
     @staticmethod
-    def _load_config(path: str) -> Dict:
+    def _load_config(path: str) -> dict:
         config_path = Path(path)
         if not config_path.exists():
             raise FileNotFoundError(
@@ -354,7 +352,7 @@ class ProductionDataEngine:
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         """Return a snapshot of engine health for monitoring / dashboards."""
         return {
             "active_provider": self.active_provider,

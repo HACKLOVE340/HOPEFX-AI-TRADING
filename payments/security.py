@@ -9,7 +9,7 @@ Security Module
 Handles 2FA, KYC verification, transaction limits, and fraud detection.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from decimal import Decimal
 from enum import Enum
 from typing import Dict, Optional, List, Tuple
@@ -37,7 +37,7 @@ class KYCInfo:
     user_id: str
     level: KYCLevel
     verified_at: Optional[datetime] = None
-    documents: Dict[str, str] = None
+    documents: dict[str, str] = None
 
     def __post_init__(self):
         if self.documents is None:
@@ -57,18 +57,18 @@ class TransactionLimit:
 
     def __post_init__(self):
         if self.last_reset is None:
-            self.last_reset = datetime.now(timezone.utc)
+            self.last_reset = datetime.now(UTC)
 
 
 class SecurityManager:
     """Manages security features including 2FA, KYC, and limits"""
 
     def __init__(self):
-        self.kyc_info: Dict[str, KYCInfo] = {}
-        self.transaction_limits: Dict[str, TransactionLimit] = {}
-        self.totp_secrets: Dict[str, str] = {}
-        self.failed_attempts: Dict[str, List[datetime]] = {}
-        self.ip_whitelist: Dict[str, List[str]] = {}
+        self.kyc_info: dict[str, KYCInfo] = {}
+        self.transaction_limits: dict[str, TransactionLimit] = {}
+        self.totp_secrets: dict[str, str] = {}
+        self.failed_attempts: dict[str, list[datetime]] = {}
+        self.ip_whitelist: dict[str, list[str]] = {}
 
         # Default limits by KYC level
         self.default_limits = {
@@ -94,7 +94,7 @@ class SecurityManager:
             },
         }
 
-    def setup_2fa(self, user_id: str) -> Dict[str, str]:
+    def setup_2fa(self, user_id: str) -> dict[str, str]:
         """
         Set up 2FA for user using RFC 6238 TOTP.
 
@@ -145,7 +145,7 @@ class SecurityManager:
         return is_valid
 
     def set_kyc_level(
-        self, user_id: str, level: KYCLevel, documents: Optional[Dict[str, str]] = None
+        self, user_id: str, level: KYCLevel, documents: Optional[dict[str, str]] = None
     ) -> None:
         """
         Set KYC level for user
@@ -158,7 +158,7 @@ class SecurityManager:
         kyc = KYCInfo(
             user_id=user_id,
             level=level,
-            verified_at=datetime.now(timezone.utc) if level != KYCLevel.NONE else None,
+            verified_at=datetime.now(UTC) if level != KYCLevel.NONE else None,
             documents=documents or {},
         )
 
@@ -189,7 +189,7 @@ class SecurityManager:
 
     def check_transaction_limit(
         self, user_id: str, amount: Decimal
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, Optional[str]]:
         """
         Check if transaction is within limits
 
@@ -242,7 +242,7 @@ class SecurityManager:
         if not limits:
             return
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Reset daily if day changed
         if limits.last_reset.date() != now.date():
@@ -256,7 +256,7 @@ class SecurityManager:
 
     def validate_transaction(
         self, user_id: str, amount: Decimal, transaction_type: str
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, Optional[str]]:
         """
         Validate if transaction is allowed
 
@@ -317,7 +317,7 @@ class SecurityManager:
         # Check failed attempts
         failed = self.failed_attempts.get(user_id, [])
         recent_failed = [
-            f for f in failed if datetime.now(timezone.utc) - f < timedelta(hours=1)
+            f for f in failed if datetime.now(UTC) - f < timedelta(hours=1)
         ]
         if len(recent_failed) > 5:
             logger.warning(f"Suspicious: Multiple failed attempts for user {user_id}")
@@ -336,7 +336,7 @@ class SecurityManager:
         if user_id not in self.failed_attempts:
             self.failed_attempts[user_id] = []
 
-        self.failed_attempts[user_id].append(datetime.now(timezone.utc))
+        self.failed_attempts[user_id].append(datetime.now(UTC))
 
     def add_ip_to_whitelist(self, user_id: str, ip_address: str) -> None:
         """Add IP to user's whitelist"""
@@ -347,7 +347,7 @@ class SecurityManager:
             self.ip_whitelist[user_id].append(ip_address)
             logger.info(f"IP {ip_address} added to whitelist for user {user_id}")
 
-    def get_security_status(self, user_id: str) -> Dict:
+    def get_security_status(self, user_id: str) -> dict:
         """Get security status for user"""
         kyc = self.get_kyc_info(user_id)
         has_2fa = user_id in self.totp_secrets

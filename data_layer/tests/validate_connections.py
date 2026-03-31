@@ -52,7 +52,7 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import List, Tuple
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ def check_types() -> ValidationResult:
 
         tick = GoldTick(
             symbol="XAU_USD",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             bid=1980.0,
             ask=1980.5,
             mid=1980.25,
@@ -127,7 +127,7 @@ def check_types() -> ValidationResult:
         # MicrostructureSnapshot.mid property
         snap = MicrostructureSnapshot(
             symbol="XAU_USD",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             bid=1980.0,
             ask=1981.0,
             spread=1.0,
@@ -154,7 +154,7 @@ def check_dqe() -> ValidationResult:
         import uuid
 
         dqe = DataQualityEngine()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Good tick
         good = GoldTick(
@@ -227,7 +227,7 @@ def check_microstructure() -> ValidationResult:
         for i in range(20):
             tick = GoldTick(
                 symbol="XAU_USD",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 bid=1980.0 + i * 0.1,
                 ask=1980.5 + i * 0.1,
                 mid=1980.25 + i * 0.1,
@@ -269,8 +269,8 @@ def check_sentiment_scorer() -> ValidationResult:
             headline="Gold surges as Federal Reserve signals rate cuts amid inflation fears",
             summary="Gold prices rallied sharply as the Fed signaled dovish policy amid rising CPI.",
             url="https://example.com/gold-rally",
-            published_at=datetime.now(timezone.utc),
-            fetched_at=datetime.now(timezone.utc),
+            published_at=datetime.now(UTC),
+            fetched_at=datetime.now(UTC),
             lineage_id=str(uuid.uuid4()),
         )
         scored = scorer.score_article(article)
@@ -432,7 +432,7 @@ def check_lineage_store() -> ValidationResult:
 
             tick = GoldTick(
                 symbol="XAU_USD",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 bid=1980.0,
                 ask=1980.5,
                 mid=1980.25,
@@ -462,7 +462,7 @@ def check_dukascopy_logic() -> ValidationResult:
         from data_layer.replay.dukascopy import DukascopyFetcher
 
         fetcher = DukascopyFetcher()
-        hour = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        hour = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
         url = fetcher._build_url("XAUUSD", hour)
         assert "XAUUSD" in url, f"XAUUSD not in URL: {url}"  # nosec B101
         assert "2024" in url, f"2024 not in URL: {url}"  # nosec B101
@@ -632,7 +632,7 @@ def check_lineage_flush() -> ValidationResult:
 
             tick = GoldTick(
                 symbol="XAU_USD",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 bid=1980.0,
                 ask=1980.5,
                 mid=1980.25,
@@ -690,7 +690,7 @@ def check_dqe_mahalanobis() -> ValidationResult:
         from data_layer.types import GoldTick, FeedSource
 
         dqe = DataQualityEngine()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Feed 60 normal ticks to build history
         for i in range(60):
@@ -773,7 +773,7 @@ def check_normalization_batch() -> ValidationResult:
         ticks = [
             GoldTick(
                 symbol="XAU_USD",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 bid=1999.5 + i * 0.1,
                 ask=2000.5 + i * 0.1,
                 mid=2000.0 + i * 0.1,
@@ -882,7 +882,7 @@ def check_macro_calendar_causal_blackout() -> ValidationResult:
         engine = MacroCalendarEngine()
         # _is_blackout_at must exist and accept a datetime
         assert hasattr(engine, "_is_blackout_at"), "_is_blackout_at method missing"  # nosec B101
-        result = engine._is_blackout_at(datetime.now(timezone.utc))
+        result = engine._is_blackout_at(datetime.now(UTC))
         assert isinstance(result, bool), "_is_blackout_at must return bool"  # nosec B101
 
         # get_ml_features with as_of must not use live datetime.now()
@@ -1244,13 +1244,13 @@ def check_macro_csv_startup_population() -> ValidationResult:
         return ValidationResult("Macro CSV startup population", False, str(exc))
 
 
-async def run_all(verbose: bool = False) -> Tuple[int, int]:
+async def run_all(verbose: bool = False) -> tuple[int, int]:
     print(_head("HOPEFX Data Layer — Connection Validation"))
-    print(f"  Timestamp: {datetime.now(timezone.utc).isoformat()}")
+    print(f"  Timestamp: {datetime.now(UTC).isoformat()}")
     print(f"  Python:    {sys.version.split()[0]}")
     print()
 
-    results: List[ValidationResult] = []
+    results: list[ValidationResult] = []
 
     # Synchronous checks
     sync_checks = [

@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tca", tags=["tca"])
 
 
-def _require_auth(request: Request) -> Dict[str, Any]:
+def _require_auth(request: Request) -> dict[str, Any]:
     try:
         from auth.jwt_handler import decode_token
 
@@ -46,7 +46,7 @@ def _require_auth(request: Request) -> Dict[str, Any]:
 async def get_all_reports(
     request: Request,
     last_n: int = Query(500, ge=1, le=10000),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Return per-broker TCA reports for all brokers with recent fills."""
     _require_auth(request)
     from execution.tca_recorder import get_tca_recorder
@@ -62,7 +62,7 @@ async def get_broker_report(
     symbol: Optional[str] = Query(None),
     session: Optional[str] = Query(None),
     last_n: int = Query(500, ge=1, le=10000),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return TCA report for a specific broker, optionally filtered by symbol/session."""
     _require_auth(request)
     from execution.tca_recorder import get_tca_recorder
@@ -83,7 +83,7 @@ async def get_recent_records(
     n: int = Query(100, ge=1, le=1000),
     broker: Optional[str] = Query(None),
     symbol: Optional[str] = Query(None),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Return the N most recent TCA records, optionally filtered."""
     _require_auth(request)
     from execution.tca_recorder import get_tca_recorder
@@ -100,7 +100,7 @@ async def get_recent_records(
 
 
 @router.get("/alerts")
-async def get_alerts(request: Request) -> List[Dict[str, Any]]:
+async def get_alerts(request: Request) -> list[dict[str, Any]]:
     """Return brokers currently above the slippage alert threshold."""
     _require_auth(request)
     from execution.tca_recorder import (
@@ -130,7 +130,7 @@ async def get_alerts(request: Request) -> List[Dict[str, Any]]:
 async def get_stats(
     request: Request,
     n: int = Query(100, ge=1, le=5000),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Rolling execution quality statistics across all brokers.
 
@@ -152,7 +152,7 @@ async def get_stats(
     count = len(slippages)
 
     # Per-session breakdown
-    session_stats: Dict[str, Any] = {}
+    session_stats: dict[str, Any] = {}
     for session in ("london", "new_york", "asia", "off_hours"):
         sess_slips = [
             r["slippage_bps"] for r in records_raw if r.get("session") == session
@@ -167,7 +167,7 @@ async def get_stats(
             }
 
     # Per-broker breakdown
-    broker_stats: Dict[str, Any] = {}
+    broker_stats: dict[str, Any] = {}
     for b in {r.get("broker", "unknown") for r in records_raw}:
         b_slips = [r["slippage_bps"] for r in records_raw if r.get("broker") == b]
         if b_slips:
@@ -197,7 +197,7 @@ async def get_stats(
 
 
 @router.delete("/records")
-async def flush_records(request: Request) -> Dict[str, str]:
+async def flush_records(request: Request) -> dict[str, str]:
     """Flush all in-memory TCA records (admin only)."""
     payload = _require_auth(request)
     role = payload.get("role", "")
@@ -217,7 +217,7 @@ async def flush_records(request: Request) -> Dict[str, str]:
 # ── Serialisation helper ──────────────────────────────────────────────────────
 
 
-def _report_to_dict(r: Any) -> Dict[str, Any]:
+def _report_to_dict(r: Any) -> dict[str, Any]:
     return {
         "broker": r.broker,
         "symbol": r.symbol,

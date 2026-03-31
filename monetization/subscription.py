@@ -27,7 +27,7 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Optional, Dict, List
 from enum import Enum
 
@@ -151,21 +151,21 @@ class Subscription:
         self.user_id = user_id
         self.tier = tier
         self.status = status
-        self.start_date = start_date or datetime.now(timezone.utc)
+        self.start_date = start_date or datetime.now(UTC)
         self.end_date = end_date or (self.start_date + timedelta(days=30))
         self.access_code = access_code
         self.auto_renew = auto_renew
         self.stripe_subscription_id = stripe_subscription_id
         self.stripe_customer_id = stripe_customer_id
         self.license_key = license_key or _generate_license_key(user_id, tier)
-        self.created_at = datetime.now(timezone.utc)
-        self.updated_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
+        self.updated_at = datetime.now(UTC)
 
     def is_active(self) -> bool:
         """Check if subscription is active"""
         if self.status not in (SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIAL):
             return False
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return self.start_date <= now <= self.end_date
 
     def has_feature(self, feature: str) -> bool:
@@ -176,21 +176,21 @@ class Subscription:
 
     def is_expired(self) -> bool:
         """Check if subscription is expired"""
-        return datetime.now(timezone.utc) > self.end_date
+        return datetime.now(UTC) > self.end_date
 
     def days_remaining(self) -> int:
         """Get days remaining in subscription"""
         if self.is_expired():
             return 0
-        return (self.end_date - datetime.now(timezone.utc)).days
+        return (self.end_date - datetime.now(UTC)).days
 
     def renew(self, duration_days: int = 30) -> None:
         """Renew subscription"""
         if self.is_expired():
-            self.start_date = datetime.now(timezone.utc)
-        self.end_date = datetime.now(timezone.utc) + timedelta(days=duration_days)
+            self.start_date = datetime.now(UTC)
+        self.end_date = datetime.now(UTC) + timedelta(days=duration_days)
         self.status = SubscriptionStatus.ACTIVE
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         logger.info(
             f"Subscription {self.subscription_id} renewed until {self.end_date}"
         )
@@ -199,13 +199,13 @@ class Subscription:
         """Cancel subscription"""
         self.status = SubscriptionStatus.CANCELLED
         self.auto_renew = False
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         logger.info(f"Subscription {self.subscription_id} cancelled")
 
     def suspend(self) -> None:
         """Suspend subscription"""
         self.status = SubscriptionStatus.SUSPENDED
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         logger.info(f"Subscription {self.subscription_id} suspended")
 
     def reactivate(self) -> None:
@@ -214,10 +214,10 @@ class Subscription:
             self.renew()
         else:
             self.status = SubscriptionStatus.ACTIVE
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
         logger.info(f"Subscription {self.subscription_id} reactivated")
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "subscription_id": self.subscription_id,
@@ -242,8 +242,8 @@ class SubscriptionManager:
     """Manage user subscriptions"""
 
     def __init__(self):
-        self._subscriptions: Dict[str, Subscription] = {}
-        self._user_subscriptions: Dict[str, str] = {}  # user_id -> subscription_id
+        self._subscriptions: dict[str, Subscription] = {}
+        self._user_subscriptions: dict[str, str] = {}  # user_id -> subscription_id
 
     def _create_subscription_base(
         self,
@@ -255,7 +255,7 @@ class SubscriptionManager:
     ) -> Subscription:
         """Internal base subscription creation (no Stripe fields)."""
         subscription_id = f"SUB-{uuid.uuid4().hex[:12].upper()}"
-        start_date = datetime.now(timezone.utc)
+        start_date = datetime.now(UTC)
         end_date = start_date + timedelta(days=duration_days)
 
         subscription = Subscription(
@@ -298,7 +298,7 @@ class SubscriptionManager:
             return False
 
         subscription.status = SubscriptionStatus.ACTIVE
-        subscription.updated_at = datetime.now(timezone.utc)
+        subscription.updated_at = datetime.now(UTC)
 
         logger.info(f"Activated subscription {subscription_id}")
         return True
@@ -318,7 +318,7 @@ class SubscriptionManager:
             return False
 
         subscription.tier = new_tier
-        subscription.updated_at = datetime.now(timezone.utc)
+        subscription.updated_at = datetime.now(UTC)
 
         logger.info(f"Upgraded subscription {subscription_id} to {new_tier}")
         return True
@@ -338,7 +338,7 @@ class SubscriptionManager:
             return False
 
         subscription.tier = new_tier
-        subscription.updated_at = datetime.now(timezone.utc)
+        subscription.updated_at = datetime.now(UTC)
 
         logger.info(f"Downgraded subscription {subscription_id} to {new_tier}")
         return True
@@ -369,7 +369,7 @@ class SubscriptionManager:
 
         return pricing_manager.has_feature(subscription.tier, feature_name)
 
-    def get_user_limits(self, user_id: str) -> Dict:
+    def get_user_limits(self, user_id: str) -> dict:
         """Get usage limits for a user"""
         subscription = self.get_user_subscription(user_id)
         if not subscription or not subscription.is_active():
@@ -397,15 +397,15 @@ class SubscriptionManager:
             "news_integration": tier.features.news_integration,
         }
 
-    def get_all_subscriptions(self) -> List[Subscription]:
+    def get_all_subscriptions(self) -> list[Subscription]:
         """Get all subscriptions"""
         return list(self._subscriptions.values())
 
-    def get_active_subscriptions(self) -> List[Subscription]:
+    def get_active_subscriptions(self) -> list[Subscription]:
         """Get all active subscriptions"""
         return [sub for sub in self._subscriptions.values() if sub.is_active()]
 
-    def get_expired_subscriptions(self) -> List[Subscription]:
+    def get_expired_subscriptions(self) -> list[Subscription]:
         """Get all expired subscriptions"""
         return [sub for sub in self._subscriptions.values() if sub.is_expired()]
 
@@ -423,7 +423,7 @@ class SubscriptionManager:
         import uuid as _uuid
 
         subscription_id = f"SUB-{_uuid.uuid4().hex[:12].upper()}"
-        start_date = datetime.now(timezone.utc)
+        start_date = datetime.now(UTC)
         end_date = start_date + timedelta(days=duration_days)
 
         subscription = Subscription(
@@ -528,8 +528,8 @@ class SubscriptionManager:
                 existing.stripe_subscription_id = stripe_sub_id
                 existing.stripe_customer_id = stripe_cust_id
                 existing.status = SubscriptionStatus.ACTIVE
-                existing.end_date = datetime.now(timezone.utc) + timedelta(days=30)
-                existing.updated_at = datetime.now(timezone.utc)
+                existing.end_date = datetime.now(UTC) + timedelta(days=30)
+                existing.updated_at = datetime.now(UTC)
             else:
                 sub = self.create_subscription(
                     user_id=user_id,
@@ -865,7 +865,7 @@ def require_plan(minimum_plan: str):
     The user's current plan is read from their active subscription record.
     Falls back to "free" when no subscription exists.
     """
-    from functools import wraps  # noqa: F401 (kept for potential future use)
+    from functools import wraps
 
     try:
         from fastapi import Request
@@ -875,8 +875,8 @@ def require_plan(minimum_plan: str):
     async def _dependency(request: "Request", user=None):  # type: ignore[name-defined]
         # Import here to avoid circular imports
         try:
-            from api.auth import get_current_user, TokenPayload  # noqa: F401
-            from fastapi.security import HTTPBearer as _HTTPBearer  # noqa: F401
+            from api.auth import get_current_user, TokenPayload
+            from fastapi.security import HTTPBearer as _HTTPBearer
             from fastapi.security.http import HTTPAuthorizationCredentials as _Creds
         except ImportError:
             # auth module not available (e.g. unit tests) — allow through

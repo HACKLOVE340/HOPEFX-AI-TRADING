@@ -410,8 +410,7 @@ class CoinGeckoSource(DataSource):
 
             # Calculate days needed
             days = (end_date - start_date).days
-            if days < 1:
-                days = 1
+            days = max(days, 1)
 
             url = f"{self.BASE_URL}/coins/{coin_id}/market_chart"
             params = {"vs_currency": "usd", "days": days, "interval": "daily"}
@@ -461,7 +460,7 @@ class CoinGeckoSource(DataSource):
             logger.error(f"Error downloading {symbol} from CoinGecko: {e}")
             return pd.DataFrame()
 
-    def get_coin_list(self) -> List[Dict[str, str]]:
+    def get_coin_list(self) -> list[dict[str, str]]:
         """Get list of all supported coins."""
         try:
             import requests
@@ -546,7 +545,7 @@ class ExchangeRateSource(DataSource):
             logger.error(f"Error getting rate for {symbol}: {e}")
             return pd.DataFrame()
 
-    def get_all_rates(self, base: str = "USD") -> Dict[str, float]:
+    def get_all_rates(self, base: str = "USD") -> dict[str, float]:
         """Get all exchange rates for a base currency."""
         try:
             import requests
@@ -785,11 +784,11 @@ class DataManager:
         logger.warning(f"No data found for stock symbol {symbol}")
         return pd.DataFrame()
 
-    def get_available_sources(self) -> List[str]:
+    def get_available_sources(self) -> list[str]:
         """Get list of available data sources."""
         return list(self.sources.keys())
 
-    def get_source_info(self) -> Dict[str, Dict[str, Any]]:
+    def get_source_info(self) -> dict[str, dict[str, Any]]:
         """Get information about available data sources."""
         return {
             "yahoo": {

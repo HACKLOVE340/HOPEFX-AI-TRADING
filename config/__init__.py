@@ -30,28 +30,24 @@ from .config_manager import (
 class EncryptionManager:  # pragma: no cover
     """Backwards-compat shim. Encryption is handled by ConfigManager._setup_encryption."""
 
-    pass
 
 
 class APIConfig:  # pragma: no cover
     """Backwards-compat shim. API configuration is managed by ConfigManager."""
 
-    pass
 
 
 class LoggingConfig:  # pragma: no cover
     """Backwards-compat shim. Logging configuration is managed by ConfigManager."""
 
-    pass
 
 
 class AppConfig:  # pragma: no cover
     """Backwards-compat shim. Application configuration is managed by ConfigManager."""
 
-    pass
 
 
-from .feature_flags import FeatureFlags, FeatureStatus, flags  # noqa: E402
+from .feature_flags import FeatureFlags, FeatureStatus, flags
 
 __all__ = [
     "ConfigManager",

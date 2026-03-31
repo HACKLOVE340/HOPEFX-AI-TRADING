@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -77,7 +77,7 @@ def _compute_clock_status(stamp_path: pathlib.Path, oanda_key: str = "") -> dict
 
     data = json.loads(stamp_path.read_text())
     started_dt = datetime.fromisoformat(data["started_utc"])
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     elapsed = (now - started_dt).total_seconds() / 86400.0
     target = float(data.get("target_days", 30))
     remaining = max(0.0, target - elapsed)
@@ -125,7 +125,7 @@ class TestStampOandaPaperStart:
         monkeypatch.chdir(tmp_path)
         (tmp_path / "data").mkdir()
 
-        original_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        original_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
         stamp_path = tmp_path / "data" / "oanda_paper_start.json"
         stamp_path.write_text(
             json.dumps(
@@ -196,7 +196,7 @@ class TestPaperTradingClockLogic:
     def test_elapsed_days_10(self, tmp_path):
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        ten_days_ago = datetime.now(timezone.utc) - timedelta(days=10)
+        ten_days_ago = datetime.now(UTC) - timedelta(days=10)
         stamp = _write_stamp(data_dir, ten_days_ago)
         result = _compute_clock_status(stamp)
         assert result["started"] is True
@@ -207,7 +207,7 @@ class TestPaperTradingClockLogic:
     def test_complete_after_31_days(self, tmp_path):
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        thirty_one_days_ago = datetime.now(timezone.utc) - timedelta(days=31)
+        thirty_one_days_ago = datetime.now(UTC) - timedelta(days=31)
         stamp = _write_stamp(data_dir, thirty_one_days_ago)
         result = _compute_clock_status(stamp)
         assert result["started"] is True
@@ -218,7 +218,7 @@ class TestPaperTradingClockLogic:
     def test_remaining_days_never_negative(self, tmp_path):
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        old = datetime.now(timezone.utc) - timedelta(days=100)
+        old = datetime.now(UTC) - timedelta(days=100)
         stamp = _write_stamp(data_dir, old)
         result = _compute_clock_status(stamp)
         assert result["remaining_days"] == 0.0
@@ -226,14 +226,14 @@ class TestPaperTradingClockLogic:
     def test_environment_field_preserved(self, tmp_path):
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        stamp = _write_stamp(data_dir, datetime.now(timezone.utc) - timedelta(days=5))
+        stamp = _write_stamp(data_dir, datetime.now(UTC) - timedelta(days=5))
         result = _compute_clock_status(stamp)
         assert result["environment"] == "practice"
 
     def test_elapsed_plus_remaining_equals_target(self, tmp_path):
         data_dir = tmp_path / "data"
         data_dir.mkdir()
-        fifteen_days_ago = datetime.now(timezone.utc) - timedelta(days=15)
+        fifteen_days_ago = datetime.now(UTC) - timedelta(days=15)
         stamp = _write_stamp(data_dir, fifteen_days_ago)
         result = _compute_clock_status(stamp)
         total = result["elapsed_days"] + result["remaining_days"]

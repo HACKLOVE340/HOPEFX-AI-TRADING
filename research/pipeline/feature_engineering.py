@@ -39,7 +39,7 @@ import numpy as np
 import pandas as pd
 
 try:
-    from scipy.fft import rfft, rfftfreq  # noqa: F401
+    from scipy.fft import rfft, rfftfreq
 
     _SCIPY_AVAILABLE = True
 except ImportError:
@@ -62,7 +62,7 @@ def _sma(series: pd.Series, window: int) -> pd.Series:
 
 
 def _true_range(df: pd.DataFrame) -> pd.Series:
-    h, l, c = df["high"], df["low"], df["close"]  # noqa: E741
+    h, l, c = df["high"], df["low"], df["close"]
     tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(
         axis=1
     )
@@ -77,7 +77,7 @@ def _true_range(df: pd.DataFrame) -> pd.Series:
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
     c = d["close"]
-    h, l, v = d["high"], d["low"], d["volume"]  # noqa: E741
+    h, l, v = d["high"], d["low"], d["volume"]
 
     # ── RSI (14) ──────────────────────────────────────────────────────────────
     delta = c.diff()
@@ -175,7 +175,7 @@ LAG_PERIODS = [1, 2, 3, 5, 10, 20, 60]
 
 
 def add_lag_features(
-    df: pd.DataFrame, periods: List[int] = LAG_PERIODS
+    df: pd.DataFrame, periods: list[int] = LAG_PERIODS
 ) -> pd.DataFrame:
     d = df.copy()
     c = d["close"]
@@ -201,7 +201,7 @@ ROLLING_WINDOWS = [5, 10, 20, 50, 100]
 
 
 def add_rolling_stats(
-    df: pd.DataFrame, windows: List[int] = ROLLING_WINDOWS
+    df: pd.DataFrame, windows: list[int] = ROLLING_WINDOWS
 ) -> pd.DataFrame:
     d = df.copy()
     log_ret = np.log(d["close"] / d["close"].shift(1))
@@ -280,7 +280,7 @@ def add_fourier_features(
 
 def add_candlestick_features(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
-    o, h, l, c = d["open"], d["high"], d["low"], d["close"]  # noqa: E741
+    o, h, l, c = d["open"], d["high"], d["low"], d["close"]
     candle_range = (h - l).replace(0, np.nan)
     body = (c - o).abs()
 
@@ -673,8 +673,8 @@ def build_feature_matrix(
     df: pd.DataFrame,
     fourier_window: int = 128,
     fourier_components: int = 5,
-    lag_periods: Optional[List[int]] = None,
-    rolling_windows: Optional[List[int]] = None,
+    lag_periods: Optional[list[int]] = None,
+    rolling_windows: Optional[list[int]] = None,
     swing_lookback: int = 20,
     drop_na: bool = True,
     include_microstructure: bool = True,
@@ -741,7 +741,7 @@ def build_feature_matrix(
     return d
 
 
-def feature_names(df: pd.DataFrame) -> List[str]:
+def feature_names(df: pd.DataFrame) -> list[str]:
     """Return the list of feature column names (excludes OHLCV and target columns)."""
     exclude = {
         "open",

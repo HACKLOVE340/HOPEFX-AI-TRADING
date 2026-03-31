@@ -47,7 +47,7 @@ def set_state(state) -> None:
 
 
 # ── In-memory fallback ────────────────────────────────────────────────────────
-_watchlists: Dict[str, List[str]] = {}
+_watchlists: dict[str, list[str]] = {}
 
 DEFAULT_SYMBOLS = ["XAUUSD", "EURUSD", "GBPUSD", "BTCUSD"]
 
@@ -76,7 +76,7 @@ def _get_session() -> Optional[object]:
 # ── Dedicated-table persistence ───────────────────────────────────────────────
 
 
-def _db_load(user_id: str) -> Optional[List[str]]:
+def _db_load(user_id: str) -> Optional[list[str]]:
     """Load from dedicated watchlists table. Returns None when DB unavailable."""
     session = _get_session()
     if session is None:
@@ -168,7 +168,7 @@ def _db_remove(user_id: str, symbol: str) -> bool:
 # ── Unified load / save (DB-first, memory fallback) ───────────────────────────
 
 
-def _load_watchlist(user_id: str) -> List[str]:
+def _load_watchlist(user_id: str) -> list[str]:
     db_val = _db_load(user_id)
     if db_val is not None:
         _watchlists[user_id] = db_val
@@ -266,8 +266,8 @@ class WatchlistItem(BaseModel):
 
 class WatchlistResponse(BaseModel):
     user_id: str
-    symbols: List[str]
-    items: List[WatchlistItem]
+    symbols: list[str]
+    items: list[WatchlistItem]
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -316,10 +316,10 @@ async def remove_symbol(
     return {"symbol": sym, "removed": True}
 
 
-@router.get("/prices", response_model=List[WatchlistItem])
+@router.get("/prices", response_model=list[WatchlistItem])
 async def get_prices(
     user: TokenPayload = Depends(get_current_user),
-) -> List[WatchlistItem]:
+) -> list[WatchlistItem]:
     """Return live prices for all symbols in the authenticated user's watchlist."""
     symbols = _load_watchlist(user.sub)
     return [WatchlistItem(**p) for s in symbols if (p := _get_price(s)) is not None]

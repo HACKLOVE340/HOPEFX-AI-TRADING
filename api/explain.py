@@ -32,6 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from api.auth import TokenPayload, get_current_user
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ _EXPLAIN_LATEST_LIMIT = os.getenv("EXPLAIN_LATEST_RATE_LIMIT", "60/minute")
 def _get_limiter():
     """Return the slowapi Limiter from app state, or None if not configured."""
     try:
-        from fastapi import Request as _Req  # noqa: F401 — imported for type hint only
+        from fastapi import Request as _Req
         from slowapi import Limiter
         from slowapi.util import get_remote_address
 
@@ -63,7 +64,7 @@ def _get_limiter():
             logger.debug("Suppressed exception: %s", _exc)
 
         # Module-level fallback limiter (in-memory, no Redis)
-        global _fallback_limiter  # noqa: PLW0603
+        global _fallback_limiter
         if _fallback_limiter is None:
             _fallback_limiter = Limiter(key_func=get_remote_address)
         return _fallback_limiter
@@ -98,7 +99,7 @@ def _enforce_rate_limit(request: Request, limit_str: str) -> None:
             # slowapi exposes hit() which increments and raises RateLimitExceeded
             # when the limit is breached.  We call it synchronously here because
             # the underlying storage (Redis or in-memory) is synchronous.
-            from slowapi.util import get_remote_address  # noqa: PLC0415
+            from slowapi.util import get_remote_address
 
             key = get_remote_address(request)
             limiter.hit(limit_str, key)  # type: ignore[attr-defined]
@@ -107,7 +108,7 @@ def _enforce_rate_limit(request: Request, limit_str: str) -> None:
             # Re-raise HTTP 429 from slowapi; swallow any other limiter error
             # (fail-open) so a Redis outage never blocks the explain endpoint.
             try:
-                from slowapi.errors import RateLimitExceeded  # noqa: PLC0415
+                from slowapi.errors import RateLimitExceeded
 
                 if isinstance(exc, RateLimitExceeded):
                     raise HTTPException(
@@ -121,7 +122,7 @@ def _enforce_rate_limit(request: Request, limit_str: str) -> None:
             return
 
     # ── Pure-Python fallback sliding window ───────────────────────────────────
-    import time  # noqa: PLC0415
+    import time
 
     try:
         count_str, window_str = limit_str.split("/")
@@ -167,7 +168,7 @@ class SignalExplanation(BaseModel):
     direction: str  # BUY / SELL / HOLD
     confidence: float  # 0–1
     regime: str  # trending / ranging / volatile / risk-off
-    top_features: List[FeatureImportance]
+    top_features: list[FeatureImportance]
     plain_english: str  # LLM or template-generated summary
     timestamp: str
 
@@ -182,7 +183,7 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
     so the UI always has something to show.
     """
     try:
-        from core.signal_engine import SignalEngine  # noqa: PLC0415
+        from core.signal_engine import SignalEngine
         from explainability.explainer import AIExplainer
 
         explainer = AIExplainer()
@@ -227,7 +228,7 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
         logger.debug("Live explanation failed (%s) — using template", exc)
 
     # Template fallback — always returns something useful
-    from datetime import datetime, timezone  # noqa: PLC0415
+    from datetime import datetime, timezone
 
     template_features = [
         FeatureImportance(
@@ -270,11 +271,11 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
             "Volatility is moderate (ATR within 1-sigma of 30-day average). "
             "Price is holding above the 20-period SMA acting as dynamic support."
         ),
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
 
-def _template_summary(features: List[FeatureImportance], direction: str) -> str:
+def _template_summary(features: list[FeatureImportance], direction: str) -> str:
     top = features[:3] if features else []
     parts = [f"{f.feature} ({f.description})" for f in top]
     return (

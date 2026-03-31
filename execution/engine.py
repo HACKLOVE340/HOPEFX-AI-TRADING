@@ -29,7 +29,7 @@ import time
 import traceback
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -73,7 +73,7 @@ class ExecutionRequest:
     take_profit: Optional[float] = None
     strategy_id: str = "unknown"
     request_id: str = field(default_factory=lambda: str(uuid.uuid4())[:16])
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.side not in ("BUY", "SELL"):
@@ -102,8 +102,8 @@ class ExecutionReport:
     commission: float = 0.0
     latency_ms: float = 0.0
     message: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def success(self) -> bool:
@@ -131,7 +131,7 @@ class EngineCircuitBreaker:
         self._max_failures = max_failures
         self._window_sec = window_sec
         self._reset_sec = reset_sec
-        self._failures: List[float] = []  # monotonic timestamps of failures
+        self._failures: list[float] = []  # monotonic timestamps of failures
         self._open = False
         self._opened_at: Optional[float] = None
         self._lock = asyncio.Lock()
@@ -242,14 +242,14 @@ class ExecutionEngine:
         )
 
         # Execution callbacks (e.g. for strategy feedback)
-        self._on_fill_callbacks: List[Callable[[ExecutionReport], None]] = []
+        self._on_fill_callbacks: list[Callable[[ExecutionReport], None]] = []
 
         # Metrics
         self._total_orders = 0
         self._total_fills = 0
         self._total_blocks = 0
         self._total_errors = 0
-        self._latencies_ms: List[float] = []  # rolling 100
+        self._latencies_ms: list[float] = []  # rolling 100
 
         self._running = False
         self._lock = asyncio.Lock()
@@ -801,7 +801,7 @@ class ExecutionEngine:
         if len(self._latencies_ms) > 100:
             self._latencies_ms.pop(0)
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """Return execution metrics snapshot."""
         avg_latency = (
             sum(self._latencies_ms) / len(self._latencies_ms)

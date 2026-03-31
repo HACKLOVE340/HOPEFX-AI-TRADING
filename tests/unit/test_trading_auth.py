@@ -31,7 +31,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 # Set env vars before any project imports so module-level reads pick them up
-os.environ["SECURITY_JWT_SECRET"] = "test-secret-key-minimum-32-characters-long"  # noqa: S105
+os.environ["SECURITY_JWT_SECRET"] = "test-secret-key-minimum-32-characters-long"
 os.environ["ALLOWED_SYMBOLS"] = "XAUUSD,EURUSD,BTCUSD"
 os.environ["MAX_ORDER_QUANTITY"] = "10.0"
 # Ensure kill switch is never active during tests regardless of persisted state.
@@ -81,7 +81,7 @@ auth_module = _load_module("api.auth", _API_DIR / "auth.py")
 sys.modules["api"].auth = auth_module  # type: ignore[attr-defined]
 trading_module = _load_module("api.trading", _API_DIR / "trading.py")
 
-from api.auth import _ROLE_RANK, validate_order_symbol, validate_order_quantity  # noqa: E402
+from api.auth import _ROLE_RANK, validate_order_symbol, validate_order_quantity
 
 router = trading_module.router
 
@@ -106,7 +106,7 @@ def _make_token(
     return jwt.encode(payload, _SECRET, algorithm="HS256")
 
 
-def _auth(role: str = "trader") -> Dict[str, str]:
+def _auth(role: str = "trader") -> dict[str, str]:
     return {"Authorization": f"Bearer {_make_token(role)}"}
 
 

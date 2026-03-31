@@ -11,7 +11,7 @@ Commissions are charged based on subscription tier (0.1% - 0.5% per trade).
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional, Dict, List
 from decimal import Decimal
 from enum import Enum
@@ -57,13 +57,13 @@ class Commission:
         self.commission_amount = commission_amount
         self.currency = currency
         self.status = status
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.collected_at: Optional[datetime] = None
 
     def mark_collected(self) -> None:
         """Mark commission as collected"""
         self.status = CommissionStatus.COLLECTED
-        self.collected_at = datetime.now(timezone.utc)
+        self.collected_at = datetime.now(UTC)
         logger.info(f"Commission {self.commission_id} marked as collected")
 
     def mark_failed(self) -> None:
@@ -76,7 +76,7 @@ class Commission:
         self.status = CommissionStatus.REFUNDED
         logger.info(f"Commission {self.commission_id} refunded")
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "commission_id": self.commission_id,
@@ -100,8 +100,8 @@ class CommissionTracker:
     """Track and manage commissions"""
 
     def __init__(self):
-        self._commissions: Dict[str, Commission] = {}
-        self._user_commissions: Dict[str, List[str]] = {}  # user_id -> [commission_ids]
+        self._commissions: dict[str, Commission] = {}
+        self._user_commissions: dict[str, list[str]] = {}  # user_id -> [commission_ids]
 
     def calculate_commission(
         self,
@@ -164,7 +164,7 @@ class CommissionTracker:
         """Get commission by ID"""
         return self._commissions.get(commission_id)
 
-    def get_user_commissions(self, user_id: str) -> List[Commission]:
+    def get_user_commissions(self, user_id: str) -> list[Commission]:
         """Get all commissions for a user"""
         commission_ids = self._user_commissions.get(user_id, [])
         return [
@@ -185,7 +185,7 @@ class CommissionTracker:
 
     def get_pending_commissions(
         self, user_id: Optional[str] = None
-    ) -> List[Commission]:
+    ) -> list[Commission]:
         """Get pending commissions"""
         if user_id:
             commissions = self.get_user_commissions(user_id)
@@ -199,7 +199,7 @@ class CommissionTracker:
 
     def get_collected_commissions(
         self, user_id: Optional[str] = None
-    ) -> List[Commission]:
+    ) -> list[Commission]:
         """Get collected commissions"""
         if user_id:
             commissions = self.get_user_commissions(user_id)
@@ -211,7 +211,7 @@ class CommissionTracker:
             if c.status == CommissionStatus.COLLECTED
         ]
 
-    def get_commission_stats(self, user_id: Optional[str] = None) -> Dict:
+    def get_commission_stats(self, user_id: Optional[str] = None) -> dict:
         """Get commission statistics"""
         if user_id:
             commissions = self.get_user_commissions(user_id)
@@ -255,9 +255,9 @@ class CommissionTracker:
         user_id: Optional[str] = None,
         year: Optional[int] = None,
         month: Optional[int] = None,
-    ) -> Dict:
+    ) -> dict:
         """Get monthly commission report"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         year = year or now.year
         month = month or now.month
 
@@ -290,7 +290,7 @@ class CommissionTracker:
             else 0.0,
         }
 
-    def get_tier_breakdown(self) -> Dict:
+    def get_tier_breakdown(self) -> dict:
         """Get commission breakdown by tier"""
         breakdown = {}
 

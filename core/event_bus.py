@@ -36,7 +36,7 @@ import struct
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional
 
 import redis.asyncio as aioredis  # redis-py >= 4.2
@@ -72,10 +72,10 @@ class DomainEvent:
     payload: bytes
     priority: int = 5
 
-    _TYPE_CODES: Dict[str, int] = None  # populated lazily
+    _TYPE_CODES: dict[str, int] = None  # populated lazily
 
     @classmethod
-    def _codes(cls) -> Dict[str, int]:
+    def _codes(cls) -> dict[str, int]:
         if cls._TYPE_CODES is None:
             cls._TYPE_CODES = {
                 "PRICE_UPDATE": 1,
@@ -110,7 +110,7 @@ class DomainEvent:
         except ImportError:
             payload = json.dumps(data).encode()
         return cls(
-            timestamp=int(datetime.now(timezone.utc).timestamp() * 1e9),
+            timestamp=int(datetime.now(UTC).timestamp() * 1e9),
             event_type=cls._codes().get(event_type, 99),
             source=source,
             payload=payload,
@@ -123,7 +123,7 @@ class DomainEvent:
             import msgpack
 
             return msgpack.unpackb(lz4.frame.decompress(self.payload), raw=False)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return json.loads(self.payload.decode())
 
 
@@ -140,7 +140,7 @@ class MemoryMappedEventStore:
         self.current_offset = 0
         self.file_counter = 0
         self._lock = threading.RLock()
-        self._index: Dict[str, list] = defaultdict(list)
+        self._index: dict[str, list] = defaultdict(list)
         self._sequence = 0
         os.makedirs(base_path, exist_ok=True)
         self._rotate_file()
@@ -227,7 +227,7 @@ class _LocalBus:
     """
 
     def __init__(self) -> None:
-        self._handlers: Dict[str, List[Callable]] = {ch: [] for ch in ALL_CHANNELS}
+        self._handlers: dict[str, list[Callable]] = {ch: [] for ch in ALL_CHANNELS}
 
     def subscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
         self._handlers.setdefault(channel, []).append(handler)
@@ -238,7 +238,7 @@ class _LocalBus:
                 result = handler(message)
                 if asyncio.iscoroutine(result):
                     await result
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning("LocalBus handler error on %s: %s", channel, exc)
 
 
@@ -317,7 +317,7 @@ class EventBus:
     def __init__(self) -> None:
         self._redis: Optional[aioredis.Redis] = None
         self._degraded: bool = False
-        self._metrics: Dict[str, int] = {
+        self._metrics: dict[str, int] = {
             "published": 0,
             "delivered": 0,
             "errors": 0,
@@ -333,7 +333,7 @@ class EventBus:
             await self._redis.ping()
             self._degraded = False
             logger.info("EventBus connected to Redis.")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "EventBus: Redis unavailable (%s) — local fallback active.", exc
             )
@@ -379,7 +379,7 @@ class EventBus:
                 await self._redis.publish(channel, payload)
                 self._metrics["published"] += 1
                 return
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 attempt += 1
                 self._metrics["retries"] += 1
                 logger.warning(
@@ -462,7 +462,7 @@ class EventBus:
                 if pubsub:
                     await pubsub.unsubscribe()
                 return
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 self._metrics["errors"] += 1
                 logger.error("EventBus subscribe error: %s — reconnecting in 5 s", exc)
                 await asyncio.sleep(5)
@@ -470,7 +470,7 @@ class EventBus:
                     self._redis = _make_redis()
                     await self._redis.ping()
                     logger.info("EventBus reconnected to Redis.")
-                except Exception:  # noqa: BLE001
+                except Exception:
                     self._degraded = True
                     logger.error(
                         "EventBus: Redis reconnect failed — switching to local fallback."

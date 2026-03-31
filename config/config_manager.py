@@ -195,7 +195,7 @@ class AppConfig:
     version: str = "1.0.0"
     environment: str = "development"
     debug: bool = False
-    api_configs: Dict[str, APIConfig] = field(default_factory=dict)
+    api_configs: dict[str, APIConfig] = field(default_factory=dict)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     trading: TradingConfig = field(default_factory=TradingConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)

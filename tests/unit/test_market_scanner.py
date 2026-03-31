@@ -12,7 +12,7 @@ Tests for:
 - Opportunity Detection
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 
 class TestScanCriteriaType:
@@ -173,13 +173,13 @@ class TestMarketOpportunity:
             risk_reward=2.0,
             triggers=[],
             analysis={},
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
         )
 
         assert opportunity.is_valid is True
 
         # Expired opportunity
-        opportunity.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        opportunity.expires_at = datetime.now(UTC) - timedelta(hours=1)
         assert opportunity.is_valid is False
 
     def test_opportunity_to_dict(self):
