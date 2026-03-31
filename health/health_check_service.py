@@ -71,7 +71,9 @@ class HealthCheckService:
             self.alerts.append(f"Cache check failed: {exc}")
             return False
 
-    def check_broker_connections(self, broker: Optional[Any] = None) -> Union[bool, str]:
+    def check_broker_connections(
+        self, broker: Optional[Any] = None
+    ) -> Union[bool, str]:
         b = broker or self.broker
         if b is None:
             return "unconfigured"

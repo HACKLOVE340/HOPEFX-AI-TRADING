@@ -23,9 +23,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import sys
 from datetime import datetime, timezone
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +41,7 @@ def print_metrics(analyzer, symbol: str) -> None:
     """Print a snapshot of current order-flow metrics to stdout."""
     aggression = analyzer.get_aggression_metrics(symbol)
     oscillator = analyzer.get_order_flow_oscillator(symbol)
-    pressure   = analyzer.get_pressure_gauges(symbol)
+    pressure = analyzer.get_pressure_gauges(symbol)
 
     print(f"\n{'='*55}")
     print(
@@ -126,10 +124,11 @@ async def run_example(max_ticks: int = 100) -> None:
             "No live tick — loading last 24h of Dukascopy M1 data for order flow"
         )
         from datetime import timedelta
+
         # Access replay engine via orchestrator — single entry point rule
         from data_layer.orchestrator import orchestrator as _orch
 
-        end   = datetime.now(timezone.utc)
+        end = datetime.now(timezone.utc)
         start = end - timedelta(hours=24)
         engine = _orch._replay
 
@@ -139,8 +138,11 @@ async def run_example(max_ticks: int = 100) -> None:
         ):
             if tick_count >= max_ticks:
                 break
-            side = "buy" if replay_tick.mid >= (replay_tick.bid + replay_tick.ask) / 2 \
-                   else "sell"
+            side = (
+                "buy"
+                if replay_tick.mid >= (replay_tick.bid + replay_tick.ask) / 2
+                else "sell"
+            )
             analyzer.add_trade(
                 symbol=SYMBOL,
                 price=replay_tick.mid,
@@ -185,7 +187,9 @@ def _parse_args() -> argparse.Namespace:
         description="HOPEFX Order Flow Example — Real Data"
     )
     parser.add_argument(
-        "--ticks", type=int, default=100,
+        "--ticks",
+        type=int,
+        default=100,
         help="Number of ticks to process (default: 100)",
     )
     return parser.parse_args()

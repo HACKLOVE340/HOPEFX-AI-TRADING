@@ -54,6 +54,7 @@ logger = logging.getLogger("forward_test")
 # Real components — no mocks
 # ---------------------------------------------------------------------------
 
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -68,14 +69,15 @@ class RealRiskManager:
 
     def __init__(self, account_balance: float = 10_000.0) -> None:
         import os
+
         self.balance = account_balance
         self._peak_balance = account_balance
         self._daily_loss = 0.0
         self._trade_count = 0
         self.MAX_DAILY_LOSS_PCT = float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05"))
-        self.MAX_POSITION_PCT   = float(os.getenv("RISK_MAX_POSITION_PCT",   "0.05"))
-        self.KELLY_FRACTION     = float(os.getenv("RISK_KELLY_FRACTION",     "0.25"))
-        self.MIN_DATA_QUALITY   = float(os.getenv("RISK_MIN_DATA_QUALITY",   "0.40"))
+        self.MAX_POSITION_PCT = float(os.getenv("RISK_MAX_POSITION_PCT", "0.05"))
+        self.KELLY_FRACTION = float(os.getenv("RISK_KELLY_FRACTION", "0.25"))
+        self.MIN_DATA_QUALITY = float(os.getenv("RISK_MIN_DATA_QUALITY", "0.40"))
 
     @property
     def max_daily_loss_usd(self) -> float:
@@ -85,18 +87,24 @@ class RealRiskManager:
         if self._daily_loss >= self.max_daily_loss_usd:
             logger.warning(
                 "RISK: daily loss limit hit (%.2f / %.2f)",
-                self._daily_loss, self.max_daily_loss_usd,
+                self._daily_loss,
+                self.max_daily_loss_usd,
             )
             return False
         return True
 
-    def position_size(self, price: float, win_rate: float = 0.52,
-                      avg_win: float = 1.5, avg_loss: float = 1.0) -> float:
+    def position_size(
+        self,
+        price: float,
+        win_rate: float = 0.52,
+        avg_win: float = 1.5,
+        avg_loss: float = 1.0,
+    ) -> float:
         """Quarter-Kelly position sizing."""
         kelly_f = (win_rate * avg_win - (1 - win_rate) * avg_loss) / avg_win
         kelly_f = max(0.0, kelly_f) * self.KELLY_FRACTION
         risk_usd = self.balance * kelly_f
-        max_usd  = self.balance * self.MAX_POSITION_PCT
+        max_usd = self.balance * self.MAX_POSITION_PCT
         risk_usd = min(risk_usd, max_usd)
         # Convert USD risk to lots (1 lot XAUUSD = 100 oz; $1 move = $100/lot)
         stop_usd = price * 0.002  # 0.2% stop
@@ -120,7 +128,9 @@ class RealRiskManager:
         self._trade_count += 1
         logger.info(
             "PnL: %.2f | balance=%.2f | daily_loss=%.2f",
-            pnl, self.balance, self._daily_loss,
+            pnl,
+            self.balance,
+            self._daily_loss,
         )
 
 
@@ -151,8 +161,8 @@ class EMAStrategy:
         self._closes.append(close)
         if len(self._closes) < self._slow + 2:
             return "HOLD"
-        fast_now  = self._ema(self._closes,      self._fast)
-        slow_now  = self._ema(self._closes,      self._slow)
+        fast_now = self._ema(self._closes, self._fast)
+        slow_now = self._ema(self._closes, self._slow)
         fast_prev = self._ema(self._closes[:-1], self._fast)
         slow_prev = self._ema(self._closes[:-1], self._slow)
         if fast_prev <= slow_prev and fast_now > slow_now:
@@ -164,12 +174,12 @@ class EMAStrategy:
 
 @dataclass
 class Position:
-    side:        str
+    side: str
     entry_price: float
-    lots:        float
-    stop_loss:   float
+    lots: float
+    stop_loss: float
     take_profit: float
-    opened_at:   datetime = field(default_factory=_utcnow)
+    opened_at: datetime = field(default_factory=_utcnow)
 
 
 class PaperOrderGateway:
@@ -179,14 +189,14 @@ class PaperOrderGateway:
     Uses real bar close prices — no synthetic fills.
     """
 
-    SLIPPAGE_PCT = 0.0001   # 0.01% slippage on entry
-    STOP_PCT     = 0.0020   # 0.20% stop loss
-    TP_RATIO     = 2.0      # 2:1 reward/risk
+    SLIPPAGE_PCT = 0.0001  # 0.01% slippage on entry
+    STOP_PCT = 0.0020  # 0.20% stop loss
+    TP_RATIO = 2.0  # 2:1 reward/risk
 
     def __init__(self, risk: RealRiskManager) -> None:
-        self._risk     = risk
+        self._risk = risk
         self._position: Optional[Position] = None
-        self._trades:   List[Dict]         = []
+        self._trades: List[Dict] = []
 
     @property
     def position(self) -> Optional[Position]:
@@ -203,24 +213,31 @@ class PaperOrderGateway:
 
         slip = close * self.SLIPPAGE_PCT
         stop_dist = close * self.STOP_PCT
-        tp_dist   = stop_dist * self.TP_RATIO
+        tp_dist = stop_dist * self.TP_RATIO
 
         if signal == "BUY":
             entry = close + slip
-            sl    = entry - stop_dist
-            tp    = entry + tp_dist
+            sl = entry - stop_dist
+            tp = entry + tp_dist
         else:
             entry = close - slip
-            sl    = entry + stop_dist
-            tp    = entry - tp_dist
+            sl = entry + stop_dist
+            tp = entry - tp_dist
 
         self._position = Position(
-            side=signal, entry_price=entry, lots=lots,
-            stop_loss=sl, take_profit=tp,
+            side=signal,
+            entry_price=entry,
+            lots=lots,
+            stop_loss=sl,
+            take_profit=tp,
         )
         logger.info(
             "OPEN %s @ %.4f  lots=%.2f  SL=%.4f  TP=%.4f",
-            signal, entry, lots, sl, tp,
+            signal,
+            entry,
+            lots,
+            sl,
+            tp,
         )
         return True
 
@@ -229,10 +246,12 @@ class PaperOrderGateway:
         if self._position is None:
             return None
         pos = self._position
-        hit_sl = (pos.side == "BUY"  and close <= pos.stop_loss) or \
-                 (pos.side == "SELL" and close >= pos.stop_loss)
-        hit_tp = (pos.side == "BUY"  and close >= pos.take_profit) or \
-                 (pos.side == "SELL" and close <= pos.take_profit)
+        hit_sl = (pos.side == "BUY" and close <= pos.stop_loss) or (
+            pos.side == "SELL" and close >= pos.stop_loss
+        )
+        hit_tp = (pos.side == "BUY" and close >= pos.take_profit) or (
+            pos.side == "SELL" and close <= pos.take_profit
+        )
         if not (hit_sl or hit_tp):
             return None
 
@@ -242,18 +261,24 @@ class PaperOrderGateway:
         else:
             pnl = (pos.entry_price - close) * pos.lots * 100.0
 
-        self._trades.append({
-            "side":       pos.side,
-            "entry":      pos.entry_price,
-            "exit":       close,
-            "lots":       pos.lots,
-            "pnl":        round(pnl, 2),
-            "reason":     reason,
-            "duration_s": (_utcnow() - pos.opened_at).total_seconds(),
-        })
+        self._trades.append(
+            {
+                "side": pos.side,
+                "entry": pos.entry_price,
+                "exit": close,
+                "lots": pos.lots,
+                "pnl": round(pnl, 2),
+                "reason": reason,
+                "duration_s": (_utcnow() - pos.opened_at).total_seconds(),
+            }
+        )
         logger.info(
             "CLOSE [%s] %s: entry=%.4f exit=%.4f pnl=%.2f",
-            reason, pos.side, pos.entry_price, close, pnl,
+            reason,
+            pos.side,
+            pos.entry_price,
+            close,
+            pnl,
         )
         self._risk.record_pnl(pnl)
         self._position = None
@@ -267,6 +292,7 @@ class PaperOrderGateway:
 # ---------------------------------------------------------------------------
 # Forward test harness — real Dukascopy data
 # ---------------------------------------------------------------------------
+
 
 class ForwardTestHarness:
     """
@@ -282,24 +308,25 @@ class ForwardTestHarness:
         end: datetime,
         timeframe: str = "H1",
     ) -> None:
-        self._start     = start
-        self._end       = end
+        self._start = start
+        self._end = end
         self._timeframe = timeframe
-        self._risk      = RealRiskManager()
-        self._strategy  = EMAStrategy()
-        self._gateway   = PaperOrderGateway(self._risk)
+        self._risk = RealRiskManager()
+        self._strategy = EMAStrategy()
+        self._gateway = PaperOrderGateway(self._risk)
         self._metrics: Dict = {
-            "bars_processed":    0,
+            "bars_processed": 0,
             "signals_generated": 0,
-            "trades_opened":     0,
-            "trades_closed":     0,
-            "total_pnl":         0.0,
-            "invalid_bars":      0,
+            "trades_opened": 0,
+            "trades_closed": 0,
+            "total_pnl": 0.0,
+            "invalid_bars": 0,
         }
 
     async def _fetch_ohlcv(self) -> pd.DataFrame:
         """Fetch real OHLCV data from Dukascopy via the replay engine (via orchestrator)."""
         from data_layer.orchestrator import orchestrator as _orch
+
         engine = _orch._replay
         logger.info(
             "Fetching Dukascopy XAUUSD %s bars %s → %s …",
@@ -368,9 +395,9 @@ class ForwardTestHarness:
         return self._metrics
 
     def _print_results(self) -> None:
-        trades   = self._gateway.trade_log
-        wins     = [t for t in trades if t["pnl"] > 0]
-        losses   = [t for t in trades if t["pnl"] <= 0]
+        trades = self._gateway.trade_log
+        wins = [t for t in trades if t["pnl"] > 0]
+        losses = [t for t in trades if t["pnl"] <= 0]
         win_rate = len(wins) / len(trades) * 100 if trades else 0.0
 
         logger.info("=" * 60)
@@ -387,9 +414,9 @@ class ForwardTestHarness:
         logger.info("=" * 60)
 
         if trades:
-            avg_win  = sum(t["pnl"] for t in wins)  / max(len(wins),  1)
+            avg_win = sum(t["pnl"] for t in wins) / max(len(wins), 1)
             avg_loss = sum(t["pnl"] for t in losses) / max(len(losses), 1)
-            total_wins   = sum(t["pnl"] for t in wins)
+            total_wins = sum(t["pnl"] for t in wins)
             total_losses = abs(sum(t["pnl"] for t in losses))
             pf = total_wins / total_losses if total_losses > 0 else float("inf")
             logger.info("Avg win (USD)        : %.2f", avg_win)
@@ -402,24 +429,33 @@ class ForwardTestHarness:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="HOPEFX Forward Test — Real Dukascopy Replay"
     )
     parser.add_argument(
-        "--days", type=int, default=7,
+        "--days",
+        type=int,
+        default=7,
         help="Number of past days to replay (default: 7)",
     )
     parser.add_argument(
-        "--start", type=str, default=None,
+        "--start",
+        type=str,
+        default=None,
         help="Start date YYYY-MM-DD (overrides --days)",
     )
     parser.add_argument(
-        "--end", type=str, default=None,
+        "--end",
+        type=str,
+        default=None,
         help="End date YYYY-MM-DD (default: today)",
     )
     parser.add_argument(
-        "--tf", type=str, default="H1",
+        "--tf",
+        type=str,
+        default="H1",
         help="Timeframe: M1 M5 M15 M30 H1 H4 D1 (default: H1)",
     )
     return parser.parse_args()
