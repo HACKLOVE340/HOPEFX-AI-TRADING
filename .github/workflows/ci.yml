@@ -44,13 +44,13 @@ jobs:
         # Report CVEs but do not block merges — tracked in security dashboard.
         run: pip-audit --requirement=requirements.txt --desc || true
       - name: Scan with Trivy (supply-chain)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: table
-          exit-code: "0"
-          severity: CRITICAL,HIGH
+        # Install Trivy binary directly — avoids the trivy-action supply-chain
+        # risk (the action was briefly compromised; pinning a SHA is insufficient
+        # when the action itself is the attack vector).
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin v0.61.0
+          trivy fs . --severity CRITICAL,HIGH --exit-code 0 --format table
 
   typecheck:
     runs-on: ubuntu-latest
