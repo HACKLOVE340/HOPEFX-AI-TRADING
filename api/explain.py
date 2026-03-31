@@ -227,7 +227,7 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
         logger.debug("Live explanation failed (%s) — using template", exc)
 
     # Template fallback — always returns something useful
-    import datetime
+    from datetime import datetime, timezone  # noqa: PLC0415
 
     template_features = [
         FeatureImportance(
@@ -270,7 +270,7 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
             "Volatility is moderate (ATR within 1-sigma of 30-day average). "
             "Price is holding above the 20-period SMA acting as dynamic support."
         ),
-        timestamp=datetime.datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
 
@@ -309,11 +309,11 @@ async def explain_signal(
     _enforce_rate_limit(request, _EXPLAIN_LIMIT)
     try:
         return _build_explanation(signal_id)
-    except Exception as exc:
+    except (RuntimeError, ValueError, KeyError, AttributeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Explanation unavailable: {exc}",
-        )
+        ) from exc
 
 
 @router.get(
