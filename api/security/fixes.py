@@ -50,14 +50,13 @@ router = APIRouter(prefix="/api/security/fixes", tags=["security-fixes"])
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
+
 def _require_auth(request: Request) -> Dict[str, Any]:
     """Require any authenticated user."""
     try:
         from auth.jwt_handler import decode_token
 
-        token = (
-            request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        )
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Missing token")
         return decode_token(token)
@@ -77,9 +76,11 @@ def _require_admin(request: Request) -> Dict[str, Any]:
 
 # ── Redis helper ──────────────────────────────────────────────────────────────
 
+
 async def _get_redis() -> Optional[Any]:
     try:
         from cache.redis_client import get_redis
+
         return await get_redis()
     except Exception as exc:
         logger.debug("fixes router: Redis unavailable: %s", exc)
@@ -88,14 +89,19 @@ async def _get_redis() -> Optional[Any]:
 
 # ── Request/response models ───────────────────────────────────────────────────
 
+
 class ApproveFixRequest(BaseModel):
     endpoint: str = Field(..., description="API endpoint path of the fix to approve")
-    approved_by: str = Field(default="dashboard", description="Identifier of the approver")
+    approved_by: str = Field(
+        default="dashboard", description="Identifier of the approver"
+    )
 
 
 class DeclineFixRequest(BaseModel):
     endpoint: str = Field(..., description="API endpoint path of the fix to decline")
-    declined_by: str = Field(default="dashboard", description="Identifier of the decliner")
+    declined_by: str = Field(
+        default="dashboard", description="Identifier of the decliner"
+    )
     reason: Optional[str] = Field(default=None, description="Optional decline reason")
 
 
@@ -107,6 +113,7 @@ class ScanEntryRequest(BaseModel):
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.get("")
 async def get_pending_fixes(
@@ -277,7 +284,10 @@ async def approve_fix(
 
     logger.info(
         "fixes router: approved endpoint=%s pr_status=%s pr_url=%s by=%s",
-        endpoint, pr_result.get("status"), pr_result.get("pr_url"), approved_by,
+        endpoint,
+        pr_result.get("status"),
+        pr_result.get("pr_url"),
+        approved_by,
     )
 
     return {
@@ -338,7 +348,9 @@ async def decline_fix(
 
     logger.info(
         "fixes router: declined endpoint=%s by=%s reason=%s",
-        endpoint, declined_by, body.reason,
+        endpoint,
+        declined_by,
+        body.reason,
     )
     return {"status": "declined", "endpoint": endpoint}
 
@@ -371,7 +383,10 @@ async def push_scan_entry(
         queue_depth = await redis.llen("scan:vuln_queue")
         logger.info(
             "fixes router: scan entry queued endpoint=%s severity=%s rule=%s depth=%d",
-            body.endpoint, body.severity, body.rule, queue_depth,
+            body.endpoint,
+            body.severity,
+            body.rule,
+            queue_depth,
         )
         return {
             "status": "queued",

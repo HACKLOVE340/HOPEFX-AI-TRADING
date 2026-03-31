@@ -39,7 +39,7 @@ import time
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any, Deque, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -60,6 +60,7 @@ _SIGNAL_WINDOW = int(os.getenv("SIGNAL_QUALITY_WINDOW", "100"))
 
 # ── Prometheus metrics (optional — degrades gracefully if not installed) ──────
 
+
 def _init_prometheus():
     """
     Initialise Prometheus counters/gauges/histograms with dedup guard.
@@ -67,13 +68,23 @@ def _init_prometheus():
     Returns a metrics namespace, or a no-op stub when prometheus_client
     is not installed or metrics are already registered (hot-reload safe).
     """
+
     class _Noop:
         class _C:
-            def labels(self, **_kw): return self
-            def inc(self, *a, **kw): pass
-            def observe(self, *a, **kw): pass
-            def set(self, *a, **kw): pass
-        def __getattr__(self, _name): return self._C()
+            def labels(self, **_kw):
+                return self
+
+            def inc(self, *a, **kw):
+                pass
+
+            def observe(self, *a, **kw):
+                pass
+
+            def set(self, *a, **kw):
+                pass
+
+        def __getattr__(self, _name):
+            return self._C()
 
     try:
         from prometheus_client import Counter, Gauge, Histogram, REGISTRY
@@ -100,23 +111,23 @@ def _init_prometheus():
                 return REGISTRY._names_to_collectors.get(name)
 
         class _Metrics:
-            predict_total      = _counter(
+            predict_total = _counter(
                 "hopefx_inference_predict_total",
                 "Total inference predictions",
                 ["symbol", "direction"],
             )
-            predict_latency    = _histogram(
+            predict_latency = _histogram(
                 "hopefx_inference_predict_latency_seconds",
                 "Inference prediction latency in seconds",
                 ["symbol"],
                 buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
             )
-            fallback_total     = _counter(
+            fallback_total = _counter(
                 "hopefx_inference_fallback_total",
                 "Fallback (non-model) predictions",
                 ["symbol", "reason"],
             )
-            confidence_gauge   = _gauge(
+            confidence_gauge = _gauge(
                 "hopefx_inference_last_confidence",
                 "Last prediction confidence score",
                 ["symbol"],
@@ -131,7 +142,7 @@ def _init_prometheus():
                 "Active model version (label only)",
                 ["model_id"],
             )
-            rollback_total     = _counter(
+            rollback_total = _counter(
                 "hopefx_inference_rollback_total",
                 "Model rollback count",
                 ["reason"],
@@ -210,10 +221,13 @@ class InferenceEngine:
                 # data_layer sub-modules directly from outside data_layer/).
                 try:
                     from data_layer.orchestrator import orchestrator
+
                     if not orchestrator._macro_bridge.is_loaded:
-                        logger.debug("MacroStoreBridge not yet loaded — using CSV defaults")
+                        logger.debug(
+                            "MacroStoreBridge not yet loaded — using CSV defaults"
+                        )
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Suppressed exception: %s", _exc)
                 macro_store.load_defaults()
             macro_df = macro_store.align_to_hourly(ohlcv)
             if macro_df is None or macro_df.empty:
@@ -256,6 +270,7 @@ class InferenceEngine:
             return self._online_learner
         try:
             from ml.online_learner import get_online_learner
+
             self._online_learner = get_online_learner()
             return self._online_learner
         except Exception as exc:
@@ -395,16 +410,24 @@ class InferenceEngine:
             if label == 1:
                 # Ensure last close > first close so the learner sees a win
                 bars = ohlcv.copy()
-                if "close" in bars.columns and bars["close"].iloc[-1] <= bars["close"].iloc[0]:
+                if (
+                    "close" in bars.columns
+                    and bars["close"].iloc[-1] <= bars["close"].iloc[0]
+                ):
                     bars.loc[bars.index[-1], "close"] = bars["close"].iloc[0] * 1.001
             else:
                 bars = ohlcv.copy()
-                if "close" in bars.columns and bars["close"].iloc[-1] >= bars["close"].iloc[0]:
+                if (
+                    "close" in bars.columns
+                    and bars["close"].iloc[-1] >= bars["close"].iloc[0]
+                ):
                     bars.loc[bars.index[-1], "close"] = bars["close"].iloc[0] * 0.999
 
             ok = learner.partial_fit(bars)
             if ok:
-                logger.debug("InferenceEngine: online learner updated with label=%d", label)
+                logger.debug(
+                    "InferenceEngine: online learner updated with label=%d", label
+                )
         except Exception as exc:
             logger.debug("Online learner update failed: %s", exc)
 
@@ -463,7 +486,9 @@ class InferenceEngine:
 
         if len(ohlcv) < _MIN_BARS:
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
-            _PROM.fallback_total.labels(symbol=sym_label, reason="insufficient_bars").inc()
+            _PROM.fallback_total.labels(
+                symbol=sym_label, reason="insufficient_bars"
+            ).inc()
             return base_result
 
         # Step 1: MacroStore (now auto-populated from FRED via MacroStoreBridge)
@@ -479,7 +504,9 @@ class InferenceEngine:
         if X is None:
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             self._fallback_count += 1
-            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_build_failed").inc()
+            _PROM.fallback_total.labels(
+                symbol=sym_label, reason="feature_build_failed"
+            ).inc()
             return base_result
 
         # Step 4: Model prediction
@@ -512,7 +539,9 @@ class InferenceEngine:
                     online_active = True
                     logger.debug(
                         "Online learner blended: base=%.3f online=%.3f blend=%.3f",
-                        base_before, online_prob, raw_prob,
+                        base_before,
+                        online_prob,
+                        raw_prob,
                     )
             except Exception as exc:
                 logger.debug("Online learner blend failed: %s", exc)
@@ -549,23 +578,24 @@ class InferenceEngine:
 
         # Record signal to lineage store (with features hash for audit trail)
         self._record_signal_lineage(
-            direction     = direction,
-            confidence    = float(confidence),
-            probability   = float(cal_prob),
-            symbol        = symbol,
-            model_version = model_version,
-            features_df   = X,
+            direction=direction,
+            confidence=float(confidence),
+            probability=float(cal_prob),
+            symbol=symbol,
+            model_version=model_version,
+            features_df=X,
         )
 
         # Data quality from orchestrator (for downstream gating)
         data_quality = 1.0
         try:
             from data_layer.orchestrator import orchestrator
+
             tick = orchestrator.get_latest_tick()
             if tick is not None:
                 data_quality = tick.confidence
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         # ── Prometheus instrumentation ────────────────────────────────────────
         _PROM.predict_total.labels(symbol=sym_label, direction=direction).inc()
@@ -578,22 +608,22 @@ class InferenceEngine:
             _PROM.fallback_total.labels(symbol=sym_label, reason="model_fallback").inc()
 
         return {
-            "direction":       direction,
-            "probability":     round(raw_prob, 4),
-            "confidence":      round(float(confidence), 4),
-            "model_version":   model_version,
-            "bars_used":       len(ohlcv),
-            "last_close":      last_close,
-            "latency_ms":      round(latency_ms, 2),
-            "fallback":        model_version == "fallback",
-            "macro_active":    macro_active,
-            "mtf_active":      mtf_active,
-            "online_active":   online_active,
-            "dl_nudge":        round(dl_nudge, 4),
+            "direction": direction,
+            "probability": round(raw_prob, 4),
+            "confidence": round(float(confidence), 4),
+            "model_version": model_version,
+            "bars_used": len(ohlcv),
+            "last_close": last_close,
+            "latency_ms": round(latency_ms, 2),
+            "fallback": model_version == "fallback",
+            "macro_active": macro_active,
+            "mtf_active": mtf_active,
+            "online_active": online_active,
+            "dl_nudge": round(dl_nudge, 4),
             "sentiment_score": self._last_sentiment_score,
-            "macro_impact":    self._last_macro_impact,
-            "data_quality":    round(data_quality, 4),
-            "is_safe":         self.is_safe_to_trade(),
+            "macro_impact": self._last_macro_impact,
+            "data_quality": round(data_quality, 4),
+            "is_safe": self.is_safe_to_trade(),
         }
 
     def _get_data_layer_nudge(self) -> float:
@@ -614,7 +644,7 @@ class InferenceEngine:
         Suppressed entirely during macro blackout windows.
         """
         self._last_sentiment_score = 0.0
-        self._last_macro_impact    = 0.0
+        self._last_macro_impact = 0.0
         try:
             from data_layer.orchestrator import orchestrator
 
@@ -629,14 +659,14 @@ class InferenceEngine:
 
             features = orchestrator.get_ml_features()
 
-            sentiment      = float(features.get("news_sentiment_score",    0.0))
-            impact         = float(features.get("macro_impact_score_now",  0.0))
-            blackout       = float(features.get("macro_is_blackout",       0.0))
-            ofi            = float(features.get("micro_ofi",               0.0))
-            trade_pressure = float(features.get("micro_trade_pressure",    0.0))
+            sentiment = float(features.get("news_sentiment_score", 0.0))
+            impact = float(features.get("macro_impact_score_now", 0.0))
+            blackout = float(features.get("macro_is_blackout", 0.0))
+            ofi = float(features.get("micro_ofi", 0.0))
+            trade_pressure = float(features.get("micro_trade_pressure", 0.0))
 
             self._last_sentiment_score = sentiment
-            self._last_macro_impact    = impact
+            self._last_macro_impact = impact
 
             # Hard suppress during blackout windows
             if blackout > 0.5:
@@ -670,6 +700,7 @@ class InferenceEngine:
         """
         try:
             from data_layer.orchestrator import orchestrator
+
             return orchestrator.get_latest_tick()
         except Exception:
             return None
@@ -683,6 +714,7 @@ class InferenceEngine:
         """
         try:
             from data_layer.orchestrator import orchestrator
+
             return orchestrator.get_ml_features()
         except Exception:
             return {}
@@ -698,6 +730,7 @@ class InferenceEngine:
         """
         try:
             from data_layer.orchestrator import orchestrator
+
             return orchestrator.is_safe_to_trade()
         except Exception:
             return True  # fail-open: don't block trading on orchestrator error
@@ -721,36 +754,41 @@ class InferenceEngine:
             import hashlib
             import json
             import uuid
+
             # Access lineage store via orchestrator — single entry point rule.
             # Never import data_layer.lineage.store directly from outside data_layer/.
             from data_layer.orchestrator import orchestrator
+
             lineage_store = orchestrator._lineage
 
             # Compute features hash for audit trail
             features_hash = ""
             if features_df is not None and not features_df.empty:
                 try:
-                    feat_dict = features_df.iloc[-1].replace(
-                        [float("inf"), float("-inf")], 0.0
-                    ).fillna(0.0).to_dict()
+                    feat_dict = (
+                        features_df.iloc[-1]
+                        .replace([float("inf"), float("-inf")], 0.0)
+                        .fillna(0.0)
+                        .to_dict()
+                    )
                     # Round to 4dp to avoid float noise in hash
                     feat_dict = {k: round(float(v), 4) for k, v in feat_dict.items()}
                     blob = json.dumps(feat_dict, sort_keys=True, separators=(",", ":"))
                     features_hash = hashlib.sha256(blob.encode()).hexdigest()[:16]
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Suppressed exception: %s", _exc)
 
             lineage_store.record_signal(
-                direction     = direction,
-                confidence    = confidence,
-                probability   = probability,
-                features_hash = features_hash,
-                model_version = model_version,
-                lineage_id    = str(uuid.uuid4()),
-                symbol        = symbol,
+                direction=direction,
+                confidence=confidence,
+                probability=probability,
+                features_hash=features_hash,
+                model_version=model_version,
+                lineage_id=str(uuid.uuid4()),
+                symbol=symbol,
             )
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
     # ── Metadata cache ────────────────────────────────────────────────────────
 
@@ -830,10 +868,11 @@ class InferenceEngine:
         macro_series = 0
         try:
             from ml.macro_store import macro_store  # noqa: PLC0415
+
             macro_series = len(macro_store)
             macro_ok = macro_series > 0
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         mtf_ok = False
         if _MTF_FUSION_ENABLED:
@@ -841,9 +880,10 @@ class InferenceEngine:
                 from research.pipeline.mtf_fusion import (  # noqa: PLC0415
                     _MTF_STORE_SINGLETON,
                 )
+
                 mtf_ok = _MTF_STORE_SINGLETON is not None
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
         online_ok = False
         if _ONLINE_LEARNING_ENABLED:
@@ -851,11 +891,12 @@ class InferenceEngine:
                 from research.pipeline.paper_trading_gate import (  # noqa: PLC0415
                     get_gate,
                 )
+
                 gate = get_gate()
                 p3_ok, _ = gate.phase3_ready()
                 online_ok = p3_ok
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
         # ── Feature count ─────────────────────────────────────────────────────
         feature_count = 0
@@ -864,7 +905,7 @@ class InferenceEngine:
                 n = getattr(predictor._model, "n_features_in_", 0)
                 feature_count = int(n) if n else 0
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         # ── Metadata (oos_accuracy, last_trained_at) ──────────────────────────
         meta = self._load_meta()
@@ -882,11 +923,12 @@ class InferenceEngine:
         signal_filter_stats: Dict[str, Any] = {}
         try:
             from ml.signal_filter import get_signal_filter  # noqa: PLC0415
+
             sf = get_signal_filter()
             if hasattr(sf, "get_stats"):
                 signal_filter_stats = sf.get_stats()
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         # ── Uptime ────────────────────────────────────────────────────────────
         uptime_seconds: Optional[float] = None
@@ -929,7 +971,9 @@ class InferenceEngine:
             "threshold_short": _THRESHOLD_SHORT,
             "signal_filter": signal_filter_stats,
             "rollback_count": self._rollback_count,
-            "active_model_path": str(self._active_model_path) if self._active_model_path else None,
+            "active_model_path": str(self._active_model_path)
+            if self._active_model_path
+            else None,
             "checked_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -963,17 +1007,20 @@ class InferenceEngine:
                     else self._active_model_path
                 )
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
         try:
             from ml.live_inference import AdvancedModelPredictor
+
             new_predictor = AdvancedModelPredictor(model_path=target)
             if not new_predictor.is_available:
                 logger.error("reload_model: new predictor not available after load")
                 return False
             # Force-load the model now so failures surface here, not at predict time
             if not new_predictor._load():
-                logger.error("reload_model: model file exists but failed to load: %s", target)
+                logger.error(
+                    "reload_model: model file exists but failed to load: %s", target
+                )
                 return False
             self._predictor = new_predictor
             self._active_model_path = target
@@ -1005,7 +1052,9 @@ class InferenceEngine:
         if success:
             self._rollback_count += 1
             _PROM.rollback_total.labels(reason="manual_rollback").inc()
-            logger.warning("rollback_model: rollback complete (count=%d)", self._rollback_count)
+            logger.warning(
+                "rollback_model: rollback complete (count=%d)", self._rollback_count
+            )
         return success
 
 

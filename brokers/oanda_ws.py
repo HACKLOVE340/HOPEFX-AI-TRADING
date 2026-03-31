@@ -36,7 +36,7 @@ OANDA credentials are still used for ORDER EXECUTION via brokers.oanda_stream
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,7 @@ class StreamingForbidden(RuntimeError):
 
     Live price data must flow exclusively through data_feed.NuclearStreamer.
     """
+
     def __init__(self, method: str = "start") -> None:
         super().__init__(
             f"ARCHITECTURAL VIOLATION: OANDAStreamAdapter.{method}() called. "

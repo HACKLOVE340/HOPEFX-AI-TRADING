@@ -1,4 +1,3 @@
-from __future__ import annotations
 # HOPEFX-AI-TRADING
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
@@ -9,6 +8,8 @@ from __future__ import annotations
 HOPEFX Online Learning Pipeline
 Continuously adapts to market regime changes without catastrophic forgetting
 """
+
+from __future__ import annotations
 
 import logging
 
@@ -31,12 +32,13 @@ except ImportError:
 
     DataLoader = None  # type: ignore[assignment,misc]
     TensorDataset = None  # type: ignore[assignment,misc]
-from collections import deque
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from collections import deque  # noqa: E402
+from dataclasses import dataclass, field  # noqa: E402
+from typing import Any, Dict, List, Optional, Tuple  # noqa: E402
 
-import numpy as np
-import pandas as pd  # noqa: F401 — used in type annotations below
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402, F401 — used in type annotations below
+
 logger = logging.getLogger(__name__)
 
 
@@ -332,8 +334,8 @@ class SklearnOnlineLearner:
     """
 
     # Drift detection window and KS p-value threshold
-    _DRIFT_WINDOW    = 50
-    _DRIFT_P_THRESH  = 0.05
+    _DRIFT_WINDOW = 50
+    _DRIFT_P_THRESH = 0.05
     # EWC anchor: snapshot weights every N updates
     _EWC_ANCHOR_EVERY = 20
     # Performance tracking window
@@ -346,16 +348,16 @@ class SklearnOnlineLearner:
         n_features: int = 176,
         ewc_lambda: float = 0.10,
     ) -> None:
-        self.symbol       = symbol
+        self.symbol = symbol
         self.persist_path = persist_path
-        self.n_features   = n_features
-        self.ewc_lambda   = ewc_lambda  # L2 anchor strength (0 = disabled)
+        self.n_features = n_features
+        self.ewc_lambda = ewc_lambda  # L2 anchor strength (0 = disabled)
 
-        self._fitted        = False
-        self._update_count  = 0
-        self._reset_count   = 0
-        self._model         = None
-        self._scaler        = None
+        self._fitted = False
+        self._update_count = 0
+        self._reset_count = 0
+        self._model = None
+        self._scaler = None
 
         # EWC anchor: snapshot of model coef_ after stable training
         self._anchor_coef: Optional[np.ndarray] = None
@@ -408,7 +410,11 @@ class SklearnOnlineLearner:
         All values are padded/truncated to ``n_features``.
         """
         try:
-            cols = [c for c in ["open", "high", "low", "close", "volume"] if c in bars.columns]
+            cols = [
+                c
+                for c in ["open", "high", "low", "close", "volume"]
+                if c in bars.columns
+            ]
             if not cols:
                 return None
 
@@ -426,13 +432,16 @@ class SklearnOnlineLearner:
             dl_extra = np.zeros(4, dtype=float)
             try:
                 from data_layer.orchestrator import orchestrator
+
                 feats = orchestrator.get_ml_features()
-                dl_extra[0] = float(feats.get("news_sentiment_score",   0.0))
-                dl_extra[1] = float(feats.get("micro_ofi",              0.0))
+                dl_extra[0] = float(feats.get("news_sentiment_score", 0.0))
+                dl_extra[1] = float(feats.get("micro_ofi", 0.0))
                 dl_extra[2] = float(feats.get("macro_impact_score_now", 0.0))
-                dl_extra[3] = float(feats.get("macro_is_blackout",      0.0))
+                dl_extra[3] = float(feats.get("macro_is_blackout", 0.0))
             except Exception as _exc:
-                logger.debug("SklearnOnlineLearner: data layer injection skipped: %s", _exc)
+                logger.debug(
+                    "SklearnOnlineLearner: data layer injection skipped: %s", _exc
+                )
 
             flat = np.concatenate([flat, dl_extra])
 
@@ -467,11 +476,12 @@ class SklearnOnlineLearner:
         if self._model is None or not hasattr(self._model, "coef_"):
             return
         try:
-            self._anchor_coef      = self._model.coef_.copy()
+            self._anchor_coef = self._model.coef_.copy()
             self._anchor_intercept = self._model.intercept_.copy()
             logger.debug(
                 "SklearnOnlineLearner[%s]: EWC anchor updated at update #%d",
-                self.symbol, self._update_count,
+                self.symbol,
+                self._update_count,
             )
         except Exception as exc:
             logger.debug("EWC anchor update failed: %s", exc)
@@ -496,7 +506,9 @@ class SklearnOnlineLearner:
         try:
             drift = float(np.mean(np.abs(self._model.coef_ - self._anchor_coef)))
             new_alpha = self._base_alpha * (1.0 + self.ewc_lambda * drift * 100.0)
-            new_alpha = float(np.clip(new_alpha, self._base_alpha, self._base_alpha * 100))
+            new_alpha = float(
+                np.clip(new_alpha, self._base_alpha, self._base_alpha * 100)
+            )
             self._model.alpha = new_alpha
         except Exception as exc:
             logger.debug("EWC penalty application failed: %s", exc)
@@ -522,12 +534,14 @@ class SklearnOnlineLearner:
 
         try:
             from scipy.stats import ks_2samp
+
             _, p_value = ks_2samp(self._ref_probs, window_arr)
             if p_value < self._DRIFT_P_THRESH:
                 logger.info(
                     "SklearnOnlineLearner[%s]: drift detected (p=%.4f) — "
                     "resetting model to adapt to new regime",
-                    self.symbol, p_value,
+                    self.symbol,
+                    p_value,
                 )
                 return True
         except Exception as exc:
@@ -544,15 +558,16 @@ class SklearnOnlineLearner:
         Increments the reset counter for monitoring.
         """
         self._init_model()
-        self._fitted        = False
-        self._reset_count  += 1
-        self._drift_count  += 1
+        self._fitted = False
+        self._reset_count += 1
+        self._drift_count += 1
         # Update reference distribution to the current window
         if len(self._prob_window) >= self._DRIFT_WINDOW:
             self._ref_probs = np.array(self._prob_window)
         logger.info(
             "SklearnOnlineLearner[%s]: model reset #%d for new regime",
-            self.symbol, self._reset_count,
+            self.symbol,
+            self._reset_count,
         )
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -618,8 +633,10 @@ class SklearnOnlineLearner:
 
             logger.debug(
                 "SklearnOnlineLearner[%s] partial_fit #%d OK (acc=%.3f resets=%d)",
-                self.symbol, self._update_count,
-                self._rolling_accuracy, self._reset_count,
+                self.symbol,
+                self._update_count,
+                self._rolling_accuracy,
+                self._reset_count,
             )
             return True
         except Exception as exc:
@@ -659,17 +676,17 @@ class SklearnOnlineLearner:
     def status(self) -> Dict:
         """Return monitoring status dict."""
         return {
-            "symbol":           self.symbol,
-            "fitted":           self._fitted,
-            "update_count":     self._update_count,
-            "reset_count":      self._reset_count,
-            "drift_count":      self._drift_count,
+            "symbol": self.symbol,
+            "fitted": self._fitted,
+            "update_count": self._update_count,
+            "reset_count": self._reset_count,
+            "drift_count": self._drift_count,
             "rolling_accuracy": round(self._rolling_accuracy, 4),
-            "ewc_lambda":       self.ewc_lambda,
-            "n_features":       self.n_features,
-            "persist_path":     self.persist_path,
+            "ewc_lambda": self.ewc_lambda,
+            "n_features": self.n_features,
+            "persist_path": self.persist_path,
             "prob_window_size": len(self._prob_window),
-            "has_anchor":       self._anchor_coef is not None,
+            "has_anchor": self._anchor_coef is not None,
         }
 
     def _save(self) -> None:
@@ -720,6 +737,7 @@ def get_online_learner(
             try:
                 learner = SklearnOnlineLearner.load(str(p))
                 import logging as _log
+
                 _log.getLogger(__name__).info(
                     "Loaded persisted OnlineLearner for %s from %s", symbol, p
                 )
@@ -735,9 +753,11 @@ def get_online_learner(
 
 # ── XGBoostOnlineModel ────────────────────────────────────────────────────────
 
+
 @dataclass
 class ModelMetadata:
     """Training metadata returned by XGBoostOnlineModel.fit()."""
+
     val_score: float = 0.0
     n_samples: int = 0
     n_features: int = 0
@@ -801,6 +821,7 @@ class XGBoostOnlineModel:
         Returns ModelMetadata with val_score populated.
         """
         import asyncio
+
         loop = asyncio.get_event_loop()
         meta = await loop.run_in_executor(None, self._fit_sync, X, y)
         return meta
@@ -812,7 +833,8 @@ class XGBoostOnlineModel:
 
         n_samples, n_features = X.shape
         X_train, X_val, y_train, y_val = train_test_split(
-            X, y,
+            X,
+            y,
             test_size=self._eval_fraction,
             random_state=self._random_state,
             stratify=y if len(np.unique(y)) > 1 else None,
@@ -830,7 +852,8 @@ class XGBoostOnlineModel:
             verbosity=0,
         )
         model.fit(
-            X_train, y_train,
+            X_train,
+            y_train,
             eval_set=[(X_val, y_val)],
             verbose=False,
         )
@@ -855,7 +878,9 @@ class XGBoostOnlineModel:
         )
         logger.info(
             "XGBoostOnlineModel fitted: n=%d features=%d val_auc=%.4f",
-            n_samples, n_features, val_score,
+            n_samples,
+            n_features,
+            val_score,
         )
         return self.metadata
 
@@ -877,10 +902,12 @@ class XGBoostOnlineModel:
         """
         if not self._is_trained or self._model is None:
             import asyncio
+
             asyncio.run(self.fit(X, y))
             return
 
         from xgboost import XGBClassifier
+
         prev = self._model
         n_prev = prev.n_estimators
         updated = XGBClassifier(
@@ -896,4 +923,6 @@ class XGBoostOnlineModel:
         )
         updated.fit(X, y, xgb_model=prev.get_booster(), verbose=False)
         self._model = updated
-        logger.debug("XGBoostOnlineModel partial_fit: added %d trees", self._n_estimators)
+        logger.debug(
+            "XGBoostOnlineModel partial_fit: added %d trees", self._n_estimators
+        )

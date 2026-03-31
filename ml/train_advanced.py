@@ -75,12 +75,13 @@ sys.path.insert(0, str(ROOT))
 MODEL_DIR = ROOT / "ml" / "saved_models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-import os as _os
+import os as _os  # noqa: E402
+
 # When HOPEFX_CI=1 (set by tests/conftest.py) use minimal model params so
 # every test that trains a model finishes well within the 20 s timeout.
 _CI = _os.environ.get("HOPEFX_CI", "0") == "1"
-_N_EST = 20 if _CI else None   # None → use per-call default
-_CV    = 2  if _CI else 3
+_N_EST = 20 if _CI else None  # None → use per-call default
+_CV = 2 if _CI else 3
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -188,7 +189,7 @@ def _build_base_models():
         RandomForestClassifier,
     )
 
-    _ne = _N_EST or 600   # CI: 20, prod: 600
+    _ne = _N_EST or 600  # CI: 20, prod: 600
     _rf = _N_EST or 500
     _gb = _N_EST or 300
 
@@ -565,7 +566,7 @@ def extract_feature_importance(model, feature_names: List[str]) -> Dict:
             imp = pd.Series(inner.feature_importances_, index=feature_names)
             return {k: round(float(v), 6) for k, v in imp.nlargest(20).items()}
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
     return {}
 
 

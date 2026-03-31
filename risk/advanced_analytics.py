@@ -1319,7 +1319,7 @@ class AdvancedRiskAnalytics:
                 sigma2[t] = omega + alpha * arr[t - 1] ** 2 + beta * sigma2[t - 1]
                 if sigma2[t] <= 0:
                     return 1e10
-            ll = -0.5 * np.sum(np.log(sigma2) + arr ** 2 / sigma2)
+            ll = -0.5 * np.sum(np.log(sigma2) + arr**2 / sigma2)
             return -ll
 
         # Initial guess: small omega, typical alpha/beta for FX/gold
@@ -1366,10 +1366,11 @@ class AdvancedRiskAnalytics:
         var_garch = float(-(mu_h + z * sigma_forecast))
         var_garch = max(var_garch, 0.0)
 
-        val = (abs(var_garch * portfolio_value) if portfolio_value else var_garch)
+        val = abs(var_garch * portfolio_value) if portfolio_value else var_garch
 
         if not converged:
             import warnings as _w
+
             _w.warn(
                 "calculate_var_garch: MLE did not converge — using initial parameter "
                 "guess. Result may be inaccurate. Increase series length or check for "
@@ -1385,8 +1386,9 @@ class AdvancedRiskAnalytics:
             method="garch11",
             scaling_approximate=not converged,
             scaling_note=(
-                "" if converged else
-                f"GARCH(1,1) MLE did not converge (omega={omega:.2e}, "
+                ""
+                if converged
+                else f"GARCH(1,1) MLE did not converge (omega={omega:.2e}, "
                 f"alpha={alpha:.4f}, beta={beta:.4f}). Result is approximate."
             ),
         )

@@ -231,7 +231,8 @@ async def feed_status(user: TokenPayload = Depends(get_current_user)):
 
     # Count signals this user has published to the feed
     signal_count = sum(
-        1 for item in _feed_items.values()
+        1
+        for item in _feed_items.values()
         if item.get("trader_id") == user.sub and item.get("is_public")
     )
 
@@ -239,12 +240,15 @@ async def feed_status(user: TokenPayload = Depends(get_current_user)):
     follower_count = 0
     try:
         from social.profiles import TraderProfileManager as _TPM  # noqa: PLC0415
+
         mgr = _TPM()
         profile = mgr.get_profile(user.sub)
         if profile:
             follower_count = getattr(profile, "total_followers", 0)
     except Exception as exc:
-        logger.warning("feed_status: failed to fetch follower count for %s: %s", user.sub, exc)
+        logger.warning(
+            "feed_status: failed to fetch follower count for %s: %s", user.sub, exc
+        )
 
     return {
         "opted_in": opted_in,
@@ -302,16 +306,18 @@ async def get_leaderboard(
             ranked = sorted(profiles, key=lambda p: p.sharpe_ratio, reverse=True)
             result = []
             for i, p in enumerate(ranked[:limit], 1):
-                result.append({
-                    "id": p.trader_id,
-                    "rank": i,
-                    "name": p.username,
-                    "return_3m": round(p.total_pnl / max(p.total_trades, 1), 2),
-                    "sharpe": round(p.sharpe_ratio, 2),
-                    "followers": p.total_followers,
-                    "win_rate": round(p.win_rate, 1),
-                    "trades": p.total_trades,
-                })
+                result.append(
+                    {
+                        "id": p.trader_id,
+                        "rank": i,
+                        "name": p.username,
+                        "return_3m": round(p.total_pnl / max(p.total_trades, 1), 2),
+                        "sharpe": round(p.sharpe_ratio, 2),
+                        "followers": p.total_followers,
+                        "win_rate": round(p.win_rate, 1),
+                        "trades": p.total_trades,
+                    }
+                )
             if result:
                 return result
     except Exception as exc:

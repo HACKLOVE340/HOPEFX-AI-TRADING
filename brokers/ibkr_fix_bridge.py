@@ -355,7 +355,7 @@ class IBKRFIXBridge:
             try:
                 sentry_sdk.capture_exception(exc)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
     # ------------------------------------------------------------------
     # Context manager

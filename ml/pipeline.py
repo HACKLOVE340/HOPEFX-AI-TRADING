@@ -433,9 +433,7 @@ class XGBoostPredictor:
             raise ImportError("xgboost not installed.")
         base = dict(self.DEFAULT_PARAMS)
         if self._CI_FAST:
-            base["n_estimators"] = int(
-                os.environ.get("CI_XGB_N_ESTIMATORS", "50")
-            )
+            base["n_estimators"] = int(os.environ.get("CI_XGB_N_ESTIMATORS", "50"))
         self._params = {**base, **(params or {})}
         self._model: Optional[xgb.XGBClassifier] = None
         self._scaler: Optional["StandardScaler"] = None

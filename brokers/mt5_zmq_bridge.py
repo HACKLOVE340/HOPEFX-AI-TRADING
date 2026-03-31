@@ -245,7 +245,11 @@ class MT5ZmqBridge:
             self._status = BridgeStatus.CONNECTED
             logger.info(
                 "MT5ZmqBridge connected — cmd=%s:%d resp=%s:%d pub=*:%d",
-                self.host, self.cmd_port, self.host, self.resp_port, self.pub_port,
+                self.host,
+                self.cmd_port,
+                self.host,
+                self.resp_port,
+                self.pub_port,
             )
         except Exception as exc:
             self._status = BridgeStatus.ERROR
@@ -263,13 +267,13 @@ class MT5ZmqBridge:
                 try:
                     sock.close(linger=0)  # type: ignore[union-attr]
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Suppressed exception: %s", _exc)
 
         if self._ctx is not None:
             try:
                 self._ctx.term()  # type: ignore[union-attr]
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
         self._push = self._pull = self._pub = self._ctx = None
         self._status = BridgeStatus.STOPPED
@@ -335,7 +339,9 @@ class MT5ZmqBridge:
         payload: dict = {"cmd": "CLOSE", "id": cmd_id, "ticket": ticket}
         if lots is not None:
             payload["lots"] = lots
-        return self._send_and_wait(cmd_id, payload, symbol="", side="CLOSE", lots=lots or 0.0)
+        return self._send_and_wait(
+            cmd_id, payload, symbol="", side="CLOSE", lots=lots or 0.0
+        )
 
     def modify_position(
         self,
@@ -365,7 +371,7 @@ class MT5ZmqBridge:
         payload = {"cmd": "PING", "id": cmd_id}
         t0 = time.monotonic()
         try:
-            result = self._send_and_wait(cmd_id, payload, symbol="", side="PING", lots=0.0)
+            self._send_and_wait(cmd_id, payload, symbol="", side="PING", lots=0.0)
             latency = (time.monotonic() - t0) * 1000.0
             self._stats.latency_ms = latency
             self._stats.last_heartbeat = datetime.now(timezone.utc)
@@ -384,13 +390,15 @@ class MT5ZmqBridge:
         """
         if self._pub is None:
             return
-        msg = json.dumps({
-            "type": "SIGNAL",
-            "symbol": symbol,
-            "direction": direction,
-            "confidence": confidence,
-            "ts": int(time.time() * 1000),
-        })
+        msg = json.dumps(
+            {
+                "type": "SIGNAL",
+                "symbol": symbol,
+                "direction": direction,
+                "confidence": confidence,
+                "ts": int(time.time() * 1000),
+            }
+        )
         try:
             with self._lock:
                 self._pub.send_string(msg)  # type: ignore[union-attr]
@@ -509,7 +517,7 @@ class MT5ZmqBridge:
                 try:
                     q.put_nowait(msg)
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Suppressed exception: %s", _exc)
             return
 
         logger.debug("Unknown MT5 message type: %s", msg_type)

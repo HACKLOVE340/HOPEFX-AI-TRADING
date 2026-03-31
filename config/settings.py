@@ -117,7 +117,7 @@ class SecuritySettings(BaseSettings):
         if not raw or raw.startswith("CHANGE_ME"):
             raise ValueError(
                 "SECURITY_JWT_SECRET must be set to a strong random value. "
-                "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+                'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
             )
         return v
 

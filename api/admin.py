@@ -114,9 +114,14 @@ def _save_risk_settings(settings: Dict[str, Any], changed_by: str = "system") ->
         if ok:
             return True
         # config_store returned False (e.g. DB unavailable) — fall through to file
-        logger.warning("_save_risk_settings: config_store.set returned False, falling back to file")
+        logger.warning(
+            "_save_risk_settings: config_store.set returned False, falling back to file"
+        )
     except Exception as exc:
-        logger.warning("_save_risk_settings: config_store unavailable (%s), falling back to file", exc)
+        logger.warning(
+            "_save_risk_settings: config_store unavailable (%s), falling back to file",
+            exc,
+        )
 
     try:
         _RISK_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -141,7 +146,10 @@ def apply_persisted_risk_settings() -> None:
     try:
         from core.config_store import config_store
 
-        if _RISK_SETTINGS_FILE.exists() and config_store.get(_RISK_SETTINGS_KEY) is None:
+        if (
+            _RISK_SETTINGS_FILE.exists()
+            and config_store.get(_RISK_SETTINGS_KEY) is None
+        ):
             try:
                 legacy = json.loads(_RISK_SETTINGS_FILE.read_text())
                 if legacy:
@@ -152,9 +160,14 @@ def apply_persisted_risk_settings() -> None:
                         _RISK_SETTINGS_FILE,
                     )
             except Exception as mig_exc:
-                logger.warning("Risk settings migration failed (non-fatal): %s", mig_exc)
+                logger.warning(
+                    "Risk settings migration failed (non-fatal): %s", mig_exc
+                )
     except Exception as exc:
-        logger.debug("apply_persisted_risk_settings: config_store unavailable, skipping migration: %s", exc)
+        logger.debug(
+            "apply_persisted_risk_settings: config_store unavailable, skipping migration: %s",
+            exc,
+        )
 
     persisted = _get_risk_settings()
     if not persisted:
@@ -181,7 +194,9 @@ def apply_persisted_risk_settings() -> None:
                             value,
                         )
     except Exception as exc:
-        logger.warning("apply_persisted_risk_settings: RiskManager update failed: %s", exc)
+        logger.warning(
+            "apply_persisted_risk_settings: RiskManager update failed: %s", exc
+        )
 
 
 class AdminStatusResponse(BaseModel):
@@ -229,7 +244,9 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
 
     # Brain / strategy brain
     try:
-        brain = getattr(app_state, "strategy_brain", None) or getattr(app_state, "brain", None)
+        brain = getattr(app_state, "strategy_brain", None) or getattr(
+            app_state, "brain", None
+        )
         components["brain"] = brain is not None
     except Exception:
         components["brain"] = False
@@ -237,6 +254,7 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
     # Signal engine
     try:
         from core.signal_engine import get_signal_engine_status
+
         se_status = get_signal_engine_status()
         components["signal_engine"] = se_status.get("ml_available", False)
     except Exception:
@@ -252,6 +270,7 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
     # Online learner (Phase 3)
     try:
         from research.pipeline.online_learning import list_online_learners
+
         learners = list_online_learners()
         components["online_learner"] = len(learners) > 0
     except Exception:
@@ -263,9 +282,12 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
         if nuclear is not None:
             components["data_feed"] = nuclear.status().get("is_running", False)
         else:
-            df_engine = getattr(app_state, "price_engine", None) or getattr(app_state, "data_engine", None)
+            df_engine = getattr(app_state, "price_engine", None) or getattr(
+                app_state, "data_engine", None
+            )
             components["data_feed"] = df_engine is not None and (
-                getattr(df_engine, "active", False) or getattr(df_engine, "is_running", False)
+                getattr(df_engine, "active", False)
+                or getattr(df_engine, "is_running", False)
             )
     except Exception:
         components["data_feed"] = False
@@ -500,9 +522,7 @@ async def get_kyc_status(
 # ── New endpoints expected by tests ──────────────────────────────────────────
 
 
-@router.get(
-    "/system-info", response_model=None, summary="Server version and uptime"
-)
+@router.get("/system-info", response_model=None, summary="Server version and uptime")
 def get_system_info(user: TokenPayload = Depends(require_role("admin"))):
     """Server version and uptime. Requires: role >= 'admin'."""
     return {
@@ -572,9 +592,17 @@ def get_activity(user: TokenPayload = Depends(require_role("admin"))):
 @router.get("/dashboard-data")
 def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     """Full system state. Requires: role >= 'admin'."""
-    trading_stats: Dict[str, Any] = {"total_trades": 0, "open_positions": 0, "daily_pnl": 0.0}
+    trading_stats: Dict[str, Any] = {
+        "total_trades": 0,
+        "open_positions": 0,
+        "daily_pnl": 0.0,
+    }
     risk_status: Dict[str, Any] = {"within_limits": True}
-    module_status: Dict[str, Any] = {"strategies": False, "brokers": False, "signal_engine": False}
+    module_status: Dict[str, Any] = {
+        "strategies": False,
+        "brokers": False,
+        "signal_engine": False,
+    }
 
     # Live broker stats
     try:
@@ -610,6 +638,7 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     # Trade logger stats
     try:
         from core.trade_logger import TradeLogger
+
         tl = TradeLogger.get_trade_logger()
         tl_stats = tl.get_stats() if hasattr(tl, "get_stats") else {}
         trading_stats["total_trades"] = tl_stats.get("total_fills", 0)
@@ -619,6 +648,7 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     # Signal engine
     try:
         from core.signal_engine import get_signal_engine_status
+
         se = get_signal_engine_status()
         module_status["signal_engine"] = se.get("ml_available", False)
         module_status["strategies"] = True
@@ -628,6 +658,7 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     # Paper trading gate fill count
     try:
         from research.pipeline.paper_trading_gate import get_gate
+
         gate = get_gate()
         trading_stats["paper_fill_count"] = gate.fill_count
     except Exception as exc:
@@ -641,18 +672,18 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     }
 
 
-@router.get(
-    "/system-metrics", response_model=None, summary="System resource metrics"
-)
+@router.get("/system-metrics", response_model=None, summary="System resource metrics")
 def get_system_metrics(user: TokenPayload = Depends(require_role("admin"))):
     """Prometheus-style system metrics. Requires: role >= 'admin'."""
     import os as _os
+
     uptime_secs = time.time() - _start_time
     memory_mb: float = 0.0
     cpu_pct: float = 0.0
 
     try:
         import psutil
+
         proc = psutil.Process(_os.getpid())
         memory_mb = round(proc.memory_info().rss / 1_048_576, 2)
         cpu_pct = round(proc.cpu_percent(interval=0.1), 2)

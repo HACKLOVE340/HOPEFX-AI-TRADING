@@ -58,23 +58,23 @@ Usage
 Or as a standalone process:
     python -m execution.execution
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
 import signal
-import sys
 import time
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 # ── env config ────────────────────────────────────────────────────────────────
-_BROKER_PRIMARY   = os.getenv("BROKER_PRIMARY",   "oanda")   # "oanda" | "ibkr"
-_BROKER_SECONDARY = os.getenv("BROKER_SECONDARY", "ibkr")    # fallback broker
-_HEALTH_INTERVAL  = float(os.getenv("HEALTH_INTERVAL_S", "30"))
-_LOG_LEVEL        = os.getenv("LOG_LEVEL", "INFO")
+_BROKER_PRIMARY = os.getenv("BROKER_PRIMARY", "oanda")  # "oanda" | "ibkr"
+_BROKER_SECONDARY = os.getenv("BROKER_SECONDARY", "ibkr")  # fallback broker
+_HEALTH_INTERVAL = float(os.getenv("HEALTH_INTERVAL_S", "30"))
+_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 
 class ExecutionSystem:
@@ -87,18 +87,18 @@ class ExecutionSystem:
 
     def __init__(self, ml_inference_fn: Optional[Callable] = None) -> None:
         self._ml_inference_fn = ml_inference_fn
-        self._started         = False
-        self._start_time:     Optional[float] = None
+        self._started = False
+        self._start_time: Optional[float] = None
 
         # Components — populated in start()
         self._orchestrator = None
-        self._lineage      = None
-        self._risk         = None
-        self._gatekeeper   = None
-        self._router       = None
-        self._engine       = None
-        self._brokers:     Dict[str, Any] = {}
-        self._tasks:       List[asyncio.Task] = []
+        self._lineage = None
+        self._risk = None
+        self._gatekeeper = None
+        self._router = None
+        self._engine = None
+        self._brokers: Dict[str, Any] = {}
+        self._tasks: List[asyncio.Task] = []
 
     # ── Startup ───────────────────────────────────────────────────────────────
 
@@ -121,6 +121,7 @@ class ExecutionSystem:
         # ── Step 1: Start orchestrator ─────────────────────────────────────
         logger.info("Step 1/9: Starting MarketDataOrchestrator...")
         from data_layer.orchestrator import orchestrator
+
         self._orchestrator = orchestrator
         await self._orchestrator.start()
         logger.info("Step 1/9: MarketDataOrchestrator started ✓")
@@ -133,24 +134,27 @@ class ExecutionSystem:
         # ── Step 3: Instantiate RiskManager ───────────────────────────────
         logger.info("Step 3/9: Instantiating RiskManager...")
         from risk.manager import RiskManager
+
         self._risk = RiskManager(
-            orchestrator  = self._orchestrator,
-            lineage_store = self._lineage,
+            orchestrator=self._orchestrator,
+            lineage_store=self._lineage,
         )
         logger.info("Step 3/9: RiskManager ready ✓")
 
         # ── Step 4: Instantiate Gatekeeper ────────────────────────────────
         logger.info("Step 4/9: Instantiating Gatekeeper...")
         from risk.gatekeeper import Gatekeeper
+
         self._gatekeeper = Gatekeeper(
-            orchestrator  = self._orchestrator,
-            lineage_store = self._lineage,
+            orchestrator=self._orchestrator,
+            lineage_store=self._lineage,
         )
         logger.info("Step 4/9: Gatekeeper ready ✓")
 
         # ── Step 5: Instantiate SmartRouter ───────────────────────────────
         logger.info("Step 5/9: Instantiating SmartRouter...")
         from execution.smart_router import SmartRouter
+
         self._router = SmartRouter(lineage_store=self._lineage)
         logger.info("Step 5/9: SmartRouter ready ✓")
 
@@ -173,13 +177,14 @@ class ExecutionSystem:
         # ── Step 9: Start HopeFXEngine ─────────────────────────────────────
         logger.info("Step 9/9: Starting HopeFXEngine...")
         from execution.hopefx_engine import HopeFXEngine
+
         self._engine = HopeFXEngine(
-            orchestrator    = self._orchestrator,
-            smart_router    = self._router,
-            risk_manager    = self._risk,
-            gatekeeper      = self._gatekeeper,
-            lineage_store   = self._lineage,
-            ml_inference_fn = self._ml_inference_fn,
+            orchestrator=self._orchestrator,
+            smart_router=self._router,
+            risk_manager=self._risk,
+            gatekeeper=self._gatekeeper,
+            lineage_store=self._lineage,
+            ml_inference_fn=self._ml_inference_fn,
         )
         await self._engine.start()
         logger.info("Step 9/9: HopeFXEngine started ✓")
@@ -196,7 +201,9 @@ class ExecutionSystem:
         elapsed = time.monotonic() - self._start_time
         logger.info("=" * 60)
         logger.info("ExecutionSystem: FULLY STARTED in %.2fs", elapsed)
-        logger.info("  Orchestrator : %s", "running" if self._orchestrator._started else "ERROR")
+        logger.info(
+            "  Orchestrator : %s", "running" if self._orchestrator._started else "ERROR"
+        )
         logger.info("  Brokers      : %s", list(self._brokers.keys()))
         logger.info("  Engine state : %s", self._engine._state.value)
         logger.info("=" * 60)
@@ -220,9 +227,7 @@ class ExecutionSystem:
                 connected_count += 1
 
         if connected_count == 0:
-            logger.warning(
-                "No brokers connected — running in paper/simulation mode"
-            )
+            logger.warning("No brokers connected — running in paper/simulation mode")
             paper = _build_paper_broker()
             self._brokers["paper"] = paper
 
@@ -252,7 +257,9 @@ class ExecutionSystem:
                     await broker.disconnect()
                 logger.info("ExecutionSystem: broker %s disconnected", broker_id)
             except Exception as exc:
-                logger.error("ExecutionSystem: broker %s disconnect error: %s", broker_id, exc)
+                logger.error(
+                    "ExecutionSystem: broker %s disconnect error: %s", broker_id, exc
+                )
 
         # 4. Stop orchestrator last
         if self._orchestrator:
@@ -275,9 +282,9 @@ class ExecutionSystem:
         if not self._engine:
             return
         em = self._engine.metrics()
-        rm = self._risk.metrics()   if self._risk      else {}
+        rm = self._risk.metrics() if self._risk else {}
         gm = self._gatekeeper.metrics() if self._gatekeeper else {}
-        sm = self._router.metrics() if self._router    else {}
+        sm = self._router.metrics() if self._router else {}
         oh = self._orchestrator.health() if self._orchestrator else {}
 
         logger.info(
@@ -306,12 +313,14 @@ class ExecutionSystem:
         loop = asyncio.get_event_loop()
 
         def _handle_shutdown(sig_name: str) -> None:
-            logger.warning("ExecutionSystem: received %s — initiating shutdown", sig_name)
+            logger.warning(
+                "ExecutionSystem: received %s — initiating shutdown", sig_name
+            )
             asyncio.create_task(self.stop())
 
         try:
             loop.add_signal_handler(signal.SIGTERM, lambda: _handle_shutdown("SIGTERM"))
-            loop.add_signal_handler(signal.SIGINT,  lambda: _handle_shutdown("SIGINT"))
+            loop.add_signal_handler(signal.SIGINT, lambda: _handle_shutdown("SIGINT"))
         except (NotImplementedError, RuntimeError):
             pass  # Windows / non-main thread
 
@@ -320,31 +329,35 @@ class ExecutionSystem:
     def health(self) -> Dict[str, Any]:
         uptime = time.monotonic() - self._start_time if self._start_time else 0
         return {
-            "started":       self._started,
-            "uptime_s":      round(uptime, 1),
-            "engine":        self._engine.metrics()      if self._engine      else {},
-            "risk":          self._risk.metrics()        if self._risk        else {},
-            "gatekeeper":    self._gatekeeper.metrics()  if self._gatekeeper  else {},
-            "router":        self._router.metrics()      if self._router      else {},
-            "orchestrator":  self._orchestrator.health() if self._orchestrator else {},
+            "started": self._started,
+            "uptime_s": round(uptime, 1),
+            "engine": self._engine.metrics() if self._engine else {},
+            "risk": self._risk.metrics() if self._risk else {},
+            "gatekeeper": self._gatekeeper.metrics() if self._gatekeeper else {},
+            "router": self._router.metrics() if self._router else {},
+            "orchestrator": self._orchestrator.health() if self._orchestrator else {},
         }
 
 
 # ── Broker factory helpers ────────────────────────────────────────────────────
 
+
 async def _connect_oanda() -> Optional[Any]:
     account_id = os.getenv("OANDA_ACCOUNT_ID", "")
-    api_token  = os.getenv("OANDA_API_TOKEN",  "")
+    api_token = os.getenv("OANDA_API_TOKEN", "")
     if not account_id or not api_token:
         logger.warning("OANDA credentials not set — skipping OANDA broker")
         return None
     try:
         from brokers.oanda import OANDABroker
-        broker = OANDABroker({
-            "login":    account_id,
-            "password": api_token,
-            "server":   os.getenv("OANDA_ENVIRONMENT", "practice"),
-        })
+
+        broker = OANDABroker(
+            {
+                "login": account_id,
+                "password": api_token,
+                "server": os.getenv("OANDA_ENVIRONMENT", "practice"),
+            }
+        )
         ok = await broker.connect()
         if ok:
             logger.info("OANDA broker connected")
@@ -358,14 +371,17 @@ async def _connect_oanda() -> Optional[Any]:
 
 async def _connect_ibkr() -> Optional[Any]:
     host = os.getenv("IBKR_HOST", "127.0.0.1")
-    port = int(os.getenv("IBKR_PORT", "7497"))
+    _port = int(os.getenv("IBKR_PORT", "7497"))
     try:
         from brokers.ibkr import IBKRBroker
-        broker = IBKRBroker({
-            "server":    os.getenv("IBKR_ENV", "paper"),
-            "host":      host,
-            "client_id": int(os.getenv("IBKR_CLIENT_ID", "1")),
-        })
+
+        broker = IBKRBroker(
+            {
+                "server": os.getenv("IBKR_ENV", "paper"),
+                "host": host,
+                "client_id": int(os.getenv("IBKR_CLIENT_ID", "1")),
+            }
+        )
         ok = await broker.connect()
         if ok:
             logger.info("IBKR broker connected")
@@ -384,14 +400,14 @@ def _build_paper_broker() -> Any:
     class _PaperBroker:
         async def place_order(self, order_request: Dict) -> Dict:
             await asyncio.sleep(0.05)  # simulate 50ms latency
-            mid   = float(order_request.get("mid_price", 1900.0))
-            slip  = random.uniform(-0.5, 0.5)
+            mid = float(order_request.get("mid_price", 1900.0))
+            slip = random.uniform(-0.5, 0.5)
             return {
-                "status":     "filled",
+                "status": "filled",
                 "fill_price": round(mid + slip, 4),
-                "quantity":   float(order_request.get("quantity", 0)),
-                "direction":  order_request.get("direction", "long"),
-                "broker":     "paper",
+                "quantity": float(order_request.get("quantity", 0)),
+                "direction": order_request.get("direction", "long"),
+                "broker": "paper",
                 "latency_ms": 50.0,
             }
 
@@ -407,6 +423,7 @@ def _build_paper_broker() -> Any:
 
 # ── notify_fill wiring ────────────────────────────────────────────────────────
 
+
 def _wire_notify_fill(orchestrator) -> None:
     """
     Add notify_fill() to the orchestrator if not already present.
@@ -419,13 +436,13 @@ def _wire_notify_fill(orchestrator) -> None:
         return  # already wired
 
     def notify_fill(
-        symbol:     str,
-        direction:  str,
-        quantity:   float,
+        symbol: str,
+        direction: str,
+        quantity: float,
         fill_price: float,
-        fill_id:    str,
-        signal_id:  str,
-        broker:     str,
+        fill_id: str,
+        signal_id: str,
+        broker: str,
         latency_ms: float,
     ) -> None:
         """
@@ -440,15 +457,15 @@ def _wire_notify_fill(orchestrator) -> None:
         from datetime import datetime, timezone
 
         fill_record = {
-            "fill_id":    fill_id,
-            "signal_id":  signal_id,
-            "symbol":     symbol,
-            "direction":  direction,
-            "quantity":   quantity,
+            "fill_id": fill_id,
+            "signal_id": signal_id,
+            "symbol": symbol,
+            "direction": direction,
+            "quantity": quantity,
             "fill_price": fill_price,
-            "broker":     broker,
+            "broker": broker,
             "latency_ms": latency_ms,
-            "filled_at":  datetime.now(timezone.utc).isoformat(),
+            "filled_at": datetime.now(timezone.utc).isoformat(),
         }
 
         # Update Redis cache
@@ -456,26 +473,31 @@ def _wire_notify_fill(orchestrator) -> None:
             if orchestrator._redis:
                 key = f"hopefx:fills:{symbol}"
                 orchestrator._redis.lpush(key, json.dumps(fill_record))
-                orchestrator._redis.ltrim(key, 0, 999)   # keep last 1000 fills
-                orchestrator._redis.expire(key, 86400)   # 24h TTL
+                orchestrator._redis.ltrim(key, 0, 999)  # keep last 1000 fills
+                orchestrator._redis.expire(key, 86400)  # 24h TTL
         except Exception as exc:
             logger.debug("notify_fill Redis update failed: %s", exc)
 
         # Notify replay engine
         try:
             orchestrator._replay.on_fill(
-                symbol     = symbol,
-                fill_price = fill_price,
-                quantity   = quantity,
-                direction  = direction,
-                fill_id    = fill_id,
+                symbol=symbol,
+                fill_price=fill_price,
+                quantity=quantity,
+                direction=direction,
+                fill_id=fill_id,
             )
         except Exception as exc:
             logger.debug("notify_fill replay engine update failed: %s", exc)
 
         logger.debug(
             "notify_fill: %s %s qty=%.4f price=%.4f broker=%s latency=%.1fms",
-            direction, symbol, quantity, fill_price, broker, latency_ms,
+            direction,
+            symbol,
+            quantity,
+            fill_price,
+            broker,
+            latency_ms,
         )
 
     orchestrator.notify_fill = notify_fill
@@ -484,12 +506,13 @@ def _wire_notify_fill(orchestrator) -> None:
 
 # ── Logging config ────────────────────────────────────────────────────────────
 
+
 def _configure_logging() -> None:
     level = getattr(logging, _LOG_LEVEL.upper(), logging.INFO)
     logging.basicConfig(
-        level   = level,
-        format  = "%(asctime)s %(levelname)-8s %(name)-35s %(message)s",
-        datefmt = "%Y-%m-%dT%H:%M:%S",
+        level=level,
+        format="%(asctime)s %(levelname)-8s %(name)-35s %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S",
     )
     # Suppress noisy third-party loggers
     for noisy in ("urllib3", "aiohttp", "asyncio", "ib_insync"):
@@ -501,6 +524,7 @@ execution_system = ExecutionSystem()
 
 
 # ── Standalone entry point ────────────────────────────────────────────────────
+
 
 async def _main() -> None:
     system = ExecutionSystem()

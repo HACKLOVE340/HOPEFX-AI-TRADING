@@ -113,7 +113,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     expire = (
         datetime.now(timezone.utc) + expires_delta
         if expires_delta
-        else datetime.now(timezone.utc) + timedelta(minutes=_get_access_token_expire_minutes())
+        else datetime.now(timezone.utc)
+        + timedelta(minutes=_get_access_token_expire_minutes())
     )
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, _get_secret(), algorithm=ALGORITHM)
@@ -149,6 +150,7 @@ def decode_access_token(token: str) -> dict:
     if jti:
         try:
             from auth.service import is_access_token_revoked
+
             if is_access_token_revoked(jti):
                 raise jwt.InvalidTokenError("Token has been revoked")
         except ImportError:

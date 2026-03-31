@@ -17,9 +17,9 @@ GET  /api/chaos/status           — combined chaos + mutation status
 
 All write endpoints require admin role.
 """
+
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -35,64 +35,65 @@ router = APIRouter(prefix="/api/chaos", tags=["Chaos & Mutation Testing"])
 
 
 class ScenarioResultOut(BaseModel):
-    scenario:   str
-    passed:     bool
+    scenario: str
+    passed: bool
     duration_s: float
-    sla_s:      float
+    sla_s: float
     within_sla: bool
-    detail:     str
+    detail: str
 
 
 class ChaosRunResponse(BaseModel):
-    run_id:     str
+    run_id: str
     started_at: str
-    scenarios:  List[ScenarioResultOut]
-    total:      int
-    passed:     int
-    failed:     int
-    report:     str
+    scenarios: List[ScenarioResultOut]
+    total: int
+    passed: int
+    failed: int
+    report: str
 
 
 class MutationRunResponse(BaseModel):
-    status:     str   # "started" | "completed" | "error"
-    run_id:     str
-    message:    str
+    status: str  # "started" | "completed" | "error"
+    run_id: str
+    message: str
 
 
 class MutationResultOut(BaseModel):
-    engine:     str
-    modules:    List[str]
-    total:      int
-    killed:     int
-    survived:   int
-    timeouts:   int
-    score:      float
-    passed:     bool
-    min_score:  float
+    engine: str
+    modules: List[str]
+    total: int
+    killed: int
+    survived: int
+    timeouts: int
+    score: float
+    passed: bool
+    min_score: float
     duration_s: float
     generated_at: str
-    summary:    str
+    summary: str
 
 
 class ChaosStatusResponse(BaseModel):
-    chaos_last_run:     Optional[str]
-    chaos_passed:       Optional[int]
-    chaos_failed:       Optional[int]
-    mutation_score:     Optional[float]
-    mutation_passed:    Optional[bool]
-    mutation_engine:    Optional[str]
-    mutation_last_run:  Optional[str]
+    chaos_last_run: Optional[str]
+    chaos_passed: Optional[int]
+    chaos_failed: Optional[int]
+    mutation_score: Optional[float]
+    mutation_passed: Optional[bool]
+    mutation_engine: Optional[str]
+    mutation_last_run: Optional[str]
 
 
 # ── In-memory state (replaced on each run) ───────────────────────────────────
 
 _last_chaos_results: List[Dict] = []
-_last_chaos_run_at:  Optional[str] = None
-_mutation_running:   bool = False
+_last_chaos_run_at: Optional[str] = None
+_mutation_running: bool = False
 _last_mutation_report: Optional[Dict] = None
 
 
 # ── Dependency: get ChaosController from app state ───────────────────────────
+
 
 def _get_chaos_controller(request: Request) -> Any:
     ctrl = getattr(request.app.state, "chaos_controller", None)
@@ -106,6 +107,7 @@ def _get_chaos_controller(request: Request) -> Any:
 
 def _get_mutation_runner(request: Request) -> Any:
     from chaos.mutation_runner import MutationTestRunner
+
     runner = getattr(request.app.state, "mutation_runner", None)
     if runner is None:
         # Create on demand — no persistent state needed
@@ -131,38 +133,39 @@ async def run_all_chaos_scenarios(
     global _last_chaos_results, _last_chaos_run_at
 
     import uuid
+
     run_id = str(uuid.uuid4())[:8]
     started_at = datetime.now(timezone.utc).isoformat()
 
     logger.warning("CHAOS RUN %s started by API", run_id)
 
-    results = await controller.run_all_scenarios()
+    await controller.run_all_scenarios()
     report_text = controller.report()
 
     _last_chaos_results = controller.results_dict()
-    _last_chaos_run_at  = started_at
+    _last_chaos_run_at = started_at
 
     out_results = [
         ScenarioResultOut(
-            scenario   = r["scenario"],
-            passed     = r["passed"],
-            duration_s = r["duration_s"],
-            sla_s      = r["sla_s"],
-            within_sla = r["within_sla"],
-            detail     = r["detail"],
+            scenario=r["scenario"],
+            passed=r["passed"],
+            duration_s=r["duration_s"],
+            sla_s=r["sla_s"],
+            within_sla=r["within_sla"],
+            detail=r["detail"],
         )
         for r in _last_chaos_results
     ]
 
     passed = sum(1 for r in out_results if r.passed)
     return ChaosRunResponse(
-        run_id     = run_id,
-        started_at = started_at,
-        scenarios  = out_results,
-        total      = len(out_results),
-        passed     = passed,
-        failed     = len(out_results) - passed,
-        report     = report_text,
+        run_id=run_id,
+        started_at=started_at,
+        scenarios=out_results,
+        total=len(out_results),
+        passed=passed,
+        failed=len(out_results) - passed,
+        report=report_text,
     )
 
 
@@ -179,12 +182,12 @@ async def run_single_scenario(
     corrupt_tick_rejection, clock_skew_detection, feed_drop_recovery
     """
     scenario_map = {
-        "dqe_spike_rejection":    "_scenario_dqe_spike_rejection",
-        "stale_tick_detection":   "_scenario_stale_tick_detection",
-        "spread_gate":            "_scenario_spread_gate",
+        "dqe_spike_rejection": "_scenario_dqe_spike_rejection",
+        "stale_tick_detection": "_scenario_stale_tick_detection",
+        "spread_gate": "_scenario_spread_gate",
         "corrupt_tick_rejection": "_scenario_corrupt_tick_rejection",
-        "clock_skew_detection":   "_scenario_clock_skew_detection",
-        "feed_drop_recovery":     "_scenario_feed_drop_recovery",
+        "clock_skew_detection": "_scenario_clock_skew_detection",
+        "feed_drop_recovery": "_scenario_feed_drop_recovery",
     }
 
     method_name = scenario_map.get(scenario_name)
@@ -192,24 +195,26 @@ async def run_single_scenario(
         raise HTTPException(
             status_code=404,
             detail=f"Unknown scenario '{scenario_name}'. "
-                   f"Valid: {list(scenario_map.keys())}",
+            f"Valid: {list(scenario_map.keys())}",
         )
 
     method = getattr(controller, method_name, None)
     if method is None:
-        raise HTTPException(status_code=500, detail=f"Scenario method not found: {method_name}")
+        raise HTTPException(
+            status_code=500, detail=f"Scenario method not found: {method_name}"
+        )
 
     logger.warning("CHAOS SCENARIO %s triggered via API", scenario_name)
     result = await method()
     controller._inj.clear_all()
 
     return ScenarioResultOut(
-        scenario   = result.scenario,
-        passed     = result.passed,
-        duration_s = result.duration_s,
-        sla_s      = result.sla_s,
-        within_sla = result.within_sla,
-        detail     = result.detail,
+        scenario=result.scenario,
+        passed=result.passed,
+        duration_s=result.duration_s,
+        sla_s=result.sla_s,
+        within_sla=result.within_sla,
+        detail=result.detail,
     )
 
 
@@ -220,12 +225,12 @@ async def get_chaos_results() -> List[ScenarioResultOut]:
         return []
     return [
         ScenarioResultOut(
-            scenario   = r["scenario"],
-            passed     = r["passed"],
-            duration_s = r["duration_s"],
-            sla_s      = r["sla_s"],
-            within_sla = r["within_sla"],
-            detail     = r["detail"],
+            scenario=r["scenario"],
+            passed=r["passed"],
+            duration_s=r["duration_s"],
+            sla_s=r["sla_s"],
+            within_sla=r["within_sla"],
+            detail=r["detail"],
         )
         for r in _last_chaos_results
     ]
@@ -256,10 +261,12 @@ async def run_mutation_tests(
         )
 
     import uuid
+
     run_id = str(uuid.uuid4())[:8]
 
     if modules:
         from chaos.mutation_runner import MutationTestRunner
+
         runner = MutationTestRunner(modules=modules.split(","))
         request.app.state.mutation_runner = runner
 
@@ -269,18 +276,18 @@ async def run_mutation_tests(
         try:
             report = await runner.run()
             _last_mutation_report = {
-                "engine":       report.engine,
-                "modules":      report.modules,
-                "total":        report.total,
-                "killed":       report.killed,
-                "survived":     report.survived,
-                "timeouts":     report.timeouts,
-                "score":        report.score,
-                "passed":       report.passed,
-                "min_score":    report.min_score,
-                "duration_s":   round(report.duration_s, 2),
+                "engine": report.engine,
+                "modules": report.modules,
+                "total": report.total,
+                "killed": report.killed,
+                "survived": report.survived,
+                "timeouts": report.timeouts,
+                "score": report.score,
+                "passed": report.passed,
+                "min_score": report.min_score,
+                "duration_s": round(report.duration_s, 2),
                 "generated_at": report.generated_at,
-                "summary":      report.summary(),
+                "summary": report.summary(),
             }
         except Exception as exc:
             logger.error("Background mutation run failed: %s", exc)
@@ -290,10 +297,10 @@ async def run_mutation_tests(
     background_tasks.add_task(_run_in_background)
 
     return MutationRunResponse(
-        status  = "started",
-        run_id  = run_id,
-        message = f"Mutation testing started (run_id={run_id}). "
-                  f"Poll /api/chaos/mutation/results for completion.",
+        status="started",
+        run_id=run_id,
+        message=f"Mutation testing started (run_id={run_id}). "
+        f"Poll /api/chaos/mutation/results for completion.",
     )
 
 
@@ -304,18 +311,18 @@ async def get_mutation_results() -> Optional[MutationResultOut]:
         return None
     r = _last_mutation_report
     return MutationResultOut(
-        engine       = r["engine"],
-        modules      = r["modules"],
-        total        = r["total"],
-        killed       = r["killed"],
-        survived     = r["survived"],
-        timeouts     = r["timeouts"],
-        score        = r["score"],
-        passed       = r["passed"],
-        min_score    = r["min_score"],
-        duration_s   = r["duration_s"],
-        generated_at = r["generated_at"],
-        summary      = r["summary"],
+        engine=r["engine"],
+        modules=r["modules"],
+        total=r["total"],
+        killed=r["killed"],
+        survived=r["survived"],
+        timeouts=r["timeouts"],
+        score=r["score"],
+        passed=r["passed"],
+        min_score=r["min_score"],
+        duration_s=r["duration_s"],
+        generated_at=r["generated_at"],
+        summary=r["summary"],
     )
 
 
@@ -329,11 +336,11 @@ async def get_chaos_status() -> ChaosStatusResponse:
 
     mut = _last_mutation_report
     return ChaosStatusResponse(
-        chaos_last_run    = _last_chaos_run_at,
-        chaos_passed      = chaos_passed,
-        chaos_failed      = chaos_failed,
-        mutation_score    = mut["score"]        if mut else None,
-        mutation_passed   = mut["passed"]       if mut else None,
-        mutation_engine   = mut["engine"]       if mut else None,
-        mutation_last_run = mut["generated_at"] if mut else None,
+        chaos_last_run=_last_chaos_run_at,
+        chaos_passed=chaos_passed,
+        chaos_failed=chaos_failed,
+        mutation_score=mut["score"] if mut else None,
+        mutation_passed=mut["passed"] if mut else None,
+        mutation_engine=mut["engine"] if mut else None,
+        mutation_last_run=mut["generated_at"] if mut else None,
     )

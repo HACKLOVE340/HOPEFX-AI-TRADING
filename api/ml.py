@@ -156,7 +156,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> "pd.DataFrame":
     data_dir = pathlib.Path(__file__).parent.parent / "data"
     candidates = [
         data_dir / f"{symbol_upper}_H1.csv",
-        data_dir / f"{symbol_upper.replace('_','')}_H1.csv",
+        data_dir / f"{symbol_upper.replace('_', '')}_H1.csv",
         data_dir / f"{symbol_upper}_H1.csv".replace("XAU_USD", "XAUUSD"),
     ]
     for csv_path in candidates:
@@ -203,7 +203,8 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> "pd.DataFrame":
         "_load_ohlcv_for_symbol: no OHLCV data available for %s "
         "(checked price_engine, CSV files, paper broker). "
         "Ensure the data layer is running or place a CSV in data/%s_H1.csv.",
-        symbol, symbol.upper().replace("/", "_").replace("-", "_"),
+        symbol,
+        symbol.upper().replace("/", "_").replace("-", "_"),
     )
     return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
 
@@ -234,20 +235,20 @@ def _compute_atr_sl_tp(
 
     try:
         if ohlcv is not None and len(ohlcv) >= 15:
-            highs  = ohlcv["high"].values[-15:].astype(float)
-            lows   = ohlcv["low"].values[-15:].astype(float)
+            highs = ohlcv["high"].values[-15:].astype(float)
+            lows = ohlcv["low"].values[-15:].astype(float)
             closes = ohlcv["close"].values[-15:].astype(float)
             tr = _np.maximum(
                 highs[1:] - lows[1:],
                 _np.maximum(
                     _np.abs(highs[1:] - closes[:-1]),
-                    _np.abs(lows[1:]  - closes[:-1]),
+                    _np.abs(lows[1:] - closes[:-1]),
                 ),
             )
             if len(tr) >= 14:
                 atr = float(_np.mean(tr[-14:]))
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
 
     if atr is None or atr <= 0:
         atr = entry_price * 0.01  # 1% fallback
@@ -345,7 +346,7 @@ class RetrainResponse(BaseModel):
 class MLHealthResponse(BaseModel):
     """Response schema for GET /api/ml/health."""
 
-    status: str                          # "ok" | "degraded" | "unavailable"
+    status: str  # "ok" | "degraded" | "unavailable"
     model_loaded: bool
     model_id: Optional[str]
     feature_count: int
@@ -354,8 +355,8 @@ class MLHealthResponse(BaseModel):
     predict_count: int
     fallback_count: int
     fallback_rate: float = 0.0
-    non_neutral_rate: float = 0.0        # fraction of last N signals that were directional
-    signal_window_size: int = 0          # number of signals in the rolling window
+    non_neutral_rate: float = 0.0  # fraction of last N signals that were directional
+    signal_window_size: int = 0  # number of signals in the rolling window
     last_latency_ms: float
     uptime_seconds: Optional[float] = None
     calibrator_available: bool
@@ -371,7 +372,7 @@ class MLHealthResponse(BaseModel):
 class MLEngineHealthResponse(BaseModel):
     """Response schema for GET /api/ml/engine-health (admin)."""
 
-    status: str                          # "ok" | "degraded" | "unavailable"
+    status: str  # "ok" | "degraded" | "unavailable"
     engine: Dict[str, Any]
     macro_store: Dict[str, Any]
     mtf_store: Dict[str, Any]
@@ -420,12 +421,28 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                     or data.get("test_accuracy")
                     or 0.0
                 )
-                precision = float(data.get("precision") or data.get("test_precision") or data.get("oos_f1") or 0.0)
-                recall = float(data.get("recall") or data.get("test_recall") or data.get("oos_auc") or 0.0)
-                f1 = float(data.get("f1") or data.get("f1_score") or data.get("oos_f1") or 0.0)
+                precision = float(
+                    data.get("precision")
+                    or data.get("test_precision")
+                    or data.get("oos_f1")
+                    or 0.0
+                )
+                recall = float(
+                    data.get("recall")
+                    or data.get("test_recall")
+                    or data.get("oos_auc")
+                    or 0.0
+                )
+                f1 = float(
+                    data.get("f1") or data.get("f1_score") or data.get("oos_f1") or 0.0
+                )
                 # Sharpe: prefer multi-symbol pooled, then sharpe_gate, then direct key
                 sharpe_gate = data.get("sharpe_gate") or {}
-                multi = data.get("multi_symbol_backtest_extended") or data.get("multi_symbol_backtest") or {}
+                multi = (
+                    data.get("multi_symbol_backtest_extended")
+                    or data.get("multi_symbol_backtest")
+                    or {}
+                )
                 sharpe = float(
                     data.get("sharpe")
                     or data.get("sharpe_ratio")
@@ -446,13 +463,23 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                 model_id = str(
                     data.get("model_id") or data.get("model_file") or "advanced_oos"
                 )
-                evaluated_at = data.get("evaluated_at") or data.get("validated_at") or datetime.now(timezone.utc).isoformat()
-                note = data.get("note") or data.get("validation_notes") or data.get("sharpe_note") or ""
+                evaluated_at = (
+                    data.get("evaluated_at")
+                    or data.get("validated_at")
+                    or datetime.now(timezone.utc).isoformat()
+                )
+                note = (
+                    data.get("note")
+                    or data.get("validation_notes")
+                    or data.get("sharpe_note")
+                    or ""
+                )
 
                 # If accuracy is still 0 try to derive from InferenceEngine counters
                 if accuracy == 0.0:
                     try:
                         from ml.inference_engine import get_inference_engine
+
                         eng = get_inference_engine()
                         h = eng.health()
                         total = h.get("predict_count", 0)
@@ -461,9 +488,12 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                             accuracy = round(1.0 - fallback / total, 4)
                             win_rate = accuracy
                             total_signals = total
-                            note = note or "Accuracy derived from live predict/fallback ratio"
+                            note = (
+                                note
+                                or "Accuracy derived from live predict/fallback ratio"
+                            )
                     except Exception as _exc:
-                        logger.debug('Suppressed exception: %s', _exc)
+                        logger.debug("Suppressed exception: %s", _exc)
 
                 return AccuracyResponse(
                     model_id=model_id,
@@ -483,6 +513,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
     # ── Live engine counters as last resort ───────────────────────────────────
     try:
         from ml.inference_engine import get_inference_engine
+
         eng = get_inference_engine()
         h = eng.health()
         total = h.get("predict_count", 0)
@@ -502,7 +533,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                 note=f"Live ratio: {total - fallback}/{total} non-fallback predictions",
             )
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
 
     # No evaluation data and no live engine counters — model not yet trained.
     # Return zeros with a clear note; the UI should prompt the user to train.
@@ -546,10 +577,16 @@ async def predict(
     if getattr(user, "role", "") != "admin":
         try:
             from monetization.subscription import subscription_manager, plan_gate
+
             sub = subscription_manager.get_user_subscription(user.sub)
-            user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
+            user_plan = (
+                sub.tier.value
+                if (sub and sub.is_active() and hasattr(sub.tier, "value"))
+                else "free"
+            )
             if not plan_gate("professional", user_plan):
                 from fastapi import HTTPException as _HTTPException, status as _status
+
                 raise _HTTPException(
                     status_code=_status.HTTP_403_FORBIDDEN,
                     detail={
@@ -673,8 +710,6 @@ async def predict(
     )
 
 
-
-
 @router.get(
     "/features",
     response_model=FeatureImportancesResponse,
@@ -793,6 +828,7 @@ async def signal_filter_stats(
     """
     try:
         from ml.signal_filter import get_signal_filter
+
         filt = get_signal_filter()
         stats = filt.ev_stats(symbol)
         return {
@@ -803,8 +839,14 @@ async def signal_filter_stats(
                 "ev_window": int(os.getenv("EV_WINDOW", "50")),
                 "threshold_long": float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.58")),
                 "threshold_short": float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.42")),
-                "regime_filter_enabled": os.getenv("REGIME_FILTER_ENABLED", "true").lower() == "true",
-                "mtf_confluence_required": os.getenv("MTF_CONFLUENCE_REQUIRED", "false").lower() == "true",
+                "regime_filter_enabled": os.getenv(
+                    "REGIME_FILTER_ENABLED", "true"
+                ).lower()
+                == "true",
+                "mtf_confluence_required": os.getenv(
+                    "MTF_CONFLUENCE_REQUIRED", "false"
+                ).lower()
+                == "true",
                 "sizing_method": os.getenv("POSITION_SIZING_METHOD", "volatility"),
             },
         }
@@ -871,12 +913,13 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
         if feature_count == 0:
             try:
                 from ml.live_inference import get_advanced_predictor  # noqa: PLC0415
+
                 pred = get_advanced_predictor()
                 if pred.is_available and hasattr(pred, "_model"):
                     n = getattr(pred._model, "n_features_in_", 0)
                     feature_count = int(n) if n else 0
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
         model_available = engine_health.get("model_available", False)
 
@@ -916,6 +959,7 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
 
         if not model_available:
             from fastapi.responses import JSONResponse  # noqa: PLC0415
+
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 content=payload.model_dump(),
@@ -955,6 +999,7 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
 
     if not model_loaded:
         from fastapi.responses import JSONResponse  # noqa: PLC0415
+
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content=payload.model_dump(),
@@ -999,24 +1044,26 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
         macro_status: Dict[str, Any] = {"available": False, "series_count": 0}
         try:
             from ml.macro_store import macro_store  # noqa: PLC0415
+
             macro_status = {
                 "available": len(macro_store) > 0,
                 "series_count": len(macro_store),
             }
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         # MTF store status
         mtf_status: Dict[str, Any] = {"available": False, "ready": False}
         try:
             from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON  # noqa: PLC0415
+
             if _MTF_STORE_SINGLETON is not None:
                 mtf_status = {
                     "available": True,
                     "ready": getattr(_MTF_STORE_SINGLETON, "is_ready", False),
                 }
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         # Saved model files inventory (pkl + json metadata)
         saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
@@ -1027,7 +1074,7 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
                     try:
                         model_files[f.name] = round(f.stat().st_size / 1024, 1)
                     except Exception as _exc:
-                        logger.debug('Suppressed exception: %s', _exc)
+                        logger.debug("Suppressed exception: %s", _exc)
 
         model_available = health.get("model_available", False)
         engine_status = health.get("status", "ok" if model_available else "degraded")
@@ -1047,6 +1094,7 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
 
         if not model_available:
             from fastapi.responses import JSONResponse  # noqa: PLC0415
+
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 content=payload.model_dump(),
@@ -1056,6 +1104,7 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
     except Exception as exc:
         logger.warning("ml_engine_health: %s", exc)
         from fastapi.responses import JSONResponse  # noqa: PLC0415
+
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content=MLEngineHealthResponse(
@@ -1103,7 +1152,7 @@ async def rl_train(
     Requires: admin role.
     """
     try:
-        from ml.rl_agent import RLAgent, ForexTradingEnv, RLMetrics
+        from ml.rl_agent import RLAgent, ForexTradingEnv  # noqa: F401
         import asyncio
 
         # Load candles from the data layer
@@ -1112,12 +1161,12 @@ async def rl_train(
 
         split = int(len(candles_list) * req.train_split)
         train_c = candles_list[:split]
-        test_c  = candles_list[split:]
+        test_c = candles_list[split:]
 
         agent = RLAgent(model_name=f"hopefx_ppo_{req.symbol.lower()}")
 
         train_env = ForexTradingEnv(train_c)
-        test_env  = ForexTradingEnv(test_c)
+        test_env = ForexTradingEnv(test_c)
 
         # Run in thread pool to avoid blocking the event loop
         loop = asyncio.get_event_loop()
@@ -1201,11 +1250,13 @@ async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
         for fname in sorted(os.listdir(_MODEL_DIR)):
             if fname.endswith(".zip"):
                 fpath = os.path.join(_MODEL_DIR, fname)
-                models.append({
-                    "name": fname,
-                    "size_kb": round(os.path.getsize(fpath) / 1024, 1),
-                    "modified": os.path.getmtime(fpath),
-                })
+                models.append(
+                    {
+                        "name": fname,
+                        "size_kb": round(os.path.getsize(fpath) / 1024, 1),
+                        "modified": os.path.getmtime(fpath),
+                    }
+                )
 
     return {
         "model_dir": _MODEL_DIR,

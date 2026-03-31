@@ -26,7 +26,7 @@ Usage
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -63,11 +63,11 @@ ORDER_TYPE_BUY_STOP = 4
 ORDER_TYPE_SELL_STOP = 5
 
 # MT5 trade action constants.
-TRADE_ACTION_DEAL = 1       # Market order
-TRADE_ACTION_PENDING = 5    # Pending order
-TRADE_ACTION_SLTP = 6       # Modify SL/TP
-TRADE_ACTION_MODIFY = 7     # Modify pending order
-TRADE_ACTION_REMOVE = 8     # Delete pending order
+TRADE_ACTION_DEAL = 1  # Market order
+TRADE_ACTION_PENDING = 5  # Pending order
+TRADE_ACTION_SLTP = 6  # Modify SL/TP
+TRADE_ACTION_MODIFY = 7  # Modify pending order
+TRADE_ACTION_REMOVE = 8  # Delete pending order
 TRADE_ACTION_CLOSE_BY = 10  # Close by opposite position
 
 
@@ -175,14 +175,20 @@ class MT5Broker:
         if not self._assert_connected("close_position"):
             return {"success": False, "comment": "Not connected"}
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._sync_close_position, ticket, volume)
+        return await loop.run_in_executor(
+            None, self._sync_close_position, ticket, volume
+        )
 
-    async def modify_position(self, ticket: int, sl: float = 0.0, tp: float = 0.0) -> Dict:
+    async def modify_position(
+        self, ticket: int, sl: float = 0.0, tp: float = 0.0
+    ) -> Dict:
         """Modify the SL/TP of an open position."""
         if not self._assert_connected("modify_position"):
             return {"success": False, "comment": "Not connected"}
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._sync_modify_position, ticket, sl, tp)
+        return await loop.run_in_executor(
+            None, self._sync_modify_position, ticket, sl, tp
+        )
 
     async def cancel_order(self, ticket: int) -> Dict:
         """Delete a pending order by ticket number."""
@@ -234,7 +240,9 @@ class MT5Broker:
         if not success:
             logger.error(
                 "MT5 login failed (login=%s, server=%s): %s",
-                login_int, server, _mt5.last_error(),
+                login_int,
+                server,
+                _mt5.last_error(),
             )
             _mt5.shutdown()
             return False
@@ -327,21 +335,37 @@ class MT5Broker:
             trade_action = TRADE_ACTION_DEAL
             tick = _mt5.symbol_info_tick(symbol)
             if tick is None:
-                return {"success": False, "order": 0, "comment": f"No tick for {symbol}"}
+                return {
+                    "success": False,
+                    "order": 0,
+                    "comment": f"No tick for {symbol}",
+                }
             price = tick.ask if action_str == "buy" else tick.bid
             mt5_order_type = ORDER_TYPE_BUY if action_str == "buy" else ORDER_TYPE_SELL
         elif order_type_str == "limit":
             trade_action = TRADE_ACTION_PENDING
-            mt5_order_type = ORDER_TYPE_BUY_LIMIT if action_str == "buy" else ORDER_TYPE_SELL_LIMIT
+            mt5_order_type = (
+                ORDER_TYPE_BUY_LIMIT if action_str == "buy" else ORDER_TYPE_SELL_LIMIT
+            )
         elif order_type_str == "stop":
             trade_action = TRADE_ACTION_PENDING
-            mt5_order_type = ORDER_TYPE_BUY_STOP if action_str == "buy" else ORDER_TYPE_SELL_STOP
+            mt5_order_type = (
+                ORDER_TYPE_BUY_STOP if action_str == "buy" else ORDER_TYPE_SELL_STOP
+            )
         else:
-            return {"success": False, "order": 0, "comment": f"Unknown order_type: {order_type_str}"}
+            return {
+                "success": False,
+                "order": 0,
+                "comment": f"Unknown order_type: {order_type_str}",
+            }
 
         sym_info = _mt5.symbol_info(symbol)
         if sym_info is None:
-            return {"success": False, "order": 0, "comment": f"Symbol {symbol} not found"}
+            return {
+                "success": False,
+                "order": 0,
+                "comment": f"Symbol {symbol} not found",
+            }
 
         request = {
             "action": trade_action,
@@ -366,12 +390,17 @@ class MT5Broker:
         if not success:
             logger.warning(
                 "MT5 order_send failed | retcode=%s | comment=%s",
-                result.retcode, result.comment,
+                result.retcode,
+                result.comment,
             )
         else:
             logger.info(
                 "MT5 order placed | ticket=%s | symbol=%s | %s %.2f @ %.5f",
-                result.order, symbol, action_str, volume, price,
+                result.order,
+                symbol,
+                action_str,
+                volume,
+                price,
             )
         return {
             "success": success,
@@ -410,7 +439,11 @@ class MT5Broker:
             return {"success": False, "comment": str(_mt5.last_error())}
         success = result.retcode == _mt5.TRADE_RETCODE_DONE
         logger.info("MT5 close position | ticket=%s | success=%s", ticket, success)
-        return {"success": success, "retcode": result.retcode, "comment": result.comment}
+        return {
+            "success": success,
+            "retcode": result.retcode,
+            "comment": result.comment,
+        }
 
     def _sync_modify_position(self, ticket: int, sl: float, tp: float) -> Dict:
         request = {
@@ -423,7 +456,11 @@ class MT5Broker:
         if result is None:
             return {"success": False, "comment": str(_mt5.last_error())}
         success = result.retcode == _mt5.TRADE_RETCODE_DONE
-        return {"success": success, "retcode": result.retcode, "comment": result.comment}
+        return {
+            "success": success,
+            "retcode": result.retcode,
+            "comment": result.comment,
+        }
 
     def _sync_cancel_order(self, ticket: int) -> Dict:
         request = {"action": TRADE_ACTION_REMOVE, "order": ticket}
@@ -431,7 +468,11 @@ class MT5Broker:
         if result is None:
             return {"success": False, "comment": str(_mt5.last_error())}
         success = result.retcode == _mt5.TRADE_RETCODE_DONE
-        return {"success": success, "retcode": result.retcode, "comment": result.comment}
+        return {
+            "success": success,
+            "retcode": result.retcode,
+            "comment": result.comment,
+        }
 
     def _sync_get_tick(self, symbol: str) -> Optional[Dict]:
         tick = _mt5.symbol_info_tick(symbol)

@@ -45,12 +45,12 @@ __all__ = [
 __version__ = "1.0.0"
 
 # ── Macro-aware model loader ──────────────────────────────────────────────────
-import hashlib as _hashlib
-import json as _json
-import logging as _logging
-from pathlib import Path as _Path
-from typing import Any as _Any
-from typing import Optional as _Optional
+import hashlib as _hashlib  # noqa: E402
+import json as _json  # noqa: E402
+import logging as _logging  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+from typing import Any as _Any  # noqa: E402
+from typing import Optional as _Optional  # noqa: E402
 
 _ml_logger = _logging.getLogger(__name__)
 _SAVED = _Path(__file__).parent / "saved_models"
@@ -160,6 +160,7 @@ def _try_load(path: _Path) -> _Optional[_Any]:
                 return _pickle.load(f)
         except Exception as exc:
             import sys as _sys
+
             _ml_logger.critical(
                 "CANNOT LOAD MODEL %s: %s\n"
                 "  Python version: %s\n"

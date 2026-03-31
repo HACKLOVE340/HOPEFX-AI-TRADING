@@ -36,6 +36,7 @@ Credential resolution
   OANDA_API_TOKEN   — personal access token
   OANDA_ENVIRONMENT — "practice" | "live" (default: practice)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -53,13 +54,14 @@ import requests
 logger = logging.getLogger(__name__)
 
 _PRACTICE_BASE = "https://api-fxpractice.oanda.com"
-_LIVE_BASE     = "https://api-fxtrade.oanda.com"
+_LIVE_BASE = "https://api-fxtrade.oanda.com"
 _DEFAULT_TIMEOUT = float(os.getenv("OANDA_TIMEOUT_S", "10"))
-_MAX_RETRIES     = int(os.getenv("OANDA_MAX_RETRIES", "3"))
-_RETRY_BACKOFF   = float(os.getenv("OANDA_RETRY_BACKOFF_S", "0.5"))
+_MAX_RETRIES = int(os.getenv("OANDA_MAX_RETRIES", "3"))
+_RETRY_BACKOFF = float(os.getenv("OANDA_RETRY_BACKOFF_S", "0.5"))
 
 
 # ── Architectural boundary enforcement ───────────────────────────────────────
+
 
 class MarketDataForbidden(RuntimeError):
     """
@@ -67,6 +69,7 @@ class MarketDataForbidden(RuntimeError):
 
     All market data must flow through data_layer.orchestrator exclusively.
     """
+
     def __init__(self, method: str) -> None:
         super().__init__(
             f"ARCHITECTURAL VIOLATION: {method}() called on OANDABroker. "
@@ -78,35 +81,37 @@ class MarketDataForbidden(RuntimeError):
 
 # ── Data classes ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class AccountInfo:
-    account_id:        str
-    currency:          str
-    balance:           float
-    nav:               float
-    unrealized_pnl:    float
-    margin_used:       float
-    margin_available:  float
-    positions_count:   int
-    timestamp:         datetime
+    account_id: str
+    currency: str
+    balance: float
+    nav: float
+    unrealized_pnl: float
+    margin_used: float
+    margin_available: float
+    positions_count: int
+    timestamp: datetime
 
 
 @dataclass
 class OrderResult:
-    order_id:      str
-    client_ref:    str
-    status:        str        # "filled" | "pending" | "rejected" | "cancelled"
-    fill_price:    float
-    quantity:      float
-    direction:     str
-    symbol:        str
-    broker:        str = "oanda"
-    latency_ms:    float = 0.0
+    order_id: str
+    client_ref: str
+    status: str  # "filled" | "pending" | "rejected" | "cancelled"
+    fill_price: float
+    quantity: float
+    direction: str
+    symbol: str
+    broker: str = "oanda"
+    latency_ms: float = 0.0
     reject_reason: str = ""
-    raw:           Optional[Dict] = None
+    raw: Optional[Dict] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _resolve_env(value: Any) -> str:
     if not isinstance(value, str):
@@ -125,6 +130,7 @@ def _units(direction: str, quantity: float) -> int:
 
 
 # ── OANDABroker (async) ───────────────────────────────────────────────────────
+
 
 class OANDABroker:
     """
@@ -157,12 +163,12 @@ class OANDABroker:
         _server = _resolve_env(
             server or cfg.get("server", os.getenv("OANDA_ENVIRONMENT", "practice"))
         )
-        self._base_url   = _LIVE_BASE if _server == "live" else _PRACTICE_BASE
-        self._timeout    = float(cfg.get("timeout_seconds", _DEFAULT_TIMEOUT))
-        self._session:   Optional[aiohttp.ClientSession] = None
-        self.connected:  bool = False
+        self._base_url = _LIVE_BASE if _server == "live" else _PRACTICE_BASE
+        self._timeout = float(cfg.get("timeout_seconds", _DEFAULT_TIMEOUT))
+        self._session: Optional[aiohttp.ClientSession] = None
+        self.connected: bool = False
         self._total_orders: int = 0
-        self._total_fills:  int = 0
+        self._total_fills: int = 0
         # Optional injected API object (used by tests to bypass HTTP calls)
         self.api = None
         # Optional injected risk manager (used by tests)
@@ -176,14 +182,16 @@ class OANDABroker:
         # When a test injects self.api, skip the real HTTP handshake.
         if self.api is not None:
             self.connected = True
-            logger.debug("OANDABroker: using injected api object — skipping HTTP connect")
+            logger.debug(
+                "OANDABroker: using injected api object — skipping HTTP connect"
+            )
             return True
         if not self._account_id or not self._token:
             logger.error("OANDABroker: missing OANDA_ACCOUNT_ID or OANDA_API_TOKEN")
             return False
         headers = {
-            "Authorization":  f"Bearer {self._token}",
-            "Content-Type":   "application/json",
+            "Authorization": f"Bearer {self._token}",
+            "Content-Type": "application/json",
             "Accept-Datetime-Format": "RFC3339",
         }
         timeout = aiohttp.ClientTimeout(total=self._timeout)
@@ -194,7 +202,11 @@ class OANDABroker:
             ) as resp:
                 resp.raise_for_status()
             self.connected = True
-            logger.info("OANDABroker: connected to %s account=%s", self._base_url, self._account_id)
+            logger.info(
+                "OANDABroker: connected to %s account=%s",
+                self._base_url,
+                self._account_id,
+            )
             return True
         except Exception as exc:
             logger.error("OANDABroker: connect failed: %s", exc)
@@ -224,15 +236,17 @@ class OANDABroker:
             a = data.get("account", {})
             nav = float(a.get("NAV", a.get("balance", 0)))
             return AccountInfo(
-                account_id       = self._account_id,
-                currency         = a.get("currency", "USD"),
-                balance          = float(a.get("balance", 0)),
-                nav              = nav,
-                unrealized_pnl   = float(a.get("unrealizedPL", 0)),
-                margin_used      = float(a.get("marginUsed", 0)),
-                margin_available = float(a.get("marginAvailable", nav)),
-                positions_count  = int(a.get("openPositionCount", a.get("openTradeCount", 0))),
-                timestamp        = datetime.now(timezone.utc),
+                account_id=self._account_id,
+                currency=a.get("currency", "USD"),
+                balance=float(a.get("balance", 0)),
+                nav=nav,
+                unrealized_pnl=float(a.get("unrealizedPL", 0)),
+                margin_used=float(a.get("marginUsed", 0)),
+                margin_available=float(a.get("marginAvailable", nav)),
+                positions_count=int(
+                    a.get("openPositionCount", a.get("openTradeCount", 0))
+                ),
+                timestamp=datetime.now(timezone.utc),
             )
         except Exception as exc:
             logger.error("OANDABroker get_account_info: %s", exc)
@@ -268,10 +282,10 @@ class OANDABroker:
         if not self.connected or not self._session:
             return {"status": "rejected", "reason": "not_connected", "broker": "oanda"}
 
-        t0         = time.monotonic()
-        symbol     = order_request.get("symbol", "XAU_USD")
-        direction  = order_request.get("direction", "long")
-        quantity   = float(order_request.get("quantity", 0))
+        t0 = time.monotonic()
+        symbol = order_request.get("symbol", "XAU_USD")
+        direction = order_request.get("direction", "long")
+        quantity = float(order_request.get("quantity", 0))
         order_type = order_request.get("order_type", "MARKET").upper()
         client_ref = order_request.get("order_id", str(uuid.uuid4()))
 
@@ -282,12 +296,12 @@ class OANDABroker:
 
         # Build OANDA order body
         order_body: Dict[str, Any] = {
-            "type":        order_type,
-            "instrument":  symbol,
-            "units":       str(units),
+            "type": order_type,
+            "instrument": symbol,
+            "units": str(units),
             "timeInForce": "FOK" if order_type == "MARKET" else "GTC",
             "clientExtensions": {
-                "id":      client_ref[:32],
+                "id": client_ref[:32],
                 "comment": f"hopefx:{order_request.get('signal_id', '')[:16]}",
             },
         }
@@ -323,29 +337,51 @@ class OANDABroker:
 
                     # OANDA error response
                     error_code = data.get("errorCode", "")
-                    error_msg  = data.get("errorMessage", str(data))
+                    error_msg = data.get("errorMessage", str(data))
                     logger.warning(
                         "OANDABroker: order rejected (attempt %d/%d) code=%s msg=%s",
-                        attempt, _MAX_RETRIES, error_code, error_msg,
+                        attempt,
+                        _MAX_RETRIES,
+                        error_code,
+                        error_msg,
                     )
                     last_error = f"{error_code}:{error_msg}"
 
                     # Non-retryable rejections
-                    if error_code in ("INSUFFICIENT_MARGIN", "ACCOUNT_NOT_TRADEABLE",
-                                      "INSTRUMENT_NOT_TRADEABLE", "UNITS_LIMIT_EXCEEDED"):
-                        return {"status": "rejected", "reason": last_error, "broker": "oanda"}
+                    if error_code in (
+                        "INSUFFICIENT_MARGIN",
+                        "ACCOUNT_NOT_TRADEABLE",
+                        "INSTRUMENT_NOT_TRADEABLE",
+                        "UNITS_LIMIT_EXCEEDED",
+                    ):
+                        return {
+                            "status": "rejected",
+                            "reason": last_error,
+                            "broker": "oanda",
+                        }
 
             except asyncio.TimeoutError:
                 last_error = "timeout"
-                logger.warning("OANDABroker: order timeout (attempt %d/%d)", attempt, _MAX_RETRIES)
+                logger.warning(
+                    "OANDABroker: order timeout (attempt %d/%d)", attempt, _MAX_RETRIES
+                )
             except Exception as exc:
                 last_error = str(exc)
-                logger.error("OANDABroker: order error (attempt %d/%d): %s", attempt, _MAX_RETRIES, exc)
+                logger.error(
+                    "OANDABroker: order error (attempt %d/%d): %s",
+                    attempt,
+                    _MAX_RETRIES,
+                    exc,
+                )
 
             if attempt < _MAX_RETRIES:
                 await asyncio.sleep(_RETRY_BACKOFF * attempt)
 
-        return {"status": "rejected", "reason": f"max_retries:{last_error}", "broker": "oanda"}
+        return {
+            "status": "rejected",
+            "reason": f"max_retries:{last_error}",
+            "broker": "oanda",
+        }
 
     @staticmethod
     def _parse_fill(data: Dict, client_ref: str) -> Dict:
@@ -353,29 +389,31 @@ class OANDABroker:
         # Market order fill
         fill = data.get("orderFillTransaction", {})
         if fill:
-            price = float(fill.get("price", fill.get("tradeOpened", {}).get("price", 0)))
+            price = float(
+                fill.get("price", fill.get("tradeOpened", {}).get("price", 0))
+            )
             units = abs(int(fill.get("units", 0)))
             direction = "long" if int(fill.get("units", 0)) > 0 else "short"
             return {
-                "status":     "filled",
+                "status": "filled",
                 "fill_price": price,
-                "quantity":   units,
-                "direction":  direction,
-                "order_id":   fill.get("orderID", ""),
-                "trade_id":   fill.get("tradeOpened", {}).get("tradeID", ""),
+                "quantity": units,
+                "direction": direction,
+                "order_id": fill.get("orderID", ""),
+                "trade_id": fill.get("tradeOpened", {}).get("tradeID", ""),
                 "client_ref": client_ref,
-                "broker":     "oanda",
-                "raw":        data,
+                "broker": "oanda",
+                "raw": data,
             }
 
         # Limit order created (pending)
         created = data.get("orderCreateTransaction", {})
         if created:
             return {
-                "status":   "pending",
+                "status": "pending",
                 "order_id": created.get("orderID", ""),
-                "broker":   "oanda",
-                "raw":      data,
+                "broker": "oanda",
+                "raw": data,
             }
 
         # Cancelled / rejected
@@ -411,15 +449,17 @@ class OANDABroker:
                 data = await resp.json()
             positions = []
             for p in data.get("positions", []):
-                long_units  = int(p.get("long",  {}).get("units", 0))
+                long_units = int(p.get("long", {}).get("units", 0))
                 short_units = int(p.get("short", {}).get("units", 0))
                 if long_units != 0 or short_units != 0:
-                    positions.append({
-                        "symbol":      p.get("instrument"),
-                        "long_units":  long_units,
-                        "short_units": short_units,
-                        "unrealized_pnl": float(p.get("unrealizedPL", 0)),
-                    })
+                    positions.append(
+                        {
+                            "symbol": p.get("instrument"),
+                            "long_units": long_units,
+                            "short_units": short_units,
+                            "unrealized_pnl": float(p.get("unrealizedPL", 0)),
+                        }
+                    )
             return positions
         except Exception as exc:
             logger.error("OANDABroker get_open_positions: %s", exc)
@@ -492,18 +532,18 @@ class OANDABroker:
 
     def metrics(self) -> Dict[str, Any]:
         return {
-            "broker":        "oanda",
-            "connected":     self.connected,
-            "total_orders":  self._total_orders,
-            "total_fills":   self._total_fills,
-            "fill_rate":     self._total_fills / max(self._total_orders, 1),
+            "broker": "oanda",
+            "connected": self.connected,
+            "total_orders": self._total_orders,
+            "total_fills": self._total_fills,
+            "fill_rate": self._total_fills / max(self._total_orders, 1),
         }
 
 
 # ── Backward-compat aliases ───────────────────────────────────────────────────
-OandaBroker         = OANDABroker
+OandaBroker = OANDABroker
 AsyncOANDAConnector = OANDABroker
-OandaAPI            = OANDABroker
+OandaAPI = OANDABroker
 
 
 # ── Synchronous OANDAConnector ────────────────────────────────────────────────
@@ -532,10 +572,10 @@ class OANDAConnector:
     """
 
     PRACTICE_URL = _PRACTICE_BASE
-    LIVE_URL     = _LIVE_BASE
+    LIVE_URL = _LIVE_BASE
 
     def __init__(self, config: Dict[str, Any]) -> None:
-        api_key    = config.get("api_key") or os.getenv("OANDA_API_TOKEN", "")
+        api_key = config.get("api_key") or os.getenv("OANDA_API_TOKEN", "")
         account_id = config.get("account_id") or os.getenv("OANDA_ACCOUNT_ID", "")
         if not api_key or not account_id:
             raise ValueError(
@@ -543,12 +583,12 @@ class OANDAConnector:
                 "or OANDA_API_TOKEN / OANDA_ACCOUNT_ID env vars."
             )
         env = config.get("environment", "practice")
-        self.environment  = env
-        self.base_url     = self.LIVE_URL if env == "live" else self.PRACTICE_URL
-        self._account_id  = account_id
-        self._api_key     = api_key
-        self._timeout     = float(config.get("timeout", 10))
-        self.connected    = False
+        self.environment = env
+        self.base_url = self.LIVE_URL if env == "live" else self.PRACTICE_URL
+        self._account_id = account_id
+        self._api_key = api_key
+        self._timeout = float(config.get("timeout", 10))
+        self.connected = False
         self.session: Optional[requests.Session] = None
 
     # ── Connection ────────────────────────────────────────────────────────────
@@ -557,16 +597,22 @@ class OANDAConnector:
         """Open a requests.Session and verify credentials against the account endpoint."""
         try:
             sess = requests.Session()
-            sess.headers.update({
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type":  "application/json",
-            })
-            url  = f"{self.base_url}/v3/accounts/{self._account_id}"
+            sess.headers.update(
+                {
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                }
+            )
+            url = f"{self.base_url}/v3/accounts/{self._account_id}"
             resp = sess.get(url, timeout=self._timeout)
             resp.raise_for_status()
-            self.session   = sess
+            self.session = sess
             self.connected = True
-            logger.info("OANDAConnector: connected (%s) account=%s", self.environment, self._account_id)
+            logger.info(
+                "OANDAConnector: connected (%s) account=%s",
+                self.environment,
+                self._account_id,
+            )
             return True
         except Exception as exc:
             logger.error("OANDAConnector.connect failed: %s", exc)
@@ -579,7 +625,7 @@ class OANDAConnector:
             if self.session:
                 self.session.close()
             self.connected = False
-            self.session   = None
+            self.session = None
             return True
         except Exception as exc:
             logger.error("OANDAConnector.disconnect failed: %s", exc)
@@ -600,15 +646,17 @@ class OANDAConnector:
         if not self.connected or not self.session:
             return None
         units = str(int(quantity)) if side == _OrderSide.BUY else str(-int(quantity))
-        body: Dict[str, Any] = {"order": {"units": units, "instrument": symbol, "timeInForce": "FOK"}}
+        body: Dict[str, Any] = {
+            "order": {"units": units, "instrument": symbol, "timeInForce": "FOK"}
+        }
         if order_type == _OrderType.MARKET:
             body["order"]["type"] = "MARKET"
         else:
-            body["order"]["type"]  = "LIMIT"
+            body["order"]["type"] = "LIMIT"
             body["order"]["price"] = str(price or 0)
             body["order"]["timeInForce"] = "GTC"
         try:
-            url  = f"{self.base_url}/v3/accounts/{self._account_id}/orders"
+            url = f"{self.base_url}/v3/accounts/{self._account_id}/orders"
             resp = self.session.post(url, json=body, timeout=self._timeout)
             resp.raise_for_status()
             data = resp.json()
@@ -647,7 +695,7 @@ class OANDAConnector:
         if not self.connected or not self.session:
             return False
         try:
-            url  = f"{self.base_url}/v3/accounts/{self._account_id}/orders/{order_id}/cancel"
+            url = f"{self.base_url}/v3/accounts/{self._account_id}/orders/{order_id}/cancel"
             resp = self.session.put(url, timeout=self._timeout)
             resp.raise_for_status()
             return True
@@ -662,7 +710,7 @@ class OANDAConnector:
         if not self.connected or not self.session:
             return []
         try:
-            url  = f"{self.base_url}/v3/accounts/{self._account_id}/openPositions"
+            url = f"{self.base_url}/v3/accounts/{self._account_id}/openPositions"
             resp = self.session.get(url, timeout=self._timeout)
             resp.raise_for_status()
             positions: List[_Position] = []
@@ -672,28 +720,30 @@ class OANDAConnector:
                 short_units = abs(float(p.get("short", {}).get("units", 0)))
                 if long_units > 0:
                     side_str = "LONG"
-                    qty      = long_units
-                    avg_px   = float(p["long"].get("averagePrice", 0))
-                    upnl     = float(p["long"].get("unrealizedPL", 0))
-                    rpnl     = float(p["long"].get("realizedPL", 0))
+                    qty = long_units
+                    avg_px = float(p["long"].get("averagePrice", 0))
+                    upnl = float(p["long"].get("unrealizedPL", 0))
+                    rpnl = float(p["long"].get("realizedPL", 0))
                 elif short_units > 0:
                     side_str = "SHORT"
-                    qty      = short_units
-                    avg_px   = float(p["short"].get("averagePrice", 0))
-                    upnl     = float(p["short"].get("unrealizedPL", 0))
-                    rpnl     = float(p["short"].get("realizedPL", 0))
+                    qty = short_units
+                    avg_px = float(p["short"].get("averagePrice", 0))
+                    upnl = float(p["short"].get("unrealizedPL", 0))
+                    rpnl = float(p["short"].get("realizedPL", 0))
                 else:
                     continue
-                positions.append(_Position(
-                    symbol=instrument,
-                    side=side_str,
-                    quantity=qty,
-                    entry_price=avg_px,
-                    current_price=avg_px,
-                    unrealized_pnl=upnl,
-                    realized_pnl=rpnl,
-                    timestamp=datetime.now(timezone.utc),
-                ))
+                positions.append(
+                    _Position(
+                        symbol=instrument,
+                        side=side_str,
+                        quantity=qty,
+                        entry_price=avg_px,
+                        current_price=avg_px,
+                        unrealized_pnl=upnl,
+                        realized_pnl=rpnl,
+                        timestamp=datetime.now(timezone.utc),
+                    )
+                )
             return positions
         except Exception as exc:
             logger.error("OANDAConnector.get_positions failed: %s", exc)
@@ -704,8 +754,12 @@ class OANDAConnector:
         if not self.connected or not self.session:
             return False
         try:
-            url  = f"{self.base_url}/v3/accounts/{self._account_id}/positions/{symbol}/close"
-            resp = self.session.put(url, json={"longUnits": "ALL", "shortUnits": "ALL"}, timeout=self._timeout)
+            url = f"{self.base_url}/v3/accounts/{self._account_id}/positions/{symbol}/close"
+            resp = self.session.put(
+                url,
+                json={"longUnits": "ALL", "shortUnits": "ALL"},
+                timeout=self._timeout,
+            )
             resp.raise_for_status()
             return True
         except Exception as exc:
@@ -719,7 +773,7 @@ class OANDAConnector:
         if not self.connected or not self.session:
             return None
         try:
-            url  = f"{self.base_url}/v3/accounts/{self._account_id}"
+            url = f"{self.base_url}/v3/accounts/{self._account_id}"
             resp = self.session.get(url, timeout=self._timeout)
             resp.raise_for_status()
             acct = resp.json().get("account", {})
@@ -747,21 +801,23 @@ class OANDAConnector:
         if not self.connected or not self.session:
             return None
         try:
-            url    = f"{self.base_url}/v3/instruments/{symbol}/candles"
+            url = f"{self.base_url}/v3/instruments/{symbol}/candles"
             params = {"granularity": granularity, "count": count, "price": "M"}
-            resp   = self.session.get(url, params=params, timeout=self._timeout)
+            resp = self.session.get(url, params=params, timeout=self._timeout)
             resp.raise_for_status()
             candles = []
             for c in resp.json().get("candles", []):
                 mid = c.get("mid", {})
-                candles.append({
-                    "time":   c.get("time"),
-                    "open":   float(mid.get("o", 0)),
-                    "high":   float(mid.get("h", 0)),
-                    "low":    float(mid.get("l", 0)),
-                    "close":  float(mid.get("c", 0)),
-                    "volume": int(c.get("volume", 0)),
-                })
+                candles.append(
+                    {
+                        "time": c.get("time"),
+                        "open": float(mid.get("o", 0)),
+                        "high": float(mid.get("h", 0)),
+                        "low": float(mid.get("l", 0)),
+                        "close": float(mid.get("c", 0)),
+                        "volume": int(c.get("volume", 0)),
+                    }
+                )
             return candles
         except Exception as exc:
             logger.error("OANDAConnector.get_market_data failed: %s", exc)
@@ -771,10 +827,10 @@ class OANDAConnector:
 
     def _parse_order_status(self, raw: str) -> "_OrderStatus":
         mapping = {
-            "FILLED":    _OrderStatus.FILLED,
+            "FILLED": _OrderStatus.FILLED,
             "CANCELLED": _OrderStatus.CANCELLED,
-            "PENDING":   _OrderStatus.PENDING,
-            "OPEN":      _OrderStatus.OPEN,
-            "REJECTED":  _OrderStatus.REJECTED,
+            "PENDING": _OrderStatus.PENDING,
+            "OPEN": _OrderStatus.OPEN,
+            "REJECTED": _OrderStatus.REJECTED,
         }
         return mapping.get(raw.upper(), _OrderStatus.PENDING)

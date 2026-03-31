@@ -1240,6 +1240,7 @@ async def example_usage():
     # Create FTMO broker — credentials must come from environment variables.
     # Set FTMO_API_KEY, FTMO_SECRET_KEY, FTMO_ACCOUNT_ID before running.
     import os as _os
+
     async with PropFirmFactory.create_broker(
         PropFirmType.FTMO,
         api_key=_os.environ["FTMO_API_KEY"],

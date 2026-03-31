@@ -151,7 +151,9 @@ class LSTMSignalLayer:
             self._loaded = True
             logger.info(
                 "LSTMSignalLayer loaded ← %s  (seq_len=%d n_features=%d)",
-                self._model_path, self._seq_len, self._n_features,
+                self._model_path,
+                self._seq_len,
+                self._n_features,
             )
             return True
         except Exception as exc:
@@ -188,7 +190,7 @@ class LSTMSignalLayer:
                 return None
 
             # Take the last seq_len rows
-            X_window = X.iloc[-self._seq_len:].values.astype(np.float32)
+            X_window = X.iloc[-self._seq_len :].values.astype(np.float32)
 
             # Replace inf/nan with 0
             X_window = np.where(np.isfinite(X_window), X_window, 0.0)
@@ -197,7 +199,9 @@ class LSTMSignalLayer:
             return X_window[np.newaxis, :, :]
 
         except Exception as exc:
-            logger.warning("LSTMSignalLayer feature build failed for %s: %s", symbol, exc)
+            logger.warning(
+                "LSTMSignalLayer feature build failed for %s: %s", symbol, exc
+            )
             return None
 
     # ── Neutral response ──────────────────────────────────────────────────────
@@ -208,7 +212,7 @@ class LSTMSignalLayer:
         try:
             last_close = float(ohlcv.iloc[-1].get("close", ohlcv.iloc[-1].iloc[-1]))
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
         return {
             "direction": "neutral",
             "probability": 0.5,
@@ -259,7 +263,7 @@ class LSTMSignalLayer:
             return self._neutral(
                 ohlcv,
                 reason=f"insufficient_bars_{len(ohlcv) if ohlcv is not None else 0}"
-                       f"_need_{self._min_bars}",
+                f"_need_{self._min_bars}",
                 t0=t0,
             )
 
@@ -301,7 +305,7 @@ class LSTMSignalLayer:
         try:
             last_close = float(ohlcv.iloc[-1].get("close", ohlcv.iloc[-1].iloc[-1]))
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         return {
             "direction": direction,
@@ -330,7 +334,8 @@ class LSTMSignalLayer:
             "abstain_count": self._abstain_count,
             "abstain_rate": (
                 round(self._abstain_count / self._predict_count, 3)
-                if self._predict_count > 0 else 0.0
+                if self._predict_count > 0
+                else 0.0
             ),
             "signal_weight": LSTM_SIGNAL_WEIGHT,
         }

@@ -64,26 +64,49 @@ def register_routers(
     from api.accounts import router as accounts_router
 
     for _router in [
-        auth_router, trading_router, admin_router, monetization_router,
-        backtesting_router, online_learner_router, chat_router, prop_firm_router,
-        performance_router, explain_router, macro_router, broker_router,
-        landing_router, payments_router, settings_router, status_router,
-        brain_router, calendar_router, profiles_router, social_feed_router,
-        social_leaderboard_router, mobile_router, whitelabel_router,
-        platform_router, ml_router, accounts_router,
+        auth_router,
+        trading_router,
+        admin_router,
+        monetization_router,
+        backtesting_router,
+        online_learner_router,
+        chat_router,
+        prop_firm_router,
+        performance_router,
+        explain_router,
+        macro_router,
+        broker_router,
+        landing_router,
+        payments_router,
+        settings_router,
+        status_router,
+        brain_router,
+        calendar_router,
+        profiles_router,
+        social_feed_router,
+        social_leaderboard_router,
+        mobile_router,
+        whitelabel_router,
+        platform_router,
+        ml_router,
+        accounts_router,
     ]:
         app.include_router(_router)
 
     # ── Feature-gated routers ─────────────────────────────────────────────────
     if feature_flags.TWO_FACTOR_AUTH:
         from api.two_factor import router as two_factor_router
+
         app.include_router(two_factor_router)
         logger.info("Two-factor auth router registered (/api/2fa)")
     else:
-        logger.debug("TWO_FACTOR_AUTH disabled — set FEATURE_TWO_FACTOR_AUTH=true to enable")
+        logger.debug(
+            "TWO_FACTOR_AUTH disabled — set FEATURE_TWO_FACTOR_AUTH=true to enable"
+        )
 
     if feature_flags.WATCHLIST:
         from api.watchlist import router as watchlist_router
+
         app.include_router(watchlist_router)
         logger.info("Watchlist router registered (/api/watchlist)")
     else:
@@ -91,27 +114,37 @@ def register_routers(
 
     if feature_flags.TRADE_JOURNAL:
         from api.journal import router as journal_router
+
         app.include_router(journal_router)
         logger.info("Trade journal router registered (/api/journal)")
     else:
-        logger.debug("TRADE_JOURNAL disabled — set FEATURE_TRADE_JOURNAL=true to enable")
+        logger.debug(
+            "TRADE_JOURNAL disabled — set FEATURE_TRADE_JOURNAL=true to enable"
+        )
 
     if feature_flags.BILLING_SUBSCRIPTION:
         from api.billing import router as billing_router
+
         app.include_router(billing_router)
         logger.info("Billing router registered (/api/billing)")
     else:
-        logger.debug("BILLING_SUBSCRIPTION disabled — set FEATURE_BILLING_SUBSCRIPTION=true to enable")
+        logger.debug(
+            "BILLING_SUBSCRIPTION disabled — set FEATURE_BILLING_SUBSCRIPTION=true to enable"
+        )
 
     if feature_flags.ADVANCED_TRADING:
         from api.advanced_trading import router as advanced_router
+
         app.include_router(advanced_router)
         logger.info("Advanced trading router registered (/api/advanced)")
     else:
-        logger.debug("ADVANCED_TRADING disabled — set FEATURE_ADVANCED_TRADING=true to enable")
+        logger.debug(
+            "ADVANCED_TRADING disabled — set FEATURE_ADVANCED_TRADING=true to enable"
+        )
 
     if feature_flags.PRICE_ALERTS:
         from api.alerts import router as alerts_router
+
         app.include_router(alerts_router)
         logger.info("Price alerts router registered (/api/alerts)")
     else:
@@ -132,6 +165,7 @@ def register_routers(
     # ── TCA (Transaction Cost Analysis) ──────────────────────────────────────
     try:
         from api.tca import router as tca_router
+
         app.include_router(tca_router)
         logger.info("TCA router registered (/tca)")
     except Exception as _tca_err:
@@ -140,6 +174,7 @@ def register_routers(
     # ── Security fixes (LLM auto-heal queue + GitHub PR pipeline) ─────────────
     try:
         from api.security.fixes import router as fixes_router
+
         app.include_router(fixes_router)
         logger.info("Security fixes router registered (/api/security/fixes)")
     except Exception as _fixes_err:
@@ -148,6 +183,7 @@ def register_routers(
     # ── Live WebSocket ────────────────────────────────────────────────────────
     try:
         from api.ws_live import router as ws_live_router
+
         app.include_router(ws_live_router)
         logger.info("Live WebSocket router registered (/ws/live)")
     except Exception as _ws_live_err:

@@ -48,10 +48,9 @@ from __future__ import annotations
 import logging
 import math
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal, Optional
 
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +79,7 @@ class ImpactEstimate:
 
     order_size: float
     adv: float
-    participation_rate: float          # order_size / adv
+    participation_rate: float  # order_size / adv
     volatility_daily: float
     spread_bps: float
     price: float
@@ -194,7 +193,9 @@ class AlmgrenChrissModel:
 
             # Temporary impact: η × σ × sqrt(participation)
             # Converted to bps: × 10,000
-            temp_bps = self.eta * volatility_daily * math.sqrt(participation_rate) * 10_000
+            temp_bps = (
+                self.eta * volatility_daily * math.sqrt(participation_rate) * 10_000
+            )
 
             # Permanent impact: γ × σ × participation
             perm_bps = self.gamma * volatility_daily * participation_rate * 10_000
@@ -223,12 +224,12 @@ class AlmgrenChrissModel:
 class SimulatedFill:
     """Result of a simulated fill."""
 
-    signal_price: float       # Price at signal generation time
-    fill_price: float         # Actual simulated fill price
-    slippage_bps: float       # Total slippage in bps
-    slippage_usd: float       # Total slippage in USD
-    partial_fill: bool        # True if order was partially filled
-    fill_quantity: float      # Actual filled quantity
+    signal_price: float  # Price at signal generation time
+    fill_price: float  # Actual simulated fill price
+    slippage_bps: float  # Total slippage in bps
+    slippage_usd: float  # Total slippage in USD
+    partial_fill: bool  # True if order was partially filled
+    fill_quantity: float  # Actual filled quantity
     requested_quantity: float
     impact_estimate: Optional[ImpactEstimate] = None
     notes: str = ""

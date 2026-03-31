@@ -62,6 +62,7 @@ CHECKPOINT_FILE = "state/main_loop_checkpoint.json"
 # Orchestrator
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class MainLoop:
     """
     Starts all sub-systems as concurrent asyncio tasks and manages their
@@ -69,12 +70,12 @@ class MainLoop:
     """
 
     def __init__(self) -> None:
-        self._ingest    = MarketIngest()
-        self._news      = NewsCalendarFeed()
-        self._strategy  = StrategyEngine()
+        self._ingest = MarketIngest()
+        self._news = NewsCalendarFeed()
+        self._strategy = StrategyEngine()
         self._gatekeeper = Gatekeeper()
-        self._router    = FIXRouter()
-        self._fault     = FaultGuard()
+        self._router = FIXRouter()
+        self._fault = FaultGuard()
 
         self._tasks: list[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
@@ -105,13 +106,13 @@ class MainLoop:
 
         # Launch each sub-system as an independent task
         self._tasks = [
-            asyncio.create_task(self._fault.run(),            name="fault_guard"),
-            asyncio.create_task(self._news.run(),             name="news_calendar"),
-            asyncio.create_task(self._ingest.start(),         name="market_ingest"),
-            asyncio.create_task(self._strategy.start(),       name="strategy_engine"),
-            asyncio.create_task(self._gatekeeper.start(),     name="gatekeeper"),
-            asyncio.create_task(self._router.start(),         name="fix_router"),
-            asyncio.create_task(self._breach_watcher(),       name="breach_watcher"),
+            asyncio.create_task(self._fault.run(), name="fault_guard"),
+            asyncio.create_task(self._news.run(), name="news_calendar"),
+            asyncio.create_task(self._ingest.start(), name="market_ingest"),
+            asyncio.create_task(self._strategy.start(), name="strategy_engine"),
+            asyncio.create_task(self._gatekeeper.start(), name="gatekeeper"),
+            asyncio.create_task(self._router.start(), name="fix_router"),
+            asyncio.create_task(self._breach_watcher(), name="breach_watcher"),
         ]
 
         logger.info("MainLoop: all sub-systems running.")
@@ -139,18 +140,20 @@ class MainLoop:
         # Wait for all tasks to finish (ignore CancelledError)
         results = await asyncio.gather(*self._tasks, return_exceptions=True)
         for task, result in zip(self._tasks, results):
-            if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
+            if isinstance(result, Exception) and not isinstance(
+                result, asyncio.CancelledError
+            ):
                 logger.error("MainLoop: task %s raised: %s", task.get_name(), result)
 
         # Stop sub-systems explicitly (some may need clean teardown)
         for name, coro in [
-            ("fix_router",      self._router.stop()),
-            ("gatekeeper",      self._gatekeeper.stop()),
+            ("fix_router", self._router.stop()),
+            ("gatekeeper", self._gatekeeper.stop()),
             ("strategy_engine", self._strategy.stop()),
-            ("market_ingest",   self._ingest.stop()),
-            ("news_calendar",   self._news.stop()),
-            ("fault_guard",     self._fault.stop()),
-            ("event_bus",       bus.close()),
+            ("market_ingest", self._ingest.stop()),
+            ("news_calendar", self._news.stop()),
+            ("fault_guard", self._fault.stop()),
+            ("event_bus", bus.close()),
         ]:
             try:
                 await coro
@@ -183,18 +186,19 @@ class MainLoop:
         """Write final state snapshot to disk."""
         uptime_s = (
             (datetime.now(timezone.utc) - self._start_time).total_seconds()
-            if self._start_time else 0
+            if self._start_time
+            else 0
         )
         state = {
-            "timestamp":    datetime.now(timezone.utc).isoformat(),
-            "uptime_s":     round(uptime_s, 1),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "uptime_s": round(uptime_s, 1),
             "ingest_ticks": self._ingest.tick_count,
-            "signals":      self._strategy.metrics().get("signal_count", 0),
-            "gate_passed":  self._gatekeeper.metrics().get("pass_count", 0),
+            "signals": self._strategy.metrics().get("signal_count", 0),
+            "gate_passed": self._gatekeeper.metrics().get("pass_count", 0),
             "gate_blocked": self._gatekeeper.metrics().get("block_count", 0),
-            "fills":        self._router.metrics().get("fill_count", 0),
-            "rejects":      self._router.metrics().get("reject_count", 0),
-            "bus_metrics":  bus.metrics(),
+            "fills": self._router.metrics().get("fill_count", 0),
+            "rejects": self._router.metrics().get("reject_count", 0),
+            "bus_metrics": bus.metrics(),
             "fault_metrics": self._fault.metrics(),
         }
         try:
@@ -209,6 +213,7 @@ class MainLoop:
 # ─────────────────────────────────────────────────────────────────────────────
 # Public entry point
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def run() -> None:
     """Convenience coroutine — create and run a MainLoop instance."""
@@ -233,14 +238,17 @@ def _validate_startup_env() -> None:
     error message if any hard-required var is absent.
     """
     hard_required = [
-        ("OANDA_API_KEY",    "OANDA v20 API key — get from https://www.oanda.com/"),
+        ("OANDA_API_KEY", "OANDA v20 API key — get from https://www.oanda.com/"),
         ("OANDA_ACCOUNT_ID", "OANDA account ID — found in your OANDA dashboard"),
     ]
     soft_required = [
-        ("REDIS_URL",           "Redis event bus URL (default: redis://localhost:6379/0)"),
-        ("TELEGRAM_BOT_TOKEN",  "Telegram bot token for alerts (optional but recommended)"),
-        ("TELEGRAM_CHAT_ID",    "Telegram chat ID for alerts (optional but recommended)"),
-        ("INITIAL_BALANCE",     "Starting balance for drawdown tracking (default: 100000)"),
+        ("REDIS_URL", "Redis event bus URL (default: redis://localhost:6379/0)"),
+        (
+            "TELEGRAM_BOT_TOKEN",
+            "Telegram bot token for alerts (optional but recommended)",
+        ),
+        ("TELEGRAM_CHAT_ID", "Telegram chat ID for alerts (optional but recommended)"),
+        ("INITIAL_BALANCE", "Starting balance for drawdown tracking (default: 100000)"),
     ]
 
     missing_hard = []

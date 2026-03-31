@@ -58,6 +58,7 @@ def _get_macro_store_bridge() -> Optional[Any]:
     """
     try:
         from data_layer.orchestrator import orchestrator
+
         bridge = orchestrator._macro_bridge
         return bridge if bridge.is_loaded else None
     except Exception:
@@ -423,7 +424,7 @@ def _fetch_mtf_df(
         if not flags.MTF_FUSION:
             return None
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
 
     # Try app_state first (populated by init_mtf_store at startup)
     store = getattr(app_state, "mtf_store", None)
@@ -722,6 +723,7 @@ async def _publish_and_broadcast(
     # reflects engine-generated signals (not just manually-submitted ones).
     try:
         from api.signals import _get_signal_service as _svc_factory
+
         _svc_factory().ingest_engine_signal(signal_payload)
     except Exception as _ingest_exc:
         logger.debug("ingest_engine_signal failed (non-fatal): %s", _ingest_exc)
@@ -829,22 +831,26 @@ async def _execute_if_approved(
             # win rate × avg_win < (1-win_rate) × avg_loss.
             try:
                 from ml.signal_filter import get_signal_filter
+
                 _filt = get_signal_filter()
                 # Build a minimal OHLCV-like object from data dict for regime gate
                 _ohlcv_proxy = None
                 try:
                     import pandas as _pd
+
                     _prices = data.get("prices", [])
                     _highs = data.get("highs", [])
                     _lows = data.get("lows", [])
                     if _prices and _highs and _lows:
-                        _ohlcv_proxy = _pd.DataFrame({
-                            "close": _prices,
-                            "high": _highs,
-                            "low": _lows,
-                        })
+                        _ohlcv_proxy = _pd.DataFrame(
+                            {
+                                "close": _prices,
+                                "high": _highs,
+                                "low": _lows,
+                            }
+                        )
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Suppressed exception: %s", _exc)
 
                 _filter_result = _filt.check(
                     signal_payload,
@@ -869,7 +875,9 @@ async def _execute_if_approved(
                 if ml_prob < _ML_MIN_PROB:
                     logger.info(
                         "Auto-trade skipped (fallback): ML prob %.3f < %.3f (%s)",
-                        ml_prob, _ML_MIN_PROB, symbol,
+                        ml_prob,
+                        _ML_MIN_PROB,
+                        symbol,
                     )
                     return
 
@@ -942,16 +950,19 @@ async def _execute_if_approved(
             try:
                 from ml.position_sizer import get_position_sizer
                 import pandas as _pd_sz
+
                 _ohlcv_sz = None
                 _prices_sz = (data or {}).get("prices", [])
                 _highs_sz = (data or {}).get("highs", [])
                 _lows_sz = (data or {}).get("lows", [])
                 if _prices_sz and _highs_sz and _lows_sz:
-                    _ohlcv_sz = _pd_sz.DataFrame({
-                        "close": _prices_sz,
-                        "high": _highs_sz,
-                        "low": _lows_sz,
-                    })
+                    _ohlcv_sz = _pd_sz.DataFrame(
+                        {
+                            "close": _prices_sz,
+                            "high": _highs_sz,
+                            "low": _lows_sz,
+                        }
+                    )
                 _sizer_lots = get_position_sizer().compute(
                     symbol=symbol,
                     direction=direction,
@@ -967,7 +978,9 @@ async def _execute_if_approved(
                 signal_strength = min(_sizer_lots / max(_max_lots, 1.0), 0.80)
                 logger.debug(
                     "PositionSizer: %s lots=%.4f signal_strength=%.4f",
-                    symbol, _sizer_lots, signal_strength,
+                    symbol,
+                    _sizer_lots,
+                    signal_strength,
                 )
             except Exception as _sz_exc:
                 logger.debug("PositionSizer error (fallback to ML prob): %s", _sz_exc)
@@ -1044,11 +1057,12 @@ async def _execute_if_approved(
                     trade_id=order.id,
                 )
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
         # Paper trading gate fill counter.
         try:
             from research.pipeline.paper_trading_gate import get_gate as _get_gate
+
             _get_gate().record_fill(pnl=0.0)
         except Exception as _gate_exc:
             logger.debug("gate.record_fill skipped in signal_engine: %s", _gate_exc)
@@ -1057,15 +1071,20 @@ async def _execute_if_approved(
         # label=1 (trade was approved by risk + ML gates, so it's a positive sample).
         try:
             import pandas as _pd
+
             _fill_price = order.average_fill_price or signal_payload["entry_price"]
-            _features = _pd.DataFrame([{
-                "symbol": symbol,
-                "direction": direction,
-                "confidence": signal_payload.get("confidence", 0.0),
-                "fill_price": _fill_price,
-                "ml_prob": signal_payload.get("probability", 0.5),
-                "source": "signal_engine_auto",
-            }])
+            _features = _pd.DataFrame(
+                [
+                    {
+                        "symbol": symbol,
+                        "direction": direction,
+                        "confidence": signal_payload.get("confidence", 0.0),
+                        "fill_price": _fill_price,
+                        "ml_prob": signal_payload.get("probability", 0.5),
+                        "source": "signal_engine_auto",
+                    }
+                ]
+            )
             notify_fill(
                 _features,
                 label=1,
@@ -1134,6 +1153,7 @@ async def _tick(app_state: Any) -> None:
                 lows = data.get("lows", [])
                 closes_list = data.get("prices", [entry_price])
                 import numpy as _np_sl
+
                 sl_mult = float(os.getenv("SL_ATR_MULT", "1.5"))
                 tp_mult = float(os.getenv("TP_ATR_MULT", "3.0"))
                 if len(highs) >= 14 and len(lows) >= 14:
@@ -1144,20 +1164,44 @@ async def _tick(app_state: Any) -> None:
                         h[1:] - l[1:],
                         _np_sl.maximum(abs(h[1:] - c[:-1]), abs(l[1:] - c[:-1])),
                     )
-                    atr = float(_np_sl.mean(tr[-14:])) if len(tr) >= 14 else entry_price * 0.008
+                    atr = (
+                        float(_np_sl.mean(tr[-14:]))
+                        if len(tr) >= 14
+                        else entry_price * 0.008
+                    )
                 else:
                     atr = entry_price * 0.008
                 is_long = direction.upper() == "BUY"
-                sl_raw = sl_raw if sl_raw is not None else (
-                    entry_price - atr * sl_mult if is_long else entry_price + atr * sl_mult
+                sl_raw = (
+                    sl_raw
+                    if sl_raw is not None
+                    else (
+                        entry_price - atr * sl_mult
+                        if is_long
+                        else entry_price + atr * sl_mult
+                    )
                 )
-                tp_raw = tp_raw if tp_raw is not None else (
-                    entry_price + atr * tp_mult if is_long else entry_price - atr * tp_mult
+                tp_raw = (
+                    tp_raw
+                    if tp_raw is not None
+                    else (
+                        entry_price + atr * tp_mult
+                        if is_long
+                        else entry_price - atr * tp_mult
+                    )
                 )
             except Exception as _sl_exc:
                 logger.debug("Signal payload ATR SL/TP failed: %s", _sl_exc)
-                sl_raw = sl_raw or (entry_price * 0.985 if direction.upper() == "BUY" else entry_price * 1.015)
-                tp_raw = tp_raw or (entry_price * 1.03 if direction.upper() == "BUY" else entry_price * 0.97)
+                sl_raw = sl_raw or (
+                    entry_price * 0.985
+                    if direction.upper() == "BUY"
+                    else entry_price * 1.015
+                )
+                tp_raw = tp_raw or (
+                    entry_price * 1.03
+                    if direction.upper() == "BUY"
+                    else entry_price * 0.97
+                )
 
         signal_payload: Dict[str, Any] = {
             "symbol": symbol,

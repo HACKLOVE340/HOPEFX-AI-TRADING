@@ -355,9 +355,7 @@ class RobustPredictor:
         # ── Regime-conditional model gating ───────────────────────────────────
         # HIGH_VOLATILITY: model accuracy historically drops — return neutral
         if regime == Regime.HIGH_VOLATILITY:
-            logger.debug(
-                "RobustPredictor: HIGH_VOLATILITY regime — returning neutral"
-            )
+            logger.debug("RobustPredictor: HIGH_VOLATILITY regime — returning neutral")
             return PredictionResult(
                 direction=0,
                 probability=0.5,
@@ -372,17 +370,17 @@ class RobustPredictor:
             )
 
         # MEAN_REVERTING: tighten thresholds (require higher conviction)
-        bullish_med  = self._bullish_med_threshold
+        bullish_med = self._bullish_med_threshold
         bullish_high = self._bullish_high_threshold
-        bearish_med  = self._bearish_med_threshold
+        bearish_med = self._bearish_med_threshold
         bearish_high = self._bearish_high_threshold
         agreement_thr = self._agreement_threshold
 
         if regime == Regime.MEAN_REVERTING:
             # Require 5% more conviction in mean-reverting regimes
-            bullish_med  = min(bullish_med  + 0.05, 0.80)
+            bullish_med = min(bullish_med + 0.05, 0.80)
             bullish_high = min(bullish_high + 0.05, 0.85)
-            bearish_med  = max(bearish_med  - 0.05, 0.20)
+            bearish_med = max(bearish_med - 0.05, 0.20)
             bearish_high = max(bearish_high - 0.05, 0.15)
             agreement_thr = min(agreement_thr + 0.10, 0.90)
 
@@ -427,7 +425,7 @@ class RobustPredictor:
         probs_arr = np.array(probabilities)
 
         mean_prob = float(np.mean(probs_arr))
-        std_prob  = float(np.std(probs_arr))
+        std_prob = float(np.std(probs_arr))
 
         # Model agreement: fraction voting with the majority
         mode_val = int(stats.mode(preds_arr, keepdims=True)[0][0])
@@ -670,28 +668,33 @@ class RobustPredictor:
 
         # ATR (14-bar)
         if all(c in X.columns for c in ["high", "low", "close"]):
-            tr = pd.concat([
-                X["high"] - X["low"],
-                (X["high"] - X["close"].shift(1)).abs(),
-                (X["low"]  - X["close"].shift(1)).abs(),
-            ], axis=1).max(axis=1)
+            tr = pd.concat(
+                [
+                    X["high"] - X["low"],
+                    (X["high"] - X["close"].shift(1)).abs(),
+                    (X["low"] - X["close"].shift(1)).abs(),
+                ],
+                axis=1,
+            ).max(axis=1)
             features["atr_14"] = tr.rolling(14).mean().shift(1)
-            features["atr_ratio"] = (
-                features["atr_14"] / X["close"].rolling(14).mean().shift(1)
-            )
+            features["atr_ratio"] = features["atr_14"] / X["close"].rolling(
+                14
+            ).mean().shift(1)
 
         # Bollinger band position
         roll_mean = X["close"].rolling(20).mean()
-        roll_std  = X["close"].rolling(20).std()
-        features["bb_position"] = (
-            (X["close"] - roll_mean) / (roll_std + 1e-9)
-        ).shift(1)
+        roll_std = X["close"].rolling(20).std()
+        features["bb_position"] = ((X["close"] - roll_mean) / (roll_std + 1e-9)).shift(
+            1
+        )
 
         # MACD signal
         ema12 = X["close"].ewm(span=12, adjust=False).mean()
         ema26 = X["close"].ewm(span=26, adjust=False).mean()
-        macd  = ema12 - ema26
-        features["macd_signal"] = (macd - macd.ewm(span=9, adjust=False).mean()).shift(1)
+        macd = ema12 - ema26
+        features["macd_signal"] = (macd - macd.ewm(span=9, adjust=False).mean()).shift(
+            1
+        )
 
         # Hurst exponent proxy (rolling R/S over 40 bars)
         def _rolling_hurst(prices: pd.Series, window: int = 40) -> pd.Series:
@@ -710,18 +713,19 @@ class RobustPredictor:
                         rs_vals.append(np.log(r / s))
                 if len(rs_vals) < 2:
                     return 0.5
-                log_lags = np.log(list(lags[:len(rs_vals)]))
+                log_lags = np.log(list(lags[: len(rs_vals)]))
                 return float(np.clip(np.polyfit(log_lags, rs_vals, 1)[0], 0.0, 1.0))
+
             return prices.rolling(window).apply(_hurst, raw=True)
 
         features["regime_hurst"] = _rolling_hurst(X["close"], 40).shift(1)
 
         # ADX proxy (normalised trend strength)
         if all(c in X.columns for c in ["high", "low", "close"]):
-            plus_dm  = (X["high"] - X["high"].shift(1)).clip(lower=0)
+            plus_dm = (X["high"] - X["high"].shift(1)).clip(lower=0)
             minus_dm = (X["low"].shift(1) - X["low"]).clip(lower=0)
             tr_smooth = tr.rolling(14).mean()
-            plus_di  = 100 * plus_dm.rolling(14).mean()  / (tr_smooth + 1e-9)
+            plus_di = 100 * plus_dm.rolling(14).mean() / (tr_smooth + 1e-9)
             minus_di = 100 * minus_dm.rolling(14).mean() / (tr_smooth + 1e-9)
             dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
             features["regime_trend_str"] = (dx.rolling(14).mean() / 100.0).shift(1)
@@ -734,12 +738,13 @@ class RobustPredictor:
 
         # ── Time features ─────────────────────────────────────────────────────
         if hasattr(X.index, "hour"):
-            features["hour"]        = X.index.hour
+            features["hour"] = X.index.hour
             features["day_of_week"] = X.index.dayofweek
 
         # ── Data layer injection (orchestrator — causal, last bar only) ───────
         try:
             from data_layer.orchestrator import orchestrator
+
             dl_feats = orchestrator.get_ml_features()
             if dl_feats:
                 for key, val in dl_feats.items():
@@ -937,6 +942,7 @@ class RobustPredictor:
         Returns the manifest path on success.
         """
         import os
+
         os.makedirs(path, exist_ok=True)
 
         # Save each ensemble member individually
@@ -968,7 +974,9 @@ class RobustPredictor:
         }
         manifest = os.path.join(path, "state.joblib")
         joblib.dump(state, manifest)
-        logger.info("RobustPredictor saved to %s (%d members)", path, len(saved_members))
+        logger.info(
+            "RobustPredictor saved to %s (%d members)", path, len(saved_members)
+        )
         return manifest
 
     def load(self, path: str) -> None:
@@ -979,24 +987,33 @@ class RobustPredictor:
         Raises FileNotFoundError if the manifest is missing.
         """
         import os
+
         manifest = os.path.join(path, "state.joblib")
         if not os.path.exists(manifest):
             raise FileNotFoundError(f"RobustPredictor manifest not found: {manifest}")
 
         state = joblib.load(manifest)
-        self.config                    = state["config"]
-        self.selected_features         = state["selected_features"]
+        self.config = state["config"]
+        self.selected_features = state["selected_features"]
         self.feature_importance_history = state.get("feature_importance_history", [])
-        self.last_retrain              = state.get("last_retrain")
-        self._thresholds_calibrated    = state.get("thresholds_calibrated", False)
+        self.last_retrain = state.get("last_retrain")
+        self._thresholds_calibrated = state.get("thresholds_calibrated", False)
 
         # Restore calibrated thresholds
         thresholds = state.get("thresholds", {})
         if thresholds:
-            self._bullish_high_threshold = thresholds.get("bullish_high", self._bullish_high_threshold)
-            self._bullish_med_threshold  = thresholds.get("bullish_med",  self._bullish_med_threshold)
-            self._bearish_high_threshold = thresholds.get("bearish_high", self._bearish_high_threshold)
-            self._bearish_med_threshold  = thresholds.get("bearish_med",  self._bearish_med_threshold)
+            self._bullish_high_threshold = thresholds.get(
+                "bullish_high", self._bullish_high_threshold
+            )
+            self._bullish_med_threshold = thresholds.get(
+                "bullish_med", self._bullish_med_threshold
+            )
+            self._bearish_high_threshold = thresholds.get(
+                "bearish_high", self._bearish_high_threshold
+            )
+            self._bearish_med_threshold = thresholds.get(
+                "bearish_med", self._bearish_med_threshold
+            )
 
         # Load ensemble members
         self.models = {}
@@ -1004,7 +1021,9 @@ class RobustPredictor:
             if os.path.exists(member_path):
                 self.models[name] = joblib.load(member_path)
             else:
-                logger.warning("RobustPredictor: member %s not found at %s", name, member_path)
+                logger.warning(
+                    "RobustPredictor: member %s not found at %s", name, member_path
+                )
 
         # Load meta-model
         meta_path = state.get("meta_model_path")
@@ -1019,7 +1038,9 @@ class RobustPredictor:
 
         logger.info(
             "RobustPredictor loaded from %s (%d members, calibrated=%s)",
-            path, len(self.models), self._thresholds_calibrated,
+            path,
+            len(self.models),
+            self._thresholds_calibrated,
         )
 
 
@@ -1074,7 +1095,7 @@ class RegimeDetector:
         if "regime_hurst" in X.columns and "regime_trend_str" in X.columns:
             last = X.iloc[-1]
             hurst = float(last["regime_hurst"])
-            adx   = float(last["regime_trend_str"])
+            adx = float(last["regime_trend_str"])
             if np.isnan(hurst) or np.isnan(adx):
                 return Regime.UNKNOWN
             if adx > 0.25 and hurst > 0.55:
@@ -1090,14 +1111,16 @@ class RegimeDetector:
 
 # ── Drift detection ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class DriftResult:
     """Result returned by DriftDetector.update() when drift is evaluated."""
+
     detected: bool
-    statistic: float          # KS test statistic (0–1)
-    p_value: float            # p-value; low = drift
-    window_mean: float        # mean of current window
-    reference_mean: float     # mean of reference distribution
+    statistic: float  # KS test statistic (0–1)
+    p_value: float  # p-value; low = drift
+    window_mean: float  # mean of current window
+    reference_mean: float  # mean of reference distribution
     window_size: int
     reference_size: int
     extra: Dict[str, Any] = field(default_factory=dict)

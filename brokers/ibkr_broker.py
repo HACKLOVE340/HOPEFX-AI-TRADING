@@ -33,12 +33,22 @@ Usage
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 try:
-    from ib_insync import IB, Contract, Forex, Future, LimitOrder, MarketOrder, Order, Stock, StopOrder  # type: ignore
+    from ib_insync import (  # type: ignore
+        IB,
+        Contract,
+        Forex,  # noqa: F401
+        Future,  # noqa: F401
+        LimitOrder,
+        MarketOrder,
+        Order,  # noqa: F401
+        Stock,  # noqa: F401
+        StopOrder,
+    )
 
     _IB_AVAILABLE = True
 except ImportError:
@@ -141,7 +151,9 @@ class IBKRBroker:
         except asyncio.TimeoutError:
             logger.error(
                 "IBKRBroker connect timed out after %ss — is TWS/Gateway running on %s:%s?",
-                _CONNECT_TIMEOUT, self._host, self._port,
+                _CONNECT_TIMEOUT,
+                self._host,
+                self._port,
             )
             return False
         except Exception as exc:  # noqa: BLE001
@@ -268,11 +280,19 @@ class IBKRBroker:
         if order_type == "MKT":
             ib_order = MarketOrder(action=action, totalQuantity=quantity)
         elif order_type == "LMT":
-            ib_order = LimitOrder(action=action, totalQuantity=quantity, lmtPrice=limit_price)
+            ib_order = LimitOrder(
+                action=action, totalQuantity=quantity, lmtPrice=limit_price
+            )
         elif order_type == "STP":
-            ib_order = StopOrder(action=action, totalQuantity=quantity, stopPrice=aux_price)
+            ib_order = StopOrder(
+                action=action, totalQuantity=quantity, stopPrice=aux_price
+            )
         else:
-            return {"success": False, "order_id": 0, "comment": f"Unsupported order_type: {order_type}"}
+            return {
+                "success": False,
+                "order_id": 0,
+                "comment": f"Unsupported order_type: {order_type}",
+            }
 
         if account:
             ib_order.account = account
@@ -283,7 +303,11 @@ class IBKRBroker:
             await asyncio.sleep(0.1)
             logger.info(
                 "IBKR order placed | symbol=%s | action=%s | qty=%.2f | type=%s | order_id=%s",
-                symbol, action, quantity, order_type, trade.order.orderId,
+                symbol,
+                action,
+                quantity,
+                order_type,
+                trade.order.orderId,
             )
             return {
                 "success": True,
@@ -303,7 +327,10 @@ class IBKRBroker:
         open_trades = self._ib.openTrades()
         target = next((t for t in open_trades if t.order.orderId == order_id), None)
         if target is None:
-            return {"success": False, "comment": f"Order {order_id} not found in open trades"}
+            return {
+                "success": False,
+                "comment": f"Order {order_id} not found in open trades",
+            }
         try:
             self._ib.cancelOrder(target.order)
             await asyncio.sleep(0.1)
@@ -312,8 +339,13 @@ class IBKRBroker:
         except Exception as exc:  # noqa: BLE001
             return {"success": False, "comment": str(exc)}
 
-    async def close_position(self, symbol: str, sec_type: str = "CASH",
-                              exchange: str = "IDEALPRO", currency: str = "USD") -> Dict:
+    async def close_position(
+        self,
+        symbol: str,
+        sec_type: str = "CASH",
+        exchange: str = "IDEALPRO",
+        currency: str = "USD",
+    ) -> Dict:
         """
         Close all open positions for *symbol* by placing a market order in the
         opposite direction.
@@ -322,25 +354,30 @@ class IBKRBroker:
             return {"success": False, "comment": "Not connected"}
 
         positions = self._ib.positions(account=self._account or "")
-        target = next(
-            (p for p in positions if p.contract.symbol == symbol), None
-        )
+        target = next((p for p in positions if p.contract.symbol == symbol), None)
         if target is None:
             return {"success": False, "comment": f"No open position for {symbol}"}
 
         close_action = "SELL" if target.position > 0 else "BUY"
-        return await self.place_order({
-            "symbol": symbol,
-            "action": close_action,
-            "quantity": abs(target.position),
-            "order_type": "MKT",
-            "sec_type": sec_type,
-            "exchange": exchange,
-            "currency": currency,
-        })
+        return await self.place_order(
+            {
+                "symbol": symbol,
+                "action": close_action,
+                "quantity": abs(target.position),
+                "order_type": "MKT",
+                "sec_type": sec_type,
+                "exchange": exchange,
+                "currency": currency,
+            }
+        )
 
-    async def get_tick(self, symbol: str, sec_type: str = "CASH",
-                       exchange: str = "IDEALPRO", currency: str = "USD") -> Optional[Dict]:
+    async def get_tick(
+        self,
+        symbol: str,
+        sec_type: str = "CASH",
+        exchange: str = "IDEALPRO",
+        currency: str = "USD",
+    ) -> Optional[Dict]:
         """Request a snapshot tick for *symbol*."""
         if not self._assert_connected("get_tick"):
             return None
@@ -385,6 +422,7 @@ class IBKRBroker:
 
 
 # ── Module-level helpers ───────────────────────────────────────────────────────
+
 
 def _build_contract(symbol: str, sec_type: str, exchange: str, currency: str) -> object:
     """Build an ib_insync Contract from basic parameters."""

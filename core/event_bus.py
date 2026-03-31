@@ -44,22 +44,23 @@ import redis.asyncio as aioredis  # redis-py >= 4.2
 logger = logging.getLogger(__name__)
 
 # ── channel names ─────────────────────────────────────────────────────────────
-CH_TICK   = "hopefx:tick"
+CH_TICK = "hopefx:tick"
 CH_SIGNAL = "hopefx:signal"
-CH_ORDER  = "hopefx:order"
+CH_ORDER = "hopefx:order"
 CH_BREACH = "hopefx:breach"
 
 ALL_CHANNELS = (CH_TICK, CH_SIGNAL, CH_ORDER, CH_BREACH)
 
 # ── retry / back-off config ───────────────────────────────────────────────────
-MAX_RETRIES:    int   = 5
-BASE_BACKOFF_S: float = 0.25   # first retry after 250 ms
-MAX_BACKOFF_S:  float = 30.0   # cap at 30 s
+MAX_RETRIES: int = 5
+BASE_BACKOFF_S: float = 0.25  # first retry after 250 ms
+MAX_BACKOFF_S: float = 30.0  # cap at 30 s
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Legacy domain model (kept for backward compatibility)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class DomainEvent:
@@ -77,23 +78,33 @@ class DomainEvent:
     def _codes(cls) -> Dict[str, int]:
         if cls._TYPE_CODES is None:
             cls._TYPE_CODES = {
-                "PRICE_UPDATE": 1, "SIGNAL_GENERATED": 2,
-                "ORDER_SUBMITTED": 3, "ORDER_FILLED": 4,
-                "POSITION_OPENED": 5, "POSITION_CLOSED": 6,
-                "RISK_VIOLATION": 7, "KILL_SWITCH": 8,
-                "REGIME_CHANGE": 9, "COMPOSITE_SIGNAL": 10,
+                "PRICE_UPDATE": 1,
+                "SIGNAL_GENERATED": 2,
+                "ORDER_SUBMITTED": 3,
+                "ORDER_FILLED": 4,
+                "POSITION_OPENED": 5,
+                "POSITION_CLOSED": 6,
+                "RISK_VIOLATION": 7,
+                "KILL_SWITCH": 8,
+                "REGIME_CHANGE": 9,
+                "COMPOSITE_SIGNAL": 10,
                 "HEARTBEAT": 11,
                 # New event types aligned with Redis channels
-                "TICK": 12, "SIGNAL": 13, "ORDER": 14, "BREACH": 15,
+                "TICK": 12,
+                "SIGNAL": 13,
+                "ORDER": 14,
+                "BREACH": 15,
             }
         return cls._TYPE_CODES
 
     @classmethod
-    def create(cls, event_type: str, source: str,
-               data: dict, priority: int = 5) -> "DomainEvent":
+    def create(
+        cls, event_type: str, source: str, data: dict, priority: int = 5
+    ) -> "DomainEvent":
         try:
             import lz4.frame
             import msgpack
+
             packed = msgpack.packb(data, use_bin_type=True)
             payload = lz4.frame.compress(packed)
         except ImportError:
@@ -110,6 +121,7 @@ class DomainEvent:
         try:
             import lz4.frame
             import msgpack
+
             return msgpack.unpackb(lz4.frame.decompress(self.payload), raw=False)
         except Exception:  # noqa: BLE001
             return json.loads(self.payload.decode())
@@ -118,8 +130,9 @@ class DomainEvent:
 class MemoryMappedEventStore:
     """Persistent event store backed by memory-mapped files (legacy)."""
 
-    def __init__(self, base_path: str = "data/events/",
-                 max_file_size: int = 1_073_741_824) -> None:
+    def __init__(
+        self, base_path: str = "data/events/", max_file_size: int = 1_073_741_824
+    ) -> None:
         self.base_path = base_path
         self.max_file_size = max_file_size
         self.current_file = None
@@ -149,21 +162,29 @@ class MemoryMappedEventStore:
         with self._lock:
             self._sequence += 1
             src_bytes = event.source.encode()
-            header = struct.pack(">QQH", self._sequence, event.timestamp, event.event_type)
+            header = struct.pack(
+                ">QQH", self._sequence, event.timestamp, event.event_type
+            )
             header += struct.pack("B", len(src_bytes)) + src_bytes
             header += struct.pack(">I", len(event.payload))
             record = header + event.payload
             if self.current_offset + len(record) > self.max_file_size:
                 self._rotate_file()
-            self.current_mmap[self.current_offset:self.current_offset + len(record)] = record
+            self.current_mmap[
+                self.current_offset : self.current_offset + len(record)
+            ] = record
             self.current_offset += len(record)
             self._index[event.source].append(
                 (self.file_counter - 1, self.current_offset - len(record))
             )
             return self._sequence
 
-    def query(self, source: Optional[str] = None,
-              event_type: Optional[int] = None, limit: int = 1000) -> list:
+    def query(
+        self,
+        source: Optional[str] = None,
+        event_type: Optional[int] = None,
+        limit: int = 1000,
+    ) -> list:
         results = []
         sources = [source] if source else list(self._index.keys())
         for src in sources:
@@ -187,13 +208,15 @@ class MemoryMappedEventStore:
             src = f.read(src_len).decode()
             payload_len = struct.unpack(">I", f.read(4))[0]
             payload = f.read(payload_len)
-            return DomainEvent(timestamp=ts, event_type=evt_type,
-                               source=src, payload=payload)
+            return DomainEvent(
+                timestamp=ts, event_type=evt_type, source=src, payload=payload
+            )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # In-process fallback bus (active when Redis is unreachable)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class _LocalBus:
     """
@@ -225,6 +248,7 @@ _local_bus = _LocalBus()
 # ─────────────────────────────────────────────────────────────────────────────
 # Redis connection factory
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _make_redis() -> aioredis.Redis:
     """
@@ -272,6 +296,7 @@ def _make_redis() -> aioredis.Redis:
 # EventBus — Redis pub/sub with retry/backoff + local fallback
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class EventBus:
     """
     Async Redis pub/sub event bus.
@@ -293,7 +318,10 @@ class EventBus:
         self._redis: Optional[aioredis.Redis] = None
         self._degraded: bool = False
         self._metrics: Dict[str, int] = {
-            "published": 0, "delivered": 0, "errors": 0, "retries": 0,
+            "published": 0,
+            "delivered": 0,
+            "errors": 0,
+            "retries": 0,
         }
 
     # ── connection ────────────────────────────────────────────────────────────
@@ -306,7 +334,9 @@ class EventBus:
             self._degraded = False
             logger.info("EventBus connected to Redis.")
         except Exception as exc:  # noqa: BLE001
-            logger.warning("EventBus: Redis unavailable (%s) — local fallback active.", exc)
+            logger.warning(
+                "EventBus: Redis unavailable (%s) — local fallback active.", exc
+            )
             self._degraded = True
 
     async def close(self) -> None:
@@ -331,11 +361,12 @@ class EventBus:
         # Inject trace context for cross-service propagation
         try:
             from tracing.setup import inject_trace_context
+
             trace_headers = inject_trace_context()
             if trace_headers:
                 message = {**message, "_trace": trace_headers}
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
         payload = json.dumps(message)
         attempt = 0
@@ -353,7 +384,10 @@ class EventBus:
                 self._metrics["retries"] += 1
                 logger.warning(
                     "EventBus publish attempt %d/%d failed on %s: %s",
-                    attempt, MAX_RETRIES, channel, exc,
+                    attempt,
+                    MAX_RETRIES,
+                    channel,
+                    exc,
                 )
                 if attempt >= MAX_RETRIES:
                     break
@@ -362,7 +396,9 @@ class EventBus:
 
         # Exhausted retries — route through local fallback
         self._metrics["errors"] += 1
-        logger.error("EventBus: all retries exhausted for %s — using local fallback.", channel)
+        logger.error(
+            "EventBus: all retries exhausted for %s — using local fallback.", channel
+        )
         await _local_bus.publish_local(channel, message)
 
     # ── subscribe ─────────────────────────────────────────────────────────────
@@ -407,16 +443,20 @@ class EventBus:
                         # spans appear as children in the same distributed trace.
                         try:
                             from tracing.setup import extract_trace_context
+
                             trace_carrier = msg.pop("_trace", {})
                             if trace_carrier:
-                                msg["_trace_context"] = extract_trace_context(trace_carrier)
+                                msg["_trace_context"] = extract_trace_context(
+                                    trace_carrier
+                                )
                         except Exception as _exc:
-                            logger.debug('Suppressed exception: %s', _exc)
+                            logger.debug("Suppressed exception: %s", _exc)
                         self._metrics["delivered"] += 1
                         yield msg
                     except json.JSONDecodeError as exc:
-                        logger.warning("EventBus: bad JSON on %s: %s",
-                                       raw.get("channel"), exc)
+                        logger.warning(
+                            "EventBus: bad JSON on %s: %s", raw.get("channel"), exc
+                        )
 
             except asyncio.CancelledError:
                 if pubsub:

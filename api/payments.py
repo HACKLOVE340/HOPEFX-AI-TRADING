@@ -91,7 +91,7 @@ def _get_db_session():
         if app_state and app_state.db_session_factory:
             return app_state.db_session_factory()
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
     return None
 
 
@@ -99,7 +99,9 @@ def _save_payment(payment: dict) -> None:
     """Persist a new payment record to the database."""
     session = _get_db_session()
     if session is None:
-        logger.warning("DB unavailable — payment %s not persisted", payment["payment_id"])
+        logger.warning(
+            "DB unavailable — payment %s not persisted", payment["payment_id"]
+        )
         return
     try:
         from database.models import CryptoPayment
@@ -314,14 +316,14 @@ def _verify_webhook_hmac(body: bytes, signature: str) -> bool:
     if not _WEBHOOK_SECRET:
         # In production, require the secret to be set
         if os.getenv("APP_ENV", "development") == "production":
-            logger.error("CRYPTO_WEBHOOK_SECRET not set in production — rejecting webhook")
+            logger.error(
+                "CRYPTO_WEBHOOK_SECRET not set in production — rejecting webhook"
+            )
             return False
         logger.warning("CRYPTO_WEBHOOK_SECRET not set — skipping HMAC check (dev only)")
         return True
 
-    expected = hmac.new(
-        _WEBHOOK_SECRET.encode(), body, hashlib.sha256
-    ).hexdigest()
+    expected = hmac.new(_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature.lower())
 
 
@@ -354,7 +356,9 @@ async def payment_webhook(
     verify = os.getenv("CRYPTO_WEBHOOK_VERIFY", "true").lower() != "false"
     if verify:
         if not x_webhook_signature:
-            raise HTTPException(status_code=403, detail="Missing X-Webhook-Signature header")
+            raise HTTPException(
+                status_code=403, detail="Missing X-Webhook-Signature header"
+            )
         if not _verify_webhook_hmac(raw_body, x_webhook_signature):
             logger.critical(
                 "Crypto webhook SIGNATURE INVALID from %s",

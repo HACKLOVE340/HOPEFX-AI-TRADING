@@ -38,15 +38,15 @@ XAUUSD contract
   Commodity("XAUUSD", "SMART", "USD") — spot gold CFD
   Futures path available via _build_gold_contract(use_futures=True)
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
-import threading
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
@@ -54,29 +54,41 @@ logger = logging.getLogger(__name__)
 
 # ib_insync — optional dependency
 try:
-    from ib_insync import (  # type: ignore[import]
-        IB, CFD, Commodity, Contract, Future,
-        LimitOrder, MarketOrder, StopOrder, StopLimitOrder,
-        Trade, util,
+    from ib_insync import (  # type: ignore[import]  # noqa: F401
+        IB,
+        CFD,
+        Commodity,
+        Contract,
+        Future,
+        LimitOrder,
+        MarketOrder,
+        StopOrder,
+        StopLimitOrder,
+        Trade,
+        util,
     )
+
     _IB_AVAILABLE = True
 except ImportError:
     _IB_AVAILABLE = False
     IB = None
-    logger.warning("ib_insync not installed — IBKRBroker unavailable. pip install ib_insync==0.9.86")
+    logger.warning(
+        "ib_insync not installed — IBKRBroker unavailable. pip install ib_insync==0.9.86"
+    )
 
 # ── env config ────────────────────────────────────────────────────────────────
-_HOST       = os.getenv("IBKR_HOST",      "127.0.0.1")
+_HOST = os.getenv("IBKR_HOST", "127.0.0.1")
 _PORT_PAPER = int(os.getenv("IBKR_PORT_PAPER", "7497"))
-_PORT_LIVE  = int(os.getenv("IBKR_PORT_LIVE",  "7496"))
-_CLIENT_ID  = int(os.getenv("IBKR_CLIENT_ID",  "1"))
-_CONNECT_TIMEOUT  = float(os.getenv("IBKR_CONNECT_TIMEOUT_S", "30"))
-_ORDER_TIMEOUT    = float(os.getenv("IBKR_ORDER_TIMEOUT_S",   "30"))
-_RECONNECT_DELAY  = float(os.getenv("IBKR_RECONNECT_DELAY_S", "5"))
-_MAX_RECONNECTS   = int(os.getenv("IBKR_MAX_RECONNECTS",      "10"))
+_PORT_LIVE = int(os.getenv("IBKR_PORT_LIVE", "7496"))
+_CLIENT_ID = int(os.getenv("IBKR_CLIENT_ID", "1"))
+_CONNECT_TIMEOUT = float(os.getenv("IBKR_CONNECT_TIMEOUT_S", "30"))
+_ORDER_TIMEOUT = float(os.getenv("IBKR_ORDER_TIMEOUT_S", "30"))
+_RECONNECT_DELAY = float(os.getenv("IBKR_RECONNECT_DELAY_S", "5"))
+_MAX_RECONNECTS = int(os.getenv("IBKR_MAX_RECONNECTS", "10"))
 
 
 # ── Architectural boundary enforcement ───────────────────────────────────────
+
 
 class MarketDataForbidden(RuntimeError):
     """
@@ -84,6 +96,7 @@ class MarketDataForbidden(RuntimeError):
 
     All market data must flow through data_layer.orchestrator exclusively.
     """
+
     def __init__(self, method: str) -> None:
         super().__init__(
             f"ARCHITECTURAL VIOLATION: {method}() called on IBKRBroker. "
@@ -95,27 +108,29 @@ class MarketDataForbidden(RuntimeError):
 
 # ── Data classes ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class AccountInfo:
-    account_id:       str
-    currency:         str
-    balance:          float
-    nav:              float
-    unrealized_pnl:   float
-    buying_power:     float
-    margin_used:      float
-    timestamp:        datetime
+    account_id: str
+    currency: str
+    balance: float
+    nav: float
+    unrealized_pnl: float
+    buying_power: float
+    margin_used: float
+    timestamp: datetime
 
 
 @dataclass
 class IBKRConfig:
-    host:      str  = _HOST
-    port:      int  = _PORT_PAPER
-    client_id: int  = _CLIENT_ID
-    paper:     bool = True
+    host: str = _HOST
+    port: int = _PORT_PAPER
+    client_id: int = _CLIENT_ID
+    paper: bool = True
 
 
 # ── IBKRBroker ────────────────────────────────────────────────────────────────
+
 
 class IBKRBroker:
     """
@@ -129,18 +144,18 @@ class IBKRBroker:
 
     def __init__(self, config: Optional[Dict] = None) -> None:
         config = config or {}
-        server    = str(config.get("server", os.getenv("IBKR_ENV", "paper")))
+        server = str(config.get("server", os.getenv("IBKR_ENV", "paper")))
         self._cfg = IBKRConfig(
-            host      = str(config.get("host",      _HOST)),
-            port      = _PORT_LIVE if server == "live" else _PORT_PAPER,
-            client_id = int(config.get("client_id", _CLIENT_ID)),
-            paper     = server != "live",
+            host=str(config.get("host", _HOST)),
+            port=_PORT_LIVE if server == "live" else _PORT_PAPER,
+            client_id=int(config.get("client_id", _CLIENT_ID)),
+            paper=server != "live",
         )
-        self._ib:           Optional[Any] = None   # IB instance
-        self.connected:     bool = False
-        self._reconnects:   int  = 0
-        self._total_orders: int  = 0
-        self._total_fills:  int  = 0
+        self._ib: Optional[Any] = None  # IB instance
+        self.connected: bool = False
+        self._reconnects: int = 0
+        self._total_orders: int = 0
+        self._total_fills: int = 0
         self._fill_callbacks: List[Callable] = []
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -161,14 +176,17 @@ class IBKRBroker:
                 ),
                 timeout=_CONNECT_TIMEOUT,
             )
-            self._ib.orderStatusEvent  += self._on_order_status
-            self._ib.execDetailsEvent  += self._on_exec_details
-            self._ib.errorEvent        += self._on_error
+            self._ib.orderStatusEvent += self._on_order_status
+            self._ib.execDetailsEvent += self._on_exec_details
+            self._ib.errorEvent += self._on_error
             self.connected = True
             self._reconnects = 0
             logger.info(
                 "IBKRBroker: connected to %s:%d clientId=%d paper=%s",
-                self._cfg.host, self._cfg.port, self._cfg.client_id, self._cfg.paper,
+                self._cfg.host,
+                self._cfg.port,
+                self._cfg.client_id,
+                self._cfg.paper,
             )
             return True
         except asyncio.TimeoutError:
@@ -188,7 +206,12 @@ class IBKRBroker:
         """Exponential-backoff reconnect, max _MAX_RECONNECTS attempts."""
         for attempt in range(1, _MAX_RECONNECTS + 1):
             delay = min(_RECONNECT_DELAY * (2 ** (attempt - 1)), 120.0)
-            logger.warning("IBKRBroker: reconnect attempt %d/%d in %.0fs", attempt, _MAX_RECONNECTS, delay)
+            logger.warning(
+                "IBKRBroker: reconnect attempt %d/%d in %.0fs",
+                attempt,
+                _MAX_RECONNECTS,
+                delay,
+            )
             await asyncio.sleep(delay)
             if await self.connect():
                 return True
@@ -205,14 +228,16 @@ class IBKRBroker:
             vals = {v.tag: v.value for v in self._ib.accountValues()}
             currency = vals.get("Currency", "USD")
             return AccountInfo(
-                account_id     = self._ib.managedAccounts()[0] if self._ib.managedAccounts() else "",
-                currency       = currency,
-                balance        = float(vals.get("CashBalance", 0)),
-                nav            = float(vals.get("NetLiquidation", 0)),
-                unrealized_pnl = float(vals.get("UnrealizedPnL", 0)),
-                buying_power   = float(vals.get("BuyingPower", 0)),
-                margin_used    = float(vals.get("MaintMarginReq", 0)),
-                timestamp      = datetime.now(timezone.utc),
+                account_id=self._ib.managedAccounts()[0]
+                if self._ib.managedAccounts()
+                else "",
+                currency=currency,
+                balance=float(vals.get("CashBalance", 0)),
+                nav=float(vals.get("NetLiquidation", 0)),
+                unrealized_pnl=float(vals.get("UnrealizedPnL", 0)),
+                buying_power=float(vals.get("BuyingPower", 0)),
+                margin_used=float(vals.get("MaintMarginReq", 0)),
+                timestamp=datetime.now(timezone.utc),
             )
         except Exception as exc:
             logger.error("IBKRBroker get_account_info: %s", exc)
@@ -233,10 +258,10 @@ class IBKRBroker:
         if not self.connected or not self._ib:
             return {"status": "rejected", "reason": "not_connected", "broker": "ibkr"}
 
-        t0         = time.monotonic()
-        symbol     = order_request.get("symbol", "XAUUSD")
-        direction  = order_request.get("direction", "long")
-        quantity   = float(order_request.get("quantity", 0))
+        t0 = time.monotonic()
+        symbol = order_request.get("symbol", "XAUUSD")
+        direction = order_request.get("direction", "long")
+        quantity = float(order_request.get("quantity", 0))
         order_type = order_request.get("order_type", "MARKET").upper()
         client_ref = order_request.get("order_id", str(uuid.uuid4()))
 
@@ -291,8 +316,8 @@ class IBKRBroker:
             stop_price = float(req.get("stop_price", req.get("mid_price", 0)))
             return StopOrder(action, qty, stop_price)
         elif order_type == "STOP_LIMIT":
-            lmt   = float(req.get("mid_price", 0))
-            stop  = float(req.get("stop_price", lmt))
+            lmt = float(req.get("mid_price", 0))
+            stop = float(req.get("stop_price", lmt))
             return StopLimitOrder(action, qty, lmt, stop)
         else:
             return MarketOrder(action, qty)
@@ -305,16 +330,16 @@ class IBKRBroker:
             status = trade.orderStatus.status
             if status == "Filled":
                 avg_price = trade.orderStatus.avgFillPrice
-                filled    = trade.orderStatus.filled
-                action    = trade.order.action
+                filled = trade.orderStatus.filled
+                action = trade.order.action
                 return {
-                    "status":     "filled",
+                    "status": "filled",
                     "fill_price": float(avg_price),
-                    "quantity":   float(filled),
-                    "direction":  "long" if action == "BUY" else "short",
-                    "order_id":   str(trade.order.orderId),
+                    "quantity": float(filled),
+                    "direction": "long" if action == "BUY" else "short",
+                    "order_id": str(trade.order.orderId),
                     "client_ref": client_ref,
-                    "broker":     "ibkr",
+                    "broker": "ibkr",
                 }
             if status in ("Cancelled", "ApiCancelled", "Inactive"):
                 return {
@@ -326,7 +351,7 @@ class IBKRBroker:
         try:
             self._ib.cancelOrder(trade.order)
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
         return {"status": "rejected", "reason": "fill_timeout", "broker": "ibkr"}
 
     # ── Order cancellation ────────────────────────────────────────────────────
@@ -355,12 +380,14 @@ class IBKRBroker:
             positions = []
             for pos in self._ib.positions():
                 if pos.position != 0:
-                    positions.append({
-                        "symbol":    pos.contract.symbol,
-                        "quantity":  pos.position,
-                        "direction": "long" if pos.position > 0 else "short",
-                        "avg_cost":  pos.avgCost,
-                    })
+                    positions.append(
+                        {
+                            "symbol": pos.contract.symbol,
+                            "quantity": pos.position,
+                            "direction": "long" if pos.position > 0 else "short",
+                            "avg_cost": pos.avgCost,
+                        }
+                    )
             return positions
         except Exception as exc:
             logger.error("IBKRBroker get_open_positions: %s", exc)
@@ -402,12 +429,16 @@ class IBKRBroker:
             except Exception as exc:
                 logger.error("IBKRBroker fill callback error: %s", exc)
 
-    def _on_error(self, req_id: int, error_code: int, error_string: str, contract: Any) -> None:
+    def _on_error(
+        self, req_id: int, error_code: int, error_string: str, contract: Any
+    ) -> None:
         if error_code in (2104, 2106, 2158):
             return  # informational only
         logger.error(
             "IBKRBroker error: req_id=%d code=%d msg=%s",
-            req_id, error_code, error_string,
+            req_id,
+            error_code,
+            error_string,
         )
 
     def register_fill_callback(self, cb: Callable) -> None:
@@ -440,12 +471,12 @@ class IBKRBroker:
 
     def metrics(self) -> Dict[str, Any]:
         return {
-            "broker":       "ibkr",
-            "connected":    self.connected,
-            "paper":        self._cfg.paper,
+            "broker": "ibkr",
+            "connected": self.connected,
+            "paper": self._cfg.paper,
             "total_orders": self._total_orders,
-            "total_fills":  self._total_fills,
-            "fill_rate":    self._total_fills / max(self._total_orders, 1),
+            "total_fills": self._total_fills,
+            "fill_rate": self._total_fills / max(self._total_orders, 1),
         }
 
 

@@ -112,7 +112,6 @@ RECOMMENDED_VARS: List[EnvVar] = [
         required=False,
         description="Sender address for system emails",
     ),
-
     # ── Connector hub — live trading pipeline ─────────────────────────────────
     EnvVar(
         "OANDA_API_KEY",

@@ -525,11 +525,18 @@ class FIXAdapter:
     # Credential validation
     # ------------------------------------------------------------------
 
-    _PLACEHOLDER_VALUES = frozenset({
-        "CLIENT", "BROKER", "HOPEFX", "CHANGE_ME",
-        "<CHANGE_ME_YOUR_SENDER_COMP_ID>", "<CHANGE_ME_BROKER_TARGET_COMP_ID>",
-        "<CHANGE_ME_BROKER_FIX_HOST>", "",
-    })
+    _PLACEHOLDER_VALUES = frozenset(
+        {
+            "CLIENT",
+            "BROKER",
+            "HOPEFX",
+            "CHANGE_ME",
+            "<CHANGE_ME_YOUR_SENDER_COMP_ID>",
+            "<CHANGE_ME_BROKER_TARGET_COMP_ID>",
+            "<CHANGE_ME_BROKER_FIX_HOST>",
+            "",
+        }
+    )
 
     def validate_credentials(self, *, raise_on_error: bool = False) -> bool:
         """Check that FIX session credentials are not placeholder values.
@@ -551,7 +558,7 @@ class FIXAdapter:
 
         sender = os.environ.get("FIX_SENDER_COMP_ID", self.sender_comp_id)
         target = os.environ.get("FIX_TARGET_COMP_ID", self.target_comp_id)
-        host   = os.environ.get("FIX_HOST", self.host)
+        host = os.environ.get("FIX_HOST", self.host)
 
         errors: list[str] = []
 
@@ -586,7 +593,9 @@ class FIXAdapter:
 
         logger.info(
             "fix_adapter credentials OK: sender=%s target=%s host=%s",
-            sender, target, host,
+            sender,
+            target,
+            host,
         )
         return True
 
@@ -603,6 +612,7 @@ class FIXAdapter:
         paper-trading and CI work without real broker credentials.
         """
         import os
+
         _is_production = os.environ.get("APP_ENV", "production") == "production"
         self.validate_credentials(raise_on_error=_is_production)
 

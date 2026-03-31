@@ -100,7 +100,9 @@ def _fetch_bars(symbol: str, lookback: int = 200):
         df = yf.download(ticker, period="60d", interval="1h", progress=False)
         if df is None or df.empty:
             raise ValueError(f"No data returned for {ticker}")
-        df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
+        df.columns = [
+            c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns
+        ]
         return df.tail(lookback)
     except Exception as exc:
         raise HTTPException(
@@ -129,7 +131,9 @@ class LearnerStatusResponse(BaseModel):
 
 
 class PartialFitRequest(BaseModel):
-    symbol: str = Field("XAU_USD", description="Symbol to update (e.g. XAU_USD, BTC_USD)")
+    symbol: str = Field(
+        "XAU_USD", description="Symbol to update (e.g. XAU_USD, BTC_USD)"
+    )
     lookback: int = Field(
         200, ge=50, le=2000, description="Number of recent OHLCV bars to use"
     )
@@ -183,22 +187,25 @@ def _get_phase3_items(symbol: Optional[str] = None) -> List[Phase3StatusItem]:
     items: List[Phase3StatusItem] = []
     try:
         from research.pipeline.online_learning import list_online_learners  # noqa: PLC0415
+
         stores = list_online_learners()
         for sym, snap in stores.items():
             if symbol is not None and sym.upper() != symbol.upper():
                 continue
-            items.append(Phase3StatusItem(
-                symbol=sym,
-                ready=snap.get("ready", False),
-                fill_count=snap.get("fill_count", 0),
-                ph_drift_count=snap.get("ph_drift_count", 0),
-                adwin_drift_count=snap.get("adwin_drift_count", 0),
-                recent_error=snap.get("recent_error"),
-                primary_weight=snap.get("primary_weight", 0.7),
-                online_weight=snap.get("online_weight", 0.3),
-                adaptive_weights=snap.get("adaptive_weights", True),
-                adwin_window=snap.get("adwin_window", 0),
-            ))
+            items.append(
+                Phase3StatusItem(
+                    symbol=sym,
+                    ready=snap.get("ready", False),
+                    fill_count=snap.get("fill_count", 0),
+                    ph_drift_count=snap.get("ph_drift_count", 0),
+                    adwin_drift_count=snap.get("adwin_drift_count", 0),
+                    recent_error=snap.get("recent_error"),
+                    primary_weight=snap.get("primary_weight", 0.7),
+                    online_weight=snap.get("online_weight", 0.3),
+                    adaptive_weights=snap.get("adaptive_weights", True),
+                    adwin_window=snap.get("adwin_window", 0),
+                )
+            )
     except Exception as exc:
         logger.debug("_get_phase3_items failed: %s", exc)
     return items
@@ -231,8 +238,15 @@ async def online_learner_status(
         try:
             raw = learner.status()
         except Exception as exc:
-            logger.warning("online_learner_status: status() failed for %s: %s", sym, exc)
-            raw = {"symbol": sym, "fitted": False, "update_count": 0, "persist_path": ""}
+            logger.warning(
+                "online_learner_status: status() failed for %s: %s", sym, exc
+            )
+            raw = {
+                "symbol": sym,
+                "fitted": False,
+                "update_count": 0,
+                "persist_path": "",
+            }
 
         items.append(
             LearnerStatusItem(
@@ -344,16 +358,23 @@ async def online_learner_diagnostics(
             raw = learner.status()
         except Exception as exc:
             logger.warning("diagnostics: sklearn status() failed for %s: %s", sym, exc)
-            raw = {"symbol": sym, "fitted": False, "update_count": 0, "persist_path": ""}
-        sklearn_items.append(LearnerStatusItem(
-            symbol=raw.get("symbol", sym),
-            fitted=raw.get("fitted", False),
-            update_count=raw.get("update_count", 0),
-            persist_path=raw.get("persist_path", ""),
-            last_fit_at=getattr(learner, "_last_fit_at", None),
-            accuracy=getattr(learner, "_last_accuracy", None),
-            regime=getattr(learner, "_current_regime", None),
-        ))
+            raw = {
+                "symbol": sym,
+                "fitted": False,
+                "update_count": 0,
+                "persist_path": "",
+            }
+        sklearn_items.append(
+            LearnerStatusItem(
+                symbol=raw.get("symbol", sym),
+                fitted=raw.get("fitted", False),
+                update_count=raw.get("update_count", 0),
+                persist_path=raw.get("persist_path", ""),
+                last_fit_at=getattr(learner, "_last_fit_at", None),
+                accuracy=getattr(learner, "_last_accuracy", None),
+                regime=getattr(learner, "_current_regime", None),
+            )
+        )
 
     # Layer B — Phase-3 XGBoost
     phase3_items = _get_phase3_items(symbol=symbol)
@@ -387,6 +408,7 @@ async def reset_online_learner(
     reset_at = datetime.now(timezone.utc).isoformat()
     try:
         from research.pipeline.online_learning import reset_online_learner as _reset  # noqa: PLC0415
+
         removed = _reset(symbol=req.symbol)
     except Exception as exc:
         raise HTTPException(
@@ -400,7 +422,9 @@ async def reset_online_learner(
         if removed
         else f"No OnlineLearnerStore found for {req.symbol.upper()} — nothing to reset."
     )
-    logger.info("online_learner reset: symbol=%s removed=%s", req.symbol.upper(), removed)
+    logger.info(
+        "online_learner reset: symbol=%s removed=%s", req.symbol.upper(), removed
+    )
     return ResetResponse(
         symbol=req.symbol.upper(),
         reset=removed,

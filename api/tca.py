@@ -32,9 +32,7 @@ def _require_auth(request: Request) -> Dict[str, Any]:
     try:
         from auth.jwt_handler import decode_token
 
-        token = (
-            request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        )
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Missing token")
         return decode_token(token)

@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,9 @@ class CreateApplicantRequest(BaseModel):
     dob: Optional[str] = Field(None, description="Date of birth YYYY-MM-DD")
     country: Optional[str] = Field(None, description="ISO 3166-1 alpha-2 country code")
     phone: Optional[str] = None
-    document_type: str = Field("passport", description="passport | driving_licence | id_card")
+    document_type: str = Field(
+        "passport", description="passport | driving_licence | id_card"
+    )
 
 
 class ApplicantResponse(BaseModel):
@@ -69,6 +71,7 @@ class SanctionsScreenResponse(BaseModel):
 
 def _get_gateway():
     from compliance.kyc_provider import get_kyc_gateway
+
     return get_kyc_gateway()
 
 
@@ -76,6 +79,7 @@ def _require_auth(request: Request) -> Dict[str, Any]:
     """Minimal auth check — delegates to existing JWT middleware."""
     try:
         from auth.jwt_handler import decode_token
+
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Missing token")
@@ -164,9 +168,11 @@ async def get_my_kyc_status(request: Request) -> Dict[str, str]:
     user_id = payload.get("sub", "unknown")
     try:
         from compliance.compliance_manager import ComplianceManager
+
         # Use the app-level compliance manager if available
         try:
             from app import app_state
+
             cm = getattr(app_state, "compliance_manager", None)
         except Exception:
             cm = None
@@ -193,6 +199,7 @@ async def sumsub_webhook(
     payload_bytes = await request.body()
     try:
         import json
+
         raw = json.loads(payload_bytes)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
@@ -218,6 +225,7 @@ async def onfido_webhook(
     payload_bytes = await request.body()
     try:
         import json
+
         raw = json.loads(payload_bytes)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")

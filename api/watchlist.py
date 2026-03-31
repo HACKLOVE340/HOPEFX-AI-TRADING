@@ -98,7 +98,7 @@ def _db_load(user_id: str) -> Optional[List[str]]:
         try:
             session.close()
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
 
 def _db_add(user_id: str, symbol: str) -> bool:
@@ -128,7 +128,7 @@ def _db_add(user_id: str, symbol: str) -> bool:
         try:
             session.close()
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
 
 def _db_remove(user_id: str, symbol: str) -> bool:
@@ -162,7 +162,7 @@ def _db_remove(user_id: str, symbol: str) -> bool:
         try:
             session.close()
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
 
 # ── Unified load / save (DB-first, memory fallback) ───────────────────────────
@@ -279,11 +279,7 @@ async def get_watchlist(
 ) -> WatchlistResponse:
     """Return the authenticated user's watchlist with live prices."""
     symbols = _load_watchlist(user.sub)
-    items = [
-        WatchlistItem(**p)
-        for s in symbols
-        if (p := _get_price(s)) is not None
-    ]
+    items = [WatchlistItem(**p) for s in symbols if (p := _get_price(s)) is not None]
     return WatchlistResponse(user_id=user.sub, symbols=symbols, items=items)
 
 
@@ -326,8 +322,4 @@ async def get_prices(
 ) -> List[WatchlistItem]:
     """Return live prices for all symbols in the authenticated user's watchlist."""
     symbols = _load_watchlist(user.sub)
-    return [
-        WatchlistItem(**p)
-        for s in symbols
-        if (p := _get_price(s)) is not None
-    ]
+    return [WatchlistItem(**p) for s in symbols if (p := _get_price(s)) is not None]

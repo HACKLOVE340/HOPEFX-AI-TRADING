@@ -48,11 +48,10 @@ Usage
 from __future__ import annotations
 
 import logging
-import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 from scipy import stats as _stats
@@ -60,11 +59,11 @@ from scipy import stats as _stats
 logger = logging.getLogger(__name__)
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
-KS_P_THRESHOLD = 0.05       # KS test p-value below this → drift detected
-PSI_WARN_THRESHOLD = 0.10   # PSI above this → warning
-PSI_FAIL_THRESHOLD = 0.25   # PSI above this → fail (retrain required)
-MEAN_DRIFT_SIGMA = 2.0      # mean drift beyond this many sigma → warning
-MIN_SAMPLES = 30            # minimum samples for meaningful comparison
+KS_P_THRESHOLD = 0.05  # KS test p-value below this → drift detected
+PSI_WARN_THRESHOLD = 0.10  # PSI above this → warning
+PSI_FAIL_THRESHOLD = 0.25  # PSI above this → fail (retrain required)
+MEAN_DRIFT_SIGMA = 2.0  # mean drift beyond this many sigma → warning
+MIN_SAMPLES = 30  # minimum samples for meaningful comparison
 
 
 class ValidationStatus(str, Enum):
@@ -107,11 +106,19 @@ class ValidationReport:
             f"Signal Distribution Validation — {self.status.value.upper()}",
             f"  OOS samples: {self.oos_sample_size}  Live samples: {self.live_sample_size}",
             f"  PSI: {self.psi:.4f}" if self.psi is not None else "  PSI: —",
-            f"  KS p-value: {self.ks_p_value:.4f}" if self.ks_p_value is not None else "  KS p-value: —",
-            f"  Mean drift: {self.mean_drift_sigma:.2f}σ" if self.mean_drift_sigma is not None else "  Mean drift: —",
+            f"  KS p-value: {self.ks_p_value:.4f}"
+            if self.ks_p_value is not None
+            else "  KS p-value: —",
+            f"  Mean drift: {self.mean_drift_sigma:.2f}σ"
+            if self.mean_drift_sigma is not None
+            else "  Mean drift: —",
         ]
         for c in self.checks:
-            icon = "✓" if c.status == ValidationStatus.PASSED else ("⚠" if c.status == ValidationStatus.WARNING else "✗")
+            icon = (
+                "✓"
+                if c.status == ValidationStatus.PASSED
+                else ("⚠" if c.status == ValidationStatus.WARNING else "✗")
+            )
             lines.append(f"  {icon} {c.name}: {c.message}")
         return "\n".join(lines)
 
@@ -144,9 +151,10 @@ class ValidationReport:
 @dataclass
 class SignalRecord:
     """A single signal emitted by the model."""
-    direction: str          # "BUY" | "SELL" | "HOLD"
-    confidence: float       # 0.0 – 1.0
-    raw_score: float        # raw model output (logit or probability)
+
+    direction: str  # "BUY" | "SELL" | "HOLD"
+    confidence: float  # 0.0 – 1.0
+    raw_score: float  # raw model output (logit or probability)
     timestamp: Optional[datetime] = None
 
 
@@ -224,16 +232,18 @@ class SignalDistributionValidator:
         )
 
         if len(oos) < self.min_samples or len(live) < self.min_samples:
-            report.checks.append(CheckResult(
-                name="sample_size",
-                status=ValidationStatus.INSUFFICIENT_DATA,
-                value=min(len(oos), len(live)),
-                threshold=self.min_samples,
-                message=(
-                    f"Insufficient samples: OOS={len(oos)}, live={len(live)}, "
-                    f"minimum={self.min_samples}"
-                ),
-            ))
+            report.checks.append(
+                CheckResult(
+                    name="sample_size",
+                    status=ValidationStatus.INSUFFICIENT_DATA,
+                    value=min(len(oos), len(live)),
+                    threshold=self.min_samples,
+                    message=(
+                        f"Insufficient samples: OOS={len(oos)}, live={len(live)}, "
+                        f"minimum={self.min_samples}"
+                    ),
+                )
+            )
             return report
 
         oos_scores = np.array([s.raw_score for s in oos], dtype=float)
@@ -247,18 +257,27 @@ class SignalDistributionValidator:
         ks_stat, ks_p = _stats.ks_2samp(oos_scores, live_scores)
         report.ks_statistic = float(ks_stat)
         report.ks_p_value = float(ks_p)
-        ks_status = ValidationStatus.PASSED if ks_p >= self.ks_p_threshold else ValidationStatus.WARNING
-        checks.append(CheckResult(
-            name="ks_test",
-            status=ks_status,
-            value=float(ks_p),
-            threshold=self.ks_p_threshold,
-            message=(
-                f"KS p={ks_p:.4f} (stat={ks_stat:.4f}) — "
-                + ("distributions match" if ks_p >= self.ks_p_threshold
-                   else f"distributions differ (p < {self.ks_p_threshold})")
-            ),
-        ))
+        ks_status = (
+            ValidationStatus.PASSED
+            if ks_p >= self.ks_p_threshold
+            else ValidationStatus.WARNING
+        )
+        checks.append(
+            CheckResult(
+                name="ks_test",
+                status=ks_status,
+                value=float(ks_p),
+                threshold=self.ks_p_threshold,
+                message=(
+                    f"KS p={ks_p:.4f} (stat={ks_stat:.4f}) — "
+                    + (
+                        "distributions match"
+                        if ks_p >= self.ks_p_threshold
+                        else f"distributions differ (p < {self.ks_p_threshold})"
+                    )
+                ),
+            )
+        )
 
         # 2. PSI on raw scores
         psi = _compute_psi(oos_scores, live_scores)
@@ -272,13 +291,15 @@ class SignalDistributionValidator:
         else:
             psi_status = ValidationStatus.FAILED
             psi_msg = f"PSI={psi:.4f} — major shift (retrain required)"
-        checks.append(CheckResult(
-            name="psi",
-            status=psi_status,
-            value=float(psi),
-            threshold=self.psi_fail,
-            message=psi_msg,
-        ))
+        checks.append(
+            CheckResult(
+                name="psi",
+                status=psi_status,
+                value=float(psi),
+                threshold=self.psi_fail,
+                message=psi_msg,
+            )
+        )
 
         # 3. Mean drift
         oos_mean = float(np.mean(oos_scores))
@@ -286,51 +307,65 @@ class SignalDistributionValidator:
         live_mean = float(np.mean(live_scores))
         drift_sigma = abs(live_mean - oos_mean) / max(oos_std, 1e-10)
         report.mean_drift_sigma = float(drift_sigma)
-        mean_status = ValidationStatus.PASSED if drift_sigma <= self.mean_drift_sigma else ValidationStatus.WARNING
-        checks.append(CheckResult(
-            name="mean_drift",
-            status=mean_status,
-            value=float(drift_sigma),
-            threshold=self.mean_drift_sigma,
-            message=(
-                f"Mean drift {drift_sigma:.2f}σ "
-                f"(OOS μ={oos_mean:.4f}, live μ={live_mean:.4f})"
-            ),
-        ))
+        mean_status = (
+            ValidationStatus.PASSED
+            if drift_sigma <= self.mean_drift_sigma
+            else ValidationStatus.WARNING
+        )
+        checks.append(
+            CheckResult(
+                name="mean_drift",
+                status=mean_status,
+                value=float(drift_sigma),
+                threshold=self.mean_drift_sigma,
+                message=(
+                    f"Mean drift {drift_sigma:.2f}σ "
+                    f"(OOS μ={oos_mean:.4f}, live μ={live_mean:.4f})"
+                ),
+            )
+        )
 
         # 4. Directional bias
         oos_buy_rate = sum(1 for s in oos if s.direction == "BUY") / len(oos)
         live_buy_rate = sum(1 for s in live if s.direction == "BUY") / len(live)
         bias_drift = abs(live_buy_rate - oos_buy_rate)
         report.directional_bias_drift = float(bias_drift)
-        bias_status = ValidationStatus.PASSED if bias_drift <= 0.15 else ValidationStatus.WARNING
-        checks.append(CheckResult(
-            name="directional_bias",
-            status=bias_status,
-            value=float(bias_drift),
-            threshold=0.15,
-            message=(
-                f"BUY rate: OOS={oos_buy_rate:.2%}, live={live_buy_rate:.2%}, "
-                f"drift={bias_drift:.2%}"
-            ),
-        ))
+        bias_status = (
+            ValidationStatus.PASSED if bias_drift <= 0.15 else ValidationStatus.WARNING
+        )
+        checks.append(
+            CheckResult(
+                name="directional_bias",
+                status=bias_status,
+                value=float(bias_drift),
+                threshold=0.15,
+                message=(
+                    f"BUY rate: OOS={oos_buy_rate:.2%}, live={live_buy_rate:.2%}, "
+                    f"drift={bias_drift:.2%}"
+                ),
+            )
+        )
 
         # 5. Confidence score drift
         oos_conf_mean = float(np.mean(oos_conf))
         live_conf_mean = float(np.mean(live_conf))
         conf_drift = abs(live_conf_mean - oos_conf_mean)
         report.confidence_drift = float(conf_drift)
-        conf_status = ValidationStatus.PASSED if conf_drift <= 0.10 else ValidationStatus.WARNING
-        checks.append(CheckResult(
-            name="confidence_drift",
-            status=conf_status,
-            value=float(conf_drift),
-            threshold=0.10,
-            message=(
-                f"Confidence: OOS μ={oos_conf_mean:.3f}, live μ={live_conf_mean:.3f}, "
-                f"drift={conf_drift:.3f}"
-            ),
-        ))
+        conf_status = (
+            ValidationStatus.PASSED if conf_drift <= 0.10 else ValidationStatus.WARNING
+        )
+        checks.append(
+            CheckResult(
+                name="confidence_drift",
+                status=conf_status,
+                value=float(conf_drift),
+                threshold=0.10,
+                message=(
+                    f"Confidence: OOS μ={oos_conf_mean:.3f}, live μ={live_conf_mean:.3f}, "
+                    f"drift={conf_drift:.3f}"
+                ),
+            )
+        )
 
         report.checks = checks
 
@@ -345,7 +380,10 @@ class SignalDistributionValidator:
 
         logger.info(
             "Signal validation: %s | PSI=%.4f KS_p=%.4f drift=%.2fσ",
-            report.status.value, psi, ks_p, drift_sigma,
+            report.status.value,
+            psi,
+            ks_p,
+            drift_sigma,
         )
         return report
 

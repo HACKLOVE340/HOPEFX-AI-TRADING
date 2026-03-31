@@ -561,10 +561,13 @@ class AsyncExecutionEngine:
                 else:
                     # Real price feed — poll the broker's pricing endpoint
                     broker_cfg = self.brokers[venue]
-                    price_url = broker_cfg.get("price_url") or f"{broker_cfg.get('url', '')}/prices"
-                    symbols = broker_cfg.get("symbols", list(self.price_cache.keys())) or [
-                        "EUR/USD", "GBP/USD", "XAU/USD"
-                    ]
+                    price_url = (
+                        broker_cfg.get("price_url")
+                        or f"{broker_cfg.get('url', '')}/prices"
+                    )
+                    symbols = broker_cfg.get(
+                        "symbols", list(self.price_cache.keys())
+                    ) or ["EUR/USD", "GBP/USD", "XAU/USD"]
                     session = self.sessions.get(venue)
                     if session and price_url:
                         try:
@@ -573,22 +576,37 @@ class AsyncExecutionEngine:
                                 if resp.status == 200:
                                     data = await resp.json()
                                     # Normalise: support both OANDA-style and generic dicts
-                                    prices_list = data.get("prices") or data.get("ticks") or []
+                                    prices_list = (
+                                        data.get("prices") or data.get("ticks") or []
+                                    )
                                     async with self.price_lock:
                                         for tick in prices_list:
-                                            sym = tick.get("instrument") or tick.get("symbol", "")
-                                            bid = float(tick.get("bids", [{}])[0].get("price") or tick.get("bid", 0))
-                                            ask = float(tick.get("asks", [{}])[0].get("price") or tick.get("ask", 0))
+                                            sym = tick.get("instrument") or tick.get(
+                                                "symbol", ""
+                                            )
+                                            bid = float(
+                                                tick.get("bids", [{}])[0].get("price")
+                                                or tick.get("bid", 0)
+                                            )
+                                            ask = float(
+                                                tick.get("asks", [{}])[0].get("price")
+                                                or tick.get("ask", 0)
+                                            )
                                             if bid and ask:
                                                 mid = (bid + ask) / 2.0
                                                 prev = self.price_cache.get(sym, {})
                                                 prev_mid = prev.get("mid", mid)
-                                                vol = abs(mid - prev_mid) / prev_mid if prev_mid else 0.0
+                                                vol = (
+                                                    abs(mid - prev_mid) / prev_mid
+                                                    if prev_mid
+                                                    else 0.0
+                                                )
                                                 self.price_cache[sym] = {
                                                     "bid": bid,
                                                     "ask": ask,
                                                     "mid": mid,
-                                                    "volatility": vol * 0.3 + prev.get("volatility", 0.0) * 0.7,
+                                                    "volatility": vol * 0.3
+                                                    + prev.get("volatility", 0.0) * 0.7,
                                                     "timestamp": time.time(),
                                                 }
                                 else:
@@ -596,7 +614,9 @@ class AsyncExecutionEngine:
                                         "Price feed HTTP %s from %s", resp.status, venue
                                     )
                         except aiohttp.ClientError as exc:
-                            logger.warning("Price feed request error (%s): %s", venue, exc)
+                            logger.warning(
+                                "Price feed request error (%s): %s", venue, exc
+                            )
 
                 await asyncio.sleep(0.1)  # 10Hz update
 

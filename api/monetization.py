@@ -844,7 +844,7 @@ async def stripe_webhook(payload: Dict[str, Any] = Body(...)):
 # Strategy Submission & Audit
 # ==========================
 
-from monetization.marketplace_submission import submission_manager, SubmissionStatus  # noqa: E402
+from monetization.marketplace_submission import submission_manager  # noqa: E402
 from monetization.revenue_split import revenue_engine, TransactionType  # noqa: E402
 
 
@@ -914,9 +914,7 @@ async def list_pending_submissions():
 @router.post("/marketplace/submissions/{submission_id}/approve")
 async def approve_submission(submission_id: str, body: ManualReviewRequest):
     """Manually approve a strategy submission (admin only)."""
-    ok = submission_manager.manual_approve(
-        submission_id, body.reviewer_id, body.notes
-    )
+    ok = submission_manager.manual_approve(submission_id, body.reviewer_id, body.notes)
     if not ok:
         raise HTTPException(status_code=404, detail="Submission not found")
     return {"approved": True, "submission_id": submission_id}
@@ -925,9 +923,7 @@ async def approve_submission(submission_id: str, body: ManualReviewRequest):
 @router.post("/marketplace/submissions/{submission_id}/reject")
 async def reject_submission(submission_id: str, body: ManualReviewRequest):
     """Manually reject a strategy submission (admin only)."""
-    ok = submission_manager.manual_reject(
-        submission_id, body.reviewer_id, body.notes
-    )
+    ok = submission_manager.manual_reject(submission_id, body.reviewer_id, body.notes)
     if not ok:
         raise HTTPException(status_code=404, detail="Submission not found")
     return {"rejected": True, "submission_id": submission_id}
@@ -987,7 +983,9 @@ async def get_creator_balance(creator_id: str):
         "pending_usd": float(bal.pending_usd),
         "total_earned_usd": float(bal.total_earned_usd),
         "total_paid_usd": float(bal.total_paid_usd),
-        "last_payout_at": bal.last_payout_at.isoformat() if bal.last_payout_at else None,
+        "last_payout_at": bal.last_payout_at.isoformat()
+        if bal.last_payout_at
+        else None,
         "stripe_account_linked": bal.stripe_account_id is not None,
         "payout_eligible": bal.is_payout_eligible,
     }

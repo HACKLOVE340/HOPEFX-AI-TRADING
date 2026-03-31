@@ -1,4 +1,3 @@
-import logging
 # HOPEFX-AI-TRADING
 # Copyright (c) 2025-2026
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
@@ -10,9 +9,8 @@ Master Control Core - connects your existing HOPEFX components
 with advanced features. Non-breaking integration.
 """
 
+import logging
 import os
-
-# Import your existing components
 import sys
 import threading
 from collections import defaultdict
@@ -23,9 +21,10 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from cache.market_data_cache import MarketDataCache
-from config.config_manager import ConfigManager
-from strategies.base_enhanced import EnhancedStrategy, StrategyAdapter, StrategySignal
+from cache.market_data_cache import MarketDataCache  # noqa: E402
+from config.config_manager import ConfigManager  # noqa: E402
+from strategies.base_enhanced import EnhancedStrategy, StrategyAdapter, StrategySignal  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -139,7 +138,7 @@ class MasterControlCore:
                     str(mcc_settings.get("max_drawdown", 0.10)),
                 )
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)  # Use defaults
+            logger.debug("Suppressed exception: %s", _exc)  # Use defaults
 
     def register_strategy(
         self,
@@ -261,12 +260,19 @@ class MasterControlCore:
                 if len(history) >= 20:
                     prices = [float(p) for _, p in history[-20:]]
                     # Pearson correlation of consecutive returns
-                    returns = [prices[i] / prices[i - 1] - 1 for i in range(1, len(prices))]
+                    returns = [
+                        prices[i] / prices[i - 1] - 1 for i in range(1, len(prices))
+                    ]
                     if len(returns) >= 2:
                         mean_r = sum(returns) / len(returns)
-                        variance = sum((r - mean_r) ** 2 for r in returns) / len(returns)
+                        variance = sum((r - mean_r) ** 2 for r in returns) / len(
+                            returns
+                        )
                         # If variance is near zero the series is flat — treat as correlated
-                        if variance < 1e-12 or abs(mean_r) > self.config.correlation_threshold:
+                        if (
+                            variance < 1e-12
+                            or abs(mean_r) > self.config.correlation_threshold
+                        ):
                             return True
                         continue  # not correlated enough
 
@@ -300,18 +306,28 @@ class MasterControlCore:
 
         best_action = max(vote_weights, key=lambda a: vote_weights[a])
         best_weight = vote_weights[best_action]
-        confidence = best_weight / total_weight  # fraction of total weight behind winner
+        confidence = (
+            best_weight / total_weight
+        )  # fraction of total weight behind winner
 
         # Require a clear majority
         if best_action == "HOLD" or confidence <= 0.5:
             return {"action": "HOLD", "confidence": confidence, "strength": 0.0}
 
         avg_strength = best_weight / max(
-            sum(1 for n in self.active_strategies if self._latest_signals.get(n) and
-                self._latest_signals[n].action == best_action),
+            sum(
+                1
+                for n in self.active_strategies
+                if self._latest_signals.get(n)
+                and self._latest_signals[n].action == best_action
+            ),
             1,
         )
-        return {"action": best_action, "confidence": confidence, "strength": avg_strength}
+        return {
+            "action": best_action,
+            "confidence": confidence,
+            "strength": avg_strength,
+        }
 
     def _execute_signal(self, composite: Dict):
         """Send to execution"""

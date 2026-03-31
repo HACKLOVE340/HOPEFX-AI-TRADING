@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # Sources: typical retail broker spreads during liquid hours.
 # Used as the base spread; actual slippage adds a random component on top.
 _DEFAULT_SPREADS: Dict[str, float] = {
-    "XAUUSD": 0.30,   # Gold: ~$0.30 half-spread
+    "XAUUSD": 0.30,  # Gold: ~$0.30 half-spread
     "XAGUSD": 0.02,
     "XPTUSD": 0.50,
     "EURUSD": 0.00010,  # 1 pip
@@ -128,14 +128,21 @@ class SlippageModel:
             return mid_price
 
         # Direction: +1 for buys (price goes up), -1 for sells (price goes down)
-        direction = 1.0 if str(side).upper() in ("BUY", "ORDERSIDE.BUY", "LONG") else -1.0
+        direction = (
+            1.0 if str(side).upper() in ("BUY", "ORDERSIDE.BUY", "LONG") else -1.0
+        )
 
         if self._model == "fixed":
             slippage = mid_price * self._fixed_pct * direction
             fill = mid_price + slippage
             logger.debug(
                 "SlippageModel[fixed] %s %s qty=%.4f mid=%.5f fill=%.5f slip=%.5f",
-                side, symbol, quantity, mid_price, fill, slippage,
+                side,
+                symbol,
+                quantity,
+                mid_price,
+                fill,
+                slippage,
             )
             return max(fill, 1e-8)
 
@@ -162,8 +169,14 @@ class SlippageModel:
         logger.debug(
             "SlippageModel[gaussian] %s %s qty=%.4f mid=%.5f "
             "spread=%.5f impact=%.5f noise=%.5f fill=%.5f",
-            side, symbol, quantity, mid_price,
-            spread_cost, impact, noise, fill,
+            side,
+            symbol,
+            quantity,
+            mid_price,
+            spread_cost,
+            impact,
+            noise,
+            fill,
         )
         return max(fill, 1e-8)
 
@@ -230,8 +243,8 @@ class PaperTradingBroker(BrokerConnector):
         self.market_prices = {
             # Precious Metals
             "XAUUSD": 3300.0,  # Gold (~Mar 2025)
-            "XAGUSD": 33.50,   # Silver
-            "XPTUSD": 980.0,   # Platinum
+            "XAGUSD": 33.50,  # Silver
+            "XPTUSD": 980.0,  # Platinum
             # Major Forex Pairs
             "EURUSD": 1.0820,
             "GBPUSD": 1.2940,
@@ -257,9 +270,9 @@ class PaperTradingBroker(BrokerConnector):
             "TSLA": 250.0,
             "NVDA": 880.0,
             # Indices
-            "US30": 41500.0,   # Dow Jones
-            "US500": 5600.0,   # S&P 500
-            "NAS100": 19500.0, # Nasdaq 100
+            "US30": 41500.0,  # Dow Jones
+            "US500": 5600.0,  # S&P 500
+            "NAS100": 19500.0,  # Nasdaq 100
         }
 
     async def __aenter__(self):
@@ -347,8 +360,13 @@ class PaperTradingBroker(BrokerConnector):
 
             logger.info(
                 "Market order filled: %s %s %s mid=%.5f fill=%.5f slip=%.5f commission=%.4f",
-                side.value, quantity, symbol,
-                current_price, fill_price, fill_price - current_price, commission,
+                side.value,
+                quantity,
+                symbol,
+                current_price,
+                fill_price,
+                fill_price - current_price,
+                commission,
             )
         else:
             # For limit/stop orders, just mark as open
@@ -374,7 +392,9 @@ class PaperTradingBroker(BrokerConnector):
         self.equity = self.balance
         logger.debug(
             "Commission charged: $%.4f (qty=%.0f lots=%.4f rate=%.2f/lot)",
-            commission, quantity, quantity / self._standard_lot_units,
+            commission,
+            quantity,
+            quantity / self._standard_lot_units,
             self._commission_per_lot,
         )
         return commission
@@ -440,9 +460,11 @@ class PaperTradingBroker(BrokerConnector):
         mid_price = self.market_prices.get(symbol, position.entry_price)
 
         # Closing a LONG = selling; closing a SHORT = buying
-        close_side = OrderSide.SELL if str(position.side).upper() in (
-            "LONG", "ORDERSIDE.BUY", "BUY"
-        ) else OrderSide.BUY
+        close_side = (
+            OrderSide.SELL
+            if str(position.side).upper() in ("LONG", "ORDERSIDE.BUY", "BUY")
+            else OrderSide.BUY
+        )
         exit_price = self._slippage.fill_price(
             symbol=symbol,
             mid_price=mid_price,
@@ -471,7 +493,11 @@ class PaperTradingBroker(BrokerConnector):
         logger.info(
             "Position closed: %s gross_pnl=$%.2f commission=$%.4f net_pnl=$%.2f "
             "balance=$%.2f",
-            symbol, gross_pnl, close_commission, net_pnl, self.balance,
+            symbol,
+            gross_pnl,
+            close_commission,
+            net_pnl,
+            self.balance,
         )
 
         return True
@@ -612,8 +638,13 @@ class PaperTradingBroker(BrokerConnector):
 
         # Timeframe → seconds mapping for realistic bar timestamps
         _tf_seconds = {
-            "1m": 60, "5m": 300, "15m": 900, "30m": 1800,
-            "1h": 3600, "4h": 14400, "1d": 86400,
+            "1m": 60,
+            "5m": 300,
+            "15m": 900,
+            "30m": 1800,
+            "1h": 3600,
+            "4h": 14400,
+            "1d": 86400,
         }
         bar_seconds = _tf_seconds.get(timeframe, 3600)
         now_ts = time.time()

@@ -99,7 +99,9 @@ class ModelPerformanceMonitor:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def on_model_promoted(self, new_version: str, previous_version: Optional[str]) -> None:
+    def on_model_promoted(
+        self, new_version: str, previous_version: Optional[str]
+    ) -> None:
         """
         Notify the monitor that a new model version was promoted.
 
@@ -226,10 +228,13 @@ class ModelPerformanceMonitor:
         if prev_mean is not None:
             if prev_mean > 0 and cur_mean < prev_mean * (1 - ROLLBACK_THRESHOLD):
                 return True, (
-                    f"current mean_pnl={cur_mean:.4f} is {ROLLBACK_THRESHOLD*100:.0f}%+ "
+                    f"current mean_pnl={cur_mean:.4f} is {ROLLBACK_THRESHOLD * 100:.0f}%+ "
                     f"below previous mean_pnl={prev_mean:.4f}"
                 )
-            if prev_mean <= 0 and cur_mean < prev_mean - abs(prev_mean) * ROLLBACK_THRESHOLD:
+            if (
+                prev_mean <= 0
+                and cur_mean < prev_mean - abs(prev_mean) * ROLLBACK_THRESHOLD
+            ):
                 return True, (
                     f"current mean_pnl={cur_mean:.4f} degraded vs "
                     f"previous mean_pnl={prev_mean:.4f}"

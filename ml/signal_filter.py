@@ -55,34 +55,36 @@ from __future__ import annotations
 import logging
 import os
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Deque, Dict, Optional
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 # ── Environment-configurable thresholds ──────────────────────────────────────
-_THRESHOLD_LONG     = float(os.getenv("SIGNAL_THRESHOLD_LONG",    "0.58"))
-_THRESHOLD_SHORT    = float(os.getenv("SIGNAL_THRESHOLD_SHORT",   "0.42"))
-_EV_MIN             = float(os.getenv("EV_MIN_THRESHOLD",         "0.0"))
-_EV_WINDOW          = int(os.getenv("EV_WINDOW",                  "50"))
-_REGIME_FILTER      = os.getenv("REGIME_FILTER_ENABLED",          "true").lower()  == "true"
-_MTF_CONFLUENCE     = os.getenv("MTF_CONFLUENCE_REQUIRED",        "false").lower() == "true"
-_MIN_CONFIDENCE_ABS = float(os.getenv("MIN_CONFIDENCE_ABS",       "0.55"))
-_BLACKOUT_GATE      = os.getenv("BLACKOUT_GATE_ENABLED",          "true").lower()  == "true"
-_CIRCUIT_BREAKER    = os.getenv("CIRCUIT_BREAKER_ENABLED",        "true").lower()  == "true"
+_THRESHOLD_LONG = float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.58"))
+_THRESHOLD_SHORT = float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.42"))
+_EV_MIN = float(os.getenv("EV_MIN_THRESHOLD", "0.0"))
+_EV_WINDOW = int(os.getenv("EV_WINDOW", "50"))
+_REGIME_FILTER = os.getenv("REGIME_FILTER_ENABLED", "true").lower() == "true"
+_MTF_CONFLUENCE = os.getenv("MTF_CONFLUENCE_REQUIRED", "false").lower() == "true"
+_MIN_CONFIDENCE_ABS = float(os.getenv("MIN_CONFIDENCE_ABS", "0.55"))
+_BLACKOUT_GATE = os.getenv("BLACKOUT_GATE_ENABLED", "true").lower() == "true"
+_CIRCUIT_BREAKER = os.getenv("CIRCUIT_BREAKER_ENABLED", "true").lower() == "true"
 # Circuit-breaker: halt all signals when rolling accuracy drops below this
-_CB_MIN_ACCURACY    = float(os.getenv("CB_MIN_ACCURACY",          "0.45"))
+_CB_MIN_ACCURACY = float(os.getenv("CB_MIN_ACCURACY", "0.45"))
 # Circuit-breaker: minimum outcomes before the breaker can trip
-_CB_MIN_OUTCOMES    = int(os.getenv("CB_MIN_OUTCOMES",            "30"))
+_CB_MIN_OUTCOMES = int(os.getenv("CB_MIN_OUTCOMES", "30"))
 
 
 # ── Prometheus metrics (optional) ────────────────────────────────────────────
 
+
 def _init_prometheus():
     try:
         from prometheus_client import Counter, Gauge
+
         class _M:
             signals_checked = Counter(
                 "hopefx_signal_filter_checked_total",
@@ -114,14 +116,24 @@ def _init_prometheus():
                 "Number of times the circuit breaker tripped",
                 ["symbol"],
             )
+
         return _M()
     except Exception:
+
         class _Noop:
             class _C:
-                def labels(self, **_kw): return self
-                def inc(self, *a, **kw): pass
-                def set(self, *a, **kw): pass
-            def __getattr__(self, _): return self._C()
+                def labels(self, **_kw):
+                    return self
+
+                def inc(self, *a, **kw):
+                    pass
+
+                def set(self, *a, **kw):
+                    pass
+
+            def __getattr__(self, _):
+                return self._C()
+
         return _Noop()
 
 
@@ -131,9 +143,10 @@ _PROM = _init_prometheus()
 @dataclass
 class FilterResult:
     """Result of a signal quality check."""
+
     passed: bool
     reason: str = ""
-    gate: str = ""                  # which gate blocked (empty if passed)
+    gate: str = ""  # which gate blocked (empty if passed)
     confidence: float = 0.0
     expected_value: float = 0.0
     regime: str = "unknown"
@@ -146,8 +159,9 @@ class FilterResult:
 @dataclass
 class _TradeOutcome:
     """Minimal record of a completed trade for EV calculation."""
+
     pnl_pct: float
-    direction: int   # 1=long, -1=short
+    direction: int  # 1=long, -1=short
     confidence: float
 
 
@@ -187,7 +201,7 @@ class SignalFilter:
         # Global outcome window (used when per-symbol window is too small)
         self._global_outcomes: Deque[_TradeOutcome] = deque(maxlen=_EV_WINDOW * 3)
         # Circuit-breaker state
-        self._cb_tripped: Dict[str, bool] = {}   # per-symbol trip state
+        self._cb_tripped: Dict[str, bool] = {}  # per-symbol trip state
         self._cb_trip_count: int = 0
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -209,7 +223,7 @@ class SignalFilter:
 
         Returns FilterResult — check .passed before forwarding to execution.
         """
-        sym       = symbol or signal.get("symbol", "UNKNOWN")
+        sym = symbol or signal.get("symbol", "UNKNOWN")
         direction = signal.get("direction", "HOLD")
         confidence = self._extract_confidence(signal)
 
@@ -294,7 +308,9 @@ class SignalFilter:
         Call this from the execution path after a trade closes.
         Updates Prometheus accuracy gauge immediately.
         """
-        outcome = _TradeOutcome(pnl_pct=pnl_pct, direction=direction, confidence=confidence)
+        outcome = _TradeOutcome(
+            pnl_pct=pnl_pct, direction=direction, confidence=confidence
+        )
         if symbol not in self._outcomes:
             self._outcomes[symbol] = deque(maxlen=_EV_WINDOW)
         self._outcomes[symbol].append(outcome)
@@ -311,9 +327,17 @@ class SignalFilter:
 
     def ev_stats(self, symbol: Optional[str] = None) -> Dict[str, Any]:
         """Return EV statistics for monitoring/API exposure."""
-        outcomes = list(self._outcomes.get(symbol or "", [])) or list(self._global_outcomes)
+        outcomes = list(self._outcomes.get(symbol or "", [])) or list(
+            self._global_outcomes
+        )
         if not outcomes:
-            return {"n": 0, "ev": None, "win_rate": None, "avg_win": None, "avg_loss": None}
+            return {
+                "n": 0,
+                "ev": None,
+                "win_rate": None,
+                "avg_win": None,
+                "avg_loss": None,
+            }
         pnls = [o.pnl_pct for o in outcomes]
         wins = [p for p in pnls if p > 0]
         losses = [p for p in pnls if p <= 0]
@@ -349,21 +373,21 @@ class SignalFilter:
             "symbols_tracked": len(self._outcomes),
             "global_outcomes_buffered": len(self._global_outcomes),
             "circuit_breaker": {
-                "enabled":    _CIRCUIT_BREAKER,
+                "enabled": _CIRCUIT_BREAKER,
                 "trip_count": self._cb_trip_count,
-                "tripped":    dict(self._cb_tripped),
+                "tripped": dict(self._cb_tripped),
                 "min_accuracy": _CB_MIN_ACCURACY,
                 "min_outcomes": _CB_MIN_OUTCOMES,
             },
             "config": {
-                "threshold_long":         _THRESHOLD_LONG,
-                "threshold_short":        _THRESHOLD_SHORT,
-                "ev_min":                 _EV_MIN,
-                "ev_window":              _EV_WINDOW,
-                "min_confidence_abs":     _MIN_CONFIDENCE_ABS,
-                "regime_filter_enabled":  _REGIME_FILTER,
+                "threshold_long": _THRESHOLD_LONG,
+                "threshold_short": _THRESHOLD_SHORT,
+                "ev_min": _EV_MIN,
+                "ev_window": _EV_WINDOW,
+                "min_confidence_abs": _MIN_CONFIDENCE_ABS,
+                "regime_filter_enabled": _REGIME_FILTER,
                 "mtf_confluence_required": _MTF_CONFLUENCE,
-                "blackout_gate_enabled":  _BLACKOUT_GATE,
+                "blackout_gate_enabled": _BLACKOUT_GATE,
                 "circuit_breaker_enabled": _CIRCUIT_BREAKER,
             },
         }
@@ -402,7 +426,10 @@ class SignalFilter:
                 logger.warning(
                     "SignalFilter: circuit breaker TRIPPED for %s "
                     "(win_rate=%.3f < %.3f, n=%d)",
-                    symbol, win_rate, _CB_MIN_ACCURACY, len(pnls),
+                    symbol,
+                    win_rate,
+                    _CB_MIN_ACCURACY,
+                    len(pnls),
                 )
             return FilterResult(
                 passed=False,
@@ -419,7 +446,8 @@ class SignalFilter:
             self._cb_tripped[symbol] = False
             logger.info(
                 "SignalFilter: circuit breaker RESET for %s (win_rate=%.3f recovered)",
-                symbol, win_rate,
+                symbol,
+                win_rate,
             )
 
         return FilterResult(passed=True, confidence=confidence)
@@ -433,6 +461,7 @@ class SignalFilter:
         """
         try:
             from data_layer.orchestrator import orchestrator
+
             if orchestrator.is_blackout_window():
                 return FilterResult(
                     passed=False,
@@ -456,6 +485,7 @@ class SignalFilter:
         # Try orchestrator first
         try:
             from data_layer.orchestrator import orchestrator
+
             feats = orchestrator.get_ml_features()
             if feats:
                 # Use micro_ofi as a proxy for trending vs mean-reverting
@@ -471,6 +501,7 @@ class SignalFilter:
         if ohlcv is not None:
             try:
                 import numpy as _np
+
                 closes = _np.array(ohlcv["close"].values[-50:], dtype=float)
                 if len(closes) >= 20:
                     hurst = self._hurst_exponent(closes)
@@ -488,7 +519,9 @@ class SignalFilter:
 
         return "unknown"
 
-    def _gate_confidence(self, direction: str, confidence: float, regime: str = "unknown") -> FilterResult:
+    def _gate_confidence(
+        self, direction: str, confidence: float, regime: str = "unknown"
+    ) -> FilterResult:
         """
         Gate 2: confidence must exceed the direction-specific threshold.
 
@@ -515,9 +548,9 @@ class SignalFilter:
         elif regime == "HIGH_VOL":
             tighten = 0.03
 
-        threshold_long  = _THRESHOLD_LONG  + tighten
+        threshold_long = _THRESHOLD_LONG + tighten
         threshold_short = _THRESHOLD_SHORT - tighten
-        min_conf        = _MIN_CONFIDENCE_ABS + tighten
+        min_conf = _MIN_CONFIDENCE_ABS + tighten
 
         # Hard floor (regime-adjusted)
         if confidence < min_conf:
@@ -619,12 +652,16 @@ class SignalFilter:
         try:
             closes = np.array(ohlcv["close"].values[-100:], dtype=float)
             if len(closes) < 20:
-                return FilterResult(passed=True, confidence=confidence, regime="unknown")
+                return FilterResult(
+                    passed=True, confidence=confidence, regime="unknown"
+                )
 
             # Realised vol: 14-bar rolling std of log returns
             log_ret = np.diff(np.log(closes))
             if len(log_ret) < 14:
-                return FilterResult(passed=True, confidence=confidence, regime="unknown")
+                return FilterResult(
+                    passed=True, confidence=confidence, regime="unknown"
+                )
 
             rv_14 = float(np.std(log_ret[-14:]))
             rv_90 = float(np.std(log_ret[-90:])) if len(log_ret) >= 90 else rv_14
@@ -635,7 +672,7 @@ class SignalFilter:
                     passed=False,
                     gate="regime",
                     reason=(
-                        f"HIGH_VOL regime: rv14={rv_14:.5f} > 2×rv90={2*rv_90:.5f}. "
+                        f"HIGH_VOL regime: rv14={rv_14:.5f} > 2×rv90={2 * rv_90:.5f}. "
                         "Model accuracy historically lower in high-vol regimes."
                     ),
                     confidence=confidence,
@@ -674,13 +711,18 @@ class SignalFilter:
         """
         try:
             from research.pipeline.mtf_fusion import get_mtf_store
+
             store = get_mtf_store()
             if store is None:
-                return FilterResult(passed=True, confidence=confidence, mtf_aligned=None)
+                return FilterResult(
+                    passed=True, confidence=confidence, mtf_aligned=None
+                )
 
             features = store.get(symbol, {})
             if not features:
-                return FilterResult(passed=True, confidence=confidence, mtf_aligned=None)
+                return FilterResult(
+                    passed=True, confidence=confidence, mtf_aligned=None
+                )
 
             # MTF features: h4_trend_up, d1_trend_up (1=up, 0=down/neutral)
             h4_up = features.get("h4_trend_up", 0.5)
@@ -755,7 +797,7 @@ class SignalFilter:
                     rs_vals.append(np.log(r / s))
             if len(rs_vals) < 3:
                 return 0.5
-            log_lags = np.log(list(lags[:len(rs_vals)]))
+            log_lags = np.log(list(lags[: len(rs_vals)]))
             hurst = float(np.polyfit(log_lags, rs_vals, 1)[0])
             return max(0.0, min(1.0, hurst))
         except Exception:

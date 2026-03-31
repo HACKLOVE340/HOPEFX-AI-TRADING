@@ -158,7 +158,7 @@ class EngineCircuitBreaker:
                             level="critical",
                         )
                     except Exception as _exc:
-                        logger.debug('Suppressed exception: %s', _exc)
+                        logger.debug("Suppressed exception: %s", _exc)
 
     async def record_success(self) -> None:
         async with self._lock:
@@ -306,6 +306,7 @@ class ExecutionEngine:
         # This is belt-and-suspenders — gatekeeper already checks this.
         try:
             from data_layer.orchestrator import orchestrator
+
             if orchestrator._started and not orchestrator.is_safe_to_trade():
                 self._total_blocks += 1
                 return self._blocked_report(
@@ -328,12 +329,17 @@ class ExecutionEngine:
                         take_profit=request.take_profit,
                         strategy_id=request.strategy_id,
                         request_id=request.request_id,
-                        metadata={**request.metadata, "dl_mid": tick.mid,
-                                   "dl_source": tick.source.value,
-                                   "dl_confidence": tick.confidence},
+                        metadata={
+                            **request.metadata,
+                            "dl_mid": tick.mid,
+                            "dl_source": tick.source.value,
+                            "dl_confidence": tick.confidence,
+                        },
                     )
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)  # data layer unavailable — proceed without enrichment
+            logger.debug(
+                "Suppressed exception: %s", _exc
+            )  # data layer unavailable — proceed without enrichment
 
         # ── 1. Kill switch ────────────────────────────────────────────────────
         if self._kill_switch and self._kill_switch.is_active():
@@ -385,17 +391,22 @@ class ExecutionEngine:
         # The algo manager returns None for small orders (plain market order).
         try:
             from execution.algo_orders import get_algo_manager
+
             _algo_mgr = get_algo_manager()
             # Wire broker submit function if not already set
             if _algo_mgr._broker_submit is None and self._broker_manager is not None:
+
                 async def _broker_fn(**kwargs):
                     from execution.engine import ExecutionRequest as _ER
+
                     _req = _ER(
                         symbol=kwargs["symbol"],
                         side=kwargs["side"],
                         quantity=kwargs["quantity"],
                         order_type=kwargs.get("order_type", "MARKET"),
-                        strategy_id=kwargs.get("metadata", {}).get("strategy_id", "algo"),
+                        strategy_id=kwargs.get("metadata", {}).get(
+                            "strategy_id", "algo"
+                        ),
                         metadata=kwargs.get("metadata", {}),
                     )
                     _rep = await self._submit_to_broker(_req, time.monotonic())
@@ -404,6 +415,7 @@ class ExecutionEngine:
                         "fill_price": _rep.average_price,
                         "filled_quantity": _rep.filled_quantity,
                     }
+
                 _algo_mgr.set_broker_submit_fn(_broker_fn)
 
             algo_id = await _algo_mgr.submit_auto(
@@ -431,6 +443,7 @@ class ExecutionEngine:
         if model_version:
             try:
                 from ml.sharpe_circuit_breaker import get_sharpe_cb
+
                 if get_sharpe_cb().is_open(model_version):
                     self._total_blocks += 1
                     return self._blocked_report(
@@ -449,6 +462,7 @@ class ExecutionEngine:
         if _signal_price > 0:
             try:
                 from execution.tca_recorder import get_tca_recorder
+
                 get_tca_recorder().record_signal(
                     request_id=request.request_id,
                     symbol=request.symbol,
@@ -498,6 +512,7 @@ class ExecutionEngine:
                 pnl = report.metadata.get("realised_pnl", 0.0)
                 try:
                     from ml.sharpe_circuit_breaker import get_sharpe_cb
+
                     get_sharpe_cb().record_trade(pnl=pnl, model_version=model_version)
                 except Exception as _scb_exc:
                     logger.debug("SharpeCircuitBreaker record failed: %s", _scb_exc)
@@ -710,7 +725,12 @@ class ExecutionEngine:
         # ── New TCARecorder: signal_price vs fill_price ───────────────────────
         try:
             from execution.tca_recorder import get_tca_recorder
-            broker = report.metadata.get("broker", "unknown") if report.metadata else "unknown"
+
+            broker = (
+                report.metadata.get("broker", "unknown")
+                if report.metadata
+                else "unknown"
+            )
             get_tca_recorder().record_fill(
                 request_id=request.request_id,
                 fill_price=report.average_price,
@@ -810,4 +830,4 @@ class ExecutionEngine:
             try:
                 sentry_sdk.capture_exception(exc)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)

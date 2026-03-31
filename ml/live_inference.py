@@ -276,9 +276,11 @@ class AdvancedModelPredictor:
             # with 0 if it was not trained on them — safe degradation.
             try:
                 from data_layer.orchestrator import orchestrator
+
                 dl_features = orchestrator.get_ml_features()
                 if dl_features:
                     import pandas as _pd
+
                     dl_row = _pd.DataFrame([dl_features], index=result.index)
                     # Only add columns not already present
                     new_cols = [c for c in dl_row.columns if c not in result.columns]
@@ -286,7 +288,8 @@ class AdvancedModelPredictor:
                         result = _pd.concat([result, dl_row[new_cols]], axis=1)
                         logger.debug(
                             "Data layer injected %d features for %s",
-                            len(new_cols), symbol,
+                            len(new_cols),
+                            symbol,
                         )
             except Exception as dl_exc:
                 logger.debug("Data layer feature injection skipped: %s", dl_exc)
@@ -449,9 +452,9 @@ def get_advanced_predictor() -> AdvancedModelPredictor:
 
 # ── LiveInferenceLoop ─────────────────────────────────────────────────────────
 
-import asyncio
-import threading
-from typing import Callable, List
+import asyncio  # noqa: E402
+import threading  # noqa: E402
+from typing import Callable, List  # noqa: E402
 
 
 class LiveInferenceLoop:
@@ -533,6 +536,7 @@ class LiveInferenceLoop:
         try:
             # Primary: broker OHLCV store (live trading path)
             from brokers.ohlcv_store import get_ohlcv_store
+
             store = get_ohlcv_store()
             ohlcv = store.get(self.symbol, bars=self.min_bars + 20)
             if ohlcv is not None and len(ohlcv) >= self.min_bars:
@@ -543,6 +547,7 @@ class LiveInferenceLoop:
         try:
             # Secondary: replay engine (backtest / paper trading path)
             from data_layer.orchestrator import orchestrator
+
             replay = orchestrator._replay
             if replay is not None and hasattr(replay, "get_ohlcv"):
                 ohlcv = await asyncio.get_event_loop().run_in_executor(
@@ -565,6 +570,7 @@ class LiveInferenceLoop:
         """
         try:
             from ml.macro_store import macro_store
+
             if len(macro_store) == 0:
                 return None
             # We need an OHLCV index to align to; use a minimal placeholder
@@ -584,6 +590,7 @@ class LiveInferenceLoop:
         """
         try:
             from ml.signal_filter import get_signal_filter
+
             sf = get_signal_filter()
             result = sf.check(
                 signal=signal,
@@ -658,7 +665,8 @@ class LiveInferenceLoop:
         self._running = True
         logger.info(
             "LiveInferenceLoop started: symbol=%s interval=%.0fs",
-            self.symbol, self.interval_seconds,
+            self.symbol,
+            self.interval_seconds,
         )
         while self._running:
             start = time.monotonic()

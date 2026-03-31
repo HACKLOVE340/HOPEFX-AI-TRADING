@@ -78,7 +78,6 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -98,19 +97,21 @@ TCA_MAX_MEMORY_RECORDS: int = int(os.getenv("TCA_MAX_MEMORY_RECORDS", "10000"))
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class TCARecord:
     """Single trade TCA record: signal price vs actual fill price."""
+
     request_id: str
     symbol: str
-    side: str                       # BUY | SELL
-    signal_price: float             # Price at signal generation time
-    fill_price: float               # Actual fill price
+    side: str  # BUY | SELL
+    signal_price: float  # Price at signal generation time
+    fill_price: float  # Actual fill price
     filled_quantity: float
     broker: str
     latency_ms: float
     model_version: str
-    session: str                    # e.g. "london", "new_york", "asia"
+    session: str  # e.g. "london", "new_york", "asia"
     signal_time: datetime
     fill_time: datetime
 
@@ -161,6 +162,7 @@ class TCARecord:
 @dataclass
 class TCAReport:
     """Aggregated TCA statistics for a broker/instrument/session slice."""
+
     broker: str
     symbol: Optional[str]
     session: Optional[str]
@@ -174,8 +176,8 @@ class TCAReport:
     mean_latency_ms: float
     p95_latency_ms: float
     mean_signal_to_fill_ms: float
-    adverse_fill_rate: float        # fraction of fills with slippage > 0
-    price_improvement_rate: float   # fraction of fills with slippage < 0
+    adverse_fill_rate: float  # fraction of fills with slippage > 0
+    price_improvement_rate: float  # fraction of fills with slippage < 0
     alert_triggered: bool
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -192,6 +194,7 @@ class TCAReport:
 
 
 # ── TCA Recorder ──────────────────────────────────────────────────────────────
+
 
 class TCARecorder:
     """
@@ -293,9 +296,16 @@ class TCARecorder:
         logger.info(
             "TCA: %s %s %s | signal=%.4f fill=%.4f slippage=%.2fbps "
             "slippage_usd=%.2f latency=%.1fms broker=%s session=%s",
-            signal["side"], signal["symbol"], request_id,
-            signal["signal_price"], fill_price, record.slippage_bps,
-            record.slippage_usd, latency_ms, broker, session,
+            signal["side"],
+            signal["symbol"],
+            request_id,
+            signal["signal_price"],
+            fill_price,
+            record.slippage_bps,
+            record.slippage_usd,
+            latency_ms,
+            broker,
+            session,
         )
 
         # Alert check
@@ -333,7 +343,9 @@ class TCARecorder:
         total_slip_usd = sum(r.slippage_usd for r in records)
 
         mean_slip = float(np.mean(slippages))
-        rolling_mean = float(np.mean(list(self._broker_slippage.get(broker or "", [])) or [mean_slip]))
+        rolling_mean = float(
+            np.mean(list(self._broker_slippage.get(broker or "", [])) or [mean_slip])
+        )
         alert = rolling_mean > TCA_ALERT_THRESHOLD_BPS
 
         report = TCAReport(
@@ -407,14 +419,20 @@ class TCARecorder:
             logger.warning(
                 "TCA ALERT: broker=%s rolling mean slippage=%.2fbps > threshold=%.2fbps "
                 "(window=%d trades) — possible routing issue",
-                broker, rolling_mean, TCA_ALERT_THRESHOLD_BPS, len(window),
+                broker,
+                rolling_mean,
+                TCA_ALERT_THRESHOLD_BPS,
+                len(window),
             )
             self._fire_alert(broker, rolling_mean, record)
 
-    def _fire_alert(self, broker: str, mean_slippage_bps: float, record: TCARecord) -> None:
+    def _fire_alert(
+        self, broker: str, mean_slippage_bps: float, record: TCARecord
+    ) -> None:
         """Publish a TCA alert to the outbox and alert engine."""
         try:
             from core.outbox import write_outbox_event_standalone
+
             write_outbox_event_standalone(
                 event_type="TCA_SLIPPAGE_ALERT",
                 channel="hopefx:tca",
@@ -448,6 +466,7 @@ class TCARecorder:
                 if redis is None:
                     return
                 import json
+
                 key = f"hopefx:tca:{record.broker}:{record.symbol}"
                 score = record.fill_time.timestamp()
                 await redis.zadd(key, {json.dumps(record.to_dict()): score})
@@ -466,6 +485,7 @@ class TCARecorder:
         """Write TCA record to DB via transactional outbox."""
         try:
             from core.outbox import write_outbox_event_standalone
+
             write_outbox_event_standalone(
                 event_type="TCA_RECORD",
                 channel="hopefx:tca",

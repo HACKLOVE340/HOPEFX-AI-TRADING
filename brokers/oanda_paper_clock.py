@@ -68,6 +68,7 @@ class OandaPaperClock:
         """Initialise the SharpeProgressTracker, returning a stub on import failure."""
         try:
             from ml.train_advanced import SharpeProgressTracker
+
             return SharpeProgressTracker(
                 target_n=_SHARPE_TARGET_N,
                 target_sharpe=_SHARPE_TARGET_SR,
@@ -136,6 +137,7 @@ class OandaPaperClock:
             started_dt = now
 
         from datetime import timedelta
+
         live_gate_opens = (started_dt + timedelta(days=_TARGET_DAYS)).isoformat()
 
         # Mask account_id: first 8 chars + ellipsis
@@ -202,6 +204,7 @@ class OandaPaperClock:
         # ── Prometheus ────────────────────────────────────────────────────────
         try:
             from core.metrics import SHARPE_N_TRADES, SHARPE_RATIO, SHARPE_GATE_PASSED
+
             SHARPE_N_TRADES.set(status["n_trades"])
             SHARPE_RATIO.set(status["sharpe"])
             SHARPE_GATE_PASSED.set(1.0 if status["gate_passed"] else 0.0)
@@ -460,9 +463,7 @@ def validate_oanda_account_at_startup() -> Dict[str, Any]:
             "BROKER_OANDA_TOKEN is set but BROKER_OANDA_ACCOUNT is missing. "
             "Set BROKER_OANDA_ACCOUNT to your practice account ID."
         )
-        logger.warning(
-            "⚠ BROKER_OANDA_TOKEN set but BROKER_OANDA_ACCOUNT missing."
-        )
+        logger.warning("⚠ BROKER_OANDA_TOKEN set but BROKER_OANDA_ACCOUNT missing.")
 
     if not status.get("started", False):
         warnings.append(

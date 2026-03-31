@@ -43,7 +43,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -59,6 +58,7 @@ logging.basicConfig(
 try:
     import gymnasium as gym
     from gymnasium import spaces
+
     _GYM_AVAILABLE = True
 except ImportError:
     _GYM_AVAILABLE = False
@@ -74,6 +74,7 @@ try:
     from stable_baselines3.common.env_checker import check_env
     from stable_baselines3.common.monitor import Monitor
     from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+
     _SB3_AVAILABLE = True
 except ImportError:
     _SB3_AVAILABLE = False
@@ -241,10 +242,10 @@ if _GYM_AVAILABLE:
             else:
                 severity = self.np_random.uniform(0.0, 4.0)
 
-            vol        = max(0.1, self.np_random.normal(1.0, 0.5))
-            sentiment  = self.np_random.uniform(-1.0, 1.0)
+            vol = max(0.1, self.np_random.normal(1.0, 0.5))
+            sentiment = self.np_random.uniform(-1.0, 1.0)
             confidence = self.np_random.uniform(0.2, 1.0)
-            exposure   = self.np_random.uniform(0.0, 1.0)
+            exposure = self.np_random.uniform(0.0, 1.0)
             nuclear_level_norm = self._nuclear_level / 3.0
             paused = 1.0 if self._trading_paused else 0.0
 
@@ -263,6 +264,7 @@ if _GYM_AVAILABLE:
 
 
 # ── Training function ─────────────────────────────────────────────────────────
+
 
 def train(
     total_timesteps: int = 200_000,
@@ -345,6 +347,7 @@ def train(
     try:
         import tqdm  # noqa: F401
         import rich  # noqa: F401
+
         _progress_bar = True
     except ImportError:
         _progress_bar = False
@@ -376,6 +379,7 @@ def train(
 
 # ── Walk-forward wrapper ───────────────────────────────────────────────────────
 
+
 def walk_forward_train(
     n_folds: int = 5,
     timesteps_per_fold: int = 100_000,
@@ -389,7 +393,9 @@ def walk_forward_train(
         logger.error("gymnasium and stable-baselines3 required")
         return
 
-    logger.info("Walk-forward training: %d folds × %d steps", n_folds, timesteps_per_fold)
+    logger.info(
+        "Walk-forward training: %d folds × %d steps", n_folds, timesteps_per_fold
+    )
     best_reward = float("-inf")
     best_fold = -1
 
@@ -436,6 +442,7 @@ def walk_forward_train(
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(

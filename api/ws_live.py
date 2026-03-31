@@ -78,6 +78,7 @@ def _validate_ws_token(token: str) -> Optional[dict]:
         token = token[7:]
     try:
         from auth.jwt import decode_access_token
+
         return decode_access_token(token)
     except Exception as exc:
         logger.debug("WS token validation failed: %s", exc)
@@ -260,7 +261,10 @@ def _seed_from_broker() -> None:
                 _open_prices[sym] = float(live)
         _prices_seeded = True
     except Exception as exc:
-        logger.debug("_seed_prices_from_broker: app_state not ready yet, will retry next tick: %s", exc)
+        logger.debug(
+            "_seed_prices_from_broker: app_state not ready yet, will retry next tick: %s",
+            exc,
+        )
 
 
 def _get_live_price(symbol: str) -> Optional[float]:
@@ -346,6 +350,7 @@ async def _eventbus_tick_broadcaster() -> None:
     """
     try:
         from core.event_bus import bus, CH_TICK
+
         await bus.connect()
         logger.info("WS live: connected to EventBus — streaming real ticks.")
         async for msg in bus.subscribe(CH_TICK):
@@ -354,28 +359,29 @@ async def _eventbus_tick_broadcaster() -> None:
             # Normalise to frontend PriceTick schema:
             # { type: "price_tick", data: PriceTick }
             symbol = msg.get("symbol", "XAU/USD")
-            mid    = float(msg.get("mid") or 0)
+            mid = float(msg.get("mid") or 0)
             # Track previous mid for change_pct calculation
-            prev   = _last_mid.get(symbol, mid)
+            prev = _last_mid.get(symbol, mid)
             change = ((mid - prev) / prev * 100) if prev else 0.0
             _last_mid[symbol] = mid
 
             tick = {
                 "type": "price_tick",
                 "data": {
-                    "symbol":     symbol,
-                    "bid":        msg.get("bid"),
-                    "ask":        msg.get("ask"),
-                    "mid":        mid,
-                    "spread":     msg.get("spread"),
-                    "timestamp":  msg.get("timestamp"),
+                    "symbol": symbol,
+                    "bid": msg.get("bid"),
+                    "ask": msg.get("ask"),
+                    "mid": mid,
+                    "spread": msg.get("spread"),
+                    "timestamp": msg.get("timestamp"),
                     "change_pct": round(change, 4),
                 },
             }
             await _manager.broadcast("prices", tick)
     except Exception as exc:  # noqa: BLE001
         logger.warning(
-            "WS live: EventBus tick stream failed (%s) — broadcasting no_live_feed.", exc
+            "WS live: EventBus tick stream failed (%s) — broadcasting no_live_feed.",
+            exc,
         )
         await _broadcast_no_live_feed()
 
@@ -407,30 +413,36 @@ def _compute_atr_sl_tp(
     # ── 1. Signal engine data buffer ─────────────────────────────────────────
     try:
         from core.signal_engine import _data_buffers  # type: ignore[attr-defined]
+
         broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
         buf = _data_buffers.get(broker_sym) or _data_buffers.get(symbol)
         if buf is not None and len(buf) >= 15:
             import numpy as _np
-            highs  = _np.array([b["high"]  for b in list(buf)[-15:]], dtype=float)
-            lows   = _np.array([b["low"]   for b in list(buf)[-15:]], dtype=float)
+
+            highs = _np.array([b["high"] for b in list(buf)[-15:]], dtype=float)
+            lows = _np.array([b["low"] for b in list(buf)[-15:]], dtype=float)
             closes = _np.array([b["close"] for b in list(buf)[-15:]], dtype=float)
             tr = _np.maximum(
                 highs[1:] - lows[1:],
                 _np.maximum(
                     _np.abs(highs[1:] - closes[:-1]),
-                    _np.abs(lows[1:]  - closes[:-1]),
+                    _np.abs(lows[1:] - closes[:-1]),
                 ),
             )
             if len(tr) >= 14:
                 atr = float(_np.mean(tr[-14:]))
     except Exception as exc:
-        logger.debug("_compute_sl_tp: signal engine ATR calc failed, trying CSV fallback: %s", exc)
+        logger.debug(
+            "_compute_sl_tp: signal engine ATR calc failed, trying CSV fallback: %s",
+            exc,
+        )
 
     # ── 2. CSV fallback ───────────────────────────────────────────────────────
     if atr is None:
         try:
             import pathlib
             import pandas as _pd
+
             broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
             csv_path = pathlib.Path(f"data/{broker_sym}_H1.csv")
             if not csv_path.exists():
@@ -438,20 +450,24 @@ def _compute_atr_sl_tp(
             if csv_path.exists():
                 df = _pd.read_csv(csv_path, usecols=["high", "low", "close"]).tail(20)
                 if len(df) >= 15:
-                    highs  = df["high"].values.astype(float)
-                    lows   = df["low"].values.astype(float)
+                    highs = df["high"].values.astype(float)
+                    lows = df["low"].values.astype(float)
                     closes = df["close"].values.astype(float)
                     import numpy as _np
+
                     tr = _np.maximum(
                         highs[1:] - lows[1:],
                         _np.maximum(
                             _np.abs(highs[1:] - closes[:-1]),
-                            _np.abs(lows[1:]  - closes[:-1]),
+                            _np.abs(lows[1:] - closes[:-1]),
                         ),
                     )
                     atr = float(_np.mean(tr[-14:]))
         except Exception as exc:
-            logger.debug("_compute_sl_tp: CSV ATR calc failed, using percentage fallback: %s", exc)
+            logger.debug(
+                "_compute_sl_tp: CSV ATR calc failed, using percentage fallback: %s",
+                exc,
+            )
 
     # ── 3. Percentage fallback ────────────────────────────────────────────────
     if atr is None or atr <= 0:
@@ -476,6 +492,7 @@ async def _eventbus_signal_broadcaster() -> None:
     """
     try:
         from core.event_bus import bus, CH_SIGNAL
+
         await bus.connect()
         async for msg in bus.subscribe(CH_SIGNAL):
             if msg.get("type") != "signal_event":
@@ -485,10 +502,12 @@ async def _eventbus_signal_broadcaster() -> None:
             # Normalise to the frontend WsMessage schema:
             # { type: "signal", data: Signal }
             direction_raw = (msg.get("direction") or "neutral").lower()
-            direction_fe  = (
-                "long"  if direction_raw == "buy"  else
-                "short" if direction_raw == "sell" else
-                "neutral"
+            direction_fe = (
+                "long"
+                if direction_raw == "buy"
+                else "short"
+                if direction_raw == "sell"
+                else "neutral"
             )
             mid = msg.get("mid", 0.0)
             symbol = msg.get("symbol", "XAU/USD")
@@ -505,16 +524,16 @@ async def _eventbus_signal_broadcaster() -> None:
             signal = {
                 "type": "signal",
                 "data": {
-                    "id":           f"sig_{msg.get('tick_seq', 0)}",
-                    "symbol":       symbol,
-                    "direction":    direction_fe,
-                    "confidence":   msg.get("confidence", 0.0),
-                    "model":        msg.get("model_version", "advanced_oos"),
-                    "entry_price":  mid,
-                    "stop_loss":    sl,
-                    "take_profit":  tp,
+                    "id": f"sig_{msg.get('tick_seq', 0)}",
+                    "symbol": symbol,
+                    "direction": direction_fe,
+                    "confidence": msg.get("confidence", 0.0),
+                    "model": msg.get("model_version", "advanced_oos"),
+                    "entry_price": mid,
+                    "stop_loss": sl,
+                    "take_profit": tp,
                     "generated_at": msg.get("timestamp", ""),
-                    "status":       "active",
+                    "status": "active",
                 },
             }
             await _manager.broadcast("signals", signal)
@@ -534,14 +553,17 @@ async def _broadcast_no_live_feed() -> None:
     logger.warning("WS live: no live broker feed — GBM simulation disabled.")
     while True:
         if _manager.connection_count > 0:
-            await _manager.broadcast("prices", {
-                "type": "no_live_feed",
-                "message": (
-                    "No live broker connection. "
-                    "Connect a broker in Settings to receive real-time prices."
-                ),
-                "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
-            })
+            await _manager.broadcast(
+                "prices",
+                {
+                    "type": "no_live_feed",
+                    "message": (
+                        "No live broker connection. "
+                        "Connect a broker in Settings to receive real-time prices."
+                    ),
+                    "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+                },
+            )
         await asyncio.sleep(_NO_FEED_INTERVAL)
 
 
@@ -567,15 +589,17 @@ async def _price_broadcaster_live_only() -> None:
                 await _manager.broadcast("prices", tick)
             elif symbol not in _no_feed_warned:
                 _no_feed_warned.add(symbol)
-                await _manager.broadcast("prices", {
-                    "type": "no_live_feed",
-                    "symbol": symbol,
-                    "message": (
-                        f"No live price for {symbol}. "
-                        "Connect a broker in Settings."
-                    ),
-                    "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
-                })
+                await _manager.broadcast(
+                    "prices",
+                    {
+                        "type": "no_live_feed",
+                        "symbol": symbol,
+                        "message": (
+                            f"No live price for {symbol}. Connect a broker in Settings."
+                        ),
+                        "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+                    },
+                )
         if not any_live:
             # All symbols missing — slow down polling to avoid log spam
             await asyncio.sleep(9)
@@ -595,7 +619,10 @@ async def _price_broadcaster() -> None:
         # through to the direct-poll path below.
         await _eventbus_tick_broadcaster()
     except Exception as exc:
-        logger.warning("_price_broadcaster: EventBus tick broadcaster failed, falling back to direct poll: %s", exc)
+        logger.warning(
+            "_price_broadcaster: EventBus tick broadcaster failed, falling back to direct poll: %s",
+            exc,
+        )
     # EventBus unavailable — poll broker directly (real prices only, no GBM)
     await _price_broadcaster_live_only()
 
@@ -625,7 +652,11 @@ async def _heartbeat_broadcaster() -> None:
                 try:
                     await ws.close(code=1001, reason="heartbeat timeout")
                 except Exception as exc:
-                    logger.debug("_heartbeat_broadcaster: error closing stale connection %s: %s", cid, exc)
+                    logger.debug(
+                        "_heartbeat_broadcaster: error closing stale connection %s: %s",
+                        cid,
+                        exc,
+                    )
             _manager.disconnect(cid)
 
 
@@ -661,12 +692,15 @@ async def ws_live(websocket: WebSocket) -> None:
     """
     cid = await _manager.connect(websocket)
 
-    await _manager.send(cid, {
-        "type": "connected",
-        "connection_id": cid,
-        "auth_required": WS_AUTH_REQUIRED,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    })
+    await _manager.send(
+        cid,
+        {
+            "type": "connected",
+            "connection_id": cid,
+            "auth_required": WS_AUTH_REQUIRED,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
     # ── Auth gate ─────────────────────────────────────────────────────────────
     if WS_AUTH_REQUIRED:
@@ -676,40 +710,52 @@ async def ws_live(websocket: WebSocket) -> None:
             )
             msg = json.loads(raw)
             if msg.get("type") != "auth":
-                await _manager.send(cid, {
-                    "type": "error",
-                    "code": "AUTH_REQUIRED",
-                    "message": "First message must be {type: auth, token: ...}",
-                })
+                await _manager.send(
+                    cid,
+                    {
+                        "type": "error",
+                        "code": "AUTH_REQUIRED",
+                        "message": "First message must be {type: auth, token: ...}",
+                    },
+                )
                 await websocket.close(code=4001)
                 _manager.disconnect(cid)
                 return
 
             payload = _validate_ws_token(msg.get("token", ""))
             if payload is None:
-                await _manager.send(cid, {
-                    "type": "error",
-                    "code": "AUTH_FAILED",
-                    "message": "Invalid or expired token",
-                })
+                await _manager.send(
+                    cid,
+                    {
+                        "type": "error",
+                        "code": "AUTH_FAILED",
+                        "message": "Invalid or expired token",
+                    },
+                )
                 await websocket.close(code=4001)
                 _manager.disconnect(cid)
                 return
 
             user_id = str(payload.get("sub", payload.get("user_id", "unknown")))
             _manager.authenticate(cid, user_id)
-            await _manager.send(cid, {
-                "type": "auth_ok",
-                "user_id": user_id,
-                "role": payload.get("role", "trader"),
-            })
+            await _manager.send(
+                cid,
+                {
+                    "type": "auth_ok",
+                    "user_id": user_id,
+                    "role": payload.get("role", "trader"),
+                },
+            )
 
         except asyncio.TimeoutError:
-            await _manager.send(cid, {
-                "type": "error",
-                "code": "AUTH_TIMEOUT",
-                "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s",
-            })
+            await _manager.send(
+                cid,
+                {
+                    "type": "error",
+                    "code": "AUTH_TIMEOUT",
+                    "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s",
+                },
+            )
             await websocket.close(code=4001)
             _manager.disconnect(cid)
             return
@@ -725,11 +771,14 @@ async def ws_live(websocket: WebSocket) -> None:
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
-                await _manager.send(cid, {
-                    "type": "error",
-                    "code": "INVALID_JSON",
-                    "message": "Message must be valid JSON",
-                })
+                await _manager.send(
+                    cid,
+                    {
+                        "type": "error",
+                        "code": "INVALID_JSON",
+                        "message": "Message must be valid JSON",
+                    },
+                )
                 continue
 
             msg_type = msg.get("type", "")
@@ -737,18 +786,24 @@ async def ws_live(websocket: WebSocket) -> None:
             if msg_type == "subscribe":
                 channels = msg.get("channels", [])
                 _manager.subscribe(cid, channels)
-                await _manager.send(cid, {
-                    "type": "subscribed",
-                    "channels": channels,
-                })
+                await _manager.send(
+                    cid,
+                    {
+                        "type": "subscribed",
+                        "channels": channels,
+                    },
+                )
 
             elif msg_type == "unsubscribe":
                 channels = msg.get("channels", [])
                 _manager.unsubscribe(cid, channels)
-                await _manager.send(cid, {
-                    "type": "unsubscribed",
-                    "channels": channels,
-                })
+                await _manager.send(
+                    cid,
+                    {
+                        "type": "unsubscribed",
+                        "channels": channels,
+                    },
+                )
 
             elif msg_type == "ping":
                 # Client responding to heartbeat — reset miss counter
@@ -761,23 +816,32 @@ async def ws_live(websocket: WebSocket) -> None:
                 if payload:
                     user_id = str(payload.get("sub", "unknown"))
                     _manager.authenticate(cid, user_id)
-                    await _manager.send(cid, {
-                        "type": "auth_ok",
-                        "user_id": user_id,
-                    })
+                    await _manager.send(
+                        cid,
+                        {
+                            "type": "auth_ok",
+                            "user_id": user_id,
+                        },
+                    )
                 else:
-                    await _manager.send(cid, {
-                        "type": "error",
-                        "code": "AUTH_FAILED",
-                        "message": "Invalid or expired token",
-                    })
+                    await _manager.send(
+                        cid,
+                        {
+                            "type": "error",
+                            "code": "AUTH_FAILED",
+                            "message": "Invalid or expired token",
+                        },
+                    )
 
             else:
-                await _manager.send(cid, {
-                    "type": "error",
-                    "code": "UNKNOWN_MESSAGE_TYPE",
-                    "message": f"Unknown message type: {msg_type}",
-                })
+                await _manager.send(
+                    cid,
+                    {
+                        "type": "error",
+                        "code": "UNKNOWN_MESSAGE_TYPE",
+                        "message": f"Unknown message type: {msg_type}",
+                    },
+                )
 
     except WebSocketDisconnect:
         _manager.disconnect(cid)
@@ -835,6 +899,11 @@ async def push_account_update(account: dict, user_id: Optional[str] = None) -> N
 
 async def push_alert(alert: dict, user_id: str) -> None:
     """Price alerts are always per-user."""
-    await _manager.send_to_user(user_id, "alerts", {
-        "type": "alert_triggered", "data": alert,
-    })
+    await _manager.send_to_user(
+        user_id,
+        "alerts",
+        {
+            "type": "alert_triggered",
+            "data": alert,
+        },
+    )

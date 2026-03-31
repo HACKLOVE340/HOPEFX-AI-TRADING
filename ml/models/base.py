@@ -20,6 +20,8 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 
 class BaseMLModel(ABC):
     """
@@ -142,7 +144,7 @@ class BaseMLModel(ABC):
                     average="weighted",
                 )
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)  # Skip if not applicable
+                logger.debug("Suppressed exception: %s", _exc)  # Skip if not applicable
 
         return metrics
 

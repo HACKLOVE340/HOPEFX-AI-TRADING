@@ -96,8 +96,10 @@ def _check_kill_switch() -> None:
 # Both gates are bypassed when BROKER_TYPE=paper (paper trading is always
 # allowed) or APP_ENV=test so the test suite is not affected.
 # ---------------------------------------------------------------------------
-_OOS_META_PATH = _Path(__file__).parent.parent / "ml" / "saved_models" / "advanced_oos_meta.json"
-_deployment_gate_cache: dict = {}   # {path_mtime: result} — avoids re-reading on every order
+_OOS_META_PATH = (
+    _Path(__file__).parent.parent / "ml" / "saved_models" / "advanced_oos_meta.json"
+)
+_deployment_gate_cache: dict = {}  # {path_mtime: result} — avoids re-reading on every order
 
 
 def _read_oos_meta() -> dict:
@@ -392,7 +394,9 @@ async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
         ]
         assessment = app_state.risk_manager.assess_risk(account_info, positions_dicts)
         if not assessment.can_trade:
-            reason = getattr(assessment, "reason", None) or getattr(assessment, "messages", ["risk_check_failed"])
+            reason = getattr(assessment, "reason", None) or getattr(
+                assessment, "messages", ["risk_check_failed"]
+            )
             reason_str = "; ".join(reason) if isinstance(reason, list) else str(reason)
             logger.warning(
                 "Order blocked by risk manager: user=%s reason=%s",
@@ -492,7 +496,7 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
                 symbol=order.symbol, side=order.side, status="error"
             ).inc()
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
@@ -587,7 +591,7 @@ async def _record_fill(
 
         ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="filled").inc()
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
 
     # Paper trading gate fill counter — increments the Phase-3 fill counter so
     # the gate knows how many paper trades have been completed.
@@ -609,13 +613,17 @@ async def _record_fill(
         # something to learn from even when no pre-computed feature df exists.
         _fill_price = result.average_fill_price or 0.0
         _label = 1  # REST-API fills are assumed profitable (user-initiated)
-        _features = _pd.DataFrame([{
-            "symbol": order.symbol,
-            "side": order.side,
-            "quantity": order.quantity,
-            "fill_price": _fill_price,
-            "source": "rest_api",
-        }])
+        _features = _pd.DataFrame(
+            [
+                {
+                    "symbol": order.symbol,
+                    "side": order.side,
+                    "quantity": order.quantity,
+                    "fill_price": _fill_price,
+                    "source": "rest_api",
+                }
+            ]
+        )
         _notify_fill(_features, label=_label, primary_prob=None)
     except Exception as _ol_exc:
         logger.debug("notify_fill skipped in _record_fill: %s", _ol_exc)
@@ -666,8 +674,13 @@ async def place_order(
     ):
         try:
             from monetization.subscription import subscription_manager, plan_gate
+
             sub = subscription_manager.get_user_subscription(user.sub)
-            user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
+            user_plan = (
+                sub.tier.value
+                if (sub and sub.is_active() and hasattr(sub.tier, "value"))
+                else "free"
+            )
             if not plan_gate("starter", user_plan):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -681,8 +694,8 @@ async def place_order(
         except ImportError:
             pass  # monetization not available — allow through
 
-    _check_kill_switch()              # hard block — must be first
-    _check_live_deployment_gates()    # Sharpe gate + CI model guard
+    _check_kill_switch()  # hard block — must be first
+    _check_live_deployment_gates()  # Sharpe gate + CI model guard
     _check_order_rate_limit(user.sub)
     await _validate_order(order)
     await _apply_risk_checks(order, user.sub)
@@ -710,18 +723,24 @@ async def get_positions(
         pnl = float(getattr(p, "unrealized_pnl", 0) or 0)
         pnl_pct = ((current - entry) / entry * 100) if entry > 0 else 0.0
         opened_at = getattr(p, "opened_at", None) or getattr(p, "created_at", None)
-        opened_at_str = opened_at.isoformat() if hasattr(opened_at, "isoformat") else str(opened_at or "")
-        result.append(PositionResponse(
-            id=p.id,
-            symbol=p.symbol,
-            side=p.side.value if hasattr(p.side, "value") else str(p.side),
-            quantity=p.quantity,
-            entry_price=entry,
-            current_price=current,
-            unrealized_pnl=pnl,
-            unrealized_pnl_pct=round(pnl_pct, 4),
-            opened_at=opened_at_str,
-        ))
+        opened_at_str = (
+            opened_at.isoformat()
+            if hasattr(opened_at, "isoformat")
+            else str(opened_at or "")
+        )
+        result.append(
+            PositionResponse(
+                id=p.id,
+                symbol=p.symbol,
+                side=p.side.value if hasattr(p.side, "value") else str(p.side),
+                quantity=p.quantity,
+                entry_price=entry,
+                current_price=current,
+                unrealized_pnl=pnl,
+                unrealized_pnl_pct=round(pnl_pct, 4),
+                opened_at=opened_at_str,
+            )
+        )
     return result
 
 
@@ -825,9 +844,11 @@ async def get_account(
         return default
 
     balance = _f(raw, "balance", "nav", "net_liquidation")
-    equity  = _f(raw, "equity", "balance", "nav") or balance
+    equity = _f(raw, "equity", "balance", "nav") or balance
     margin_used = _f(raw, "margin_used", "margin", "used_margin")
-    margin_avail = _f(raw, "margin_available", "free_margin", "available_margin") or (equity - margin_used)
+    margin_avail = _f(raw, "margin_available", "free_margin", "available_margin") or (
+        equity - margin_used
+    )
     unrealized = _f(raw, "unrealized_pnl", "open_pnl", "unrealised_pnl")
     daily_pnl = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
     daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
@@ -1232,12 +1253,12 @@ def _make_strategy_router():
                 raise AttributeError("no broker")
 
             account = broker.get_account_info()
-            positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+            positions = (
+                broker.get_positions() if hasattr(broker, "get_positions") else []
+            )
 
             # Daily PnL: sum unrealised PnL across open positions
-            daily_pnl = sum(
-                getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions
-            )
+            daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
 
             # Margin used from account info
             margin_used = float(getattr(account, "margin_used", 0.0) or 0.0)
@@ -1325,9 +1346,11 @@ def _make_strategy_router():
 
             # Period in days
             ts_list = [t for t, _ in equity_history]
-            period_days = max(
-                1, round((ts_list[-1] - ts_list[0]) / 86400)
-            ) if len(ts_list) >= 2 else 1
+            period_days = (
+                max(1, round((ts_list[-1] - ts_list[0]) / 86400))
+                if len(ts_list) >= 2
+                else 1
+            )
 
             return {
                 "total_return": round(total_return, 4),

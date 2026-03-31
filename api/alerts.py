@@ -75,7 +75,7 @@ def _get_engine(request: Request):
         if engine is not None:
             return engine
     except Exception as _exc:
-        logger.debug('Suppressed exception: %s', _exc)
+        logger.debug("Suppressed exception: %s", _exc)
 
     # 2. request.app.state (legacy)
     engine = getattr(request.app.state, "alert_engine", None)

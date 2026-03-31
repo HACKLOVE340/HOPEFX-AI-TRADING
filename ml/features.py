@@ -305,12 +305,12 @@ class FeatureEngineer:
             If the model exposes no recognised importance interface.
         """
         if model is None:
-            raise ValueError(
-                "A trained model must be supplied; no model provided."
-            )
+            raise ValueError("A trained model must be supplied; no model provided.")
 
         # XGBoostPredictor wrapper (ml/pipeline.py)
-        if hasattr(model, "get_feature_importances") and callable(model.get_feature_importances):
+        if hasattr(model, "get_feature_importances") and callable(
+            model.get_feature_importances
+        ):
             return model.get_feature_importances()
 
         # sklearn / XGBoost / LightGBM native attribute
@@ -318,7 +318,8 @@ class FeatureEngineer:
             importances = model.feature_importances_
             names = (
                 self.feature_names
-                if hasattr(self, "feature_names") and len(self.feature_names) == len(importances)
+                if hasattr(self, "feature_names")
+                and len(self.feature_names) == len(importances)
                 else [str(i) for i in range(len(importances))]
             )
             return dict(zip(names, importances.tolist()))
@@ -447,4 +448,7 @@ class SignalEnsemble:
                 "predict_proba() nor predict()."
             )
 
-        return {"probability": prob, "raw_output": {"feature_count": len(features.features)}}
+        return {
+            "probability": prob,
+            "raw_output": {"feature_count": len(features.features)},
+        }

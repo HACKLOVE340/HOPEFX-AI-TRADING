@@ -49,7 +49,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -618,7 +618,7 @@ class WalkForwardResult:
     avg_return: float
     avg_drawdown: float
     avg_win_rate: float
-    stability_score: float   # 0–100: 100 = perfectly consistent across folds
+    stability_score: float  # 0–100: 100 = perfectly consistent across folds
     timesteps_per_fold: int
     completed_at: str
 
@@ -663,7 +663,6 @@ def walk_forward_eval(
     WalkForwardResult with per-fold metrics and aggregate statistics.
     """
     import pandas as pd
-    from datetime import timezone
 
     if len(candles) < 200:
         raise ValueError(f"Need at least 200 candles, got {len(candles)}")
@@ -678,7 +677,9 @@ def walk_forward_eval(
 
     logger.info(
         "Walk-forward eval: %d candles, %d folds, %d steps/fold",
-        total, n_folds, timesteps_per_fold,
+        total,
+        n_folds,
+        timesteps_per_fold,
     )
 
     for fold_idx in range(n_folds):
@@ -688,26 +689,32 @@ def walk_forward_eval(
 
         split = int(len(fold_df) * train_pct)
         if split < 100 or (len(fold_df) - split) < 50:
-            logger.warning("Fold %d: insufficient data (%d rows), skipping", fold_idx + 1, len(fold_df))
+            logger.warning(
+                "Fold %d: insufficient data (%d rows), skipping",
+                fold_idx + 1,
+                len(fold_df),
+            )
             continue
 
         train_rows = fold_df.iloc[:split]
-        test_rows  = fold_df.iloc[split:]
+        test_rows = fold_df.iloc[split:]
 
         train_candles_fold = train_rows.to_dict("records")
-        test_candles_fold  = test_rows.to_dict("records")
+        test_candles_fold = test_rows.to_dict("records")
 
         model_name = f"{model_name_prefix}_fold{fold_idx + 1}"
         agent = RLAgent(model_name=model_name)
 
         try:
             train_env = ForexTradingEnv(train_candles_fold)
-            test_env  = ForexTradingEnv(test_candles_fold)
+            test_env = ForexTradingEnv(test_candles_fold)
         except ValueError as exc:
             logger.warning("Fold %d env creation failed: %s", fold_idx + 1, exc)
             continue
 
-        logger.info("Fold %d/%d: training %d steps …", fold_idx + 1, n_folds, timesteps_per_fold)
+        logger.info(
+            "Fold %d/%d: training %d steps …", fold_idx + 1, n_folds, timesteps_per_fold
+        )
         agent.train(train_env, timesteps=timesteps_per_fold, verbose=0)
 
         metrics = agent.evaluate(test_env)
@@ -743,18 +750,19 @@ def walk_forward_eval(
     drawdowns = [f.max_drawdown for f in folds_results]
     win_rates = [f.win_rate for f in folds_results]
 
-    avg_sharpe   = float(np.mean(sharpes))
-    avg_return   = float(np.mean(returns))
+    avg_sharpe = float(np.mean(sharpes))
+    avg_return = float(np.mean(returns))
     avg_drawdown = float(np.mean(drawdowns))
     avg_win_rate = float(np.mean(win_rates))
 
     # Stability score: 100 - coefficient of variation of Sharpe ratios (capped 0–100)
-    sharpe_std  = float(np.std(sharpes)) if len(sharpes) > 1 else 0.0
+    sharpe_std = float(np.std(sharpes)) if len(sharpes) > 1 else 0.0
     sharpe_mean = abs(avg_sharpe) + 1e-9
     cv = sharpe_std / sharpe_mean
     stability = float(max(0.0, min(100.0, 100.0 * (1.0 - cv))))
 
     from datetime import datetime, timezone as tz
+
     completed_at = datetime.now(tz.utc).isoformat()
 
     result = WalkForwardResult(
