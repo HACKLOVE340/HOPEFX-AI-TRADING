@@ -1574,10 +1574,10 @@ class WorldMonitorSelfHostConfig:
         "GROQ_API_KEY": "Your Groq API key for AI summarization",
         # Caching (optional)
         "UPSTASH_REDIS_REST_URL": "Redis URL for cross-user caching",
-        "UPSTASH_REDIS_REST_TOKEN": "Redis auth token",
+        "UPSTASH_REDIS_REST_TOKEN": "Redis auth token",  # nosec B105 - env var description, not a credential,
         # Flight tracking (optional)
         "OPENSKY_USERNAME": "OpenSky Network username",
-        "OPENSKY_PASSWORD": "OpenSky Network password",
+        "OPENSKY_PASSWORD": "OpenSky Network password",  # nosec B105 - env var description, not a credential,
         # Ship tracking (optional)
         "VESSELFINDER_API_KEY": "VesselFinder API key",
         # Satellite fire detection (optional)

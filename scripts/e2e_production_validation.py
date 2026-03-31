@@ -59,7 +59,7 @@ os.chdir(_PROJECT_ROOT)
 
 # ── Result tracking ───────────────────────────────────────────────────────────
 
-PASS = "\033[92m✓\033[0m"
+PASS = "\033[92m✓\033[0m"  # nosec B105 - ANSI terminal color code, not a password
 FAIL = "\033[91m✗\033[0m"
 WARN = "\033[93m⚠\033[0m"
 BOLD = "\033[1m"

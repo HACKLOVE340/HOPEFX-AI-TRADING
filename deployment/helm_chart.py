@@ -295,7 +295,8 @@ spec:
 {{- end }}
 """
 
-SECRET_YAML = """\  # nosec B105 - Helm template string, not a hardcoded secret
+SECRET_YAML = (  # nosec B105 - Helm template string; variable name contains 'secret' but holds no credential
+    """\
 # helm/hopefx/templates/secret.yaml
 # Values are base64-encoded by Helm from the plain-text --set flags.
 # Never commit real secrets to source control.
@@ -311,6 +312,7 @@ data:
   {{ $key }}: {{ $val | b64enc | quote }}
   {{- end }}
 """
+)
 
 HELPERS_TPL = """\
 {{/*

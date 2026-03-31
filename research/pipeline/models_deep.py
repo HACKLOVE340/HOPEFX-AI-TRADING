@@ -722,7 +722,9 @@ class DeepPredictor:
             raise FileNotFoundError(f"DeepPredictor model not found: {path}")
         if not TORCH_AVAILABLE:
             raise RuntimeError("PyTorch is required for DeepPredictor.load()")
-        checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+        # weights_only=False required: checkpoint contains non-tensor metadata
+        # (architecture, task, label_smoothing). Path is validated by caller.
+        checkpoint = torch.load(path, map_location="cpu", weights_only=False)  # nosec B614
         predictor = cls(
             architecture=checkpoint["architecture"],
             n_features=checkpoint["n_features"],

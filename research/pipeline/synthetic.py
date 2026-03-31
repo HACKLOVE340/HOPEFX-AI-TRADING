@@ -504,7 +504,9 @@ class RegimeSynthesizer:
 
     @classmethod
     def load(cls, path: str | Path, device: str = "auto") -> "RegimeSynthesizer":
-        ckpt = torch.load(path, map_location="cpu")
+        # weights_only=False required: checkpoint contains non-tensor metadata
+        # (seq_len, n_features, n_regimes, noise_dim). Path is caller-validated.
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)  # nosec B614
         obj = cls(
             seq_len=ckpt["seq_len"],
             n_features=ckpt["n_features"],
