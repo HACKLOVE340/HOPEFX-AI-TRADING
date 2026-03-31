@@ -187,6 +187,29 @@ class CircuitBreaker:
 _QuickfixBase = fix.Application if fix is not None else object
 
 
+def _get_fix_field(message: Any, field_obj: Any, context: str = "") -> str:
+    """
+    Extract a string value from a FIX message field.
+
+    Returns an empty string when the field is absent or unreadable.
+    Optional fields in FIX 4.4 (Text, CxlRejReason, etc.) are legitimately
+    absent — callers should treat "" as "not present".
+
+    Parameters
+    ----------
+    message   : quickfix Message object
+    field_obj : pre-constructed quickfix field object (e.g. fix.Text())
+    context   : label used in the debug log when the field is absent
+    """
+    try:
+        message.getField(field_obj)
+        return field_obj.getString()
+    except Exception as exc:
+        if context:
+            logger.debug("%s field absent: %s", context, exc)
+        return ""
+
+
 class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
     """
     quickfix Application implementation.
@@ -240,6 +263,23 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         except Exception as exc:
             logger.warning("fix.toAdmin: could not inject credentials: %s", exc)
 
+    def _log_logout(self, message: Any, session_id: Any) -> None:
+        """Log an inbound Logout message with its optional reason text."""
+        text = _get_fix_field(message, fix.Text(), "fix.fromAdmin: Logout Text")
+        logger.warning(
+            "fix.fromAdmin: Logout received session=%s text=%r", session_id, text
+        )
+
+    def _log_session_reject(self, message: Any) -> None:
+        """Log an inbound session-level Reject with ref_seq, reason, and text."""
+        ref_seq = _get_fix_field(message, fix.RefSeqNum(),           "fix.fromAdmin: Reject RefSeqNum")
+        reason  = _get_fix_field(message, fix.SessionRejectReason(), "fix.fromAdmin: Reject SessionRejectReason")
+        text    = _get_fix_field(message, fix.Text(),                "fix.fromAdmin: Reject Text")
+        logger.error(
+            "fix.fromAdmin: session Reject ref_seq=%s reason=%s text=%r",
+            ref_seq, reason, text,
+        )
+
     def fromAdmin(self, message, session_id):
         """
         Called for every inbound admin message (Logon, Logout, Heartbeat, etc.).
@@ -255,49 +295,9 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
             mt = msg_type.getValue()
 
             if mt == fix.MsgType_Logout:
-                text_f = fix.Text()
-                text = ""
-                try:
-                    message.getField(text_f)
-                    text = text_f.getString()
-                except Exception as _e:
-                    # Text field is optional in Logout — absence is normal
-                    logger.debug("fix.fromAdmin: Logout Text field absent: %s", _e)
-                logger.warning(
-                    "fix.fromAdmin: Logout received session=%s text=%r",
-                    session_id,
-                    text,
-                )
-
+                self._log_logout(message, session_id)
             elif mt == fix.MsgType_Reject:
-                ref_seq_f = fix.RefSeqNum()
-                reason_f = fix.SessionRejectReason()
-                text_f = fix.Text()
-                ref_seq, reason, text = "", "", ""
-                try:
-                    message.getField(ref_seq_f)
-                    ref_seq = ref_seq_f.getString()
-                except Exception as _e:
-                    logger.debug("fix.fromAdmin: Reject RefSeqNum field absent: %s", _e)
-                try:
-                    message.getField(reason_f)
-                    reason = reason_f.getString()
-                except Exception as _e:
-                    logger.debug(
-                        "fix.fromAdmin: Reject SessionRejectReason field absent: %s",
-                        _e,
-                    )
-                try:
-                    message.getField(text_f)
-                    text = text_f.getString()
-                except Exception as _e:
-                    logger.debug("fix.fromAdmin: Reject Text field absent: %s", _e)
-                logger.error(
-                    "fix.fromAdmin: session Reject ref_seq=%s reason=%s text=%r",
-                    ref_seq,
-                    reason,
-                    text,
-                )
+                self._log_session_reject(message)
         except Exception as exc:
             logger.warning("fix.fromAdmin: error processing admin message: %s", exc)
 
@@ -322,30 +322,46 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
 
     # --- Internal ---
 
+    def _extract_exec_report_fields(self, message: Any) -> dict:
+        """
+        Extract all required ExecutionReport fields from a quickfix message.
+
+        Returns a plain dict so _handle_exec_report stays under 20 lines.
+        Raises on any missing required field — callers catch and reject.
+        """
+        def _req(field_obj: Any) -> Any:
+            """Fetch a required field; raises if absent."""
+            message.getField(field_obj)
+            return field_obj
+
+        cl_ord_id_f  = _req(fix.ClOrdID())
+        order_id_f   = _req(fix.OrderID())
+        exec_type_f  = _req(fix.ExecType())
+        symbol_f     = _req(fix.Symbol())
+        side_f       = _req(fix.Side())
+        last_qty_f   = _req(fix.LastQty())
+        avg_px_f     = _req(fix.AvgPx())
+        leaves_qty_f = _req(fix.LeavesQty())
+        cum_qty_f    = _req(fix.CumQty())
+
+        return {
+            "cl_ord_id":  cl_ord_id_f.getString(),
+            "order_id":   order_id_f.getString(),
+            "exec_type":  FIXExecType(exec_type_f.getValue()),
+            "symbol":     symbol_f.getString(),
+            "side":       FIXSide(side_f.getValue()),
+            "filled_qty": float(last_qty_f.getValue()),
+            "avg_px":     float(avg_px_f.getValue()),
+            "leaves_qty": float(leaves_qty_f.getValue()),
+            "cum_qty":    float(cum_qty_f.getValue()),
+        }
+
     def _handle_exec_report(self, message) -> None:
         cl_ord_id = "<unknown>"
         try:
-            cl_ord_id_f = fix.ClOrdID()
-            order_id_f = fix.OrderID()
-            exec_type_f = fix.ExecType()
-            symbol_f = fix.Symbol()
-            side_f = fix.Side()
-            last_qty_f = fix.LastQty()
-            avg_px_f = fix.AvgPx()
-            leaves_qty_f = fix.LeavesQty()
-            cum_qty_f = fix.CumQty()
+            fields    = self._extract_exec_report_fields(message)
+            cl_ord_id = fields["cl_ord_id"]
 
-            message.getField(cl_ord_id_f)
-            message.getField(order_id_f)
-            message.getField(exec_type_f)
-            message.getField(symbol_f)
-            message.getField(side_f)
-            message.getField(last_qty_f)
-            message.getField(avg_px_f)
-            message.getField(leaves_qty_f)
-            message.getField(cum_qty_f)
-
-            cl_ord_id = cl_ord_id_f.getString()
             latency_ms = 0.0
             if cl_ord_id in self._send_times:
                 latency_ms = (time.monotonic() - self._send_times.pop(cl_ord_id)) * 1000
@@ -353,14 +369,14 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
 
             report = FIXFillReport(
                 cl_ord_id=cl_ord_id,
-                order_id=order_id_f.getString(),
-                exec_type=FIXExecType(exec_type_f.getValue()),
-                symbol=symbol_f.getString(),
-                side=FIXSide(side_f.getValue()),
-                filled_qty=float(last_qty_f.getValue()),
-                avg_px=float(avg_px_f.getValue()),
-                leaves_qty=float(leaves_qty_f.getValue()),
-                cum_qty=float(cum_qty_f.getValue()),
+                order_id=fields["order_id"],
+                exec_type=fields["exec_type"],
+                symbol=fields["symbol"],
+                side=fields["side"],
+                filled_qty=fields["filled_qty"],
+                avg_px=fields["avg_px"],
+                leaves_qty=fields["leaves_qty"],
+                cum_qty=fields["cum_qty"],
                 latency_ms=latency_ms,
                 raw=message,
             )
@@ -369,11 +385,8 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         except Exception as exc:
             logger.exception(
                 "fix_adapter._handle_exec_report error cl_ord_id=%s: %s",
-                cl_ord_id,
-                exc,
+                cl_ord_id, exc,
             )
-            # Resolve the pending future with an error so the caller gets an
-            # immediate exception instead of hanging for 30 s then timing out.
             self._reject_pending(cl_ord_id, exc)
 
     def _handle_order_cancel_reject(self, message) -> None:
@@ -381,48 +394,31 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         cl_ord_id = "<unknown>"
         try:
             cl_ord_id_f = fix.ClOrdID()
-            text_f = fix.Text()
-            cxl_rej_reason_f = fix.CxlRejReason()
-
             message.getField(cl_ord_id_f)
             cl_ord_id = cl_ord_id_f.getString()
 
-            text = ""
-            try:
-                message.getField(text_f)
-                text = text_f.getString()
-            except Exception as _e:
-                # Text field is optional in OrderCancelReject
-                logger.debug("fix_adapter.OrderCancelReject: Text field absent: %s", _e)
-
-            reason_code = ""
-            try:
-                message.getField(cxl_rej_reason_f)
-                reason_code = cxl_rej_reason_f.getString()
-            except Exception as _e:
-                # CxlRejReason is optional
-                logger.debug(
-                    "fix_adapter.OrderCancelReject: CxlRejReason field absent: %s",
-                    _e,
-                )
+            reason_code = _get_fix_field(
+                message, fix.CxlRejReason(), "fix_adapter.OrderCancelReject: CxlRejReason"
+            )
+            text = _get_fix_field(
+                message, fix.Text(), "fix_adapter.OrderCancelReject: Text"
+            )
 
             logger.error(
                 "fix_adapter.OrderCancelReject cl_ord_id=%s reason=%s text=%r",
+                cl_ord_id, reason_code, text,
+            )
+            self._reject_pending(
                 cl_ord_id,
-                reason_code,
-                text,
+                RuntimeError(
+                    f"Order cancel/replace rejected by broker: cl_ord_id={cl_ord_id} "
+                    f"reason={reason_code} text={text!r}"
+                ),
             )
-            exc = RuntimeError(
-                f"Order cancel/replace rejected by broker: cl_ord_id={cl_ord_id} "
-                f"reason={reason_code} text={text!r}",
-            )
-            self._reject_pending(cl_ord_id, exc)
-
         except Exception as exc:
             logger.exception(
                 "fix_adapter._handle_order_cancel_reject error cl_ord_id=%s: %s",
-                cl_ord_id,
-                exc,
+                cl_ord_id, exc,
             )
 
     def _reject_pending(self, cl_ord_id: str, exc: Exception) -> None:
