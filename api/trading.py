@@ -370,84 +370,77 @@ async def _validate_order(order: "OrderRequest") -> None:
         ) from pf_exc
 
 
-async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
+async def _run_standard_risk_check(order: "OrderRequest", user_id: str) -> None:
     """
-    Run RiskManager.assess_risk() and CVaR pre-trade gate.
+    Run RiskManager.assess_risk() against current account state.
 
-    Raises HTTP 403 if risk limits are breached.
-    Raises HTTP 503 if the CVaR check itself errors (fail-safe: block the order).
+    Raises HTTP 403 when risk limits are breached.
+    Raises HTTP 503 when the check itself fails (fail-safe: block the order).
     """
-    if not (hasattr(app_state, "risk_manager") and app_state.risk_manager is not None):
-        return
-
-    # Standard risk assessment
     try:
         account_info = await _broker_call("get_account_info")
-        positions = await _broker_call("get_positions")
+        positions    = await _broker_call("get_positions")
         positions_dicts = [
             {
-                "symbol": p.symbol,
-                "quantity": p.quantity,
+                "symbol":        p.symbol,
+                "quantity":      p.quantity,
                 "current_price": getattr(p, "current_price", 0),
             }
             for p in positions
         ]
         assessment = app_state.risk_manager.assess_risk(account_info, positions_dicts)
         if not assessment.can_trade:
-            reason = getattr(assessment, "reason", None) or getattr(
-                assessment, "messages", ["risk_check_failed"]
-            )
+            reason     = getattr(assessment, "reason", None) or getattr(assessment, "messages", ["risk_check_failed"])
             reason_str = "; ".join(reason) if isinstance(reason, list) else str(reason)
-            logger.warning(
-                "Order blocked by risk manager: user=%s reason=%s",
-                user_id,
-                reason_str,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Risk check failed: {reason_str}",
-            )
+            logger.warning("Order blocked by risk manager: user=%s reason=%s", user_id, reason_str)
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Risk check failed: {reason_str}")
     except HTTPException:
         raise
-    except Exception as risk_exc:
-        logger.error(
-            "Risk check error (blocking order for safety): user=%s %s",
-            user_id,
-            risk_exc,
-            exc_info=True,
-        )
+    except Exception as exc:
+        logger.error("Risk check error (blocking order for safety): user=%s %s", user_id, exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Risk check unavailable — order rejected for safety",
-        ) from risk_exc
+        ) from exc
 
-    # CVaR pre-trade gate — runs independently so a CVaR breach always blocks
+
+async def _run_cvar_gate(user_id: str) -> None:
+    """
+    Run the CVaR pre-trade gate.
+
+    Raises HTTP 403 when the CVaR limit is breached.
+    Raises HTTP 503 when the check itself fails (fail-safe: block the order).
+    """
     try:
-        cvar_allowed, cvar_reason = app_state.risk_manager.check_cvar_pre_trade()
-        if not cvar_allowed:
-            logger.warning(
-                "Order blocked by CVaR gate: user=%s reason=%s",
-                user_id,
-                cvar_reason,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"CVaR limit breached: {cvar_reason}",
-            )
-        logger.debug("CVaR pre-trade gate passed: user=%s %s", user_id, cvar_reason)
+        allowed, reason = app_state.risk_manager.check_cvar_pre_trade()
+        if not allowed:
+            logger.warning("Order blocked by CVaR gate: user=%s reason=%s", user_id, reason)
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"CVaR limit breached: {reason}")
+        logger.debug("CVaR pre-trade gate passed: user=%s %s", user_id, reason)
     except HTTPException:
         raise
-    except Exception as cvar_exc:
-        logger.error(
-            "CVaR pre-trade check error (blocking order for safety): user=%s %s",
-            user_id,
-            cvar_exc,
-            exc_info=True,
-        )
+    except Exception as exc:
+        logger.error("CVaR pre-trade check error (blocking order for safety): user=%s %s", user_id, exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="CVaR risk check unavailable — order rejected for safety",
-        ) from cvar_exc
+        ) from exc
+
+
+async def _apply_risk_checks(order: "OrderRequest", user_id: str) -> None:
+    """
+    Run all pre-trade risk gates in sequence.
+
+    Gate 1: RiskManager.assess_risk() — drawdown, daily loss, open positions.
+    Gate 2: CVaR pre-trade gate — tail-risk limit.
+
+    Both gates run independently so a CVaR breach always blocks even when
+    the standard risk check passes.
+    """
+    if not (hasattr(app_state, "risk_manager") and app_state.risk_manager is not None):
+        return
+    await _run_standard_risk_check(order, user_id)
+    await _run_cvar_gate(user_id)
 
 
 def _log_compliance(order: "OrderRequest", user_id: str) -> None:
@@ -500,44 +493,26 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
 
 
-async def _record_fill(
-    order: "OrderRequest",
-    result: Any,
-    user_id: str,
-) -> Dict[str, Any]:
-    """
-    Broadcast the fill over WebSocket, send FCM push, send email, update
-    Prometheus, and return the API response dict.
+async def _broadcast_fill_ws(order: "OrderRequest", result: Any) -> None:
+    """Broadcast the fill over WebSocket. Best-effort — logs on failure."""
+    if not (hasattr(app_state, "ws_manager") and app_state.ws_manager is not None):
+        return
+    try:
+        await app_state.ws_manager.broadcast_trade(
+            symbol=order.symbol,
+            price=result.average_fill_price or 0.0,
+            quantity=order.quantity,
+            side=order.side,
+            trade_id=result.id,
+        )
+    except Exception as exc:
+        logger.warning("WebSocket broadcast failed: %s", exc)
 
-    All notification steps are best-effort — failures are logged but do not
-    affect the response.
-    """
-    logger.info(
-        "Order placed: user=%s symbol=%s side=%s qty=%s order_id=%s",
-        user_id,
-        order.symbol,
-        order.side,
-        order.quantity,
-        result.id,
-    )
 
-    # WebSocket broadcast
-    if hasattr(app_state, "ws_manager") and app_state.ws_manager is not None:
-        try:
-            await app_state.ws_manager.broadcast_trade(
-                symbol=order.symbol,
-                price=result.average_fill_price or 0.0,
-                quantity=order.quantity,
-                side=order.side,
-                trade_id=result.id,
-            )
-        except Exception as ws_exc:
-            logger.warning("WebSocket broadcast failed: %s", ws_exc)
-
-    # FCM push notification
+def _send_fill_push(order: "OrderRequest", result: Any, user_id: str) -> None:
+    """Send FCM push notification for the fill. Best-effort."""
     try:
         from mobile.push_notifications import push_manager
-
         push_manager.send_trade_filled(
             user_id=user_id,
             symbol=order.symbol,
@@ -545,28 +520,25 @@ async def _record_fill(
             price=result.average_fill_price or 0.0,
             lots=order.quantity,
         )
-    except Exception as fcm_exc:
-        logger.debug("FCM trade push skipped: %s", fcm_exc)
+    except Exception as exc:
+        logger.debug("FCM trade push skipped: %s", exc)
 
-    # Email notification — resolve user email from DB, fall back to SMTP_TO
+
+def _resolve_user_email(user_id: str) -> str:
+    """Look up the authenticated user's email address from the DB."""
+    try:
+        from auth.service import AuthService  # noqa: PLC0415
+        db_user = AuthService().get_user_by_id(user_id)
+        return getattr(db_user, "email", "") or ""
+    except Exception as exc:
+        logger.debug("Could not resolve user email for fill notification: %s", exc)
+        return ""
+
+
+def _send_fill_email(order: "OrderRequest", result: Any, user_id: str) -> None:
+    """Send trade-fill email notification. Best-effort."""
     try:
         from notifications.email_triggers import send_trade_fill_email  # noqa: PLC0415
-
-        # Attempt to look up the authenticated user's email address so the
-        # notification goes to the right inbox rather than the system default.
-        user_email: str = ""
-        try:
-            from auth.service import AuthService  # noqa: PLC0415
-
-            _auth_svc = AuthService()
-            _db_user = _auth_svc.get_user_by_id(user_id)
-            if _db_user and getattr(_db_user, "email", None):
-                user_email = _db_user.email
-        except Exception as _ue_exc:
-            logger.debug(
-                "Could not resolve user email for fill notification: %s", _ue_exc
-            )
-
         send_trade_fill_email(
             symbol=order.symbol,
             direction=order.side,
@@ -574,66 +546,121 @@ async def _record_fill(
             fill_price=result.average_fill_price or 0.0,
             net_pnl=getattr(result, "pnl", None),
             commission=getattr(result, "commission", 0.0),
-            to=user_email,
+            to=_resolve_user_email(user_id),
         )
-        logger.debug(
-            "Trade fill email queued: user=%s symbol=%s side=%s",
-            user_id,
-            order.symbol,
-            order.side,
-        )
-    except Exception as email_exc:
-        logger.debug("Trade fill email skipped: %s", email_exc)
+        logger.debug("Trade fill email queued: user=%s symbol=%s side=%s", user_id, order.symbol, order.side)
+    except Exception as exc:
+        logger.debug("Trade fill email skipped: %s", exc)
 
-    # Prometheus metric
+
+def _increment_fill_metrics(order: "OrderRequest") -> None:
+    """Increment Prometheus fill counter. Best-effort."""
     try:
         from core.metrics import ORDERS_TOTAL
-
         ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="filled").inc()
-    except Exception as _exc:
-        logger.debug("Suppressed exception: %s", _exc)
+    except Exception as exc:
+        logger.debug("Suppressed exception: %s", exc)
 
-    # Paper trading gate fill counter — increments the Phase-3 fill counter so
-    # the gate knows how many paper trades have been completed.
+
+def _notify_paper_gate_and_online_learner(order: "OrderRequest", result: Any) -> None:
+    """
+    Notify the paper-trading gate fill counter and online learner.
+
+    Both are Phase-3 components — failures must not affect the fill response.
+    """
     try:
         from research.pipeline.paper_trading_gate import get_gate as _get_gate
+        _get_gate().record_fill(pnl=float(getattr(result, "pnl", 0.0) or 0.0))
+    except Exception as exc:
+        logger.debug("gate.record_fill skipped: %s", exc)
 
-        _pnl = float(getattr(result, "pnl", 0.0) or 0.0)
-        _get_gate().record_fill(pnl=_pnl)
-    except Exception as _gate_exc:
-        logger.debug("gate.record_fill skipped in _record_fill: %s", _gate_exc)
-
-    # Online learner feedback — notify Phase-3 store of the confirmed fill so
-    # it can update blend weights and accumulate training data.
     try:
-        from core.signal_engine import notify_fill as _notify_fill
         import pandas as _pd
+        from core.signal_engine import notify_fill as _notify_fill
+        _features = _pd.DataFrame([{
+            "symbol":     order.symbol,
+            "side":       order.side,
+            "quantity":   order.quantity,
+            "fill_price": result.average_fill_price or 0.0,
+            "source":     "rest_api",
+        }])
+        _notify_fill(_features, label=1, primary_prob=None)
+    except Exception as exc:
+        logger.debug("notify_fill skipped: %s", exc)
 
-        # Build a minimal feature row from the fill so the online learner has
-        # something to learn from even when no pre-computed feature df exists.
-        _fill_price = result.average_fill_price or 0.0
-        _label = 1  # REST-API fills are assumed profitable (user-initiated)
-        _features = _pd.DataFrame(
-            [
-                {
-                    "symbol": order.symbol,
-                    "side": order.side,
-                    "quantity": order.quantity,
-                    "fill_price": _fill_price,
-                    "source": "rest_api",
-                }
-            ]
-        )
-        _notify_fill(_features, label=_label, primary_prob=None)
-    except Exception as _ol_exc:
-        logger.debug("notify_fill skipped in _record_fill: %s", _ol_exc)
+
+async def _record_fill(
+    order: "OrderRequest",
+    result: Any,
+    user_id: str,
+) -> Dict[str, Any]:
+    """
+    Post-fill notifications and response construction.
+
+    All steps are best-effort — failures are logged but do not affect the
+    HTTP response.  Steps:
+      1. WebSocket broadcast
+      2. FCM push notification
+      3. Email notification
+      4. Prometheus metric increment
+      5. Paper-trading gate + online learner feedback
+    """
+    logger.info(
+        "Order placed: user=%s symbol=%s side=%s qty=%s order_id=%s",
+        user_id, order.symbol, order.side, order.quantity, result.id,
+    )
+    await _broadcast_fill_ws(order, result)
+    _send_fill_push(order, result, user_id)
+    _send_fill_email(order, result, user_id)
+    _increment_fill_metrics(order)
+    _notify_paper_gate_and_online_learner(order, result)
 
     return {
-        "status": "success",
-        "order_id": result.id,
-        "filled_price": result.average_fill_price,
-        "filled_quantity": result.filled_quantity,
+        "status":           "success",
+        "order_id":         result.id,
+        "filled_price":     result.average_fill_price,
+        "filled_quantity":  result.filled_quantity,
     }
+
+
+def _check_subscription_gate(user_id: str) -> None:
+    """
+    Enforce Starter-plan requirement for live trading.
+
+    Skipped in test/CI environments, paper-trading mode, and when the
+    monetization module is unavailable.  Raises HTTP 403 when the user's
+    active plan is below 'starter'.
+    """
+    app_env    = os.getenv("APP_ENV", "test").lower()
+    broker_type = os.getenv("BROKER_TYPE", "paper").lower()
+
+    if (
+        app_state is None
+        or app_env  in ("test", "ci", "testing", "")
+        or broker_type in ("paper", "")
+    ):
+        return
+
+    try:
+        from monetization.subscription import subscription_manager, plan_gate
+        sub       = subscription_manager.get_user_subscription(user_id)
+        user_plan = (
+            sub.tier.value
+            if (sub and sub.is_active() and hasattr(sub.tier, "value"))
+            else "free"
+        )
+        if not plan_gate("starter", user_plan):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error":         "PLAN_LIMIT_EXCEEDED",
+                    "required_plan": "starter",
+                    "current_plan":  user_plan,
+                    "message":       "Live trading requires a Starter subscription or above.",
+                },
+            )
+    except ImportError:
+        pass  # monetization module not installed — allow through
 
 
 @router.post(
@@ -662,38 +689,7 @@ async def place_order(
       _route_to_broker()  — broker submission
       _record_fill()      — WebSocket/FCM/email/Prometheus + response
     """
-    # Subscription gate — Starter plan required for live trading.
-    # Skipped in test/CI environments, paper trading, and when running outside
-    # the main app. Defaults to skipping when APP_ENV is unset (safe default).
-    _app_env = os.getenv("APP_ENV", "test").lower()
-    _broker_type = os.getenv("BROKER_TYPE", "paper").lower()
-    if (
-        app_state is not None
-        and _app_env not in ("test", "ci", "testing", "")
-        and _broker_type not in ("paper", "")
-    ):
-        try:
-            from monetization.subscription import subscription_manager, plan_gate
-
-            sub = subscription_manager.get_user_subscription(user.sub)
-            user_plan = (
-                sub.tier.value
-                if (sub and sub.is_active() and hasattr(sub.tier, "value"))
-                else "free"
-            )
-            if not plan_gate("starter", user_plan):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={
-                        "error": "PLAN_LIMIT_EXCEEDED",
-                        "required_plan": "starter",
-                        "current_plan": user_plan,
-                        "message": "Live trading requires a Starter subscription or above.",
-                    },
-                )
-        except ImportError:
-            pass  # monetization not available — allow through
-
+    _check_subscription_gate(user.sub)
     _check_kill_switch()  # hard block — must be first
     _check_live_deployment_gates()  # Sharpe gate + CI model guard
     _check_order_rate_limit(user.sub)
