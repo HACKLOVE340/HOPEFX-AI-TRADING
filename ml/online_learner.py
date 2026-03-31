@@ -610,7 +610,7 @@ class SklearnOnlineLearner:
                 self._correct_window.append(correct)
                 if len(self._correct_window) >= 10:
                     self._rolling_accuracy = float(np.mean(self._correct_window))
-            except Exception:
+            except Exception:  # nosec B110 - accuracy update failure must not interrupt learning loop
                 pass
 
             # EWC anchor snapshot
@@ -625,7 +625,7 @@ class SklearnOnlineLearner:
                 prob = float(self._model.predict_proba(X_scaled)[0, 1])
                 if self._check_drift(prob):
                     self._reset_for_new_regime()
-            except Exception:
+            except Exception:  # nosec B110 - drift detection failure must not interrupt learning loop
                 pass
 
             if self.persist_path:

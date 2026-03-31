@@ -852,7 +852,7 @@ class HybridEnsemblePredictor:
                     meta_input = self._meta_scaler.transform(meta_input)
                 blended = float(self._meta.predict(meta_input)[0])
                 return float(np.clip(blended, 0.0, 1.0))
-            except Exception:
+            except Exception:  # nosec B110 - meta-model failure falls through to weighted average
                 pass
 
         # Weighted average fallback

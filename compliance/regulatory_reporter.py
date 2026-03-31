@@ -198,7 +198,7 @@ class DeadLetterQueue:
             try:
                 with open(dlq_file) as fh:
                     count += sum(1 for line in fh if line.strip())
-            except Exception:
+            except Exception:  # nosec B110 - file read failure is non-fatal for DLQ depth
                 pass
         return count
 

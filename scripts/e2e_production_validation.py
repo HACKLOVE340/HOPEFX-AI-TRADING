@@ -662,7 +662,7 @@ async def check_orchestrator_start_stop() -> None:
     finally:
         try:
             await orch.stop()
-        except Exception:
+        except Exception:  # nosec B110 - orchestrator stop failure during cleanup is non-fatal
             pass
 
 

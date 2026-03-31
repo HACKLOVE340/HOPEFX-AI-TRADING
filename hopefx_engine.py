@@ -603,7 +603,7 @@ class HopeFXEngine:
                         _real_ask = dl_tick.ask
                         spread = dl_tick.spread
                         mid = dl_tick.mid
-            except Exception:
+            except Exception:  # nosec B110 - intentional fallback to NuclearStreamer price
                 pass  # fall back to NuclearStreamer price
 
         # Build OHLCV bar: use spread to give high/low realistic range.
