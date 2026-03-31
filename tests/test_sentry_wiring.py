@@ -303,7 +303,7 @@ class TestBeforeSend:
     def test_scrubs_request_data(self):
         event = {
             "transaction": "/api/auth/login",
-            "request": {"data": {"password": "secret", "username": "alice"}},
+            "request": {"data": {"password": "secret", "username": "alice"}},  # nosec B105 - test file
         }
         result = self.before_send(event, {})
         assert result["request"]["data"]["password"] == "[Filtered]"  # noqa: S105

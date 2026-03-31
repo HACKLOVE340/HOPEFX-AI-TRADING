@@ -260,7 +260,7 @@ class TestNotificationManagerExtended:
 
         config = {
             "discord_webhook_url": None,
-            "telegram_bot_token": None,
+            "telegram_bot_token": None,  # nosec B105 - test file
             "telegram_chat_id": None,
             "email_smtp_host": None,
         }

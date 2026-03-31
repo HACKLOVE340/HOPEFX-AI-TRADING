@@ -613,7 +613,7 @@ class TestStripeIntegration:
         try:
             _mod._stripe = mock_stripe
             _mod._STRIPE_AVAILABLE = True
-            with patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_unit"}):
+            with patch.dict("os.environ", {"STRIPE_SECRET_KEY": "sk_test_unit"}):  # nosec B105 - test file
                 si = StripeIntegration()
             fn(si, mock_stripe)
         finally:

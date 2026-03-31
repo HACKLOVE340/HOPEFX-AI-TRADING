@@ -25,7 +25,7 @@ Covers
 from __future__ import annotations
 
 import json
-import subprocess
+import subprocess  # nosec B404 - test file
 import sys
 from pathlib import Path
 
@@ -226,7 +226,7 @@ def test_advanced_training_report_feature_count(monkeypatch):
 @pytest.mark.slow
 def test_retrain_model_smoke_exits_zero():
     """retrain_model.py --smoke --advanced completes without error."""
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603 - test file
         [
             sys.executable,
             str(ROOT / "scripts" / "retrain_model.py"),

@@ -700,7 +700,7 @@ class TestAPIConfigExtended:
         assert cfg.validate() is False
 
     def test_validate_missing_api_secret(self):
-        cfg = APIConfig(provider="p", api_key="k", api_secret="")
+        cfg = APIConfig(provider="p", api_key="k", api_secret="")  # nosec B106 - test file
         assert cfg.validate() is False
 
     def test_validate_missing_provider(self):
@@ -730,7 +730,7 @@ class TestDatabaseConfigExtended:
             host="",
             port=0,
             username="",
-            password="",
+            password="",  # nosec B106 - test file
             database="test.db",
         )
 
@@ -881,7 +881,7 @@ class TestAppConfigValidation:
 
     def test_validate_propagates_api_config_failure(self):
         cfg = AppConfig()
-        cfg.api_configs["bad"] = APIConfig(provider="", api_key="", api_secret="")
+        cfg.api_configs["bad"] = APIConfig(provider="", api_key="", api_secret="")  # nosec B106 - test file
         assert cfg.validate() is False
 
     def test_validate_with_valid_api_config(self):
@@ -959,7 +959,7 @@ class TestConfigManagerLoadConfig:
                 "host": "localhost",
                 "port": 5432,
                 "username": "",
-                "password": "",
+                "password": "",  # nosec B105 - test file
                 "database": "test.db",
                 "ssl_enabled": True,
                 "connection_pool_size": 10,

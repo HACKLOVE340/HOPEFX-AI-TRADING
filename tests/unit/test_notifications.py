@@ -109,7 +109,7 @@ class TestNotificationManager:
         """Test Telegram notification with bot token and chat ID"""
         config = {
             "telegram_enabled": True,
-            "telegram_bot_token": "test_bot_token",
+            "telegram_bot_token": "test_bot_token",  # nosec B105 - test file
             "telegram_chat_id": "test_chat_id",
         }
         manager = NotificationManager(config)
@@ -164,7 +164,7 @@ class TestNotificationManager:
             "smtp_host": "smtp.example.com",
             "smtp_port": 587,
             "smtp_username": "test@example.com",
-            "smtp_password": "password",
+            "smtp_password": "password",  # nosec B105 - test file
             "smtp_to": "recipient@example.com",
         }
         manager = NotificationManager(config)

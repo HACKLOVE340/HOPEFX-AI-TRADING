@@ -217,7 +217,7 @@ class TestAuthApiEndpoints:
             json={
                 "email": "new@example.com",
                 "username": "newtrader",
-                "password": "SecurePass123!",
+                "password": "SecurePass123!",  # nosec B105 - test file
             },
         )
         assert res.status_code == 201
@@ -231,7 +231,7 @@ class TestAuthApiEndpoints:
             "/api/auth/login",
             json={
                 "username": "testuser",
-                "password": "SecurePass123!",
+                "password": "SecurePass123!",  # nosec B105 - test file
             },
         )
         # 200 or 422 depending on mock wiring — just ensure no 500

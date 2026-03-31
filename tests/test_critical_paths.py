@@ -452,7 +452,7 @@ class TestCompliance:
             {"first_name": "John", "last_name": "Doe", "email": "j@example.com"},
         )
         assert applicant.applicant_id.startswith("mock_")
-        assert applicant.sdk_token != ""
+        assert applicant.sdk_token != ""  # nosec B105 - test file
 
     @pytest.mark.asyncio
     async def test_kyc_gateway_sanctions_screen_no_match(self):
