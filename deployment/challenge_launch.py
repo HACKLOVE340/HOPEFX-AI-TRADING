@@ -112,7 +112,7 @@ def _load_json(path: Path, default: Any) -> Any:
         try:
             return json.loads(path.read_text())
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
     return default
 
 

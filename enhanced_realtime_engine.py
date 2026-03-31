@@ -617,6 +617,7 @@ class MockProvider(DataProvider):
         tick_interval_ms: float = 100,
     ):
         import os as _os
+
         if _os.getenv("APP_ENV", "production").lower() == "production":
             raise RuntimeError(
                 "MockProvider cannot be used in production (APP_ENV=production). "
@@ -992,6 +993,7 @@ async def run_realtime_test():
     RuntimeError if called in APP_ENV=production.
     """
     import os as _os
+
     if _os.getenv("APP_ENV", "production").lower() == "production":
         raise RuntimeError(
             "run_realtime_test() uses MockProvider and cannot run in production. "

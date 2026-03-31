@@ -31,6 +31,7 @@ try:
         create_engine,
     )
     from sqlalchemy.sql import func
+
     try:
         from sqlalchemy.orm import declarative_base
     except ImportError:
@@ -833,12 +834,12 @@ if SQLALCHEMY_AVAILABLE:
         payment_id = Column(String(100), unique=True, nullable=False, index=True)
         user_id = Column(String(128), nullable=False, index=True)
         plan_id = Column(String(100), nullable=False)
-        currency = Column(String(10), nullable=False)   # BTC | ETH | USDT
-        network = Column(String(20), nullable=False)    # BTC | ERC20 | TRC20 | BEP20
+        currency = Column(String(10), nullable=False)  # BTC | ETH | USDT
+        network = Column(String(20), nullable=False)  # BTC | ERC20 | TRC20 | BEP20
         address = Column(String(200), nullable=False)
         amount_usd = Column(Float, nullable=False)
         amount_crypto = Column(Float, nullable=False)
-        rate_usd = Column(Float, nullable=False)        # USD price per coin at creation
+        rate_usd = Column(Float, nullable=False)  # USD price per coin at creation
         status = Column(
             String(20), nullable=False, default="pending", index=True
         )  # pending | confirming | complete | expired | failed
@@ -846,8 +847,10 @@ if SQLALCHEMY_AVAILABLE:
         confirmations_required = Column(Integer, nullable=False)
         # Webhook / on-chain data
         tx_hash = Column(String(200), nullable=True)
-        webhook_payload = Column(Text, nullable=True)   # raw JSON from processor
-        created_at = Column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+        webhook_payload = Column(Text, nullable=True)  # raw JSON from processor
+        created_at = Column(
+            DateTime(timezone=True), default=datetime.utcnow, index=True
+        )
         expires_at = Column(DateTime(timezone=True), nullable=False)
         confirmed_at = Column(DateTime(timezone=True), nullable=True)
         updated_at = Column(
@@ -871,7 +874,9 @@ if SQLALCHEMY_AVAILABLE:
                 "tx_hash": self.tx_hash,
                 "created_at": self.created_at.isoformat() if self.created_at else None,
                 "expires_at": self.expires_at.isoformat() if self.expires_at else None,
-                "confirmed_at": self.confirmed_at.isoformat() if self.confirmed_at else None,
+                "confirmed_at": self.confirmed_at.isoformat()
+                if self.confirmed_at
+                else None,
             }
 
 else:
@@ -896,9 +901,11 @@ if SQLALCHEMY_AVAILABLE:
 
         id = Column(Integer, primary_key=True, autoincrement=True)
         event_type = Column(String(100), nullable=False, index=True)
-        channel = Column(String(100), nullable=False)   # Redis pub/sub channel
-        payload = Column(Text, nullable=False)           # JSON
-        created_at = Column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+        channel = Column(String(100), nullable=False)  # Redis pub/sub channel
+        payload = Column(Text, nullable=False)  # JSON
+        created_at = Column(
+            DateTime(timezone=True), default=datetime.utcnow, index=True
+        )
         published_at = Column(DateTime(timezone=True), nullable=True)
         attempts = Column(Integer, default=0)
         last_error = Column(Text, nullable=True)
