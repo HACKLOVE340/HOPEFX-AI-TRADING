@@ -219,6 +219,73 @@ class PortfolioManager:
         }
 
 
+    # ── Rebalancer integration ────────────────────────────────────────────────
+
+    def attach_rebalancer(
+        self,
+        method: str = "risk_parity",
+        max_weight: float = 0.40,
+        dd_limit: float = 0.15,
+        interval_hours: float = 4.0,
+    ) -> "DynamicRebalancer":
+        """
+        Attach a DynamicRebalancer to this PortfolioManager.
+
+        The rebalancer tracks strategy return streams and optimises weights
+        across the book.  Call ``run_rebalance()`` to trigger a rebalance
+        check and get target weight adjustments.
+
+        Returns the attached rebalancer so callers can feed return streams
+        directly:
+            rebalancer = pms.attach_rebalancer()
+            rebalancer.update_strategy_returns("smc_ict", returns_series)
+        """
+        from portfolio.rebalancer import DynamicRebalancer
+        self._rebalancer = DynamicRebalancer(
+            method=method,
+            max_weight=max_weight,
+            dd_limit=dd_limit,
+            interval_hours=interval_hours,
+        )
+        # Seed current drawdown from portfolio state
+        self._rebalancer.update_drawdown(
+            "portfolio", float(self.max_drawdown)
+        )
+        return self._rebalancer
+
+    def run_rebalance(self, force: bool = False) -> Optional[dict]:
+        """
+        Run the rebalancer and return target weights (or None if no rebalance needed).
+
+        Also updates the rebalancer's drawdown state from the current portfolio.
+        """
+        rebalancer = getattr(self, "_rebalancer", None)
+        if rebalancer is None:
+            return None
+
+        # Keep drawdown state current
+        rebalancer.update_drawdown("portfolio", float(self.max_drawdown))
+
+        result = rebalancer.rebalance(force=force)
+        if result is None:
+            return None
+        return result.to_dict()
+
+    def get_rebalancer_status(self) -> dict:
+        """Return rebalancer status, or empty dict if not attached."""
+        rebalancer = getattr(self, "_rebalancer", None)
+        if rebalancer is None:
+            return {"attached": False}
+        return {"attached": True, **rebalancer.status()}
+
+
+# Forward reference resolved at runtime
+try:
+    from portfolio.rebalancer import DynamicRebalancer  # noqa: F401
+except ImportError:
+    pass
+
+
 class PortfolioOptimizer:
     """
     Kelly Criterion and Mean-Variance optimization.
