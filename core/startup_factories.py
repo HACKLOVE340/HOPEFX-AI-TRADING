@@ -1797,6 +1797,169 @@ async def init_hot_standby(s: Any) -> Any | None:
         return None
 
 
+async def init_tick_feed(s: Any) -> Any:
+    """
+    Start the TickFeedManager — live tick ingestion from OANDA, Finnhub, Polygon.
+
+    Wires ticks into:
+      - broker.update_market_price() so paper broker and signal engine see live prices
+      - execution engine's last_tick cache for latency-sensitive order pricing
+      - NuclearStreamer bridge (if already running) for deduplication
+
+    Best-effort — missing API keys disable individual sources but never block startup.
+    """
+    try:
+        from api.admin import log_activity
+    except Exception:
+        def log_activity(msg: str) -> None:
+            logger.info(msg)
+
+    try:
+        from data.tick_feed import TickFeedManager
+
+        symbol = os.getenv("DATA_SYMBOL", "XAU_USD")
+        bar_tf = int(os.getenv("TICK_BAR_TIMEFRAME_S", "60"))
+        manager = TickFeedManager(symbol=symbol, bar_timeframe_s=bar_tf)
+
+        # Bridge: push every validated tick into the broker price table
+        broker_ref = getattr(s, "broker", None)
+        execution_engine_ref = getattr(s, "execution_engine", None)
+
+        class _TickBridge:
+            async def on_tick(self, tick) -> None:
+                mid = tick.mid
+                # Update broker price table
+                if broker_ref is not None and hasattr(broker_ref, "update_market_price"):
+                    try:
+                        broker_ref.update_market_price(tick.symbol, mid)
+                    except Exception as _exc:
+                        logger.debug("tick_feed broker bridge error: %s", _exc)
+                # Update execution engine last-tick cache
+                if execution_engine_ref is not None and hasattr(
+                    execution_engine_ref, "update_last_tick"
+                ):
+                    try:
+                        execution_engine_ref.update_last_tick(tick.symbol, tick)
+                    except Exception as _exc:
+                        logger.debug("tick_feed exec engine bridge error: %s", _exc)
+
+        manager.subscribe(_TickBridge())
+
+        # Wire OHLCV bars into the signal engine's bar buffer if available
+        signal_engine_ref = getattr(s, "signal_engine", None)
+        if signal_engine_ref is not None and hasattr(signal_engine_ref, "on_bar"):
+            manager.add_bar_callback(signal_engine_ref.on_bar)
+
+        await manager.start()
+        s.tick_feed = manager
+
+        log_activity(
+            f"TickFeedManager started — symbol={symbol} "
+            f"sources=OANDA+Finnhub+Polygon bar_tf={bar_tf}s"
+        )
+        return manager
+
+    except Exception as exc:
+        logger.warning("init_tick_feed failed (non-fatal): %s", exc)
+        return None
+
+
+async def init_factor_engine(s: Any) -> Any:
+    """
+    Start the LiveFactorEngine — real-time Barra/PCA factor attribution.
+
+    Fits Ridge regression betas for each tracked symbol against 6 systematic
+    factors (rates, vol, momentum, carry, macro PCA, DXY) using FRED + yfinance.
+
+    Attaches to app_state.factor_engine so signal_engine and risk_manager
+    can call engine.attribute() and engine.factor_var() on every tick.
+
+    Best-effort — factor engine failure never blocks trading.
+    """
+    try:
+        from api.admin import log_activity
+    except Exception:
+        def log_activity(msg: str) -> None:
+            logger.info(msg)
+
+    try:
+        from portfolio.factor_model import LiveFactorEngine
+
+        symbols_raw = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAU_USD,BTC_USD,ETH_USD")
+        symbols = [s_sym.strip() for s_sym in symbols_raw.split(",") if s_sym.strip()]
+        interval_s = int(os.getenv("FACTOR_ENGINE_INTERVAL_S", "3600"))
+
+        engine = LiveFactorEngine(interval_s=interval_s, symbols=symbols)
+        await engine.start()
+        s.factor_engine = engine
+
+        log_activity(
+            f"LiveFactorEngine started — symbols={symbols} "
+            f"interval={interval_s}s factors=rates,vol,momentum,carry,macro,dxy"
+        )
+        return engine
+
+    except Exception as exc:
+        logger.warning("init_factor_engine failed (non-fatal): %s", exc)
+        return None
+
+
+async def init_portfolio_rebalancer(s: Any) -> Any:
+    """
+    Initialise the DynamicRebalancer and attach it to the StrategyOrchestra.
+
+    Method is controlled by REBALANCER_METHOD env var (default: risk_parity).
+    Supported: risk_parity | mean_variance | equal_weight
+
+    The rebalancer is also attached to app_state.rebalancer so the API
+    route can expose current weights and trigger manual rebalances.
+    """
+    try:
+        from api.admin import log_activity
+    except Exception:
+        def log_activity(msg: str) -> None:
+            logger.info(msg)
+
+    try:
+        from portfolio.rebalancer import DynamicRebalancer
+
+        method = os.getenv("REBALANCER_METHOD", "risk_parity")
+        max_weight = float(os.getenv("REBALANCER_MAX_WEIGHT", "0.40"))
+        dd_limit = float(os.getenv("REBALANCER_DD_LIMIT", "0.15"))
+        interval_hours = float(os.getenv("REBALANCER_INTERVAL_HOURS", "4.0"))
+
+        rebalancer = DynamicRebalancer(
+            method=method,
+            max_weight=max_weight,
+            dd_limit=dd_limit,
+            interval_hours=interval_hours,
+        )
+        s.rebalancer = rebalancer
+
+        # Wire into StrategyOrchestra if available
+        orchestra = getattr(s, "strategy_orchestra", None)
+        if orchestra is not None and hasattr(orchestra, "attach_rebalancer"):
+            orchestra._rebalancer = rebalancer
+            logger.info("DynamicRebalancer wired into StrategyOrchestra")
+
+        # Wire into PortfolioManager if available
+        pms = getattr(s, "portfolio_manager", None)
+        if pms is not None and hasattr(pms, "attach_rebalancer"):
+            pms._rebalancer = rebalancer
+            logger.info("DynamicRebalancer wired into PortfolioManager")
+
+        log_activity(
+            f"DynamicRebalancer initialised — method={method} "
+            f"max_weight={max_weight:.0%} dd_limit={dd_limit:.0%} "
+            f"interval={interval_hours}h"
+        )
+        return rebalancer
+
+    except Exception as exc:
+        logger.warning("init_portfolio_rebalancer failed (non-fatal): %s", exc)
+        return None
+
+
 def run_startup_stress_tests(risk_manager) -> None:
     """
     Run standard stress scenarios against the risk manager at startup.
