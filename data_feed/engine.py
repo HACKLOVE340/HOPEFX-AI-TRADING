@@ -39,7 +39,7 @@ import os
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 import yaml
@@ -90,7 +90,9 @@ class ProductionDataEngine:
         # State
         self.current_price: Optional[float] = None
         self.last_update: Optional[datetime] = None
-        self.price_history: deque = deque(maxlen=int(self._cfg.get("history_size", 5000)))
+        self.price_history: deque = deque(
+            maxlen=int(self._cfg.get("history_size", 5000))
+        )
         self.subscribers: List[Any] = []
         self.is_running: bool = True
 
@@ -122,7 +124,9 @@ class ProductionDataEngine:
 
     async def start(self) -> None:
         """Open the HTTP session and start the polling + health-monitor loops."""
-        timeout = aiohttp.ClientTimeout(total=float(self._cfg.get("timeout_seconds", 4)))
+        timeout = aiohttp.ClientTimeout(
+            total=float(self._cfg.get("timeout_seconds", 4))
+        )
         self._session = aiohttp.ClientSession(timeout=timeout)
         logger.info(
             "ProductionDataEngine started — primary provider: %s", self.active_provider
@@ -205,7 +209,10 @@ class ProductionDataEngine:
             idx = -1
         for candidate in self._fallback_order[idx + 1 :] + self._fallback_order[:idx]:
             open_at = self._circuit_open_at.get(candidate)
-            if open_at is None or (now - open_at).total_seconds() >= _CIRCUIT_BREAKER_COOLDOWN:
+            if (
+                open_at is None
+                or (now - open_at).total_seconds() >= _CIRCUIT_BREAKER_COOLDOWN
+            ):
                 return candidate
         return current  # No healthy alternative found.
 
@@ -230,7 +237,10 @@ class ProductionDataEngine:
                 )
             except asyncio.TimeoutError:
                 logger.warning(
-                    "Provider '%s' timed out (attempt %d/%d)", provider, attempt, max_retries
+                    "Provider '%s' timed out (attempt %d/%d)",
+                    provider,
+                    attempt,
+                    max_retries,
                 )
             except aiohttp.ClientError as exc:
                 logger.warning(
@@ -336,7 +346,9 @@ class ProductionDataEngine:
     def _load_config(path: str) -> Dict:
         config_path = Path(path)
         if not config_path.exists():
-            raise FileNotFoundError(f"Data feed config not found: {config_path.resolve()}")
+            raise FileNotFoundError(
+                f"Data feed config not found: {config_path.resolve()}"
+            )
         with config_path.open("r") as fh:
             return yaml.safe_load(fh)
 

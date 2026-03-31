@@ -70,16 +70,19 @@ from dotenv import load_dotenv
 # ── Nuclear chart engine (optional — graceful degradation if unavailable) ─────
 _chart_engine = None
 
+
 def _get_chart_engine():
     """Lazy-load the NuclearAIChartEngine singleton."""
     global _chart_engine
     if _chart_engine is None:
         try:
             from charting.nuclear_ai_chart_engine import get_chart_engine
+
             _chart_engine = get_chart_engine()
-        except Exception as exc:
+        except Exception:
             pass  # chart engine is optional
     return _chart_engine
+
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -96,12 +99,15 @@ DAILY_REPORT_HOUR_UTC: int = 0
 CHECKPOINT_FILE: str = "state/connect_to_life_checkpoint.json"
 
 # Nuclear supervisor — controls whether it is active
-NUCLEAR_SUPERVISOR_ENABLED: bool = os.environ.get("NUCLEAR_SUPERVISOR_ENABLED", "1") != "0"
+NUCLEAR_SUPERVISOR_ENABLED: bool = (
+    os.environ.get("NUCLEAR_SUPERVISOR_ENABLED", "1") != "0"
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Telegram helper
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def _telegram(token: str, chat_id: str, text: str) -> None:
     """Fire-and-forget Telegram message. Silently swallows errors."""
@@ -109,6 +115,7 @@ async def _telegram(token: str, chat_id: str, text: str) -> None:
         return
     try:
         import aiohttp
+
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         async with aiohttp.ClientSession() as session:
             await session.post(
@@ -123,6 +130,7 @@ async def _telegram(token: str, chat_id: str, text: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Drawdown monitor
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class DrawdownMonitor:
     """Track peak-to-trough drawdown for a running equity series.
@@ -176,6 +184,7 @@ class DrawdownMonitor:
 # Daily reporter
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class DailyReporter:
     """Sends one Telegram summary per calendar day at midnight UTC."""
 
@@ -211,6 +220,7 @@ class DailyReporter:
 # Supervisor
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class LifeSupervisor:
     """
     Starts HopeFXEngine and monitors it externally.
@@ -240,6 +250,7 @@ class LifeSupervisor:
         if NUCLEAR_SUPERVISOR_ENABLED:
             try:
                 from brain.nuclear_supervisor import get_nuclear_supervisor
+
                 self._nuclear_supervisor = get_nuclear_supervisor()
                 logger.info("NuclearHopeFXSupervisor loaded and ready")
             except Exception as exc:
@@ -261,7 +272,8 @@ class LifeSupervisor:
 
         logger.info(
             "LifeSupervisor starting — mode=%s DD_limit=%.0f%%",
-            self._trading_mode, DD_HARD_STOP_PCT * 100,
+            self._trading_mode,
+            DD_HARD_STOP_PCT * 100,
         )
 
         # Register OS signal handlers
@@ -290,9 +302,11 @@ class LifeSupervisor:
         # Start HOPEFXBrain — 24/7 security engine (global_fortress)
         try:
             from security.global_fortress import start_brain as _start_brain
+
             # app reference: import the FastAPI app so the brain can mount its router
             try:
                 from app import app as _fastapi_app
+
                 await _start_brain(_fastapi_app)
                 logger.info("HOPEFXBrain 24/7 security engine started")
             except ImportError:
@@ -300,19 +314,24 @@ class LifeSupervisor:
                 # Create a minimal FastAPI instance so the brain can mount its router
                 # and run its 24/7 monitor loop without the full HTTP server.
                 from fastapi import FastAPI as _FastAPI
+
                 _minimal_app = _FastAPI(title="HOPEFXBrain-CLI")
                 await _start_brain(_minimal_app)
-                logger.info("HOPEFXBrain started in CLI mode (minimal FastAPI instance)")
+                logger.info(
+                    "HOPEFXBrain started in CLI mode (minimal FastAPI instance)"
+                )
         except Exception as _brain_exc:
             logger.warning("HOPEFXBrain failed to start (non-fatal): %s", _brain_exc)
 
         # Send startup Telegram notification
         nuclear_status = (
-            "RL-supervisor=ON" if self._nuclear_supervisor is not None
+            "RL-supervisor=ON"
+            if self._nuclear_supervisor is not None
             else "RL-supervisor=OFF"
         )
         await _telegram(
-            self._tg_token, self._tg_chat,
+            self._tg_token,
+            self._tg_chat,
             f"🟢 HOPEFX started — mode={self._trading_mode} "
             f"DD_limit={DD_HARD_STOP_PCT*100:.0f}% {nuclear_status}",
         )
@@ -345,10 +364,14 @@ class LifeSupervisor:
                 logger.info("Nuclear supervisor wired via register_news_callback")
                 return
             except Exception as exc:
-                logger.warning("register_news_callback failed: %s — using poll mode", exc)
+                logger.warning(
+                    "register_news_callback failed: %s — using poll mode", exc
+                )
 
         # Fallback: polling mode — _supervise will call _poll_news_events()
-        logger.info("Nuclear supervisor in poll mode (no register_news_callback on engine)")
+        logger.info(
+            "Nuclear supervisor in poll mode (no register_news_callback on engine)"
+        )
 
     async def on_news_event(self, event: Dict[str, Any]) -> None:
         """
@@ -367,7 +390,10 @@ class LifeSupervisor:
         if "current_exposure" not in event:
             try:
                 from risk.orchestrator import risk_orchestrator
-                event["current_exposure"] = await risk_orchestrator.get_current_exposure()
+
+                event[
+                    "current_exposure"
+                ] = await risk_orchestrator.get_current_exposure()
             except Exception:
                 event["current_exposure"] = 0.5
 
@@ -384,7 +410,9 @@ class LifeSupervisor:
                         sentiment=event.get("sentiment", 0.0),
                     )
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)  # chart engine errors must never crash the supervisor
+                    logger.debug(
+                        "Suppressed exception: %s", _exc
+                    )  # chart engine errors must never crash the supervisor
 
             # If nuclear mode was triggered, enforce DD stop immediately
             if action == "nuclear":
@@ -424,7 +452,11 @@ class LifeSupervisor:
         while not self._shutdown_event.is_set():
             # If engine task died unexpectedly, stop supervising
             if self._engine_task.done():
-                exc = self._engine_task.exception() if not self._engine_task.cancelled() else None
+                exc = (
+                    self._engine_task.exception()
+                    if not self._engine_task.cancelled()
+                    else None
+                )
                 if exc:
                     logger.critical("Engine task died with exception: %s", exc)
                     self._exit_code = 1
@@ -450,7 +482,7 @@ class LifeSupervisor:
             # ── nuclear chart engine: record equity point ──────────────────
             if self._chart_engine is not None:
                 try:
-                    equity  = status.get("equity", self._initial_bal)
+                    equity = status.get("equity", self._initial_bal)
                     balance = status.get("balance", self._initial_bal)
                     # Annotate nuclear events on the equity curve
                     annotation: Optional[str] = None
@@ -556,14 +588,15 @@ class LifeSupervisor:
             try:
                 await self._chart_engine.stop()
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
         # Stop notifications manager cleanly
         try:
             from notifications import notifications
+
             await notifications.stop()
         except Exception as _exc:
-            logger.debug('Suppressed exception: %s', _exc)
+            logger.debug("Suppressed exception: %s", _exc)
 
     async def _breach_shutdown(self, dd_frac: float) -> None:
         """Hard stop triggered by daily drawdown exceeding the limit."""
@@ -575,7 +608,8 @@ class LifeSupervisor:
         )
         logger.critical(
             "AUTO-STOP: daily DD %.2f%% >= %.0f%% limit",
-            dd_frac * 100, DD_HARD_STOP_PCT * 100,
+            dd_frac * 100,
+            DD_HARD_STOP_PCT * 100,
         )
         await _telegram(self._tg_token, self._tg_chat, msg)
         self._exit_code = 1
@@ -591,7 +625,7 @@ class LifeSupervisor:
                 # Remove non-serialisable last_event nested dict for simplicity
                 nuclear_state.pop("last_event", None)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
         state = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "trading_mode": self._trading_mode,
@@ -616,14 +650,14 @@ class LifeSupervisor:
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def _main() -> None:
     # Load .env before anything else (override=False keeps real env vars)
     load_dotenv(override=False)
 
     # Validate mandatory credentials
     missing = [
-        k for k in ("OANDA_API_KEY", "OANDA_ACCOUNT_ID")
-        if not os.environ.get(k)
+        k for k in ("OANDA_API_KEY", "OANDA_ACCOUNT_ID") if not os.environ.get(k)
     ]
     if missing:
         logger.critical("Missing required env vars: %s — aborting.", missing)

@@ -59,6 +59,7 @@ def set_state(state) -> None:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _equity_curve() -> List[Dict[str, Any]]:
     """
     Build an equity curve from real closed trade history.
@@ -85,6 +86,7 @@ def _equity_curve() -> List[Dict[str, Any]]:
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @app.get("/healthcheck")
 def read_healthcheck():

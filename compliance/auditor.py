@@ -119,6 +119,7 @@ class ImmutableAuditLog:
     def _persist_record(self, record: AuditRecord):
         """Write to append-only log (async when a loop is running, sync otherwise)."""
         import os as _os
+
         _os.makedirs(self.log_path, exist_ok=True)
         filename = (
             f"{self.log_path}audit_{datetime.now(timezone.utc).strftime('%Y-%m')}.jsonl"
@@ -132,16 +133,21 @@ class ImmutableAuditLog:
 
     def _sync_write(self, filename: str, record: AuditRecord) -> None:
         """Synchronous fallback write used when no event loop is running."""
-        line = json.dumps({
-            "timestamp": record.timestamp,
-            "seq": record.sequence_number,
-            "level": record.level.name,
-            "category": record.category,
-            "actor": record.actor,
-            "action": record.action,
-            "data": record.data,
-            "hash": record.hash_chain,
-        }) + "\n"
+        line = (
+            json.dumps(
+                {
+                    "timestamp": record.timestamp,
+                    "seq": record.sequence_number,
+                    "level": record.level.name,
+                    "category": record.category,
+                    "actor": record.actor,
+                    "action": record.action,
+                    "data": record.data,
+                    "hash": record.hash_chain,
+                }
+            )
+            + "\n"
+        )
         try:
             with open(filename, "a") as fh:
                 fh.write(line)
@@ -292,40 +298,46 @@ class TradeReporting:
         from compliance.regulatory_reporter import get_regulatory_reporter
 
         reporter = get_regulatory_reporter()
-        record   = await reporter.submit(trade)
+        record = await reporter.submit(trade)
 
         # Write submission outcome to immutable audit log
         self.audit_log.append(
             AuditLevel.COMPLIANCE,
             "REGULATORY",
             "system",
-            "REPORT_SUBMITTED" if record.status == "submitted" else record.status.upper(),
+            "REPORT_SUBMITTED"
+            if record.status == "submitted"
+            else record.status.upper(),
             {
-                "trade_id":     trade.get("id"),
-                "report_id":    record.report_id,
+                "trade_id": trade.get("id"),
+                "report_id": record.report_id,
                 "jurisdiction": record.jurisdiction,
-                "endpoint":     record.endpoint,
-                "status":       record.status,
-                "attempts":     record.attempts,
-                "error":        record.last_error,
+                "endpoint": record.endpoint,
+                "status": record.status,
+                "attempts": record.attempts,
+                "error": record.last_error,
             },
         )
 
         if record.status == "submitted":
             logger.info(
                 "Regulatory report submitted: trade_id=%s report_id=%s jurisdiction=%s",
-                trade.get("id"), record.report_id, record.jurisdiction,
+                trade.get("id"),
+                record.report_id,
+                record.jurisdiction,
             )
         elif record.status == "suppressed":
             logger.debug(
                 "Regulatory report suppressed: trade_id=%s reason=%s",
-                trade.get("id"), record.endpoint,
+                trade.get("id"),
+                record.endpoint,
             )
         else:
             logger.error(
                 "Regulatory report FAILED: trade_id=%s report_id=%s "
                 "enqueued to DLQ for retry",
-                trade.get("id"), record.report_id,
+                trade.get("id"),
+                record.report_id,
             )
 
     def generate_daily_report(self) -> Dict:

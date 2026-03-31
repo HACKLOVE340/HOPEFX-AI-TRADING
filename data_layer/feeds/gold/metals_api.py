@@ -14,6 +14,7 @@ Response: {"success":true,"base":"XAU","rates":{"USD":1985.5},"timestamp":170000
 
 Note: Metals-API and MetalpriceAPI share a nearly identical response schema.
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,9 +30,9 @@ _BASE = "https://metals-api.com/api"
 class MetalsAPIFeed(GoldFeedBase):
     """Metals-API — REST polling adapter."""
 
-    name           = FeedSource.METALS_API
-    _api_key_env   = "METALS_API_KEY"
-    _base_url      = _BASE
+    name = FeedSource.METALS_API
+    _api_key_env = "METALS_API_KEY"
+    _base_url = _BASE
     _min_interval_s = 60.0
 
     async def fetch_tick(self) -> GoldTick:
@@ -42,8 +43,8 @@ class MetalsAPIFeed(GoldFeedBase):
             f"{_BASE}/latest",
             params={
                 "access_key": self._api_key,
-                "base":       "XAU",
-                "symbols":    "USD",
+                "base": "XAU",
+                "symbols": "USD",
             },
         )
 

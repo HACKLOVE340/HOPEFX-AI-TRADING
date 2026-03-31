@@ -14,6 +14,7 @@ Endpoints used:
 FMP provides structured news with ticker tagging — very useful for
 filtering gold-specific articles without keyword matching.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,9 +33,9 @@ _BASE = "https://financialmodelingprep.com/api"
 class FMPFeed(NewsFeedBase):
     """Financial Modeling Prep news adapter."""
 
-    name           = NewsSource.FMP
-    _api_key_env   = "FMP_API_KEY"
-    _min_interval_s = 30.0   # 250 req/day ≈ 1 req/5.8min; use 30s for bursts
+    name = NewsSource.FMP
+    _api_key_env = "FMP_API_KEY"
+    _min_interval_s = 30.0  # 250 req/day ≈ 1 req/5.8min; use 30s for bursts
 
     async def fetch_articles(self, limit: int = 50) -> List[NewsArticle]:
         if not self.is_configured:
@@ -47,40 +48,40 @@ class FMPFeed(NewsFeedBase):
                 f"{_BASE}/v3/stock_news",
                 params={
                     "tickers": "GLD,IAU,XAUUSD,GOLD",
-                    "limit":   min(limit, 50),
-                    "apikey":  self._api_key,
+                    "limit": min(limit, 50),
+                    "apikey": self._api_key,
                 },
             )
             if not isinstance(data, list):
                 data = []
 
             for item in data:
-                headline   = item.get("title", "")
-                summary    = item.get("text", "")
-                raw_id     = item.get("url", headline)
+                headline = item.get("title", "")
+                summary = item.get("text", "")
+                raw_id = item.get("url", headline)
                 article_id = self._dedup_id(raw_id)
                 if not self._is_new(article_id):
                     continue
 
                 pub_str = item.get("publishedDate", "")
                 try:
-                    published = datetime.fromisoformat(
-                        pub_str.replace("Z", "+00:00")
-                    )
+                    published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
                 except Exception:
                     published = datetime.now(timezone.utc)
 
-                articles.append(NewsArticle(
-                    article_id   = article_id,
-                    source       = self.name,
-                    headline     = headline,
-                    summary      = summary,
-                    url          = item.get("url", ""),
-                    published_at = published,
-                    fetched_at   = datetime.now(timezone.utc),
-                    keywords     = [item.get("symbol", "")],
-                    lineage_id   = str(uuid.uuid4()),
-                ))
+                articles.append(
+                    NewsArticle(
+                        article_id=article_id,
+                        source=self.name,
+                        headline=headline,
+                        summary=summary,
+                        url=item.get("url", ""),
+                        published_at=published,
+                        fetched_at=datetime.now(timezone.utc),
+                        keywords=[item.get("symbol", "")],
+                        lineage_id=str(uuid.uuid4()),
+                    )
+                )
                 self._total_fetched += 1
 
         except Exception as exc:

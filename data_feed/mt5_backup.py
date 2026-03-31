@@ -146,7 +146,9 @@ class MT5Backup:
             return True
 
         error = _mt5.last_error()
-        logger.error("MT5 login failed (login=%s, server=%s): %s", login_int, server, error)
+        logger.error(
+            "MT5 login failed (login=%s, server=%s): %s", login_int, server, error
+        )
         _mt5.shutdown()
         return False
 
@@ -157,7 +159,13 @@ class MT5Backup:
             logger.warning("MT5Backup: no tick data for symbol '%s'", self.symbol)
             return None
         mid = (tick.bid + tick.ask) / 2.0
-        logger.debug("MT5Backup tick | %s bid=%.5f ask=%.5f mid=%.5f", self.symbol, tick.bid, tick.ask, mid)
+        logger.debug(
+            "MT5Backup tick | %s bid=%.5f ask=%.5f mid=%.5f",
+            self.symbol,
+            tick.bid,
+            tick.ask,
+            mid,
+        )
         return mid
 
     # ── Diagnostics ───────────────────────────────────────────────────────────

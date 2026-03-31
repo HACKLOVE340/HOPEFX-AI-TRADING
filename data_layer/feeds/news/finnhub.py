@@ -14,6 +14,7 @@ Endpoints used:
 Finnhub provides a native sentiment score (bullishPercent, bearishPercent)
 which we use directly rather than running our own NLP on every article.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,9 +33,9 @@ _BASE = "https://finnhub.io/api/v1"
 class FinnhubFeed(NewsFeedBase):
     """Finnhub news + native sentiment scores."""
 
-    name           = NewsSource.FINNHUB
-    _api_key_env   = "FINNHUB_API_KEY"
-    _min_interval_s = 5.0   # free tier: 60 req/min
+    name = NewsSource.FINNHUB
+    _api_key_env = "FINNHUB_API_KEY"
+    _min_interval_s = 5.0  # free tier: 60 req/min
 
     async def fetch_articles(self, limit: int = 50) -> List[NewsArticle]:
         if not self.is_configured:
@@ -51,13 +52,13 @@ class FinnhubFeed(NewsFeedBase):
 
             for item in data[:limit]:
                 headline = item.get("headline", "")
-                summary  = item.get("summary", "")
-                text     = f"{headline} {summary}"
+                summary = item.get("summary", "")
+                text = f"{headline} {summary}"
 
                 if not self._is_gold_relevant(text):
                     continue
 
-                raw_id     = str(item.get("id", item.get("url", headline)))
+                raw_id = str(item.get("id", item.get("url", headline)))
                 article_id = self._dedup_id(raw_id)
                 if not self._is_new(article_id):
                     continue
@@ -65,20 +66,23 @@ class FinnhubFeed(NewsFeedBase):
                 ts = item.get("datetime", 0)
                 published = (
                     datetime.fromtimestamp(ts, tz=timezone.utc)
-                    if ts else datetime.now(timezone.utc)
+                    if ts
+                    else datetime.now(timezone.utc)
                 )
 
-                articles.append(NewsArticle(
-                    article_id    = article_id,
-                    source        = self.name,
-                    headline      = headline,
-                    summary       = summary,
-                    url           = item.get("url", ""),
-                    published_at  = published,
-                    fetched_at    = datetime.now(timezone.utc),
-                    gold_relevance= 0.0,   # scored by SentimentEngine
-                    lineage_id    = str(uuid.uuid4()),
-                ))
+                articles.append(
+                    NewsArticle(
+                        article_id=article_id,
+                        source=self.name,
+                        headline=headline,
+                        summary=summary,
+                        url=item.get("url", ""),
+                        published_at=published,
+                        fetched_at=datetime.now(timezone.utc),
+                        gold_relevance=0.0,  # scored by SentimentEngine
+                        lineage_id=str(uuid.uuid4()),
+                    )
+                )
                 self._total_fetched += 1
 
         except Exception as exc:
@@ -103,8 +107,8 @@ class FinnhubFeed(NewsFeedBase):
             return {
                 "bullish_pct": float(data.get("bullishPercent", 0.5)),
                 "bearish_pct": float(data.get("bearishPercent", 0.5)),
-                "buzz":        float(data.get("buzz", {}).get("articlesInLastWeek", 0)),
-                "source":      "finnhub",
+                "buzz": float(data.get("buzz", {}).get("articlesInLastWeek", 0)),
+                "source": "finnhub",
             }
         except Exception as exc:
             logger.debug("Finnhub sentiment error: %s", exc)

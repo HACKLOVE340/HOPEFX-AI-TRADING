@@ -37,6 +37,7 @@ Memory pressure handling
 
 All operations degrade gracefully — Redis unavailability never raises.
 """
+
 from __future__ import annotations
 
 import json
@@ -48,23 +49,23 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 _OHLCV_TTL: Dict[str, int] = {
-    "1m":  300,
-    "5m":  900,
+    "1m": 300,
+    "5m": 900,
     "15m": 1800,
-    "1h":  7200,
-    "4h":  28800,
-    "1d":  172800,
+    "1h": 7200,
+    "4h": 28800,
+    "1d": 172800,
 }
 
-_TICK_TTL         = int(os.getenv("DL_TICK_TTL_S",        "30"))
-_MICRO_TTL        = int(os.getenv("DL_MICRO_TTL_S",        "5"))
-_SENTIMENT_TTL    = int(os.getenv("DL_SENTIMENT_TTL_S",   "60"))
-_MACRO_TTL        = int(os.getenv("DL_MACRO_TTL_S",      "300"))
-_CALENDAR_TTL     = int(os.getenv("DL_CALENDAR_TTL_S",    "60"))
-_QUALITY_TTL      = int(os.getenv("DL_QUALITY_TTL_S",     "30"))
-_HEALTH_TTL       = int(os.getenv("DL_HEALTH_TTL_S",      "10"))
+_TICK_TTL = int(os.getenv("DL_TICK_TTL_S", "30"))
+_MICRO_TTL = int(os.getenv("DL_MICRO_TTL_S", "5"))
+_SENTIMENT_TTL = int(os.getenv("DL_SENTIMENT_TTL_S", "60"))
+_MACRO_TTL = int(os.getenv("DL_MACRO_TTL_S", "300"))
+_CALENDAR_TTL = int(os.getenv("DL_CALENDAR_TTL_S", "60"))
+_QUALITY_TTL = int(os.getenv("DL_QUALITY_TTL_S", "30"))
+_HEALTH_TTL = int(os.getenv("DL_HEALTH_TTL_S", "10"))
 _TICK_HISTORY_MAX = int(os.getenv("DL_TICK_HISTORY_MAX", "10000"))
-_OHLCV_MAX_BARS   = int(os.getenv("DL_OHLCV_MAX_BARS",   "2000"))
+_OHLCV_MAX_BARS = int(os.getenv("DL_OHLCV_MAX_BARS", "2000"))
 
 _PREFIX = "hopefx:dl:"
 
@@ -81,19 +82,19 @@ class DataLayerRedisStore:
     """
 
     def __init__(self, redis_client=None) -> None:
-        self._r      = redis_client
-        self._hits   = 0
+        self._r = redis_client
+        self._hits = 0
         self._misses = 0
         self._errors = 0
         self._writes = 0
         # Prometheus metrics (initialised before auto-connect so they exist
         # even when Redis is unavailable)
-        self._prom_hits    = None
-        self._prom_misses  = None
-        self._prom_writes  = None
-        self._prom_errors  = None
+        self._prom_hits = None
+        self._prom_misses = None
+        self._prom_writes = None
+        self._prom_errors = None
         self._prom_hit_rate = None
-        self._prom_mem_mb  = None
+        self._prom_mem_mb = None
         self._init_prometheus()
         # Auto-connect if no client provided and REDIS_URL is set
         if self._r is None:
@@ -115,12 +116,24 @@ class DataLayerRedisStore:
                 except ValueError:
                     return REGISTRY._names_to_collectors.get(name)  # type: ignore[return-value]
 
-            self._prom_hits     = _counter("hopefx_redis_cache_hits_total",   "Total Redis cache hits")
-            self._prom_misses   = _counter("hopefx_redis_cache_misses_total", "Total Redis cache misses")
-            self._prom_writes   = _counter("hopefx_redis_cache_writes_total", "Total Redis cache writes")
-            self._prom_errors   = _counter("hopefx_redis_cache_errors_total", "Total Redis cache errors")
-            self._prom_hit_rate = _gauge("hopefx_redis_cache_hit_rate",       "Rolling Redis cache hit rate [0, 1]")
-            self._prom_mem_mb   = _gauge("hopefx_redis_memory_rss_mb",        "Redis used_memory_rss in MB")
+            self._prom_hits = _counter(
+                "hopefx_redis_cache_hits_total", "Total Redis cache hits"
+            )
+            self._prom_misses = _counter(
+                "hopefx_redis_cache_misses_total", "Total Redis cache misses"
+            )
+            self._prom_writes = _counter(
+                "hopefx_redis_cache_writes_total", "Total Redis cache writes"
+            )
+            self._prom_errors = _counter(
+                "hopefx_redis_cache_errors_total", "Total Redis cache errors"
+            )
+            self._prom_hit_rate = _gauge(
+                "hopefx_redis_cache_hit_rate", "Rolling Redis cache hit rate [0, 1]"
+            )
+            self._prom_mem_mb = _gauge(
+                "hopefx_redis_memory_rss_mb", "Redis used_memory_rss in MB"
+            )
         except Exception as _exc:
             logger.debug("DataLayerRedisStore: Prometheus init skipped: %s", _exc)
 
@@ -138,15 +151,17 @@ class DataLayerRedisStore:
           REDIS_PASSWORD=secret
         """
         import os
+
         sentinel_hosts_raw = os.getenv("REDIS_SENTINEL_HOSTS", "")
-        sentinel_master    = os.getenv("REDIS_SENTINEL_MASTER", "mymaster")
-        redis_password     = os.getenv("REDIS_PASSWORD", "") or None
+        sentinel_master = os.getenv("REDIS_SENTINEL_MASTER", "mymaster")
+        redis_password = os.getenv("REDIS_PASSWORD", "") or None
 
         # ── Sentinel path ────────────────────────────────────────────────────
         if sentinel_hosts_raw:
             try:
                 import redis as _redis_lib
                 from redis.sentinel import Sentinel  # type: ignore[import]
+
                 sentinels = []
                 for part in sentinel_hosts_raw.split(","):
                     part = part.strip()
@@ -170,7 +185,8 @@ class DataLayerRedisStore:
                 self._r = client
                 logger.info(
                     "DataLayerRedisStore: connected via Sentinel master=%s hosts=%s",
-                    sentinel_master, sentinel_hosts_raw,
+                    sentinel_master,
+                    sentinel_hosts_raw,
                 )
                 # Emit startup warning if maxmemory is unlimited
                 self.get_memory_info()
@@ -178,13 +194,15 @@ class DataLayerRedisStore:
             except Exception as exc:
                 logger.warning(
                     "DataLayerRedisStore: Sentinel connect failed (%s) — "
-                    "falling back to REDIS_URL", exc,
+                    "falling back to REDIS_URL",
+                    exc,
                 )
 
         # ── Standard URL path ────────────────────────────────────────────────
         url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         try:
             import redis as _redis_lib
+
             kwargs: dict = {
                 "socket_connect_timeout": 2,
                 "socket_timeout": 2,
@@ -201,7 +219,8 @@ class DataLayerRedisStore:
         except Exception as exc:
             logger.debug(
                 "DataLayerRedisStore: auto-connect failed (%s) — "
-                "caching disabled until orchestrator injects client", exc,
+                "caching disabled until orchestrator injects client",
+                exc,
             )
 
     def _key(self, *parts: str) -> str:
@@ -274,7 +293,8 @@ class DataLayerRedisStore:
                     self._r.zremrangebyrank(key, 0, evict_count - 1)
                     logger.debug(
                         "Redis eviction: removed %d bars from %s",
-                        evict_count, key,
+                        evict_count,
+                        key,
                     )
         except Exception as exc:
             logger.debug("Redis eviction error: %s", exc)
@@ -290,7 +310,7 @@ class DataLayerRedisStore:
         # Push to sorted set history (score = epoch)
         if self._r:
             try:
-                score    = tick_dict.get("epoch", time.time())
+                score = tick_dict.get("epoch", time.time())
                 hist_key = self._key("tick_history", symbol)
                 pipe = self._r.pipeline(transaction=False)
                 pipe.zadd(hist_key, {payload: score})
@@ -309,14 +329,12 @@ class DataLayerRedisStore:
                 return None
         return None
 
-    def get_tick_history(
-        self, symbol: str, limit: int = 500
-    ) -> List[Dict[str, Any]]:
+    def get_tick_history(self, symbol: str, limit: int = 500) -> List[Dict[str, Any]]:
         """Return the last N ticks from history (oldest first)."""
         if not self._r:
             return []
         try:
-            key      = self._key("tick_history", symbol)
+            key = self._key("tick_history", symbol)
             raw_list = self._r.zrange(key, -limit, -1)
             return [json.loads(r) for r in raw_list if r]
         except Exception as exc:
@@ -335,7 +353,7 @@ class DataLayerRedisStore:
         # Sorted set history
         if self._r:
             try:
-                score    = bar.get("open_epoch", time.time())
+                score = bar.get("open_epoch", time.time())
                 hist_key = self._key("ohlcv", symbol, timeframe)
                 pipe = self._r.pipeline(transaction=False)
                 pipe.zadd(hist_key, {json.dumps(bar): score})
@@ -351,16 +369,14 @@ class DataLayerRedisStore:
         if not self._r:
             return []
         try:
-            key      = self._key("ohlcv", symbol, timeframe)
+            key = self._key("ohlcv", symbol, timeframe)
             raw_list = self._r.zrange(key, -limit, -1)
             return [json.loads(r) for r in raw_list if r]
         except Exception as exc:
             logger.debug("Redis ohlcv get error: %s", exc)
             return []
 
-    def get_latest_bar(
-        self, symbol: str, timeframe: str
-    ) -> Optional[Dict[str, Any]]:
+    def get_latest_bar(self, symbol: str, timeframe: str) -> Optional[Dict[str, Any]]:
         raw = self._safe_get(self._key("ohlcv_latest", symbol, timeframe))
         if raw:
             try:
@@ -446,13 +462,13 @@ class DataLayerRedisStore:
     def stats(self) -> Dict[str, Any]:
         total = self._hits + self._misses
         return {
-            "hits":         self._hits,
-            "misses":       self._misses,
-            "writes":       self._writes,
-            "errors":       self._errors,
-            "hit_rate":     round(self._hits / max(total, 1), 4),
-            "connected":    self._r is not None,
-            "memory_mb":    self.memory_usage_mb(),
+            "hits": self._hits,
+            "misses": self._misses,
+            "writes": self._writes,
+            "errors": self._errors,
+            "hit_rate": round(self._hits / max(total, 1), 4),
+            "connected": self._r is not None,
+            "memory_mb": self.memory_usage_mb(),
         }
 
     def health(self) -> Dict[str, Any]:
@@ -462,16 +478,19 @@ class DataLayerRedisStore:
         Extends stats() with ping latency, key count, and memory info.
         """
         import time as _time
+
         t0 = _time.monotonic()
         alive = self.ping()
         ping_ms = round((_time.monotonic() - t0) * 1000, 2)
         h = self.stats()
-        h.update({
-            "alive":        alive,
-            "ping_ms":      ping_ms if alive else None,
-            "key_count":    self.key_count() if alive else 0,
-            "memory_info":  self.get_memory_info() if alive else {},
-        })
+        h.update(
+            {
+                "alive": alive,
+                "ping_ms": ping_ms if alive else None,
+                "key_count": self.key_count() if alive else 0,
+                "memory_info": self.get_memory_info() if alive else {},
+            }
+        )
         return h
 
     def ping(self) -> bool:
@@ -500,6 +519,7 @@ class DataLayerRedisStore:
             return 0
         try:
             import json
+
             pipe = self._r.pipeline(transaction=False)
             for suffix, value in items.items():
                 full_key = self._key(suffix)
@@ -530,6 +550,7 @@ class DataLayerRedisStore:
             return {}
         try:
             import json
+
             full_keys = [self._key(k) for k in keys]
             pipe = self._r.pipeline(transaction=False)
             for fk in full_keys:
@@ -568,7 +589,8 @@ class DataLayerRedisStore:
             deleted = self._r.delete(*keys)
             logger.warning(
                 "DataLayerRedisStore.flush_all: deleted %d keys matching '%s'",
-                deleted, pattern,
+                deleted,
+                pattern,
             )
             return int(deleted)
         except Exception as exc:
@@ -600,13 +622,17 @@ class DataLayerRedisStore:
                     "Recommended: maxmemory 512mb maxmemory-policy allkeys-lru"
                 )
             return {
-                "used_memory_mb":       round(info.get("used_memory", 0) / 1024 / 1024, 2),
-                "used_memory_rss_mb":   round(info.get("used_memory_rss", 0) / 1024 / 1024, 2),
-                "mem_fragmentation":    info.get("mem_fragmentation_ratio", 0.0),
-                "maxmemory_mb":         round(maxmemory / 1024 / 1024, 2),
-                "maxmemory_policy":     info.get("maxmemory_policy", "unknown"),
-                "peak_used_memory_mb":  round(info.get("used_memory_peak", 0) / 1024 / 1024, 2),
-                "maxmemory_unlimited":  maxmemory == 0,
+                "used_memory_mb": round(info.get("used_memory", 0) / 1024 / 1024, 2),
+                "used_memory_rss_mb": round(
+                    info.get("used_memory_rss", 0) / 1024 / 1024, 2
+                ),
+                "mem_fragmentation": info.get("mem_fragmentation_ratio", 0.0),
+                "maxmemory_mb": round(maxmemory / 1024 / 1024, 2),
+                "maxmemory_policy": info.get("maxmemory_policy", "unknown"),
+                "peak_used_memory_mb": round(
+                    info.get("used_memory_peak", 0) / 1024 / 1024, 2
+                ),
+                "maxmemory_unlimited": maxmemory == 0,
             }
         except Exception as exc:
             logger.debug("DataLayerRedisStore.get_memory_info error: %s", exc)

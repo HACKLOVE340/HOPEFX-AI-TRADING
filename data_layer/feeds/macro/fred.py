@@ -20,13 +20,14 @@ Fetches the macro series that most directly drive gold prices:
 Free tier: 120 req/day without key, 500 req/day with free key.
 Get a free key at: https://fred.stlouisfed.org/docs/api/api_key.html
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import aiohttp
 import pandas as pd
@@ -34,20 +35,20 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 _FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
-_FRED_KEY  = os.getenv("FRED_API_KEY", "")
+_FRED_KEY = os.getenv("FRED_API_KEY", "")
 
 # Series definitions: (series_id, human_name, gold_impact_direction)
 # gold_impact_direction: +1 = rising value is bullish for gold, -1 = bearish
 FRED_SERIES: Dict[str, Tuple[str, int]] = {
-    "dxy":         ("DTWEXBGS",  -1),   # strong dollar → bearish gold
-    "us10y":       ("DGS10",     -1),   # rising yields → bearish gold
-    "us2y":        ("DGS2",      -1),
-    "real10y":     ("DFII10",    -1),   # TIPS yield — strongest gold driver
-    "cpi":         ("CPIAUCNS",  +1),   # inflation → bullish gold
-    "pce":         ("PCEPI",     +1),
-    "vix":         ("VIXCLS",    +1),   # fear → bullish gold
-    "fed_funds":   ("FEDFUNDS",  -1),
-    "m2":          ("M2SL",      +1),   # money supply → bullish gold
+    "dxy": ("DTWEXBGS", -1),  # strong dollar → bearish gold
+    "us10y": ("DGS10", -1),  # rising yields → bearish gold
+    "us2y": ("DGS2", -1),
+    "real10y": ("DFII10", -1),  # TIPS yield — strongest gold driver
+    "cpi": ("CPIAUCNS", +1),  # inflation → bullish gold
+    "pce": ("PCEPI", +1),
+    "vix": ("VIXCLS", +1),  # fear → bullish gold
+    "fed_funds": ("FEDFUNDS", -1),
+    "m2": ("M2SL", +1),  # money supply → bullish gold
 }
 
 _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=15.0)
@@ -101,12 +102,12 @@ class FREDFeed:
             return pd.Series(dtype=float)
 
         params = {
-            "series_id":         series_id,
+            "series_id": series_id,
             "observation_start": start,
-            "file_type":         "json",
-            "sort_order":        "asc",
-            "limit":             limit,
-            "api_key":           _FRED_KEY,
+            "file_type": "json",
+            "sort_order": "asc",
+            "limit": limit,
+            "api_key": _FRED_KEY,
         }
 
         try:
@@ -122,10 +123,12 @@ class FREDFeed:
                 if val == ".":
                     continue
                 try:
-                    records.append((
-                        pd.Timestamp(obs["date"], tz="UTC"),
-                        float(val),
-                    ))
+                    records.append(
+                        (
+                            pd.Timestamp(obs["date"], tz="UTC"),
+                            float(val),
+                        )
+                    )
                 except (ValueError, KeyError):
                     continue
 
@@ -148,18 +151,14 @@ class FREDFeed:
         Returns {series_name: pd.Series}.
         """
         tasks = {
-            name: asyncio.create_task(
-                self.fetch_series(series_id, observation_start)
-            )
+            name: asyncio.create_task(self.fetch_series(series_id, observation_start))
             for name, (series_id, _) in FRED_SERIES.items()
         }
         results: Dict[str, pd.Series] = {}
         for name, task in tasks.items():
             try:
                 results[name] = await task
-                logger.debug(
-                    "FRED %s: %d observations", name, len(results[name])
-                )
+                logger.debug("FRED %s: %d observations", name, len(results[name]))
             except Exception as exc:
                 logger.warning("FRED %s failed: %s", name, exc)
                 results[name] = pd.Series(dtype=float)
