@@ -36,6 +36,8 @@ jobs:
       # Check out source code
       - name: Check Out Source Code
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Check Fortify secrets are configured
         env:
