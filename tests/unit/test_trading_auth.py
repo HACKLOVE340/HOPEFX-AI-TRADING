@@ -47,7 +47,15 @@ _API_DIR = pathlib.Path(__file__).parents[2] / "api"
 
 
 def _load_module(name: str, path: pathlib.Path):
-    """Load a single .py file as a module, bypassing package __init__."""
+    """Load a single .py file as a module, bypassing package __init__.
+
+    If the module is already in sys.modules (e.g. imported by an earlier test
+    in the full suite), reuse it. Replacing it would create a second copy of
+    every function object, breaking dependency_overrides in other tests that
+    captured the original references.
+    """
+    if name in sys.modules:
+        return sys.modules[name]
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
