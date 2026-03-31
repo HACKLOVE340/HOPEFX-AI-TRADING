@@ -93,7 +93,8 @@ _XAUUSD_VOLUME_PROFILE_RAW = [
 _total = sum(_XAUUSD_VOLUME_PROFILE_RAW)
 # Normalise so the profile always sums to exactly 1.0
 _XAUUSD_VOLUME_PROFILE = [v / _total for v in _XAUUSD_VOLUME_PROFILE_RAW]
-assert abs(sum(_XAUUSD_VOLUME_PROFILE) - 1.0) < 1e-9, "Volume profile must sum to 1"
+if abs(sum(_XAUUSD_VOLUME_PROFILE) - 1.0) >= 1e-9:
+    raise ValueError("Volume profile must sum to 1")
 
 
 @dataclass
