@@ -9,7 +9,7 @@ and Phase 26: White-Label Module (whitelabel/).
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 
 # ===========================================================================
@@ -705,11 +705,11 @@ class TestTenant:
         assert sample_tenant.is_active() is True
 
     def test_tenant_is_active_expired(self, sample_tenant):
-        sample_tenant.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+        sample_tenant.expires_at = datetime.now(UTC) - timedelta(days=1)
         assert sample_tenant.is_active() is False
 
     def test_tenant_is_active_not_yet_expired(self, sample_tenant):
-        sample_tenant.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        sample_tenant.expires_at = datetime.now(UTC) + timedelta(days=7)
         assert sample_tenant.is_active() is True
 
     def test_tenant_has_feature(self, sample_tenant):
@@ -782,7 +782,7 @@ class TestWhiteLabelManagerTenants:
     def test_create_tenant_trial_has_expiry(self, manager):
         t = manager.create_tenant("Trial Co", "x@x.com", trial_days=14)
         assert t.expires_at is not None
-        assert t.expires_at > datetime.now(timezone.utc)
+        assert t.expires_at > datetime.now(UTC)
 
     def test_create_tenant_no_trial(self, manager):
         from whitelabel import TenantStatus

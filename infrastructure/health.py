@@ -13,7 +13,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -44,10 +44,10 @@ class HealthCheck:
     status: HealthStatus
     response_time_ms: float
     message: str = ""
-    details: Dict[str, Any] = field(default_factory=dict)
-    last_check: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    details: dict[str, Any] = field(default_factory=dict)
+    last_check: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "name": self.name,
             "status": self.status.value,
@@ -63,13 +63,13 @@ class SystemHealth:
     """Overall system health"""
 
     status: HealthStatus
-    checks: List[HealthCheck]
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    checks: list[HealthCheck]
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     version: str = "2.1.0"
     uptime_seconds: float = 0.0
     hostname: str = field(default_factory=lambda: os.uname().nodename)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "status": self.status.value,
             "timestamp": self.timestamp.isoformat(),
@@ -96,8 +96,8 @@ class HealthChecker:
 
     def __init__(self, app=None):
         self.app = app
-        self._checks: Dict[str, Callable] = {}
-        self._last_results: Dict[str, HealthCheck] = {}
+        self._checks: dict[str, Callable] = {}
+        self._last_results: dict[str, HealthCheck] = {}
         self._start_time = time.time()
         self._running = False
         self._check_interval = 30  # seconds
@@ -152,7 +152,7 @@ class HealthChecker:
                 name=name,
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=(time.time() - start_time) * 1000,
-                message=f"Health check error: {str(e)}",
+                message=f"Health check error: {e!s}",
             )
             self._last_results[name] = result
             return result
@@ -272,7 +272,7 @@ class HealthChecker:
                 name="database",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=0,
-                message=f"Database error: {str(e)}",
+                message=f"Database error: {e!s}",
             )
 
     async def _check_cache(self) -> HealthCheck:
@@ -313,7 +313,7 @@ class HealthChecker:
                 name="cache",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=0,
-                message=f"Cache error: {str(e)}",
+                message=f"Cache error: {e!s}",
             )
 
     async def _check_broker(self) -> HealthCheck:
@@ -357,7 +357,7 @@ class HealthChecker:
                 name="broker",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=0,
-                message=f"Broker error: {str(e)}",
+                message=f"Broker error: {e!s}",
             )
 
     async def _check_price_feed(self) -> HealthCheck:
@@ -412,7 +412,7 @@ class HealthChecker:
                 name="price_feed",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=0,
-                message=f"Price feed error: {str(e)}",
+                message=f"Price feed error: {e!s}",
             )
 
     async def _check_brain(self) -> HealthCheck:
@@ -463,7 +463,7 @@ class HealthChecker:
                 name="brain",
                 status=HealthStatus.UNHEALTHY,
                 response_time_ms=0,
-                message=f"Brain error: {str(e)}",
+                message=f"Brain error: {e!s}",
             )
 
     async def start_monitoring(self, interval: Optional[int] = None):
@@ -500,7 +500,7 @@ class HealthChecker:
 
 # HTTP Server for health checks
 async def start_health_server(
-    host: str = "0.0.0.0", port: int = 8080, checker: Optional[HealthChecker] = None  # nosec B104 - host configurable via parameter  # noqa: S104
+    host: str = "0.0.0.0", port: int = 8080, checker: Optional[HealthChecker] = None  # nosec B104 - host configurable via parameter
 ):
     """Start HTTP health check server"""
     if not AIOHTTP_AVAILABLE:

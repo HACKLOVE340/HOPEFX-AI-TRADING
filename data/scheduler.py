@@ -46,7 +46,7 @@ import asyncio
 import csv
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -65,7 +65,7 @@ _OANDA_ENV = os.getenv("OANDA_ENVIRONMENT", "practice")
 _OANDA_REGION = os.getenv("OANDA_REGION", "us")
 
 # OANDA base URLs by region and environment
-_OANDA_URLS: Dict[str, Dict[str, str]] = {
+_OANDA_URLS: dict[str, dict[str, str]] = {
     "us": {
         "practice": "https://api-fxpractice.oanda.com",
         "live": "https://api-fxtrade.oanda.com",
@@ -86,7 +86,7 @@ _OANDA_BASE = _OANDA_URLS.get(_OANDA_REGION, _OANDA_URLS["us"]).get(
 
 # Granularity codes and their duration in seconds
 # Supported: M1, M5, M15, M30, H1, H4, D, W, M
-TIMEFRAME_SECONDS: Dict[str, int] = {
+TIMEFRAME_SECONDS: dict[str, int] = {
     "M1": 60,
     "M5": 300,
     "M15": 900,
@@ -99,7 +99,7 @@ TIMEFRAME_SECONDS: Dict[str, int] = {
 }
 
 # yfinance interval mapping for each OANDA granularity
-_YF_INTERVAL_MAP: Dict[str, str] = {
+_YF_INTERVAL_MAP: dict[str, str] = {
     "M1": "1m",
     "M5": "5m",
     "M15": "15m",
@@ -112,7 +112,7 @@ _YF_INTERVAL_MAP: Dict[str, str] = {
 }
 
 # yfinance lookback period for each granularity (intraday data has limits)
-_YF_PERIOD_MAP: Dict[str, str] = {
+_YF_PERIOD_MAP: dict[str, str] = {
     "M1": "7d",
     "M5": "60d",
     "M15": "60d",
@@ -125,7 +125,7 @@ _YF_PERIOD_MAP: Dict[str, str] = {
 }
 
 # yfinance symbol map
-_YF_SYMBOL_MAP: Dict[str, str] = {
+_YF_SYMBOL_MAP: dict[str, str] = {
     "XAU_USD": "GC=F",
     "XAUUSD": "GC=F",
     "EUR_USD": "EURUSD=X",
@@ -142,7 +142,7 @@ _OANDA_MAX_COUNT = 5_000
 _UPDATE_INTERVAL_SECS = int(os.getenv("SCHEDULER_INTERVAL", "3600"))
 
 # All timeframes updated on each scheduler run
-ALL_TIMEFRAMES: Tuple[str, ...] = ("M1", "M5", "M15", "M30", "H1", "H4", "D", "W", "M")
+ALL_TIMEFRAMES: tuple[str, ...] = ("M1", "M5", "M15", "M30", "H1", "H4", "D", "W", "M")
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +156,7 @@ async def _fetch_oanda(
     count: int = 500,
     from_dt: Optional[datetime] = None,
     to_dt: Optional[datetime] = None,
-) -> List[Dict]:
+) -> list[dict]:
     """
     Fetch OHLCV bars from OANDA REST API.
 
@@ -182,7 +182,7 @@ async def _fetch_oanda(
         "Authorization": f"Bearer {_OANDA_KEY}",
         "Content-Type": "application/json",
     }
-    params: Dict = {
+    params: dict = {
         "granularity": granularity,
         "price": "M",  # midpoint candles
     }
@@ -225,7 +225,7 @@ async def _fetch_oanda(
         logger.error("OANDA fetch error: %s", exc)
         return []
 
-    bars: List[Dict] = []
+    bars: list[dict] = []
     for candle in data.get("candles", []):
         if not candle.get("complete", True):
             continue
@@ -263,7 +263,7 @@ async def _fetch_yfinance(
     symbol: str,
     granularity: str = "H1",
     from_dt: Optional[datetime] = None,
-) -> List[Dict]:
+) -> list[dict]:
     """
     Fetch bars via yfinance as a fallback when OANDA credentials are absent.
 
@@ -284,7 +284,7 @@ async def _fetch_yfinance(
         loop = asyncio.get_event_loop()
 
         if from_dt is not None:
-            end_dt = datetime.now(timezone.utc)
+            end_dt = datetime.now(UTC)
             hist = await loop.run_in_executor(
                 None,
                 lambda: yf.download(
@@ -317,7 +317,7 @@ async def _fetch_yfinance(
     else:
         hist.columns = [c.lower() for c in hist.columns]
 
-    bars: List[Dict] = []
+    bars: list[dict] = []
     for ts, row in hist.iterrows():
         try:
             # Normalise timestamp to ISO format without timezone
@@ -387,7 +387,7 @@ def _get_last_timestamp(path: Path) -> Optional[str]:
     return max(existing)
 
 
-def _append_bars(path: Path, bars: List[Dict]) -> int:
+def _append_bars(path: Path, bars: list[dict]) -> int:
     """
     Append new bars to CSV, skipping duplicates.
 
@@ -438,7 +438,7 @@ async def _update_timeframe(
     from_dt: Optional[datetime] = None
     if last_ts:
         try:
-            from_dt = datetime.fromisoformat(last_ts).replace(tzinfo=timezone.utc)
+            from_dt = datetime.fromisoformat(last_ts).replace(tzinfo=UTC)
             bar_secs = TIMEFRAME_SECONDS.get(granularity, 3600)
             from_dt += timedelta(seconds=bar_secs)
         except ValueError:
@@ -469,7 +469,7 @@ async def _update_timeframe(
         from data.validator import DataValidator
 
         validator = DataValidator(symbol=symbol.replace("_", ""))
-        valid_bars: List[Dict] = []
+        valid_bars: list[dict] = []
         for i, bar in enumerate(bars):
             result = validator.validate_bar(bar)
             if result.ok:
@@ -508,7 +508,7 @@ class DataScheduler:
     def __init__(
         self,
         symbol: str = _SYMBOL,
-        timeframes: Tuple[str, ...] = ALL_TIMEFRAMES,
+        timeframes: tuple[str, ...] = ALL_TIMEFRAMES,
         interval_secs: int = _UPDATE_INTERVAL_SECS,
     ) -> None:
         self.symbol = symbol
@@ -516,13 +516,13 @@ class DataScheduler:
         self.interval_secs = interval_secs
         self._running = False
 
-    async def run_once(self) -> Dict[str, int]:
+    async def run_once(self) -> dict[str, int]:
         """
         Fetch and append new bars for all configured timeframes.
 
         Returns a dict mapping timeframe → bars appended.
         """
-        results: Dict[str, int] = {}
+        results: dict[str, int] = {}
         for tf in self.timeframes:
             try:
                 count = await _update_timeframe(self.symbol, tf)
@@ -588,14 +588,14 @@ async def backfill(
 
     Returns total bars appended.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if to_date is None:
         to_date = now
     if from_date is None:
         # Default: 2015-01-01 — covers 10+ years of H1 data for regime analysis
         # and multi-cycle backtesting (2015 USD rally, 2018 correction, 2020 COVID,
         # 2022 rate hike cycle, 2024-2026 gold bull run).
-        from_date = datetime(2015, 1, 1, tzinfo=timezone.utc)
+        from_date = datetime(2015, 1, 1, tzinfo=UTC)
 
     if granularity not in TIMEFRAME_SECONDS:
         logger.error("Unsupported granularity: %s", granularity)
@@ -665,7 +665,7 @@ async def backfill(
         # Advance cursor past the last bar received
         try:
             last_ts = bars[-1]["timestamp"]
-            cursor = datetime.fromisoformat(last_ts).replace(tzinfo=timezone.utc)
+            cursor = datetime.fromisoformat(last_ts).replace(tzinfo=UTC)
             cursor += timedelta(seconds=bar_secs)
         except Exception:
             cursor += timedelta(seconds=chunk_secs)
@@ -742,12 +742,12 @@ if __name__ == "__main__":
     async def _main() -> None:
         if args.backfill:
             from_dt = (
-                datetime.fromisoformat(args.from_date).replace(tzinfo=timezone.utc)
+                datetime.fromisoformat(args.from_date).replace(tzinfo=UTC)
                 if args.from_date
                 else None
             )
             to_dt = (
-                datetime.fromisoformat(args.to_date).replace(tzinfo=timezone.utc)
+                datetime.fromisoformat(args.to_date).replace(tzinfo=UTC)
                 if args.to_date
                 else None
             )
@@ -759,26 +759,25 @@ if __name__ == "__main__":
             )
             print(f"\nBackfill complete: {count} bars appended.")
             print(f"Data saved to: {_csv_path(args.symbol, args.granularity)}")
-        else:
-            if args.timeframe:
-                if args.timeframe not in TIMEFRAME_SECONDS:
-                    print(
-                        f"Unknown timeframe '{args.timeframe}'. "
-                        f"Supported: {', '.join(ALL_TIMEFRAMES)}"
-                    )
-                    return
-                count = await _update_timeframe(args.symbol, args.timeframe)
+        elif args.timeframe:
+            if args.timeframe not in TIMEFRAME_SECONDS:
                 print(
-                    f"Fetched and appended {count} new bars "
-                    f"for {args.symbol}/{args.timeframe}."
+                    f"Unknown timeframe '{args.timeframe}'. "
+                    f"Supported: {', '.join(ALL_TIMEFRAMES)}"
                 )
-            else:
-                scheduler = DataScheduler(symbol=args.symbol)
-                results = await scheduler.run_once()
-                total = sum(results.values())
-                print(f"\nUpdate complete: {total} total new bars")
-                for tf, n in results.items():
-                    path = _csv_path(args.symbol, tf)
-                    print(f"  {tf:>4}  {n:>5} new bars  →  {path}")
+                return
+            count = await _update_timeframe(args.symbol, args.timeframe)
+            print(
+                f"Fetched and appended {count} new bars "
+                f"for {args.symbol}/{args.timeframe}."
+            )
+        else:
+            scheduler = DataScheduler(symbol=args.symbol)
+            results = await scheduler.run_once()
+            total = sum(results.values())
+            print(f"\nUpdate complete: {total} total new bars")
+            for tf, n in results.items():
+                path = _csv_path(args.symbol, tf)
+                print(f"  {tf:>4}  {n:>5} new bars  →  {path}")
 
     asyncio.run(_main())

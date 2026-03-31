@@ -64,7 +64,7 @@ class TradingConfig:
 class APIConfig:
     """API configuration"""
 
-    host: str = os.getenv("API_HOST", "0.0.0.0")  # nosec B104 - host read from API_HOST env var  # noqa: S104
+    host: str = os.getenv("API_HOST", "0.0.0.0")  # nosec B104 - host read from API_HOST env var
     port: int = int(os.getenv("API_PORT", "8000"))
     workers: int = int(os.getenv("API_WORKERS", "4"))
     debug: bool = os.getenv("API_DEBUG", "false").lower() == "true"

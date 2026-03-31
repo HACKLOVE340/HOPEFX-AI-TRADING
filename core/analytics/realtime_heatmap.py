@@ -10,7 +10,7 @@ Live correlation, regime detection, and risk visualization
 """
 
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List
 
 import numpy as np
@@ -25,8 +25,8 @@ class RealtimeHeatmapEngine:
         self.event_bus = event_bus
 
         # Data buffers
-        self.price_history: Dict[str, deque] = {}
-        self.returns_history: Dict[str, deque] = {}
+        self.price_history: dict[str, deque] = {}
+        self.returns_history: dict[str, deque] = {}
         self.regime_history: deque = deque(maxlen=1000)
 
         # Configuration
@@ -80,9 +80,9 @@ class RealtimeHeatmapEngine:
 
         if regime != self.orchestra.current_regime:
             self.orchestra.current_regime = regime
-            self.regime_history.append((datetime.now(timezone.utc), regime))
+            self.regime_history.append((datetime.now(UTC), regime))
 
-    def _calculate_adx(self, prices: List[float], period: int = 14) -> float:
+    def _calculate_adx(self, prices: list[float], period: int = 14) -> float:
         """Average Directional Index"""
         if len(prices) < period + 1:
             return 0
@@ -124,7 +124,7 @@ class RealtimeHeatmapEngine:
         )
         return dx
 
-    def get_correlation_matrix(self, symbols: List[str]) -> np.ndarray:
+    def get_correlation_matrix(self, symbols: list[str]) -> np.ndarray:
         """Calculate real-time correlation matrix"""
         if len(symbols) < 2:
             return np.eye(1)
@@ -144,7 +144,7 @@ class RealtimeHeatmapEngine:
 
         return np.corrcoef(matrix)
 
-    def get_heatmap_data(self) -> Dict:
+    def get_heatmap_data(self) -> dict:
         """Generate comprehensive heatmap data"""
         symbols = list(self.price_history.keys())
 
@@ -174,5 +174,5 @@ class RealtimeHeatmapEngine:
             "correlation": {"symbols": symbols, "matrix": corr_matrix.tolist()},
             "risk": risk_data,
             "regime_timeline": regime_timeline,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }

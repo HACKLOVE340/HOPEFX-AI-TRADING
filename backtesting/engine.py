@@ -10,7 +10,7 @@ Production-grade backtesting with transaction cost modeling
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from dataclasses import dataclass, field
 from typing import List, Dict, Callable, Optional, Tuple, Any
 from enum import Enum
@@ -71,7 +71,7 @@ class BarData:
 
     @classmethod
     def from_ticks(
-        cls, ticks: List[TickData], symbol: str, timestamp: datetime
+        cls, ticks: list[TickData], symbol: str, timestamp: datetime
     ) -> "BarData":
         if not ticks:
             raise ValueError("Cannot create bar from empty ticks")
@@ -109,7 +109,7 @@ class Order:
     def __post_init__(self):
         if self.order_id is None:
             self.order_id = (
-                f"ORD_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}"
+                f"ORD_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S_%f')}"
             )
 
 
@@ -200,7 +200,7 @@ class PerformanceMetrics:
     drawdown_series: pd.Series = field(default_factory=pd.Series)
     returns_series: pd.Series = field(default_factory=pd.Series)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "total_return": self.total_return,
             "annualized_return": self.annualized_return,
@@ -252,7 +252,7 @@ class TransactionCostModel:
 
     def calculate_costs(
         self, order: Order, tick: TickData, quantity: float
-    ) -> Tuple[float, float, float]:
+    ) -> tuple[float, float, float]:
         """Returns (fill_price, commission, slippage)"""
 
         # Base price with spread
@@ -296,7 +296,7 @@ class BacktestEngine:
     """
 
     # Bars per day for common timeframes — used to scale the annual swap rate
-    _BARS_PER_DAY: Dict[str, float] = {
+    _BARS_PER_DAY: dict[str, float] = {
         "tick": 86400.0,
         "1m": 1440.0,
         "5m": 288.0,
@@ -329,10 +329,10 @@ class BacktestEngine:
         self._overnight_rate_per_bar = overnight_rate_annual / 365.0 / bars_per_day
 
         # State
-        self.positions: Dict[str, Position] = {}
-        self.pending_orders: List[Order] = []
-        self.closed_trades: List[Trade] = []
-        self.equity_history: List[Dict] = []
+        self.positions: dict[str, Position] = {}
+        self.pending_orders: list[Order] = []
+        self.closed_trades: list[Trade] = []
+        self.equity_history: list[dict] = []
         self.current_time: Optional[datetime] = None
 
         # Performance tracking
@@ -344,12 +344,12 @@ class BacktestEngine:
 
         # Strategy
         self.strategy: Optional[Callable] = None
-        self.symbols: List[str] = []
+        self.symbols: list[str] = []
 
         # Data
         self.data_handler: Optional[Any] = None
 
-    def set_strategy(self, strategy: Callable, symbols: List[str]):
+    def set_strategy(self, strategy: Callable, symbols: list[str]):
         """Set the trading strategy function"""
         self.strategy = strategy
         self.symbols = symbols
@@ -439,9 +439,7 @@ class BacktestEngine:
                 fill_price = tick.ask if order.side == OrderSide.BUY else tick.bid
 
             elif order.order_type == OrderType.LIMIT:
-                if order.side == OrderSide.BUY and tick.ask <= order.price:
-                    fill_price = order.price
-                elif order.side == OrderSide.SELL and tick.bid >= order.price:
+                if order.side == OrderSide.BUY and tick.ask <= order.price or order.side == OrderSide.SELL and tick.bid >= order.price:
                     fill_price = order.price
 
             elif order.order_type == OrderType.STOP:
@@ -495,15 +493,13 @@ class BacktestEngine:
             self.drawdown_start = None
         else:
             drawdown = (self.peak_equity - total_equity) / self.peak_equity
-            if drawdown > self.max_drawdown:
-                self.max_drawdown = drawdown
+            self.max_drawdown = max(self.max_drawdown, drawdown)
 
             if self.drawdown_start is None:
                 self.drawdown_start = timestamp
             else:
                 duration = (timestamp - self.drawdown_start).days
-                if duration > self.max_drawdown_duration:
-                    self.max_drawdown_duration = duration
+                self.max_drawdown_duration = max(self.max_drawdown_duration, duration)
 
         self.equity_history.append(
             {
@@ -518,7 +514,7 @@ class BacktestEngine:
             }
         )
 
-    def _execute_signal(self, signal: Dict, tick: TickData):
+    def _execute_signal(self, signal: dict, tick: TickData):
         """Convert strategy signal to order"""
         side = OrderSide.BUY if signal["action"] == "buy" else OrderSide.SELL
         quantity = signal.get("quantity", 0.0)
@@ -572,41 +568,40 @@ class BacktestEngine:
                     + order.filled_price * order.filled_quantity
                 ) / total_qty
                 position.quantity = total_qty
+            # Reducing/closing position
+            elif order.filled_quantity >= position.quantity:
+                # Close position
+                pnl = (
+                    position.realized_pnl
+                    + (order.filled_price - position.entry_price)
+                    * position.quantity
+                )
+                if position.side == OrderSide.SELL:
+                    pnl = -pnl
+
+                trade = Trade(
+                    trade_id=f"TRADE_{len(self.closed_trades)}",
+                    entry_order=order,  # Simplified - should track original entry
+                    exit_order=order,
+                    symbol=symbol,
+                    side=position.side,
+                    quantity=position.quantity,
+                    entry_price=position.entry_price,
+                    exit_price=order.filled_price,
+                    entry_time=position.entry_time,
+                    exit_time=self.current_time,
+                    pnl=pnl,
+                    commission=order.commission,
+                    slippage=order.slippage,
+                )
+
+                self.closed_trades.append(trade)
+                self.capital += pnl - order.commission
+                del self.positions[symbol]
             else:
-                # Reducing/closing position
-                if order.filled_quantity >= position.quantity:
-                    # Close position
-                    pnl = (
-                        position.realized_pnl
-                        + (order.filled_price - position.entry_price)
-                        * position.quantity
-                    )
-                    if position.side == OrderSide.SELL:
-                        pnl = -pnl
-
-                    trade = Trade(
-                        trade_id=f"TRADE_{len(self.closed_trades)}",
-                        entry_order=order,  # Simplified - should track original entry
-                        exit_order=order,
-                        symbol=symbol,
-                        side=position.side,
-                        quantity=position.quantity,
-                        entry_price=position.entry_price,
-                        exit_price=order.filled_price,
-                        entry_time=position.entry_time,
-                        exit_time=self.current_time,
-                        pnl=pnl,
-                        commission=order.commission,
-                        slippage=order.slippage,
-                    )
-
-                    self.closed_trades.append(trade)
-                    self.capital += pnl - order.commission
-                    del self.positions[symbol]
-                else:
-                    # Partial close
-                    position.quantity -= order.filled_quantity
-                    self.capital -= order.commission
+                # Partial close
+                position.quantity -= order.filled_quantity
+                self.capital -= order.commission
         else:
             # New position
             self.positions[symbol] = Position(
@@ -831,7 +826,7 @@ class CSVDataHandler:
         self.data.sort_values("timestamp", inplace=True)
         print(f"Loaded {len(self.data)} rows from {self.filepath}")
 
-    def get_data(self, start_date: datetime, end_date: datetime, symbols: List[str]):
+    def get_data(self, start_date: datetime, end_date: datetime, symbols: list[str]):
         """Generator yielding (timestamp, symbol, tick)"""
         if self.data is None:
             self.load()

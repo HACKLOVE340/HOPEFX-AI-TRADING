@@ -13,7 +13,7 @@ import asyncio
 import json
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Callable, Dict, List, Optional, Set
 
 try:
@@ -56,9 +56,9 @@ class FeedHandler:
     """
 
     def __init__(self):
-        self.exchanges: Dict[str, ExchangeFeed] = {}
-        self.normalized_callbacks: List[Callable[[Tick], None]] = []
-        self.symbol_subscriptions: Set[str] = set()
+        self.exchanges: dict[str, ExchangeFeed] = {}
+        self.normalized_callbacks: list[Callable[[Tick], None]] = []
+        self.symbol_subscriptions: set[str] = set()
         self.tick_buffer: deque = deque(maxlen=10000)
         self.stats = {"ticks_processed": 0, "ticks_per_second": 0.0, "latency_ns": 0}
 
@@ -67,15 +67,15 @@ class FeedHandler:
         self.exchanges[name] = feed
         feed.set_callback(self._on_exchange_tick)
 
-    def subscribe(self, symbols: List[str]):
+    def subscribe(self, symbols: list[str]):
         """Subscribe to symbols"""
         self.symbol_subscriptions.update(symbols)
         for exchange in self.exchanges.values():
             exchange.subscribe(symbols)
 
-    def _on_exchange_tick(self, raw_data: Dict, exchange_name: str):
+    def _on_exchange_tick(self, raw_data: dict, exchange_name: str):
         """Process raw tick from exchange"""
-        start_ns = datetime.now(timezone.utc).timestamp() * 1e9
+        start_ns = datetime.now(UTC).timestamp() * 1e9
 
         # Normalize to common format
         tick = self._normalize(raw_data, exchange_name)
@@ -87,7 +87,7 @@ class FeedHandler:
         self.tick_buffer.append(tick)
 
         # Calculate latency
-        latency_ns = datetime.now(timezone.utc).timestamp() * 1e9 - start_ns
+        latency_ns = datetime.now(UTC).timestamp() * 1e9 - start_ns
         self.stats["latency_ns"] = 0.9 * self.stats["latency_ns"] + 0.1 * latency_ns
 
         # Distribute
@@ -99,7 +99,7 @@ class FeedHandler:
 
         self.stats["ticks_processed"] += 1
 
-    def _normalize(self, raw: Dict, exchange: str) -> Tick:
+    def _normalize(self, raw: dict, exchange: str) -> Tick:
         """Normalize exchange-specific format to Tick"""
         # Exchange-specific parsing
         parsers = {
@@ -111,10 +111,10 @@ class FeedHandler:
         parser = parsers.get(exchange, self._parse_generic)
         return parser(raw, exchange)
 
-    def _parse_oanda(self, raw: Dict, exchange: str) -> Tick:
+    def _parse_oanda(self, raw: dict, exchange: str) -> Tick:
         return Tick(
             symbol=raw.get("instrument", "").replace("_", ""),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             bid=float(raw.get("bids", [{}])[0].get("price", 0)),
             ask=float(raw.get("asks", [{}])[0].get("price", 0)),
             bid_size=float(raw.get("bids", [{}])[0].get("liquidity", 0)),
@@ -128,7 +128,7 @@ class FeedHandler:
             exchange=exchange,
         )
 
-    def _parse_binance(self, raw: Dict, exchange: str) -> Tick:
+    def _parse_binance(self, raw: dict, exchange: str) -> Tick:
         return Tick(
             symbol=raw.get("s", ""),
             timestamp=datetime.fromtimestamp(raw.get("E", 0) / 1000),
@@ -142,7 +142,7 @@ class FeedHandler:
             is_trade=raw.get("e") == "trade",
         )
 
-    def _parse_coinbase(self, raw: Dict, exchange: str) -> Tick:
+    def _parse_coinbase(self, raw: dict, exchange: str) -> Tick:
         # Coinbase Pro format
         return Tick(
             symbol=raw.get("product_id", "").replace("-", ""),
@@ -159,10 +159,10 @@ class FeedHandler:
             is_trade=raw.get("type") == "match",
         )
 
-    def _parse_generic(self, raw: Dict, exchange: str) -> Tick:
+    def _parse_generic(self, raw: dict, exchange: str) -> Tick:
         return Tick(
             symbol=str(raw.get("symbol", "")),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             bid=float(raw.get("bid", 0)),
             ask=float(raw.get("ask", 0)),
             bid_size=float(raw.get("bidSize", 0)),
@@ -183,7 +183,7 @@ class FeedHandler:
                 return tick
         return None
 
-    def get_recent_trades(self, symbol: str, n: int = 100) -> List[Tick]:
+    def get_recent_trades(self, symbol: str, n: int = 100) -> list[Tick]:
         """Get recent trades for symbol"""
         return [
             tick for tick in self.tick_buffer if tick.symbol == symbol and tick.is_trade
@@ -197,13 +197,13 @@ class ExchangeFeed:
         self.name = name
         self.ws_url = ws_url
         self.callback: Optional[Callable] = None
-        self.subscribed_symbols: Set[str] = set()
+        self.subscribed_symbols: set[str] = set()
         self.connected = False
 
-    def set_callback(self, callback: Callable[[Dict, str], None]):
+    def set_callback(self, callback: Callable[[dict, str], None]):
         self.callback = callback
 
-    def subscribe(self, symbols: List[str]):
+    def subscribe(self, symbols: list[str]):
         self.subscribed_symbols.update(symbols)
 
     async def connect(self):
@@ -223,7 +223,6 @@ class ExchangeFeed:
     async def _send_subscription(self):
         """Send subscription message"""
         # Override in subclass
-        pass
 
     async def _receive_loop(self):
         """Receive and process messages"""

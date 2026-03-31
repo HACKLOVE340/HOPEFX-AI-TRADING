@@ -21,7 +21,7 @@ Key components:
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -89,14 +89,14 @@ class ResellerTier(str, Enum):
 # Tier constants
 # ---------------------------------------------------------------------------
 
-TIER_COMMISSION_RATES: Dict[ResellerTier, float] = {
+TIER_COMMISSION_RATES: dict[ResellerTier, float] = {
     ResellerTier.STANDARD: 0.15,
     ResellerTier.SILVER: 0.20,
     ResellerTier.GOLD: 0.25,
     ResellerTier.PLATINUM: 0.30,
 }
 
-TIER_TENANT_THRESHOLDS: Dict[ResellerTier, int] = {
+TIER_TENANT_THRESHOLDS: dict[ResellerTier, int] = {
     ResellerTier.STANDARD: 0,
     ResellerTier.SILVER: 5,
     ResellerTier.GOLD: 15,
@@ -104,7 +104,7 @@ TIER_TENANT_THRESHOLDS: Dict[ResellerTier, int] = {
 }
 
 # Ordered from highest to lowest for upgrade logic
-_TIER_ORDER: List[ResellerTier] = [
+_TIER_ORDER: list[ResellerTier] = [
     ResellerTier.PLATINUM,
     ResellerTier.GOLD,
     ResellerTier.SILVER,
@@ -143,7 +143,7 @@ class BrandTheme:
         self.custom_css = custom_css
         self.tagline = tagline
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise the theme to a plain dictionary."""
         return {
             "primary_color": self.primary_color,
@@ -154,7 +154,7 @@ class BrandTheme:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "BrandTheme":
+    def from_dict(cls, data: dict[str, Any]) -> "BrandTheme":
         """Deserialise a BrandTheme from a plain dictionary."""
         return cls(
             primary_color=data.get("primary_color", "#1976D2"),
@@ -192,7 +192,7 @@ class Tenant:
         owner_email: str,
         status: TenantStatus = TenantStatus.ACTIVE,
         expires_at: Optional[datetime] = None,
-        features: Optional[List[FeatureFlag]] = None,
+        features: Optional[list[FeatureFlag]] = None,
         max_users: int = 50,
         user_count: int = 0,
         reseller_id: Optional[str] = None,
@@ -204,18 +204,18 @@ class Tenant:
         self.owner_email = owner_email
         self.status = status
         self.expires_at = expires_at
-        self.features: List[FeatureFlag] = features if features is not None else []
+        self.features: list[FeatureFlag] = features if features is not None else []
         self.max_users = max_users
         self.user_count = user_count
         self.reseller_id = reseller_id
         self.custom_domain = custom_domain
         self.theme: BrandTheme = theme if theme is not None else BrandTheme()
-        self.created_at: datetime = datetime.now(timezone.utc)
+        self.created_at: datetime = datetime.now(UTC)
 
     def is_active(self) -> bool:
         """Return True if the tenant is currently active or in trial (and not expired)."""
         if self.expires_at is not None and self.expires_at <= datetime.now(
-            timezone.utc
+            UTC
         ):
             return False
         return self.status in (TenantStatus.ACTIVE, TenantStatus.TRIAL)
@@ -286,16 +286,16 @@ class WhiteLabelManager:
     """
 
     def __init__(self) -> None:
-        self._tenants: Dict[str, Tenant] = {}
-        self._resellers: Dict[str, Reseller] = {}
-        self._domains: Dict[str, str] = {}  # domain -> tenant_id
+        self._tenants: dict[str, Tenant] = {}
+        self._resellers: dict[str, Reseller] = {}
+        self._domains: dict[str, str] = {}  # domain -> tenant_id
 
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
 
     @property
-    def tenants(self) -> Dict[str, Tenant]:
+    def tenants(self) -> dict[str, Tenant]:
         """Return the internal tenants mapping."""
         return self._tenants
 
@@ -308,7 +308,7 @@ class WhiteLabelManager:
         name: str,
         owner_email: str,
         trial_days: int = 0,
-        features: Optional[List[FeatureFlag]] = None,
+        features: Optional[list[FeatureFlag]] = None,
         reseller_id: Optional[str] = None,
     ) -> Tenant:
         """
@@ -327,7 +327,7 @@ class WhiteLabelManager:
         tenant_id = _generate_id("WL")
         if trial_days > 0:
             status = TenantStatus.TRIAL
-            expires_at: Optional[datetime] = datetime.now(timezone.utc) + timedelta(
+            expires_at: Optional[datetime] = datetime.now(UTC) + timedelta(
                 days=trial_days
             )
         else:
@@ -386,7 +386,7 @@ class WhiteLabelManager:
         _logger.info("Tenant %s deleted", tenant_id)
         return True
 
-    def list_tenants(self, status: Optional[TenantStatus] = None) -> List[Tenant]:
+    def list_tenants(self, status: Optional[TenantStatus] = None) -> list[Tenant]:
         """Return all tenants, optionally filtered by status."""
         tenants = list(self._tenants.values())
         if status is not None:
@@ -397,7 +397,7 @@ class WhiteLabelManager:
     # Theme management
     # ------------------------------------------------------------------
 
-    def update_theme(self, tenant_id: str, theme_dict: Dict[str, Any]) -> bool:
+    def update_theme(self, tenant_id: str, theme_dict: dict[str, Any]) -> bool:
         """Update the brand theme for a tenant from a dictionary of attributes."""
         tenant = self.get_tenant(tenant_id)
         if tenant is None:
@@ -437,7 +437,7 @@ class WhiteLabelManager:
             tenant.features.remove(feature)
         return True
 
-    def get_tenant_features(self, tenant_id: str) -> List[FeatureFlag]:
+    def get_tenant_features(self, tenant_id: str) -> list[FeatureFlag]:
         """Return the list of enabled feature flags for a tenant, or [] if not found."""
         tenant = self.get_tenant(tenant_id)
         if tenant is None:
@@ -550,7 +550,7 @@ class WhiteLabelManager:
     # Export / Import
     # ------------------------------------------------------------------
 
-    def export_tenant_config(self, tenant_id: str) -> Optional[Dict[str, Any]]:
+    def export_tenant_config(self, tenant_id: str) -> Optional[dict[str, Any]]:
         """
         Export a tenant's configuration as a serialisable dictionary.
 
@@ -567,7 +567,7 @@ class WhiteLabelManager:
             "custom_domain": tenant.custom_domain,
         }
 
-    def import_tenant_config(self, config: Dict[str, Any]) -> Tenant:
+    def import_tenant_config(self, config: dict[str, Any]) -> Tenant:
         """
         Import a tenant from a previously exported configuration dictionary.
 
@@ -591,7 +591,7 @@ class WhiteLabelManager:
     # Summary
     # ------------------------------------------------------------------
 
-    def get_platform_summary(self) -> Dict[str, Any]:
+    def get_platform_summary(self) -> dict[str, Any]:
         """Return a high-level summary of the platform's tenants and resellers."""
         tenants = list(self._tenants.values())
         return {

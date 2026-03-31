@@ -16,7 +16,7 @@ This module provides:
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from decimal import Decimal
 from typing import Optional, Dict, List, Any
 from enum import Enum
@@ -105,7 +105,7 @@ class RevenueMetric:
     source: RevenueSource
     amount: Decimal
     count: int
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 @dataclass
@@ -133,7 +133,7 @@ class SubscriptionMetrics:
     churned_subscriptions: int
     upgrades: int
     downgrades: int
-    tier_distribution: Dict[str, int]
+    tier_distribution: dict[str, int]
     avg_subscription_value: Decimal
 
 
@@ -148,7 +148,7 @@ class RevenueEntry:
         user_id: Optional[str] = None,
         tier: Optional[SubscriptionTier] = None,
         description: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ):
         self.entry_id = entry_id
         self.source = source
@@ -157,9 +157,9 @@ class RevenueEntry:
         self.tier = tier
         self.description = description
         self.metadata = metadata or {}
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             "entry_id": self.entry_id,
@@ -177,9 +177,9 @@ class RevenueAnalytics:
     """Revenue analytics and reporting"""
 
     def __init__(self):
-        self._entries: Dict[str, RevenueEntry] = {}
-        self._subscription_events: List[Dict[str, Any]] = []
-        self._daily_snapshots: Dict[str, Dict[str, Any]] = {}
+        self._entries: dict[str, RevenueEntry] = {}
+        self._subscription_events: list[dict[str, Any]] = []
+        self._daily_snapshots: dict[str, dict[str, Any]] = {}
 
     def record_revenue(
         self,
@@ -188,7 +188,7 @@ class RevenueAnalytics:
         user_id: Optional[str] = None,
         tier: Optional[SubscriptionTier] = None,
         description: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> RevenueEntry:
         """Record a revenue entry"""
         import uuid
@@ -234,7 +234,7 @@ class RevenueAnalytics:
             "billing_cycle": billing_cycle.value,
             "amount": float(amount),
             "previous_tier": previous_tier.value if previous_tier else None,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         self._subscription_events.append(event)
 
@@ -299,7 +299,7 @@ class RevenueAnalytics:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         source: Optional[RevenueSource] = None,
-    ) -> List[RevenueMetric]:
+    ) -> list[RevenueMetric]:
         """Get revenue aggregated by time period"""
         entries = list(self._entries.values())
 
@@ -312,7 +312,7 @@ class RevenueAnalytics:
             entries = [e for e in entries if e.source == source]
 
         # Group by period
-        grouped: Dict[str, List[RevenueEntry]] = {}
+        grouped: dict[str, list[RevenueEntry]] = {}
 
         for entry in entries:
             if period == TimePeriod.DAILY:
@@ -360,7 +360,7 @@ class RevenueAnalytics:
 
     def get_mrr(self, as_of: Optional[datetime] = None) -> Decimal:
         """Calculate Monthly Recurring Revenue"""
-        as_of = as_of or datetime.now(timezone.utc)
+        as_of = as_of or datetime.now(UTC)
 
         # Get subscription revenue from last 30 days
         start_date = as_of - timedelta(days=30)
@@ -383,7 +383,7 @@ class RevenueAnalytics:
 
     def get_growth_metrics(self) -> GrowthMetrics:
         """Get comprehensive growth metrics"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Current MRR
         current_mrr = self.get_mrr(now)
@@ -484,7 +484,7 @@ class RevenueAnalytics:
 
     def get_revenue_by_source(
         self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
-    ) -> Dict[str, Decimal]:
+    ) -> dict[str, Decimal]:
         """Get revenue breakdown by source"""
         entries = list(self._entries.values())
 
@@ -502,7 +502,7 @@ class RevenueAnalytics:
 
     def get_revenue_by_tier(
         self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
-    ) -> Dict[str, Decimal]:
+    ) -> dict[str, Decimal]:
         """Get revenue breakdown by subscription tier"""
         entries = [e for e in self._entries.values() if e.tier is not None]
 
@@ -523,7 +523,7 @@ class RevenueAnalytics:
         limit: int = 10,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get top customers by revenue"""
         entries = [e for e in self._entries.values() if e.user_id]
 
@@ -533,7 +533,7 @@ class RevenueAnalytics:
             entries = [e for e in entries if e.created_at <= end_date]
 
         # Aggregate by user
-        user_revenue: Dict[str, Decimal] = {}
+        user_revenue: dict[str, Decimal] = {}
         for entry in entries:
             if entry.user_id not in user_revenue:
                 user_revenue[entry.user_id] = Decimal("0.00")
@@ -549,10 +549,10 @@ class RevenueAnalytics:
 
     def get_cohort_analysis(
         self, cohort_period: TimePeriod = TimePeriod.MONTHLY
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get cohort analysis for subscription retention"""
         # Group users by signup cohort
-        cohorts: Dict[str, List[str]] = {}
+        cohorts: dict[str, list[str]] = {}
 
         for event in self._subscription_events:
             if event["event_type"] != "new":
@@ -593,9 +593,9 @@ class RevenueAnalytics:
 
     def generate_report(
         self, period: TimePeriod = TimePeriod.MONTHLY, include_projections: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate comprehensive revenue report"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Determine date range based on period
         if period == TimePeriod.DAILY:
@@ -665,10 +665,10 @@ class RevenueAnalytics:
 
         return report
 
-    def get_dashboard_data(self) -> Dict[str, Any]:
+    def get_dashboard_data(self) -> dict[str, Any]:
         """Get data for revenue dashboard"""
         growth = self.get_growth_metrics()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Get daily revenue for last 30 days
         daily_revenue = []

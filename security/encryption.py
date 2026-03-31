@@ -21,7 +21,7 @@ try:
     from cryptography.fernet import Fernet
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # noqa: F401
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
     CRYPTO_AVAILABLE = True
 except ImportError:
@@ -168,8 +168,8 @@ class APICredentialManager:
 
     def __init__(self, vault: SecureVault):
         self.vault = vault
-        self._credentials: Dict[str, Dict[str, EncryptedCredential]] = {}
-        self._cache: Dict[str, str] = {}  # Decrypted cache (short-lived)
+        self._credentials: dict[str, dict[str, EncryptedCredential]] = {}
+        self._cache: dict[str, str] = {}  # Decrypted cache (short-lived)
         self._credential_file = Path("config/credentials.enc")
 
     def store_credential(
@@ -298,7 +298,7 @@ class APICredentialManager:
         except Exception as e:
             logger.error(f"Failed to load credentials: {e}")
 
-    def get_all_services(self) -> List[str]:
+    def get_all_services(self) -> list[str]:
         """List all services with stored credentials"""
         return list(self._credentials.keys())
 
@@ -313,7 +313,7 @@ def generate_secure_token(length: int = 32) -> str:
     return secrets.token_urlsafe(length)
 
 
-def hash_password(password: str, salt: Optional[str] = None) -> Tuple[str, str]:
+def hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
     """
     Hash password with salt using PBKDF2
     """

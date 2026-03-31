@@ -45,7 +45,7 @@ GREEN = "GREEN"
 YELLOW = "YELLOW"
 RED = "RED"
 
-CheckResult = Tuple[str, str, str]  # (status, message, category)
+CheckResult = tuple[str, str, str]  # (status, message, category)
 
 CRITICAL = "critical"
 NON_CRITICAL = "non-critical"
@@ -309,7 +309,7 @@ def check_env_example():
 
 def check_graphql():
     try:
-        from api.graphql_schema import graphql_router  # noqa: F401
+        from api.graphql_schema import graphql_router
 
         return "GraphQL router importable"
     except ImportError as e:
@@ -334,7 +334,7 @@ def check_backtesting():
 
 # ── Check registry ────────────────────────────────────────────────────────────
 
-CHECKS: List[Tuple[str, str, callable]] = [
+CHECKS: list[tuple[str, str, callable]] = [
     # (display_name, category, fn)
     ("Env vars", CRITICAL, check_env_vars),
     ("Startup validator", CRITICAL, check_startup_validator),
@@ -381,7 +381,7 @@ CHECKS: List[Tuple[str, str, callable]] = [
 
 
 def run_checks(strict: bool = False) -> int:
-    results: Dict[str, CheckResult] = {}
+    results: dict[str, CheckResult] = {}
 
     print()
     print("=" * 70)

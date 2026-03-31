@@ -15,15 +15,15 @@ import sys
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from cache.market_data_cache import MarketDataCache  # noqa: E402
-from config.config_manager import ConfigManager  # noqa: E402
-from strategies.base_enhanced import EnhancedStrategy, StrategyAdapter, StrategySignal  # noqa: E402
+from cache.market_data_cache import MarketDataCache
+from config.config_manager import ConfigManager
+from strategies.base_enhanced import EnhancedStrategy, StrategyAdapter, StrategySignal
 
 logger = logging.getLogger(__name__)
 
@@ -74,14 +74,14 @@ class MasterControlCore:
         self.db_session = None
 
         # Strategy management
-        self.strategies: Dict[str, EnhancedStrategy] = {}
-        self.strategy_allocations: Dict[str, Decimal] = {}
-        self.active_strategies: List[str] = []
+        self.strategies: dict[str, EnhancedStrategy] = {}
+        self.strategy_allocations: dict[str, Decimal] = {}
+        self.active_strategies: list[str] = []
 
         # Market state
-        self.current_prices: Dict[str, Decimal] = {}
+        self.current_prices: dict[str, Decimal] = {}
         self.current_regime: str = "unknown"
-        self.price_history: Dict[str, List[tuple]] = defaultdict(list)
+        self.price_history: dict[str, list[tuple]] = defaultdict(list)
 
         # Risk management
         self.daily_pnl: Decimal = Decimal("0")
@@ -89,17 +89,17 @@ class MasterControlCore:
         self.kill_switch_triggered: bool = False
 
         # Event system (simplified for integration)
-        self.event_handlers: Dict[str, List[callable]] = defaultdict(list)
+        self.event_handlers: dict[str, list[callable]] = defaultdict(list)
 
         # State
         self.is_running: bool = False
         self._lock = threading.RLock()
 
         # Latest signal per strategy — used for aggregation and correlation checks
-        self._latest_signals: Dict[str, StrategySignal] = {}
+        self._latest_signals: dict[str, StrategySignal] = {}
 
         # Performance tracking
-        self.heatmap_data: Dict[str, Any] = {}
+        self.heatmap_data: dict[str, Any] = {}
 
     def initialize(
         self,
@@ -281,7 +281,7 @@ class MasterControlCore:
 
         return False
 
-    def _aggregate_signals(self) -> Dict:
+    def _aggregate_signals(self) -> dict:
         """
         Combine signals from all active strategies weighted by confidence.
 
@@ -289,7 +289,7 @@ class MasterControlCore:
         Returns the majority direction when its weighted share exceeds 50 %, or
         HOLD otherwise.
         """
-        vote_weights: Dict[str, float] = {"BUY": 0.0, "SELL": 0.0, "HOLD": 0.0}
+        vote_weights: dict[str, float] = {"BUY": 0.0, "SELL": 0.0, "HOLD": 0.0}
         total_weight = 0.0
 
         for name in self.active_strategies:
@@ -329,7 +329,7 @@ class MasterControlCore:
             "strength": avg_strength,
         }
 
-    def _execute_signal(self, composite: Dict):
+    def _execute_signal(self, composite: dict):
         """Send to execution"""
         print(
             f"🚀 EXECUTING: {composite['action']} "
@@ -348,7 +348,7 @@ class MasterControlCore:
         Call this from your existing price feed handler.
         MCC distributes to all strategies.
         """
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
 
         # Store price
         self.current_prices[symbol] = price
@@ -430,7 +430,7 @@ class MasterControlCore:
 
         # Close all positions via your existing broker
 
-    def get_heatmap_data(self) -> Dict:
+    def get_heatmap_data(self) -> dict:
         """
         Generate heatmap data for visualization.
         Shows strategy performance, correlations, risk.
@@ -446,7 +446,7 @@ class MasterControlCore:
             "prices": {sym: float(price) for sym, price in self.current_prices.items()},
         }
 
-    def get_status(self) -> Dict:
+    def get_status(self) -> dict:
         """Full system status"""
         return {
             "running": self.is_running,

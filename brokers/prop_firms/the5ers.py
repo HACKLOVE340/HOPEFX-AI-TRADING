@@ -46,7 +46,7 @@ class The5ersConnector(MT5Connector):
         "The5ers-Server",
     ]
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """Initialize The5ers connector."""
         if "server" not in config:
             config["server"] = self.THE5ERS_SERVERS[0]
@@ -58,7 +58,7 @@ class The5ersConnector(MT5Connector):
 
         logger.info(f"The5ers Connector initialized for {self.program} program")
 
-    def get_the5ers_rules(self) -> Dict[str, Any]:
+    def get_the5ers_rules(self) -> dict[str, Any]:
         """Get The5ers rules and limits."""
         rules = {
             "max_daily_loss": "4-5%",

@@ -37,7 +37,7 @@ import logging
 import os
 import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Deque, Dict, Optional
 
@@ -182,9 +182,9 @@ class InferenceEngine:
         # Uptime tracking — set on first predict call
         self._first_predict_at: Optional[float] = None
         # Rolling window of signal directions for non-neutral rate
-        self._signal_window: Deque[str] = deque(maxlen=_SIGNAL_WINDOW)
+        self._signal_window: deque[str] = deque(maxlen=_SIGNAL_WINDOW)
         # Cached model metadata from advanced_oos_meta.json
-        self._meta_cache: Optional[Dict[str, Any]] = None
+        self._meta_cache: Optional[dict[str, Any]] = None
         self._meta_mtime: float = 0.0
         # Data layer nudge tracking
         self._last_sentiment_score: float = 0.0
@@ -439,7 +439,7 @@ class InferenceEngine:
         symbol: str = "XAU_USD",
         threshold_long: float = _THRESHOLD_LONG,
         threshold_short: float = _THRESHOLD_SHORT,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate a calibrated trading signal for the given OHLCV window.
 
@@ -705,7 +705,7 @@ class InferenceEngine:
         except Exception:
             return None
 
-    def get_data_layer_features(self) -> Dict[str, float]:
+    def get_data_layer_features(self) -> dict[str, float]:
         """
         Return the full orchestrator ML feature set.
 
@@ -792,7 +792,7 @@ class InferenceEngine:
 
     # ── Metadata cache ────────────────────────────────────────────────────────
 
-    def _load_meta(self) -> Dict[str, Any]:
+    def _load_meta(self) -> dict[str, Any]:
         """
         Load and cache advanced_oos_meta.json.
 
@@ -813,7 +813,7 @@ class InferenceEngine:
             self._meta_cache = self._meta_cache or {}
         return self._meta_cache or {}
 
-    def health(self) -> Dict[str, Any]:
+    def health(self) -> dict[str, Any]:
         """
         Return engine health metrics for /api/ml/health and /api/ml/engine-health.
 
@@ -867,7 +867,7 @@ class InferenceEngine:
         macro_ok = False
         macro_series = 0
         try:
-            from ml.macro_store import macro_store  # noqa: PLC0415
+            from ml.macro_store import macro_store
 
             macro_series = len(macro_store)
             macro_ok = macro_series > 0
@@ -877,7 +877,7 @@ class InferenceEngine:
         mtf_ok = False
         if _MTF_FUSION_ENABLED:
             try:
-                from research.pipeline.mtf_fusion import (  # noqa: PLC0415
+                from research.pipeline.mtf_fusion import (
                     _MTF_STORE_SINGLETON,
                 )
 
@@ -888,7 +888,7 @@ class InferenceEngine:
         online_ok = False
         if _ONLINE_LEARNING_ENABLED:
             try:
-                from research.pipeline.paper_trading_gate import (  # noqa: PLC0415
+                from research.pipeline.paper_trading_gate import (
                     get_gate,
                 )
 
@@ -920,9 +920,9 @@ class InferenceEngine:
             last_trained_at = meta.get("validated_at") or meta.get("trained_at")
 
         # ── SignalFilter EV stats ─────────────────────────────────────────────
-        signal_filter_stats: Dict[str, Any] = {}
+        signal_filter_stats: dict[str, Any] = {}
         try:
-            from ml.signal_filter import get_signal_filter  # noqa: PLC0415
+            from ml.signal_filter import get_signal_filter
 
             sf = get_signal_filter()
             if hasattr(sf, "get_stats"):
@@ -974,7 +974,7 @@ class InferenceEngine:
             "active_model_path": str(self._active_model_path)
             if self._active_model_path
             else None,
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checked_at": datetime.now(UTC).isoformat(),
         }
 
     # ── Model reload / rollback ───────────────────────────────────────────────

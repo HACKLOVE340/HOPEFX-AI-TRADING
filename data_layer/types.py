@@ -89,7 +89,7 @@ class GoldTick:
     confidence: float = 1.0  # 0-1, multi-source weighted
     spread: float = 0.0
     lineage_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    raw: Optional[Dict[str, Any]] = field(default=None, compare=False)
+    raw: Optional[dict[str, Any]] = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         # Auto-compute spread when not explicitly set (spread == 0 but ask > bid)
@@ -171,7 +171,7 @@ class NewsArticle:
     sentiment_label: str = "neutral"
     gold_relevance: float = 0.0  # 0-1
     impact_score: float = 0.0  # 0-1 expected price impact
-    keywords: List[str] = field(default_factory=list)
+    keywords: list[str] = field(default_factory=list)
     lineage_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 
@@ -222,7 +222,7 @@ class QualityReport:
     stale_count: int
     jump_count: int
     anomaly_count: int
-    active_sources: List[str]
+    active_sources: list[str]
     primary_source: str
     consensus_price: float
     price_spread_across_sources: float  # max - min across live feeds

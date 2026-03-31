@@ -6,7 +6,7 @@
 """Performance tracking for social trading."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Dict
 
@@ -18,7 +18,7 @@ class PerformanceMetric:
     total_return: Decimal = field(default_factory=lambda: Decimal("0.0"))
     total_trades: int = 0
     winning_trades: int = 0
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class PerformanceTracker:
@@ -26,7 +26,7 @@ class PerformanceTracker:
 
     def __init__(self):
         # (user_id, period) -> PerformanceMetric
-        self.metrics: Dict[tuple, PerformanceMetric] = {}
+        self.metrics: dict[tuple, PerformanceMetric] = {}
 
     def _key(self, user_id: str, period: str) -> tuple:
         return (user_id, period)
@@ -40,7 +40,7 @@ class PerformanceTracker:
         m.total_trades += 1
         if pnl > 0:
             m.winning_trades += 1
-        m.updated_at = datetime.now(timezone.utc)
+        m.updated_at = datetime.now(UTC)
 
     def get_performance(self, user_id: str, period: str = "all") -> PerformanceMetric:
         key = self._key(user_id, period)

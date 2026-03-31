@@ -35,7 +35,7 @@ from whitelabel.config import get_tier_config
 logger = logging.getLogger(__name__)
 
 # In-memory counters: key_hash → {window: (count, reset_ts)}
-_counters: Dict[str, Dict[str, list]] = defaultdict(
+_counters: dict[str, dict[str, list]] = defaultdict(
     lambda: {"min": [0, 0.0], "day": [0, 0.0]}
 )
 

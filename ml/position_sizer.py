@@ -219,7 +219,7 @@ class PositionSizer:
         try:
             if ohlcv is not None and len(ohlcv) >= 15:
                 h = ohlcv["high"].values[-15:].astype(float)
-                l = ohlcv["low"].values[-15:].astype(float)  # noqa: E741
+                l = ohlcv["low"].values[-15:].astype(float)
                 c = ohlcv["close"].values[-15:].astype(float)
                 tr = np.maximum(
                     h[1:] - l[1:],

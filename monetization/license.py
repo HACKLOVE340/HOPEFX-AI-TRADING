@@ -11,7 +11,7 @@ based on user subscriptions and access codes.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional, Dict, List
 from enum import Enum
 
@@ -38,7 +38,7 @@ class LicenseValidator:
     """Validate licenses and control feature access"""
 
     def __init__(self):
-        self._validation_cache: Dict[str, Dict] = {}
+        self._validation_cache: dict[str, dict] = {}
         self._cache_duration = 300  # 5 minutes
 
     def validate_access_code(self, code: str) -> tuple:
@@ -88,7 +88,7 @@ class LicenseValidator:
         if cache_key in self._validation_cache:
             cache_entry = self._validation_cache[cache_key]
             if (
-                datetime.now(timezone.utc) - cache_entry["timestamp"]
+                datetime.now(UTC) - cache_entry["timestamp"]
             ).seconds < self._cache_duration:
                 return cache_entry["has_access"]
 
@@ -110,7 +110,7 @@ class LicenseValidator:
         """Update validation cache"""
         self._validation_cache[cache_key] = {
             "has_access": has_access,
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": datetime.now(UTC),
         }
 
     def get_user_tier(self, user_id: str) -> Optional[SubscriptionTier]:
@@ -118,7 +118,7 @@ class LicenseValidator:
         subscription = subscription_manager.get_user_subscription(user_id)
         return subscription.tier if subscription else None
 
-    def get_user_limits(self, user_id: str) -> Dict:
+    def get_user_limits(self, user_id: str) -> dict:
         """Get user's usage limits"""
         return subscription_manager.get_user_limits(user_id)
 
@@ -134,7 +134,7 @@ class LicenseValidator:
         max_brokers = limits.get("max_brokers", 0)
         return current_brokers < max_brokers
 
-    def get_feature_list(self, user_id: str) -> List[str]:
+    def get_feature_list(self, user_id: str) -> list[str]:
         """Get list of available features for user"""
         limits = self.get_user_limits(user_id)
         features = []
@@ -172,7 +172,7 @@ class LicenseValidator:
         # Validate API key (would check against stored keys in production)
         return True
 
-    def generate_license_info(self, user_id: str) -> Dict:
+    def generate_license_info(self, user_id: str) -> dict:
         """Generate comprehensive license information"""
         subscription = subscription_manager.get_user_subscription(user_id)
 

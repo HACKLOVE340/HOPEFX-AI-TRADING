@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import List
 
 from data_layer.feeds.news.base import NewsFeedBase
@@ -35,11 +35,11 @@ class NewsDataFeed(NewsFeedBase):
     _api_key_env = "NEWSDATA_IO_KEY"
     _min_interval_s = 300.0  # 200 credits/day ≈ 1 req/7.2min; use 5min
 
-    async def fetch_articles(self, limit: int = 50) -> List[NewsArticle]:
+    async def fetch_articles(self, limit: int = 50) -> list[NewsArticle]:
         if not self.is_configured:
             return []
 
-        articles: List[NewsArticle] = []
+        articles: list[NewsArticle] = []
         try:
             data = await self._get(
                 f"{_BASE}/news",
@@ -65,7 +65,7 @@ class NewsDataFeed(NewsFeedBase):
                 try:
                     published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
                 except Exception:
-                    published = datetime.now(timezone.utc)
+                    published = datetime.now(UTC)
 
                 keywords = item.get("keywords") or []
 
@@ -77,7 +77,7 @@ class NewsDataFeed(NewsFeedBase):
                         summary=summary,
                         url=item.get("link", ""),
                         published_at=published,
-                        fetched_at=datetime.now(timezone.utc),
+                        fetched_at=datetime.now(UTC),
                         keywords=keywords if isinstance(keywords, list) else [],
                         lineage_id=str(uuid.uuid4()),
                     )

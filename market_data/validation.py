@@ -10,7 +10,7 @@ Market Data Validation - FIA 3.1 Market Data Reasonability Checks
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
@@ -32,7 +32,7 @@ class DataQualityIssue(Enum):
 class ValidationResult:
     is_valid: bool
     quality_score: float  # 0.0 to 1.0
-    issues: List[Dict]
+    issues: list[dict]
     timestamp: datetime
 
 
@@ -47,16 +47,16 @@ class MarketDataValidator:
         max_staleness_seconds: int = 5,
         max_price_jump_pct: float = 0.02,  # 2% max jump
         min_volume: float = 1.0,
-        reference_prices: Optional[Dict[str, float]] = None,
+        reference_prices: Optional[dict[str, float]] = None,
     ):
         self.max_staleness = timedelta(seconds=max_staleness_seconds)
         self.max_price_jump = max_price_jump_pct
         self.min_volume = min_volume
         self.reference_prices = reference_prices or {}
-        self.last_valid_data: Dict[str, datetime] = {}
-        self.quality_history: List[ValidationResult] = []
+        self.last_valid_data: dict[str, datetime] = {}
+        self.quality_history: list[ValidationResult] = []
 
-    def validate_tick(self, tick: Dict, symbol: str) -> ValidationResult:
+    def validate_tick(self, tick: dict, symbol: str) -> ValidationResult:
         """
         Validate single tick data
         FIA 3.1: Market Data Reasonability Checks
@@ -70,14 +70,14 @@ class MarketDataValidator:
         if tick_time:
             if isinstance(tick_time, (int, float)):
                 tick_time = datetime.fromtimestamp(tick_time)
-            age = datetime.now(timezone.utc) - tick_time
+            age = datetime.now(UTC) - tick_time
             if age > self.max_staleness:
                 issues.append(
                     {
                         "type": DataQualityIssue.STALE_DATA.value,
                         "severity": "high",
                         "message": f"Data is {age.total_seconds()}s old (max {self.max_staleness.total_seconds()}s)",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                     }
                 )
             else:
@@ -161,13 +161,13 @@ class MarketDataValidator:
         is_valid = len([i for i in issues if i["severity"] == "critical"]) == 0
         if is_valid and current_price:
             self.reference_prices[symbol] = current_price
-            self.last_valid_data[symbol] = datetime.now(timezone.utc)
+            self.last_valid_data[symbol] = datetime.now(UTC)
 
         result = ValidationResult(
             is_valid=is_valid and quality_score >= 0.8,
             quality_score=quality_score,
             issues=issues,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
         self.quality_history.append(result)
@@ -239,10 +239,10 @@ class MarketDataValidator:
             is_valid=is_valid,
             quality_score=max(0, quality_score),
             issues=issues,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
-    def get_quality_report(self) -> Dict:
+    def get_quality_report(self) -> dict:
         """Generate data quality report"""
         if not self.quality_history:
             return {"message": "No validation history"}
@@ -257,5 +257,5 @@ class MarketDataValidator:
                 len([i for i in r.issues if i["severity"] == "critical"])
                 for r in recent
             ),
-            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "last_updated": datetime.now(UTC).isoformat(),
         }

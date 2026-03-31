@@ -62,7 +62,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -91,7 +91,7 @@ class Regime(str, Enum):
 # Maps regime → preferred strategy names (in priority order).
 # The brain picks the first available strategy from the list.
 
-_REGIME_STRATEGY_MAP: Dict[Regime, List[str]] = {
+_REGIME_STRATEGY_MAP: dict[Regime, list[str]] = {
     Regime.TRENDING_UP: ["smc_ict", "ema_crossover", "ma_crossover", "breakout"],
     Regime.TRENDING_DOWN: [
         "smc_ict",
@@ -134,11 +134,11 @@ class BrainDecision:
     reason: str  # human-readable explanation
     symbol: str
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     latency_ms: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "action": self.action,
             "confidence": round(self.confidence, 4),
@@ -167,7 +167,7 @@ class HOPEFXBrain:
     Designed to be called from the main trading loop on each new bar.
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, config: Optional[dict[str, Any]] = None) -> None:
         self._config = config or {}
         self._lock = threading.Lock()
 
@@ -179,15 +179,15 @@ class HOPEFXBrain:
         self._lstm_layer = None  # lazy-loaded (LSTM, optional secondary signal)
 
         # Regime state per symbol
-        self._regimes: Dict[str, Regime] = {}
+        self._regimes: dict[str, Regime] = {}
         self._regime_history: deque = deque(maxlen=200)
 
         # Decision history
         self._decisions: deque = deque(maxlen=500)
 
         # MTF context cache: symbol → {d_regime, h4_regime, ...}
-        self._mtf_cache: Dict[str, Dict[str, Any]] = {}
-        self._mtf_last_update: Dict[str, float] = {}
+        self._mtf_cache: dict[str, dict[str, Any]] = {}
+        self._mtf_last_update: dict[str, float] = {}
         _MTF_CACHE_TTL = float(os.getenv("BRAIN_MTF_CACHE_TTL", "300"))  # 5 min
         self._mtf_cache_ttl = _MTF_CACHE_TTL
 
@@ -375,7 +375,7 @@ class HOPEFXBrain:
                         "symbol": symbol,
                         "from": old.value if old else None,
                         "to": regime.value,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                     }
                 )
                 logger.info(
@@ -403,7 +403,7 @@ class HOPEFXBrain:
         symbol: str,
         d1_ohlcv=None,
         h4_ohlcv=None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Update multi-timeframe context for a symbol.
 
@@ -417,7 +417,7 @@ class HOPEFXBrain:
         if now - last < self._mtf_cache_ttl and symbol in self._mtf_cache:
             return self._mtf_cache[symbol]
 
-        ctx: Dict[str, Any] = {
+        ctx: dict[str, Any] = {
             "d1_regime": Regime.UNKNOWN.value,
             "h4_regime": Regime.UNKNOWN.value,
             "mtf_alignment": "unknown",
@@ -476,7 +476,7 @@ class HOPEFXBrain:
         strategy_name: str,
         ohlcv,
         symbol: str,
-    ) -> Tuple[str, float]:
+    ) -> tuple[str, float]:
         """
         Get signal from the named strategy.
 
@@ -520,7 +520,7 @@ class HOPEFXBrain:
         ml_confidence: float,
         strategy_direction: str,
         strategy_confidence: float,
-    ) -> Tuple[str, float, str]:
+    ) -> tuple[str, float, str]:
         """
         Weighted aggregation of ML and strategy signals.
 
@@ -696,10 +696,7 @@ class HOPEFXBrain:
         alignment = mtf.get("mtf_alignment", "unknown")
         if alignment.startswith("aligned_"):
             aligned_dir = alignment.replace("aligned_", "")
-            if aligned_dir == "trending_up" and final_direction == "long":
-                final_confidence = min(1.0, final_confidence * 1.15)
-                reason += "+mtf_aligned"
-            elif aligned_dir == "trending_down" and final_direction == "short":
+            if aligned_dir == "trending_up" and final_direction == "long" or aligned_dir == "trending_down" and final_direction == "short":
                 final_confidence = min(1.0, final_confidence * 1.15)
                 reason += "+mtf_aligned"
         elif alignment == "divergent" and final_direction != "hold":
@@ -764,7 +761,7 @@ class HOPEFXBrain:
     # ── Stats & introspection ─────────────────────────────────────────────────
 
     @property
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         return {
             "bar_count": self._bar_count,
             "signal_count": self._signal_count,
@@ -778,12 +775,12 @@ class HOPEFXBrain:
             "ml_predictor_loaded": self._ml_predictor is not None,
         }
 
-    def recent_decisions(self, n: int = 10) -> List[Dict[str, Any]]:
+    def recent_decisions(self, n: int = 10) -> list[dict[str, Any]]:
         """Return the last n decisions."""
         with self._lock:
             return list(self._decisions)[-n:]
 
-    def regime_history(self, n: int = 20) -> List[Dict[str, Any]]:
+    def regime_history(self, n: int = 20) -> list[dict[str, Any]]:
         """Return the last n regime changes."""
         return list(self._regime_history)[-n:]
 

@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 class SecureConfigError(Exception):
     """Raised when secure configuration cannot be established"""
 
-    pass
 
 
 class ProductionConfigManager:

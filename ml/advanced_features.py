@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 def add_price_action_features(df: pd.DataFrame) -> pd.DataFrame:
     """Candlestick body/wick ratios, engulfing, doji, pin-bar, 3-bar patterns."""
     d = df.copy()
-    o, h, l, c = d["open"], d["high"], d["low"], d["close"]  # noqa: E741
+    o, h, l, c = d["open"], d["high"], d["low"], d["close"]
 
     body = (c - o).abs()
     candle_range = (h - l).replace(0, np.nan)
@@ -102,7 +102,7 @@ def add_price_action_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_swing_features(df: pd.DataFrame, window: int = 5) -> pd.DataFrame:
     """Fractal swing levels; distance from price to nearest S/R in ATR units."""
     d = df.copy()
-    h, l, c = d["high"], d["low"], d["close"]  # noqa: E741
+    h, l, c = d["high"], d["low"], d["close"]
     atr = _atr(d, 14)
 
     swing_high = h[(h == h.rolling(window * 2 + 1, center=True).max())].reindex(d.index)
@@ -284,7 +284,7 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_trend_features(df: pd.DataFrame, smoke: bool = False) -> pd.DataFrame:
     """ADX, DI+/DI-, z-score mean reversion, multiple MA distances."""
     d = df.copy()
-    h, l, c = d["high"], d["low"], d["close"]  # noqa: E741
+    h, l, c = d["high"], d["low"], d["close"]
     atr14 = _atr(d, 14)
 
     # ADX
@@ -720,7 +720,7 @@ def build_advanced_features(
 
 
 def _atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
-    h, l, c = df["high"], df["low"], df["close"]  # noqa: E741
+    h, l, c = df["high"], df["low"], df["close"]
     tr = pd.concat(
         [
             h - l,

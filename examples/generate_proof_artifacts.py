@@ -35,7 +35,7 @@ Enhanced features (v3):
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
 import joblib
@@ -78,7 +78,7 @@ def fetch_real_xauusd(years: int = 40) -> pd.DataFrame:
     import yfinance as yf
     from datetime import timezone
 
-    end = datetime.now(timezone.utc)
+    end = datetime.now(UTC)
     start = end - timedelta(days=years * 365)
     raw = yf.download(
         "GC=F",

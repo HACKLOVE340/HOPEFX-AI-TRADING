@@ -42,8 +42,8 @@ class AlertConditionIn(BaseModel):
 class CreateAlertIn(BaseModel):
     name: str
     symbol: str
-    conditions: List[AlertConditionIn]
-    notification_channels: List[str] = ["discord"]
+    conditions: list[AlertConditionIn]
+    notification_channels: list[str] = ["discord"]
     priority: str = "high"
     expires_in_hours: Optional[int] = None
     cooldown_minutes: int = 5
@@ -69,7 +69,7 @@ def _get_engine(request: Request):
 
     # 1. app_state (primary — set by startup_factories.init_alert_engine)
     try:
-        from app import app_state  # noqa: PLC0415
+        from app import app_state
 
         engine = getattr(app_state, "alert_engine", None)
         if engine is not None:
@@ -85,7 +85,7 @@ def _get_engine(request: Request):
     # 3. Lazy-init a minimal AlertEngine so the endpoint is always usable
     if _fallback_engine is None:
         try:
-            from notifications.alert_engine import AlertEngine  # noqa: PLC0415
+            from notifications.alert_engine import AlertEngine
 
             _fallback_engine = AlertEngine(config={})
             logger.info("AlertEngine: lazy-initialised fallback instance")
@@ -97,7 +97,7 @@ def _get_engine(request: Request):
     return _fallback_engine
 
 
-def _serialise(alert) -> Dict[str, Any]:
+def _serialise(alert) -> dict[str, Any]:
     """Convert an Alert dataclass / object to a JSON-safe dict."""
     if hasattr(alert, "to_dict"):
         d = alert.to_dict()

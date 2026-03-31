@@ -6,7 +6,7 @@
 """explainability/explainer.py — AIExplainer: SHAP-based signal explanation."""
 
 from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 import logging
 
 from explainability.models import (
@@ -34,11 +34,11 @@ class AIExplainer:
     - Natural language explanations
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[dict[str, Any]] = None):
         """Initialize AI Explainer."""
         self.config = config or {}
-        self.explanation_history: List[Explanation] = []
-        self.model_performance_cache: Dict[str, ModelPerformanceExplanation] = {}
+        self.explanation_history: list[Explanation] = []
+        self.model_performance_cache: dict[str, ModelPerformanceExplanation] = {}
 
         # Feature descriptions for natural language generation
         self.feature_descriptions = {
@@ -59,7 +59,7 @@ class AIExplainer:
     def explain_prediction(
         self,
         model: Any,
-        features: Dict[str, float],
+        features: dict[str, float],
         prediction: float,
         prediction_class: str,
     ) -> Explanation:
@@ -75,7 +75,7 @@ class AIExplainer:
         Returns:
             Complete explanation object
         """
-        explanation_id = f"exp_{len(self.explanation_history) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
+        explanation_id = f"exp_{len(self.explanation_history) + 1}_{int(datetime.now(UTC).timestamp())}"
 
         # Calculate feature contributions
         feature_contributions = self._calculate_feature_importance(
@@ -106,7 +106,7 @@ class AIExplainer:
             prediction=prediction,
             prediction_class=prediction_class,
             confidence=confidence,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             feature_contributions=feature_contributions,
             decision_path=decision_path,
             confidence_interval=confidence_interval,
@@ -119,8 +119,8 @@ class AIExplainer:
         return explanation
 
     def _calculate_feature_importance(
-        self, model: Any, features: Dict[str, float], prediction: float
-    ) -> List[FeatureContribution]:
+        self, model: Any, features: dict[str, float], prediction: float
+    ) -> list[FeatureContribution]:
         """Calculate feature importance/contributions."""
         contributions = []
 
@@ -158,8 +158,8 @@ class AIExplainer:
         return contributions
 
     def _sensitivity_analysis(
-        self, features: Dict[str, float], prediction: float
-    ) -> List[FeatureContribution]:
+        self, features: dict[str, float], prediction: float
+    ) -> list[FeatureContribution]:
         """
         Estimate feature contributions via sign-aware sensitivity analysis.
 
@@ -245,8 +245,8 @@ class AIExplainer:
         return contributions
 
     def _get_decision_path(
-        self, model: Any, features: Dict[str, float]
-    ) -> List[DecisionNode]:
+        self, model: Any, features: dict[str, float]
+    ) -> list[DecisionNode]:
         """Extract decision path from tree-based models."""
         path = []
 
@@ -295,10 +295,10 @@ class AIExplainer:
     def _calculate_confidence_interval(
         self,
         model: Any,
-        features: Dict[str, float],
+        features: dict[str, float],
         prediction: float,
         confidence_level: float = 0.95,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Calculate confidence interval for prediction."""
         # Default interval width based on typical model uncertainty
         half_width = 0.1  # 10% default
@@ -317,7 +317,7 @@ class AIExplainer:
         return (lower, upper)
 
     def _calculate_prediction_confidence(
-        self, model: Any, features: Dict[str, float], prediction: float
+        self, model: Any, features: dict[str, float], prediction: float
     ) -> float:
         """Calculate confidence score for prediction."""
         try:
@@ -330,8 +330,8 @@ class AIExplainer:
         return abs(prediction - 0.5) * 2 * 0.8 + 0.2
 
     def _extract_key_factors(
-        self, contributions: List[FeatureContribution], top_n: int = 3
-    ) -> List[str]:
+        self, contributions: list[FeatureContribution], top_n: int = 3
+    ) -> list[str]:
         """Extract top contributing factors."""
         top_contributions = contributions[:top_n]
 
@@ -345,8 +345,8 @@ class AIExplainer:
     def _generate_natural_language_explanation(
         self,
         prediction_class: str,
-        contributions: List[FeatureContribution],
-        key_factors: List[str],
+        contributions: list[FeatureContribution],
+        key_factors: list[str],
         confidence: float,
     ) -> str:
         """Generate human-readable explanation."""
@@ -460,7 +460,7 @@ class AIExplainer:
 
     def compare_explanations(
         self, explanation1: Explanation, explanation2: Explanation
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Compare two explanations to understand prediction differences."""
         diff_features = []
 
@@ -489,10 +489,10 @@ class AIExplainer:
 
     def generate_counterfactual(
         self,
-        features: Dict[str, float],
+        features: dict[str, float],
         current_prediction: str,
         target_prediction: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate counterfactual explanation.
 
@@ -535,7 +535,7 @@ class AIExplainer:
 
     def get_feature_importance_chart_data(
         self, explanation: Explanation
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get data formatted for visualization charts."""
         return {
             "labels": [c.feature_name for c in explanation.feature_contributions[:10]],
@@ -549,7 +549,7 @@ class AIExplainer:
             ],
         }
 
-    def get_explanation_history(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_explanation_history(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get recent explanation history."""
         return [
             {

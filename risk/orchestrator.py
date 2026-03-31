@@ -96,7 +96,7 @@ class RiskSnapshot:
     max_risk_fraction: float
     current_exposure: float
     hedge_active: bool
-    hedge_positions: List[HedgePosition]
+    hedge_positions: list[HedgePosition]
     trading_allowed: bool
     timestamp: float = field(default_factory=time.time)
 
@@ -135,10 +135,10 @@ class RiskOrchestrator:
         self._hedge_units = hedge_units
         self._broker = broker
         self._hedge_active: bool = False
-        self._hedge_positions: List[HedgePosition] = []
+        self._hedge_positions: list[HedgePosition] = []
         self._trading_allowed: bool = True
         self._lock = asyncio.Lock()
-        self._history: List[Dict[str, Any]] = []  # last 200 risk events
+        self._history: list[dict[str, Any]] = []  # last 200 risk events
         self._state_file: Path = (
             Path(state_file) if state_file is not None else self._DEFAULT_STATE_FILE
         )
@@ -385,7 +385,7 @@ class RiskOrchestrator:
                 return
 
             broker = self._get_broker()
-            closed: List[str] = []
+            closed: list[str] = []
 
             for pos in self._hedge_positions:
                 if broker is not None:
@@ -458,7 +458,7 @@ class RiskOrchestrator:
 
     # ── Status ────────────────────────────────────────────────────────────────
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Return a snapshot of current risk orchestrator state."""
         return {
             "max_risk_fraction": self._max_risk,
@@ -488,7 +488,7 @@ class RiskOrchestrator:
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
-    def _record_event(self, event_type: str, data: Dict[str, Any]) -> None:
+    def _record_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Append to internal audit history (capped at 200 entries)."""
         self._history.append(
             {
@@ -513,7 +513,7 @@ def create_orchestrator_router(orchestrator_instance: RiskOrchestrator):
                            prefix="/risk/orchestrator", tags=["risk"])
     """
     try:
-        from fastapi import APIRouter, HTTPException  # noqa: F401
+        from fastapi import APIRouter, HTTPException
         from pydantic import BaseModel, Field
     except ImportError:
         return None

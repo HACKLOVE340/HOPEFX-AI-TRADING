@@ -42,7 +42,7 @@ class ExecutionRecord:
     fill_ratio: float  # Percentage filled
     timestamp: datetime
     broker: str
-    market_conditions: Dict[str, Any] = field(default_factory=dict)
+    market_conditions: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -63,4 +63,4 @@ class ExecutionReport:
     avg_fill_ratio: float
     total_slippage_cost: float
     execution_quality: ExecutionQuality
-    broker_comparison: Dict[str, Dict[str, float]]
+    broker_comparison: dict[str, dict[str, float]]

@@ -34,7 +34,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -183,7 +183,7 @@ class HOPEFXBrain:
 
     def __init__(self, app: FastAPI) -> None:
         self.app = app
-        self.attack_log: Dict[str, Dict[str, Any]] = {}
+        self.attack_log: dict[str, dict[str, Any]] = {}
         self._last_heal: float = time.monotonic()
         self._lockdown_active: bool = False
 
@@ -198,7 +198,7 @@ class HOPEFXBrain:
                 await self.trace_attacks()
                 await self.auto_heal()
                 await self._sync_flashpoint_iocs()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("HOPEFXBrain loop error: %s", exc, exc_info=True)
             await asyncio.sleep(SCAN_INTERVAL)
 
@@ -210,7 +210,7 @@ class HOPEFXBrain:
         Routes that return non-2xx are flagged in Redis for alerting.
         """
         redis = await _get_redis()
-        flagged: List[str] = []
+        flagged: list[str] = []
 
         for route in self.app.routes:
             path: str = getattr(route, "path", "")
@@ -229,7 +229,7 @@ class HOPEFXBrain:
             await redis.set(
                 "brain:scanned_routes",
                 json.dumps(
-                    {"ts": datetime.now(timezone.utc).isoformat(), "routes": flagged}
+                    {"ts": datetime.now(UTC).isoformat(), "routes": flagged}
                 ),
                 ex=120,
             )
@@ -251,11 +251,11 @@ class HOPEFXBrain:
 
         for log_str in raw_logs:
             try:
-                log: Dict[str, Any] = json.loads(log_str)
+                log: dict[str, Any] = json.loads(log_str)
             except json.JSONDecodeError:
                 continue
 
-            ip: str = log.get("ip", "0.0.0.0")  # nosec B104 - default value for missing IP in log entry, not a bind address  # noqa: S104
+            ip: str = log.get("ip", "0.0.0.0")  # nosec B104 - default value for missing IP in log entry, not a bind address
             data: str = str(log.get("data", ""))
 
             geo = await self._geo_lookup(ip)
@@ -266,7 +266,7 @@ class HOPEFXBrain:
                 "geo": geo,
                 "intent": intent,
                 "severity": severity,
-                "time": datetime.now(timezone.utc).isoformat(),
+                "time": datetime.now(UTC).isoformat(),
                 "raw": data[:256],  # truncate for storage
             }
 
@@ -281,7 +281,7 @@ class HOPEFXBrain:
             action = self._rl_decide(severity, geo)
             await self._execute_action(action, ip)
 
-    async def _geo_lookup(self, ip: str) -> Dict[str, Any]:
+    async def _geo_lookup(self, ip: str) -> dict[str, Any]:
         """Geo-locate an IP via ip-api.com (free, no key required)."""
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -319,7 +319,7 @@ class HOPEFXBrain:
             "ddos": 0.9,
         }.get(intent, 0.3)
 
-    def _rl_decide(self, severity: float, geo: Dict[str, Any]) -> int:
+    def _rl_decide(self, severity: float, geo: dict[str, Any]) -> int:
         """
         Use the RL agent to pick an action.
         Falls back to rule-based thresholds when the model is unavailable.
@@ -363,7 +363,7 @@ class HOPEFXBrain:
                 json.dumps(
                     {
                         "action": action_name,
-                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "ts": datetime.now(UTC).isoformat(),
                     }
                 ),
             )
@@ -405,7 +405,7 @@ class HOPEFXBrain:
         redis = await _get_redis()
 
         # Drain up to 10 vulnerability entries per cycle
-        raw_entries: List[str] = []
+        raw_entries: list[str] = []
         if redis:
             raw_entries = await redis.lrange("scan:vuln_queue", 0, 9)
             if raw_entries:
@@ -417,7 +417,7 @@ class HOPEFXBrain:
 
         for raw in raw_entries:
             try:
-                entry: Dict[str, Any] = json.loads(raw)
+                entry: dict[str, Any] = json.loads(raw)
             except json.JSONDecodeError:
                 logger.warning("HOPEFXBrain: malformed scan entry — skipping")
                 continue
@@ -443,7 +443,7 @@ class HOPEFXBrain:
                     "fix": fix,
                     "severity": severity,
                     "rule": rule,
-                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "ts": datetime.now(UTC).isoformat(),
                     "status": "pending",  # pending | approved | declined
                     "pr_url": None,
                     "pr_number": None,
@@ -510,7 +510,7 @@ class HOPEFXBrain:
                     {
                         "type": "lockdown",
                         "ip": ip,
-                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "ts": datetime.now(UTC).isoformat(),
                     }
                 ),
             )
@@ -572,7 +572,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
         redis = await _get_redis()
 
         # Find the matching fix record in the queue
-        fix_record: Optional[Dict[str, Any]] = None
+        fix_record: Optional[dict[str, Any]] = None
         if redis:
             raw_list = await redis.lrange("fixes:queue", 0, 99)
             for _i, raw in enumerate(raw_list):
@@ -598,7 +598,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
             )
 
         # Trigger GitHub PR pipeline
-        pr_result: Dict[str, Any] = {"status": "skipped"}
+        pr_result: dict[str, Any] = {"status": "skipped"}
         try:
             from security.github_pr_publisher import get_pr_publisher
 
@@ -618,7 +618,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
             **fix_record,
             "status": "approved",
             "approved_by": approved_by,
-            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "approved_at": datetime.now(UTC).isoformat(),
             "pr_url": pr_result.get("pr_url"),
             "pr_number": pr_result.get("pr_number"),
             "pr_branch": pr_result.get("branch"),
@@ -671,7 +671,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
                             **rec,
                             "status": "declined",
                             "declined_by": declined_by,
-                            "declined_at": datetime.now(timezone.utc).isoformat(),
+                            "declined_at": datetime.now(UTC).isoformat(),
                         }
                         await redis.rpush("fixes:declined", json.dumps(declined_record))
                         await redis.ltrim("fixes:declined", -500, -1)

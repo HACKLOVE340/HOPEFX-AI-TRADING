@@ -37,7 +37,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -81,13 +81,13 @@ class ExecutionSignal:
     tick_ask: float
     tick_spread: float
     tick_timestamp: datetime
-    features: Dict[str, float]
+    features: dict[str, float]
     features_hash: str
     data_quality: float  # orchestrator confidence at signal time
     sentiment_score: float
     impact_score: float
     lineage_id: str
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -194,8 +194,8 @@ class HopeFXEngine:
         self._reject_count = 0
         self._last_signal_ts: float = 0.0  # monotonic, for cooldown
         self._last_tick_epoch: float = 0.0
-        self._open_positions: Dict[str, Dict] = {}
-        self._fill_history: List[FillRecord] = []
+        self._open_positions: dict[str, dict] = {}
+        self._fill_history: list[FillRecord] = []
         self._start_time: Optional[float] = None
         self._loop_task: Optional[asyncio.Task] = None
 
@@ -471,7 +471,7 @@ class HopeFXEngine:
 
     # ── Inference ─────────────────────────────────────────────────────────────
 
-    def _run_inference(self, features: Dict[str, float]) -> Tuple[str, float, float]:
+    def _run_inference(self, features: dict[str, float]) -> tuple[str, float, float]:
         """
         Run ML inference. Returns (direction, confidence, probability).
 
@@ -546,7 +546,7 @@ class HopeFXEngine:
             "impact": signal.impact_score,
             "features": signal.features,
             "lineage_id": signal.lineage_id,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
         try:
@@ -567,8 +567,8 @@ class HopeFXEngine:
     async def _on_fill(
         self,
         signal: ExecutionSignal,
-        order: Dict,
-        fill: Dict,
+        order: dict,
+        fill: dict,
         latency_ms: float,
     ) -> None:
         """Handle confirmed fill: lineage, position tracking, orchestrator notify."""
@@ -596,7 +596,7 @@ class HopeFXEngine:
             slippage_bps=slippage_bps,
             broker=broker,
             latency_ms=latency_ms,
-            filled_at=datetime.now(timezone.utc),
+            filled_at=datetime.now(UTC),
             lineage_id=signal.lineage_id,
         )
 
@@ -865,7 +865,7 @@ class HopeFXEngine:
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
-    def metrics(self) -> Dict[str, Any]:
+    def metrics(self) -> dict[str, Any]:
         uptime = time.monotonic() - self._start_time if self._start_time else 0
         fills = self._fill_history[-20:]
         avg_slip = sum(f.slippage_bps for f in fills) / len(fills) if fills else 0.0
@@ -915,7 +915,7 @@ class HopeFXEngine:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _hash_features(features: Dict[str, float]) -> str:
+def _hash_features(features: dict[str, float]) -> str:
     """SHA-256 of sorted feature dict for lineage deduplication."""
     clean = {k: v for k, v in features.items() if not k.startswith("__")}
     blob = json.dumps(clean, sort_keys=True, default=str).encode()

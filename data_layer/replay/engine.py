@@ -274,7 +274,7 @@ class MarketReplayEngine:
     def is_replaying(self) -> bool:
         return self._is_replaying
 
-    def get_replay_features(self, as_of: datetime) -> Dict[str, float]:
+    def get_replay_features(self, as_of: datetime) -> dict[str, float]:
         """
         Return ML features at a specific historical time.
 
@@ -442,7 +442,7 @@ class MarketReplayEngine:
 
     def get_feature_snapshot(
         self, as_of: Optional[datetime] = None
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Return a complete ML feature snapshot at a given time.
 

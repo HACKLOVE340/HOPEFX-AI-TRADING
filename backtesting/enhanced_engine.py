@@ -39,20 +39,20 @@ _ATR_FALLBACK_VOL       = 0.001   # fallback volatility when realized variance i
 # ── Risk check severity constants ─────────────────────────────────────────────
 _CIRCUIT_BREAKER_HALT_LEVEL = 2   # circuit_breaker_level at which trading halts
 
-from dataclasses import dataclass, field  # noqa: E402
-from typing import Dict, List, Optional, Callable, Tuple, Any  # noqa: E402
-from enum import Enum, IntEnum, auto  # noqa: E402
-from datetime import datetime, timedelta, timezone  # noqa: E402
-from collections import deque, defaultdict  # noqa: E402
-import logging  # noqa: E402
-import json  # noqa: E402
-import gzip  # noqa: E402
-import warnings  # noqa: E402
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Callable, Tuple, Any
+from enum import Enum, IntEnum, auto
+from datetime import datetime, timedelta, timezone, UTC
+from collections import deque, defaultdict
+import logging
+import json
+import gzip
+import warnings
 
 # Performance libraries
 try:
-    import numba  # noqa: F401
-    from numba import jit, prange, njit, cuda  # noqa: F401
+    import numba
+    from numba import jit, prange, njit, cuda
 
     NUMBA_AVAILABLE = True
 except ImportError:
@@ -60,16 +60,16 @@ except ImportError:
     warnings.warn("Numba unavailable - performance degraded", stacklevel=2)
 
 try:
-    import cupy as cp  # noqa: F401
-    from cupy.cuda import Device  # noqa: F401
+    import cupy as cp
+    from cupy.cuda import Device
 
     CUDA_AVAILABLE = True
 except ImportError:
     CUDA_AVAILABLE = False
 
 try:
-    from scipy import stats, optimize, interpolate  # noqa: F401
-    from scipy.optimize import minimize, differential_evolution  # noqa: F401
+    from scipy import stats, optimize, interpolate
+    from scipy.optimize import minimize, differential_evolution
 
     SCIPY_AVAILABLE = True
 except ImportError:
@@ -205,7 +205,7 @@ class NanosecondTimestamp:
     def to_datetime(self) -> datetime:
         """Convert to UTC datetime (microsecond precision)."""
         return datetime.fromtimestamp(
-            self.seconds + self.nanoseconds / 1e9, tz=timezone.utc
+            self.seconds + self.nanoseconds / 1e9, tz=UTC
         )
 
     def __float__(self) -> float:
@@ -238,8 +238,8 @@ class TickData:
     open_interest: Optional[float] = None
 
     # Market microstructure
-    bid_depth: List[Tuple[float, float]] = field(default_factory=list)  # (price, size)
-    ask_depth: List[Tuple[float, float]] = field(default_factory=list)
+    bid_depth: list[tuple[float, float]] = field(default_factory=list)  # (price, size)
+    ask_depth: list[tuple[float, float]] = field(default_factory=list)
 
     # Derived quality metrics
     source: str = "unknown"
@@ -282,7 +282,7 @@ class TickData:
             return self.ask if use_aggressive else self.mid
         return self.bid if use_aggressive else self.mid
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "timestamp": float(self.timestamp),
             "symbol": self.symbol,
@@ -384,7 +384,7 @@ class TransactionCostModel:
         participation_rate: float,
         daily_volatility: float,
         order_flow_toxicity: float = 0.0,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Calculate temporary and permanent market impact.
 
@@ -456,7 +456,7 @@ class TransactionCostModel:
         self,
         executions: list,
         min_samples: int = 50,
-    ) -> Dict:
+    ) -> dict:
         """
         Fit Almgren-Chriss η, γ, β to observed execution data via OLS.
 
@@ -560,7 +560,7 @@ class TransactionCostModel:
 
     def total_cost(
         self, order_size: float, price: float, is_maker: bool = False, **kwargs
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Calculate all-in transaction cost"""
         notional = abs(order_size) * price
 
@@ -628,8 +628,8 @@ class Position:
     mae_timestamp: Optional[NanosecondTimestamp] = None
 
     # Trade history
-    opening_trades: List[Dict] = field(default_factory=list)
-    closing_trades: List[Dict] = field(default_factory=list)
+    opening_trades: list[dict] = field(default_factory=list)
+    closing_trades: list[dict] = field(default_factory=list)
 
     # Current state
     unrealized_pnl: float = 0.0
@@ -687,7 +687,7 @@ class Position:
                 pnl = (self.avg_entry_price - trade_price) * abs(trade_size)
             self.realized_pnl += pnl - commission - slippage
 
-    def get_performance_metrics(self) -> Dict[str, float]:
+    def get_performance_metrics(self) -> dict[str, float]:
         """Calculate position-level performance metrics"""
         if not self.opening_trades:
             return {}
@@ -798,7 +798,7 @@ class TradeRecord:
         cost_basis = self.filled_size * self.entry_price
         return self.net_pnl / cost_basis if cost_basis > 0 else 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "trade_id": self.trade_id,
             "symbol": self.symbol,
@@ -972,17 +972,16 @@ class MarketMicrostructureAnalyzer:
                 if (self.returns and np.mean(list(self.returns)[-10:]) > 0)
                 else MarketRegime.TRENDING_WEAK_BEAR
             )
+        elif volatility < 0.01:
+            self.current_regime = MarketRegime.RANGING_NARROW
         else:
-            if volatility < 0.01:
-                self.current_regime = MarketRegime.RANGING_NARROW
-            else:
-                self.current_regime = MarketRegime.RANGING_WIDE
+            self.current_regime = MarketRegime.RANGING_WIDE
 
         # Confidence based on data quality
         self.regime_confidence = min(1.0, len(self.ticks) / self.lookback)
         self.regime_history.append((self.current_regime, self.regime_confidence))
 
-    def _extract_regime_features(self) -> Dict[str, float]:
+    def _extract_regime_features(self) -> dict[str, float]:
         """Extract features for regime classification"""
         return {
             "realized_vol": np.sqrt(self.realized_variance),
@@ -1017,7 +1016,7 @@ class MarketMicrostructureAnalyzer:
         except (ValueError, RuntimeError, TypeError):
             self.hurst_exponent = 0.5
 
-    def get_execution_recommendation(self) -> Dict[str, Any]:
+    def get_execution_recommendation(self) -> dict[str, Any]:
         """Get execution strategy recommendation based on regime"""
         regime_recommendations = {
             MarketRegime.TRENDING_STRONG_BULL: {
@@ -1075,7 +1074,7 @@ class MarketMicrostructureAnalyzer:
 
         return rec
 
-    def get_microstructure_report(self) -> Dict[str, Any]:
+    def get_microstructure_report(self) -> dict[str, Any]:
         """Generate comprehensive microstructure report"""
         return {
             "regime": {
@@ -1150,7 +1149,7 @@ class InstitutionalRiskManager:
         self.daily_pnl = 0.0
         self.daily_trades = 0
         self.daily_turnover = 0.0
-        self.positions: Dict[str, Position] = {}
+        self.positions: dict[str, Position] = {}
         self.trade_history: deque = deque(maxlen=10_000)
         self.risk_events: deque = deque(maxlen=1_000)
 
@@ -1166,7 +1165,7 @@ class InstitutionalRiskManager:
         self.correlation_window: deque = deque(maxlen=50)
 
         # Callbacks for emergency actions
-        self.emergency_callbacks: List[Callable] = []
+        self.emergency_callbacks: list[Callable] = []
 
         logger.info(f"RiskManager initialized: ${initial_capital:,.2f} capital")
 
@@ -1175,11 +1174,11 @@ class InstitutionalRiskManager:
         self.emergency_callbacks.append(callback)
 
     @staticmethod
-    def _failed_check(name: str, limit: float, projected: float, severity: "RiskEventSeverity") -> Dict:
+    def _failed_check(name: str, limit: float, projected: float, severity: "RiskEventSeverity") -> dict:
         """Build a standardised failed-check dict for pre-trade risk results."""
         return {"check": name, "passed": False, "limit": limit, "projected": projected, "severity": severity}
 
-    def _check_position_size(self, symbol: str, side: "OrderSide", size: float, price: float) -> Optional[Dict]:
+    def _check_position_size(self, symbol: str, side: "OrderSide", size: float, price: float) -> Optional[dict]:
         """FIA 1.1: Reject if projected notional exceeds position limit."""
         current  = self.positions.get(symbol, Position(symbol, side))
         delta    = size if side == OrderSide.BUY else -size
@@ -1187,14 +1186,14 @@ class InstitutionalRiskManager:
         limit    = self.current_capital * self.limits["position"]
         return self._failed_check("POSITION_SIZE", limit, proj_not, RiskEventSeverity.CRITICAL) if proj_not > limit else None
 
-    def _check_leverage(self, notional: float) -> Optional[Dict]:
+    def _check_leverage(self, notional: float) -> Optional[dict]:
         """Reject if projected total exposure exceeds leverage limit."""
         current_exp = sum(abs(p.size * p.avg_entry_price) for p in self.positions.values())
         proj_exp    = current_exp + notional
         max_exp     = self.current_capital * self.limits["leverage"]
         return self._failed_check("LEVERAGE", max_exp, proj_exp, RiskEventSeverity.CRITICAL) if proj_exp > max_exp else None
 
-    def _check_var_limit(self, symbol: str, size: float, price: float) -> Optional[Dict]:
+    def _check_var_limit(self, symbol: str, size: float, price: float) -> Optional[dict]:
         """Warn if projected VaR exceeds the configured limit."""
         current_var  = self.calculate_var(0.95)
         projected_var = self._estimate_var_change(symbol, size, price)
@@ -1211,8 +1210,8 @@ class InstitutionalRiskManager:
         side: "OrderSide",
         size: float,
         price: float,
-        portfolio_state: Dict,  # noqa: ARG002
-    ) -> Tuple[bool, str, Dict]:
+        portfolio_state: dict,
+    ) -> tuple[bool, str, dict]:
         """
         Pre-trade risk check — FIA 1.1, 1.2, 1.3 compliant.
 
@@ -1248,7 +1247,7 @@ class InstitutionalRiskManager:
 
         return True, "OK", {"checks_passed": len(checks)}
 
-    def check_intraday_risk(self, timestamp: NanosecondTimestamp) -> Tuple[bool, str]:
+    def check_intraday_risk(self, timestamp: NanosecondTimestamp) -> tuple[bool, str]:
         """
         Intraday risk monitoring - continuous checks.
         """
@@ -1443,7 +1442,7 @@ class InstitutionalRiskManager:
         notional = abs(size) * price
         return notional * 0.02  # Assume 2% daily vol
 
-    def get_risk_report(self) -> Dict[str, Any]:
+    def get_risk_report(self) -> dict[str, Any]:
         """Generate comprehensive risk report"""
         current_drawdown = (
             (self.peak_capital - self.current_capital) / self.peak_capital
@@ -1529,22 +1528,22 @@ class EnhancedBacktestEngine:
         self.parallel_workers = parallel_workers
 
         # State
-        self.positions: Dict[str, Position] = {}
-        self.closed_trades: List[TradeRecord] = []
-        self.open_orders: Dict[str, Any] = {}  # Track working orders
+        self.positions: dict[str, Position] = {}
+        self.closed_trades: list[TradeRecord] = []
+        self.open_orders: dict[str, Any] = {}  # Track working orders
 
         # Market data
         self.current_time: Optional[NanosecondTimestamp] = None
         self.microstructure = MarketMicrostructureAnalyzer()
-        self.price_history: Dict[str, deque] = defaultdict(lambda: deque(maxlen=1000))
+        self.price_history: dict[str, deque] = defaultdict(lambda: deque(maxlen=1000))
 
         # Performance tracking
-        self.equity_curve: List[Tuple[NanosecondTimestamp, float]] = []
-        self.benchmark_curve: List[Tuple[NanosecondTimestamp, float]] = []
-        self.daily_stats: Dict[str, Dict] = {}
+        self.equity_curve: list[tuple[NanosecondTimestamp, float]] = []
+        self.benchmark_curve: list[tuple[NanosecondTimestamp, float]] = []
+        self.daily_stats: dict[str, dict] = {}
 
         # Execution tracking
-        self.execution_log: List[Dict] = []
+        self.execution_log: list[dict] = []
         self.trade_count = 0
 
         # Slippage model parameters based on execution quality
@@ -1555,7 +1554,7 @@ class EnhancedBacktestEngine:
         if self.enable_gpu:
             logger.info("GPU acceleration enabled")
 
-    def _get_latency_model(self) -> Dict[str, float]:
+    def _get_latency_model(self) -> dict[str, float]:
         """Get latency distribution parameters for execution quality"""
         models = {
             ExecutionQuality.HFT_COLOCATED: {"mean": 0.0001, "std": 0.00005},  # 100μs
@@ -1610,7 +1609,7 @@ class EnhancedBacktestEngine:
             position.update_mfe_mae(current_price, tick.timestamp)
         return total_financing
 
-    def process_tick(self, tick: TickData) -> Dict[str, Any]:
+    def process_tick(self, tick: TickData) -> dict[str, Any]:
         """
         Process a single tick with full market microstructure analysis.
 
@@ -1696,7 +1695,7 @@ class EnhancedBacktestEngine:
         stop_price: Optional[float] = None,
         time_in_force: str = "GTC",
         strategy_id: Optional[str] = None,
-    ) -> Tuple[bool, str, Optional[str]]:
+    ) -> tuple[bool, str, Optional[str]]:
         """
         Submit order with full pre-trade risk checks.
         """
@@ -1737,8 +1736,8 @@ class EnhancedBacktestEngine:
         return True, "OK", order_id
 
     def _resolve_market_fill(
-        self, order: Dict, tick: "TickData", size: float
-    ) -> Tuple[float, float, float]:
+        self, order: dict, tick: "TickData", size: float
+    ) -> tuple[float, float, float]:
         """
         Compute fill price, slippage, and latency for a market order.
 
@@ -1764,8 +1763,8 @@ class EnhancedBacktestEngine:
         return fill_price, slippage_bps, latency
 
     def _resolve_limit_fill(
-        self, order: Dict, tick: "TickData"
-    ) -> Tuple[float, float, float]:
+        self, order: dict, tick: "TickData"
+    ) -> tuple[float, float, float]:
         """
         Validate and return fill parameters for a limit order.
 
@@ -1782,11 +1781,11 @@ class EnhancedBacktestEngine:
 
     def _apply_fill_to_position(
         self,
-        order: Dict,
+        order: dict,
         position: "Position",
         size: float,
         fill_price: float,
-        costs: Dict,
+        costs: dict,
         tick: "TickData",
         order_id: str,
     ) -> None:
@@ -1834,7 +1833,7 @@ class EnhancedBacktestEngine:
             timestamp=tick.timestamp, is_opening=True,
         )
 
-    def _update_order_status(self, order_id: str, order: Dict, size: float) -> None:
+    def _update_order_status(self, order_id: str, order: dict, size: float) -> None:
         """Mark order filled or reduce remaining size."""
         order["filled_size"] = order.get("filled_size", 0) + size
         if abs(order["filled_size"] - order["size"]) < _FILL_TOLERANCE:
@@ -1845,7 +1844,7 @@ class EnhancedBacktestEngine:
 
     def execute_order(
         self, order_id: str, tick: "TickData", fill_size: Optional[float] = None
-    ) -> Tuple[bool, Dict[str, Any]]:
+    ) -> tuple[bool, dict[str, Any]]:
         """Execute an order with realistic market simulation."""
         if order_id not in self.open_orders:
             return False, {"error": "Order not found"}
@@ -1999,7 +1998,7 @@ class EnhancedBacktestEngine:
 
         return trade
 
-    def get_performance_report(self) -> Dict[str, Any]:
+    def get_performance_report(self) -> dict[str, Any]:
         """Generate comprehensive institutional-grade performance report"""
         if not self.closed_trades:
             return {"error": "No completed trades"}
@@ -2056,7 +2055,7 @@ class EnhancedBacktestEngine:
                         dd_start = (
                             ts.to_datetime()
                             if hasattr(ts, "to_datetime")
-                            else datetime.now(timezone.utc)
+                            else datetime.now(UTC)
                         )
 
         # Advanced metrics
@@ -2078,7 +2077,7 @@ class EnhancedBacktestEngine:
 
         report = {
             "metadata": {
-                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "generated_at": datetime.now(UTC).isoformat(),
                 "initial_capital": self.initial_capital,
                 "final_capital": self.capital,
                 "total_return_pct": (self.capital - self.initial_capital)
@@ -2209,7 +2208,7 @@ class EnhancedBacktestEngine:
 
         return report
 
-    def _analyze_regime_performance(self) -> Dict[str, Dict]:
+    def _analyze_regime_performance(self) -> dict[str, dict]:
         """Analyze performance by market regime"""
         regime_stats = defaultdict(
             lambda: {"trades": 0, "pnl": 0.0, "wins": 0, "losses": 0}
@@ -2236,7 +2235,7 @@ class EnhancedBacktestEngine:
             for regime, stats in regime_stats.items()
         }
 
-    def _calculate_monthly_returns(self) -> Dict[str, float]:
+    def _calculate_monthly_returns(self) -> dict[str, float]:
         """Calculate monthly returns from equity curve"""
         if not self.equity_curve:
             return {}
@@ -2264,7 +2263,7 @@ class EnhancedBacktestEngine:
         """Save complete engine state to disk"""
         state = {
             "metadata": {
-                "saved_at": datetime.now(timezone.utc).isoformat(),
+                "saved_at": datetime.now(UTC).isoformat(),
                 "version": "4.0",
                 "initial_capital": self.initial_capital,
             },
@@ -2335,7 +2334,7 @@ class EnhancedBacktestEngine:
 # =============================================================================
 
 
-def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> List[TickData]:
+def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> list[TickData]:
     """
     Generate SYNTHETIC tick data for unit tests and engine smoke-tests ONLY.
 
@@ -2384,7 +2383,7 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> List[Tic
     spreads = rng.uniform(0.02, 0.08, n_ticks)  # 2-8 pips for gold
 
     ticks = []
-    start_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    start_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
 
     for i in range(n_ticks):
         price = prices[i]
@@ -2409,7 +2408,7 @@ def generate_test_data(n_ticks: int = 10000, symbol: str = "XAUUSD") -> List[Tic
 
 def _load_real_ticks(
     symbol: str = "XAUUSD", max_bars: int = 5000
-) -> Optional[List["TickData"]]:
+) -> Optional[list["TickData"]]:
     """
     Attempt to load real OHLCV data via real_data_backtest.py and convert to
     TickData objects for use by the backtest engine.
@@ -2433,7 +2432,7 @@ def _load_real_ticks(
         if df is None or len(df) < 100:
             return None
 
-        ticks: List[TickData] = []
+        ticks: list[TickData] = []
         for ts, row in df.iterrows():
             mid = float(row["close"])
             spread = mid * 0.00005  # ~0.5 pip spread for gold
@@ -2478,7 +2477,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
     print("=" * 80)
 
     # ── Data loading ──────────────────────────────────────────────────────────
-    ticks: Optional[List[TickData]] = None
+    ticks: Optional[list[TickData]] = None
     data_source = "real/binance"
 
     if use_real_data:
@@ -2561,7 +2560,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
 
         def generate_signal(
             self, tick: TickData, regime: MarketRegime
-        ) -> Optional[Tuple[OrderSide, float]]:
+        ) -> Optional[tuple[OrderSide, float]]:
             self.prices.append(tick.mid)
 
             if len(self.prices) < self.slow:

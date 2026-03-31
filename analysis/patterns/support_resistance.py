@@ -18,7 +18,7 @@ significant buying or selling pressure:
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ class PriceLevel:
     is_active: bool
     description: str = ""
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         last_touch_str = (
             self.last_touch.isoformat() if self.last_touch is not None else None
         )
@@ -50,7 +50,7 @@ class PriceLevel:
             "method": self.method,
             "is_active": self.is_active,
             "description": self.description,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
 
@@ -66,7 +66,7 @@ class SRLevel:
     start_index: int = 0
     end_index: int = 0
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "price": self.price,
             "level_type": self.level_type,
@@ -88,9 +88,9 @@ class SRZone:
     zone_type: str  # 'support', 'resistance', 'mixed'
     strength: float  # 0.0 – 1.0
     touch_count: int
-    levels: List[SRLevel] = field(default_factory=list)
+    levels: list[SRLevel] = field(default_factory=list)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "low_price": self.low_price,
             "high_price": self.high_price,
@@ -107,9 +107,9 @@ class SRZone:
 
 
 def _find_swing_highs(
-    highs: List[float],
+    highs: list[float],
     window: int = 5,
-) -> List[Tuple[int, float]]:
+) -> list[tuple[int, float]]:
     """Return (index, price) pairs for swing highs."""
     results = []
     for i in range(window, len(highs) - window):
@@ -120,9 +120,9 @@ def _find_swing_highs(
 
 
 def _find_swing_lows(
-    lows: List[float],
+    lows: list[float],
     window: int = 5,
-) -> List[Tuple[int, float]]:
+) -> list[tuple[int, float]]:
     """Return (index, price) pairs for swing lows."""
     results = []
     for i in range(window, len(lows) - window):
@@ -134,8 +134,8 @@ def _find_swing_lows(
 
 def _count_touches(
     price: float,
-    highs: List[float],
-    lows: List[float],
+    highs: list[float],
+    lows: list[float],
     tolerance: float,
 ) -> int:
     """Count how many bars came within *tolerance* of *price*."""
@@ -152,16 +152,16 @@ def _count_touches(
 
 
 def _build_swing_levels(
-    highs: List[float],
-    lows: List[float],
-    closes: List[float],
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
     window: int,
     tolerance: float,
-) -> List[SRLevel]:
+) -> list[SRLevel]:
     """Build S/R levels from swing highs and lows."""
     swing_highs = _find_swing_highs(highs, window)
     swing_lows = _find_swing_lows(lows, window)
-    levels: List[SRLevel] = []
+    levels: list[SRLevel] = []
 
     current_price = closes[-1] if closes else 0.0
 
@@ -212,17 +212,17 @@ def _round_level_step(current_price: float) -> float:
 
 
 def _build_psychological_levels(
-    closes: List[float],
+    closes: list[float],
     tolerance: float,
     count: int = 10,
-) -> List[SRLevel]:
+) -> list[SRLevel]:
     """Generate round-number S/R levels near the current price."""
     if not closes:
         return []
 
     current_price = closes[-1]
     step = _round_level_step(current_price)
-    levels: List[SRLevel] = []
+    levels: list[SRLevel] = []
 
     # Centre the grid on current price
     base = round(current_price / step) * step
@@ -261,16 +261,16 @@ def _build_psychological_levels(
 
 
 def _merge_levels_into_zones(
-    levels: List[SRLevel],
+    levels: list[SRLevel],
     merge_pct: float = 0.005,
-) -> List[SRZone]:
+) -> list[SRZone]:
     """Merge closely spaced levels into S/R zones."""
     if not levels:
         return []
 
     sorted_levels = sorted(levels, key=lambda x: x.price)
-    zones: List[SRZone] = []
-    current_group: List[SRLevel] = [sorted_levels[0]]
+    zones: list[SRZone] = []
+    current_group: list[SRLevel] = [sorted_levels[0]]
 
     for level in sorted_levels[1:]:
         ref_price = current_group[0].price
@@ -288,7 +288,7 @@ def _merge_levels_into_zones(
     return zones
 
 
-def _group_to_zone(group: List[SRLevel]) -> SRZone:
+def _group_to_zone(group: list[SRLevel]) -> SRZone:
     """Convert a group of nearby SRLevel objects into a SRZone."""
     prices = [lv.price for lv in group]
     low_p = min(prices)
@@ -321,10 +321,10 @@ def _group_to_zone(group: List[SRLevel]) -> SRZone:
 
 
 def _build_volume_levels(
-    closes: List[float],
-    volumes: List[float],
+    closes: list[float],
+    volumes: list[float],
     bins: int = 20,
-) -> List[SRLevel]:
+) -> list[SRLevel]:
     """Identify price levels with disproportionately high traded volume."""
     if not closes or not volumes or len(closes) != len(volumes):
         return []
@@ -335,7 +335,7 @@ def _build_volume_levels(
         return []
 
     bucket = (max_p - min_p) / bins
-    vol_by_bin: Dict[int, float] = {}
+    vol_by_bin: dict[int, float] = {}
 
     for price, vol in zip(closes, volumes, strict=False):
         idx = min(int((price - min_p) / bucket), bins - 1)
@@ -347,7 +347,7 @@ def _build_volume_levels(
 
     avg_vol = total_vol / bins
     current_price = closes[-1]
-    levels: List[SRLevel] = []
+    levels: list[SRLevel] = []
 
     for idx, vol in vol_by_bin.items():
         if vol < avg_vol * 1.5:
@@ -387,7 +387,7 @@ class SupportResistanceDetector:
             print(lvl.price, lvl.strength)
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialise the detector.
 
@@ -415,7 +415,7 @@ class SupportResistanceDetector:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_ohlcv_cols(self, df) -> Optional[Dict[str, str]]:
+    def _get_ohlcv_cols(self, df) -> Optional[dict[str, str]]:
         """Return lower-cased column name map or None if df is invalid."""
         try:
             import pandas as pd
@@ -446,7 +446,7 @@ class SupportResistanceDetector:
         self,
         df,
         current_price: Optional[float] = None,
-    ) -> Dict[str, List[PriceLevel]]:
+    ) -> dict[str, list[PriceLevel]]:
         """
         Detect support, resistance, and pivot levels.
 
@@ -459,7 +459,7 @@ class SupportResistanceDetector:
             Dict with keys 'support', 'resistance', 'pivot', each a list
             of PriceLevel objects.
         """
-        result: Dict[str, List[PriceLevel]] = {
+        result: dict[str, list[PriceLevel]] = {
             "support": [],
             "resistance": [],
             "pivot": [],
@@ -478,7 +478,7 @@ class SupportResistanceDetector:
         if current_price is None:
             current_price = float(closes[-1]) if closes else 0.0
 
-        all_levels: List[PriceLevel] = []
+        all_levels: list[PriceLevel] = []
         all_levels.extend(self.get_swing_levels(df))
         all_levels.extend(self.get_fibonacci_levels(df))
         all_levels.extend(self.get_round_number_levels(df))
@@ -495,7 +495,7 @@ class SupportResistanceDetector:
 
         return result
 
-    def get_swing_levels(self, df) -> List[PriceLevel]:
+    def get_swing_levels(self, df) -> list[PriceLevel]:
         """
         Get support/resistance levels from swing highs and lows.
 
@@ -518,7 +518,7 @@ class SupportResistanceDetector:
         current_price = closes[-1] if closes else 0.0
         tolerance = current_price * self.sensitivity
 
-        levels: List[PriceLevel] = []
+        levels: list[PriceLevel] = []
         swing_highs = _find_swing_highs(highs, self.swing_window)
         swing_lows = _find_swing_lows(lows, self.swing_window)
 
@@ -556,7 +556,7 @@ class SupportResistanceDetector:
 
         return levels
 
-    def get_fibonacci_levels(self, df) -> List[PriceLevel]:
+    def get_fibonacci_levels(self, df) -> list[PriceLevel]:
         """
         Get Fibonacci retracement levels.
 
@@ -580,7 +580,7 @@ class SupportResistanceDetector:
             return []
 
         fib_ratios = [0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
-        levels: List[PriceLevel] = []
+        levels: list[PriceLevel] = []
 
         for ratio in fib_ratios:
             price = price_max - ratio * price_range
@@ -600,7 +600,7 @@ class SupportResistanceDetector:
 
         return levels
 
-    def get_round_number_levels(self, df) -> List[PriceLevel]:
+    def get_round_number_levels(self, df) -> list[PriceLevel]:
         """
         Get round-number / psychological levels.
 
@@ -624,7 +624,7 @@ class SupportResistanceDetector:
         increment = self.round_number_increment
         base = math.floor(current_price / increment) * increment
 
-        levels: List[PriceLevel] = []
+        levels: list[PriceLevel] = []
         for offset in range(-3, 4):
             price = base + offset * increment
             if price <= 0:
@@ -645,7 +645,7 @@ class SupportResistanceDetector:
 
         return levels
 
-    def get_volume_levels(self, df) -> List[PriceLevel]:
+    def get_volume_levels(self, df) -> list[PriceLevel]:
         """
         Get volume-weighted price levels.
 
@@ -665,7 +665,7 @@ class SupportResistanceDetector:
         volumes = df[cols["volume"]].tolist()
 
         sr_levels = _build_volume_levels(closes, volumes)
-        levels: List[PriceLevel] = []
+        levels: list[PriceLevel] = []
         for sr in sr_levels:
             levels.append(
                 PriceLevel(
@@ -680,7 +680,7 @@ class SupportResistanceDetector:
             )
         return levels
 
-    def get_dynamic_levels(self, df) -> List[PriceLevel]:
+    def get_dynamic_levels(self, df) -> list[PriceLevel]:
         """
         Get dynamic levels based on moving averages.
 
@@ -744,11 +744,11 @@ class SupportResistanceDetector:
 
     def detect(
         self,
-        highs: List[float],
-        lows: List[float],
-        closes: List[float],
-        volumes: Optional[List[float]] = None,
-    ) -> List[SRLevel]:
+        highs: list[float],
+        lows: list[float],
+        closes: list[float],
+        volumes: Optional[list[float]] = None,
+    ) -> list[SRLevel]:
         """
         Detect all support and resistance levels (legacy API).
 
@@ -779,11 +779,11 @@ class SupportResistanceDetector:
 
     def detect_zones(
         self,
-        highs: List[float],
-        lows: List[float],
-        closes: List[float],
-        volumes: Optional[List[float]] = None,
-    ) -> List[SRZone]:
+        highs: list[float],
+        lows: list[float],
+        closes: list[float],
+        volumes: Optional[list[float]] = None,
+    ) -> list[SRZone]:
         """
         Detect S/R zones by merging nearby individual levels (legacy API).
 
@@ -802,12 +802,12 @@ class SupportResistanceDetector:
 
     def get_nearest_levels(
         self,
-        highs: List[float],
-        lows: List[float],
-        closes: List[float],
+        highs: list[float],
+        lows: list[float],
+        closes: list[float],
         current_price: float,
         n: int = 3,
-    ) -> Dict:
+    ) -> dict:
         """
         Return the *n* closest support and resistance levels to *current_price*
         (legacy API).
@@ -842,9 +842,9 @@ class SupportResistanceDetector:
     def is_near_level(
         self,
         price: float,
-        highs: List[float],
-        lows: List[float],
-        closes: List[float],
+        highs: list[float],
+        lows: list[float],
+        closes: list[float],
         tolerance_pct: Optional[float] = None,
     ) -> bool:
         """

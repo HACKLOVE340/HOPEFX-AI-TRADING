@@ -31,14 +31,14 @@ from typing import Dict, Optional
 logger = logging.getLogger(__name__)
 
 # Supported coins → CoinGecko IDs
-_COIN_IDS: Dict[str, str] = {
+_COIN_IDS: dict[str, str] = {
     "BTC": "bitcoin",
     "ETH": "ethereum",
     "USDT": "tether",
 }
 
 # Binance symbols for fallback
-_BINANCE_SYMBOLS: Dict[str, str] = {
+_BINANCE_SYMBOLS: dict[str, str] = {
     "BTC": "BTCUSDT",
     "ETH": "ETHUSDT",
 }
@@ -47,11 +47,11 @@ RATE_TTL_SECONDS: int = int(os.getenv("CRYPTO_RATE_TTL_SECONDS", "60"))
 
 # ── In-process TTL cache ──────────────────────────────────────────────────────
 _cache_lock = asyncio.Lock()
-_cached_rates: Dict[str, float] = {}
+_cached_rates: dict[str, float] = {}
 _cache_ts: float = 0.0
 
 # USDT peg — always 1.0 by definition; not a hardcoded price estimate
-_STABLECOIN_RATES: Dict[str, float] = {
+_STABLECOIN_RATES: dict[str, float] = {
     "USDT": 1.0,
     "USDC": 1.0,
 }
@@ -60,7 +60,7 @@ _STABLECOIN_RATES: Dict[str, float] = {
 # fail and the cache is empty.  These are intentionally stale estimates — never
 # used for actual payment calculations in production (APP_ENV=production raises
 # instead).  Values are updated periodically via git; not relied on for pricing.
-_FALLBACK_RATES: Dict[str, float] = {
+_FALLBACK_RATES: dict[str, float] = {
     "BTC": 60_000.0,
     "ETH": 3_000.0,
     "USDT": 1.0,
@@ -68,7 +68,7 @@ _FALLBACK_RATES: Dict[str, float] = {
 }
 
 
-async def _fetch_coingecko() -> Dict[str, float]:
+async def _fetch_coingecko() -> dict[str, float]:
     """Fetch USD prices from CoinGecko /simple/price."""
     import aiohttp
 
@@ -81,7 +81,7 @@ async def _fetch_coingecko() -> Dict[str, float]:
             resp.raise_for_status()
             data = await resp.json()
 
-    rates: Dict[str, float] = {}
+    rates: dict[str, float] = {}
     for coin, cg_id in _COIN_IDS.items():
         price = data.get(cg_id, {}).get("usd")
         if price and float(price) > 0:
@@ -89,11 +89,11 @@ async def _fetch_coingecko() -> Dict[str, float]:
     return rates
 
 
-async def _fetch_binance_fallback() -> Dict[str, float]:
+async def _fetch_binance_fallback() -> dict[str, float]:
     """Fetch USD prices from Binance /api/v3/ticker/price as fallback."""
     import aiohttp
 
-    rates: Dict[str, float] = {}
+    rates: dict[str, float] = {}
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as session:
         for coin, symbol in _BINANCE_SYMBOLS.items():
             try:
@@ -111,7 +111,7 @@ async def _fetch_binance_fallback() -> Dict[str, float]:
     return rates
 
 
-async def get_rates(force_refresh: bool = False) -> Dict[str, float]:
+async def get_rates(force_refresh: bool = False) -> dict[str, float]:
     """
     Return current USD prices for supported coins.
 

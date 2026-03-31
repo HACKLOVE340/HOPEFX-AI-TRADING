@@ -48,7 +48,7 @@ _secrets_mem: dict[str, str] = {}
 _enabled_mem: dict[str, bool] = {}
 _backup_codes_mem: dict[str, list] = {}
 
-_KEY_SECRET = "2fa:secret:{}"  # nosec B105 - Redis key template, not a password  # noqa: S105
+_KEY_SECRET = "2fa:secret:{}"  # nosec B105 - Redis key template, not a password
 _KEY_ENABLED = "2fa:enabled:{}"
 _KEY_BACKUP = "2fa:backup:{}"
 
@@ -175,7 +175,7 @@ class StatusResponse(BaseModel):
 
 
 class BackupCodesResponse(BaseModel):
-    codes: List[str]
+    codes: list[str]
     warning: str
 
 

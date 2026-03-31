@@ -11,7 +11,7 @@ Multi-Gateway Payment Processor
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from enum import Enum
 from typing import Dict, Optional
@@ -53,7 +53,7 @@ class Payment:
         self.user_id = user_id
         self.description = description
         self.status = PaymentStatus.PENDING
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.completed_at = None
         self.transaction_id = None
 
@@ -62,7 +62,7 @@ class PaymentGateway:
     """Main payment gateway"""
 
     def __init__(self):
-        self.payments: Dict[str, Payment] = {}
+        self.payments: dict[str, Payment] = {}
 
     def create_payment(
         self, amount: float, method: PaymentMethod, user_id: str, description: str = ""
@@ -90,7 +90,7 @@ class PaymentGateway:
                 self._process_bank(payment)
 
             payment.status = PaymentStatus.SUCCESS
-            payment.completed_at = datetime.now(timezone.utc)
+            payment.completed_at = datetime.now(UTC)
             logger.info(f"Payment successful: {payment_id}")
             return True
 

@@ -16,22 +16,22 @@ import os
 
 # Maximum fraction of feature_names allowed to be uncategorised in feature groups
 _MAX_UNCATEGORISED_FRACTION = 0.3
-import tempfile  # noqa: E402
-from unittest.mock import MagicMock, patch  # noqa: E402
+import tempfile
+from unittest.mock import MagicMock, patch
 
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
-import pytest  # noqa: E402
+import numpy as np
+import pandas as pd
+import pytest
 
-from ml.features.technical import TechnicalFeatureEngineer  # noqa: E402
-from ml.models.base import BaseMLModel  # noqa: E402
-from ml.models.ensemble import (  # noqa: E402
+from ml.features.technical import TechnicalFeatureEngineer
+from ml.models.base import BaseMLModel
+from ml.models.ensemble import (
     EnsemblePredictor,
     EnsemblePrediction,
     ModelPrediction,
 )
-from ml.models.lstm import LSTMPricePredictor  # noqa: E402
-from ml.models.random_forest import RandomForestTradingClassifier  # noqa: E402
+from ml.models.lstm import LSTMPricePredictor
+from ml.models.random_forest import RandomForestTradingClassifier
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +299,7 @@ class TestLSTMPricePredictor:
         lstm = LSTMPricePredictor(config={"sequence_length": 10, "lstm_units": [32]})
         # If TensorFlow is not installed, build() should raise ImportError
         try:
-            import tensorflow  # noqa: F401  – already available or not
+            import tensorflow
 
             # TF available: build should set self.model
             lstm.build()

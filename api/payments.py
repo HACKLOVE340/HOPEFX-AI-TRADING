@@ -25,7 +25,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/payments", tags=["Payments"])
 
-_CONFIRMATIONS_REQUIRED: Dict[str, int] = {
+_CONFIRMATIONS_REQUIRED: dict[str, int] = {
     "BTC": 3,
     "ETH": 12,
     "USDT": 12,
@@ -207,7 +207,7 @@ async def generate_deposit_address(req: AddressRequest):
 
     amount_crypto = req.amount_usd / rate_usd
     network = (req.network or currency).upper()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = (now + timedelta(minutes=ADDRESS_TTL_MINUTES)).isoformat()
 
     try:
@@ -263,8 +263,8 @@ async def get_payment_status(payment_id: str):
     if p["status"] == "pending" and p.get("expires_at"):
         expires = datetime.fromisoformat(p["expires_at"])
         if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) > expires:
+            expires = expires.replace(tzinfo=UTC)
+        if datetime.now(UTC) > expires:
             _update_payment(payment_id, status="expired")
             p["status"] = "expired"
 
@@ -298,7 +298,7 @@ async def get_rates_endpoint():
             }
             for coin, price in rates.items()
         },
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
         "source": "live",
     }
 
@@ -391,7 +391,7 @@ async def payment_webhook(
     if tx_hash:
         update_kwargs["tx_hash"] = tx_hash
     if new_status == "complete":
-        update_kwargs["confirmed_at"] = datetime.now(timezone.utc)
+        update_kwargs["confirmed_at"] = datetime.now(UTC)
 
     _update_payment(payment_id, **update_kwargs)
 

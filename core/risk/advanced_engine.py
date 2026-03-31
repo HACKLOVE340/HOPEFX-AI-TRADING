@@ -10,7 +10,7 @@ The implementation lives in core/acceleration/gpu_engine.py (historical placemen
 This module re-exports the public classes so imports work from either location.
 """
 
-from core.acceleration.gpu_engine import (  # noqa: F401
+from core.acceleration.gpu_engine import (
     CopulaRiskModel,
     GARCHModel,
     MonteCarloRiskEngine,

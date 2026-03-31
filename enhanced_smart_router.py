@@ -14,7 +14,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, Set
 
@@ -82,7 +82,7 @@ class Venue:
     min_order_size: float = 0.01
 
     # Specialization
-    preferred_assets: Set[str] = field(default_factory=set)
+    preferred_assets: set[str] = field(default_factory=set)
 
     def total_cost(self, notional: float, is_maker: bool = False) -> float:
         """Calculate total cost for trade"""
@@ -198,7 +198,7 @@ class MarketImpactModel:
 
     def total_cost(
         self, X: float, T: float, V: float, price: float
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Calculate total market impact cost"""
         temp = self.temporary_impact(X, T, V)
         perm = self.permanent_impact(X, V)
@@ -216,10 +216,10 @@ class MarketImpactModel:
 class ExecutionStrategy(ABC):
     """Base class for execution algorithms"""
 
-    def __init__(self, order: Order, venues: List[Venue]):
+    def __init__(self, order: Order, venues: list[Venue]):
         self.order = order
         self.venues = venues
-        self.fills: List[Fill] = []
+        self.fills: list[Fill] = []
         self.is_complete = False
         # Per-strategy seeded RNG for deterministic simulation in tests.
         # Seed is derived from the order id so different orders get different
@@ -229,9 +229,8 @@ class ExecutionStrategy(ABC):
         )
 
     @abstractmethod
-    async def execute(self) -> List[Fill]:
+    async def execute(self) -> list[Fill]:
         """Execute the order"""
-        pass
 
     def update_order(self, fill: Fill):
         """Update order state with new fill"""
@@ -261,7 +260,7 @@ class TWAPStrategy(ExecutionStrategy):
     def __init__(
         self,
         order: Order,
-        venues: List[Venue],
+        venues: list[Venue],
         duration_minutes: int = 30,
         num_slices: int = 10,
     ):
@@ -271,7 +270,7 @@ class TWAPStrategy(ExecutionStrategy):
         self.slice_size = order.size / num_slices
         self.interval = (duration_minutes * 60) / num_slices
 
-    async def execute(self) -> List[Fill]:
+    async def execute(self) -> list[Fill]:
         """Execute TWAP slices"""
         logger.info(f"Starting TWAP: {self.order.size} in {self.num_slices} slices")
 
@@ -353,7 +352,7 @@ class TWAPStrategy(ExecutionStrategy):
             size=order.size,
             price=fill_price,
             venue=venue.name,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             fee=fee,
             is_maker=False,
             slippage_bps=slippage * 10000,
@@ -369,8 +368,8 @@ class VWAPStrategy(ExecutionStrategy):
     def __init__(
         self,
         order: Order,
-        venues: List[Venue],
-        volume_profile: List[float],  # Historical volume by time bucket
+        venues: list[Venue],
+        volume_profile: list[float],  # Historical volume by time bucket
         duration_minutes: int = 60,
     ):
         super().__init__(order, venues)
@@ -378,7 +377,7 @@ class VWAPStrategy(ExecutionStrategy):
         self.duration = duration_minutes
         self.total_volume = sum(volume_profile)
 
-    async def execute(self) -> List[Fill]:
+    async def execute(self) -> list[Fill]:
         """Execute based on volume profile"""
         # Calculate slice sizes based on volume profile
         slice_sizes = [
@@ -429,7 +428,7 @@ class ImplementationShortfallStrategy(ExecutionStrategy):
     def __init__(
         self,
         order: Order,
-        venues: List[Venue],
+        venues: list[Venue],
         risk_aversion: float = 1.0,  # 1 = risk-neutral, >1 = more urgency
         expected_volatility: float = 0.02,
     ):
@@ -446,7 +445,7 @@ class ImplementationShortfallStrategy(ExecutionStrategy):
         # Almgren-Chriss parameters
         self.impact_model = MarketImpactModel()
 
-    def optimal_trajectory(self) -> List[float]:
+    def optimal_trajectory(self) -> list[float]:
         """
         Calculate optimal trading trajectory using Almgren-Chriss.
         Returns list of trade sizes for each period.
@@ -468,7 +467,7 @@ class ImplementationShortfallStrategy(ExecutionStrategy):
 
         return trajectory
 
-    async def execute(self) -> List[Fill]:
+    async def execute(self) -> list[Fill]:
         """Execute optimal trajectory"""
         trajectory = self.optimal_trajectory()
 
@@ -517,19 +516,19 @@ class SmartOrderRouter:
 
     def __init__(
         self,
-        venues: Optional[List[Venue]] = None,
+        venues: Optional[list[Venue]] = None,
         default_strategy: OrderType = OrderType.TWAP,
     ):
         self.venues = venues or self._default_venues()
         self.default_strategy = default_strategy
 
         # State
-        self.active_orders: Dict[str, Order] = {}
+        self.active_orders: dict[str, Order] = {}
         self.order_history: deque = deque(maxlen=10000)
         self.fill_history: deque = deque(maxlen=10000)
 
         # Performance tracking
-        self.venue_performance: Dict[str, deque] = {
+        self.venue_performance: dict[str, deque] = {
             v.name: deque(maxlen=100) for v in self.venues
         }
 
@@ -537,7 +536,7 @@ class SmartOrderRouter:
         self.impact_model = MarketImpactModel()
 
         # Routing AI
-        self.routing_weights: Dict[str, float] = {
+        self.routing_weights: dict[str, float] = {
             "cost": 0.3,
             "latency": 0.2,
             "reliability": 0.3,
@@ -546,7 +545,7 @@ class SmartOrderRouter:
 
         logger.info(f"SmartOrderRouter initialized with {len(self.venues)} venues")
 
-    def _default_venues(self) -> List[Venue]:
+    def _default_venues(self) -> list[Venue]:
         """Create default venue configuration"""
         return [
             Venue(
@@ -638,7 +637,7 @@ class SmartOrderRouter:
 
         return total_score
 
-    async def execute_order(self, order: Order) -> Dict[str, Any]:
+    async def execute_order(self, order: Order) -> dict[str, Any]:
         """
         Execute order with full lifecycle management.
         """
@@ -680,13 +679,13 @@ class SmartOrderRouter:
             "total_slippage_bps": np.mean([f.slippage_bps for f in fills]),
             "fills": len(fills),
             "duration_seconds": (
-                datetime.now(timezone.utc) - order.created_at
+                datetime.now(UTC) - order.created_at
             ).total_seconds()
             if fills
             else 0,
         }
 
-    def _calculate_vwap(self, fills: List[Fill]) -> float:
+    def _calculate_vwap(self, fills: list[Fill]) -> float:
         """Calculate volume-weighted average price"""
         if not fills:
             return 0.0
@@ -694,7 +693,7 @@ class SmartOrderRouter:
         total_size = sum(f.size for f in fills)
         return total_value / total_size if total_size > 0 else 0.0
 
-    def get_routing_report(self) -> Dict[str, Any]:
+    def get_routing_report(self) -> dict[str, Any]:
         """Generate comprehensive routing performance report"""
         if not self.fill_history:
             return {"status": "no_data"}
@@ -720,7 +719,7 @@ class SmartOrderRouter:
             },
         }
 
-    def _calculate_venue_distribution(self) -> Dict[str, float]:
+    def _calculate_venue_distribution(self) -> dict[str, float]:
         """Calculate percentage of volume routed to each venue"""
         if not self.fill_history:
             return {}

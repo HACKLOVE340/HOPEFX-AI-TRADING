@@ -65,7 +65,7 @@ async def prop_firm_status(user: TokenPayload = Depends(get_current_user)):
     yet initialised (e.g. before first trade).
     """
     try:
-        from app import app_state  # noqa: PLC0415
+        from app import app_state
         from risk.compliance import PropComplianceEngine, PropFirmConfig
 
         # Try to get the engine from app state first

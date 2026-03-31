@@ -15,7 +15,7 @@ import logging
 import hashlib
 import secrets
 import string
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Optional, Dict
 from enum import Enum
 
@@ -52,7 +52,7 @@ class AccessCode:
         self.user_id = user_id
         self.subscription_id = subscription_id
         self.status = status
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.expires_at = self.created_at + timedelta(days=duration_days)
         self.activated_at: Optional[datetime] = None
         self.used_at: Optional[datetime] = None
@@ -62,7 +62,7 @@ class AccessCode:
         if self.status != AccessCodeStatus.ACTIVE:
             return False
 
-        if datetime.now(timezone.utc) > self.expires_at:
+        if datetime.now(UTC) > self.expires_at:
             self.status = AccessCodeStatus.EXPIRED
             return False
 
@@ -77,8 +77,8 @@ class AccessCode:
         self.user_id = user_id
         self.subscription_id = subscription_id
         self.status = AccessCodeStatus.USED
-        self.activated_at = datetime.now(timezone.utc)
-        self.used_at = datetime.now(timezone.utc)
+        self.activated_at = datetime.now(UTC)
+        self.used_at = datetime.now(UTC)
 
         logger.info(f"Access code {self.code} activated for user {user_id}")
         return True
@@ -88,7 +88,7 @@ class AccessCode:
         self.status = AccessCodeStatus.REVOKED
         logger.info(f"Access code {self.code} revoked")
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "code": self.code,
@@ -111,7 +111,7 @@ class AccessCodeGenerator:
     """Generate and manage access codes"""
 
     def __init__(self):
-        self._codes: Dict[str, AccessCode] = {}
+        self._codes: dict[str, AccessCode] = {}
         self._tier_prefixes = {
             SubscriptionTier.FREE: "FRE",
             SubscriptionTier.STARTER: "STR",
@@ -251,7 +251,7 @@ class AccessCodeGenerator:
         logger.info(f"Generated {count} access codes for tier {tier.value}")
         return codes
 
-    def get_code_stats(self) -> Dict:
+    def get_code_stats(self) -> dict:
         """Get access code statistics"""
         total = len(self._codes)
         active = len(self.get_active_codes())

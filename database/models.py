@@ -10,12 +10,12 @@ Complete SQLAlchemy models for all entities
 
 import enum
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 
 def _utcnow() -> datetime:
     """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 logger = logging.getLogger(__name__)
 
@@ -746,7 +746,7 @@ class MarketDataType(enum.Enum):
 # `from database.models import User` keeps working, and so SQLAlchemy resolves
 # the "User" string reference in Account.user without a second class definition.
 try:
-    from database.user_models import User  # noqa: F401  (re-export)
+    from database.user_models import User
 except Exception:
     # Fallback stub so imports never fail when user_models has a dep issue
     class User:  # type: ignore[no-redef]

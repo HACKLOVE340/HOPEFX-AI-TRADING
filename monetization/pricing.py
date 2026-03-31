@@ -87,7 +87,7 @@ class PricingTier:
             return self.get_annual_price()
         return self.monthly_price
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "tier": self.tier.value,
@@ -116,7 +116,7 @@ class PricingManager:
     def __init__(self):
         self._tiers = self._initialize_tiers()
 
-    def _initialize_tiers(self) -> Dict[SubscriptionTier, PricingTier]:
+    def _initialize_tiers(self) -> dict[SubscriptionTier, PricingTier]:
         """Initialize pricing tiers"""
         return {
             SubscriptionTier.FREE: PricingTier(
@@ -223,7 +223,7 @@ class PricingManager:
         except ValueError:
             return None
 
-    def get_all_tiers(self) -> List[PricingTier]:
+    def get_all_tiers(self) -> list[PricingTier]:
         """Get all pricing tiers"""
         return list(self._tiers.values())
 
@@ -251,7 +251,7 @@ class PricingManager:
             return False
         return getattr(pricing_tier.features, feature_name, False)
 
-    def compare_tiers(self, tier1: SubscriptionTier, tier2: SubscriptionTier) -> Dict:
+    def compare_tiers(self, tier1: SubscriptionTier, tier2: SubscriptionTier) -> dict:
         """Compare two pricing tiers"""
         t1 = self.get_tier(tier1)
         t2 = self.get_tier(tier2)
@@ -268,7 +268,7 @@ class PricingManager:
 
     def get_upgrade_path(
         self, current_tier: SubscriptionTier
-    ) -> List[SubscriptionTier]:
+    ) -> list[SubscriptionTier]:
         """Get available upgrade options"""
         tier_order = [
             SubscriptionTier.FREE,
@@ -286,7 +286,7 @@ class PricingManager:
 
     def get_downgrade_path(
         self, current_tier: SubscriptionTier
-    ) -> List[SubscriptionTier]:
+    ) -> list[SubscriptionTier]:
         """Get available downgrade options"""
         tier_order = [
             SubscriptionTier.FREE,

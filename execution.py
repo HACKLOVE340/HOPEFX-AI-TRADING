@@ -69,11 +69,11 @@ class PaperExecutor:
         self.cash = initial_balance  # free cash
         self.commission_per_lot = commission_per_lot
         self.slippage_model = slippage_model
-        self.positions: Dict[str, Dict] = {}
+        self.positions: dict[str, dict] = {}
         self.order_history: list = []
         self.validator = OrderValidator()
         self.order_counter = 0
-        self._last_prices: Dict[str, float] = {}  # for equity mark-to-market
+        self._last_prices: dict[str, float] = {}  # for equity mark-to-market
 
     @property
     def balance(self) -> float:
@@ -90,7 +90,7 @@ class PaperExecutor:
         )
         return self.cash + total_upnl
 
-    def update_prices(self, prices: Dict[str, float]) -> None:
+    def update_prices(self, prices: dict[str, float]) -> None:
         """Update last-known prices for equity mark-to-market."""
         self._last_prices.update(prices)
 
@@ -308,9 +308,21 @@ class PaperExecutor:
                         "take_profit": order.take_profit,
                     }
 
-        else:  # sell / short
-            if order.symbol not in self.positions:
-                # No existing position — reject; paper trading does not support naked shorts.
+        elif order.symbol not in self.positions:
+            # No existing position — reject; paper trading does not support naked shorts.
+            return ExecutionResult(
+                order_id=order_id,
+                status=OrderStatus.REJECTED,
+                filled_qty=0.0,
+                avg_price=0.0,
+                slippage=0.0,
+                commission=0.0,
+                message=f"No open position for {order.symbol}; cannot sell without a position",
+                timestamp=timestamp,
+            )
+        else:
+            pos = self.positions[order.symbol]
+            if pos["side"] != "long":
                 return ExecutionResult(
                     order_id=order_id,
                     status=OrderStatus.REJECTED,
@@ -318,32 +330,19 @@ class PaperExecutor:
                     avg_price=0.0,
                     slippage=0.0,
                     commission=0.0,
-                    message=f"No open position for {order.symbol}; cannot sell without a position",
+                    message=f"Cannot sell into existing {pos['side']} position via this path",
                     timestamp=timestamp,
                 )
+
+            close_qty = min(order.qty, pos["qty"])
+            pnl = (fill_price - pos["entry_price"]) * close_qty - commission
+            # Return original cost basis to cash, add realised P&L
+            self.cash += pos["entry_price"] * close_qty + pnl
+
+            if close_qty >= pos["qty"]:
+                del self.positions[order.symbol]
             else:
-                pos = self.positions[order.symbol]
-                if pos["side"] != "long":
-                    return ExecutionResult(
-                        order_id=order_id,
-                        status=OrderStatus.REJECTED,
-                        filled_qty=0.0,
-                        avg_price=0.0,
-                        slippage=0.0,
-                        commission=0.0,
-                        message=f"Cannot sell into existing {pos['side']} position via this path",
-                        timestamp=timestamp,
-                    )
-
-                close_qty = min(order.qty, pos["qty"])
-                pnl = (fill_price - pos["entry_price"]) * close_qty - commission
-                # Return original cost basis to cash, add realised P&L
-                self.cash += pos["entry_price"] * close_qty + pnl
-
-                if close_qty >= pos["qty"]:
-                    del self.positions[order.symbol]
-                else:
-                    pos["qty"] -= close_qty
+                pos["qty"] -= close_qty
 
         # Update last-known price for equity mark-to-market
         self._last_prices[order.symbol] = fill_price
@@ -448,7 +447,7 @@ class PaperExecutor:
             order_id, order, fill_price, 0.0, commission, timestamp
         )
 
-    def get_position(self, symbol: str) -> Optional[Dict]:
+    def get_position(self, symbol: str) -> Optional[dict]:
         """Get current position for symbol."""
         return self.positions.get(symbol)
 
@@ -463,7 +462,7 @@ class PaperExecutor:
         else:
             return (pos["entry_price"] - current_price) * pos["qty"]
 
-    def close_all_positions(self, current_prices: Dict[str, float]) -> list:
+    def close_all_positions(self, current_prices: dict[str, float]) -> list:
         """Close all open positions."""
         results = []
         for symbol in list(self.positions.keys()):
@@ -516,18 +515,18 @@ class SmartOrderRouter:
     _FILL_HISTORY_LEN = 50
     _ERROR_EXCLUSION = 3  # consecutive errors before temporary exclusion
 
-    def __init__(self, routing_weights: Optional[Dict[str, float]] = None):
-        self.brokers: Dict[str, Any] = {}
+    def __init__(self, routing_weights: Optional[dict[str, float]] = None):
+        self.brokers: dict[str, Any] = {}
         self.default_broker: Optional[str] = None
         self._weights = routing_weights or self._ROUTING_WEIGHTS
 
         # Per-broker metrics
-        self._latency_ema: Dict[str, float] = {}  # ms
-        self._fill_history: Dict[str, list] = {}  # deque of 0/1
-        self._fee_bps: Dict[str, float] = {}  # configured fee
-        self._spread_bps: Dict[str, float] = {}  # configured spread
-        self._error_count: Dict[str, int] = {}  # consecutive errors
-        self._excluded_until: Dict[str, float] = {}  # time.monotonic() deadline
+        self._latency_ema: dict[str, float] = {}  # ms
+        self._fill_history: dict[str, list] = {}  # deque of 0/1
+        self._fee_bps: dict[str, float] = {}  # configured fee
+        self._spread_bps: dict[str, float] = {}  # configured spread
+        self._error_count: dict[str, int] = {}  # consecutive errors
+        self._excluded_until: dict[str, float] = {}  # time.monotonic() deadline
 
     def register_broker(
         self,
@@ -639,7 +638,7 @@ class SmartOrderRouter:
             f"SmartOrderRouter: all brokers failed. Last error: {last_error}"
         )
 
-    def get_routing_stats(self) -> Dict[str, Any]:
+    def get_routing_stats(self) -> dict[str, Any]:
         """Return per-broker routing statistics for monitoring."""
         stats = {}
         for name in self.brokers:

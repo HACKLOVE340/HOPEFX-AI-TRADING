@@ -6,7 +6,7 @@
 """Copy trading engine."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Dict, List, Optional
 
@@ -19,14 +19,14 @@ class CopyRelationship:
     max_allocation: Optional[Decimal] = None
     max_per_trade: Optional[Decimal] = None
     is_active: bool = True
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class CopyTradingEngine:
     """Manages copy-trading relationships between followers and leaders."""
 
     def __init__(self):
-        self.relationships: Dict[str, CopyRelationship] = {}
+        self.relationships: dict[str, CopyRelationship] = {}
 
     def _key(self, follower_id: str, leader_id: str) -> str:
         return f"{follower_id}_{leader_id}"
@@ -56,7 +56,7 @@ class CopyTradingEngine:
         self.relationships[key].is_active = False
         return True
 
-    def sync_trade(self, trade_id: str, leader_id: str) -> Dict[str, str]:
+    def sync_trade(self, trade_id: str, leader_id: str) -> dict[str, str]:
         """Propagate a leader trade to all active followers. Returns {copy_id: follower_id}."""
         result = {}
         for _key, rel in self.relationships.items():
@@ -67,14 +67,12 @@ class CopyTradingEngine:
 
     def get_active_relationships(
         self, user_id: str, as_follower: bool = True
-    ) -> List[CopyRelationship]:
+    ) -> list[CopyRelationship]:
         out = []
         for rel in self.relationships.values():
             if not rel.is_active:
                 continue
-            if as_follower and rel.follower_id == user_id:
-                out.append(rel)
-            elif not as_follower and rel.leader_id == user_id:
+            if as_follower and rel.follower_id == user_id or not as_follower and rel.leader_id == user_id:
                 out.append(rel)
         return out
 
@@ -82,7 +80,6 @@ class CopyTradingEngine:
 class RiskLimitExceeded(Exception):
     """Raised when a copy trade would exceed risk limits."""
 
-    pass
 
 
 # Patch CopyTradingEngine with the methods tests expect
@@ -113,7 +110,7 @@ async def _copy_trade(
 
     # max_position_size is a fraction of balance expressed as notional lots.
     # 1 lot ≈ $1 notional when no price given; use price if available.
-    price = leader_trade.get("price", None)
+    price = leader_trade.get("price")
     if price and price > 0:
         max_qty_by_risk = (follower_balance * max_pos_size) / price
     else:

@@ -7,7 +7,7 @@ import base64
 import hashlib
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Optional
 
 import jwt
@@ -50,7 +50,7 @@ def _get_secret() -> str:
 # Module-level alias kept for backward compatibility with code that reads
 # auth.jwt.SECRET_KEY directly — raises RuntimeError if secret is unset.
 @property  # type: ignore[misc]
-def SECRET_KEY() -> str:  # noqa: N802
+def SECRET_KEY() -> str:
     return _load_secret()
 
 
@@ -111,9 +111,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     """Encode a JWT access token using PyJWT (HS256)."""
     to_encode = data.copy()
     expire = (
-        datetime.now(timezone.utc) + expires_delta
+        datetime.now(UTC) + expires_delta
         if expires_delta
-        else datetime.now(timezone.utc)
+        else datetime.now(UTC)
         + timedelta(minutes=_get_access_token_expire_minutes())
     )
     to_encode.update({"exp": expire})

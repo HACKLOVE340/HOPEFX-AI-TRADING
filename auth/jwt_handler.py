@@ -15,7 +15,7 @@ Import either::
     from auth.jwt_handler import create_access_token, verify_token   # same thing
 """
 
-from auth.jwt import (  # noqa: F401  (re-export)
+from auth.jwt import (
     ALGORITHM,
     _get_secret,
     _load_secret,

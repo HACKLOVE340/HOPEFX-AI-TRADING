@@ -16,7 +16,7 @@ Integration tests for the payments layer:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 import pytest
 from sqlalchemy import create_engine
@@ -75,7 +75,7 @@ def db_session(db_engine):
 
 class TestCryptoPaymentModel:
     def _make_payment(self, payment_id: str = "PAY_int_001") -> dict:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return {
             "payment_id": payment_id,
             "user_id": "user_int_001",
@@ -152,7 +152,7 @@ class TestCryptoPaymentModel:
 
         record.status = "complete"
         record.confirmations = 3
-        record.confirmed_at = datetime.now(timezone.utc)
+        record.confirmed_at = datetime.now(UTC)
         db_session.flush()
 
         updated = (
@@ -200,7 +200,7 @@ class TestOutboxEventModel:
             event_type="KILL_SWITCH",
             channel="hopefx:breach",
             payload=json.dumps({"reason": "drawdown exceeded"}),
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             attempts=0,
         )
         db_session.add(event)
@@ -224,13 +224,13 @@ class TestOutboxEventModel:
             event_type="AML_BLOCK",
             channel="hopefx:compliance",
             payload=json.dumps({"user_id": "u1", "amount": "5000"}),
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             attempts=0,
         )
         db_session.add(event)
         db_session.flush()
 
-        event.published_at = datetime.now(timezone.utc)
+        event.published_at = datetime.now(UTC)
         db_session.flush()
 
         retrieved = (
@@ -248,15 +248,15 @@ class TestOutboxEventModel:
             event_type="ORDER_FILL",
             channel="hopefx:order",
             payload="{}",
-            created_at=datetime.now(timezone.utc),
-            published_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            published_at=datetime.now(UTC),
             attempts=1,
         )
         unpublished = OutboxEvent(
             event_type="KILL_SWITCH",
             channel="hopefx:breach",
             payload="{}",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             attempts=0,
         )
         db_session.add_all([published, unpublished])

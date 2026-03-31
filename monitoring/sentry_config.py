@@ -124,7 +124,7 @@ _SCRUB_FIELDS = frozenset(
 )
 
 # ── Regex patterns for PII in string values ───────────────────────────────────
-import re as _re  # noqa: E402
+import re as _re
 
 _PII_PATTERNS = [
     # Bearer tokens — match base64url + padding chars after "Bearer "
@@ -164,7 +164,7 @@ def _scrub_value(v: Any) -> Any:
     return v
 
 
-def _scrub_dict(d: Dict[str, Any]) -> Dict[str, Any]:
+def _scrub_dict(d: dict[str, Any]) -> dict[str, Any]:
     """Recursively replace sensitive fields with '[Filtered]' and scrub PII strings."""
     if not isinstance(d, dict):
         return d
@@ -178,8 +178,8 @@ def _scrub_dict(d: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _before_send(
-    event: Dict[str, Any], hint: Dict[str, Any]
-) -> Optional[Dict[str, Any]]:
+    event: dict[str, Any], hint: dict[str, Any]
+) -> Optional[dict[str, Any]]:
     """
     Sentry before_send hook.
 
@@ -215,8 +215,8 @@ def _before_send(
 
 
 def _before_send_transaction(
-    event: Dict[str, Any], hint: Dict[str, Any]
-) -> Optional[Dict[str, Any]]:
+    event: dict[str, Any], hint: dict[str, Any]
+) -> Optional[dict[str, Any]]:
     """
     Sentry before_send_transaction hook.
 

@@ -28,7 +28,7 @@ import logging
 import lzma
 import os
 import struct
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import List, Optional
 
@@ -281,9 +281,9 @@ class DukascopyFetcher:
         and UTC DatetimeIndex.
         """
         # Enumerate all hours in range
-        hours: List[datetime] = []
-        cur = start.replace(minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
-        end_utc = end.replace(tzinfo=timezone.utc) if end.tzinfo is None else end
+        hours: list[datetime] = []
+        cur = start.replace(minute=0, second=0, microsecond=0, tzinfo=UTC)
+        end_utc = end.replace(tzinfo=UTC) if end.tzinfo is None else end
 
         while cur <= end_utc:
             hours.append(cur)

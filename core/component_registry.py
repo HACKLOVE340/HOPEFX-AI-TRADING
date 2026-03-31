@@ -57,7 +57,7 @@ class Component:
     name: str
     factory: Callable  # async def factory(app_state) -> Any
     required: bool = False  # if True, failure raises RuntimeError
-    deps: List[str] = field(default_factory=list)
+    deps: list[str] = field(default_factory=list)
     # Populated after startup
     status: str = "pending"  # pending | ok | failed | skipped
     instance: Any = None
@@ -74,7 +74,7 @@ class ComponentRegistry:
     """
 
     def __init__(self) -> None:
-        self._components: Dict[str, Component] = {}
+        self._components: dict[str, Component] = {}
 
     # ── Registration ──────────────────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ class ComponentRegistry:
         name: str,
         factory: Callable,
         required: bool = False,
-        deps: Optional[List[str]] = None,
+        deps: Optional[list[str]] = None,
     ) -> ComponentRegistry:
         """
         Register a component.
@@ -105,7 +105,7 @@ class ComponentRegistry:
 
     # ── Startup ───────────────────────────────────────────────────────────────
 
-    async def start_all(self, app_state: Any) -> Dict[str, Component]:
+    async def start_all(self, app_state: Any) -> dict[str, Component]:
         """
         Start all registered components in dependency order.
 
@@ -186,10 +186,10 @@ class ComponentRegistry:
 
     # ── Dependency sort ───────────────────────────────────────────────────────
 
-    def _topological_sort(self) -> List[str]:
+    def _topological_sort(self) -> list[str]:
         """Kahn's algorithm — raises on cycles."""
-        in_degree: Dict[str, int] = {n: 0 for n in self._components}
-        graph: Dict[str, List[str]] = {n: [] for n in self._components}
+        in_degree: dict[str, int] = dict.fromkeys(self._components, 0)
+        graph: dict[str, list[str]] = {n: [] for n in self._components}
 
         for name, comp in self._components.items():
             for dep in comp.deps:
@@ -198,7 +198,7 @@ class ComponentRegistry:
                     in_degree[name] += 1
 
         queue = [n for n, d in in_degree.items() if d == 0]
-        order: List[str] = []
+        order: list[str] = []
 
         while queue:
             node = queue.pop(0)
@@ -224,6 +224,6 @@ class ComponentRegistry:
         """True if every required component started successfully."""
         return all(c.status == "ok" for c in self._components.values() if c.required)
 
-    def summary(self) -> Dict[str, str]:
+    def summary(self) -> dict[str, str]:
         """Return {name: status} dict for health endpoints."""
         return {name: c.status for name, c in self._components.items()}

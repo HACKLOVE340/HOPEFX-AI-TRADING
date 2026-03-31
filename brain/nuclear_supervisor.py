@@ -98,7 +98,7 @@ except ImportError:
     )
 
 # ── Internal imports ──────────────────────────────────────────────────────────
-from news.nuclear_wordmap_scorer import NuclearWordMapScorer  # noqa: E402
+from news.nuclear_wordmap_scorer import NuclearWordMapScorer
 
 # Lazy imports to avoid circular dependencies at module load time
 _kill_switch = None
@@ -214,7 +214,7 @@ class NuclearHopeFXSupervisor:
         self._vec_normalize = self._load_vec_normalize()
 
         # Event history for audit trail (last 100 events)
-        self._event_history: list[Dict[str, Any]] = []
+        self._event_history: list[dict[str, Any]] = []
 
         logger.info(
             "NuclearHopeFXSupervisor ready | rl_agent=%s vecnorm=%s model=%s",
@@ -341,7 +341,7 @@ class NuclearHopeFXSupervisor:
         severity: int,
         vol: float,
         sentiment: float,
-        meta: Dict,
+        meta: dict,
         current_exposure: float,
     ) -> np.ndarray:
         """Build the 7-dim observation vector the RL agent expects."""
@@ -360,7 +360,7 @@ class NuclearHopeFXSupervisor:
 
     # ── Main event handler ────────────────────────────────────────────────────
 
-    async def on_new_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
+    async def on_new_event(self, event: dict[str, Any]) -> dict[str, Any]:
         """
         Process a news/market event and take the appropriate action.
 
@@ -769,7 +769,7 @@ class NuclearHopeFXSupervisor:
 
         logger.info("NuclearSupervisor: manual resume — trading restored")
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Return current supervisor state for monitoring."""
         ks = _get_kill_switch()
         return {
@@ -795,7 +795,7 @@ class NuclearHopeFXSupervisor:
             "last_event": self._event_history[-1] if self._event_history else None,
         }
 
-    def get_event_history(self, n: int = 20) -> list[Dict[str, Any]]:
+    def get_event_history(self, n: int = 20) -> list[dict[str, Any]]:
         """Return the last n processed events."""
         return self._event_history[-n:]
 

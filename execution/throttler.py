@@ -146,7 +146,7 @@ class MessageThrottler:
         else:
             return ThrottleLevel.NORMAL
 
-    def get_status(self) -> Dict:
+    def get_status(self) -> dict:
         """Get current throttle status"""
         return {
             "level": self.state.level.value,

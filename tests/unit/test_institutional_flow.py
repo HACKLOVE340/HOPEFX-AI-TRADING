@@ -7,7 +7,7 @@
 Tests for Institutional Flow Detector (analysis/institutional_flow.py)
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 
 class TestInstitutionalTrade:
@@ -17,7 +17,7 @@ class TestInstitutionalTrade:
         from analysis.institutional_flow import InstitutionalTrade
 
         trade = InstitutionalTrade(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             symbol="XAUUSD",
             price=1950.0,
             size=500.0,
@@ -41,7 +41,7 @@ class TestFlowSignal:
 
         signal = FlowSignal(
             symbol="XAUUSD",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             signal_type="iceberg",
             strength="strong",
             direction="bullish",
@@ -77,7 +77,7 @@ class TestInstitutionalFlowDetector:
         from analysis.institutional_flow import InstitutionalFlowDetector
 
         detector = InstitutionalFlowDetector(config={"large_order_threshold": 200})
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         detector.add_trade(
             "XAUUSD", 1950.0, 500.0, "buy", timestamp=now - timedelta(minutes=5)
@@ -103,7 +103,7 @@ class TestInstitutionalFlowDetector:
         detector = InstitutionalFlowDetector(
             config={"iceberg_min_fills": 3, "iceberg_window_seconds": 30}
         )
-        base = datetime.now(timezone.utc) - timedelta(minutes=5)
+        base = datetime.now(UTC) - timedelta(minutes=5)
 
         # Multiple fills at same price within short time
         for i in range(5):
@@ -136,7 +136,7 @@ class TestInstitutionalFlowDetector:
         from analysis.institutional_flow import InstitutionalFlowDetector
 
         detector = InstitutionalFlowDetector(config={"volume_spike_multiplier": 2.0})
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Normal trades spread across time
         for i in range(10):
@@ -158,7 +158,7 @@ class TestInstitutionalFlowDetector:
         from analysis.institutional_flow import InstitutionalFlowDetector
 
         detector = InstitutionalFlowDetector(config={"absorption_price_pct": 0.5})
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # High volume, tiny price range = absorption
         for i in range(10):
@@ -196,7 +196,7 @@ class TestInstitutionalFlowDetector:
         from analysis.institutional_flow import InstitutionalFlowDetector
 
         detector = InstitutionalFlowDetector()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for i in range(20):
             detector.add_trade(
                 "XAUUSD",
@@ -220,7 +220,7 @@ class TestInstitutionalFlowDetector:
         from analysis.institutional_flow import InstitutionalFlowDetector
 
         detector = InstitutionalFlowDetector(config={"large_order_threshold": 50})
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for _ in range(10):
             detector.add_trade(

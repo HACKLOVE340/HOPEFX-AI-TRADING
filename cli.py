@@ -18,21 +18,21 @@ HOPEFX AI Trading Framework - Command Line Interface
 Provides a command-line interface for managing the trading framework.
 """
 
-import argparse  # noqa: E402
-import logging  # noqa: E402
-import os  # noqa: E402
-import sys  # noqa: E402
-from pathlib import Path  # noqa: E402
+import argparse
+import logging
+import os
+import sys
+from pathlib import Path
 
-from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy import create_engine
 
 # Add project root to path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from cache import MarketDataCache  # noqa: E402
-from config import initialize_config  # noqa: E402
-from database.models import Base  # noqa: E402
+from cache import MarketDataCache
+from config import initialize_config
+from database.models import Base
 
 # Setup logging
 logging.basicConfig(

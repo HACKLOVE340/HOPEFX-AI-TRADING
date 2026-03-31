@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import List
 
 from data_layer.feeds.news.base import NewsFeedBase
@@ -37,11 +37,11 @@ class AlphaVantageNewsFeed(NewsFeedBase):
     _api_key_env = "ALPHA_VANTAGE_KEY"
     _min_interval_s = 300.0  # 25 req/day ≈ 1 req/58min; use 5min for bursts
 
-    async def fetch_articles(self, limit: int = 50) -> List[NewsArticle]:
+    async def fetch_articles(self, limit: int = 50) -> list[NewsArticle]:
         if not self.is_configured:
             return []
 
-        articles: List[NewsArticle] = []
+        articles: list[NewsArticle] = []
         try:
             data = await self._get(
                 _BASE,
@@ -67,10 +67,10 @@ class AlphaVantageNewsFeed(NewsFeedBase):
                 time_str = item.get("time_published", "")
                 try:
                     published = datetime.strptime(time_str, "%Y%m%dT%H%M%S").replace(
-                        tzinfo=timezone.utc
+                        tzinfo=UTC
                     )
                 except Exception:
-                    published = datetime.now(timezone.utc)
+                    published = datetime.now(UTC)
 
                 # Native sentiment score: -1 to +1
                 raw_score = float(item.get("overall_sentiment_score", 0.0))
@@ -93,7 +93,7 @@ class AlphaVantageNewsFeed(NewsFeedBase):
                         summary=summary,
                         url=item.get("url", ""),
                         published_at=published,
-                        fetched_at=datetime.now(timezone.utc),
+                        fetched_at=datetime.now(UTC),
                         sentiment_score=raw_score,
                         sentiment_label=label.lower(),
                         gold_relevance=gold_relevance,

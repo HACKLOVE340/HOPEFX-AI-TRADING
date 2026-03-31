@@ -8,7 +8,7 @@ import logging
 import requests
 import redis
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +48,14 @@ class NewsFilterIntegration:
         import logging
 
         log = logging.getLogger(__name__)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         upcoming_events = []
         for event in events:
             try:
                 raw = event.get("date", "")
                 # Parse as UTC-aware; ForexFactory returns UTC timestamps.
                 event_time = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").replace(
-                    tzinfo=timezone.utc
+                    tzinfo=UTC
                 )
                 duration_s = float(event.get("duration", 0)) * 60
                 delta = (event_time - now).total_seconds()
@@ -86,7 +86,7 @@ class NewsFilterIntegration:
         """
         try:
             return bool(self.redis_client.get("hopefx:news_pause"))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "is_trading_paused: Redis unavailable, defaulting to not-paused: %s",
                 exc,
@@ -99,7 +99,7 @@ class NewsFilterIntegration:
         try:
             # TTL of 3600 s (1 h) as a safety net; resume_trading() clears it early.
             self.redis_client.set("hopefx:news_pause", "1", ex=3600)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("pause_trading: failed to set Redis pause flag: %s", exc)
 
     def resume_trading(self) -> None:
@@ -107,7 +107,7 @@ class NewsFilterIntegration:
         logger.info("Trading resumed after news window.")
         try:
             self.redis_client.delete("hopefx:news_pause")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("resume_trading: failed to clear Redis pause flag: %s", exc)
 
     def run(self, check_interval: int = 60) -> None:
@@ -122,9 +122,8 @@ class NewsFilterIntegration:
                     len(upcoming_events),
                 )
                 self.pause_trading()
-            else:
-                if self.is_trading_paused():
-                    self.resume_trading()
+            elif self.is_trading_paused():
+                self.resume_trading()
             time.sleep(check_interval)
 
 

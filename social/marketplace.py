@@ -13,7 +13,7 @@ import ast
 import uuid
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from dataclasses import dataclass, field
 
 
@@ -27,7 +27,7 @@ class StrategyListing:
     price: float = 0.0
     creator_id: str = ""
     strategy_code: str = ""
-    performance_stats: Dict[str, Any] = field(default_factory=dict)
+    performance_stats: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if not self.id:
@@ -46,7 +46,7 @@ class Strategy:
         self.performance_fee = Decimal("0.0")
         self.is_public = True
         self.subscribers_count = 0
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
 
 
 class StrategyMarketplace:
@@ -54,22 +54,22 @@ class StrategyMarketplace:
 
     PLATFORM_FEE_PCT = 0.20  # 20% platform cut
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         self.config = config or {}
-        self.listings: Dict[str, StrategyListing] = {}
-        self.purchases: Dict[str, List[Dict]] = {}  # buyer_id -> purchases
+        self.listings: dict[str, StrategyListing] = {}
+        self.purchases: dict[str, list[dict]] = {}  # buyer_id -> purchases
         # Legacy subscription model
-        self.strategies: Dict[str, Strategy] = {}
-        self.subscriptions: Dict[str, List[str]] = {}  # user_id -> strategy_ids
+        self.strategies: dict[str, Strategy] = {}
+        self.subscriptions: dict[str, list[str]] = {}  # user_id -> strategy_ids
 
     # ── Listing API ──────────────────────────────────────────────────────────
 
-    def list_strategy(self, listing: StrategyListing) -> Dict[str, Any]:
+    def list_strategy(self, listing: StrategyListing) -> dict[str, Any]:
         """Add a strategy to the marketplace."""
         self.listings[listing.id] = listing
         return {"status": "active", "id": listing.id}
 
-    def get_all_listings(self) -> Dict[str, StrategyListing]:
+    def get_all_listings(self) -> dict[str, StrategyListing]:
         """Return all active listings."""
         return self.listings
 
@@ -80,7 +80,7 @@ class StrategyMarketplace:
         strategy_id: str,
         buyer_id: str,
         payment_method: str = "wallet",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Purchase a listed strategy and return receipt with revenue split."""
         if strategy_id not in self.listings:
             raise ValueError(f"Strategy {strategy_id!r} not found")
@@ -100,7 +100,7 @@ class StrategyMarketplace:
             "platform_fee": platform_fee,
             "creator_payout": creator_payout,
             "license_key": license_key,
-            "purchased_at": datetime.now(timezone.utc).isoformat(),
+            "purchased_at": datetime.now(UTC).isoformat(),
         }
 
         self.purchases.setdefault(buyer_id, []).append(receipt)
@@ -145,14 +145,14 @@ class StrategyMarketplace:
             return True
         return False
 
-    def get_strategies(self, public_only: bool = True) -> List[Strategy]:
+    def get_strategies(self, public_only: bool = True) -> list[Strategy]:
         """Get all available strategies."""
         strategies = list(self.strategies.values())
         if public_only:
             strategies = [s for s in strategies if s.is_public]
         return strategies
 
-    def get_user_subscriptions(self, user_id: str) -> List[Strategy]:
+    def get_user_subscriptions(self, user_id: str) -> list[Strategy]:
         """Get strategies a user is subscribed to."""
         strategy_ids = self.subscriptions.get(user_id, [])
         return [self.strategies[sid] for sid in strategy_ids if sid in self.strategies]

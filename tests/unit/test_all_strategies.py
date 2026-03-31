@@ -11,7 +11,7 @@ This file aims to increase test coverage to 80%+.
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from strategies.base import StrategyConfig
 
@@ -343,7 +343,7 @@ class TestBaseStrategyComprehensive:
             signal_type=SignalType.BUY,
             symbol="EUR_USD",
             price=1.1000,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             confidence=0.8,
             metadata={"reason": "test"},
         )
@@ -362,6 +362,6 @@ class TestBaseStrategyComprehensive:
                 signal_type=SignalType.BUY,
                 symbol="EUR_USD",
                 price=1.1000,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 confidence=1.5,  # Invalid - should be 0-1
             )

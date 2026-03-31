@@ -36,7 +36,7 @@ Credential resolution
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -120,7 +120,7 @@ class OANDAStream:
         self,
         api_key: str,
         account_id: str,
-        instruments: List[str],
+        instruments: list[str],
         practice: bool = True,
         event_bus: Any = None,
         on_tick: Any = None,  # accepted but ignored — streaming is forbidden
@@ -220,7 +220,7 @@ class OANDAStream:
                     positions_count=int(
                         a.get("openPositionCount", a.get("openTradeCount", 0))
                     ),
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                 )
         except Exception as exc:
             logger.error("get_account_info: %s", exc)
@@ -228,7 +228,7 @@ class OANDAStream:
 
     # ── Positions ─────────────────────────────────────────────────────────────
 
-    async def get_positions(self) -> List[Position]:
+    async def get_positions(self) -> list[Position]:
         """Fetch all open positions."""
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/openPositions"
@@ -236,7 +236,7 @@ class OANDAStream:
                 url, timeout=aiohttp.ClientTimeout(total=_DEFAULT_TIMEOUT)
             ) as r:
                 r.raise_for_status()
-                out: List[Position] = []
+                out: list[Position] = []
                 for p in (await r.json()).get("positions", []):
                     lu = float(p.get("long", {}).get("units", 0))
                     su = float(p.get("short", {}).get("units", 0))
@@ -261,7 +261,7 @@ class OANDAStream:
                             current_price=avg,
                             unrealized_pnl=upnl,
                             realized_pnl=rpnl,
-                            timestamp=datetime.now(timezone.utc),
+                            timestamp=datetime.now(UTC),
                         )
                     )
                 return out
@@ -301,7 +301,7 @@ class OANDAStream:
     ) -> Optional[Order]:
         """Place a market or limit order."""
         signed_units = units if side == OrderSide.BUY else -units
-        body: Dict[str, Any] = {
+        body: dict[str, Any] = {
             "order": {
                 "instrument": symbol,
                 "units": str(int(signed_units)),
@@ -345,7 +345,7 @@ class OANDAStream:
             logger.error("cancel_order %s: %s", order_id, exc)
             return False
 
-    async def get_open_orders(self) -> List[Order]:
+    async def get_open_orders(self) -> list[Order]:
         """Fetch all pending (open) orders."""
         try:
             url = f"{self._rest_base}/v3/accounts/{self.account_id}/pendingOrders"
@@ -367,7 +367,7 @@ class OANDAStream:
                             price=float(o["price"]) if o.get("price") else None,
                             status=OrderStatus.OPEN,
                             filled_quantity=0.0,
-                            timestamp=datetime.now(timezone.utc),
+                            timestamp=datetime.now(UTC),
                         )
                     )
                 return orders
@@ -382,7 +382,7 @@ class OANDAStream:
         symbol: str,
         timeframe: str = "H1",
         count: int = 500,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Fetch completed OHLCV candles for strategy warm-up.
 
@@ -418,7 +418,7 @@ class OANDAStream:
 
     def _parse_order_response(
         self,
-        data: Dict,
+        data: dict,
         symbol: str,
         side: OrderSide,
         qty: float,
@@ -436,7 +436,7 @@ class OANDAStream:
                 status=OrderStatus.FILLED,
                 filled_quantity=abs(float(fill.get("units", qty))),
                 average_price=float(fill["price"]) if fill.get("price") else None,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
         if create:
             return Order(
@@ -448,7 +448,7 @@ class OANDAStream:
                 price=float(create["price"]) if create.get("price") else None,
                 status=OrderStatus.OPEN,
                 filled_quantity=0.0,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
         return Order(
             id="",
@@ -458,5 +458,5 @@ class OANDAStream:
             quantity=qty,
             status=OrderStatus.REJECTED,
             filled_quantity=0.0,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )

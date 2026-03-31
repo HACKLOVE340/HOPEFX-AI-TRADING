@@ -221,9 +221,9 @@ class TestFeatureFlags:
         """Direct attribute access must return the same value as registry lookup."""
         ff = FeatureFlags()
         reg = ff.registry()
-        assert ff.ORDER_FLOW_DASHBOARD == reg["ORDER_FLOW_DASHBOARD"]["enabled"]
-        assert ff.BACKTESTING == reg["BACKTESTING"]["enabled"]
-        assert ff.ML_PREDICTIONS == reg["ML_PREDICTIONS"]["enabled"]
+        assert reg["ORDER_FLOW_DASHBOARD"]["enabled"] == ff.ORDER_FLOW_DASHBOARD
+        assert reg["BACKTESTING"]["enabled"] == ff.BACKTESTING
+        assert reg["ML_PREDICTIONS"]["enabled"] == ff.ML_PREDICTIONS
 
     # ── log_summary smoke test ────────────────────────────────────────────
 

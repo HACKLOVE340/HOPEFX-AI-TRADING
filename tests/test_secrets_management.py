@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from scripts.manage_secrets import (  # noqa: E402
+from scripts.manage_secrets import (
     REQUIRED_SECRETS,
     _generate,
     _is_placeholder,

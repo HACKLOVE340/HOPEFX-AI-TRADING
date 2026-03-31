@@ -10,7 +10,7 @@ This strategy uses Exponential Moving Average crossovers for signals.
 Similar to MA Crossover but more responsive to recent price changes.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict
 
 import pandas as pd
@@ -51,7 +51,7 @@ class EMAcrossoverStrategy(BaseStrategy):
             f"fast={fast_period}, slow={slow_period}",
         )
 
-    def generate_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """
         Generate trading signal based on EMA crossover.
 
@@ -67,7 +67,7 @@ class EMAcrossoverStrategy(BaseStrategy):
                     "type": "HOLD",
                     "confidence": 0.0,
                     "reason": "Insufficient data",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
 
             close = market_data["close"]
@@ -154,7 +154,7 @@ class EMAcrossoverStrategy(BaseStrategy):
                 "type": signal_type,
                 "confidence": confidence,
                 "reason": reason,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "metadata": {
                     "fast_ema": current_fast,
                     "slow_ema": current_slow,
@@ -169,6 +169,6 @@ class EMAcrossoverStrategy(BaseStrategy):
             return {
                 "type": "HOLD",
                 "confidence": 0.0,
-                "reason": f"Error: {str(e)}",
-                "timestamp": datetime.now(timezone.utc),
+                "reason": f"Error: {e!s}",
+                "timestamp": datetime.now(UTC),
             }

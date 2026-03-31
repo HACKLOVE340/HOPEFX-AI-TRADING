@@ -11,10 +11,11 @@ Multi-channel alerts: Discord, Telegram, Email, SMS, Webhooks
 import asyncio
 import logging
 import aiohttp
-from typing import Dict, List, Optional  # noqa: F401
+from typing import Dict, List, Optional
 from enum import Enum
 from dataclasses import dataclass
-import json  # noqa: F401
+import json
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class NotificationLevel(Enum):
 class Notification:
     level: NotificationLevel
     message: str
-    data: Optional[Dict] = None
+    data: Optional[dict] = None
     timestamp: float = None
 
     def __post_init__(self):
@@ -45,9 +46,9 @@ class NotificationManager:
     Unified notification system
     """
 
-    def __init__(self, config: Dict = None):
+    def __init__(self, config: dict = None):
         self.config = config or {}
-        self.channels: Dict[str, bool] = {
+        self.channels: dict[str, bool] = {
             "discord": bool(self.config.get("discord_webhook")),
             "telegram": bool(self.config.get("telegram_bot_token")),
             "email": bool(self.config.get("smtp_host")),
@@ -71,7 +72,7 @@ class NotificationManager:
         """Queue a notification"""
         await self.queue.put(notification)
 
-    async def send_alert(self, level: str, message: str, data: Dict = None):
+    async def send_alert(self, level: str, message: str, data: dict = None):
         """Quick send method"""
         notification = Notification(
             level=NotificationLevel(level.lower()), message=message, data=data
@@ -221,7 +222,7 @@ class NotificationManager:
         """Format timestamp for Discord"""
         from datetime import datetime, timezone
 
-        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        dt = datetime.fromtimestamp(timestamp, tz=UTC)
         return dt.isoformat()
 
 

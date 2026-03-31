@@ -10,7 +10,7 @@ Implements real stock trading with Alpaca REST API (commission-free US stocks).
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -50,7 +50,7 @@ class AlpacaConnector(BrokerConnector):
     LIVE_URL = "https://api.alpaca.markets"
     DATA_URL = "https://data.alpaca.markets"
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Initialize Alpaca connector.
 
@@ -289,7 +289,7 @@ class AlpacaConnector(BrokerConnector):
             logger.error(f"Failed to get order {order_id}: {e}")
             return None
 
-    def get_positions(self) -> List[Position]:
+    def get_positions(self) -> list[Position]:
         """
         Get all open positions.
 
@@ -316,7 +316,7 @@ class AlpacaConnector(BrokerConnector):
                     current_price=float(pos_data["current_price"]),
                     unrealized_pnl=float(pos_data["unrealized_pl"]),
                     realized_pnl=0.0,  # Not provided by Alpaca in position data
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                 )
                 positions.append(position)
 
@@ -397,7 +397,7 @@ class AlpacaConnector(BrokerConnector):
                 margin_used=float(account_data.get("initial_margin", 0)),
                 margin_available=float(account_data["buying_power"]),
                 positions_count=int(account_data.get("position_count", 0)),
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
             return info
@@ -411,7 +411,7 @@ class AlpacaConnector(BrokerConnector):
         symbol: str,
         timeframe: str = "1Min",
         limit: int = 100,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Optional[list[dict[str, Any]]]:
         """
         Get historical market data (bars).
 
@@ -459,7 +459,7 @@ class AlpacaConnector(BrokerConnector):
             logger.error(f"Failed to get market data for {symbol}: {e}")
             return None
 
-    def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_quote(self, symbol: str) -> Optional[dict[str, Any]]:
         """
         Get latest quote for a symbol.
 

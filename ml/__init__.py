@@ -45,12 +45,12 @@ __all__ = [
 __version__ = "1.0.0"
 
 # ── Macro-aware model loader ──────────────────────────────────────────────────
-import hashlib as _hashlib  # noqa: E402
-import json as _json  # noqa: E402
-import logging as _logging  # noqa: E402
-from pathlib import Path as _Path  # noqa: E402
-from typing import Any as _Any  # noqa: E402
-from typing import Optional as _Optional  # noqa: E402
+import hashlib as _hashlib
+import json as _json
+import logging as _logging
+from pathlib import Path as _Path
+from typing import Any as _Any
+from typing import Optional as _Optional
 
 _ml_logger = _logging.getLogger(__name__)
 _SAVED = _Path(__file__).parent / "saved_models"
@@ -157,7 +157,7 @@ def _try_load(path: _Path) -> _Optional[_Any]:
             import pickle as _pickle  # nosec B403
 
             with open(path, "rb") as f:
-                return _pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback for protocol mismatch  # noqa: S301
+                return _pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback for protocol mismatch
         except Exception as exc:
             import sys as _sys
 
@@ -391,7 +391,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     Returns:
         FastAPI APIRouter
     """
-    from typing import Any, Dict, List, Optional  # noqa: F401
+    from typing import Any, Dict, List, Optional
 
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel
@@ -406,7 +406,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         volume: float
 
     class FeatureRequest(BaseModel):
-        bars: List[OHLCVRow]
+        bars: list[OHLCVRow]
 
     @router.get("/status")
     async def get_status():

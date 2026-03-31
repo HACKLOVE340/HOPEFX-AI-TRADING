@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -143,7 +143,7 @@ def evaluate_predictions(
     actual_returns: Optional[np.ndarray] = None,
     threshold: float = 0.5,
     periods_per_year: int = 252,
-) -> Dict:
+) -> dict:
     """
     Full evaluation suite.
 
@@ -185,7 +185,7 @@ def temporal_split(
     df: pd.DataFrame,
     train_frac: float = 0.70,
     val_frac: float = 0.15,
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     n = len(df)
     train_end = int(n * train_frac)
     val_end = int(n * (train_frac + val_frac))
@@ -212,7 +212,7 @@ def _learn_meta_weight(
         combined = w * deep_probs_val + (1 - w) * ens_probs_val
         try:
             auc = roc_auc_score(y_val, combined)
-        except Exception:  # nosec B112 - skip weight if AUC computation fails  # noqa: S112
+        except Exception:  # nosec B112 - skip weight if AUC computation fails
             continue
         if auc > best_auc:
             best_auc = auc
@@ -254,7 +254,7 @@ class PipelineOrchestrator:
         self.drift_detector: Optional[DriftDetector] = None
         self.meta_weight: float = 0.5
         self.scaler = StandardScaler()
-        self._feature_cols: Optional[List[str]] = None
+        self._feature_cols: Optional[list[str]] = None
 
     # ── Step 1: Data ──────────────────────────────────────────────────────────
 
@@ -385,7 +385,7 @@ class PipelineOrchestrator:
         self,
         X_train: pd.DataFrame,
         y_train: np.ndarray,
-    ) -> Tuple[pd.DataFrame, np.ndarray]:
+    ) -> tuple[pd.DataFrame, np.ndarray]:
         cfg = self.cfg
         logger.info("Fitting TimeGAN synthesizer (epochs=%d)…", cfg.synthetic_epochs)
         regime_labels = label_regimes(X_train, n_regimes=cfg.n_regimes)
@@ -463,7 +463,7 @@ class PipelineOrchestrator:
         X_scaled: np.ndarray,
         y_bin: np.ndarray,
         y_ret: np.ndarray,
-    ) -> Dict:
+    ) -> dict:
         cfg = self.cfg
 
         # Deep predictions
@@ -522,12 +522,12 @@ class PipelineOrchestrator:
 
     # ── Main run ──────────────────────────────────────────────────────────────
 
-    def run(self) -> Dict:
+    def run(self) -> dict:
         """
         Execute the full pipeline and return an evaluation report dict.
         """
         cfg = self.cfg
-        run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        run_id = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         logger.info(
             "Pipeline run %s  ticker=%s  interval=%s", run_id, cfg.ticker, cfg.interval
         )
@@ -641,7 +641,7 @@ class PipelineOrchestrator:
 
     # ── Inference ─────────────────────────────────────────────────────────────
 
-    def predict_latest(self, df: pd.DataFrame) -> Dict:
+    def predict_latest(self, df: pd.DataFrame) -> dict:
         """
         Run inference on the most recent bars of a live DataFrame.
 

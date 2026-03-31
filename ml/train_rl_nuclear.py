@@ -130,8 +130,8 @@ if _GYM_AVAILABLE:
             self,
             *,
             seed: Optional[int] = None,
-            options: Optional[Dict[str, Any]] = None,
-        ) -> Tuple[np.ndarray, Dict]:
+            options: Optional[dict[str, Any]] = None,
+        ) -> tuple[np.ndarray, dict]:
             super().reset(seed=seed)
             self._step = 0
             self._equity = 100_000.0
@@ -141,7 +141,7 @@ if _GYM_AVAILABLE:
             self._obs = self._sample_training_obs()
             return self._obs.copy(), {}
 
-        def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict]:
+        def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
             self._step += 1
             severity = float(self._obs[0]) * 10.0
             vol = float(self._obs[1])
@@ -172,7 +172,7 @@ if _GYM_AVAILABLE:
             self._obs = self._sample_training_obs()
             terminated = self._step >= self.episode_length
             truncated = False
-            info: Dict[str, Any] = {
+            info: dict[str, Any] = {
                 "equity": self._equity,
                 "nuclear_level": self._nuclear_level,
                 "severity": severity,
@@ -345,8 +345,8 @@ def train(
 
     # progress_bar requires tqdm+rich; degrade gracefully if absent
     try:
-        import tqdm  # noqa: F401
-        import rich  # noqa: F401
+        import tqdm
+        import rich
 
         _progress_bar = True
     except ImportError:

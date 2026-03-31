@@ -45,7 +45,7 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 # Ensure project root is on path
@@ -118,11 +118,11 @@ def _parse_args() -> argparse.Namespace:
 async def _run(args: argparse.Namespace) -> None:
     from data.scheduler import backfill, _csv_path, TIMEFRAME_SECONDS
 
-    from_dt = datetime.fromisoformat(args.from_date).replace(tzinfo=timezone.utc)
+    from_dt = datetime.fromisoformat(args.from_date).replace(tzinfo=UTC)
     to_dt = (
-        datetime.fromisoformat(args.to_date).replace(tzinfo=timezone.utc)
+        datetime.fromisoformat(args.to_date).replace(tzinfo=UTC)
         if args.to_date
-        else datetime.now(timezone.utc)
+        else datetime.now(UTC)
     )
 
     if args.granularity not in TIMEFRAME_SECONDS:

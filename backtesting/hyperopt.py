@@ -69,7 +69,7 @@ class ParamSpace:
         return _Param("float", low=low, high=high, step=step, log=log)
 
     @staticmethod
-    def categorical(choices: List[Any]) -> _Param:
+    def categorical(choices: list[Any]) -> _Param:
         return _Param("categorical", choices=choices)
 
     @staticmethod
@@ -82,12 +82,12 @@ class ParamSpace:
 
 @dataclass
 class HyperoptResult:
-    best_params: Dict[str, Any]
+    best_params: dict[str, Any]
     best_value: float
     metric: str
     n_trials: int
     duration_seconds: float
-    all_trials: List[Dict[str, Any]] = field(default_factory=list)
+    all_trials: list[dict[str, Any]] = field(default_factory=list)
     study_name: str = ""
 
     def summary(self) -> str:
@@ -123,7 +123,7 @@ class HyperoptEngine:
         self,
         strategy_class,
         market_data: pd.DataFrame,
-        param_space: Dict[str, _Param],
+        param_space: dict[str, _Param],
         n_trials: int = 100,
         metric: str = "sharpe_ratio",
         direction: Literal["maximize", "minimize"] = "maximize",
@@ -214,7 +214,7 @@ class HyperoptEngine:
 
         return self._backtest_objective(params)
 
-    def _suggest_params(self, trial) -> Dict[str, Any]:
+    def _suggest_params(self, trial) -> dict[str, Any]:
         params = {}
         for name, spec in self.param_space.items():
             if spec.kind == "int":
@@ -238,7 +238,7 @@ class HyperoptEngine:
                 params[name] = trial.suggest_categorical(name, spec.choices)
         return params
 
-    def _backtest_objective(self, params: Dict[str, Any]) -> float:
+    def _backtest_objective(self, params: dict[str, Any]) -> float:
         """
         Vectorised backtest — no loop overhead, runs in milliseconds.
 
@@ -308,7 +308,7 @@ class HyperoptEngine:
             logger.debug("Backtest failed for params %s: %s", params, exc)
             return float("-inf") if self.direction == "maximize" else float("inf")
 
-    def _compute_metric(self, df: pd.DataFrame, signals: List[str]) -> float:
+    def _compute_metric(self, df: pd.DataFrame, signals: list[str]) -> float:
         """Compute the target metric from a signal list."""
         close = df["close"].to_numpy()
         n = len(signals)
@@ -381,7 +381,7 @@ class HyperoptEngine:
 
         return float(total_return)
 
-    def get_param_importance(self) -> Dict[str, float]:
+    def get_param_importance(self) -> dict[str, float]:
         """Return parameter importance scores (requires completed study)."""
         if self._study is None:
             return {}
@@ -424,7 +424,7 @@ def create_hyperopt_router():
     from pydantic import BaseModel
 
     router = APIRouter(prefix="/hyperopt", tags=["Hyperopt"])
-    _jobs: Dict[str, Any] = {}
+    _jobs: dict[str, Any] = {}
 
     class HyperoptRequest(BaseModel):
         strategy: str
@@ -433,12 +433,12 @@ def create_hyperopt_router():
         n_trials: int = 50
         metric: str = "sharpe_ratio"
         direction: str = "maximize"
-        param_space: Dict[str, Any] = {}
+        param_space: dict[str, Any] = {}
 
     class HyperoptStatus(BaseModel):
         job_id: str
         status: str
-        result: Optional[Dict] = None
+        result: Optional[dict] = None
 
     @router.post("/run", response_model=HyperoptStatus, summary="Start a hyperopt job")
     async def run_hyperopt(req: HyperoptRequest, background_tasks: BackgroundTasks):

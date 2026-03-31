@@ -22,14 +22,14 @@ class LeaderboardManager:
 
     def __init__(self):
         # category -> {user_id -> LeaderboardEntry}
-        self._data: Dict[str, Dict[str, LeaderboardEntry]] = {}
+        self._data: dict[str, dict[str, LeaderboardEntry]] = {}
 
     @property
-    def leaderboards(self) -> Dict[str, List[LeaderboardEntry]]:
+    def leaderboards(self) -> dict[str, list[LeaderboardEntry]]:
         """Return sorted leaderboard lists keyed by category."""
         return {cat: self._sorted(cat) for cat in self._data}
 
-    def _sorted(self, category: str) -> List[LeaderboardEntry]:
+    def _sorted(self, category: str) -> list[LeaderboardEntry]:
         entries = sorted(
             self._data[category].values(), key=lambda e: e.score, reverse=True
         )
@@ -50,7 +50,7 @@ class LeaderboardManager:
 
     def get_leaderboard(
         self, category: str, limit: Optional[int] = None
-    ) -> List[LeaderboardEntry]:
+    ) -> list[LeaderboardEntry]:
         if category not in self._data:
             return []
         entries = self._sorted(category)

@@ -44,7 +44,7 @@ import json
 import logging
 import math
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -76,7 +76,7 @@ SHARPE_PLAUSIBILITY_THRESHOLD = 5.0
 DEFAULT_SYMBOLS = ["EURUSD", "GBPUSD", "XAUUSD"]
 
 # Known implausible Sharpe values from the multi-symbol backtest
-KNOWN_IMPLAUSIBLE: Dict[str, float] = {
+KNOWN_IMPLAUSIBLE: dict[str, float] = {
     "EURUSD": 12.48,
     "GBPUSD": 16.36,
 }
@@ -120,7 +120,7 @@ def compute_psi(
 def compute_ks(
     reference: np.ndarray,
     comparison: np.ndarray,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """
     Two-sample KS test.
 
@@ -150,7 +150,7 @@ def compute_ks(
 # ── Look-ahead bias detection ─────────────────────────────────────────────────
 
 
-def detect_lookahead_bias(returns: np.ndarray) -> Dict[str, object]:
+def detect_lookahead_bias(returns: np.ndarray) -> dict[str, object]:
     """
     Heuristic look-ahead bias indicators.
 
@@ -163,7 +163,7 @@ def detect_lookahead_bias(returns: np.ndarray) -> Dict[str, object]:
     3. Sharpe stability — compute rolling 30-trade Sharpe. If it never drops
        below 2.0, the strategy may be overfitted or look-ahead contaminated.
     """
-    results: Dict[str, object] = {}
+    results: dict[str, object] = {}
 
     if len(returns) < 10:
         results["insufficient_data"] = True
@@ -301,18 +301,18 @@ def audit_symbol(
     known_sharpe: Optional[float] = None,
     n_trades: int = 250,
     win_rate: float = 0.66,
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """
     Run full audit for one symbol against the reference distribution.
 
     Returns a dict with all test results and a verdict.
     """
-    result: Dict[str, object] = {
+    result: dict[str, object] = {
         "symbol": symbol,
         "n_reference": len(reference_dist),
         "n_comparison": len(comparison_dist),
         "known_sharpe": known_sharpe,
-        "audited_at": datetime.now(timezone.utc).isoformat(),
+        "audited_at": datetime.now(UTC).isoformat(),
     }
 
     # PSI
@@ -389,7 +389,7 @@ def audit_symbol(
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="Audit EUR/USD and GBP/USD backtest Sharpe ratios using PSI and KS tests"
     )
@@ -509,7 +509,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Write JSON report
     report = {
         "audit_type": "symbol_sharpe_audit",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "reference_symbol": "XAUUSD",
         "n_reference": int(len(xauusd_dist)),
         "psi_thresholds": {"stable": PSI_STABLE, "monitor": PSI_MONITOR},
@@ -524,7 +524,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         },
     }
 
-    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    date_str = datetime.now(UTC).strftime("%Y-%m-%d")
     report_path = output_dir / f"sharpe_audit_{date_str}.json"
     report_path.write_text(json.dumps(report, indent=2, default=str))
 

@@ -38,7 +38,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -86,7 +86,7 @@ class BrokerState:
     fill_rate: float = 0.95
     avg_slippage_bps: float = 5.0
     reliability: float = 1.0
-    error_times: List[float] = field(default_factory=list)
+    error_times: list[float] = field(default_factory=list)
     circuit_open: bool = False
     circuit_open_at: float = 0.0
     total_orders: int = 0
@@ -162,14 +162,14 @@ class RoutingDecision:
     decision_id: str
     order_id: str
     selected_broker: str
-    fallback_chain: List[str]
-    scores: Dict[str, float]
+    fallback_chain: list[str]
+    scores: dict[str, float]
     ofi: float
     sentiment_score: float
     impact_score: float
     spread_bps: float
     reason: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class SmartRouter:
@@ -198,9 +198,9 @@ class SmartRouter:
         algo_manager: Optional[AlgoOrderManager] = None,
     ) -> None:
         self._lineage: Any = lineage_store
-        self._brokers: Dict[str, Any] = {}  # broker_id → broker instance
-        self._states: Dict[str, BrokerState] = {}
-        self._decisions: List[RoutingDecision] = []
+        self._brokers: dict[str, Any] = {}  # broker_id → broker instance
+        self._states: dict[str, BrokerState] = {}
+        self._decisions: list[RoutingDecision] = []
         self._total_routed: int = 0
         self._total_filled: int = 0
 
@@ -224,7 +224,7 @@ class SmartRouter:
 
     # ── Main routing entry point ──────────────────────────────────────────────
 
-    async def route_and_execute(self, order_request: Dict) -> Dict:
+    async def route_and_execute(self, order_request: dict) -> dict:
         """
         Select optimal broker and execute order.
 
@@ -296,10 +296,10 @@ class SmartRouter:
 
     async def _route_via_algo(
         self,
-        order_request: Dict,
+        order_request: dict,
         quantity: float,
         direction: str,
-    ) -> Dict:
+    ) -> dict:
         """
         Delegate a large order to AlgoOrderManager (TWAP/VWAP/Iceberg).
 
@@ -376,7 +376,7 @@ class SmartRouter:
             "reason": f"large_order_delegated:qty={quantity:.2f}",
         }
 
-    async def _submit_child_order(self, child_order_dict: Dict) -> Dict:
+    async def _submit_child_order(self, child_order_dict: dict) -> dict:
         """
         Broker submission function wired into AlgoOrderManager.
 
@@ -505,7 +505,7 @@ class SmartRouter:
         direction: str,
         ofi: float,
         sentiment_score: float,
-    ) -> List[Tuple[str, float]]:
+    ) -> list[tuple[str, float]]:
         """Return list of (broker_id, score) sorted descending, circuit-open excluded."""
         ranked = []
         for broker_id, state in self._states.items():
@@ -522,10 +522,10 @@ class SmartRouter:
 
     async def _execute_with_fallback(
         self,
-        order_request: Dict,
-        ranked: List[Tuple[str, float]],
+        order_request: dict,
+        ranked: list[tuple[str, float]],
         decision: RoutingDecision,
-    ) -> Dict:
+    ) -> dict:
         last_error = "unknown"
         for broker_id, score in ranked:
             t0 = time.monotonic()
@@ -592,7 +592,7 @@ class SmartRouter:
 
     # ── Lineage ───────────────────────────────────────────────────────────────
 
-    def _write_routing_lineage(self, decision: RoutingDecision, order: Dict) -> None:
+    def _write_routing_lineage(self, decision: RoutingDecision, order: dict) -> None:
         if self._lineage is None:
             return
         try:
@@ -627,7 +627,7 @@ class SmartRouter:
             reasons.append("neutral_sentiment")
         return ",".join(reasons) if reasons else "best_composite_score"
 
-    def metrics(self) -> Dict[str, Any]:
+    def metrics(self) -> dict[str, Any]:
         active_algos = self._algo.get_all_active()
         return {
             "total_routed": self._total_routed,

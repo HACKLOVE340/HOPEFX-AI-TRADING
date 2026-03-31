@@ -126,7 +126,7 @@ class TestPropFirmRules:
             # If it returns, it should indicate failure
             if result is not None:
                 assert result is not True
-        except Exception:  # noqa: S110
+        except Exception:
             pass  # Raising is the expected behaviour
 
     def test_healthy_account_passes_rules(self):

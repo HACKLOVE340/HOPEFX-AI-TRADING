@@ -37,7 +37,7 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -55,7 +55,7 @@ _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=10.0)
 # ── Historical gold reaction lookup ──────────────────────────────────────────
 # Empirical average absolute gold move (USD) in 30 minutes after event release.
 # Source: analysis of 2015-2024 gold reactions to macro events.
-_GOLD_REACTION_USD: Dict[str, float] = {
+_GOLD_REACTION_USD: dict[str, float] = {
     "FOMC Rate Decision": 18.5,
     "Fed Chair Press Conference": 12.0,
     "FOMC Minutes": 8.0,
@@ -90,7 +90,7 @@ _GOLD_REACTION_USD: Dict[str, float] = {
 
 _MAX_REACTION = max(_GOLD_REACTION_USD.values())
 
-_IMPACT_MAP: Dict[str, MacroImpact] = {
+_IMPACT_MAP: dict[str, MacroImpact] = {
     "FOMC Rate Decision": MacroImpact.HIGH,
     "Fed Chair Press Conference": MacroImpact.HIGH,
     "Non-Farm Payrolls": MacroImpact.HIGH,
@@ -159,7 +159,7 @@ class MacroCalendarEngine:
     """
 
     def __init__(self, redis_client=None) -> None:
-        self._events: List[MacroEvent] = []
+        self._events: list[MacroEvent] = []
         self._redis = redis_client
         self._session: Optional[aiohttp.ClientSession] = None
         self._last_refresh: float = 0.0
@@ -248,7 +248,7 @@ class MacroCalendarEngine:
 
     # ── Finnhub calendar fetch ────────────────────────────────────────────────
 
-    async def _fetch_finnhub_calendar(self) -> List[MacroEvent]:
+    async def _fetch_finnhub_calendar(self) -> list[MacroEvent]:
         if not _FINNHUB_KEY:
             logger.debug("MacroCalendarEngine: FINNHUB_API_KEY not set")
             return []
@@ -256,7 +256,7 @@ class MacroCalendarEngine:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(timeout=_HTTP_TIMEOUT)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start = now.strftime("%Y-%m-%d")
         end = (now + timedelta(days=7)).strftime("%Y-%m-%d")
 
@@ -271,7 +271,7 @@ class MacroCalendarEngine:
             logger.warning("Finnhub calendar fetch error: %s", exc)
             return []
 
-        events: List[MacroEvent] = []
+        events: list[MacroEvent] = []
         for item in data.get("economicCalendar", []):
             name = item.get("event", "")
             country = item.get("country", "")
@@ -280,7 +280,7 @@ class MacroCalendarEngine:
             time_str = item.get("time", "")
             try:
                 scheduled = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
-            except Exception:  # nosec B112 - skip malformed calendar entry  # noqa: S112
+            except Exception:  # nosec B112 - skip malformed calendar entry
                 continue
 
             actual = _safe_float(item.get("actual"))
@@ -330,13 +330,13 @@ class MacroCalendarEngine:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def get_upcoming_events(self, hours_ahead: float = 24.0) -> List[MacroEvent]:
-        now = datetime.now(timezone.utc)
+    def get_upcoming_events(self, hours_ahead: float = 24.0) -> list[MacroEvent]:
+        now = datetime.now(UTC)
         cutoff = now + timedelta(hours=hours_ahead)
         return [e for e in self._events if now <= e.scheduled_at <= cutoff]
 
-    def get_recent_events(self, hours_back: float = 4.0) -> List[MacroEvent]:
-        now = datetime.now(timezone.utc)
+    def get_recent_events(self, hours_back: float = 4.0) -> list[MacroEvent]:
+        now = datetime.now(UTC)
         cutoff = now - timedelta(hours=hours_back)
         return [e for e in self._events if cutoff <= e.scheduled_at <= now]
 
@@ -350,7 +350,7 @@ class MacroCalendarEngine:
           - Proportional to the event's gold_impact_score
           - Amplified by surprise magnitude
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         max_score = 0.0
 
         for event in self._events:
@@ -384,7 +384,7 @@ class MacroCalendarEngine:
 
         Blackout = [event_time - BLACKOUT_BEFORE_MIN, event_time + BLACKOUT_AFTER_MIN]
         """
-        return self._is_blackout_at(datetime.now(timezone.utc))
+        return self._is_blackout_at(datetime.now(UTC))
 
     def _is_blackout_at(self, at: datetime) -> bool:
         """
@@ -401,7 +401,7 @@ class MacroCalendarEngine:
                 return True
         return False
 
-    def get_ml_features(self, as_of: Optional[datetime] = None) -> Dict[str, float]:
+    def get_ml_features(self, as_of: Optional[datetime] = None) -> dict[str, float]:
         """
         Return 6 macro calendar ML features.
 
@@ -416,7 +416,7 @@ class MacroCalendarEngine:
         macro_high_event_count_24h  : HIGH events in next 24h
         macro_is_blackout           : 1.0 if in blackout window
         """
-        now = as_of or datetime.now(timezone.utc)
+        now = as_of or datetime.now(UTC)
 
         past_events = [e for e in self._events if e.scheduled_at <= now]
         future_events = [e for e in self._events if e.scheduled_at > now]
@@ -553,7 +553,7 @@ class MacroCalendarEngine:
         impact: MacroImpact,
         hours_ahead: float = 48.0,
         hours_back: float = 48.0,
-    ) -> List[MacroEvent]:
+    ) -> list[MacroEvent]:
         """
         Return events matching `impact` within a time window.
 
@@ -565,7 +565,7 @@ class MacroCalendarEngine:
 
         Returns events sorted by scheduled_at ascending.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         lo = now - timedelta(hours=hours_back)
         hi = now + timedelta(hours=hours_ahead)
         return sorted(
@@ -577,7 +577,7 @@ class MacroCalendarEngine:
             key=lambda e: e.scheduled_at,
         )
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         """
         Return a full calendar snapshot for caching and health endpoints.
 
@@ -614,11 +614,11 @@ class MacroCalendarEngine:
             ],
         }
 
-    def health(self) -> Dict[str, Any]:
+    def health(self) -> dict[str, Any]:
         return {
             "event_count": len(self._events),
             "last_refresh": datetime.fromtimestamp(
-                self._last_refresh, tz=timezone.utc
+                self._last_refresh, tz=UTC
             ).isoformat()
             if self._last_refresh
             else None,

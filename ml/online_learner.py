@@ -15,7 +15,7 @@ import logging
 
 try:
     import torch
-    import torch.nn as nn
+    from torch import nn
     from torch.utils.data import DataLoader, TensorDataset
 
     HAS_TORCH = True
@@ -32,12 +32,12 @@ except ImportError:
 
     DataLoader = None  # type: ignore[assignment,misc]
     TensorDataset = None  # type: ignore[assignment,misc]
-from collections import deque  # noqa: E402
-from dataclasses import dataclass, field  # noqa: E402
-from typing import Any, Dict, List, Optional, Tuple  # noqa: E402
+from collections import deque
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402, F401 — used in type annotations below
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +51,8 @@ class EWCRegularizer:
     def __init__(self, model: nn.Module, lambda_ewc: float = 1000):
         self.model = model
         self.lambda_ewc = lambda_ewc
-        self.fisher_dict: Dict[str, torch.Tensor] = {}
-        self.optimal_params: Dict[str, torch.Tensor] = {}
+        self.fisher_dict: dict[str, torch.Tensor] = {}
+        self.optimal_params: dict[str, torch.Tensor] = {}
         self.ewc_loss = 0
 
     def update_fisher(self, dataloader: DataLoader):
@@ -139,8 +139,8 @@ class OnlineLearner:
 
     def train_step(
         self,
-        new_data: Tuple[np.ndarray, np.ndarray],
-        validation_data: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+        new_data: tuple[np.ndarray, np.ndarray],
+        validation_data: Optional[tuple[np.ndarray, np.ndarray]] = None,
     ) -> float:
         """
         Single online training step with EWC and replay.
@@ -205,7 +205,7 @@ class OnlineLearner:
 
         return total_loss.item()
 
-    def adapt_to_regime(self, regime: str, regime_data: Dict[str, np.ndarray]):
+    def adapt_to_regime(self, regime: str, regime_data: dict[str, np.ndarray]):
         """
         Fast adaptation to detected market regime.
         Uses regime-specific learning rate and EWC weight.
@@ -220,7 +220,7 @@ class OnlineLearner:
                 param_group["lr"] *= 0.8  # Slower, more stable
             self.ewc.lambda_ewc = 2000  # More regularization
 
-    def get_learning_diagnostics(self) -> Dict:
+    def get_learning_diagnostics(self) -> dict:
         """Get diagnostics about learning process"""
         return {
             "train_loss_trend": np.polyfit(
@@ -242,14 +242,14 @@ class EnsemblePredictor:
     Provides robust predictions via model diversity.
     """
 
-    def __init__(self, models: List[nn.Module], weights: Optional[List[float]] = None):
+    def __init__(self, models: list[nn.Module], weights: Optional[list[float]] = None):
         self.models = models
         self.weights = weights or [1.0 / len(models)] * len(models)
-        self.performance_history: Dict[int, List[float]] = {
+        self.performance_history: dict[int, list[float]] = {
             i: [] for i in range(len(models))
         }
 
-    def predict(self, X: np.ndarray) -> Tuple[float, float]:
+    def predict(self, X: np.ndarray) -> tuple[float, float]:
         """
         Ensemble prediction with uncertainty estimation.
 
@@ -274,7 +274,7 @@ class EnsemblePredictor:
 
         return float(weighted_pred.mean()), float(uncertainty.mean())
 
-    def update_weights(self, recent_performance: Dict[int, float]):
+    def update_weights(self, recent_performance: dict[int, float]):
         """
         Update ensemble weights based on recent performance.
         Poor performers get reduced weight.
@@ -610,7 +610,7 @@ class SklearnOnlineLearner:
                 self._correct_window.append(correct)
                 if len(self._correct_window) >= 10:
                     self._rolling_accuracy = float(np.mean(self._correct_window))
-            except Exception:  # nosec B110 - accuracy update failure must not interrupt learning loop  # noqa: S110
+            except Exception:  # nosec B110 - accuracy update failure must not interrupt learning loop
                 pass
 
             # EWC anchor snapshot
@@ -625,7 +625,7 @@ class SklearnOnlineLearner:
                 prob = float(self._model.predict_proba(X_scaled)[0, 1])
                 if self._check_drift(prob):
                     self._reset_for_new_regime()
-            except Exception:  # nosec B110 - drift detection failure must not interrupt learning loop  # noqa: S110
+            except Exception:  # nosec B110 - drift detection failure must not interrupt learning loop
                 pass
 
             if self.persist_path:
@@ -673,7 +673,7 @@ class SklearnOnlineLearner:
         """
         self._reset_for_new_regime()
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         """Return monitoring status dict."""
         return {
             "symbol": self.symbol,
@@ -706,7 +706,7 @@ class SklearnOnlineLearner:
 
 # ── Module-level singleton registry ──────────────────────────────────────────
 
-_learner_registry: Dict[str, SklearnOnlineLearner] = {}
+_learner_registry: dict[str, SklearnOnlineLearner] = {}
 
 
 def get_online_learner(
@@ -722,7 +722,7 @@ def get_online_learner(
 
     Called by HourlyTrainer._online_update() on every hourly cycle.
     """
-    global _learner_registry  # noqa: PLW0603
+    global _learner_registry
 
     if symbol not in _learner_registry:
         if persist_path is None:
@@ -760,7 +760,7 @@ class ModelMetadata:
     n_samples: int = 0
     n_features: int = 0
     train_score: float = 0.0
-    extra: Dict[str, Any] = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 class XGBoostOnlineModel:
@@ -788,7 +788,7 @@ class XGBoostOnlineModel:
         random_state: int = 42,
     ) -> None:
         try:
-            import xgboost as xgb  # noqa: F401
+            import xgboost as xgb
         except ImportError as exc:
             raise ImportError(
                 "xgboost is required for XGBoostOnlineModel. "

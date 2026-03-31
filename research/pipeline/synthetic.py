@@ -56,8 +56,8 @@ logger = logging.getLogger(__name__)
 
 try:
     import torch
-    import torch.nn as nn
-    import torch.optim as optim
+    from torch import nn
+    from torch import optim
 
     TORCH_AVAILABLE = True
 except ImportError:
@@ -272,7 +272,7 @@ class RegimeSynthesizer:
 
     def _make_sequences(
         self, X: np.ndarray, labels: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Slide a window over X to produce (seq, label) pairs."""
         seqs, labs = [], []
         for i in range(len(X) - self.seq_len):
@@ -428,7 +428,7 @@ class RegimeSynthesizer:
         target_regime: int,
         target_count: Optional[int] = None,
         multiplier: float = 3.0,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Oversample a rare regime by generating synthetic sequences.
 

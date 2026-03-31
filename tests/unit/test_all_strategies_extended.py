@@ -24,7 +24,7 @@ import logging
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List
 
 from strategies.base import (
@@ -73,7 +73,7 @@ def make_ohlcv_list(
     trend: float = 0.0,
     noise: float = 0.5,
     seed: int = 42,
-) -> List[Dict[str, float]]:
+) -> list[dict[str, float]]:
     """Generate OHLCV data as a list of dicts (for new-style strategies)."""
     df = make_ohlcv_data(periods, base, trend, noise, seed)
     return [
@@ -351,7 +351,7 @@ class TestBaseStrategyInterface:
             signal_type=SignalType.BUY,
             symbol="XAUUSD",
             price=1900.0,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             confidence=0.75,
             metadata={"reason": "test"},
         )
@@ -365,7 +365,7 @@ class TestBaseStrategyInterface:
                 signal_type=SignalType.BUY,
                 symbol="XAUUSD",
                 price=1900.0,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 confidence=1.5,
             )
 
@@ -374,7 +374,7 @@ class TestBaseStrategyInterface:
             signal_type=SignalType.HOLD,
             symbol="XAUUSD",
             price=1900.0,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             confidence=0.0,
         )
         assert sig.confidence == 0.0
@@ -412,7 +412,7 @@ class TestBaseStrategyInterface:
             signal_type=SignalType.BUY,
             symbol="XAUUSD",
             price=1900.0,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             confidence=0.8,
         )
 
@@ -1109,7 +1109,7 @@ class TestSMCICTStrategy:
             "liquidity_zones": {"swept_above": False, "swept_below": True},
             "premium_discount": {"zone": "discount", "level": 0.8},
             "ote_levels": {"bullish": [1900.0], "bearish": []},
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": datetime.now(UTC),
         }
         result = strategy.generate_signal(analysis)
         # Confidence check
@@ -1135,7 +1135,7 @@ class TestSMCICTStrategy:
             "liquidity_zones": {"swept_above": True, "swept_below": False},
             "premium_discount": {"zone": "premium", "level": 0.8},
             "ote_levels": {"bullish": [], "bearish": [1900.0]},
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": datetime.now(UTC),
         }
         result = strategy.generate_signal(analysis)
         assert result is None or result.signal_type == SignalType.SELL
@@ -1194,19 +1194,19 @@ class TestITS8OSStrategy:
 
     def test_analyze_returns_dict(self, strategy, prices_list):
         result = strategy.analyze(
-            {"prices": prices_list, "timestamp": datetime.now(timezone.utc)}
+            {"prices": prices_list, "timestamp": datetime.now(UTC)}
         )
         assert isinstance(result, dict)
 
     def test_analyze_insufficient_data_returns_error(self, strategy):
         result = strategy.analyze(
-            {"prices": [], "timestamp": datetime.now(timezone.utc)}
+            {"prices": [], "timestamp": datetime.now(UTC)}
         )
         assert "error" in result
 
     def test_analyze_returns_setup_results(self, strategy, prices_list):
         result = strategy.analyze(
-            {"prices": prices_list, "timestamp": datetime.now(timezone.utc)}
+            {"prices": prices_list, "timestamp": datetime.now(UTC)}
         )
         if "error" not in result:
             assert "setup_results" in result
@@ -1214,7 +1214,7 @@ class TestITS8OSStrategy:
 
     def test_generate_signal_returns_none_or_signal(self, strategy, prices_list):
         analysis = strategy.analyze(
-            {"prices": prices_list, "timestamp": datetime.now(timezone.utc)}
+            {"prices": prices_list, "timestamp": datetime.now(UTC)}
         )
         result = strategy.generate_signal(analysis)
         assert result is None or isinstance(result, Signal)
@@ -1311,7 +1311,7 @@ class TestITS8OSStrategy:
     def test_on_bar_integration(self, strategy, prices_list):
         strategy.start()
         result = strategy.on_bar(
-            {"prices": prices_list, "timestamp": datetime.now(timezone.utc)}
+            {"prices": prices_list, "timestamp": datetime.now(UTC)}
         )
         assert result is None or isinstance(result, Signal)
 
@@ -1352,7 +1352,7 @@ class TestStrategyBrain:
                     signal_type=SignalType.BUY,
                     symbol="XAUUSD",
                     price=analysis.get("price", 1900.0),
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     confidence=0.9,
                 )
 
@@ -1374,7 +1374,7 @@ class TestStrategyBrain:
                     signal_type=SignalType.SELL,
                     symbol="XAUUSD",
                     price=analysis.get("price", 1900.0),
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     confidence=0.9,
                 )
 
@@ -1451,7 +1451,7 @@ class TestStrategyBrain:
                     signal_type=SignalType.BUY,
                     symbol="XAUUSD",
                     price=1900.0,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     confidence=0.85,
                 )
 
@@ -1479,7 +1479,7 @@ class TestStrategyBrain:
                         signal_type=SignalType.SELL,
                         symbol="XAUUSD",
                         price=1900.0,
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                         confidence=0.85,
                     )
 
@@ -1564,7 +1564,7 @@ class TestStrategyBrain:
                         signal_type=SignalType.BUY,
                         symbol="XAUUSD",
                         price=1900.0,
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                         confidence=0.9,
                     )
 
@@ -1595,7 +1595,7 @@ class TestStrategyBrain:
                     signal_type=SignalType.BUY,
                     symbol="XAUUSD",
                     price=1900.0,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     confidence=0.8,
                 )
 
@@ -1632,7 +1632,7 @@ class TestStrategyBrain:
                     signal_type=SignalType.BUY,
                     symbol="XAUUSD",
                     price=1900.0,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     confidence=0.8,
                 )
 

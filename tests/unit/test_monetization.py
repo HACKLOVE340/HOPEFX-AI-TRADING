@@ -39,7 +39,7 @@ from monetization.enterprise import (
     WhiteLabelStatus,
 )
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from monetization.stripe_integration import StripeIntegration, StripeWebhookEvent
 
@@ -534,7 +534,7 @@ class TestEnterpriseFeatures:
 
 def _make_stripe_mock() -> MagicMock:
     """Build a minimal Stripe SDK mock covering all methods under test."""
-    now_ts = int(datetime.now(timezone.utc).timestamp())
+    now_ts = int(datetime.now(UTC).timestamp())
     mock = MagicMock()
 
     # Customer
@@ -552,7 +552,7 @@ def _make_stripe_mock() -> MagicMock:
         amount=180000,
         currency="usd",
         status="requires_payment_method",
-        client_secret="pi_test123456789012_secret_abc",  # noqa: S106
+        client_secret="pi_test123456789012_secret_abc",
         metadata={},
     )
     mock.PaymentIntent.create.return_value = pi_mock

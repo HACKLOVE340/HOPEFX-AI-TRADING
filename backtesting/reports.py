@@ -20,7 +20,7 @@ class ReportGenerator:
     Generate backtest reports in various formats.
     """
 
-    def __init__(self, results: Dict):
+    def __init__(self, results: dict):
         """
         Initialize report generator.
 

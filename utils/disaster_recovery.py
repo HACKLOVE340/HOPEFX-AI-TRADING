@@ -14,13 +14,13 @@ import json
 import gzip
 from typing import TYPE_CHECKING, Dict, List
 from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 import hashlib
 import aiofiles
 
 if TYPE_CHECKING:
-    import aiohttp  # noqa: F401
+    import aiohttp
 
 
 @dataclass
@@ -29,10 +29,10 @@ class SystemState:
 
     timestamp: str
     event_store_position: int
-    strategy_states: Dict[str, Dict]
-    open_positions: List[Dict]
-    risk_metrics: Dict
-    performance_cache: Dict
+    strategy_states: dict[str, dict]
+    open_positions: list[dict]
+    risk_metrics: dict
+    performance_cache: dict
     checksum: str
 
 
@@ -49,7 +49,7 @@ class ContinuousBackup:
         self.backup_path.mkdir(parents=True, exist_ok=True)
 
         # Backup destinations (local + cloud)
-        self.destinations: List[Path] = [self.backup_path]
+        self.destinations: list[Path] = [self.backup_path]
         self.cloud_enabled = False
 
     async def enable_s3_backup(self, bucket: str, region: str):
@@ -73,7 +73,7 @@ class ContinuousBackup:
         # (In production, use copy-on-write)
 
         state = SystemState(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             event_store_position=event_store._sequence
             if hasattr(event_store, "_sequence")
             else 0,
@@ -169,12 +169,12 @@ class FailoverManager:
     # Default port used when a peer string contains no port component.
     HEARTBEAT_PORT: int = 8765
 
-    def __init__(self, node_id: str, peers: List[str]):
+    def __init__(self, node_id: str, peers: list[str]):
         self.node_id = node_id
         self.peers = peers  # Other HOPEFX nodes
         self.is_primary = False
         self.heartbeat_interval = 5  # seconds
-        self.last_peer_heartbeat: Dict[str, datetime] = {}
+        self.last_peer_heartbeat: dict[str, datetime] = {}
         self.failover_timeout = 15  # seconds
         # Shared aiohttp session — created lazily on first use
         self._session: aiohttp.ClientSession | None = None  # type: ignore[name-defined]
@@ -211,7 +211,7 @@ class FailoverManager:
                     last_seen = self.last_peer_heartbeat.get(primary)
                     if (
                         last_seen
-                        and (datetime.now(timezone.utc) - last_seen).seconds
+                        and (datetime.now(UTC) - last_seen).seconds
                         > self.failover_timeout
                     ):
                         print(
@@ -241,7 +241,7 @@ class FailoverManager:
         payload = {
             "node_id": self.node_id,
             "is_primary": self.is_primary,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Lazily create a shared session
@@ -253,7 +253,7 @@ class FailoverManager:
         try:
             async with self._session.post(url, json=payload) as resp:
                 if resp.status < 300:
-                    self.last_peer_heartbeat[peer] = datetime.now(timezone.utc)
+                    self.last_peer_heartbeat[peer] = datetime.now(UTC)
                 else:
                     print(f"⚠️ Heartbeat to {peer} returned HTTP {resp.status}")
         except aiohttp.ClientError as exc:

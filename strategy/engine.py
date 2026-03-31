@@ -35,7 +35,7 @@ import asyncio
 import logging
 import os
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Deque, Optional
 
 import pandas as pd
@@ -70,7 +70,7 @@ class _OHLCVBuffer:
     """
 
     def __init__(self, maxbars: int = BUFFER_SIZE) -> None:
-        self._bars: Deque[dict] = deque(maxlen=maxbars)
+        self._bars: deque[dict] = deque(maxlen=maxbars)
         self._pending: list = []
         self._ema_f: Optional[float] = None
         self._ema_s: Optional[float] = None
@@ -165,7 +165,7 @@ class _MLPredictor:
                     "StrategyEngine: advanced_oos.pkl not found — "
                     "run `python ml/run_training.py` to train. EMA fallback active."
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "StrategyEngine: ML predictor unavailable (%s) — EMA fallback active.",
                 exc,
@@ -199,7 +199,7 @@ class _MLPredictor:
                 else:
                     return "HOLD", confidence
 
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning(
                     "StrategyEngine: ML predict error (%s) — EMA fallback.", exc
                 )
@@ -270,7 +270,7 @@ class StrategyEngine:
                 await self._on_tick(msg)
             except asyncio.CancelledError:
                 break
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("StrategyEngine tick error: %s", exc)
 
     async def _on_tick(self, tick: dict) -> None:
@@ -278,7 +278,7 @@ class StrategyEngine:
         mid = float(tick.get("mid", 0))
         spread = float(tick.get("spread", 0))
         symbol = tick.get("symbol", "XAU/USD")
-        timestamp = tick.get("timestamp", datetime.now(timezone.utc).isoformat())
+        timestamp = tick.get("timestamp", datetime.now(UTC).isoformat())
 
         if mid <= 0:
             return
@@ -294,7 +294,7 @@ class StrategyEngine:
                     "tick_count": self._tick_count,
                     "bar_count": self._buffer.bar_count,
                     "ml_ready": self._buffer.ready(),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
 
@@ -333,7 +333,7 @@ class StrategyEngine:
             "spread": spread,
             "bar_count": self._bar_count,
             "tick_seq": tick.get("seq", self._tick_count),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         logger.info(

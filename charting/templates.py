@@ -8,28 +8,28 @@ Chart Template Management
 """
 
 from typing import Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 
 class ChartTemplate:
     """Chart template"""
 
     def __init__(self, name: str, description: str):
-        self.template_id = f"TPL_{name}_{datetime.now(timezone.utc).timestamp()}"
+        self.template_id = f"TPL_{name}_{datetime.now(UTC).timestamp()}"
         self.name = name
         self.description = description
         self.config = {}
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
 
 
 class TemplateManager:
     """Manages chart templates"""
 
     def __init__(self):
-        self.templates: Dict[str, ChartTemplate] = {}
+        self.templates: dict[str, ChartTemplate] = {}
 
     def save_template(
-        self, name: str, description: str, config: Dict[str, Any]
+        self, name: str, description: str, config: dict[str, Any]
     ) -> ChartTemplate:
         """Save a chart template"""
         template = ChartTemplate(name, description)

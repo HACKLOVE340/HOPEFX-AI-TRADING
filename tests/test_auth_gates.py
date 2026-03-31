@@ -27,7 +27,7 @@ from fastapi.testclient import TestClient
 # ── Minimal secret for test tokens ───────────────────────────────────────────
 # Force-set (not setdefault) so this module's tokens always verify correctly
 # regardless of which other test module ran first and set a different secret.
-_SECRET = "test-secret-key-that-is-long-enough-for-hs256-validation"  # noqa: S105
+_SECRET = "test-secret-key-that-is-long-enough-for-hs256-validation"
 os.environ["SECURITY_JWT_SECRET"] = _SECRET
 
 

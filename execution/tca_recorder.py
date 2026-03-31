@@ -80,7 +80,7 @@ import logging
 import os
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Deque, Dict, List, Optional
 
 import numpy as np
@@ -179,7 +179,7 @@ class TCAReport:
     adverse_fill_rate: float  # fraction of fills with slippage > 0
     price_improvement_rate: float  # fraction of fills with slippage < 0
     alert_triggered: bool
-    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def summary(self) -> str:
         return (
@@ -206,17 +206,17 @@ class TCARecorder:
 
     def __init__(self) -> None:
         # Pending signals: request_id → signal metadata
-        self._pending: Dict[str, dict] = {}
+        self._pending: dict[str, dict] = {}
 
         # Completed records: keyed by (broker, symbol) for fast aggregation
-        self._records: Dict[str, Deque[TCARecord]] = defaultdict(
+        self._records: dict[str, deque[TCARecord]] = defaultdict(
             lambda: deque(maxlen=TCA_MAX_MEMORY_RECORDS)
         )
         # Flat list for cross-slice queries
-        self._all_records: Deque[TCARecord] = deque(maxlen=TCA_MAX_MEMORY_RECORDS * 10)
+        self._all_records: deque[TCARecord] = deque(maxlen=TCA_MAX_MEMORY_RECORDS * 10)
 
         # Rolling slippage window per broker for alert evaluation
-        self._broker_slippage: Dict[str, Deque[float]] = defaultdict(
+        self._broker_slippage: dict[str, deque[float]] = defaultdict(
             lambda: deque(maxlen=TCA_ALERT_WINDOW)
         )
 
@@ -243,7 +243,7 @@ class TCARecorder:
             "signal_price": signal_price,
             "quantity": quantity,
             "model_version": model_version,
-            "signal_time": datetime.now(timezone.utc),
+            "signal_time": datetime.now(UTC),
         }
 
     def record_fill(
@@ -268,7 +268,7 @@ class TCARecorder:
             )
             return None
 
-        fill_time = datetime.now(timezone.utc)
+        fill_time = datetime.now(UTC)
         session = self._get_session(fill_time)
 
         record = TCARecord(
@@ -369,12 +369,12 @@ class TCARecorder:
         logger.info(report.summary())
         return report
 
-    def get_all_reports(self, last_n: int = 500) -> List[TCAReport]:
+    def get_all_reports(self, last_n: int = 500) -> list[TCAReport]:
         """Return per-broker TCA reports for all brokers with recent fills."""
         brokers = {r.broker for r in self._all_records}
         return [r for b in brokers if (r := self.get_report(broker=b, last_n=last_n))]
 
-    def get_recent_records(self, n: int = 100) -> List[dict]:
+    def get_recent_records(self, n: int = 100) -> list[dict]:
         """Return the N most recent TCA records as dicts."""
         records = list(self._all_records)[-n:]
         return [r.to_dict() for r in reversed(records)]
@@ -398,7 +398,7 @@ class TCARecorder:
         symbol: Optional[str],
         session: Optional[str],
         last_n: int,
-    ) -> List[TCARecord]:
+    ) -> list[TCARecord]:
         """Filter records by broker/symbol/session and return last_n."""
         records = list(self._all_records)
         if broker:
@@ -442,7 +442,7 @@ class TCARecorder:
                     "mean_slippage_bps": mean_slippage_bps,
                     "threshold_bps": TCA_ALERT_THRESHOLD_BPS,
                     "window": TCA_ALERT_WINDOW,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
         except Exception as exc:

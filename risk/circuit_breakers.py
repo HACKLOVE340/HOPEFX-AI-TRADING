@@ -15,7 +15,7 @@ import logging
 import threading
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from enum import Enum
 from typing import Callable, Dict, List, Optional
 
@@ -99,8 +99,8 @@ class CircuitBreaker:
         self.loss_streak_amount = 0.0
 
         # History
-        self.breach_history: List[Dict] = []
-        self.state_changes: List[Dict] = []
+        self.breach_history: list[dict] = []
+        self.state_changes: list[dict] = []
 
         # Callbacks
         self.on_breach: Optional[Callable] = None
@@ -141,8 +141,7 @@ class CircuitBreaker:
         self.daily_pnl = self._calculate_daily_pnl()
 
         # Update drawdown
-        if current_balance > self.peak_balance:
-            self.peak_balance = current_balance
+        self.peak_balance = max(self.peak_balance, current_balance)
         self.current_drawdown = (
             self.peak_balance - current_balance
         ) / self.peak_balance
@@ -164,7 +163,7 @@ class CircuitBreaker:
             return
 
         # Check order rate limits
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff_minute = now - timedelta(minutes=1)
         cutoff_hour = now - timedelta(hours=1)
 
@@ -205,7 +204,7 @@ class CircuitBreaker:
 
             # Record breach
             breach = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "reason": reason,
                 "message": message,
                 "severity": severity,
@@ -330,7 +329,7 @@ class CircuitBreaker:
                 logger.warning("🔴 Recovery failed - circuit breaker re-opened")
                 asyncio.create_task(self._schedule_recovery())
 
-    def pre_trade_check(self, order: Dict) -> tuple[bool, Optional[str]]:
+    def pre_trade_check(self, order: dict) -> tuple[bool, Optional[str]]:
         """
         Pre-trade risk check. Call this before every order.
         Returns: (allowed: bool, reason: Optional[str])
@@ -366,7 +365,7 @@ class CircuitBreaker:
                 return False, f"Correlation limit would be breached for {symbol}"
 
             # Record order for rate limiting
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             self.orders_last_minute.append(now)
             self.orders_last_hour.append(now)
 
@@ -398,7 +397,7 @@ class CircuitBreaker:
             logger.critical(f"🔧 MANUAL OVERRIDE {action} by {authorized_by}: {reason}")
 
             audit_record = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "action": f"MANUAL_OVERRIDE_{action}",
                 "authorized_by": authorized_by,
                 "reason": reason,
@@ -421,7 +420,7 @@ class CircuitBreaker:
                 "peak_balance": self.peak_balance,
                 "consecutive_losses": self.consecutive_losses,
                 "breach_history": json.dumps(self.breach_history[-10:]),  # Last 10
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
             try:
                 self.redis.hset("circuit_breaker:state", mapping=state_data)
@@ -491,7 +490,7 @@ class CircuitBreaker:
         logger.critical(f"EMERGENCY ALERT: {message}")
         # Implement actual notification (SMS, phone call, etc.)
 
-    def get_status(self) -> Dict:
+    def get_status(self) -> dict:
         """Get current circuit breaker status"""
         with self.state_lock:
             return {

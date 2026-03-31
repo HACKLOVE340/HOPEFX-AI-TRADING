@@ -120,7 +120,7 @@ async def get_trader_signals(trader_id: str, limit: int = 10):
     published by the signal engine from opted-in users are returned.
     Returns an empty list when the trader has no public signals yet.
     """
-    from api.social_feed import _feed_items  # noqa: PLC0415
+    from api.social_feed import _feed_items
 
     signals = [
         item

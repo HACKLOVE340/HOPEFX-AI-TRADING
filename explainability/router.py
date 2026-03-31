@@ -27,7 +27,7 @@ def create_explainability_router(explainer: "AIExplainer"):
     class ExplainRequest(BaseModel):
         prediction: float
         prediction_class: str
-        features: Dict[str, float]
+        features: dict[str, float]
         model_name: str = "default"
 
     class CounterfactualRequest(BaseModel):

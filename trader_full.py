@@ -65,7 +65,7 @@ class SecureConfig:
         self.redis_port: int = int(os.getenv("REDIS_PORT", "6379"))
         self.telegram_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
-        self.symbols: List[str] = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAU_USD").split(
+        self.symbols: list[str] = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAU_USD").split(
             ","
         )
         self.initial_balance: float = float(os.getenv("INITIAL_BALANCE", "10000"))
@@ -102,7 +102,7 @@ class LiveDataPipeline:
     def __init__(self, config: SecureConfig) -> None:
         self._config = config
         self._streamer: Optional[Any] = None
-        self._callbacks: List[Any] = []
+        self._callbacks: list[Any] = []
         self._running = False
 
     def register_tick_callback(self, fn) -> None:
@@ -231,7 +231,7 @@ class EnsembleStrategy:
         except Exception as exc:
             logger.warning("EnsembleStrategy setup failed: %s", exc)
 
-    def generate_signal(self, market_data: Dict) -> Dict:
+    def generate_signal(self, market_data: dict) -> dict:
         if self._orchestra is None:
             return {
                 "direction": "flat",
@@ -281,7 +281,7 @@ class MLPredictor:
             logger.warning("MLPredictor.load: %s", exc)
             return False
 
-    def predict(self, df) -> Dict:
+    def predict(self, df) -> dict:
         if self._predictor is None or not getattr(self._predictor, "is_fitted", False):
             return {"direction": "neutral", "confidence": 0.0}
         try:
@@ -320,7 +320,7 @@ class RiskManager:
 
     def approve_trade(
         self, symbol: str, side: str, price: float, equity: float
-    ) -> Dict:
+    ) -> dict:
         if self._rm is None:
             return {"approved": False, "reason": "risk manager not initialised"}
         try:
@@ -499,7 +499,7 @@ class ForwardTestHarness:
         self._state = state
         self._running = False
         self._equity = 10_000.0
-        self._tick_buffer: List[Dict] = []
+        self._tick_buffer: list[dict] = []
 
     async def run(self) -> None:
         self._running = True
@@ -527,7 +527,7 @@ class ForwardTestHarness:
     def stop(self) -> None:
         self._running = False
 
-    def _on_tick(self, tick: Dict) -> None:
+    def _on_tick(self, tick: dict) -> None:
         """
         Process a normalised tick from NuclearStreamer.
 

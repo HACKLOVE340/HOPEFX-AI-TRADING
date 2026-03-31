@@ -25,7 +25,7 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 import bcrypt
@@ -69,7 +69,7 @@ class AuthToken(BaseModel):
     access_token: str
     refresh_token: str
     expires_in: int
-    token_type: str = "Bearer"  # noqa: S105
+    token_type: str = "Bearer"
 
 
 class Account(BaseModel):
@@ -135,7 +135,7 @@ class NewsItem(BaseModel):
     source: str
     timestamp: datetime
     importance: str = "medium"
-    related_symbols: List[str] = []
+    related_symbols: list[str] = []
 
 
 class NotificationPreferences(BaseModel):
@@ -155,7 +155,7 @@ class MobileAPIServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",  # nosec B104 - host configurable via parameter  # noqa: S104
+        host: str = "0.0.0.0",  # nosec B104 - host configurable via parameter
         port: int = 8001,
         jwt_secret: str | None = None,
         broker=None,
@@ -187,7 +187,7 @@ class MobileAPIServer:
         self.notification_service = notification_service
         self.cache_service = cache_service
         self.rate_limiter = rate_limiter
-        self.active_connections: Dict[str, List[WebSocket]] = {}
+        self.active_connections: dict[str, list[WebSocket]] = {}
 
         # CORS — explicit allowlist only; wildcard + credentials is rejected by
         # browsers per the CORS spec and is a security misconfiguration.
@@ -212,8 +212,8 @@ class MobileAPIServer:
         payload = {
             "sub": user_id,
             "type": "access",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=24),
-            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(UTC) + timedelta(hours=24),
+            "iat": datetime.now(UTC),
         }
         return jwt.encode(payload, self.jwt_secret, algorithm="HS256")
 
@@ -222,8 +222,8 @@ class MobileAPIServer:
         payload = {
             "sub": user_id,
             "type": "refresh",
-            "exp": datetime.now(timezone.utc) + timedelta(days=7),
-            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(UTC) + timedelta(days=7),
+            "iat": datetime.now(UTC),
         }
         return jwt.encode(payload, self.jwt_secret, algorithm="HS256")
 
@@ -286,7 +286,7 @@ class MobileAPIServer:
         async def health_check():
             return {
                 "status": "healthy",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "version": "2.0.0",
             }
 
@@ -312,7 +312,7 @@ class MobileAPIServer:
                             "password_hash": password_hash.decode(),
                             "device_id": user.device_id,
                             "platform": user.platform,
-                            "created_at": datetime.now(timezone.utc),
+                            "created_at": datetime.now(UTC),
                             "notification_preferences": NotificationPreferences().model_dump(),
                         }
                     )
@@ -417,7 +417,7 @@ class MobileAPIServer:
                     symbol=symbol,
                     bid=float(quote["bid"]),
                     ask=float(quote["ask"]),
-                    last_update=datetime.now(timezone.utc),
+                    last_update=datetime.now(UTC),
                     spread=float(quote["ask"]) - float(quote["bid"]),
                     bid_volume=float(quote.get("bid_volume", 0)),
                     ask_volume=float(quote.get("ask_volume", 0)),
@@ -431,7 +431,7 @@ class MobileAPIServer:
                 raise HTTPException(status_code=500, detail="Failed to fetch quote") from exc
 
         @self.app.post(
-            "/api/v2/orders", response_model=Dict[str, Any], tags=["Trading"]
+            "/api/v2/orders", response_model=dict[str, Any], tags=["Trading"]
         )
         async def place_order(
             order: PlaceOrderRequest,
@@ -495,7 +495,7 @@ class MobileAPIServer:
                     "status": result.get("status", "pending"),
                     "entry_price": order.price or result.get("entry_price", 0),
                     "quantity": order.quantity,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             except HTTPException:
                 raise
@@ -506,7 +506,7 @@ class MobileAPIServer:
                 raise HTTPException(status_code=500, detail="Order placement failed") from exc
 
         @self.app.get(
-            "/api/v2/trades", response_model=List[TradeData], tags=["Trading"]
+            "/api/v2/trades", response_model=list[TradeData], tags=["Trading"]
         )
         async def get_open_trades(user_id: str = Depends(self._verify_token)):
             try:
@@ -526,7 +526,7 @@ class MobileAPIServer:
                         entry_time=datetime.fromisoformat(t["entry_time"]),
                         duration_seconds=int(
                             (
-                                datetime.now(timezone.utc)
+                                datetime.now(UTC)
                                 - datetime.fromisoformat(t["entry_time"])
                             ).total_seconds()
                         ),
@@ -564,7 +564,7 @@ class MobileAPIServer:
                     "status": "closed",
                     "close_price": result.get("close_price", 0),
                     "pnl": result.get("pnl", 0),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             except HTTPException:
                 raise
@@ -580,7 +580,7 @@ class MobileAPIServer:
     def _register_performance_routes(self) -> None:
         @self.app.get(
             "/api/v2/performance",
-            response_model=List[PerformanceData],
+            response_model=list[PerformanceData],
             tags=["Performance"],
         )
         async def get_performance(
@@ -609,7 +609,7 @@ class MobileAPIServer:
     # ── News ─────────────────────────────────────────────────────────────────
 
     def _register_news_routes(self) -> None:
-        @self.app.get("/api/v2/news", response_model=List[NewsItem], tags=["News"])
+        @self.app.get("/api/v2/news", response_model=list[NewsItem], tags=["News"])
         async def get_news(
             limit: int = Query(20, ge=1, le=100),
             user_id: str = Depends(self._verify_token),
@@ -690,7 +690,7 @@ class MobileAPIServer:
 
             try:
                 while True:
-                    quotes: Dict[str, Any] = {}
+                    quotes: dict[str, Any] = {}
                     for sym in symbol_list:
                         if self.broker:
                             try:
@@ -698,7 +698,7 @@ class MobileAPIServer:
                                 quotes[sym] = {
                                     "bid": float(quote["bid"]),
                                     "ask": float(quote["ask"]),
-                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                 }
                             except Exception as q_exc:
                                 logger.warning(

@@ -303,7 +303,7 @@ class TestMLPipeline:
             report = pipeline.run(df)
             # If it runs, gates must fail on such tiny data
             assert not (report.passes_accuracy_gate and report.passes_pvalue_gate)
-        except (ValueError, Exception):  # noqa: S110
+        except (ValueError, Exception):
             pass  # also acceptable — WalkForwardValidator may reject
 
     def test_very_small_dataset_raises(self, tmp_path):

@@ -43,7 +43,7 @@ import logging
 import os
 import re
 import textwrap
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, Optional
 
 import httpx
@@ -65,7 +65,7 @@ _TIMEOUT = 30.0
 
 # Maps known API endpoint prefixes to source file paths.
 # Extend this dict as new modules are added.
-_ENDPOINT_FILE_MAP: Dict[str, str] = {
+_ENDPOINT_FILE_MAP: dict[str, str] = {
     "/api/auth/login": "api/auth.py",
     "/api/auth/register": "api/auth.py",
     "/api/auth/refresh": "api/auth.py",
@@ -103,7 +103,7 @@ def _resolve_file_path(endpoint: str) -> Optional[str]:
 # ── GitHub API helpers ────────────────────────────────────────────────────────
 
 
-def _headers() -> Dict[str, str]:
+def _headers() -> dict[str, str]:
     if not GITHUB_TOKEN:
         raise RuntimeError(
             "GITHUB_TOKEN is not set. Configure it to enable the auto-heal PR pipeline."
@@ -143,7 +143,7 @@ def _repo() -> str:
 
 async def _get_file(
     client: httpx.AsyncClient, repo: str, path: str
-) -> Optional[Dict[str, Any]]:
+) -> Optional[dict[str, Any]]:
     """Fetch file metadata and content from GitHub. Returns None if not found."""
     url = f"{_GITHUB_API}/repos/{repo}/contents/{path}"
     resp = await client.get(url, headers=_headers(), params={"ref": GITHUB_BASE_BRANCH})
@@ -190,7 +190,7 @@ async def _commit_file(
     """Create or update a file on *branch*. Returns the new commit SHA."""
     url = f"{_GITHUB_API}/repos/{repo}/contents/{path}"
     encoded = base64.b64encode(content.encode()).decode()
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "message": message,
         "content": encoded,
         "branch": branch,
@@ -209,7 +209,7 @@ async def _create_pr(
     base: str,
     title: str,
     body: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Open a pull request. Returns the PR object."""
     url = f"{_GITHUB_API}/repos/{repo}/pulls"
     resp = await client.post(
@@ -345,7 +345,7 @@ class GitHubPRPublisher:
         fix_code: str,
         approved_by: str = "dashboard",
         fix_ts: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create a branch, commit the fix, and open a GitHub PR.
 
@@ -363,9 +363,9 @@ class GitHubPRPublisher:
                 "error": "GITHUB_TOKEN not configured — PR pipeline disabled",
             }
 
-        ts_str = fix_ts or datetime.now(timezone.utc).isoformat()
+        ts_str = fix_ts or datetime.now(UTC).isoformat()
         slug = re.sub(r"[^a-z0-9]+", "-", endpoint.lower().strip("/"))[:40]
-        ts_tag = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        ts_tag = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         branch_name = f"auto-heal/{ts_tag}-{slug}"
 
         file_path = _resolve_file_path(endpoint)

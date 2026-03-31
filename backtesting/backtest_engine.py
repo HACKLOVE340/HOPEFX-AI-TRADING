@@ -22,8 +22,8 @@ class BacktestResult:
     max_drawdown: float
     win_rate: float
     total_trades: int
-    equity_curve: List[float] = field(default_factory=list)
-    trades: List[dict] = field(default_factory=list)
+    equity_curve: list[float] = field(default_factory=list)
+    trades: list[dict] = field(default_factory=list)
     total_commission: float = 0.0
     total_overnight_cost: float = 0.0  # cumulative financing charges
 
@@ -71,8 +71,8 @@ class BacktestEngine:
         self._overnight_rate_per_bar = (
             self.overnight_rate_annual / 365 / self.bars_per_day
         )
-        self.trades: List[dict] = []
-        self.equity_curve: List[float] = [initial_balance]
+        self.trades: list[dict] = []
+        self.equity_curve: list[float] = [initial_balance]
 
     # ------------------------------------------------------------------
     def run_backtest(

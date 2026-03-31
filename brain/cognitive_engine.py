@@ -37,7 +37,7 @@ class CognitiveEngine:
         if data is None or data.empty:
             raise ValueError("data must be a non-empty DataFrame")
         self.data = data.copy()
-        self.trends: List[str] = []
+        self.trends: list[str] = []
         self.momentum: Optional[float] = None
         self.volatility: Optional[float] = None
         self.support: Optional[float] = None
@@ -121,7 +121,7 @@ class CognitiveEngine:
         logger.debug("assess_volatility: band_width=%.4f", self.volatility)
         return self.volatility
 
-    def detect_support_resistance(self, lookback: int = 50) -> Tuple[float, float]:
+    def detect_support_resistance(self, lookback: int = 50) -> tuple[float, float]:
         """
         Identify support and resistance using rolling min/max.
 
@@ -161,7 +161,7 @@ class CognitiveEngine:
         logger.debug("perform_sentiment_analysis: sentiment=%.4f", self.sentiment)
         return self.sentiment
 
-    def composite_signal(self) -> Dict[str, object]:
+    def composite_signal(self) -> dict[str, object]:
         """
         Run all analyses and return a consolidated signal dictionary.
 

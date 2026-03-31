@@ -51,8 +51,8 @@ logger = logging.getLogger(__name__)
 # ── PyTorch (preferred; lighter than TF for this use-case) ───────────────────
 try:
     import torch
-    import torch.nn as nn
-    import torch.optim as optim
+    from torch import nn
+    from torch import optim
     from torch.utils.data import DataLoader, TensorDataset
 
     TORCH_AVAILABLE = True
@@ -62,8 +62,8 @@ except ImportError:
 
 # ── TensorFlow / Keras fallback ───────────────────────────────────────────────
 try:
-    import tensorflow as tf  # noqa: F401
-    from tensorflow.keras import layers, Model  # noqa: F401
+    import tensorflow as tf
+    from tensorflow.keras import layers, Model
 
     TF_AVAILABLE = True
 except ImportError:
@@ -79,7 +79,7 @@ def make_sequences(
     X: np.ndarray,
     y: np.ndarray,
     seq_len: int = 60,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Convert flat feature matrix to overlapping sequences.
 
@@ -639,14 +639,13 @@ class DeepPredictor:
                         best_val_loss,
                     )
                     break
-            else:
-                if epoch % 10 == 0:
-                    logger.info(
-                        "Epoch %3d  train=%.4f  lr=%.2e",
-                        epoch,
-                        avg_train,
-                        current_lr,
-                    )
+            elif epoch % 10 == 0:
+                logger.info(
+                    "Epoch %3d  train=%.4f  lr=%.2e",
+                    epoch,
+                    avg_train,
+                    current_lr,
+                )
 
         # Restore best weights
         if best_state is not None:

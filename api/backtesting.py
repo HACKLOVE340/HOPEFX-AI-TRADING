@@ -19,7 +19,7 @@ from __future__ import annotations
 import io
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -43,7 +43,7 @@ _DB_PREFIX = "backtest:result:"
 _WF_DB_PREFIX = "backtest:wf:"
 
 # Write-through in-process cache (populated lazily from DB on first read)
-_results: Dict[str, dict] = {}
+_results: dict[str, dict] = {}
 _results_loaded: bool = False
 
 
@@ -76,7 +76,7 @@ def _persist_wf_result(run_id: str, result: dict) -> None:
 
 
 # Walk-forward write-through cache
-_wf_results: Dict[str, dict] = {}
+_wf_results: dict[str, dict] = {}
 _wf_results_loaded: bool = False
 
 
@@ -108,7 +108,7 @@ class BacktestRequest(BaseModel):
     end_date: str = Field(..., description="ISO date string, e.g. '2024-01-01'")
     initial_capital: float = Field(10000.0, gt=0)
     data_frequency: str = Field("1d", description="'1d', '1h', '15m'")
-    strategy_params: Optional[Dict[str, Any]] = None
+    strategy_params: Optional[dict[str, Any]] = None
 
 
 class BacktestResult(BaseModel):
@@ -308,7 +308,7 @@ async def run_backtest(
     BacktestEngine, and returns performance metrics.
     """
     run_id = str(uuid.uuid4())
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
 
     try:
         metrics = _run_backtest_sync(req)
@@ -378,7 +378,7 @@ async def get_walk_forward(run_id: str, user: TokenPayload = Depends(get_current
     raise HTTPException(status_code=404, detail="Walk-forward result not found")
 
 
-@router.get("/results", response_model=List[BacktestResult])
+@router.get("/results", response_model=list[BacktestResult])
 async def list_results(
     user: TokenPayload = Depends(get_current_user),
     limit: int = 20,
@@ -532,7 +532,7 @@ async def run_multi_symbol_backtest(
     return MultiSymbolBacktestResponse(
         run_id=str(uuid.uuid4()),
         status="completed",
-        run_at=report.get("run_at", datetime.now(timezone.utc).isoformat()),
+        run_at=report.get("run_at", datetime.now(UTC).isoformat()),
         years=report.get("years", req.years),
         oos_frac=report.get("oos_frac", req.oos_frac),
         extended=report.get("extended", req.extended),
@@ -689,7 +689,7 @@ class ReplayBacktestRequest(BaseModel):
 class RegimeStressRequest(BaseModel):
     strategy: str = Field("microstructure_heuristic")
     initial_capital: float = Field(10_000.0, gt=0)
-    regimes: Optional[List[str]] = Field(
+    regimes: Optional[list[str]] = Field(
         None,
         description="Subset of regime names to run. Omit for all built-in regimes.",
     )
@@ -700,7 +700,7 @@ async def run_replay_backtest(
     req: ReplayBacktestRequest,
     background_tasks: BackgroundTasks,
     user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run a tick-level backtest using real Dukascopy historical data.
 
@@ -716,8 +716,8 @@ async def run_replay_backtest(
             from backtesting.replay_connector import ReplayBacktestRunner
             from datetime import datetime, timezone
 
-            start = datetime.fromisoformat(req.start_date).replace(tzinfo=timezone.utc)
-            end = datetime.fromisoformat(req.end_date).replace(tzinfo=timezone.utc)
+            start = datetime.fromisoformat(req.start_date).replace(tzinfo=UTC)
+            end = datetime.fromisoformat(req.end_date).replace(tzinfo=UTC)
 
             # Build a minimal strategy function from the strategy name
             strategy_fn = _resolve_strategy(req.strategy)
@@ -748,7 +748,7 @@ async def run_replay_backtest(
                 }
                 if metrics
                 else {},
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             })
         except Exception as exc:
             logger.error("Replay backtest %s failed: %s", run_id, exc, exc_info=True)
@@ -770,7 +770,7 @@ async def run_regime_stress_test(
     req: RegimeStressRequest,
     background_tasks: BackgroundTasks,
     user: TokenPayload = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run the strategy across all built-in stress regimes using real tick data.
 
@@ -835,7 +835,7 @@ async def run_regime_stress_test(
                     }
                     for r in report.results
                 ],
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
             })
         except Exception as exc:
             logger.error("Regime stress %s failed: %s", run_id, exc, exc_info=True)
@@ -851,7 +851,7 @@ async def run_regime_stress_test(
 
 
 @router.get("/replay/regimes", summary="List available stress regimes")
-async def list_stress_regimes() -> List[Dict[str, Any]]:
+async def list_stress_regimes() -> list[dict[str, Any]]:
     """Return all built-in stress regime definitions."""
     from backtesting.replay_connector import STRESS_REGIMES
 
@@ -1003,7 +1003,7 @@ def _build_pdf(result: dict) -> bytes:
         Paragraph(
             f"Strategy: <b>{result['strategy']}</b> &nbsp;·&nbsp; "
             f"Symbol: <b>{result['symbol']}</b> &nbsp;·&nbsp; "
-            f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+            f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}",
             subtitle_style,
         ),
     )

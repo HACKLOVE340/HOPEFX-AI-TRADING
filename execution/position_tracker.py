@@ -12,7 +12,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -31,15 +31,15 @@ class Position:
     unrealized_pnl: float = 0.0
     realized_pnl: float = 0.0
     commission: float = 0.0
-    opened_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    opened_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
 
     def update_price(self, new_price: float):
         """Update position with new price"""
         self.current_price = new_price
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
         # Calculate unrealized P&L
         if self.side == "long":
@@ -64,9 +64,9 @@ class PositionTracker:
     """
 
     def __init__(self):
-        self.positions: Dict[str, Position] = {}
+        self.positions: dict[str, Position] = {}
         self._lock = asyncio.Lock()
-        self._price_subscriptions: Dict[str, List[str]] = defaultdict(list)
+        self._price_subscriptions: dict[str, list[str]] = defaultdict(list)
 
     async def add_position(self, position: Position) -> bool:
         """Add new position"""
@@ -87,7 +87,7 @@ class PositionTracker:
                 if hasattr(pos, key):
                     setattr(pos, key, value)
 
-            pos.updated_at = datetime.now(timezone.utc)
+            pos.updated_at = datetime.now(UTC)
             return True
 
     async def close_position(
@@ -137,15 +137,15 @@ class PositionTracker:
         """Get position by ID"""
         return self.positions.get(position_id)
 
-    def get_positions_by_symbol(self, symbol: str) -> List[Position]:
+    def get_positions_by_symbol(self, symbol: str) -> list[Position]:
         """Get all positions for a symbol"""
         return [pos for pos in self.positions.values() if pos.symbol == symbol]
 
-    def get_all_positions(self) -> List[Position]:
+    def get_all_positions(self) -> list[Position]:
         """Get all positions"""
         return list(self.positions.values())
 
-    def get_exposure(self, symbol: Optional[str] = None) -> Dict[str, float]:
+    def get_exposure(self, symbol: Optional[str] = None) -> dict[str, float]:
         """Get total exposure"""
         if symbol:
             positions = self.get_positions_by_symbol(symbol)
@@ -169,7 +169,7 @@ class PositionTracker:
                 "net": total_long - total_short,
             }
 
-    def get_total_pnl(self) -> Dict[str, float]:
+    def get_total_pnl(self) -> dict[str, float]:
         """Get total P&L across all positions"""
         unrealized = sum(p.unrealized_pnl for p in self.positions.values())
         realized = sum(p.realized_pnl for p in self.positions.values())

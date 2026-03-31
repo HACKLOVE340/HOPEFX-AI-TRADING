@@ -47,7 +47,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List
 
 import numpy as np
@@ -172,7 +172,7 @@ class PostTradeAnalyzer:
 
     def __init__(self, lineage_store: Any = None) -> None:
         self._lineage = lineage_store
-        self._fills: List[FillRecord] = []
+        self._fills: list[FillRecord] = []
         self._start_ts = time.time()
 
     def record_fill(
@@ -204,7 +204,7 @@ class PostTradeAnalyzer:
             bar_high=bar_high or fill_price,
             bar_low=bar_low or fill_price,
             bar_close=bar_close or fill_price,
-            filled_at=datetime.now(timezone.utc),
+            filled_at=datetime.now(UTC),
         )
         self._fills.append(record)
 
@@ -252,7 +252,7 @@ class PostTradeAnalyzer:
 
     # ── Analytics ─────────────────────────────────────────────────────────────
 
-    def rolling_stats(self, window: int = 50) -> Dict[str, float]:
+    def rolling_stats(self, window: int = 50) -> dict[str, float]:
         """Rolling execution quality statistics over last N fills."""
         recent = self._fills[-window:] if self._fills else []
         if not recent:
@@ -272,7 +272,7 @@ class PostTradeAnalyzer:
             "adverse_sel_rate": round(sum(adverse) / len(adverse), 3),
         }
 
-    def get_fills(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_fills(self, limit: int = 100) -> list[dict[str, Any]]:
         return [
             {
                 "trade_id": r.trade_id,

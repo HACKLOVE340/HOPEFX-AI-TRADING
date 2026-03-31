@@ -54,7 +54,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -75,7 +75,7 @@ sys.path.insert(0, str(ROOT))
 MODEL_DIR = ROOT / "ml" / "saved_models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-import os as _os  # noqa: E402
+import os as _os
 
 # When HOPEFX_CI=1 (set by tests/conftest.py) use minimal model params so
 # every test that trains a model finishes well within the 20 s timeout.
@@ -113,7 +113,7 @@ def fetch_gold_ohlcv(
             df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
             df.columns = [c.lower() for c in df.columns]
             # Trim to requested years
-            cutoff = datetime.now(timezone.utc) - timedelta(days=years * 365)
+            cutoff = datetime.now(UTC) - timedelta(days=years * 365)
             if df.index.tz is not None:
                 cutoff = cutoff
             else:
@@ -133,7 +133,7 @@ def fetch_gold_ohlcv(
 
     import yfinance as yf
 
-    end = datetime.now(timezone.utc)
+    end = datetime.now(UTC)
     start = end - timedelta(days=years * 365)
     logger.info("Downloading %s  %s → %s", symbol, start.date(), end.date())
 
@@ -331,7 +331,7 @@ def walk_forward_eval(
     X: pd.DataFrame,
     y: pd.Series,
     n_splits: int = 8,
-) -> Dict:
+) -> dict:
     """
     Walk-forward cross-validation with the stacking ensemble.
     Uses a simpler (faster) model for CV to avoid O(n²) fitting time.
@@ -443,7 +443,7 @@ def train_final_model(
     y: pd.Series,
     train_pct: float = 0.8,
     use_stacking: bool = False,
-) -> Tuple[object, Dict]:
+) -> tuple[object, dict]:
     """
     Train final model on 80% of data; evaluate on held-out 20%.
 
@@ -540,7 +540,7 @@ def train_final_model(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def extract_feature_importance(model, feature_names: List[str]) -> Dict:
+def extract_feature_importance(model, feature_names: list[str]) -> dict:
     """
     Extract feature importance from the pipeline.
 
@@ -668,11 +668,11 @@ class SharpeProgressTracker:
         self._target_n = target_n
         self._target_sharpe = target_sharpe
         self._annualise = annualise
-        self._returns: List[float] = []
+        self._returns: list[float] = []
 
     # ── Core update ───────────────────────────────────────────────────────────
 
-    def update(self, trade_return: float) -> Dict:
+    def update(self, trade_return: float) -> dict:
         """
         Record one trade return and return the current status dict.
 
@@ -692,7 +692,7 @@ class SharpeProgressTracker:
 
     # ── Status snapshot ───────────────────────────────────────────────────────
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         """Return the current progress snapshot without recording a new trade."""
         n = len(self._returns)
         if n < 2:
@@ -770,7 +770,7 @@ class SharpeProgressTracker:
         """True when both the trade-count and Sharpe targets are met."""
         return self.status()["gate_passed"]
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Alias for status() — for serialisation compatibility."""
         return self.status()
 
@@ -780,7 +780,7 @@ def oos_eval_advanced(
     y_train: pd.Series,
     X_oos: pd.DataFrame,
     y_oos: pd.Series,
-) -> Dict:
+) -> dict:
     """
     Train the production model on X_train/y_train; evaluate on held-out X_oos/y_oos.
 
@@ -883,7 +883,7 @@ def oos_eval_advanced(
     # verify accuracy without unpickling the full pipeline.
     meta = {
         "model_file": "advanced_oos.pkl",
-        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "trained_at": datetime.now(UTC).isoformat(),
         # ci_mode=True means the model was trained with HOPEFX_CI=1 (n_estimators=20,
         # fast CI build).  The live deployment gate in api/trading.py reads this field
         # and blocks live orders until a full production retrain is done with HOPEFX_CI=0.
@@ -1047,7 +1047,7 @@ def main():
         use_cached=getattr(args, "use_cached", False),
         cached_csv=getattr(args, "cached_csv", None),
     )
-    end_dt = datetime.now(timezone.utc)
+    end_dt = datetime.now(UTC)
     start_dt = end_dt - timedelta(days=args.years * 365)
 
     macro_df = None
@@ -1145,7 +1145,7 @@ def main():
         logger.info("Top features: %s", list(importance.keys())[:10])
 
     # ── Held-out OOS evaluation ───────────────────────────────────────────────
-    oos_metrics: Dict = {}
+    oos_metrics: dict = {}
     if X_oos is not None:
         logger.info("\n=== Held-out OOS evaluation (%d bars) ===", oos_n)
         oos_metrics = oos_eval_advanced(X_cv, y_cv, X_oos, y_oos)
@@ -1163,7 +1163,7 @@ def main():
         "cv_sample_count": len(X_cv),
         "oos_sample_count": oos_n,
         "feature_count": X.shape[1],
-        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "trained_at": datetime.now(UTC).isoformat(),
         "walkforward": wf,
         "final": final_metrics,
         "oos": oos_metrics,

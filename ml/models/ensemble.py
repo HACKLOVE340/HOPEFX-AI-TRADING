@@ -21,7 +21,7 @@ Features:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -39,7 +39,7 @@ class ModelPrediction:
     prediction: float
     confidence: float
     weight: float
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -48,13 +48,13 @@ class EnsemblePrediction:
 
     prediction: float
     confidence: float
-    predictions_by_model: Dict[str, ModelPrediction]
+    predictions_by_model: dict[str, ModelPrediction]
     consensus: str  # 'strong', 'moderate', 'weak', 'divergent'
     direction: str  # 'bullish', 'bearish', 'neutral'
     volatility_factor: float
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "prediction": self.prediction,
             "confidence": self.confidence,
@@ -90,7 +90,7 @@ class EnsemblePredictor(BaseMLModel):
     - Adaptive model selection
     """
 
-    def __init__(self, name: str = "Ensemble_Predictor", config: Optional[Dict] = None):
+    def __init__(self, name: str = "Ensemble_Predictor", config: Optional[dict] = None):
         """
         Initialize ensemble model.
 
@@ -274,7 +274,7 @@ class EnsemblePredictor(BaseMLModel):
             self.logger.warning("XGBoost not available, skipping")
             self.use_xgb = False
 
-    def _prepare_features(self, data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _prepare_features(self, data: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
         Prepare features for training/prediction.
 
@@ -315,7 +315,7 @@ class EnsemblePredictor(BaseMLModel):
     def _prepare_lstm_sequences(
         self,
         data: np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Prepare sequences for LSTM."""
         X, y = [], []
         for i in range(self.sequence_length, len(data)):
@@ -329,7 +329,7 @@ class EnsemblePredictor(BaseMLModel):
         y_train: np.ndarray,
         X_val: Optional[np.ndarray] = None,
         y_val: Optional[np.ndarray] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Train all component models.
 
@@ -409,7 +409,7 @@ class EnsemblePredictor(BaseMLModel):
             self.is_trained = True
             self.training_history.append(
                 {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "results": results,
                     "data_points": len(X_train),
                 },
@@ -437,7 +437,7 @@ class EnsemblePredictor(BaseMLModel):
         ensemble_predictions = self.predict_with_confidence(X)
         return np.array([p.prediction for p in ensemble_predictions])
 
-    def predict_with_confidence(self, X: np.ndarray) -> List[EnsemblePrediction]:
+    def predict_with_confidence(self, X: np.ndarray) -> list[EnsemblePrediction]:
         """
         Make predictions with confidence scores and model breakdown.
 
@@ -537,7 +537,7 @@ class EnsemblePredictor(BaseMLModel):
 
     def _combine_predictions(
         self,
-        model_predictions: Dict[str, ModelPrediction],
+        model_predictions: dict[str, ModelPrediction],
     ) -> EnsemblePrediction:
         """Combine individual model predictions into ensemble prediction."""
 
@@ -673,7 +673,7 @@ class EnsemblePredictor(BaseMLModel):
                     confidences[model_name] / total_confidence
                 )
 
-    def get_model_summary(self) -> Dict[str, Any]:
+    def get_model_summary(self) -> dict[str, Any]:
         """Get summary of all models in ensemble."""
         return {
             "models": list(self.models.keys()),

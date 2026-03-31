@@ -17,7 +17,7 @@ Provides a single get_complete_analysis() method for a full snapshot.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional
 
 from analysis.order_flow import OrderFlowAnalyzer, get_order_flow_analyzer
@@ -80,7 +80,7 @@ class OrderFlowDashboard:
         self,
         symbol: str,
         lookback_minutes: int = 60,
-    ) -> Dict:
+    ) -> dict:
         """
         Get a complete order flow analysis snapshot for a symbol.
 
@@ -98,9 +98,9 @@ class OrderFlowDashboard:
         Returns:
             Dict with all analysis components
         """
-        result: Dict = {
+        result: dict = {
             "symbol": symbol,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "lookback_minutes": lookback_minutes,
             "order_flow": None,
             "institutional": None,
@@ -208,9 +208,9 @@ class OrderFlowDashboard:
 
         return result
 
-    def _build_summary(self, analysis: Dict) -> Dict:
+    def _build_summary(self, analysis: dict) -> dict:
         """Build a high-level summary from the full analysis."""
-        signals: List[str] = []
+        signals: list[str] = []
         bias = "neutral"
         strength = "weak"
 
@@ -257,7 +257,7 @@ class OrderFlowDashboard:
     # CONVENIENCE METHODS
     # ================================================================
 
-    def get_market_bias(self, symbol: str, lookback_minutes: int = 60) -> Dict:
+    def get_market_bias(self, symbol: str, lookback_minutes: int = 60) -> dict:
         """
         Get high-level market bias for a symbol.
 
@@ -271,7 +271,7 @@ class OrderFlowDashboard:
         analysis = self.get_complete_analysis(symbol, lookback_minutes)
         return analysis.get("summary", {"bias": "neutral", "strength": "weak"})
 
-    def get_key_levels(self, symbol: str) -> Dict:
+    def get_key_levels(self, symbol: str) -> dict:
         """
         Get key support/resistance levels from order flow.
 
@@ -333,7 +333,7 @@ class OrderFlowDashboard:
             except Exception as exc:
                 logger.warning("Order flow add_trade error for %s: %s", symbol, exc)
 
-    def get_summary(self, symbol: str, lookback_minutes: int = 60) -> Dict:
+    def get_summary(self, symbol: str, lookback_minutes: int = 60) -> dict:
         """
         Get a concise summary of current order flow conditions.
 
@@ -344,9 +344,9 @@ class OrderFlowDashboard:
         Returns:
             Dict with summary metrics and bias
         """
-        result: Dict = {
+        result: dict = {
             "symbol": symbol,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "bias": "neutral",
             "dom_imbalance": None,
             "buy_pressure": None,
@@ -432,7 +432,7 @@ class OrderFlowDashboard:
         Returns:
             'bullish', 'bearish', or 'neutral'
         """
-        votes: List[str] = []
+        votes: list[str] = []
 
         if self._dom is not None:
             try:
@@ -497,11 +497,11 @@ class OrderFlowDashboard:
 
 
 def create_dashboard(
-    order_flow_config: Optional[Dict] = None,
-    dom_config: Optional[Dict] = None,
-    time_sales_config: Optional[Dict] = None,
-    advanced_config: Optional[Dict] = None,
-    institutional_config: Optional[Dict] = None,
+    order_flow_config: Optional[dict] = None,
+    dom_config: Optional[dict] = None,
+    time_sales_config: Optional[dict] = None,
+    advanced_config: Optional[dict] = None,
+    institutional_config: Optional[dict] = None,
 ) -> OrderFlowDashboard:
     """
     Factory function to create a fully-initialised OrderFlowDashboard.

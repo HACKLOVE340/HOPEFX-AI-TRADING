@@ -14,7 +14,7 @@ Comprehensive tests for Phases 17-26 modules:
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from unittest.mock import MagicMock
 import numpy as np
 
@@ -793,8 +793,8 @@ class TestExecutionTransparencyExtended:
         from datetime import datetime, timedelta
 
         dist = engine.get_slippage_distribution(
-            period_start=datetime.now(timezone.utc) - timedelta(hours=1),
-            period_end=datetime.now(timezone.utc) + timedelta(hours=1),
+            period_start=datetime.now(UTC) - timedelta(hours=1),
+            period_end=datetime.now(UTC) + timedelta(hours=1),
         )
         assert dist is not None
 
@@ -812,8 +812,8 @@ class TestExecutionTransparencyExtended:
         from datetime import datetime, timedelta
 
         trend = engine.get_latency_trend(
-            period_start=datetime.now(timezone.utc) - timedelta(hours=1),
-            period_end=datetime.now(timezone.utc) + timedelta(hours=1),
+            period_start=datetime.now(UTC) - timedelta(hours=1),
+            period_end=datetime.now(UTC) + timedelta(hours=1),
         )
         assert trend is not None
 
@@ -931,7 +931,7 @@ class TestTeamsExtended:
             team_with_owner.team_id, "exp@x.com", UserRole.VIEWER, "owner1"
         )
         # Force expiry
-        inv.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        inv.expires_at = datetime.now(UTC) - timedelta(hours=1)
         result = manager.accept_invitation(inv.token, "user4", "User 4")
         assert result is None
 

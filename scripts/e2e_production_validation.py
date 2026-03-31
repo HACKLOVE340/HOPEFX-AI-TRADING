@@ -45,7 +45,7 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import List, Tuple
 
@@ -59,13 +59,13 @@ os.chdir(_PROJECT_ROOT)
 
 # ── Result tracking ───────────────────────────────────────────────────────────
 
-PASS = "\033[92m✓\033[0m"  # noqa: S105
+PASS = "\033[92m✓\033[0m"
 FAIL = "\033[91m✗\033[0m"
 WARN = "\033[93m⚠\033[0m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
 
-results: List[Tuple[str, bool, bool, str]] = []  # (name, passed, critical, detail)
+results: list[tuple[str, bool, bool, str]] = []  # (name, passed, critical, detail)
 
 
 def record(name: str, passed: bool, detail: str = "", critical: bool = True) -> None:
@@ -175,7 +175,7 @@ def check_orchestrator() -> str:
     f1 = orchestrator.get_ml_features()
     f2 = orchestrator.get_ml_features(symbol="XAU_USD")
     f3 = orchestrator.get_ml_features(
-        as_of=datetime.now(timezone.utc), symbol="XAU_USD"
+        as_of=datetime.now(UTC), symbol="XAU_USD"
     )
     assert isinstance(f1, dict), "get_ml_features() must return dict"
     assert len(f1) >= 20, f"Expected >=20 features, got {len(f1)}"
@@ -257,7 +257,7 @@ def check_lineage() -> str:
     store = orchestrator._lineage
     tick = GoldTick(
         symbol="XAU_USD",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         bid=2350.0,
         ask=2350.5,
         mid=2350.25,
@@ -284,7 +284,7 @@ def check_dqe() -> str:
 
     good = GoldTick(
         symbol="XAU_USD",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         bid=2350.0,
         ask=2350.5,
         mid=2350.25,
@@ -297,7 +297,7 @@ def check_dqe() -> str:
     # Inverted spread — must be rejected
     bad = GoldTick(
         symbol="XAU_USD",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         bid=2351.0,
         ask=2350.0,
         mid=2350.5,  # bid > ask
@@ -358,7 +358,7 @@ def check_microstructure() -> str:
         price += 0.5 if i % 3 == 0 else -0.3
         tick = GoldTick(
             symbol="XAU_USD",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             bid=round(price - 0.15, 4),
             ask=round(price + 0.15, 4),
             mid=round(price, 4),
@@ -392,8 +392,8 @@ def check_sentiment_scorer() -> str:
         headline="Gold prices surge as Fed signals rate cuts amid inflation fears",
         summary="Gold rallied strongly on dovish Fed commentary.",
         url="https://example.com/gold-surge",
-        published_at=datetime.now(timezone.utc),
-        fetched_at=datetime.now(timezone.utc),
+        published_at=datetime.now(UTC),
+        fetched_at=datetime.now(UTC),
     )
     scored = scorer.score(article)
     assert (
@@ -455,7 +455,7 @@ def check_replay() -> str:
 
     fetcher = DukascopyFetcher()
     # Verify URL construction uses 0-based months (Dukascopy quirk)
-    dt = datetime(2024, 3, 15, tzinfo=timezone.utc)
+    dt = datetime(2024, 3, 15, tzinfo=UTC)
     url = fetcher._build_url("XAUUSD", dt)
     assert "/2024/02/" in url, f"Month should be 0-based (02 for March), got: {url}"
     # Timeframe aliases
@@ -662,16 +662,16 @@ async def check_orchestrator_start_stop() -> None:
     finally:
         try:
             await orch.stop()
-        except Exception:  # nosec B110 - orchestrator stop failure during cleanup is non-fatal  # noqa: S110
+        except Exception:  # nosec B110 - orchestrator stop failure during cleanup is non-fatal
             pass
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
-async def run_all(verbose: bool = False) -> Tuple[int, int]:
+async def run_all(verbose: bool = False) -> tuple[int, int]:
     print(f"\n{BOLD}HOPEFX End-to-End Production Validation{RESET}")
-    print(f"  Timestamp: {datetime.now(timezone.utc).isoformat()}")
+    print(f"  Timestamp: {datetime.now(UTC).isoformat()}")
     print(f"  Python:    {sys.version.split()[0]}\n")
 
     print(f"{BOLD}Synchronous checks{RESET}")

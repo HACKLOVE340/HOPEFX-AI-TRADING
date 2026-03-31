@@ -30,7 +30,7 @@ import asyncio
 import logging
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Callable, Dict, Generic, List, Optional, Type, TypeVar
 
 from pydantic import BaseModel, Field
@@ -64,7 +64,7 @@ class EventEnvelope(BaseModel, Generic[T]):
     """
 
     event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     source: str
     event_type: str
     payload: T
@@ -85,7 +85,7 @@ class EventEnvelope(BaseModel, Generic[T]):
             model_version=model_version,
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "event_id": self.event_id,
             "timestamp": self.timestamp.isoformat(),
@@ -192,10 +192,10 @@ class CircuitBreakerEvent(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Map event_type string → list of async/sync callbacks
-_subscribers: Dict[str, List[Callable]] = defaultdict(list)
+_subscribers: dict[str, list[Callable]] = defaultdict(list)
 
 
-def subscribe(event_type: Type[BaseModel], callback: Callable) -> None:
+def subscribe(event_type: type[BaseModel], callback: Callable) -> None:
     """
     Register a callback for a specific typed event.
 
@@ -216,7 +216,7 @@ def subscribe(event_type: Type[BaseModel], callback: Callable) -> None:
     )
 
 
-def unsubscribe(event_type: Type[BaseModel], callback: Callable) -> None:
+def unsubscribe(event_type: type[BaseModel], callback: Callable) -> None:
     key = event_type.__name__
     try:
         _subscribers[key].remove(callback)

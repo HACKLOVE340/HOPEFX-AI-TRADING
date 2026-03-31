@@ -33,7 +33,7 @@ _bearer = HTTPBearer(auto_error=True)
 # The actual HTTP endpoints live in auth/router.py.  Re-export that router here
 # so that code doing `from api.auth import router` works without change.
 try:
-    from auth.router import router  # noqa: F401  (re-export)
+    from auth.router import router
 except Exception as _router_import_err:  # pragma: no cover
     from fastapi import APIRouter as _APIRouter
 

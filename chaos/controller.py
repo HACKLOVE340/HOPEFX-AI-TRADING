@@ -40,7 +40,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from chaos.injector import FaultInjector, FaultType, fault_injector
@@ -61,7 +61,7 @@ class ScenarioResult:
     duration_s: float
     sla_s: float
     detail: str
-    injected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    injected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def within_sla(self) -> bool:
@@ -82,11 +82,11 @@ class ChaosController:
     ) -> None:
         self._orch = orchestrator
         self._inj = injector or fault_injector
-        self._results: List[ScenarioResult] = []
+        self._results: list[ScenarioResult] = []
 
     # ── Scenario runner ───────────────────────────────────────────────────────
 
-    async def run_all_scenarios(self) -> List[ScenarioResult]:
+    async def run_all_scenarios(self) -> list[ScenarioResult]:
         """Run all chaos scenarios sequentially. Returns list of results."""
         scenarios = [
             self._scenario_dqe_spike_rejection,
@@ -329,7 +329,7 @@ class ChaosController:
         except Exception:
             return 999.0  # assume wide if unavailable
 
-    def _get_orchestrator_health(self) -> Dict[str, Any]:
+    def _get_orchestrator_health(self) -> dict[str, Any]:
         try:
             return self._orch.health()
         except Exception:
@@ -342,7 +342,7 @@ class ChaosController:
             return "No chaos scenarios have been run."
         passed = sum(1 for r in self._results if r.passed)
         lines = [
-            f"CHAOS ENGINEERING REPORT — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+            f"CHAOS ENGINEERING REPORT — {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}",
             f"Scenarios: {len(self._results)}  Passed: {passed}  Failed: {len(self._results) - passed}",
             "",
         ]
@@ -357,7 +357,7 @@ class ChaosController:
             lines.append(f"       {r.detail}")
         return "\n".join(lines)
 
-    def results_dict(self) -> List[Dict[str, Any]]:
+    def results_dict(self) -> list[dict[str, Any]]:
         return [
             {
                 "scenario": r.scenario,

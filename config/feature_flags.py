@@ -38,6 +38,7 @@ import logging
 import os
 from enum import Enum
 from typing import Any, Dict, Tuple
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ class _FeatureDef:
         return raw.strip().lower() not in ("0", "false", "no", "off")
 
     # Allow the owning class to expose metadata
-    def meta(self) -> Dict[str, Any]:
+    def meta(self) -> dict[str, Any]:
         return {
             "name": self._attr_name,
             "env_var": self._env_var,
@@ -650,7 +651,7 @@ class FeatureFlags:
 
     # ── Internal helpers ──────────────────────────────────────────────────
 
-    def registry(self) -> Dict[str, Dict[str, Any]]:
+    def registry(self) -> dict[str, dict[str, Any]]:
         """
         Return metadata for every registered feature flag.
 
@@ -659,7 +660,7 @@ class FeatureFlags:
             ``name``, ``env_var``, ``enabled``, ``default``, ``status``,
             ``description``.
         """
-        result: Dict[str, Dict[str, Any]] = {}
+        result: dict[str, dict[str, Any]] = {}
         # Use vars() on the class so we get the raw descriptor objects
         # (getattr would invoke __get__ and return bools).
         # Check by sentinel attribute rather than isinstance() so the registry
@@ -701,7 +702,7 @@ class FeatureFlags:
 # ---------------------------------------------------------------------------
 
 
-def check_phase2_gate() -> Tuple[bool, str]:
+def check_phase2_gate() -> tuple[bool, str]:
     """
     Verify the Phase 2 (anomaly weighting) paper-trading gate.
 
@@ -724,8 +725,8 @@ def check_phase2_gate() -> Tuple[bool, str]:
     try:
         start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
         if start.tzinfo is None:
-            start = start.replace(tzinfo=timezone.utc)
-        elapsed = datetime.now(timezone.utc) - start
+            start = start.replace(tzinfo=UTC)
+        elapsed = datetime.now(UTC) - start
         required = timedelta(days=30)
         if elapsed < required:
             remaining = required - elapsed
@@ -738,7 +739,7 @@ def check_phase2_gate() -> Tuple[bool, str]:
         return False, f"OANDA_PAPER_RUN_START_UTC parse error: {exc}"
 
 
-def check_phase3_gate() -> Tuple[bool, str]:
+def check_phase3_gate() -> tuple[bool, str]:
     """
     Verify the Phase 3 (online learning) paper-trading gate.
 
@@ -776,8 +777,8 @@ def check_phase3_gate() -> Tuple[bool, str]:
     try:
         start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
         if start.tzinfo is None:
-            start = start.replace(tzinfo=timezone.utc)
-        elapsed = datetime.now(timezone.utc) - start
+            start = start.replace(tzinfo=UTC)
+        elapsed = datetime.now(UTC) - start
         required = timedelta(days=90)
         if elapsed < required:
             remaining = required - elapsed
@@ -797,7 +798,7 @@ def check_phase4_gate(
     p_value: float,
     oos_accuracy_gate: float = 0.70,
     p_value_gate: float = 0.001,
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     """
     Verify the Phase 4 (deep ensemble) OOS gate.
 
@@ -834,7 +835,7 @@ def check_sharpe_gate(
     sharpe_before: float,
     sharpe_after: float,
     max_drop: float = 0.2,
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     """
     Verify the Phase 2 Sharpe gate.
 

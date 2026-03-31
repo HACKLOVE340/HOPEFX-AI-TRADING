@@ -5,7 +5,7 @@
 # No commercial use without explicit permission.
 """transparency/router.py — FastAPI router for execution transparency."""
 
-from datetime import timezone
+from datetime import timezone, UTC
 
 from transparency.engine import ExecutionTransparencyEngine
 
@@ -64,7 +64,7 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
         """Generate an execution quality report for the last N days."""
         from datetime import datetime, timedelta
 
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=days)
         report = engine.generate_report(start, end)
         if report is None:
@@ -87,7 +87,7 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
         """Get slippage distribution data for charting."""
         from datetime import datetime, timedelta
 
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=days)
         return engine.get_slippage_distribution(start, end)
 
@@ -96,7 +96,7 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
         """Get daily latency trend data."""
         from datetime import datetime, timedelta
 
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=days)
         return engine.get_latency_trend(start, end)
 

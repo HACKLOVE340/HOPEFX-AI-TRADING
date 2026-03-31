@@ -15,7 +15,7 @@ This module provides:
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from decimal import Decimal
 from typing import Optional, Dict, List, Any
 from enum import Enum
@@ -92,14 +92,14 @@ class EnterpriseFeatures:
 
     sso_enabled: bool = False
     sso_provider: Optional[str] = None
-    sso_config: Optional[Dict[str, Any]] = None
+    sso_config: Optional[dict[str, Any]] = None
     api_rate_limit_override: Optional[int] = None
     custom_webhooks: bool = True
     dedicated_support: bool = True
     sla_tier: str = "standard"
     data_retention_days: int = 365
     audit_logging: bool = True
-    ip_whitelist: Optional[List[str]] = None
+    ip_whitelist: Optional[list[str]] = None
     mfa_required: bool = False
     custom_reports: bool = True
     api_key_limit: int = 10
@@ -127,7 +127,7 @@ class Partner:
         self.contact_phone = contact_phone
         self.partner_type = partner_type
         self.status = status
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.approved_at: Optional[datetime] = None
 
         # Commission settings
@@ -161,8 +161,8 @@ class Partner:
     def approve(self) -> None:
         """Approve partner application"""
         self.status = PartnerStatus.ACTIVE
-        self.approved_at = datetime.now(timezone.utc)
-        self.contract_start = datetime.now(timezone.utc)
+        self.approved_at = datetime.now(UTC)
+        self.contract_start = datetime.now(UTC)
         logger.info(f"Partner {self.partner_id} approved")
 
     def suspend(self) -> None:
@@ -173,7 +173,7 @@ class Partner:
     def terminate(self) -> None:
         """Terminate partnership"""
         self.status = PartnerStatus.TERMINATED
-        self.contract_end = datetime.now(timezone.utc)
+        self.contract_end = datetime.now(UTC)
         logger.info(f"Partner {self.partner_id} terminated")
 
     def record_sale(self, amount: Decimal) -> Decimal:
@@ -185,7 +185,7 @@ class Partner:
         self.client_count += 1
         return commission
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             "partner_id": self.partner_id,
@@ -226,7 +226,7 @@ class WhiteLabelInstance:
         self.name = name
         self.config = config
         self.status = status
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.deployed_at: Optional[datetime] = None
 
         # Enterprise features
@@ -245,7 +245,7 @@ class WhiteLabelInstance:
     def deploy(self) -> None:
         """Mark instance as deployed"""
         self.status = WhiteLabelStatus.DEPLOYED
-        self.deployed_at = datetime.now(timezone.utc)
+        self.deployed_at = datetime.now(UTC)
         logger.info(f"White-label instance {self.instance_id} deployed")
 
     def enter_maintenance(self) -> None:
@@ -272,7 +272,7 @@ class WhiteLabelInstance:
         """Check if instance is active"""
         return self.status == WhiteLabelStatus.DEPLOYED
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             "instance_id": self.instance_id,
@@ -320,7 +320,7 @@ class EnterpriseCustomer:
         self.contact_email = contact_email
         self.contact_name = contact_name
         self.tier = tier
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
 
         # Enterprise features configuration
         self.features = EnterpriseFeatures()
@@ -337,7 +337,7 @@ class EnterpriseCustomer:
         self.api_calls = 0
         self.data_storage_gb = 0
 
-    def configure_sso(self, provider: str, config: Dict[str, Any]) -> None:
+    def configure_sso(self, provider: str, config: dict[str, Any]) -> None:
         """Configure SSO for enterprise customer"""
         self.features.sso_enabled = True
         self.features.sso_provider = provider
@@ -349,7 +349,7 @@ class EnterpriseCustomer:
         self.features.api_rate_limit_override = limit
         logger.info(f"API rate limit set for {self.customer_id}: {limit}")
 
-    def set_ip_whitelist(self, ips: List[str]) -> None:
+    def set_ip_whitelist(self, ips: list[str]) -> None:
         """Set IP whitelist"""
         self.features.ip_whitelist = ips
         logger.info(f"IP whitelist set for {self.customer_id}")
@@ -359,7 +359,7 @@ class EnterpriseCustomer:
         self.features.mfa_required = True
         logger.info(f"MFA enabled for {self.customer_id}")
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             "customer_id": self.customer_id,
@@ -399,9 +399,9 @@ class EnterpriseManager:
     """Manage enterprise customers, partners, and white-label instances"""
 
     def __init__(self):
-        self._partners: Dict[str, Partner] = {}
-        self._white_label_instances: Dict[str, WhiteLabelInstance] = {}
-        self._enterprise_customers: Dict[str, EnterpriseCustomer] = {}
+        self._partners: dict[str, Partner] = {}
+        self._white_label_instances: dict[str, WhiteLabelInstance] = {}
+        self._enterprise_customers: dict[str, EnterpriseCustomer] = {}
 
     def register_partner(
         self,
@@ -522,8 +522,8 @@ class EnterpriseManager:
 
         if contract_value:
             customer.contract_value = contract_value
-            customer.contract_start = datetime.now(timezone.utc)
-            customer.contract_end = datetime.now(timezone.utc) + timedelta(
+            customer.contract_start = datetime.now(UTC)
+            customer.contract_end = datetime.now(UTC) + timedelta(
                 days=30 * contract_months
             )
 
@@ -537,7 +537,7 @@ class EnterpriseManager:
         return self._enterprise_customers.get(customer_id)
 
     def configure_enterprise_sso(
-        self, customer_id: str, provider: str, config: Dict[str, Any]
+        self, customer_id: str, provider: str, config: dict[str, Any]
     ) -> bool:
         """Configure SSO for enterprise customer"""
         customer = self.get_enterprise_customer(customer_id)
@@ -546,7 +546,7 @@ class EnterpriseManager:
         customer.configure_sso(provider, config)
         return True
 
-    def get_partner_clients(self, partner_id: str) -> List[WhiteLabelInstance]:
+    def get_partner_clients(self, partner_id: str) -> list[WhiteLabelInstance]:
         """Get all white-label instances for a partner"""
         return [
             inst
@@ -558,7 +558,7 @@ class EnterpriseManager:
         self,
         partner_type: Optional[PartnerType] = None,
         status: Optional[PartnerStatus] = None,
-    ) -> List[Partner]:
+    ) -> list[Partner]:
         """Get all partners with optional filters"""
         partners = list(self._partners.values())
 
@@ -571,7 +571,7 @@ class EnterpriseManager:
 
     def get_all_white_label_instances(
         self, status: Optional[WhiteLabelStatus] = None
-    ) -> List[WhiteLabelInstance]:
+    ) -> list[WhiteLabelInstance]:
         """Get all white-label instances"""
         instances = list(self._white_label_instances.values())
 
@@ -582,7 +582,7 @@ class EnterpriseManager:
 
     def get_all_enterprise_customers(
         self, tier: Optional[SubscriptionTier] = None
-    ) -> List[EnterpriseCustomer]:
+    ) -> list[EnterpriseCustomer]:
         """Get all enterprise customers"""
         customers = list(self._enterprise_customers.values())
 
@@ -593,7 +593,7 @@ class EnterpriseManager:
 
     def process_partner_payout(
         self, partner_id: str, amount: Optional[Decimal] = None
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """Process payout for partner"""
         import uuid
 
@@ -615,10 +615,10 @@ class EnterpriseManager:
             "partner_id": partner_id,
             "amount": float(payout_amount),
             "status": "processed",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
-    def get_enterprise_stats(self) -> Dict[str, Any]:
+    def get_enterprise_stats(self) -> dict[str, Any]:
         """Get enterprise program statistics"""
         partners = list(self._partners.values())
         instances = list(self._white_label_instances.values())

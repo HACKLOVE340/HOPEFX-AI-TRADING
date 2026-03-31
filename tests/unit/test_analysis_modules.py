@@ -17,7 +17,7 @@ Tests for:
 import pytest
 import numpy as np
 import pandas as pd
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from unittest.mock import MagicMock
 
 
@@ -1070,7 +1070,7 @@ class TestOrderFlowDashboard:
 
     def test_add_trade_with_explicit_timestamp(self):
         dashboard = self._full_dashboard()
-        ts = datetime.now(timezone.utc)
+        ts = datetime.now(UTC)
         dashboard.add_trade("XAUUSD", 1950.0, 2.0, "buy", timestamp=ts)
 
     def test_add_trade_with_trade_id(self):

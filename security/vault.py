@@ -16,15 +16,15 @@ import logging
 import os
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-from cryptography.fernet import Fernet  # noqa: E402
-from cryptography.hazmat.backends import default_backend  # noqa: E402
-from cryptography.hazmat.primitives import hashes  # noqa: E402
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # noqa: E402
+from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 
 @dataclass
@@ -49,7 +49,7 @@ class HSMVault:
         self.hsm_type = hsm_type
         self.key_store_path = key_store_path
         self._master_key: Optional[bytes] = None
-        self._key_cache: Dict[str, bytes] = {}
+        self._key_cache: dict[str, bytes] = {}
         self._initialized = False
 
         os.makedirs(key_store_path, exist_ok=True)
@@ -362,7 +362,7 @@ class HSMVault:
             iterations=0,
             algorithm="AES-256-GCM",
             key_id=key_id,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
 
     def decrypt(self, secret: EncryptedSecret) -> str:
@@ -445,8 +445,8 @@ class APICredentialManager:
 
     def __init__(self, vault: HSMVault):
         self.vault = vault
-        self.credentials: Dict[str, EncryptedSecret] = {}
-        self.rotation_schedule: Dict[str, datetime] = {}
+        self.credentials: dict[str, EncryptedSecret] = {}
+        self.rotation_schedule: dict[str, datetime] = {}
 
     def add_credential(
         self, name: str, api_key: str, api_secret: str, rotation_days: int = 90
@@ -456,7 +456,7 @@ class APICredentialManager:
             {
                 "api_key": api_key,
                 "api_secret": api_secret,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             }
         )
 
@@ -466,20 +466,20 @@ class APICredentialManager:
         # Schedule rotation
         from datetime import timedelta
 
-        self.rotation_schedule[name] = datetime.now(timezone.utc) + timedelta(
+        self.rotation_schedule[name] = datetime.now(UTC) + timedelta(
             days=rotation_days
         )
 
         logger.info("Credential '%s' encrypted and stored", name)
 
-    def get_credential(self, name: str) -> Dict[str, str]:
+    def get_credential(self, name: str) -> dict[str, str]:
         """Retrieve and decrypt credentials"""
         if name not in self.credentials:
             raise KeyError(f"Credential '{name}' not found")
 
         # Check rotation
-        if datetime.now(timezone.utc) > self.rotation_schedule.get(
-            name, datetime.now(timezone.utc)
+        if datetime.now(UTC) > self.rotation_schedule.get(
+            name, datetime.now(UTC)
         ):
             logger.warning("Credential '%s' needs rotation", name)
 

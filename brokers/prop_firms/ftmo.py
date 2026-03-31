@@ -16,7 +16,7 @@ import hmac
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
@@ -51,7 +51,7 @@ class FTMOMetrics:
     days_remaining: int
     phase_progress: float  # 0-1
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         data = asdict(self)
         data["phase"] = self.phase.value
         return data
@@ -103,10 +103,10 @@ class FTMOBroker:
         self,
         method: str,
         endpoint: str,
-        params: Optional[Dict] = None,
-    ) -> Dict[str, str]:
+        params: Optional[dict] = None,
+    ) -> dict[str, str]:
         """Generate FTMO API signature"""
-        timestamp = str(int(datetime.now(timezone.utc).timestamp() * 1000))
+        timestamp = str(int(datetime.now(UTC).timestamp() * 1000))
         nonce = self._request_nonce
         self._request_nonce += 1
 
@@ -200,7 +200,7 @@ class FTMOBroker:
         stop_loss: Optional[float] = None,
         take_profit: Optional[float] = None,
         comment: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Place order with FTMO risk limits applied
 
@@ -297,7 +297,7 @@ class FTMOBroker:
             logger.error(f"Failed to fetch trade history: {e}")
             raise
 
-    async def check_violation(self) -> Tuple[bool, Optional[str]]:
+    async def check_violation(self) -> tuple[bool, Optional[str]]:
         """
         Check if account has any rule violations
 
@@ -317,7 +317,7 @@ class FTMOBroker:
 
         return False, None
 
-    async def request_payout(self, amount: float) -> Dict[str, Any]:
+    async def request_payout(self, amount: float) -> dict[str, Any]:
         """Request profit withdrawal"""
         if not self.session:
             raise RuntimeError("Session not initialized")
@@ -344,8 +344,8 @@ class FTMOBroker:
 # MT5-based FTMOConnector (used by tests and BrokerFactory)
 # ---------------------------------------------------------------------------
 
-from typing import Any as _Any  # noqa: E402
-from typing import Dict as _Dict  # noqa: E402
+from typing import Any as _Any
+from typing import Dict as _Dict
 
 try:
     from brokers.mt5 import MT5Connector as _MT5Connector
@@ -358,7 +358,7 @@ try:
             "live": ["FTMO-Live", "FTMO-Live2"],
         }
 
-        def __init__(self, config: _Dict[str, _Any]):
+        def __init__(self, config: dict[str, _Any]):
             cfg = dict(config)
             self.challenge_type = cfg.get("challenge_type", "demo")
             if "server" not in cfg:
@@ -372,7 +372,7 @@ try:
                 f"FTMOConnector initialized: {self.challenge_type} / {self.server}",
             )
 
-        def get_ftmo_rules(self) -> _Dict[str, _Any]:
+        def get_ftmo_rules(self) -> dict[str, _Any]:
             return {
                 "max_daily_loss": "5%",
                 "max_total_drawdown": "10%",
@@ -382,7 +382,7 @@ try:
                 "scaling": "up to $2M",
             }
 
-        def check_ftmo_compliance(self) -> _Dict[str, _Any]:
+        def check_ftmo_compliance(self) -> dict[str, _Any]:
             info = self.get_account_info()
             if info is None:
                 return {"compliant": False, "reason": "not connected"}

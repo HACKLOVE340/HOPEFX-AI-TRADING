@@ -75,7 +75,7 @@ def _get_gateway():
     return get_kyc_gateway()
 
 
-def _require_auth(request: Request) -> Dict[str, Any]:
+def _require_auth(request: Request) -> dict[str, Any]:
     """Minimal auth check — delegates to existing JWT middleware."""
     try:
         from auth.jwt_handler import decode_token
@@ -90,7 +90,7 @@ def _require_auth(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
-def _require_admin(request: Request) -> Dict[str, Any]:
+def _require_admin(request: Request) -> dict[str, Any]:
     payload = _require_auth(request)
     if payload.get("role") not in ("admin", "superadmin"):
         raise HTTPException(status_code=403, detail="Admin role required")
@@ -149,7 +149,7 @@ async def create_applicant(
 async def get_applicant_status(
     applicant_id: str,
     request: Request,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Poll the KYC provider for the current verification status."""
     _require_auth(request)
     gateway = _get_gateway()
@@ -162,7 +162,7 @@ async def get_applicant_status(
 
 
 @router.get("/status")
-async def get_my_kyc_status(request: Request) -> Dict[str, str]:
+async def get_my_kyc_status(request: Request) -> dict[str, str]:
     """Return the current user's KYC status from the compliance manager."""
     payload = _require_auth(request)
     user_id = payload.get("sub", "unknown")
@@ -189,7 +189,7 @@ async def get_my_kyc_status(request: Request) -> Dict[str, str]:
 async def sumsub_webhook(
     request: Request,
     x_payload_digest: str = Header(default="", alias="X-Payload-Digest"),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """
     Sumsub webhook callback.
 
@@ -216,7 +216,7 @@ async def sumsub_webhook(
 async def onfido_webhook(
     request: Request,
     x_sha2_signature: str = Header(default="", alias="X-SHA2-Signature"),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """
     Onfido webhook callback.
 

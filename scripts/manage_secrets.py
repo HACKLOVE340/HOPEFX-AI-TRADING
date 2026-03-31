@@ -54,7 +54,7 @@ ENV_EXAMPLE = ROOT / ".env.example"
 
 # Secrets that MUST be set before production launch.
 # Format: (env_var_name, description, generator_fn)
-REQUIRED_SECRETS: List[Tuple[str, str, Optional[str]]] = [
+REQUIRED_SECRETS: list[tuple[str, str, Optional[str]]] = [
     ("SECURITY_JWT_SECRET", "JWT signing key (48-char random)", "token48"),
     ("CONFIG_ENCRYPTION_KEY", "Config encryption key (48-char)", "token48"),
     ("HOPEFX_KILL_SWITCH_TOKEN", "Kill-switch HMAC token (48-char)", "token48"),
@@ -63,7 +63,7 @@ REQUIRED_SECRETS: List[Tuple[str, str, Optional[str]]] = [
 ]
 
 # Secrets that are required only in production (BROKER_TYPE=oanda / live)
-CONDITIONAL_SECRETS: List[Tuple[str, str, str]] = [
+CONDITIONAL_SECRETS: list[tuple[str, str, str]] = [
     ("OANDA_API_KEY", "OANDA REST API token", "BROKER_TYPE=oanda"),
     ("OANDA_ACCOUNT_ID", "OANDA account ID", "BROKER_TYPE=oanda"),
     ("STRIPE_SECRET_KEY", "Stripe secret key", "FEATURE_PAYMENTS=true"),
@@ -84,7 +84,7 @@ PLACEHOLDERS = {
 }
 
 # Patterns that indicate hardcoded secrets in source code
-AUDIT_PATTERNS: List[Tuple[str, str]] = [
+AUDIT_PATTERNS: list[tuple[str, str]] = [
     (r'password\s*=\s*["\'][^"\']{4,}["\']', "Hardcoded password"),
     (r'api_key\s*=\s*["\'][^"\']{8,}["\']', "Hardcoded API key"),
     (r'secret\s*=\s*["\'][^"\']{8,}["\']', "Hardcoded secret"),
@@ -115,9 +115,9 @@ def _generate(kind: str) -> str:
     return secrets.token_urlsafe(48)
 
 
-def _load_env(path: Path) -> Dict[str, str]:
+def _load_env(path: Path) -> dict[str, str]:
     """Parse a .env file into a dict (ignores comments and blank lines)."""
-    result: Dict[str, str] = {}
+    result: dict[str, str] = {}
     if not path.exists():
         return result
     for line in path.read_text().splitlines():
@@ -130,7 +130,7 @@ def _load_env(path: Path) -> Dict[str, str]:
     return result
 
 
-def _write_env(path: Path, env: Dict[str, str]) -> None:
+def _write_env(path: Path, env: dict[str, str]) -> None:
     """Write env dict back to file, preserving order and comments."""
     if not path.exists():
         # Create from scratch
@@ -140,7 +140,7 @@ def _write_env(path: Path, env: Dict[str, str]) -> None:
 
     existing = path.read_text().splitlines()
     updated_keys: set = set()
-    new_lines: List[str] = []
+    new_lines: list[str] = []
 
     for line in existing:
         stripped = line.strip()
@@ -173,8 +173,8 @@ def _is_placeholder(val: str) -> bool:
 def cmd_generate(args: argparse.Namespace) -> int:
     """Generate required secrets and write to .env (safe — never overwrites real values)."""
     env = _load_env(ENV_FILE)
-    generated: List[str] = []
-    skipped: List[str] = []
+    generated: list[str] = []
+    skipped: list[str] = []
 
     for var, _desc, gen_kind in REQUIRED_SECRETS:
         current = env.get(var, "")
@@ -206,8 +206,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
         if key in os.environ:
             env[key] = os.environ[key]
 
-    errors: List[str] = []
-    warnings: List[str] = []
+    errors: list[str] = []
+    warnings: list[str] = []
 
     for var, desc, _ in REQUIRED_SECRETS:
         val = env.get(var, os.getenv(var, ""))
@@ -284,7 +284,7 @@ def cmd_rotate(args: argparse.Namespace) -> int:
 def cmd_audit(args: argparse.Namespace) -> int:
     """Scan source files for hardcoded secrets."""
     compiled = [(re.compile(p, re.IGNORECASE), label) for p, label in AUDIT_PATTERNS]
-    findings: List[Tuple[str, int, str, str]] = []
+    findings: list[tuple[str, int, str, str]] = []
 
     for py_file in ROOT.rglob("*.py"):
         # Skip excluded dirs/files

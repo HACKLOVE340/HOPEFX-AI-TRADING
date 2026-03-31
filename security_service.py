@@ -31,7 +31,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -101,13 +101,13 @@ class SecurityService:
     # ── Token creation ────────────────────────────────────────────────────────
 
     def create_access_token(
-        self, data: Dict[str, Any], expires_delta: Optional[timedelta] = None
+        self, data: dict[str, Any], expires_delta: Optional[timedelta] = None
     ) -> str:
         """Create a signed JWT access token. Payload must include 'sub'."""
         if not _JWT_AVAILABLE:
             raise ImportError("PyJWT is required: pip install pyjwt")
         payload = data.copy()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload.update(
             {
                 "iat": now,
@@ -119,13 +119,13 @@ class SecurityService:
         return _jwt.encode(payload, self._secret, algorithm=self._algorithm)
 
     def create_refresh_token(
-        self, data: Dict[str, Any], expires_delta: Optional[timedelta] = None
+        self, data: dict[str, Any], expires_delta: Optional[timedelta] = None
     ) -> str:
         """Create a signed JWT refresh token (longer-lived)."""
         if not _JWT_AVAILABLE:
             raise ImportError("PyJWT is required: pip install pyjwt")
         payload = data.copy()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload.update(
             {
                 "iat": now,
@@ -138,7 +138,7 @@ class SecurityService:
 
     # ── Token verification ────────────────────────────────────────────────────
 
-    def verify_token(self, token: str, expected_type: str = "access") -> Dict[str, Any]:
+    def verify_token(self, token: str, expected_type: str = "access") -> dict[str, Any]:
         """
         Decode and validate a JWT token.
 
@@ -147,7 +147,7 @@ class SecurityService:
         if not _JWT_AVAILABLE:
             raise ImportError("PyJWT is required: pip install pyjwt")
         try:
-            payload: Dict[str, Any] = _jwt.decode(
+            payload: dict[str, Any] = _jwt.decode(
                 token,
                 self._secret,
                 algorithms=[self._algorithm],
@@ -244,18 +244,18 @@ def _get_default_service() -> SecurityService:
 
 
 def create_access_token(
-    data: Dict[str, Any], expires_delta: Optional[timedelta] = None
+    data: dict[str, Any], expires_delta: Optional[timedelta] = None
 ) -> str:
     return _get_default_service().create_access_token(data, expires_delta)
 
 
 def create_refresh_token(
-    data: Dict[str, Any], expires_delta: Optional[timedelta] = None
+    data: dict[str, Any], expires_delta: Optional[timedelta] = None
 ) -> str:
     return _get_default_service().create_refresh_token(data, expires_delta)
 
 
-def verify_token(token: str, expected_type: str = "access") -> Dict[str, Any]:
+def verify_token(token: str, expected_type: str = "access") -> dict[str, Any]:
     return _get_default_service().verify_token(token, expected_type)
 
 

@@ -10,7 +10,7 @@ Handles payments via Paystack (Nigeria) - Bank transfer, Cards, USSD.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Dict, Optional
 import logging
@@ -36,10 +36,10 @@ class PaystackClient:
 
     def initialize_payment(
         self, user_id: str, amount: Decimal, currency: str = "USD", email: str = None
-    ) -> Dict:
+    ) -> dict:
         """Initialize Paystack payment"""
         try:
-            reference = f"PSK-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+            reference = f"PSK-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
 
             # Calculate fee (in NGN if USD, convert first)
             ngn_amount = amount * Decimal("775.00") if currency == "USD" else amount
@@ -66,7 +66,7 @@ class PaystackClient:
             logger.error(f"Error initializing Paystack payment: {e}")
             raise
 
-    def verify_transaction(self, reference: str) -> Dict:
+    def verify_transaction(self, reference: str) -> dict:
         """Verify Paystack transaction"""
         payment = self.payments.get(reference)
         if payment:
@@ -76,10 +76,10 @@ class PaystackClient:
 
     def initiate_transfer(
         self, user_id: str, amount: Decimal, bank_code: str, account_number: str
-    ) -> Dict:
+    ) -> dict:
         """Initiate bank transfer"""
         try:
-            transfer_code = f"TRF-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+            transfer_code = f"TRF-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
 
             return {
                 "transfer_code": transfer_code,
@@ -87,7 +87,7 @@ class PaystackClient:
                 "bank_code": bank_code,
                 "account_number": account_number,
                 "status": "pending",
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             }
         except Exception as e:
             logger.error(f"Error initiating Paystack transfer: {e}")

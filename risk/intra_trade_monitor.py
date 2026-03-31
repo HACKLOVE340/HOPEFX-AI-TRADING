@@ -38,7 +38,7 @@ import logging
 import os
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Deque, Dict, List, Optional
 
 import numpy as np
@@ -102,7 +102,7 @@ class UnwindSignal:
     reason: str
     urgency: str  # "immediate" | "next_tick"
     mtm_pnl: float
-    triggered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    triggered_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class IntraTradeMonitor:
@@ -125,12 +125,12 @@ class IntraTradeMonitor:
     def __init__(self, equity: float = 10_000.0) -> None:
         self._equity: float = equity
         self._peak_equity: float = equity
-        self._positions: Dict[str, OpenPosition] = {}
-        self._returns: Deque[float] = deque(maxlen=_RETURNS_WINDOW)
-        self._vol_baseline: Deque[float] = deque(maxlen=_VOL_BASELINE_WINDOW)
+        self._positions: dict[str, OpenPosition] = {}
+        self._returns: deque[float] = deque(maxlen=_RETURNS_WINDOW)
+        self._vol_baseline: deque[float] = deque(maxlen=_VOL_BASELINE_WINDOW)
         self._last_mid: float = 0.0
         self._tick_count: int = 0
-        self._unwind_log: List[UnwindSignal] = []
+        self._unwind_log: list[UnwindSignal] = []
 
     # ── Position lifecycle ────────────────────────────────────────────────────
 
@@ -168,7 +168,7 @@ class IntraTradeMonitor:
         self,
         mid: float,
         data_quality: float = 1.0,
-    ) -> List[UnwindSignal]:
+    ) -> list[UnwindSignal]:
         """
         Process a tick. Returns list of UnwindSignals (empty if all clear).
 
@@ -203,7 +203,7 @@ class IntraTradeMonitor:
             _prom_vol_ratio.set(vol_ratio)
 
         # Evaluate unwind triggers
-        unwinds: List[UnwindSignal] = []
+        unwinds: list[UnwindSignal] = []
 
         # 1. Data quality gate
         if data_quality < _MIN_DATA_QUALITY:
@@ -362,7 +362,7 @@ class IntraTradeMonitor:
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         return {
             "equity": round(self._equity, 2),
             "peak_equity": round(self._peak_equity, 2),

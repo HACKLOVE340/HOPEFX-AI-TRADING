@@ -32,7 +32,7 @@ import random
 import time
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import List, Optional
 
@@ -222,7 +222,7 @@ class GoldFeedBase(ABC):
 
                     if resp.status == 429:
                         retry_after = float(resp.headers.get("Retry-After", backoff))
-                        wait = min(retry_after + random.uniform(0, 1.0), 120.0)  # nosec B311 - retry jitter, not cryptographic  # noqa: S311
+                        wait = min(retry_after + random.uniform(0, 1.0), 120.0)  # nosec B311 - retry jitter, not cryptographic
                         logger.warning(
                             "%s rate-limited — sleeping %.1fs (attempt %d)",
                             self.name.value,
@@ -257,7 +257,7 @@ class GoldFeedBase(ABC):
             except (TimeoutError, aiohttp.ClientError) as exc:
                 self._on_error("http", msg=str(exc))
                 # Full-jitter: sleep between 0 and cap
-                wait = random.uniform(0, min(backoff, 30.0))  # nosec B311 - full-jitter backoff, not cryptographic  # noqa: S311
+                wait = random.uniform(0, min(backoff, 30.0))  # nosec B311 - full-jitter backoff, not cryptographic
                 logger.warning(
                     "%s HTTP error attempt=%d/4 err=%s — retry in %.2fs",
                     self.name.value,
@@ -282,7 +282,7 @@ class GoldFeedBase(ABC):
 
     async def fetch_ohlcv(
         self, timeframe: str = "1h", limit: int = 200
-    ) -> List[OHLCVBar]:
+    ) -> list[OHLCVBar]:
         """Fetch historical OHLCV bars. Override in adapters that support it."""
         return []
 
@@ -312,7 +312,7 @@ class GoldFeedBase(ABC):
 
         tick = GoldTick(
             symbol="XAU_USD",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             bid=round(bid, 4),
             ask=round(ask, 4),
             mid=round(mid, 4),

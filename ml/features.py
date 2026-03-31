@@ -24,14 +24,14 @@ class FeatureVector:
 
     symbol: str
     timestamp: float
-    features: Dict[str, float]
+    features: dict[str, float]
     label: Optional[float] = None  # For training
 
     def to_array(self) -> np.ndarray:
         """Convert to numpy array"""
         return np.array(list(self.features.values()))
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp,
@@ -77,7 +77,7 @@ class TechnicalIndicators:
         prices: np.ndarray,
         period: int = 20,
         std_dev: float = 2.0,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Bollinger Bands"""
         sma = TechnicalIndicators.sma(prices, period)
         std = np.array(
@@ -94,7 +94,7 @@ class TechnicalIndicators:
         fast: int = 12,
         slow: int = 26,
         signal: int = 9,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """MACD"""
         ema_fast = TechnicalIndicators.ema(prices, fast)
         ema_slow = TechnicalIndicators.ema(prices, slow)
@@ -149,16 +149,16 @@ class FeatureEngineer:
     - Cross-asset relationships
     """
 
-    def __init__(self, lookback_periods: List[int] = None):
+    def __init__(self, lookback_periods: list[int] = None):
         self.lookback_periods = lookback_periods or [5, 10, 20, 50]
-        self._feature_cache: Dict[str, deque] = {}
+        self._feature_cache: dict[str, deque] = {}
         self._cache_size = 1000
 
     def extract_features(
         self,
         symbol: str,
-        ohlcv_data: List[Any],
-        order_book: Optional[Dict] = None,
+        ohlcv_data: list[Any],
+        order_book: Optional[dict] = None,
     ) -> Optional[FeatureVector]:
         """
         Extract ML features from market data
@@ -291,7 +291,7 @@ class FeatureEngineer:
             logger.error(f"Feature extraction error for {symbol}: {e}")
             return None
 
-    def get_feature_importance(self, model: Any) -> Dict[str, float]:
+    def get_feature_importance(self, model: Any) -> dict[str, float]:
         """
         Return feature importances from a trained model.
 
@@ -329,7 +329,7 @@ class FeatureEngineer:
             "feature_importances_ or get_feature_importances()."
         )
 
-    def detect_anomalies(self, symbol: str, threshold: float = 3.0) -> List[Dict]:
+    def detect_anomalies(self, symbol: str, threshold: float = 3.0) -> list[dict]:
         """
         Detect anomalous market conditions
         """
@@ -368,15 +368,15 @@ class SignalEnsemble:
     """
 
     def __init__(self):
-        self.models: Dict[str, Any] = {}
-        self.weights: Dict[str, float] = {}
+        self.models: dict[str, Any] = {}
+        self.weights: dict[str, float] = {}
 
     def add_model(self, name: str, model: Any, weight: float = 1.0):
         """Add model to ensemble"""
         self.models[name] = model
         self.weights[name] = weight
 
-    def predict(self, features: FeatureVector) -> Dict[str, Any]:
+    def predict(self, features: FeatureVector) -> dict[str, Any]:
         """
         Generate ensemble prediction
         """
@@ -417,7 +417,7 @@ class SignalEnsemble:
             "individual_predictions": predictions,
         }
 
-    def _get_model_prediction(self, model: Any, features: FeatureVector) -> Dict:
+    def _get_model_prediction(self, model: Any, features: FeatureVector) -> dict:
         """
         Obtain a probability estimate from a single model.
 

@@ -15,7 +15,7 @@ Production Mobile API v2.0
 
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 import uuid
 import asyncio
 
@@ -61,7 +61,7 @@ class AuthToken(BaseModel):
     access_token: str
     refresh_token: str
     expires_in: int
-    token_type: str = "Bearer"  # noqa: S105
+    token_type: str = "Bearer"
 
 
 class Account(BaseModel):
@@ -139,7 +139,7 @@ class NewsItem(BaseModel):
     source: str
     timestamp: datetime
     importance: str = "medium"  # low, medium, high
-    related_symbols: List[str] = []
+    related_symbols: list[str] = []
 
 
 class NotificationPreferences(BaseModel):
@@ -161,7 +161,7 @@ class MobileAPIServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",  # nosec B104 - host configurable via parameter  # noqa: S104
+        host: str = "0.0.0.0",  # nosec B104 - host configurable via parameter
         port: int = 8001,
         jwt_secret: str = None,
         broker=None,
@@ -220,7 +220,7 @@ class MobileAPIServer:
         self._setup_routes()
 
         # WebSocket connections tracking
-        self.active_connections: Dict[str, List[WebSocket]] = {}
+        self.active_connections: dict[str, list[WebSocket]] = {}
 
     def _setup_routes(self) -> None:
         """Register all route groups."""
@@ -240,7 +240,7 @@ class MobileAPIServer:
         async def health_check():
             return {
                 "status": "healthy",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "version": "2.0.0",
             }
 
@@ -272,7 +272,7 @@ class MobileAPIServer:
                             "password_hash": password_hash.decode(),
                             "device_id": user.device_id,
                             "platform": user.platform,
-                            "created_at": datetime.now(timezone.utc),
+                            "created_at": datetime.now(UTC),
                             "notification_preferences": NotificationPreferences().dict(),
                         }
                     )
@@ -421,7 +421,7 @@ class MobileAPIServer:
                     symbol=symbol,
                     bid=float(quote["bid"]),
                     ask=float(quote["ask"]),
-                    last_update=datetime.now(timezone.utc),
+                    last_update=datetime.now(UTC),
                     spread=float(quote["ask"]) - float(quote["bid"]),
                     bid_volume=float(quote.get("bid_volume", 0)),
                     ask_volume=float(quote.get("ask_volume", 0)),
@@ -434,7 +434,7 @@ class MobileAPIServer:
                 raise HTTPException(status_code=500, detail="Failed to fetch quote") from e
 
         @self.app.post(
-            "/api/v2/orders", response_model=Dict[str, Any], tags=["Trading"]
+            "/api/v2/orders", response_model=dict[str, Any], tags=["Trading"]
         )
         async def place_order(
             order: PlaceOrderRequest,
@@ -492,7 +492,7 @@ class MobileAPIServer:
                     "status": result.get("status", "pending"),
                     "entry_price": order.price or result.get("entry_price", 0),
                     "quantity": order.quantity,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
 
             except ValueError as e:
@@ -504,7 +504,7 @@ class MobileAPIServer:
                 raise HTTPException(status_code=500, detail="Order placement failed") from e
 
         @self.app.get(
-            "/api/v2/trades", response_model=List[TradeData], tags=["Trading"]
+            "/api/v2/trades", response_model=list[TradeData], tags=["Trading"]
         )
         async def get_open_trades(user_id: str = Depends(self._verify_token)):
             """Get all open trades"""
@@ -528,7 +528,7 @@ class MobileAPIServer:
                         entry_time=datetime.fromisoformat(t["entry_time"]),
                         duration_seconds=int(
                             (
-                                datetime.now(timezone.utc)
+                                datetime.now(UTC)
                                 - datetime.fromisoformat(t["entry_time"])
                             ).total_seconds()
                         ),
@@ -570,7 +570,7 @@ class MobileAPIServer:
                     "status": "closed",
                     "close_price": result.get("close_price", 0),
                     "pnl": result.get("pnl", 0),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
 
             except HTTPException:
@@ -584,7 +584,7 @@ class MobileAPIServer:
     def _register_performance_routes(self) -> None:
         @self.app.get(
             "/api/v2/performance",
-            response_model=List[PerformanceData],
+            response_model=list[PerformanceData],
             tags=["Analytics"],
         )
         async def get_performance(
@@ -621,7 +621,7 @@ class MobileAPIServer:
     # ── News ──────────────────────────────────────────────────────────────────
 
     def _register_news_routes(self) -> None:
-        @self.app.get("/api/v2/news", response_model=List[NewsItem], tags=["News"])
+        @self.app.get("/api/v2/news", response_model=list[NewsItem], tags=["News"])
         async def get_news(
             limit: int = Query(20, ge=1, le=100),
             user_id: str = Depends(self._verify_token),
@@ -701,7 +701,7 @@ class MobileAPIServer:
                                 quotes[symbol] = {
                                     "bid": float(quote["bid"]),
                                     "ask": float(quote["ask"]),
-                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                 }
                             except Exception as _exc:
                                 logger.debug("Suppressed exception: %s", _exc)
@@ -745,8 +745,8 @@ class MobileAPIServer:
 
         payload = {
             "user_id": user_id,
-            "exp": datetime.now(timezone.utc) + timedelta(hours=expires_hours),
-            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(UTC) + timedelta(hours=expires_hours),
+            "iat": datetime.now(UTC),
         }
 
         token = jwt.encode(payload, self.jwt_secret, algorithm="HS256")
@@ -802,8 +802,8 @@ class MobileAPIServer:
 # in the environment before import. _build_module_app() raises RuntimeError
 # if the secret is absent or too short — there is no fallback or placeholder.
 
-import os as _os  # noqa: E402
-from fastapi import APIRouter as _APIRouter  # noqa: E402
+import os as _os
+from fastapi import APIRouter as _APIRouter
 
 
 def _build_module_app() -> "FastAPI":

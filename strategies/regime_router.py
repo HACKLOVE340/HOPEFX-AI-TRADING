@@ -34,7 +34,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -63,7 +63,7 @@ ALL_REGIMES = [
 ]
 
 # Default strategy per regime when no backtest history is available
-_DEFAULT_REGIME_STRATEGY: Dict[str, str] = {
+_DEFAULT_REGIME_STRATEGY: dict[str, str] = {
     REGIME_TRENDING_UP: "TrendFollowing",
     REGIME_TRENDING_DOWN: "TrendFollowing",
     REGIME_MEAN_REVERTING: "MeanReversion",
@@ -81,7 +81,7 @@ _MANIFEST_PATH = Path(
 # ── Lightweight regime detector (no HMM dependency) ──────────────────────────
 
 
-def detect_regime(df: pd.DataFrame, lookback: int = 50) -> Tuple[str, float]:
+def detect_regime(df: pd.DataFrame, lookback: int = 50) -> tuple[str, float]:
     """
     Detect market regime from OHLCV DataFrame using simple indicators.
 
@@ -200,11 +200,11 @@ class RegimePerformance:
     total_trades: int = 0
     avg_return_pct: float = 0.0
     updated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        default_factory=lambda: datetime.now(UTC).isoformat(),
     )
 
 
-def load_regime_manifest() -> Dict[str, List[RegimePerformance]]:
+def load_regime_manifest() -> dict[str, list[RegimePerformance]]:
     """
     Load per-regime strategy performance from JSON manifest.
 
@@ -215,7 +215,7 @@ def load_regime_manifest() -> Dict[str, List[RegimePerformance]]:
     try:
         with open(_MANIFEST_PATH) as f:
             raw = json.load(f)
-        result: Dict[str, List[RegimePerformance]] = {}
+        result: dict[str, list[RegimePerformance]] = {}
         for regime, entries in raw.items():
             perfs = [RegimePerformance(**e) for e in entries]
             perfs.sort(key=lambda p: p.sharpe, reverse=True)
@@ -226,7 +226,7 @@ def load_regime_manifest() -> Dict[str, List[RegimePerformance]]:
         return {}
 
 
-def save_regime_manifest(manifest: Dict[str, List[RegimePerformance]]) -> None:
+def save_regime_manifest(manifest: dict[str, list[RegimePerformance]]) -> None:
     """Persist regime performance manifest to disk."""
     _MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
     raw = {regime: [vars(p) for p in perfs] for regime, perfs in manifest.items()}
@@ -259,7 +259,7 @@ def update_regime_performance(
             entry.win_rate = win_rate
             entry.total_trades = total_trades
             entry.avg_return_pct = avg_return_pct
-            entry.updated_at = datetime.now(timezone.utc).isoformat()
+            entry.updated_at = datetime.now(UTC).isoformat()
             updated = True
             break
 
@@ -296,16 +296,16 @@ class RegimeRouter:
 
     def __init__(self, strategy_manager: Any):
         self._sm = strategy_manager
-        self._manifest: Dict[str, List[RegimePerformance]] = {}
+        self._manifest: dict[str, list[RegimePerformance]] = {}
         self._last_regime: str = REGIME_UNKNOWN
         self._last_confidence: float = 0.0
-        self._regime_history: List[Tuple[str, float, str]] = []  # (regime, conf, ts)
+        self._regime_history: list[tuple[str, float, str]] = []  # (regime, conf, ts)
         self._reload_manifest()
 
     def _reload_manifest(self) -> None:
         self._manifest = load_regime_manifest()
 
-    def route(self, df: pd.DataFrame) -> Tuple[str, str]:
+    def route(self, df: pd.DataFrame) -> tuple[str, str]:
         """
         Detect regime from ``df`` and return (regime_label, strategy_name).
 
@@ -316,7 +316,7 @@ class RegimeRouter:
         self._last_confidence = confidence
 
         # Log regime changes
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
         if not self._regime_history or self._regime_history[-1][0] != regime:
             logger.info("Regime change → %s (confidence=%.2f)", regime, confidence)
             self._regime_history.append((regime, confidence, ts))
@@ -363,14 +363,14 @@ class RegimeRouter:
     def current_confidence(self) -> float:
         return self._last_confidence
 
-    def regime_history(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def regime_history(self, limit: int = 20) -> list[dict[str, Any]]:
         """Return recent regime transitions."""
         return [
             {"regime": r, "confidence": round(c, 3), "timestamp": ts}
             for r, c, ts in self._regime_history[-limit:]
         ]
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         """Return current routing status for the dashboard."""
         return {
             "current_regime": self._last_regime,

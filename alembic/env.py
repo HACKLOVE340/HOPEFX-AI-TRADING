@@ -21,12 +21,12 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Import all models so their metadata is registered on Base
-from database.models import Base  # noqa: F401
+from database.models import Base
 
 logger = logging.getLogger(__name__)
 
 try:
-    from database.user_models import User, UserSession, LoginAttempt  # noqa: F401
+    from database.user_models import User, UserSession, LoginAttempt
 except Exception as _exc:
     logger.debug("Suppressed exception: %s", _exc)
 

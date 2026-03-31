@@ -99,7 +99,7 @@ import os
 import socket
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -155,10 +155,10 @@ class Role(str, Enum):
 class StateSnapshot:
     """Complete trading state snapshot for standby restoration."""
 
-    positions: Dict[str, Any]  # symbol → position dict
+    positions: dict[str, Any]  # symbol → position dict
     equity: float
     balance: float
-    fills: List[Dict]  # last N fills (ring buffer)
+    fills: list[dict]  # last N fills (ring buffer)
     version: int
     captured_at: str  # ISO timestamp
     pod_id: str
@@ -177,7 +177,7 @@ class ReplicationStats:
     last_replication_ms: float = 0.0
     is_leader: bool = False
     started_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
 
@@ -215,13 +215,13 @@ class HotStandbyReplicator:
         self._stats = ReplicationStats(role=self._role, pod_id=self._pod_id)
 
         # In-memory state buffer (written by engine, read by replication loop)
-        self._positions: Dict[str, Any] = {}
+        self._positions: dict[str, Any] = {}
         self._equity: float = 0.0
         self._balance: float = 0.0
-        self._fills: List[Dict] = []
+        self._fills: list[dict] = []
 
         self._running = False
-        self._tasks: List[asyncio.Task] = []
+        self._tasks: list[asyncio.Task] = []
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -280,7 +280,7 @@ class HotStandbyReplicator:
 
     # ── State update API (called by execution engine) ─────────────────────────
 
-    def update_positions(self, positions: Dict[str, Any]) -> None:
+    def update_positions(self, positions: dict[str, Any]) -> None:
         """Update the in-memory position snapshot. Thread-safe (GIL)."""
         self._positions = dict(positions)
 
@@ -289,7 +289,7 @@ class HotStandbyReplicator:
         self._equity = equity
         self._balance = balance if balance is not None else equity
 
-    def record_fill(self, fill: Dict[str, Any]) -> None:
+    def record_fill(self, fill: dict[str, Any]) -> None:
         """Append a fill to the replication ring buffer."""
         self._fills.append(fill)
         if len(self._fills) > _FILLS_RING_SIZE:
@@ -520,7 +520,7 @@ class HotStandbyReplicator:
                 "balance": self._balance,
                 "version": version,
                 "pod_id": self._pod_id,
-                "captured_at": datetime.now(timezone.utc).isoformat(),
+                "captured_at": datetime.now(UTC).isoformat(),
             }
         )
         fills_json = json.dumps(self._fills[-_FILLS_RING_SIZE:], default=str)
@@ -591,7 +591,7 @@ class HotStandbyReplicator:
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Return current replication statistics."""
         return {
             "role": self._role.value,

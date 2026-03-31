@@ -6,7 +6,7 @@
 """transparency/engine.py — ExecutionTransparencyEngine."""
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 import logging
 import statistics
 
@@ -14,7 +14,7 @@ import statistics
 FOREX_PIP_MULTIPLIER: float = 10_000.0  # e.g. EURUSD: 1 pip = 0.0001
 METAL_PIP_MULTIPLIER: float = 100.0  # e.g. XAUUSD: 1 pip = 0.01
 
-from transparency.models import (  # noqa: E402
+from transparency.models import (
     ExecutionQuality,
     ExecutionRecord,
     ExecutionReport,
@@ -38,11 +38,11 @@ class ExecutionTransparencyEngine:
     - Execution audit trail
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[dict[str, Any]] = None):
         """Initialize execution transparency engine."""
         self.config = config or {}
-        self.executions: List[ExecutionRecord] = []
-        self.reports: Dict[str, ExecutionReport] = {}
+        self.executions: list[ExecutionRecord] = []
+        self.reports: dict[str, ExecutionReport] = {}
 
         logger.info("Execution Transparency Engine initialized")
 
@@ -57,7 +57,7 @@ class ExecutionTransparencyEngine:
         executed_size: float,
         latency_ms: float,
         broker: str,
-        market_conditions: Optional[Dict[str, Any]] = None,
+        market_conditions: Optional[dict[str, Any]] = None,
     ) -> ExecutionRecord:
         """
         Record a trade execution for analysis.
@@ -99,7 +99,7 @@ class ExecutionTransparencyEngine:
         )
 
         execution = ExecutionRecord(
-            execution_id=f"exec_{len(self.executions) + 1}_{int(datetime.now(timezone.utc).timestamp())}",
+            execution_id=f"exec_{len(self.executions) + 1}_{int(datetime.now(UTC).timestamp())}",
             order_id=order_id,
             symbol=symbol,
             side=side,
@@ -111,7 +111,7 @@ class ExecutionTransparencyEngine:
             slippage_cost=slippage_cost,
             latency_ms=latency_ms,
             fill_ratio=fill_ratio,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             broker=broker,
             market_conditions=market_conditions or {},
         )
@@ -141,18 +141,18 @@ class ExecutionTransparencyEngine:
         Returns:
             Execution report
         """
-        period_end = period_end or datetime.now(timezone.utc)
+        period_end = period_end or datetime.now(UTC)
         period_start = period_start or (period_end - timedelta(days=30))
 
         # Ensure both bounds are timezone-aware (UTC) for safe comparison.
         if period_start.tzinfo is None:
-            period_start = period_start.replace(tzinfo=timezone.utc)
+            period_start = period_start.replace(tzinfo=UTC)
         if period_end.tzinfo is None:
-            period_end = period_end.replace(tzinfo=timezone.utc)
+            period_end = period_end.replace(tzinfo=UTC)
 
         def _ts(dt: datetime) -> datetime:
             """Return dt as UTC-aware, converting naive datetimes."""
-            return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+            return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
         # Filter executions
         filtered = [
@@ -168,7 +168,7 @@ class ExecutionTransparencyEngine:
             logger.warning("No executions found for the specified criteria")
             # Return empty report
             return ExecutionReport(
-                report_id=f"report_{int(datetime.now(timezone.utc).timestamp())}",
+                report_id=f"report_{int(datetime.now(UTC).timestamp())}",
                 period_start=period_start,
                 period_end=period_end,
                 total_executions=0,
@@ -209,7 +209,7 @@ class ExecutionTransparencyEngine:
         broker_comparison = self._compare_brokers(filtered)
 
         report = ExecutionReport(
-            report_id=f"report_{int(datetime.now(timezone.utc).timestamp())}",
+            report_id=f"report_{int(datetime.now(UTC).timestamp())}",
             period_start=period_start,
             period_end=period_end,
             total_executions=len(filtered),
@@ -276,10 +276,10 @@ class ExecutionTransparencyEngine:
             return ExecutionQuality.VERY_POOR
 
     def _compare_brokers(
-        self, executions: List[ExecutionRecord]
-    ) -> Dict[str, Dict[str, float]]:
+        self, executions: list[ExecutionRecord]
+    ) -> dict[str, dict[str, float]]:
         """Compare execution quality across brokers."""
-        broker_data: Dict[str, List[ExecutionRecord]] = {}
+        broker_data: dict[str, list[ExecutionRecord]] = {}
 
         for ex in executions:
             if ex.broker not in broker_data:
@@ -307,9 +307,9 @@ class ExecutionTransparencyEngine:
         self,
         period_start: Optional[datetime] = None,
         period_end: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get slippage distribution data for visualization."""
-        period_end = period_end or datetime.now(timezone.utc)
+        period_end = period_end or datetime.now(UTC)
         period_start = period_start or (period_end - timedelta(days=30))
 
         filtered = [
@@ -354,9 +354,9 @@ class ExecutionTransparencyEngine:
         self,
         period_start: Optional[datetime] = None,
         period_end: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get latency trend over time."""
-        period_end = period_end or datetime.now(timezone.utc)
+        period_end = period_end or datetime.now(UTC)
         period_start = period_start or (period_end - timedelta(days=30))
 
         filtered = sorted(
@@ -365,7 +365,7 @@ class ExecutionTransparencyEngine:
         )
 
         # Group by day
-        daily_latencies: Dict[str, List[float]] = {}
+        daily_latencies: dict[str, list[float]] = {}
         for e in filtered:
             day = e.timestamp.strftime("%Y-%m-%d")
             if day not in daily_latencies:
@@ -385,7 +385,7 @@ class ExecutionTransparencyEngine:
 
     def get_execution_audit_trail(
         self, order_id: Optional[str] = None, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get execution audit trail."""
         if order_id:
             filtered = [e for e in self.executions if e.order_id == order_id]

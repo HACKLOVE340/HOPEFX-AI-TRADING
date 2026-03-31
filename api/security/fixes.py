@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -51,7 +51,7 @@ router = APIRouter(prefix="/api/security/fixes", tags=["security-fixes"])
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
 
-def _require_auth(request: Request) -> Dict[str, Any]:
+def _require_auth(request: Request) -> dict[str, Any]:
     """Require any authenticated user."""
     try:
         from auth.jwt_handler import decode_token
@@ -66,7 +66,7 @@ def _require_auth(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
-def _require_admin(request: Request) -> Dict[str, Any]:
+def _require_admin(request: Request) -> dict[str, Any]:
     """Require admin or superadmin role."""
     payload = _require_auth(request)
     if payload.get("role") not in ("admin", "superadmin"):
@@ -119,7 +119,7 @@ class ScanEntryRequest(BaseModel):
 async def get_pending_fixes(
     request: Request,
     limit: int = Query(50, ge=1, le=200),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Return pending fix queue (most recent first)."""
     _require_auth(request)
     redis = await _get_redis()
@@ -139,7 +139,7 @@ async def get_pending_fixes(
 async def get_approved_fixes(
     request: Request,
     limit: int = Query(50, ge=1, le=200),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Return recently approved fixes with PR metadata."""
     _require_auth(request)
     redis = await _get_redis()
@@ -159,7 +159,7 @@ async def get_approved_fixes(
 async def get_declined_fixes(
     request: Request,
     limit: int = Query(50, ge=1, le=200),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Return recently declined fixes."""
     _require_auth(request)
     redis = await _get_redis()
@@ -176,7 +176,7 @@ async def get_declined_fixes(
 
 
 @router.get("/stats")
-async def get_fix_stats(request: Request) -> Dict[str, Any]:
+async def get_fix_stats(request: Request) -> dict[str, Any]:
     """Return fix queue statistics."""
     _require_auth(request)
     redis = await _get_redis()
@@ -216,7 +216,7 @@ async def get_fix_stats(request: Request) -> Dict[str, Any]:
 async def approve_fix(
     body: ApproveFixRequest,
     request: Request,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Approve an LLM-generated fix and trigger the GitHub PR pipeline.
 
@@ -230,7 +230,7 @@ async def approve_fix(
     redis = await _get_redis()
 
     # Find matching pending record
-    fix_record: Optional[Dict[str, Any]] = None
+    fix_record: Optional[dict[str, Any]] = None
     if redis:
         raw_list = await redis.lrange("fixes:queue", 0, 199)
         for raw in raw_list:
@@ -250,7 +250,7 @@ async def approve_fix(
         )
 
     # Trigger GitHub PR pipeline
-    pr_result: Dict[str, Any] = {"status": "skipped"}
+    pr_result: dict[str, Any] = {"status": "skipped"}
     try:
         from security.github_pr_publisher import get_pr_publisher
 
@@ -270,7 +270,7 @@ async def approve_fix(
         **fix_record,
         "status": "approved",
         "approved_by": approved_by,
-        "approved_at": datetime.now(timezone.utc).isoformat(),
+        "approved_at": datetime.now(UTC).isoformat(),
         "pr_url": pr_result.get("pr_url"),
         "pr_number": pr_result.get("pr_number"),
         "pr_branch": pr_result.get("branch"),
@@ -306,7 +306,7 @@ async def approve_fix(
 async def decline_fix(
     body: DeclineFixRequest,
     request: Request,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Decline an LLM-generated fix.
 
@@ -330,7 +330,7 @@ async def decline_fix(
                         **rec,
                         "status": "declined",
                         "declined_by": declined_by,
-                        "declined_at": datetime.now(timezone.utc).isoformat(),
+                        "declined_at": datetime.now(UTC).isoformat(),
                         "reason": body.reason,
                     }
                     await redis.rpush("fixes:declined", json.dumps(declined_record))
@@ -359,7 +359,7 @@ async def decline_fix(
 async def push_scan_entry(
     body: ScanEntryRequest,
     request: Request,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Push a vulnerability entry to the scan queue for auto-heal processing.
 
@@ -375,7 +375,7 @@ async def push_scan_entry(
         "code": body.code,
         "severity": body.severity,
         "rule": body.rule,
-        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "submitted_at": datetime.now(UTC).isoformat(),
     }
 
     if redis:

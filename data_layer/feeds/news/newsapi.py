@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import List
 
 from data_layer.feeds.news.base import NewsFeedBase
@@ -53,7 +53,7 @@ class NewsAPIFeed(NewsFeedBase):
     def is_configured(self) -> bool:
         return bool(self._api_key or self._ai_key)
 
-    async def fetch_articles(self, limit: int = 50) -> List[NewsArticle]:
+    async def fetch_articles(self, limit: int = 50) -> list[NewsArticle]:
         if not self.is_configured:
             return []
 
@@ -61,8 +61,8 @@ class NewsAPIFeed(NewsFeedBase):
             return await self._fetch_newsapi_ai(limit)
         return await self._fetch_newsapi_org(limit)
 
-    async def _fetch_newsapi_org(self, limit: int) -> List[NewsArticle]:
-        articles: List[NewsArticle] = []
+    async def _fetch_newsapi_org(self, limit: int) -> list[NewsArticle]:
+        articles: list[NewsArticle] = []
         try:
             data = await self._get(
                 f"{_NEWSAPI_ORG_BASE}/everything",
@@ -87,7 +87,7 @@ class NewsAPIFeed(NewsFeedBase):
                 try:
                     published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
                 except Exception:
-                    published = datetime.now(timezone.utc)
+                    published = datetime.now(UTC)
 
                 articles.append(
                     NewsArticle(
@@ -97,7 +97,7 @@ class NewsAPIFeed(NewsFeedBase):
                         summary=summary,
                         url=item.get("url", ""),
                         published_at=published,
-                        fetched_at=datetime.now(timezone.utc),
+                        fetched_at=datetime.now(UTC),
                         lineage_id=str(uuid.uuid4()),
                     )
                 )
@@ -108,9 +108,9 @@ class NewsAPIFeed(NewsFeedBase):
 
         return articles
 
-    async def _fetch_newsapi_ai(self, limit: int) -> List[NewsArticle]:
+    async def _fetch_newsapi_ai(self, limit: int) -> list[NewsArticle]:
         """NewsAPI.ai uses EventRegistry API with richer entity extraction."""
-        articles: List[NewsArticle] = []
+        articles: list[NewsArticle] = []
         try:
             data = await self._get(
                 f"{_NEWSAPI_AI_BASE}/article/getArticles",
@@ -140,7 +140,7 @@ class NewsAPIFeed(NewsFeedBase):
                 try:
                     published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
                 except Exception:
-                    published = datetime.now(timezone.utc)
+                    published = datetime.now(UTC)
 
                 # NewsAPI.ai provides sentiment
                 sentiment = item.get("sentiment", 0.0) or 0.0
@@ -153,7 +153,7 @@ class NewsAPIFeed(NewsFeedBase):
                         summary=summary,
                         url=item.get("url", ""),
                         published_at=published,
-                        fetched_at=datetime.now(timezone.utc),
+                        fetched_at=datetime.now(UTC),
                         sentiment_score=float(sentiment),
                         lineage_id=str(uuid.uuid4()),
                     )

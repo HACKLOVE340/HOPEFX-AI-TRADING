@@ -20,7 +20,7 @@ import threading
 import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -62,15 +62,15 @@ class TradingSignal:
     take_profit: float
     risk_reward_ratio: float
     timeframe: str
-    strategies_agreeing: List[str]
+    strategies_agreeing: list[str]
     total_strategies: int
     regime: str  # Market regime
     session: str  # Trading session
     expiry: datetime
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "symbol": self.symbol,
@@ -96,7 +96,7 @@ class TradingSignal:
     @property
     def is_valid(self) -> bool:
         """Check if signal is still valid."""
-        return datetime.now(timezone.utc) < self.expiry
+        return datetime.now(UTC) < self.expiry
 
     def to_json(self) -> str:
         """Convert to JSON string."""
@@ -112,11 +112,11 @@ class SignalAlert:
     direction: Optional[SignalDirection] = None
     min_confidence: float = 0.5
     min_strength: SignalStrength = SignalStrength.MODERATE
-    notify_channels: List[str] = field(default_factory=lambda: ["web"])
+    notify_channels: list[str] = field(default_factory=lambda: ["web"])
     active: bool = True
     triggered_count: int = 0
     last_triggered: Optional[datetime] = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -176,7 +176,7 @@ class SignalAnalytics:
         if outcome in self.hit_rate:
             self.hit_rate[outcome] += 1
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         total_outcomes = sum(self.hit_rate.values())
         return {
             "signals_generated": self.signals_generated,
@@ -209,7 +209,7 @@ class RealTimeSignalService:
     - Performance tracking
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize signal service.
 
@@ -219,14 +219,14 @@ class RealTimeSignalService:
         self.config = config or {}
 
         # Signal storage
-        self.active_signals: Dict[str, TradingSignal] = {}
+        self.active_signals: dict[str, TradingSignal] = {}
         self.signal_history: deque = deque(maxlen=1000)
 
         # Alerts
-        self.alerts: Dict[str, SignalAlert] = {}
+        self.alerts: dict[str, SignalAlert] = {}
 
         # Event subscribers
-        self.subscribers: List[Callable] = []
+        self.subscribers: list[Callable] = []
 
         # Analytics
         self.analytics = SignalAnalytics()
@@ -253,11 +253,11 @@ class RealTimeSignalService:
         stop_loss: float,
         take_profit: float,
         timeframe: str,
-        strategies_agreeing: List[str],
+        strategies_agreeing: list[str],
         total_strategies: int,
         regime: str = "unknown",
         session: str = "unknown",
-        metadata: Optional[Dict] = None,
+        metadata: Optional[dict] = None,
     ) -> Optional[TradingSignal]:
         """
         Generate a new trading signal.
@@ -313,7 +313,7 @@ class RealTimeSignalService:
 
         # Create signal
         signal = TradingSignal(
-            id=f"SIG-{symbol}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}",
+            id=f"SIG-{symbol}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}",
             symbol=symbol,
             direction=direction,
             strength=strength,
@@ -328,7 +328,7 @@ class RealTimeSignalService:
             total_strategies=total_strategies,
             regime=regime,
             session=session,
-            expiry=datetime.now(timezone.utc)
+            expiry=datetime.now(UTC)
             + timedelta(minutes=self.signal_expiry_minutes),
             metadata=metadata or {},
         )
@@ -432,7 +432,7 @@ class RealTimeSignalService:
         symbol: str = None,
         direction: SignalDirection = None,
         min_strength: SignalStrength = None,
-    ) -> List[TradingSignal]:
+    ) -> list[TradingSignal]:
         """
         Get active (non-expired) signals.
 
@@ -475,7 +475,7 @@ class RealTimeSignalService:
         with self._lock:
             if signal_id in self.active_signals:
                 signal = self.active_signals[signal_id]
-                signal.expiry = datetime.now(timezone.utc)
+                signal.expiry = datetime.now(UTC)
                 del self.active_signals[signal_id]
                 self.analytics.record_outcome("expired")
                 self._publish_event("signal_expired", signal)
@@ -514,7 +514,7 @@ class RealTimeSignalService:
         direction: Optional[SignalDirection] = None,
         min_confidence: float = 0.5,
         min_strength: SignalStrength = SignalStrength.MODERATE,
-        notify_channels: List[str] = None,
+        notify_channels: list[str] = None,
     ) -> SignalAlert:
         """Create a signal alert."""
         alert = SignalAlert(
@@ -556,7 +556,7 @@ class RealTimeSignalService:
 
             # Alert triggered!
             alert.triggered_count += 1
-            alert.last_triggered = datetime.now(timezone.utc)
+            alert.last_triggered = datetime.now(UTC)
 
             self._publish_event(
                 "alert_triggered",
@@ -571,7 +571,7 @@ class RealTimeSignalService:
             if alert_id in self.alerts:
                 del self.alerts[alert_id]
 
-    def get_alerts(self, symbol: str = None) -> List[SignalAlert]:
+    def get_alerts(self, symbol: str = None) -> list[SignalAlert]:
         """Get all alerts, optionally filtered by symbol."""
         alerts = list(self.alerts.values())
         if symbol:
@@ -600,7 +600,7 @@ class RealTimeSignalService:
         """Publish event to all subscribers."""
         event = {
             "type": event_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "data": data.to_dict() if hasattr(data, "to_dict") else data,
         }
 
@@ -618,9 +618,9 @@ class RealTimeSignalService:
         self,
         symbol: str = None,
         hours: int = 24,
-    ) -> List[TradingSignal]:
+    ) -> list[TradingSignal]:
         """Get signal history."""
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
         signals = [s for s in self.signal_history if s.timestamp > cutoff]
 
         if symbol:
@@ -628,11 +628,11 @@ class RealTimeSignalService:
 
         return sorted(signals, key=lambda s: -s.timestamp.timestamp())
 
-    def get_analytics(self) -> Dict:
+    def get_analytics(self) -> dict:
         """Get signal analytics."""
         return self.analytics.to_dict()
 
-    def get_signal_summary(self) -> Dict:
+    def get_signal_summary(self) -> dict:
         """Get summary of current signal state."""
         with self._lock:
             return {
@@ -641,7 +641,7 @@ class RealTimeSignalService:
                     [
                         s
                         for s in self.signal_history
-                        if s.timestamp > datetime.now(timezone.utc) - timedelta(hours=1)
+                        if s.timestamp > datetime.now(UTC) - timedelta(hours=1)
                     ],
                 ),
                 "signals_last_24h": len(
@@ -649,7 +649,7 @@ class RealTimeSignalService:
                         s
                         for s in self.signal_history
                         if s.timestamp
-                        > datetime.now(timezone.utc) - timedelta(hours=24)
+                        > datetime.now(UTC) - timedelta(hours=24)
                     ],
                 ),
                 "active_alerts": len([a for a in self.alerts.values() if a.active]),
@@ -694,7 +694,7 @@ class RealTimeSignalService:
             },
         )
 
-    def get_websocket_channels(self) -> List[str]:
+    def get_websocket_channels(self) -> list[str]:
         """Get available WebSocket channels."""
         symbols = set(s.symbol for s in self.active_signals.values())
         channels = [f"signals:{sym}" for sym in symbols]
@@ -703,7 +703,7 @@ class RealTimeSignalService:
         return channels
 
     def ingest_engine_signal(
-        self, payload: Dict[str, Any]
+        self, payload: dict[str, Any]
     ) -> Optional["TradingSignal"]:
         """
         Ingest a signal dict produced by core/signal_engine.py and store it in
@@ -756,7 +756,7 @@ class RealTimeSignalService:
             )
 
             signal = TradingSignal(
-                id=f"eng_{payload.get('symbol', 'UNK')}_{int(datetime.now(timezone.utc).timestamp())}",
+                id=f"eng_{payload.get('symbol', 'UNK')}_{int(datetime.now(UTC).timestamp())}",
                 symbol=payload.get("symbol", "UNKNOWN"),
                 direction=direction,
                 strength=strength,
@@ -771,10 +771,10 @@ class RealTimeSignalService:
                 total_strategies=1,
                 regime=payload.get("regime", "unknown"),
                 session="live",
-                expiry=datetime.now(timezone.utc)
+                expiry=datetime.now(UTC)
                 .replace(second=0, microsecond=0)
                 .__class__.fromtimestamp(
-                    datetime.now(timezone.utc).timestamp() + 1800, tz=timezone.utc
+                    datetime.now(UTC).timestamp() + 1800, tz=UTC
                 ),
                 metadata={
                     "probability": payload.get("probability"),
@@ -833,9 +833,9 @@ def create_signals_router():
         timeframe: str = "1h"
         regime: str = "ranging"
         session: str = "new_york"
-        strategies_agreeing: Optional[List[str]] = None
+        strategies_agreeing: Optional[list[str]] = None
         total_strategies: int = 1
-        parameters: Optional[Dict[str, Any]] = None
+        parameters: Optional[dict[str, Any]] = None
 
     class CreateAlertRequest(_BaseModel):
         symbol: str
@@ -1020,7 +1020,7 @@ def create_signals_router():
         - recent_signals: last 10 engine-generated signals from the ring buffer
         """
         try:
-            from core.signal_engine import get_signal_engine_status  # noqa: PLC0415
+            from core.signal_engine import get_signal_engine_status
 
             engine_status = get_signal_engine_status()
         except Exception as exc:
@@ -1041,8 +1041,8 @@ def create_signals_router():
 
     # ── Signal distribution validation ───────────────────────────────────────
 
-    from pydantic import BaseModel as _BM  # noqa: PLC0415
-    from typing import List as _List, Optional as _Opt  # noqa: PLC0415
+    from pydantic import BaseModel as _BM
+    from typing import List as _List, Optional as _Opt
 
     class OOSSignalItem(_BM):
         direction: str
@@ -1055,10 +1055,10 @@ def create_signals_router():
         raw_score: float
 
     class SetOOSReferenceRequest(_BM):
-        signals: _List[OOSSignalItem]
+        signals: list[OOSSignalItem]
 
     class ValidateSignalsRequest(_BM):
-        live_signals: _Opt[_List[LiveSignalItem]] = None
+        live_signals: _Opt[list[LiveSignalItem]] = None
 
     @signals_router.post("/distribution/oos-reference")
     async def set_oos_reference(body: SetOOSReferenceRequest):
@@ -1066,7 +1066,7 @@ def create_signals_router():
         Set the OOS backtest signal distribution as the reference baseline.
         Call this once after completing an OOS backtest.
         """
-        from ml.signal_validator import SignalRecord, get_validator  # noqa: PLC0415
+        from ml.signal_validator import SignalRecord, get_validator
 
         validator = get_validator()
         records = [
@@ -1091,7 +1091,7 @@ def create_signals_router():
         - warning: monitor closely, consider retraining
         - failed: PSI > 0.25 or major drift — retrain required
         """
-        from ml.signal_validator import SignalRecord, get_validator  # noqa: PLC0415
+        from ml.signal_validator import SignalRecord, get_validator
 
         validator = get_validator()
 
@@ -1112,7 +1112,7 @@ def create_signals_router():
     @signals_router.post("/distribution/add-live")
     async def add_live_signal(body: LiveSignalItem):
         """Append a single live signal to the validation buffer."""
-        from ml.signal_validator import SignalRecord, get_validator  # noqa: PLC0415
+        from ml.signal_validator import SignalRecord, get_validator
 
         validator = get_validator()
         validator.add_live_signal(
@@ -1127,7 +1127,7 @@ def create_signals_router():
     @signals_router.get("/distribution/status")
     async def signal_distribution_status():
         """Return current validation buffer sizes and last validation result."""
-        from ml.signal_validator import get_validator  # noqa: PLC0415
+        from ml.signal_validator import get_validator
 
         validator = get_validator()
         report = (

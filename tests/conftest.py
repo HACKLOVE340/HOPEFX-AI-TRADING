@@ -24,7 +24,7 @@ os.environ.setdefault(
 import pytest
 import asyncio
 import numpy as np
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 # Import core components for testing
 from brokers import PaperTradingBroker
@@ -114,7 +114,7 @@ def _reset_global_kill_switch():
             if ks is not None:
                 ks._active = False
                 ks._reason = ""
-    except Exception:  # noqa: S110
+    except Exception:
         pass
 
 
@@ -147,7 +147,7 @@ def sample_tick():
     """Create sample price tick"""
     return Tick(
         symbol="EURUSD",
-        timestamp=datetime.now(timezone.utc).timestamp(),
+        timestamp=datetime.now(UTC).timestamp(),
         bid=1.0850,
         ask=1.0852,
         mid=1.0851,
@@ -160,7 +160,7 @@ def sample_ohlcv():
     """Create sample OHLCV data"""
     return [
         OHLCV(
-            timestamp=datetime.now(timezone.utc).timestamp() - i * 3600,
+            timestamp=datetime.now(UTC).timestamp() - i * 3600,
             open=1.0800 + i * 0.001,
             high=1.0810 + i * 0.001,
             low=1.0790 + i * 0.001,
@@ -215,7 +215,7 @@ def generate_ohlcv_from_close(closes: list) -> list:
 
         ohlcv.append(
             OHLCV(
-                timestamp=datetime.now(timezone.utc).timestamp()
+                timestamp=datetime.now(UTC).timestamp()
                 - (len(closes) - i) * 3600,
                 open=open_price,
                 high=high,
@@ -249,7 +249,7 @@ def _reset_kill_switch():
         from kill_switch import kill_switch as _ks
 
         _ks.reset_for_testing()
-    except Exception:  # noqa: S110
+    except Exception:
         pass
     yield
     # Also reset after the test in case it activated the switch
@@ -257,7 +257,7 @@ def _reset_kill_switch():
         from kill_switch import kill_switch as _ks
 
         _ks.reset_for_testing()
-    except Exception:  # noqa: S110
+    except Exception:
         pass
 
 

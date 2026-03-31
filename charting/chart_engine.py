@@ -35,9 +35,9 @@ class Chart:
         self.symbol = symbol
         self.timeframe = timeframe
         self.chart_type = chart_type
-        self.indicators: List[Dict[str, Any]] = []
-        self.drawings: List[Dict[str, Any]] = []
-        self.candles: List[Dict[str, Any]] = []
+        self.indicators: list[dict[str, Any]] = []
+        self.drawings: list[dict[str, Any]] = []
+        self.candles: list[dict[str, Any]] = []
 
     def add_indicator(self, name: str, **params) -> None:
         self.indicators.append({"name": name, "params": params})
@@ -65,7 +65,7 @@ class Chart:
             }
         )
 
-    def render(self, output_format: str = "plotly") -> Dict[str, Any]:
+    def render(self, output_format: str = "plotly") -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "timeframe": self.timeframe,
@@ -90,7 +90,7 @@ class ChartEngine:
     """Manages multiple Chart instances."""
 
     def __init__(self):
-        self.charts: Dict[str, Chart] = {}
+        self.charts: dict[str, Chart] = {}
 
     def create_chart(
         self,

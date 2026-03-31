@@ -46,7 +46,7 @@ class PerformanceMetrics:
         self.initial_capital = initial_capital
         self.risk_free_rate = risk_free_rate
 
-    def calculate_all_metrics(self) -> Dict:
+    def calculate_all_metrics(self) -> dict:
         """Calculate all available metrics."""
         metrics = {}
 

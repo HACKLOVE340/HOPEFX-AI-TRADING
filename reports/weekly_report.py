@@ -51,7 +51,7 @@ import os
 import smtplib
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -120,14 +120,14 @@ class WeeklyReport:
     # Context
     starting_equity: float
     ending_equity: float
-    symbols_traded: List[str]
+    symbols_traded: list[str]
     note: str = ""
 
     # Data provenance — REQUIRED.  Never publish a Sharpe without labelling source.
     # One of: "paper_oanda" | "paper_simulation" | "live" | "seeded"
     data_source: str = DATA_SOURCE_PAPER_SIMULATION
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         d = asdict(self)
         for k in ("week_start", "week_end", "generated_at"):
             d[k] = d[k].isoformat() if d[k] else None
@@ -160,7 +160,7 @@ def _sortino(returns: np.ndarray, periods_per_year: int = 252) -> Optional[float
     return round(mu / downside_std * math.sqrt(periods_per_year), 3)
 
 
-def _max_drawdown(equity_curve: List[float]) -> float:
+def _max_drawdown(equity_curve: list[float]) -> float:
     if len(equity_curve) < 2:
         return 0.0
     arr = np.array(equity_curve, dtype=float)
@@ -175,7 +175,7 @@ def _calmar(annual_return: float, max_dd: float) -> Optional[float]:
     return round(annual_return / abs(max_dd), 3)
 
 
-def _profit_factor(wins: List[float], losses: List[float]) -> Optional[float]:
+def _profit_factor(wins: list[float], losses: list[float]) -> Optional[float]:
     gross_win = sum(w for w in wins if w > 0)
     gross_loss = abs(sum(loss for loss in losses if loss < 0))
     if gross_loss < 1e-10:
@@ -199,14 +199,14 @@ class WeeklyReportGenerator:
 
     def generate(
         self,
-        trades: List[TradeRecord],
-        equity_curve: List[Tuple[datetime, float]],
+        trades: list[TradeRecord],
+        equity_curve: list[tuple[datetime, float]],
         starting_equity: float = 10_000.0,
         week_start: Optional[datetime] = None,
         week_end: Optional[datetime] = None,
         data_source: Optional[str] = None,
     ) -> WeeklyReport:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if week_end is None:
             week_end = now
         if week_start is None:
@@ -392,7 +392,7 @@ def _fmt(val: Optional[float], suffix: str = "", decimals: int = 2) -> str:
     return f"{val:.{decimals}f}{suffix}"
 
 
-_DATA_SOURCE_LABELS: Dict[str, str] = {
+_DATA_SOURCE_LABELS: dict[str, str] = {
     DATA_SOURCE_PAPER_OANDA: "Paper — OANDA practice account (API-connected)",
     DATA_SOURCE_PAPER_SIMULATION: "Paper — internal simulation (no real fills)",
     DATA_SOURCE_LIVE: "LIVE — funded account",
@@ -442,7 +442,7 @@ def _render_html(r: WeeklyReport) -> str:
     pnl_sign = "+" if r.net_pnl >= 0 else ""
 
     # Data source badge colour
-    _source_colors: Dict[str, str] = {
+    _source_colors: dict[str, str] = {
         DATA_SOURCE_LIVE: "#22c55e",
         DATA_SOURCE_PAPER_OANDA: "#3b82f6",
         DATA_SOURCE_PAPER_SIMULATION: "#f59e0b",
@@ -585,8 +585,8 @@ async def _load_trade_data() -> tuple:
 
     Returns (trades, equity_curve, starting_equity, data_source).
     """
-    trades: List[TradeRecord] = []
-    equity_curve: List[Tuple[datetime, float]] = []
+    trades: list[TradeRecord] = []
+    equity_curve: list[tuple[datetime, float]] = []
     starting_equity = 10_000.0
     data_source = _detect_data_source()
 
@@ -617,10 +617,10 @@ async def _load_trade_data() -> tuple:
                         side=t.get("side", "BUY"),
                         open_time=datetime.fromisoformat(t["open_time"])
                         if "open_time" in t
-                        else datetime.now(timezone.utc),
+                        else datetime.now(UTC),
                         close_time=datetime.fromisoformat(t["close_time"])
                         if "close_time" in t
-                        else datetime.now(timezone.utc),
+                        else datetime.now(UTC),
                         open_price=float(t.get("open_price", 0)),
                         close_price=float(t.get("close_price", 0)),
                         lots=float(t.get("lots", 0)),
@@ -633,7 +633,7 @@ async def _load_trade_data() -> tuple:
         if hasattr(broker, "get_equity_history"):
             history = broker.get_equity_history()
             equity_curve = [
-                (datetime.fromtimestamp(float(ts), tz=timezone.utc), float(val))
+                (datetime.fromtimestamp(float(ts), tz=UTC), float(val))
                 for ts, val in history
             ]
             if equity_curve:

@@ -26,7 +26,7 @@ import ast
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Dict, List, Optional
 
@@ -78,8 +78,8 @@ class AuditCheck:
 class AuditReport:
     submission_id: str
     status: AuditStatus
-    checks: List[AuditCheck] = field(default_factory=list)
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    checks: list[AuditCheck] = field(default_factory=list)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: Optional[datetime] = None
     reviewer_id: Optional[str] = None
     reviewer_notes: str = ""
@@ -88,7 +88,7 @@ class AuditReport:
     def passed(self) -> bool:
         return all(c.passed for c in self.checks if c.severity == "error")
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "submission_id": self.submission_id,
             "status": self.status.value,
@@ -118,18 +118,18 @@ class StrategySubmission:
     name: str
     description: str
     strategy_code: str
-    backtest_results: Dict
+    backtest_results: dict
     price_monthly: float
     price_yearly: float
     category: str
-    tags: List[str]
+    tags: list[str]
     status: SubmissionStatus = SubmissionStatus.DRAFT
     audit_report: Optional[AuditReport] = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     rejection_reason: str = ""
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "submission_id": self.submission_id,
             "creator_id": self.creator_id,
@@ -169,7 +169,7 @@ class StrategyAuditor:
         report.checks.append(self._check_description(submission.description))
         report.checks.append(self._check_pricing(submission.price_monthly))
 
-        report.completed_at = datetime.now(timezone.utc)
+        report.completed_at = datetime.now(UTC)
         report.status = AuditStatus.PASSED if report.passed else AuditStatus.FAILED
         return report
 
@@ -210,7 +210,7 @@ class StrategyAuditor:
             )
         return AuditCheck("security_check", True, "No forbidden imports found")
 
-    def _check_sharpe(self, bt: Dict) -> AuditCheck:
+    def _check_sharpe(self, bt: dict) -> AuditCheck:
         sharpe = float(bt.get("sharpe_ratio", 0))
         if sharpe >= self.MIN_SHARPE:
             return AuditCheck(
@@ -223,7 +223,7 @@ class StrategyAuditor:
             "error",
         )
 
-    def _check_drawdown(self, bt: Dict) -> AuditCheck:
+    def _check_drawdown(self, bt: dict) -> AuditCheck:
         dd = abs(float(bt.get("max_drawdown", 1.0)))
         if dd <= self.MAX_DRAWDOWN:
             return AuditCheck(
@@ -238,7 +238,7 @@ class StrategyAuditor:
             "error",
         )
 
-    def _check_trade_count(self, bt: Dict) -> AuditCheck:
+    def _check_trade_count(self, bt: dict) -> AuditCheck:
         trades = int(bt.get("total_trades", 0))
         if trades >= self.MIN_TRADES:
             return AuditCheck(
@@ -271,7 +271,7 @@ class SubmissionManager:
     """Manages the full strategy submission and approval lifecycle."""
 
     def __init__(self) -> None:
-        self._submissions: Dict[str, StrategySubmission] = {}
+        self._submissions: dict[str, StrategySubmission] = {}
         self._auditor = StrategyAuditor()
 
     def submit(
@@ -280,11 +280,11 @@ class SubmissionManager:
         name: str,
         description: str,
         strategy_code: str,
-        backtest_results: Dict,
+        backtest_results: dict,
         price_monthly: float,
         price_yearly: float,
         category: str = "algorithmic",
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
     ) -> StrategySubmission:
         sub = StrategySubmission(
             submission_id=str(uuid.uuid4()),
@@ -306,7 +306,7 @@ class SubmissionManager:
         sub.status = SubmissionStatus.UNDER_AUDIT
         report = self._auditor.run_audit(sub)
         sub.audit_report = report
-        sub.updated_at = datetime.now(timezone.utc)
+        sub.updated_at = datetime.now(UTC)
 
         if report.passed:
             sub.status = SubmissionStatus.APPROVED
@@ -331,7 +331,7 @@ class SubmissionManager:
         if not sub:
             return False
         sub.status = SubmissionStatus.APPROVED
-        sub.updated_at = datetime.now(timezone.utc)
+        sub.updated_at = datetime.now(UTC)
         if sub.audit_report:
             sub.audit_report.reviewer_id = reviewer_id
             sub.audit_report.reviewer_notes = notes
@@ -345,7 +345,7 @@ class SubmissionManager:
             return False
         sub.status = SubmissionStatus.REJECTED
         sub.rejection_reason = reason
-        sub.updated_at = datetime.now(timezone.utc)
+        sub.updated_at = datetime.now(UTC)
         if sub.audit_report:
             sub.audit_report.reviewer_id = reviewer_id
             sub.audit_report.status = AuditStatus.FAILED
@@ -354,10 +354,10 @@ class SubmissionManager:
     def get(self, submission_id: str) -> Optional[StrategySubmission]:
         return self._submissions.get(submission_id)
 
-    def list_by_creator(self, creator_id: str) -> List[StrategySubmission]:
+    def list_by_creator(self, creator_id: str) -> list[StrategySubmission]:
         return [s for s in self._submissions.values() if s.creator_id == creator_id]
 
-    def list_pending(self) -> List[StrategySubmission]:
+    def list_pending(self) -> list[StrategySubmission]:
         return [
             s
             for s in self._submissions.values()

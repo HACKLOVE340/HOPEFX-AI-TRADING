@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 # ── Gold relevance keywords ───────────────────────────────────────────────────
 # Tier 1: directly about gold
-_GOLD_TIER1: Set[str] = {
+_GOLD_TIER1: set[str] = {
     "gold",
     "xau",
     "xauusd",
@@ -60,7 +60,7 @@ _GOLD_TIER1: Set[str] = {
 }
 
 # Tier 2: macro drivers of gold
-_GOLD_TIER2: Set[str] = {
+_GOLD_TIER2: set[str] = {
     "federal reserve",
     "fed rate",
     "interest rate",
@@ -108,7 +108,7 @@ _GOLD_TIER2: Set[str] = {
 # ── Sentiment amplifiers (gold-specific) ─────────────────────────────────────
 # (pattern, multiplier) — multiplier > 1 = amplify, < 1 = dampen
 # Positive multiplier = bullish for gold, negative = bearish
-_BULLISH_PATTERNS: List[Tuple[str, float]] = [
+_BULLISH_PATTERNS: list[tuple[str, float]] = [
     (r"rate\s+cut", 1.5),
     (r"dovish", 1.4),
     (r"quantitative\s+eas", 1.4),
@@ -131,7 +131,7 @@ _BULLISH_PATTERNS: List[Tuple[str, float]] = [
     (r"gold\s+bull", 1.5),
 ]
 
-_BEARISH_PATTERNS: List[Tuple[str, float]] = [
+_BEARISH_PATTERNS: list[tuple[str, float]] = [
     (r"rate\s+hike", 1.5),
     (r"hawkish", 1.4),
     (r"taper", 1.3),
@@ -299,8 +299,8 @@ class GoldSentimentScorer:
 
     def get_aggregate_signal(
         self,
-        articles: Optional[List[NewsArticle]] = None,
-    ) -> Dict[str, float]:
+        articles: Optional[list[NewsArticle]] = None,
+    ) -> dict[str, float]:
         """
         Return an aggregate sentiment signal dict from a list of articles.
 
@@ -338,7 +338,7 @@ class GoldSentimentScorer:
             "news_bullish_ratio": round(bull_ratio, 4),
         }
 
-    def score_batch(self, articles: List[NewsArticle]) -> List[NewsArticle]:
+    def score_batch(self, articles: list[NewsArticle]) -> list[NewsArticle]:
         """Score a list of articles. Returns scored articles only (relevance > 0)."""
         scored = []
         for article in articles:

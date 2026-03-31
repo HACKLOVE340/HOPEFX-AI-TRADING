@@ -69,9 +69,9 @@ class OANDAStreamAdapter:
         self,
         api_key: str = "",
         account_id: str = "",
-        instruments: Optional[List[str]] = None,
+        instruments: Optional[list[str]] = None,
         practice: bool = True,
-        on_tick: Optional[Callable[[Dict], None]] = None,
+        on_tick: Optional[Callable[[dict], None]] = None,
         connect_timeout: float = 30.0,
         reconcile_timeout: float = 10.0,
     ) -> None:
@@ -87,5 +87,5 @@ class OANDAStreamAdapter:
     async def stop(self) -> None:
         raise StreamingForbidden("stop")
 
-    async def poll_rest(self) -> List[Dict]:
+    async def poll_rest(self) -> list[dict]:
         raise StreamingForbidden("poll_rest")

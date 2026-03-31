@@ -26,7 +26,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Optional, Tuple
 
 import jwt
@@ -128,7 +128,7 @@ def _hash_token(raw: str) -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # ── TOTP secret encryption at rest ───────────────────────────────────────────
@@ -178,7 +178,7 @@ def decrypt_totp_secret(stored: str) -> str:
 # A single implementation ensures the hash written at registration is always
 # the same scheme verified at login — previously this module used pbkdf2_sha256
 # while auth.jwt used bcrypt, causing "hash could not be identified" on login.
-from auth.jwt import hash_password, verify_password  # noqa: E402, F401
+from auth.jwt import hash_password, verify_password
 
 
 # ── TOTP (2FA) ───────────────────────────────────────────────────────────────
@@ -224,7 +224,7 @@ class AuthService:
         username: str,
         password: str,
         role: str = "trader",
-    ) -> Tuple[bool, str, Optional[str]]:
+    ) -> tuple[bool, str, Optional[str]]:
         """
         Create a new user account.
 
@@ -268,7 +268,7 @@ class AuthService:
 
     # ── Email verification ────────────────────────────────────────────────────
 
-    def verify_email(self, token: str) -> Tuple[bool, str]:
+    def verify_email(self, token: str) -> tuple[bool, str]:
         from database.user_models import User, UserStatus
 
         token_hash = _hash_token(token)
@@ -277,7 +277,7 @@ class AuthService:
             if not user:
                 return False, "Invalid or expired verification token"
             if user.email_verify_expires and _now() > user.email_verify_expires.replace(
-                tzinfo=timezone.utc,
+                tzinfo=UTC,
             ):
                 return False, "Verification token expired. Request a new one."
             user.is_email_verified = True
@@ -288,7 +288,7 @@ class AuthService:
             logger.info("Email verified: %s", user.email)
             return True, "Email verified successfully"
 
-    def resend_verification(self, email: str) -> Tuple[bool, str, Optional[str]]:
+    def resend_verification(self, email: str) -> tuple[bool, str, Optional[str]]:
         from database.user_models import User
 
         with self._sf() as session:
@@ -312,7 +312,7 @@ class AuthService:
         ip_address: str = "unknown",
         device_info: str = "",
         totp_code: Optional[str] = None,
-    ) -> Tuple[bool, str, Optional[dict]]:
+    ) -> tuple[bool, str, Optional[dict]]:
         """
         Authenticate user. Returns (success, message, token_dict).
 
@@ -366,7 +366,7 @@ class AuthService:
                 session.query(LoginAttempt)
                 .filter(
                     LoginAttempt.user_id == user.id,
-                    LoginAttempt.success == False,  # noqa: E712
+                    LoginAttempt.success == False,
                     LoginAttempt.attempted_at >= cutoff,
                 )
                 .count()
@@ -439,7 +439,7 @@ class AuthService:
         self,
         raw_refresh_token: str,
         ip_address: str = "unknown",
-    ) -> Tuple[bool, str, Optional[dict]]:
+    ) -> tuple[bool, str, Optional[dict]]:
         """
         Rotate refresh token. Old token is revoked, new pair issued.
         """
@@ -454,7 +454,7 @@ class AuthService:
             )
             if not sess_row:
                 return False, "Invalid or expired refresh token", None
-            if _now() > sess_row.expires_at.replace(tzinfo=timezone.utc):
+            if _now() > sess_row.expires_at.replace(tzinfo=UTC):
                 sess_row.is_revoked = True
                 session.commit()
                 return False, "Refresh token expired. Please log in again.", None
@@ -494,7 +494,7 @@ class AuthService:
         self,
         raw_refresh_token: str,
         access_token: Optional[str] = None,
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         from database.user_models import UserSession
 
         # Revoke refresh session in DB
@@ -530,7 +530,7 @@ class AuthService:
 
         return True, "Logged out successfully"
 
-    def logout_all(self, user_id: str) -> Tuple[bool, str]:
+    def logout_all(self, user_id: str) -> tuple[bool, str]:
         """Revoke all active sessions for a user (e.g. after password change)."""
         from database.user_models import UserSession
 
@@ -544,7 +544,7 @@ class AuthService:
 
     # ── Password reset ────────────────────────────────────────────────────────
 
-    def request_password_reset(self, email: str) -> Tuple[bool, str, Optional[str]]:
+    def request_password_reset(self, email: str) -> tuple[bool, str, Optional[str]]:
         from database.user_models import User
 
         with self._sf() as session:
@@ -562,7 +562,7 @@ class AuthService:
             session.commit()
             return True, "Password reset email sent", token
 
-    def reset_password(self, token: str, new_password: str) -> Tuple[bool, str]:
+    def reset_password(self, token: str, new_password: str) -> tuple[bool, str]:
         from database.user_models import User
 
         if len(new_password) < 8:
@@ -577,7 +577,7 @@ class AuthService:
                 return False, "Invalid or expired reset token"
             if (
                 user.password_reset_expires
-                and _now() > user.password_reset_expires.replace(tzinfo=timezone.utc)
+                and _now() > user.password_reset_expires.replace(tzinfo=UTC)
             ):
                 return False, "Reset token expired. Request a new one."
             user.hashed_password = hash_password(new_password)
@@ -591,7 +591,7 @@ class AuthService:
 
     # ── 2FA ──────────────────────────────────────────────────────────────────
 
-    def setup_2fa(self, user_id: str) -> Tuple[bool, str, Optional[str]]:
+    def setup_2fa(self, user_id: str) -> tuple[bool, str, Optional[str]]:
         """Generate TOTP secret (encrypted at rest). User must confirm before enabling."""
         from database.user_models import User
 
@@ -606,7 +606,7 @@ class AuthService:
             uri = get_totp_uri(secret, user.email)
             return True, uri, secret
 
-    def confirm_2fa(self, user_id: str, code: str) -> Tuple[bool, str]:
+    def confirm_2fa(self, user_id: str, code: str) -> tuple[bool, str]:
         from database.user_models import User
 
         with self._sf() as session:
@@ -620,7 +620,7 @@ class AuthService:
             session.commit()
             return True, "2FA enabled successfully"
 
-    def disable_2fa(self, user_id: str, code: str) -> Tuple[bool, str]:
+    def disable_2fa(self, user_id: str, code: str) -> tuple[bool, str]:
         from database.user_models import User
 
         with self._sf() as session:
@@ -658,7 +658,7 @@ class AuthService:
         ip_address: str,
         device_info: str,
         session,
-    ) -> Tuple[str, object]:
+    ) -> tuple[str, object]:
         from database.user_models import UserSession
 
         raw_token = secrets.token_urlsafe(48)

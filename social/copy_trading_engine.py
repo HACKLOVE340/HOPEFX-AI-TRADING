@@ -16,7 +16,7 @@ import logging
 from typing import Dict, List, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 import uuid
 
 from sqlalchemy.ext.declarative import declarative_base
@@ -58,7 +58,7 @@ class CopyTraderProfile:
     followers_count: int = 0
     subscription_price: float = 0.0
     bio: str = ""
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def calculate_trust_score(self) -> float:
         """Calculate trader trust score (0-100)"""
@@ -97,7 +97,7 @@ class FollowerConfig:
     auto_close_on_stop_loss: bool = True
     skip_correlation_above: float = 0.8  # Skip correlated trades
     enabled: bool = True
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -114,9 +114,9 @@ class SignalMessage:
     risk_amount: float
     lot_size: float
     reason: str  # Trading reason/analysis
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "signal_id": self.signal_id,
             "trader_id": self.trader_id,
@@ -149,8 +149,8 @@ class AdvancedCopyTradingEngine:
         self.broker = broker
 
         # In-memory tracking
-        self.active_signals: Dict[str, SignalMessage] = {}
-        self.trade_correlations: Dict[str, List[str]] = {}
+        self.active_signals: dict[str, SignalMessage] = {}
+        self.trade_correlations: dict[str, list[str]] = {}
 
     def register_trader(
         self,
@@ -197,8 +197,8 @@ class AdvancedCopyTradingEngine:
         return config
 
     def broadcast_signal(
-        self, signal: SignalMessage, followers: List[FollowerConfig]
-    ) -> Dict[str, Dict[str, Any]]:
+        self, signal: SignalMessage, followers: list[FollowerConfig]
+    ) -> dict[str, dict[str, Any]]:
         """
         Broadcast trading signal to all followers
 
@@ -363,7 +363,7 @@ class AdvancedCopyTradingEngine:
 
     def get_follower_performance(
         self, follower_id: str, days: int = 30
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get performance metrics for follower"""
 
         return {
@@ -385,7 +385,7 @@ class AdvancedCopyTradingEngine:
         trader_id: str,
         subscription_revenue: float,
         profit_share_percentage: float = 0.2,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """
         Calculate trader payout
 

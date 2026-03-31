@@ -12,7 +12,7 @@ Captures price discrepancies across multiple venues
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Dict, List, Optional
 
@@ -61,7 +61,7 @@ class ExchangeConnector(ABC):
                 return Decimal(str(balance["free"].get(asset, 0)))
     """
 
-    def __init__(self, name: str, client, latency_ms: float, fees: Dict):
+    def __init__(self, name: str, client, latency_ms: float, fees: dict):
         self.name = name
         self.client = client
         self.latency_ms = latency_ms
@@ -74,7 +74,7 @@ class ExchangeConnector(ABC):
         self.is_connected = True
 
     @abstractmethod
-    async def get_ticker(self, symbol: str) -> Dict:
+    async def get_ticker(self, symbol: str) -> dict:
         """Return current bid/ask for *symbol* as ``{"bid": Decimal, "ask": Decimal}``."""
 
     @abstractmethod
@@ -85,7 +85,7 @@ class ExchangeConnector(ABC):
         size: Decimal,
         price: Optional[Decimal] = None,
         order_type: str = "limit",
-    ) -> Dict:
+    ) -> dict:
         """Place an order and return fill info as ``{"filled": bool, "fill_price": ...}``."""
 
     @abstractmethod
@@ -98,9 +98,9 @@ class ArbitrageDetector:
 
     def __init__(self, min_profit_bps: float = 10.0):
         self.min_profit_bps = min_profit_bps
-        self.exchanges: Dict[str, ExchangeConnector] = {}
-        self.price_cache: Dict[str, Dict] = {}  # symbol -> {exchange -> {bid, ask, ts}}
-        self.opportunity_history: List[ArbitrageOpportunity] = []
+        self.exchanges: dict[str, ExchangeConnector] = {}
+        self.price_cache: dict[str, dict] = {}  # symbol -> {exchange -> {bid, ask, ts}}
+        self.opportunity_history: list[ArbitrageOpportunity] = []
 
     def add_exchange(self, connector: ExchangeConnector):
         self.exchanges[connector.name] = connector
@@ -122,12 +122,12 @@ class ArbitrageDetector:
             self.price_cache[symbol][exchange.name] = {
                 "bid": Decimal(str(ticker["bid"])),
                 "ask": Decimal(str(ticker["ask"])),
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
             }
         except Exception as e:
             print(f"Price fetch error {exchange.name}/{symbol}: {e}")
 
-    def detect_opportunities(self, symbol: str) -> List[ArbitrageOpportunity]:
+    def detect_opportunities(self, symbol: str) -> list[ArbitrageOpportunity]:
         """Find profitable arbitrage for symbol"""
         opportunities = []
 
@@ -193,13 +193,13 @@ class ArbitrageExecutor:
     """Execute arbitrage with leg risk protection"""
 
     def __init__(self):
-        self.pending_executions: Dict[str, Dict] = {}
+        self.pending_executions: dict[str, dict] = {}
         self.max_slippage_bps = 50
 
     async def execute(
         self,
         opportunity: ArbitrageOpportunity,
-        exchanges: Dict[str, ExchangeConnector],
+        exchanges: dict[str, ExchangeConnector],
     ) -> bool:
         """
         Execute both legs simultaneously with protection.
@@ -316,7 +316,7 @@ class CrossExchangeEngine:
     def add_exchange(self, connector: ExchangeConnector):
         self.detector.add_exchange(connector)
 
-    async def run(self, symbols: List[str] = None):
+    async def run(self, symbols: list[str] = None):
         """Main arbitrage loop"""
         if symbols is None:
             symbols = ["BTCUSD", "ETHUSD", "XAUUSD"]

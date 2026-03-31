@@ -19,7 +19,7 @@ Inner Circle Trader methodology:
 """
 
 import logging
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -82,7 +82,7 @@ class ITS8OSStrategy(BaseStrategy):
 
         logger.info(f"ITS-8-OS Strategy initialized for {config.symbol}")
 
-    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Analyze market using all 8 ICT optimal setups.
 
@@ -98,7 +98,7 @@ class ITS8OSStrategy(BaseStrategy):
                 return {"error": "Insufficient data"}
 
             current_price = prices[-1].get("close", 0)
-            current_time = data.get("timestamp", datetime.now(timezone.utc))
+            current_time = data.get("timestamp", datetime.now(UTC))
 
             # Run all 8 optimal setups
             setup_results = {}
@@ -155,7 +155,7 @@ class ITS8OSStrategy(BaseStrategy):
             logger.error(f"Error in ITS-8-OS analysis: {e}")
             return {"error": str(e)}
 
-    def generate_signal(self, analysis: Dict[str, Any]) -> Optional[Signal]:
+    def generate_signal(self, analysis: dict[str, Any]) -> Optional[Signal]:
         """
         Generate trading signal based on ITS-8-OS analysis.
 
@@ -228,7 +228,7 @@ class ITS8OSStrategy(BaseStrategy):
             logger.error(f"Error generating ITS-8-OS signal: {e}")
             return None
 
-    def _analyze_amd_pattern(self, prices: List[Dict]) -> Dict[str, Any]:
+    def _analyze_amd_pattern(self, prices: list[dict]) -> dict[str, Any]:
         """
         Setup 1: Accumulation, Manipulation, Distribution (AMD)
 
@@ -285,7 +285,7 @@ class ITS8OSStrategy(BaseStrategy):
             logger.error(f"Error analyzing AMD: {e}")
             return {"phase": "unknown", "signal": "neutral", "score": 0.0}
 
-    def _analyze_power_of_3(self, prices: List[Dict]) -> Dict[str, Any]:
+    def _analyze_power_of_3(self, prices: list[dict]) -> dict[str, Any]:
         """
         Setup 2: Power of 3 Pattern
 
@@ -332,7 +332,7 @@ class ITS8OSStrategy(BaseStrategy):
             logger.error(f"Error analyzing Power of 3: {e}")
             return {"detected": False, "signal": "neutral", "score": 0.0}
 
-    def _analyze_judas_swing(self, prices: List[Dict]) -> Dict[str, Any]:
+    def _analyze_judas_swing(self, prices: list[dict]) -> dict[str, Any]:
         """
         Setup 3: Judas Swing
 
@@ -380,7 +380,7 @@ class ITS8OSStrategy(BaseStrategy):
             logger.error(f"Error analyzing Judas Swing: {e}")
             return {"detected": False, "signal": "neutral", "score": 0.0}
 
-    def _analyze_kill_zones(self, current_time: datetime) -> Dict[str, Any]:
+    def _analyze_kill_zones(self, current_time: datetime) -> dict[str, Any]:
         """
         Setup 4: Kill Zones
 
@@ -420,7 +420,7 @@ class ITS8OSStrategy(BaseStrategy):
                 "signal": "neutral",
             }
 
-    def _analyze_turtle_soup(self, prices: List[Dict]) -> Dict[str, Any]:
+    def _analyze_turtle_soup(self, prices: list[dict]) -> dict[str, Any]:
         """
         Setup 5: ICT Turtle Soup
 
@@ -467,9 +467,9 @@ class ITS8OSStrategy(BaseStrategy):
 
     def _analyze_silver_bullet(
         self,
-        prices: List[Dict],
+        prices: list[dict],
         current_time: datetime,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Setup 6: Silver Bullet Setup
 
@@ -530,7 +530,7 @@ class ITS8OSStrategy(BaseStrategy):
             logger.error(f"Error analyzing Silver Bullet: {e}")
             return {"detected": False, "signal": "neutral", "score": 0.0}
 
-    def _analyze_ote(self, prices: List[Dict]) -> Dict[str, Any]:
+    def _analyze_ote(self, prices: list[dict]) -> dict[str, Any]:
         """
         Setup 7: Optimal Trade Entry
 
@@ -575,9 +575,9 @@ class ITS8OSStrategy(BaseStrategy):
 
     def _analyze_session(
         self,
-        prices: List[Dict],
+        prices: list[dict],
         current_time: datetime,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Setup 8: Session-based Analysis
 
@@ -634,7 +634,7 @@ class ITS8OSStrategy(BaseStrategy):
             logger.error(f"Error analyzing session: {e}")
             return {"session": "unknown", "signal": "neutral", "score": 0.0}
 
-    def _calculate_confluence(self, setup_results: Dict[str, Dict]) -> Dict[str, Any]:
+    def _calculate_confluence(self, setup_results: dict[str, dict]) -> dict[str, Any]:
         """Calculate confluence across all setups"""
         try:
             bullish_count = 0
@@ -685,9 +685,9 @@ class ITS8OSStrategy(BaseStrategy):
 
     def _extract_signal_details(
         self,
-        setup_results: Dict,
+        setup_results: dict,
         direction: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Extract details of setups supporting the signal"""
         details = {}
         for setup_name, result in setup_results.items():

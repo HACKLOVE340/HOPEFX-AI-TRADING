@@ -27,7 +27,7 @@ MacroFeed (FRED) → MacroStore (in-memory, forward-fill) → live_inference
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict
 
 from fastapi import APIRouter, Body, HTTPException, status
@@ -52,7 +52,7 @@ def _get_macro_store():
         return None
 
 
-def _push_snapshot_to_store(snapshot: Dict[str, Any]) -> int:
+def _push_snapshot_to_store(snapshot: dict[str, Any]) -> int:
     """
     Push FRED snapshot values into MacroStore so live inference sees them.
 
@@ -63,7 +63,7 @@ def _push_snapshot_to_store(snapshot: Dict[str, Any]) -> int:
     if store is None:
         return 0
 
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     mapping = {
         "dxy": "dxy",
         "yield_10y": "us10y",
@@ -117,7 +117,7 @@ async def macro_snapshot():
     if store is not None and len(store) > 0:
         try:
             snap_store = store.snapshot()
-            snap: Dict[str, Any] = {
+            snap: dict[str, Any] = {
                 "dxy": None,
                 "yield_10y": None,
                 "yield_2y": None,
@@ -126,7 +126,7 @@ async def macro_snapshot():
                 "cpi_yoy_pct": None,
                 "macro_regime_score": 50,
                 "macro_stance": "neutral",
-                "refreshed_at": datetime.now(timezone.utc).isoformat(),
+                "refreshed_at": datetime.now(UTC).isoformat(),
                 "source": "macro_store_cache",
             }
             key_map = {
@@ -163,7 +163,7 @@ async def macro_snapshot():
         "cpi_yoy_pct": None,
         "macro_regime_score": None,
         "macro_stance": "unavailable",
-        "refreshed_at": datetime.now(timezone.utc).isoformat(),
+        "refreshed_at": datetime.now(UTC).isoformat(),
         "source": "no_data",
         "note": (
             "FRED data unavailable and no cached values exist. "
@@ -210,7 +210,7 @@ async def macro_features():
     store = _get_macro_store()
     if store is not None and len(store) > 0:
         snap = store.snapshot()
-        features: Dict[str, float] = {}
+        features: dict[str, float] = {}
         for name, info in snap.items():
             if info is not None:
                 features[f"macro_{name}"] = float(info["value"])

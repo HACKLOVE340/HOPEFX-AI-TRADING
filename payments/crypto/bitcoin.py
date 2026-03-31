@@ -21,7 +21,7 @@ import os
 import time
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
@@ -103,15 +103,15 @@ class BitcoinClient:
     def __init__(self) -> None:
         self._mnemonic: str = _load_mnemonic()
         # user_id -> list of derived address strings (in derivation order)
-        self.user_addresses: Dict[str, List[str]] = {}
+        self.user_addresses: dict[str, list[str]] = {}
         # address string -> BitcoinAddress metadata
-        self.addresses: Dict[str, BitcoinAddress] = {}
+        self.addresses: dict[str, BitcoinAddress] = {}
         # tx_hash -> BitcoinTransaction
-        self.transactions: Dict[str, BitcoinTransaction] = {}
+        self.transactions: dict[str, BitcoinTransaction] = {}
 
     # ── Address derivation ────────────────────────────────────────────────────
 
-    def _derive_address(self, index: int) -> Tuple[str, str]:
+    def _derive_address(self, index: int) -> tuple[str, str]:
         """
         Derive a BIP84 P2WPKH (bech32) address at the given index.
 
@@ -130,7 +130,7 @@ class BitcoinClient:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def generate_deposit_address(self, user_id: str) -> Dict:
+    def generate_deposit_address(self, user_id: str) -> dict:
         """
         Generate (or return the next unused) BIP84 deposit address for a user.
 
@@ -148,7 +148,7 @@ class BitcoinClient:
             address=address,
             user_id=user_id,
             derivation_path=path,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         self.addresses[address] = btc_address
         self.user_addresses.setdefault(user_id, []).append(address)
@@ -214,12 +214,12 @@ class BitcoinClient:
             amount=amount,
             confirmations=confirmations,
             status=status,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         self.transactions[tx_hash] = transaction
 
         if address in self.addresses:
-            self.addresses[address].last_used = datetime.now(timezone.utc)
+            self.addresses[address].last_used = datetime.now(UTC)
 
         logger.info(
             "BTC deposit recorded: tx=%s amount=%s BTC confirmations=%d user=%s",
@@ -232,7 +232,7 @@ class BitcoinClient:
         user_id: str,
         amount: Decimal,
         destination_address: str,
-    ) -> Dict:
+    ) -> dict:
         """
         Prepare a Bitcoin withdrawal.
 
@@ -278,7 +278,7 @@ class BitcoinClient:
             "net_amount": float(net_amount),
             "destination": destination_address,
             "status": "broadcasting",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
     # ── Helpers ───────────────────────────────────────────────────────────────
@@ -291,7 +291,7 @@ class BitcoinClient:
             return 26 <= len(address) <= 35
         return False
 
-    def get_transaction_status(self, tx_hash: str) -> Optional[Dict]:
+    def get_transaction_status(self, tx_hash: str) -> Optional[dict]:
         """Return status dict for a known transaction, or None."""
         tx = self.transactions.get(tx_hash)
         if not tx:
@@ -305,7 +305,7 @@ class BitcoinClient:
             "created_at": tx.created_at.isoformat(),
         }
 
-    def get_user_transactions(self, user_id: str) -> List[Dict]:
+    def get_user_transactions(self, user_id: str) -> list[dict]:
         """Return all transactions for a user, newest first."""
         user_addrs = set(self.user_addresses.get(user_id, []))
         txs = [

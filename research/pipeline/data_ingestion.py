@@ -32,7 +32,7 @@ import hashlib
 import logging
 import random
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -94,7 +94,7 @@ _NEG_WORDS = {
 }
 
 # ── RSS feeds (no key required) ───────────────────────────────────────────────
-_RSS_FEEDS: Dict[str, str] = {
+_RSS_FEEDS: dict[str, str] = {
     "yahoo_finance": "https://finance.yahoo.com/news/rssindex",
     "seeking_alpha": "https://seekingalpha.com/market_currents.xml",
     "marketwatch": "https://feeds.marketwatch.com/marketwatch/topstories/",
@@ -110,7 +110,7 @@ _RSS_FEEDS: Dict[str, str] = {
 def _cache_key(ticker: str, interval: str, start: str, end: str) -> Path:
     tag = hashlib.md5(
         f"{ticker}{interval}{start}{end}".encode(), usedforsecurity=False
-    ).hexdigest()[:10]  # noqa: S324
+    ).hexdigest()[:10]
     return CACHE_DIR / f"{ticker.replace('/', '_')}_{interval}_{tag}.parquet"
 
 
@@ -125,7 +125,7 @@ def _backoff_download(ticker: str, **kwargs) -> pd.DataFrame:
             logger.warning(
                 "yfinance attempt %d failed for %s: %s", attempt + 1, ticker, exc
             )
-        sleep = (2**attempt) + random.uniform(0, 1)  # nosec B311 - exponential backoff jitter, not cryptographic  # noqa: S311
+        sleep = (2**attempt) + random.uniform(0, 1)  # nosec B311 - exponential backoff jitter, not cryptographic
         time.sleep(sleep)
     return pd.DataFrame()
 
@@ -194,7 +194,7 @@ def fetch_daily(
     DataFrame with DatetimeIndex (UTC), columns:
         open, high, low, close, volume, vwap, is_forward_filled
     """
-    end = end or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    end = end or datetime.now(UTC).strftime("%Y-%m-%d")
     cache_path = _cache_key(ticker, "1d", start, end)
 
     if use_cache and cache_path.exists():
@@ -235,7 +235,7 @@ def fetch_daily(
 # Intraday data — paginated backward to maximise history
 # ─────────────────────────────────────────────────────────────────────────────
 
-_INTRADAY_WINDOW_DAYS: Dict[str, int] = {
+_INTRADAY_WINDOW_DAYS: dict[str, int] = {
     "1m": 7,
     "2m": 60,
     "5m": 60,
@@ -271,7 +271,7 @@ def fetch_intraday(
     -------
     DataFrame with DatetimeIndex (UTC), same schema as fetch_daily()
     """
-    end_dt = datetime.now(timezone.utc)
+    end_dt = datetime.now(UTC)
     start_str = (end_dt - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
     end_str = end_dt.strftime("%Y-%m-%d")
     cache_path = _cache_key(ticker, interval, start_str, end_str)
@@ -281,7 +281,7 @@ def fetch_intraday(
         return pd.read_parquet(cache_path)
 
     window = _INTRADAY_WINDOW_DAYS.get(interval, 60)
-    chunks: List[pd.DataFrame] = []
+    chunks: list[pd.DataFrame] = []
     chunk_end = end_dt
 
     while (end_dt - chunk_end).days < lookback_days:
@@ -306,7 +306,7 @@ def fetch_intraday(
 
         chunk_end = chunk_start - timedelta(days=1)
         # Respect rate limits
-        time.sleep(random.uniform(0.5, 1.5))  # nosec B311 - rate-limit sleep jitter, not cryptographic  # noqa: S311
+        time.sleep(random.uniform(0.5, 1.5))  # nosec B311 - rate-limit sleep jitter, not cryptographic
 
         if chunk_start <= end_dt - timedelta(days=lookback_days):
             break
@@ -339,7 +339,7 @@ def fetch_intraday(
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Curated universe: equities + ETFs + crypto + FX + commodities
-DEFAULT_UNIVERSE: Dict[str, List[str]] = {
+DEFAULT_UNIVERSE: dict[str, list[str]] = {
     "equities": ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "JPM", "GS"],
     "etfs": ["SPY", "QQQ", "IWM", "GLD", "SLV", "TLT", "HYG", "EEM", "XLE"],
     "crypto": ["BTC-USD", "ETH-USD", "SOL-USD"],
@@ -350,19 +350,19 @@ DEFAULT_UNIVERSE: Dict[str, List[str]] = {
 
 
 def fetch_universe(
-    universe: Optional[Dict[str, List[str]]] = None,
+    universe: Optional[dict[str, list[str]]] = None,
     interval: str = "1d",
     start: str = "1990-01-01",
     lookback_days: int = 365,
     use_cache: bool = True,
-) -> Dict[str, pd.DataFrame]:
+) -> dict[str, pd.DataFrame]:
     """
     Fetch OHLCV for every ticker in the universe dict.
 
     Returns a dict mapping ticker → DataFrame.
     """
     universe = universe or DEFAULT_UNIVERSE
-    results: Dict[str, pd.DataFrame] = {}
+    results: dict[str, pd.DataFrame] = {}
 
     for category, tickers in universe.items():
         for ticker in tickers:
@@ -435,9 +435,9 @@ def fetch_rss_sentiment(
 
                 published = getattr(entry, "published_parsed", None)
                 if published:
-                    ts = datetime(*published[:6], tzinfo=timezone.utc)
+                    ts = datetime(*published[:6], tzinfo=UTC)
                 else:
-                    ts = datetime.now(timezone.utc)
+                    ts = datetime.now(UTC)
 
                 records.append(
                     {

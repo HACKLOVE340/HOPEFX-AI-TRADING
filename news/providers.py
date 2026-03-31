@@ -20,7 +20,7 @@ Author: HOPEFX Development Team
 import abc
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -53,10 +53,10 @@ class NewsArticle:
     url: str
     author: Optional[str] = None
     content: Optional[str] = None
-    symbols: Optional[List[str]] = None
+    symbols: Optional[list[str]] = None
     sentiment: Optional[float] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             "title": self.title,
@@ -79,11 +79,11 @@ class NewsProvider(abc.ABC):
         self.logger = logging.getLogger(self.__class__.__name__)
 
     @abc.abstractmethod
-    def get_news(self, **kwargs) -> List[NewsArticle]:
+    def get_news(self, **kwargs) -> list[NewsArticle]:
         """Fetch and return a list of NewsArticle objects."""
 
     @abc.abstractmethod
-    def format_article(self, raw_article: Dict[str, Any]) -> NewsArticle:
+    def format_article(self, raw_article: dict[str, Any]) -> NewsArticle:
         """Convert a raw provider response dict into a NewsArticle."""
 
 
@@ -108,7 +108,7 @@ class NewsAPIProvider(NewsProvider):
         sort_by: str = "publishedAt",
         page_size: int = 20,
         from_date: Optional[datetime] = None,
-    ) -> List[NewsArticle]:
+    ) -> list[NewsArticle]:
         """
         Get news from NewsAPI
 
@@ -125,7 +125,7 @@ class NewsAPIProvider(NewsProvider):
         try:
             # Set default from_date to last 24 hours
             if from_date is None:
-                from_date = datetime.now(timezone.utc) - timedelta(days=1)
+                from_date = datetime.now(UTC) - timedelta(days=1)
 
             params = {
                 "q": query,
@@ -165,7 +165,7 @@ class NewsAPIProvider(NewsProvider):
             self.logger.error(f"NewsAPI error: {e}")
             return []
 
-    def format_article(self, raw_article: Dict[str, Any]) -> NewsArticle:
+    def format_article(self, raw_article: dict[str, Any]) -> NewsArticle:
         """Format NewsAPI article"""
         return NewsArticle(
             title=raw_article.get("title", ""),
@@ -199,7 +199,7 @@ class AlphaVantageNewsProvider(NewsProvider):
         tickers: Optional[str] = None,
         topics: str = "financial_markets",
         limit: int = 50,
-    ) -> List[NewsArticle]:
+    ) -> list[NewsArticle]:
         """
         Get news from Alpha Vantage
 
@@ -249,7 +249,7 @@ class AlphaVantageNewsProvider(NewsProvider):
             self.logger.error(f"Alpha Vantage error: {e}")
             return []
 
-    def format_article(self, raw_article: Dict[str, Any]) -> NewsArticle:
+    def format_article(self, raw_article: dict[str, Any]) -> NewsArticle:
         """Format Alpha Vantage article"""
         # Extract overall sentiment score
         sentiment_score = float(raw_article.get("overall_sentiment_score", 0))
@@ -296,8 +296,8 @@ class RSSFeedProvider(NewsProvider):
         self.feeds[name] = url
 
     def get_news(
-        self, feeds: Optional[List[str]] = None, hours_back: int = 24
-    ) -> List[NewsArticle]:
+        self, feeds: Optional[list[str]] = None, hours_back: int = 24
+    ) -> list[NewsArticle]:
         """
         Get news from RSS feeds
 
@@ -311,7 +311,7 @@ class RSSFeedProvider(NewsProvider):
         if feeds is None:
             feeds = list(self.feeds.keys())
 
-        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours_back)
+        cutoff_time = datetime.now(UTC) - timedelta(hours=hours_back)
         all_articles = []
 
         for feed_name in feeds:
@@ -349,7 +349,7 @@ class RSSFeedProvider(NewsProvider):
     def format_article(self, entry: Any, source: str) -> NewsArticle:
         """Format RSS feed entry"""
         # Parse published date
-        published_at = datetime.now(timezone.utc)
+        published_at = datetime.now(UTC)
         if hasattr(entry, "published_parsed") and entry.published_parsed:
             published_at = datetime(*entry.published_parsed[:6])
         elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
@@ -395,10 +395,10 @@ class MultiSourceAggregator:
     def get_aggregated_news(
         self,
         query: Optional[str] = None,
-        symbols: Optional[List[str]] = None,
+        symbols: Optional[list[str]] = None,
         hours_back: int = 24,
         deduplicate: bool = True,
-    ) -> List[NewsArticle]:
+    ) -> list[NewsArticle]:
         """
         Get news from all configured providers
 
@@ -441,7 +441,7 @@ class MultiSourceAggregator:
         self.logger.info(f"Aggregated {len(all_articles)} unique articles")
         return all_articles
 
-    def _deduplicate(self, articles: List[NewsArticle]) -> List[NewsArticle]:
+    def _deduplicate(self, articles: list[NewsArticle]) -> list[NewsArticle]:
         """Remove duplicate articles based on title similarity"""
         seen_titles = set()
         unique_articles = []

@@ -38,7 +38,7 @@ _RISK_SETTINGS_FILE = Path("config/risk_settings.json")
 _RISK_SETTINGS_KEY = "risk_settings"
 
 # Default risk settings — used when no persisted value exists
-_RISK_SETTINGS_DEFAULTS: Dict[str, Any] = {
+_RISK_SETTINGS_DEFAULTS: dict[str, Any] = {
     "max_risk_per_trade": 2.0,
     "max_open_positions": 5,
     "paper_trading_mode": True,
@@ -47,7 +47,7 @@ _RISK_SETTINGS_DEFAULTS: Dict[str, Any] = {
 }
 
 # In-process cache — refreshed on every read from the shared store
-_risk_settings: Dict[str, Any] = dict(_RISK_SETTINGS_DEFAULTS)
+_risk_settings: dict[str, Any] = dict(_RISK_SETTINGS_DEFAULTS)
 
 _start_time = time.time()
 
@@ -65,7 +65,7 @@ def log_activity(message: str) -> None:
     logger.info("ADMIN: %s", message)
 
 
-def _get_risk_settings() -> Dict[str, Any]:
+def _get_risk_settings() -> dict[str, Any]:
     """
     Read risk settings from the shared config store (Redis → DB → defaults).
 
@@ -85,7 +85,7 @@ def _get_risk_settings() -> Dict[str, Any]:
     return dict(_risk_settings)
 
 
-def _load_persisted_risk_settings() -> Dict[str, Any]:
+def _load_persisted_risk_settings() -> dict[str, Any]:
     """Read risk settings from the legacy JSON file (_RISK_SETTINGS_FILE).
 
     Returns an empty dict when the file is absent, unreadable, or contains
@@ -101,7 +101,7 @@ def _load_persisted_risk_settings() -> Dict[str, Any]:
         return {}
 
 
-def _save_risk_settings(settings: Dict[str, Any], changed_by: str = "system") -> bool:
+def _save_risk_settings(settings: dict[str, Any], changed_by: str = "system") -> bool:
     """Persist risk settings to the shared config store (Redis + DB).
 
     Falls back to writing the legacy JSON file when the config store is
@@ -200,7 +200,7 @@ def apply_persisted_risk_settings() -> None:
 
 
 class AdminStatusResponse(BaseModel):
-    components: Dict[str, bool]
+    components: dict[str, bool]
 
 
 class SimpleStatusResponse(BaseModel):
@@ -209,7 +209,7 @@ class SimpleStatusResponse(BaseModel):
 
 class RiskSettingsResponse(BaseModel):
     status: str
-    settings: Dict[str, Any]
+    settings: dict[str, Any]
 
 
 @router.get(
@@ -222,7 +222,7 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
     if not app_state:
         raise HTTPException(status_code=503, detail="App not initialized")
 
-    components: Dict[str, bool] = {
+    components: dict[str, bool] = {
         "config": app_state.config is not None,
         "database": app_state.db_engine is not None,
         "cache": app_state.cache is not None,
@@ -338,7 +338,7 @@ async def resume_trading(user: TokenPayload = Depends(require_role("admin"))):
     summary="Update live risk management parameters",
 )
 async def update_risk_settings(
-    settings: Dict,
+    settings: dict,
     user: TokenPayload = Depends(require_role("admin")),
 ):
     """
@@ -548,7 +548,7 @@ def get_settings(user: TokenPayload = Depends(require_role("admin"))):
 @router.post("/settings")
 @router.post("/settings-data")
 def save_settings(
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     user: TokenPayload = Depends(require_role("admin")),
 ):
     """
@@ -592,13 +592,13 @@ def get_activity(user: TokenPayload = Depends(require_role("admin"))):
 @router.get("/dashboard-data")
 def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     """Full system state. Requires: role >= 'admin'."""
-    trading_stats: Dict[str, Any] = {
+    trading_stats: dict[str, Any] = {
         "total_trades": 0,
         "open_positions": 0,
         "daily_pnl": 0.0,
     }
-    risk_status: Dict[str, Any] = {"within_limits": True}
-    module_status: Dict[str, Any] = {
+    risk_status: dict[str, Any] = {"within_limits": True}
+    module_status: dict[str, Any] = {
         "strategies": False,
         "brokers": False,
         "signal_engine": False,

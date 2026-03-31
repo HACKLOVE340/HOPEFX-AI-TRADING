@@ -51,7 +51,7 @@ import json
 import logging
 import sys
 import warnings
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -115,7 +115,7 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
     try:
         import yfinance as yf
 
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=years * 365)
         df = yf.download(
             ticker,
@@ -185,7 +185,7 @@ def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
     returns = rng.standard_normal(n) * 0.015
     close = base * np.exp(np.cumsum(returns))
     idx = pd.date_range(
-        end=datetime.now(timezone.utc).date(), periods=n, freq="B", tz="UTC"
+        end=datetime.now(UTC).date(), periods=n, freq="B", tz="UTC"
     )
     return pd.DataFrame(
         {
@@ -206,7 +206,7 @@ def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
 
 def build_features(
     ohlcv: pd.DataFrame, smoke: bool = False
-) -> Tuple[pd.DataFrame, pd.Series]:
+) -> tuple[pd.DataFrame, pd.Series]:
     """Build feature matrix using extended 200+ feature builder."""
     try:
         from ml.features_extended import build_extended_features
@@ -244,7 +244,7 @@ def backtest_symbol(
     years: int,
     oos_frac: float,
     smoke: bool = False,
-) -> Dict:
+) -> dict:
     """
     Train on first (1-oos_frac) of data, backtest on last oos_frac.
     Returns trade-level results and summary metrics.
@@ -297,7 +297,7 @@ def backtest_symbol(
 
     # OOS predictions
     proba = model.predict_proba(X_oos)[:, 1]
-    preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal  # noqa: F841
+    preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal
 
     # Align OOS prices for PnL calculation
     oos_close = ohlcv["close"].reindex(X_oos.index)
@@ -382,7 +382,7 @@ def _max_drawdown(pnls: np.ndarray) -> float:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _detect_sharpe_outliers(symbol_results: List[Dict]) -> Tuple[List[str], List[str]]:
+def _detect_sharpe_outliers(symbol_results: list[dict]) -> tuple[list[str], list[str]]:
     """
     Identify symbols with statistically implausible Sharpe ratios.
 
@@ -393,14 +393,14 @@ def _detect_sharpe_outliers(symbol_results: List[Dict]) -> Tuple[List[str], List
 
     Returns (outlier_symbols, reasons) — parallel lists.
     """
-    outliers: List[str] = []
-    reasons: List[str] = []
+    outliers: list[str] = []
+    reasons: list[str] = []
     for r in symbol_results:
         sym = r.get("symbol", "?")
         sharpe = r.get("sharpe", 0.0)
         win_rate = r.get("win_rate", 0.0)
         n = r.get("n_trades", 0)
-        flags: List[str] = []
+        flags: list[str] = []
         if sharpe > 5.0:
             flags.append(f"Sharpe={sharpe:.2f} > 5.0 (implausible for daily bars)")
         if win_rate > 0.75 and n > 50:
@@ -420,8 +420,8 @@ def _detect_sharpe_outliers(symbol_results: List[Dict]) -> Tuple[List[str], List
 
 
 def _pool_pnls(
-    symbol_results: List[Dict], exclude: Optional[List[str]] = None
-) -> Tuple[np.ndarray, int]:
+    symbol_results: list[dict], exclude: Optional[list[str]] = None
+) -> tuple[np.ndarray, int]:
     """
     Pool per-trade P&Ls across symbols, optionally excluding named symbols.
 
@@ -437,9 +437,9 @@ def _pool_pnls(
     import os as _os
 
     exclude_set = set(exclude or [])
-    all_pnls: List[float] = []
+    all_pnls: list[float] = []
     n_total = 0
-    skipped_symbols: List[str] = []
+    skipped_symbols: list[str] = []
     _is_production = _os.getenv("APP_ENV", "production").lower() == "production"
 
     for r in symbol_results:
@@ -476,7 +476,7 @@ def _pool_pnls(
     return np.array(all_pnls) if all_pnls else np.array([]), n_total
 
 
-def _sharpe_stats(pnls: np.ndarray, n_total: int, target_n: int) -> Dict:
+def _sharpe_stats(pnls: np.ndarray, n_total: int, target_n: int) -> dict:
     """Compute Sharpe, SE, gate status from a pooled P&L array."""
     if n_total == 0 or len(pnls) == 0:
         return {
@@ -521,7 +521,7 @@ def _sharpe_stats(pnls: np.ndarray, n_total: int, target_n: int) -> Dict:
     }
 
 
-def compute_pooled_metrics(symbol_results: List[Dict], target_n: int = 600) -> Dict:
+def compute_pooled_metrics(symbol_results: list[dict], target_n: int = 600) -> dict:
     """
     Pool all trades across symbols and compute pooled Sharpe + SE gate.
 
@@ -615,9 +615,9 @@ def run_backtest(
     oos_frac: float = 0.3,
     target_n: int = 600,
     smoke: bool = False,
-    symbols: Optional[List] = None,
+    symbols: Optional[list] = None,
     extended: bool = False,
-) -> Dict:
+) -> dict:
     """Run multi-symbol backtest and return full report.
 
     Args:
@@ -658,7 +658,7 @@ def run_backtest(
 
     n_syms = len([r for r in symbol_results if "error" not in r])
     report = {
-        "run_at": datetime.now(timezone.utc).isoformat(),
+        "run_at": datetime.now(UTC).isoformat(),
         "years": years,
         "oos_frac": oos_frac,
         "target_n": target_n,

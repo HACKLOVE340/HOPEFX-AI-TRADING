@@ -10,7 +10,7 @@ This strategy trades when price deviates significantly from its mean,
 expecting it to revert back to the average.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict
 
 import pandas as pd
@@ -51,7 +51,7 @@ class MeanReversionStrategy(BaseStrategy):
             f"Mean Reversion Strategy initialized: period={period}, std_dev={std_dev}",
         )
 
-    def generate_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """
         Generate trading signal based on mean reversion.
 
@@ -67,7 +67,7 @@ class MeanReversionStrategy(BaseStrategy):
                     "type": "HOLD",
                     "confidence": 0.0,
                     "reason": "Insufficient data",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
 
             # Calculate Bollinger Bands
@@ -141,7 +141,7 @@ class MeanReversionStrategy(BaseStrategy):
                 "type": signal_type,
                 "confidence": confidence,
                 "reason": reason,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "metadata": {
                     "price": current_price,
                     "sma": current_sma,
@@ -156,6 +156,6 @@ class MeanReversionStrategy(BaseStrategy):
             return {
                 "type": "HOLD",
                 "confidence": 0.0,
-                "reason": f"Error: {str(e)}",
-                "timestamp": datetime.now(timezone.utc),
+                "reason": f"Error: {e!s}",
+                "timestamp": datetime.now(UTC),
             }

@@ -28,7 +28,7 @@ import aiohttp
 import websockets
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Callable, Set, Any, AsyncIterator
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum, IntEnum, auto
 from collections import deque, defaultdict
 import logging
@@ -48,7 +48,7 @@ except ImportError:
 
 try:
     import zmq
-    import zmq.asyncio  # noqa: F401
+    import zmq.asyncio
 
     ZMQ_AVAILABLE = True
 except ImportError:
@@ -112,7 +112,7 @@ class NanosecondTimestamp:
 
     def to_datetime(self) -> datetime:
         return datetime.fromtimestamp(
-            self.seconds + self.nanoseconds / 1e9, tz=timezone.utc
+            self.seconds + self.nanoseconds / 1e9, tz=UTC
         )
 
     def __float__(self) -> float:
@@ -242,7 +242,7 @@ class VenueMetrics:
         """Record error and degrade health"""
         self.errors += 1
         self.last_error = error
-        self.last_error_time = datetime.now(timezone.utc)
+        self.last_error_time = datetime.now(UTC)
         self.health_score = max(0, self.health_score - 10)
 
     def record_reconnection(self):
@@ -280,34 +280,30 @@ class DataProvider(ABC):
         self.metrics = VenueMetrics(venue_name=name)
         self.state = ConnectionState.DISCONNECTED
 
-        self.symbols: Set[str] = set()
+        self.symbols: set[str] = set()
         self.reconnect_delay = 1.0
         self.max_reconnect_delay = 60.0
         self.current_reconnect_delay = self.reconnect_delay
 
-        self._callbacks: List[Callable[[MarketTick], Any]] = []
+        self._callbacks: list[Callable[[MarketTick], Any]] = []
         self._running = False
         self._task: Optional[asyncio.Task] = None
 
     @abstractmethod
     async def connect(self) -> bool:
         """Establish connection to venue"""
-        pass
 
     @abstractmethod
-    async def subscribe(self, symbols: List[str]) -> bool:
+    async def subscribe(self, symbols: list[str]) -> bool:
         """Subscribe to market data for symbols"""
-        pass
 
     @abstractmethod
     async def stream(self) -> AsyncIterator[MarketTick]:
         """Yield ticks from connection"""
-        pass
 
     @abstractmethod
     async def disconnect(self):
         """Clean disconnect"""
-        pass
 
     def on_tick(self, callback: Callable[[MarketTick], Any]):
         """Register tick callback"""
@@ -400,7 +396,7 @@ class PolygonProvider(DataProvider):
             logger.error(f"Polygon connect failed: {e}")
             return False
 
-    async def subscribe(self, symbols: List[str]) -> bool:
+    async def subscribe(self, symbols: list[str]) -> bool:
         if not self.ws:
             return False
 
@@ -492,7 +488,7 @@ class OandaProvider(DataProvider):
         self.session = aiohttp.ClientSession()
         return True
 
-    async def subscribe(self, symbols: List[str]) -> bool:
+    async def subscribe(self, symbols: list[str]) -> bool:
         # OANDA format: XAU_USD
         self.symbols = {s.replace("/", "_") for s in symbols}
         return True
@@ -514,7 +510,7 @@ class OandaProvider(DataProvider):
                         tick_time = datetime.fromisoformat(
                             data["time"].replace("Z", "+00:00")
                         )
-                        receive_time = datetime.now(timezone.utc)
+                        receive_time = datetime.now(UTC)
 
                         # Calculate latency
                         (receive_time - tick_time).total_seconds()
@@ -565,7 +561,7 @@ class BinanceProvider(DataProvider):
             logger.error(f"Binance connect failed: {e}")
             return False
 
-    async def subscribe(self, symbols: List[str]) -> bool:
+    async def subscribe(self, symbols: list[str]) -> bool:
         self.symbols = {s.replace("/", "").upper() for s in symbols}
         return True
 
@@ -629,7 +625,7 @@ class MockProvider(DataProvider):
         self.drift = drift
         self.tick_interval = tick_interval_ms / 1000  # Convert to seconds
 
-        self.prices: Dict[str, float] = {}
+        self.prices: dict[str, float] = {}
         self._start_time = time.time()
 
     async def connect(self) -> bool:
@@ -643,12 +639,12 @@ class MockProvider(DataProvider):
         }
         return True
 
-    async def subscribe(self, symbols: List[str]) -> bool:
+    async def subscribe(self, symbols: list[str]) -> bool:
         self.symbols = set(symbols)
         # Initialize any missing prices
         for sym in symbols:
             if sym not in self.prices:
-                self.prices[sym] = 100.0 + random.random() * 900  # nosec B311 - mock provider initial price, not cryptographic  # noqa: S311
+                self.prices[sym] = 100.0 + random.random() * 900  # nosec B311 - mock provider initial price, not cryptographic
         return True
 
     async def stream(self) -> AsyncIterator[MarketTick]:
@@ -722,16 +718,16 @@ class ConsensusAggregator:
                 logger.warning(f"Redis unavailable: {e}")
 
         # State
-        self.providers: Dict[str, DataProvider] = {}
-        self.latest_ticks: Dict[str, Dict[str, MarketTick]] = defaultdict(dict)
-        self.consensus_prices: Dict[str, MarketTick] = {}
+        self.providers: dict[str, DataProvider] = {}
+        self.latest_ticks: dict[str, dict[str, MarketTick]] = defaultdict(dict)
+        self.consensus_prices: dict[str, MarketTick] = {}
         self.consensus_history: deque = deque(maxlen=1000)
 
         # Quality tracking
-        self.venue_scores: Dict[str, float] = {}
+        self.venue_scores: dict[str, float] = {}
 
         # Callbacks
-        self._consensus_callbacks: List[Callable[[MarketTick], Any]] = []
+        self._consensus_callbacks: list[Callable[[MarketTick], Any]] = []
 
         # Statistics
         self.stats = {
@@ -772,7 +768,7 @@ class ConsensusAggregator:
         consensus = self._form_consensus(tick.symbol)
         if consensus:
             self.consensus_prices[tick.symbol] = consensus
-            self.consensus_history.append((consensus, datetime.now(timezone.utc)))
+            self.consensus_history.append((consensus, datetime.now(UTC)))
             self.stats["consensus_formed"] += 1
 
             # Cache and notify
@@ -945,7 +941,7 @@ class ConsensusAggregator:
         for provider in self.providers.values():
             provider.stop()
 
-    def get_health_report(self) -> Dict[str, Any]:
+    def get_health_report(self) -> dict[str, Any]:
         """Generate comprehensive health report"""
         return {
             "providers": {

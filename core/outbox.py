@@ -39,7 +39,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ def write_outbox_event(
     session,
     event_type: str,
     channel: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
 ) -> None:
     """
     Write a single OutboxEvent row using an existing SQLAlchemy session.
@@ -78,7 +78,7 @@ def write_outbox_event(
             event_type=event_type,
             channel=channel,
             payload=json.dumps(payload),
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             attempts=0,
         )
         session.add(row)
@@ -91,7 +91,7 @@ def write_outbox_event(
 def write_outbox_event_standalone(
     event_type: str,
     channel: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
 ) -> bool:
     """
     Write an OutboxEvent in its own DB transaction.
@@ -112,7 +112,7 @@ def write_outbox_event_standalone(
             event_type=event_type,
             channel=channel,
             payload=json.dumps(payload),
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             attempts=0,
         )
         session.add(row)
@@ -202,7 +202,7 @@ class OutboxRelay:
                         # Redis unavailable — fall back to in-process event bus
                         await _publish_in_process(row.channel, row.payload)
 
-                    row.published_at = datetime.now(timezone.utc)
+                    row.published_at = datetime.now(UTC)
                     logger.debug(
                         "outbox: published id=%d type=%s channel=%s",
                         row.id,

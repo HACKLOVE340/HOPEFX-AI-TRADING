@@ -18,7 +18,7 @@ from dataclasses import dataclass
 class AnalysisResult:
     signal: str  # 'buy', 'sell', 'neutral'
     confidence: float  # 0.0 to 1.0
-    indicators: Dict[str, float]
+    indicators: dict[str, float]
     timeframe: str
 
 
@@ -30,7 +30,7 @@ class MultiTimeframeAnalyzer:
     def __init__(self):
         self.indicators = {}
 
-    def analyze(self, data: Dict[str, pd.DataFrame]) -> AnalysisResult:
+    def analyze(self, data: dict[str, pd.DataFrame]) -> AnalysisResult:
         """
         Analyze all timeframes and return confluence signal.
         """
@@ -64,7 +64,7 @@ class MultiTimeframeAnalyzer:
 
         return AnalysisResult("neutral", 0.0, {}, "multi")
 
-    def _analyze_single_timeframe(self, df: pd.DataFrame) -> Dict:
+    def _analyze_single_timeframe(self, df: pd.DataFrame) -> dict:
         """Analyze single timeframe."""
         # Calculate indicators
         sma_20 = df["close"].rolling(20).mean().iloc[-1]
@@ -91,7 +91,7 @@ class MultiTimeframeAnalyzer:
         rs = gain / loss
         return float(100 - (100 / (1 + rs)).iloc[-1])
 
-    def _aggregate_indicators(self, signals: Dict) -> Dict:
+    def _aggregate_indicators(self, signals: dict) -> dict:
         """Aggregate indicators across timeframes."""
         return {
             "avg_rsi": np.mean([s["rsi"] for s in signals.values()]),

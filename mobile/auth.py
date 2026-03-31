@@ -8,7 +8,7 @@ Mobile Authentication
 """
 
 from typing import Optional
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 
 class MobileAuth:
@@ -23,12 +23,12 @@ class MobileAuth:
         """Authenticate using biometrics"""
         # Generate JWT token
         token = (
-            f"MOB_TOKEN_{user_id}_{device_id}_{datetime.now(timezone.utc).timestamp()}"
+            f"MOB_TOKEN_{user_id}_{device_id}_{datetime.now(UTC).timestamp()}"
         )
         self.tokens[token] = {
             "user_id": user_id,
             "device_id": device_id,
-            "expires_at": datetime.now(timezone.utc) + timedelta(days=30),
+            "expires_at": datetime.now(UTC) + timedelta(days=30),
         }
         return token
 
@@ -36,6 +36,6 @@ class MobileAuth:
         """Verify mobile token"""
         if token in self.tokens:
             token_data = self.tokens[token]
-            if datetime.now(timezone.utc) < token_data["expires_at"]:
+            if datetime.now(UTC) < token_data["expires_at"]:
                 return True
         return False

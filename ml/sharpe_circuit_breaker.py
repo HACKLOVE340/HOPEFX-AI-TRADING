@@ -71,7 +71,7 @@ import math
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Deque, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -96,7 +96,7 @@ class CircuitState:
     """Per-model circuit breaker state."""
 
     model_version: str
-    pnl_window: Deque[float] = field(
+    pnl_window: collections.deque[float] = field(
         default_factory=lambda: collections.deque(maxlen=WINDOW_TRADES)
     )
     total_trades: int = 0
@@ -106,7 +106,7 @@ class CircuitState:
     last_sharpe: Optional[float] = None
     last_evaluated_at: Optional[datetime] = None
     trip_reason: str = ""
-    sharpe_history: List[Tuple[datetime, float]] = field(default_factory=list)
+    sharpe_history: list[tuple[datetime, float]] = field(default_factory=list)
 
     def record(self, pnl: float) -> None:
         self.pnl_window.append(pnl)
@@ -150,7 +150,7 @@ class SharpeCircuitBreaker:
     """
 
     def __init__(self) -> None:
-        self._states: Dict[str, CircuitState] = {}
+        self._states: dict[str, CircuitState] = {}
         self._running: bool = False
         self._lock = asyncio.Lock()
 
@@ -203,7 +203,7 @@ class SharpeCircuitBreaker:
             state.trip_reason = ""
             logger.info("SharpeCircuitBreaker: manually reset for '%s'", model_version)
 
-    def get_status(self) -> Dict[str, dict]:
+    def get_status(self) -> dict[str, dict]:
         """Return current state for all tracked model versions."""
         return {
             name: {
@@ -214,7 +214,7 @@ class SharpeCircuitBreaker:
                 "window_trades": len(s.pnl_window),
                 "trip_reason": s.trip_reason,
                 "opened_at": datetime.fromtimestamp(
-                    s.opened_at, tz=timezone.utc
+                    s.opened_at, tz=UTC
                 ).isoformat()
                 if s.opened_at
                 else None,
@@ -270,7 +270,7 @@ class SharpeCircuitBreaker:
     async def _evaluate_one(self, state: CircuitState) -> None:
         """Evaluate a single model version and trip/reset the circuit as needed."""
         sharpe = state.rolling_sharpe()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         state.last_evaluated_at = now
 
         if sharpe is None:
@@ -351,7 +351,7 @@ class SharpeCircuitBreaker:
                     "threshold": MIN_SHARPE,
                     "consecutive_bad_windows": state.consecutive_bad_windows,
                     "trip_reason": state.trip_reason,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
         except Exception as exc:
@@ -385,7 +385,7 @@ class SharpeCircuitBreaker:
             if entry and entry.get("state") == "production":
                 entry["state"] = "retired"
                 entry["retired_reason"] = reason
-                entry["retired_at"] = datetime.now(timezone.utc).isoformat()
+                entry["retired_at"] = datetime.now(UTC).isoformat()
                 registry._save(manifest)
                 logger.info(
                     "SharpeCircuitBreaker: model '%s' retired in registry",

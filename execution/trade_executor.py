@@ -39,7 +39,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Callable, Dict, List, Optional
 
@@ -84,7 +84,7 @@ class ExecutionResult:
     status: OrderStatus
     message: str
     latency_ms: float = 0.0
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class TradeExecutor:
@@ -104,15 +104,15 @@ class TradeExecutor:
         self.position_tracker = position_tracker
         self.metrics = get_metrics_registry()
 
-        self._pending_orders: Dict[str, Dict] = {}
-        self._execution_callbacks: List[Callable] = []
+        self._pending_orders: dict[str, dict] = {}
+        self._execution_callbacks: list[Callable] = []
         self._lock = asyncio.Lock()
 
         # ── Streak tracking ───────────────────────────────────────────────────
         self._consecutive_losses: int = 0
         self._streak_halted_until: Optional[float] = None  # monotonic time
 
-    async def execute_signal(self, signal: Dict) -> ExecutionResult:
+    async def execute_signal(self, signal: dict) -> ExecutionResult:
         """Execute a trading signal with full validation and risk controls."""
         start_time = asyncio.get_event_loop().time()
 
@@ -182,7 +182,7 @@ class TradeExecutor:
                 latency_ms=latency_ms,
             )
 
-    async def _execute_open(self, signal: Dict) -> ExecutionResult:
+    async def _execute_open(self, signal: dict) -> ExecutionResult:
         """
         Execute an opening order.
 
@@ -251,7 +251,7 @@ class TradeExecutor:
         signal = {**signal, "size": size}  # propagate clamped size
 
         # ── 4. Mandatory pre-trade gate ───────────────────────────────────────
-        from risk.pre_trade_gate import (  # noqa: PLC0415
+        from risk.pre_trade_gate import (
             GateOrder,
             PreTradeGate,
             RiskManagerError,
@@ -300,7 +300,7 @@ class TradeExecutor:
                 exc,
             )
             try:
-                import sentry_sdk  # noqa: PLC0415
+                import sentry_sdk
 
                 sentry_sdk.capture_exception(exc)
             except Exception as _exc:
@@ -324,7 +324,7 @@ class TradeExecutor:
         )
 
         if order.status.value in ("filled", "partial"):
-            from execution.position_tracker import Position  # noqa: PLC0415
+            from execution.position_tracker import Position
 
             position = Position(
                 id=order.id,
@@ -349,7 +349,7 @@ class TradeExecutor:
             message=f"Order {order.status.value}",
         )
 
-    async def _execute_close(self, signal: Dict) -> ExecutionResult:
+    async def _execute_close(self, signal: dict) -> ExecutionResult:
         """
         Execute a closing order.
 
@@ -423,7 +423,7 @@ class TradeExecutor:
 
                 # ── SignalFilter EV update ────────────────────────────────────
                 try:
-                    from ml.signal_filter import get_signal_filter  # noqa: PLC0415
+                    from ml.signal_filter import get_signal_filter
 
                     _entry_px = (
                         getattr(closed_position, "entry_price", None)
@@ -568,7 +568,7 @@ class TradeExecutor:
                     STREAK_COOLDOWN_MINUTES,
                 )
 
-    def _clamp_size_to_risk_cap(self, signal: Dict, size: float) -> float:
+    def _clamp_size_to_risk_cap(self, signal: dict, size: float) -> float:
         """
         Clamp position size so that a full stop-loss hit never exceeds
         MAX_RISK_PCT_PER_TRADE of current account equity.
@@ -608,18 +608,17 @@ class TradeExecutor:
                             MAX_RISK_PCT_PER_TRADE * 100,
                         )
                         return round(max_size, 8)
-            else:
-                # No SL — cap by notional: size × price <= equity × cap
-                if entry_price and entry_price > 0:
-                    max_notional = equity * MAX_RISK_PCT_PER_TRADE
-                    max_size_notional = max_notional / entry_price
-                    if max_size_notional < size:
-                        logger.info(
-                            "Risk cap (notional fallback): size %.4f → %.4f",
-                            size,
-                            max_size_notional,
-                        )
-                        return round(max_size_notional, 8)
+            # No SL — cap by notional: size × price <= equity × cap
+            elif entry_price and entry_price > 0:
+                max_notional = equity * MAX_RISK_PCT_PER_TRADE
+                max_size_notional = max_notional / entry_price
+                if max_size_notional < size:
+                    logger.info(
+                        "Risk cap (notional fallback): size %.4f → %.4f",
+                        size,
+                        max_size_notional,
+                    )
+                    return round(max_size_notional, 8)
         except Exception as exc:
             logger.debug("Risk cap calculation failed (non-fatal): %s", exc)
 
@@ -627,11 +626,11 @@ class TradeExecutor:
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
 
-    def register_callback(self, callback: Callable[[ExecutionResult, Dict], None]):
+    def register_callback(self, callback: Callable[[ExecutionResult, dict], None]):
         """Register an execution callback."""
         self._execution_callbacks.append(callback)
 
-    async def _notify_callbacks(self, result: ExecutionResult, signal: Dict):
+    async def _notify_callbacks(self, result: ExecutionResult, signal: dict):
         """Notify all registered callbacks and the InferenceEngine fill hook."""
         for callback in self._execution_callbacks:
             try:
@@ -649,7 +648,7 @@ class TradeExecutor:
             await self._notify_inference_engine_fill(result, signal)
 
     async def _notify_inference_engine_fill(
-        self, result: ExecutionResult, signal: Dict
+        self, result: ExecutionResult, signal: dict
     ) -> None:
         """
         Notify InferenceEngine of a confirmed fill for online learning.
@@ -658,7 +657,7 @@ class TradeExecutor:
         leakage on open trades.
         """
         try:
-            from ml.inference_engine import get_inference_engine  # noqa: PLC0415
+            from ml.inference_engine import get_inference_engine
 
             engine = get_inference_engine()
 
@@ -677,7 +676,7 @@ class TradeExecutor:
             _confidence = float(signal.get("confidence", 0.0))
             _action = signal.get("action", "buy")
 
-            import pandas as _pd  # noqa: PLC0415
+            import pandas as _pd
 
             features = _pd.DataFrame(
                 [
@@ -701,7 +700,7 @@ class TradeExecutor:
 
             # ── SignalFilter EV update (fill path) ────────────────────────────
             try:
-                from ml.signal_filter import get_signal_filter  # noqa: PLC0415
+                from ml.signal_filter import get_signal_filter
 
                 _sym = signal.get("symbol", "UNKNOWN")
                 _entry = result.average_price or 1.0
@@ -731,7 +730,7 @@ class TradeExecutor:
 
     # ── Utilities ─────────────────────────────────────────────────────────────
 
-    async def cancel_all_pending(self) -> List[str]:
+    async def cancel_all_pending(self) -> list[str]:
         """Cancel all pending orders."""
         cancelled = []
         async with self._lock:
@@ -745,7 +744,7 @@ class TradeExecutor:
                     logger.error("Error cancelling order %s: %s", order_id, exc)
         return cancelled
 
-    def get_risk_status(self) -> Dict:
+    def get_risk_status(self) -> dict:
         """
         Return current risk circuit-breaker state for monitoring.
 

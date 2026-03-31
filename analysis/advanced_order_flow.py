@@ -19,7 +19,7 @@ Enhances the base OrderFlowAnalyzer with:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
@@ -38,7 +38,7 @@ class AggressionMetrics:
     dominant_side: str
     aggression_strength: str  # 'strong', 'moderate', 'weak'
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp.isoformat(),
@@ -62,7 +62,7 @@ class VolumeCluster:
     cluster_type: str  # 'support', 'resistance', 'neutral'
     strength: float  # 0-1
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "price_level": self.price_level,
             "total_volume": self.total_volume,
@@ -86,7 +86,7 @@ class DeltaDivergence:
     strength: float  # 0-1
     confidence: float  # 0-1
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp.isoformat(),
@@ -109,7 +109,7 @@ class OrderFlowOscillator:
     overbought: bool
     oversold: bool
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp.isoformat(),
@@ -127,12 +127,12 @@ class StackedImbalance:
     symbol: str
     timestamp: datetime
     direction: str  # 'buy' or 'sell'
-    levels: List[float]  # Price levels in the stack
+    levels: list[float]  # Price levels in the stack
     total_volume: float
     avg_imbalance: float
     strength: str  # 'strong', 'moderate', 'weak'
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp.isoformat(),
@@ -166,7 +166,7 @@ class AdvancedOrderFlowAnalyzer:
         divergence = analyzer.detect_delta_divergence('XAUUSD')
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize advanced analyzer.
 
@@ -188,8 +188,8 @@ class AdvancedOrderFlowAnalyzer:
         self._oscillator_period = self.config.get("oscillator_period", 100)
 
         # Trade storage: symbol -> list of (timestamp, price, size, side)
-        self._trades: Dict[str, List] = defaultdict(list)
-        self._cumulative_delta: Dict[str, float] = defaultdict(float)
+        self._trades: dict[str, list] = defaultdict(list)
+        self._cumulative_delta: dict[str, float] = defaultdict(float)
 
         logger.info("Advanced Order Flow Analyzer initialized")
 
@@ -206,7 +206,7 @@ class AdvancedOrderFlowAnalyzer:
         timestamp: Optional[datetime] = None,
     ) -> None:
         """Add a trade for analysis."""
-        ts = timestamp or datetime.now(timezone.utc)
+        ts = timestamp or datetime.now(UTC)
         s = side.lower()
         self._trades[symbol].append((ts, price, size, s))
         delta = size if s == "buy" else -size
@@ -241,7 +241,7 @@ class AdvancedOrderFlowAnalyzer:
         Returns:
             AggressionMetrics or None
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
         if not trades:
@@ -266,7 +266,7 @@ class AdvancedOrderFlowAnalyzer:
 
         return AggressionMetrics(
             symbol=symbol,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             buy_aggression=buy_aggression,
             sell_aggression=sell_aggression,
             aggression_score=score,
@@ -283,7 +283,7 @@ class AdvancedOrderFlowAnalyzer:
         symbol: str,
         price_bins: int = 20,
         lookback_minutes: int = 60,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Calculate volume imbalance at each price level.
 
@@ -295,7 +295,7 @@ class AdvancedOrderFlowAnalyzer:
         Returns:
             List of dicts with price/imbalance info per level
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
         if not trades:
@@ -307,7 +307,7 @@ class AdvancedOrderFlowAnalyzer:
             return []
 
         bucket = (max_p - min_p) / price_bins
-        levels: Dict[int, Dict] = {}
+        levels: dict[int, dict] = {}
 
         for _ts, price, size, side in trades:
             idx = min(int((price - min_p) / bucket), price_bins - 1)
@@ -349,7 +349,7 @@ class AdvancedOrderFlowAnalyzer:
         price_bins: int = 20,
         lookback_minutes: int = 60,
         min_stack_size: int = 3,
-    ) -> List[StackedImbalance]:
+    ) -> list[StackedImbalance]:
         """
         Detect stacked imbalances - consecutive levels with same-direction imbalance.
 
@@ -370,10 +370,10 @@ class AdvancedOrderFlowAnalyzer:
             return []
 
         results = []
-        current_stack: List[Dict] = []
+        current_stack: list[dict] = []
         current_dir: Optional[str] = None
 
-        def _flush_stack(stack: List[Dict], direction: str) -> None:
+        def _flush_stack(stack: list[dict], direction: str) -> None:
             if len(stack) < min_stack_size:
                 return
             prices = [s["price"] for s in stack]
@@ -387,7 +387,7 @@ class AdvancedOrderFlowAnalyzer:
             results.append(
                 StackedImbalance(
                     symbol=symbol,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     direction=direction,
                     levels=prices,
                     total_volume=total_vol,
@@ -443,7 +443,7 @@ class AdvancedOrderFlowAnalyzer:
         Returns:
             DeltaDivergence or None
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
         if len(trades) < 10:
@@ -454,7 +454,7 @@ class AdvancedOrderFlowAnalyzer:
         first_half = trades[:mid]
         second_half = trades[mid:]
 
-        def _half_stats(half: List) -> Tuple[float, float]:
+        def _half_stats(half: list) -> tuple[float, float]:
             avg_price = sum(t[1] for t in half) / len(half)
             delta = sum(t[2] if t[3] == "buy" else -t[2] for t in half)
             return avg_price, delta
@@ -484,7 +484,7 @@ class AdvancedOrderFlowAnalyzer:
 
         return DeltaDivergence(
             symbol=symbol,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             divergence_type=divergence_type,
             price_direction=price_dir,
             delta_direction=delta_dir,
@@ -503,7 +503,7 @@ class AdvancedOrderFlowAnalyzer:
         lookback_minutes: int = 240,
         current_price: Optional[float] = None,
         top_n: int = 10,
-    ) -> List[VolumeCluster]:
+    ) -> list[VolumeCluster]:
         """
         Identify significant volume clusters acting as S/R levels.
 
@@ -517,7 +517,7 @@ class AdvancedOrderFlowAnalyzer:
         Returns:
             List of VolumeCluster objects
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
         if not trades:
@@ -529,7 +529,7 @@ class AdvancedOrderFlowAnalyzer:
             return []
 
         bucket = (max_p - min_p) / price_bins
-        bins: Dict[int, Dict] = {}
+        bins: dict[int, dict] = {}
 
         for _ts, price, size, side in trades:
             idx = min(int((price - min_p) / bucket), price_bins - 1)
@@ -622,7 +622,7 @@ class AdvancedOrderFlowAnalyzer:
 
         return OrderFlowOscillator(
             symbol=symbol,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             value=value,
             signal=signal,
             overbought=value > 70,
@@ -637,7 +637,7 @@ class AdvancedOrderFlowAnalyzer:
         self,
         symbol: str,
         lookback_minutes: int = 15,
-    ) -> Optional[Dict]:
+    ) -> Optional[dict]:
         """
         Get buy/sell pressure gauge readings.
 
@@ -648,7 +648,7 @@ class AdvancedOrderFlowAnalyzer:
         Returns:
             Dict with buy_pressure and sell_pressure (0-100 each)
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
         if not trades:
@@ -666,7 +666,7 @@ class AdvancedOrderFlowAnalyzer:
 
         return {
             "symbol": symbol,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "buy_pressure": buy_pressure,
             "sell_pressure": sell_pressure,
             "dominant": "buyers" if buy_pressure > sell_pressure else "sellers",
@@ -676,7 +676,7 @@ class AdvancedOrderFlowAnalyzer:
     # STATISTICS
     # ================================================================
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get analyzer statistics."""
         return {
             "symbols_tracked": len(self._trades),

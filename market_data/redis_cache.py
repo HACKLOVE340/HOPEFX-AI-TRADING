@@ -62,7 +62,7 @@ class MarketDataCache:
     # Tick cache
     # ------------------------------------------------------------------
 
-    def get_latest_tick(self, symbol: str) -> Optional[Dict[str, Any]]:
+    def get_latest_tick(self, symbol: str) -> Optional[dict[str, Any]]:
         """Return the most recent tick for *symbol*, or None."""
         try:
             key = f"{self._prefix}tick_cache:{symbol}"
@@ -74,7 +74,7 @@ class MarketDataCache:
             self._log_error("get_latest_tick", exc)
             return None
 
-    def get_recent_ticks(self, symbol: str, n: int = 100) -> List[Dict[str, Any]]:
+    def get_recent_ticks(self, symbol: str, n: int = 100) -> list[dict[str, Any]]:
         """Return up to *n* most recent ticks for *symbol*."""
         try:
             key = f"{self._prefix}tick_cache:{symbol}"
@@ -84,7 +84,7 @@ class MarketDataCache:
             self._log_error("get_recent_ticks", exc)
             return []
 
-    def get_ticks_since(self, symbol: str, since_ts: float) -> List[Dict[str, Any]]:
+    def get_ticks_since(self, symbol: str, since_ts: float) -> list[dict[str, Any]]:
         """Return all ticks with timestamp >= *since_ts*."""
         try:
             key = f"{self._prefix}tick_cache:{symbol}"
@@ -98,7 +98,7 @@ class MarketDataCache:
     # OHLCV bar cache
     # ------------------------------------------------------------------
 
-    def store_bar(self, symbol: str, timeframe: str, bar: Dict[str, Any]) -> None:
+    def store_bar(self, symbol: str, timeframe: str, bar: dict[str, Any]) -> None:
         """Store a closed OHLCV bar."""
         try:
             key = f"{self._prefix}ohlcv:{symbol}:{timeframe}"
@@ -117,7 +117,7 @@ class MarketDataCache:
         symbol: str,
         timeframe: str,
         n: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return up to *n* most recent closed bars for *symbol*/*timeframe*."""
         try:
             key = f"{self._prefix}ohlcv:{symbol}:{timeframe}"
@@ -134,7 +134,7 @@ class MarketDataCache:
         symbol: str,
         timeframe: str,
         since_ts: float,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return all bars with bar_open_ts >= *since_ts*."""
         try:
             key = f"{self._prefix}ohlcv:{symbol}:{timeframe}"
@@ -144,7 +144,7 @@ class MarketDataCache:
             self._log_error("get_bars_since", exc)
             return []
 
-    def get_latest_bar(self, symbol: str, timeframe: str) -> Optional[Dict[str, Any]]:
+    def get_latest_bar(self, symbol: str, timeframe: str) -> Optional[dict[str, Any]]:
         """Return the most recently closed bar."""
         try:
             key = f"{self._prefix}latest_bar:{symbol}:{timeframe}"
@@ -158,7 +158,7 @@ class MarketDataCache:
     # Feed health
     # ------------------------------------------------------------------
 
-    def get_feed_health(self) -> Optional[Dict[str, Any]]:
+    def get_feed_health(self) -> Optional[dict[str, Any]]:
         """Return the latest feed health snapshot."""
         try:
             val = self._r.get(f"{self._prefix}feed:health")

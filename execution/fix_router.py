@@ -31,7 +31,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional
 
 from core.event_bus import bus, CH_ORDER, CH_BREACH
@@ -120,7 +120,7 @@ class _OandaFallback:
             "units": units,
             "price": price,
             "order_id": fill.get("orderID", ""),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
 
@@ -171,7 +171,7 @@ class FIXRouter:
         if self._adapter:
             try:
                 self._adapter.stop()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning("FIXRouter: adapter stop error: %s", exc)
         logger.info(
             "FIXRouter stopped. orders=%d fills=%d rejects=%d",
@@ -195,7 +195,7 @@ class FIXRouter:
             self._adapter.start()
             logger.info("FIXRouter: FIX session started.")
             return True
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "FIXRouter: FIX session unavailable (%s) — will use OANDA REST fallback.",
                 exc,
@@ -215,7 +215,7 @@ class FIXRouter:
                 await self._route(msg)
             except asyncio.CancelledError:
                 break
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.error("FIXRouter order error: %s", exc)
 
     # ── breach listener ───────────────────────────────────────────────────────
@@ -266,7 +266,7 @@ class FIXRouter:
                     fill = await self._send_fix(symbol, direction, units, order_request)
                     await self._on_fill(fill)
                     return
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning(
                         "FIXRouter: FIX send failed (%s) — falling back to OANDA REST.",
                         exc,
@@ -280,7 +280,7 @@ class FIXRouter:
         try:
             fill = await self._fallback.send(symbol, direction, units)
             await self._on_fill(fill)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self._reject_count += 1
             logger.error(
                 "FIXRouter: all routes failed for order #%d: %s", self._order_count, exc
@@ -292,7 +292,7 @@ class FIXRouter:
                     "symbol": symbol,
                     "direction": direction,
                     "error": str(exc),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
 
@@ -345,7 +345,7 @@ class FIXRouter:
             "price": report.avg_px,
             "exec_type": report.exec_type.name,
             "latency_ms": round(latency_ms, 2),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     # ── fill handler ──────────────────────────────────────────────────────────

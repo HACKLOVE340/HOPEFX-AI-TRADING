@@ -9,7 +9,7 @@ Unit tests for Risk Manager - FIA 2024 Compliant
 """
 
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from risk.manager import RiskManager, RiskLevel
 from risk.advanced_analytics import RiskAnalytics
@@ -33,7 +33,7 @@ class TestRiskManager:
             side="buy",
             size=10000,
             entry_price=1.0850,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     def test_position_size_limit_check(self, risk_manager, sample_trade):
@@ -50,7 +50,7 @@ class TestRiskManager:
             side="buy",
             size=1000000,
             entry_price=1.0850,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         result = risk_manager.check_position_size(large_trade, max_pct=0.05)
         assert result.passed is False
@@ -190,10 +190,10 @@ class TestRiskAnalytics:
 Integration tests for broker connectivity and order execution
 """
 
-import pytest  # noqa: E402
-from unittest.mock import Mock, patch  # noqa: E402
+import pytest
+from unittest.mock import Mock, patch
 
-from brokers.oanda import OandaBroker  # noqa: E402
+from brokers.oanda import OandaBroker
 
 
 class TestOandaIntegration:
@@ -251,7 +251,7 @@ class TestOandaIntegration:
 End-to-end trading workflow tests
 """
 
-import pytest  # noqa: E402
+import pytest
 
 
 class TestTradingWorkflow:

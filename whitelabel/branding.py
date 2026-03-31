@@ -112,7 +112,7 @@ class BrandTheme:
 }}
 {self.custom_css}"""
 
-    def to_manifest(self) -> Dict[str, str]:
+    def to_manifest(self) -> dict[str, str]:
         """Return a JSON-serialisable dict for the frontend brand manifest."""
         return {
             "company_name": self.company_name,
@@ -133,7 +133,7 @@ class BrandTheme:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, str]) -> BrandTheme:
+    def from_dict(cls, data: dict[str, str]) -> BrandTheme:
         """Construct a BrandTheme from a dict, ignoring unknown keys."""
         known = {f.name for f in cls.__dataclass_fields__.values()}  # type: ignore[attr-defined]
         filtered = {k: v for k, v in data.items() if k in known}
@@ -142,7 +142,7 @@ class BrandTheme:
 
 # ── Default themes per tier ───────────────────────────────────────────────────
 
-DEFAULT_THEMES: Dict[str, BrandTheme] = {
+DEFAULT_THEMES: dict[str, BrandTheme] = {
     "starter": BrandTheme(
         company_name="HopeFX Partner",
         primary_color="#3b82f6",

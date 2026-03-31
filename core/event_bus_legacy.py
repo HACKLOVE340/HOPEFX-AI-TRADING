@@ -15,7 +15,7 @@ import struct
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Callable, Dict, Optional
 
 import lz4.frame
@@ -33,7 +33,7 @@ class DomainEvent:
     priority: int = 5
 
     @classmethod
-    def create(cls, event_type: str, source: str, data: Dict, priority: int = 5):
+    def create(cls, event_type: str, source: str, data: dict, priority: int = 5):
         type_codes = {
             "PRICE_UPDATE": 1,
             "SIGNAL_GENERATED": 2,
@@ -50,14 +50,14 @@ class DomainEvent:
         packed = msgpack.packb(data, use_bin_type=True)
         compressed = lz4.frame.compress(packed)
         return cls(
-            timestamp=int(datetime.now(timezone.utc).timestamp() * 1e9),
+            timestamp=int(datetime.now(UTC).timestamp() * 1e9),
             event_type=type_codes.get(event_type, 99),
             source=source,
             payload=compressed,
             priority=priority,
         )
 
-    def decode(self) -> Dict:
+    def decode(self) -> dict:
         return msgpack.unpackb(lz4.frame.decompress(self.payload), raw=False)
 
 

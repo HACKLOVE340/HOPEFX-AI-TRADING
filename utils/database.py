@@ -47,7 +47,7 @@ class DatabasePool:
         """
         self.db_path = db_path
         self.max_connections = max_connections
-        self.connections: List[sqlite3.Connection] = []
+        self.connections: list[sqlite3.Connection] = []
         self._initialize_pool()
 
     def _initialize_pool(self):
@@ -84,7 +84,7 @@ class Database:
     def __init__(self, db_path: str = "hopefx.db"):
         self.pool = DatabasePool(db_path)
 
-    def execute(self, query: str, params: tuple = ()) -> Optional[List[Dict]]:
+    def execute(self, query: str, params: tuple = ()) -> Optional[list[dict]]:
         """Execute query and return results"""
         try:
             with self.pool.get_connection() as conn:
@@ -101,7 +101,7 @@ class Database:
             logger.error(f"Database error: {e}")
             return None
 
-    def insert(self, table: str, data: Dict[str, Any]) -> bool:
+    def insert(self, table: str, data: dict[str, Any]) -> bool:
         """Insert record"""
         _validate_identifier(table, "table name")
         for col in data.keys():
@@ -120,7 +120,7 @@ class Database:
             logger.error(f"Insert error: {e}")
             return False
 
-    def update(self, table: str, data: Dict[str, Any], where: str) -> bool:
+    def update(self, table: str, data: dict[str, Any], where: str) -> bool:
         """Update records.
 
         *where* must be a plain column = ? expression; callers are responsible

@@ -330,7 +330,7 @@ async def _run_api() -> None:
 
         config = uvicorn.Config(
             fastapi_app,
-            host=os.environ.get("API_HOST", "0.0.0.0"),  # nosec B104 - host read from API_HOST env var  # noqa: S104
+            host=os.environ.get("API_HOST", "0.0.0.0"),  # nosec B104 - host read from API_HOST env var
             port=int(os.environ.get("API_PORT", "8000")),
             log_level=os.environ.get("LOG_LEVEL", "info").lower(),
         )

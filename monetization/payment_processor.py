@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from decimal import Decimal
 from enum import Enum
 from typing import Callable, Dict, List, Optional
@@ -91,7 +91,7 @@ class Payment:
         self.currency = currency
         self.payment_method = payment_method
         self.status = status
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         self.processed_at: Optional[datetime] = None
         self.stripe_payment_intent_id: Optional[str] = None
         self.stripe_customer_id: Optional[str] = None
@@ -101,20 +101,20 @@ class Payment:
 
     def mark_succeeded(self) -> None:
         self.status = PaymentStatus.SUCCEEDED
-        self.processed_at = datetime.now(timezone.utc)
+        self.processed_at = datetime.now(UTC)
         self.retry_count = 0
         self.next_retry_at = None
         logger.info("payment.succeeded id=%s amount=%s", self.payment_id, self.amount)
 
     def mark_failed(self, error_message: str) -> None:
         self.status = PaymentStatus.FAILED
-        self.processed_at = datetime.now(timezone.utc)
+        self.processed_at = datetime.now(UTC)
         self.error_message = error_message
         logger.error("payment.failed id=%s error=%s", self.payment_id, error_message)
 
     def schedule_retry(self, delay_hours: int = 24) -> None:
         self.retry_count += 1
-        self.next_retry_at = datetime.now(timezone.utc) + timedelta(hours=delay_hours)
+        self.next_retry_at = datetime.now(UTC) + timedelta(hours=delay_hours)
         self.status = PaymentStatus.PENDING
         logger.info(
             "payment.retry_scheduled id=%s attempt=%d next=%s",
@@ -123,7 +123,7 @@ class Payment:
             self.next_retry_at.isoformat(),
         )
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "payment_id": self.payment_id,
             "user_id": self.user_id,
@@ -157,8 +157,8 @@ class PaymentProcessor:
     def __init__(self, stripe_api_key: Optional[str] = None) -> None:
         self._stripe_api_key = stripe_api_key or os.getenv("STRIPE_SECRET_KEY", "")
         self._webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-        self._payments: Dict[str, Payment] = {}
-        self._webhook_handlers: Dict[str, Callable] = {
+        self._payments: dict[str, Payment] = {}
+        self._webhook_handlers: dict[str, Callable] = {
             "payment_intent.succeeded": self._handle_payment_succeeded,
             "payment_intent.payment_failed": self._handle_payment_failed,
             "customer.subscription.created": self._handle_subscription_created,
@@ -243,7 +243,7 @@ class PaymentProcessor:
         _stripe.api_key = self._stripe_api_key
         amount_cents = int(amount * 100)  # Stripe uses smallest currency unit
 
-        create_kwargs: Dict = {
+        create_kwargs: dict = {
             "amount": amount_cents,
             "currency": currency.lower(),
             "automatic_payment_methods": {"enabled": True},
@@ -364,7 +364,7 @@ class PaymentProcessor:
             and payment.stripe_payment_intent_id
         ):
             _stripe.api_key = self._stripe_api_key
-            refund_kwargs: Dict = {
+            refund_kwargs: dict = {
                 "payment_intent": payment.stripe_payment_intent_id,
                 "reason": reason,
             }
@@ -406,7 +406,7 @@ class PaymentProcessor:
         After _MAX_RETRIES failures the subscription is suspended and the user
         receives a final warning email.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         retried = 0
 
         for payment in list(self._payments.values()):
@@ -446,7 +446,7 @@ class PaymentProcessor:
     # Webhook dispatch
     # ------------------------------------------------------------------
 
-    def handle_webhook(self, event_type: str, event_data: Dict) -> bool:
+    def handle_webhook(self, event_type: str, event_data: dict) -> bool:
         """Dispatch a Stripe webhook event to the appropriate handler."""
         handler = self._webhook_handlers.get(event_type)
         if not handler:
@@ -463,7 +463,7 @@ class PaymentProcessor:
     # Webhook handlers
     # ------------------------------------------------------------------
 
-    def _handle_payment_succeeded(self, event_data: Dict) -> None:
+    def _handle_payment_succeeded(self, event_data: dict) -> None:
         """Send confirmation email and update subscription status."""
         payment_id = event_data.get("payment_id", "")
         user_id = event_data.get("user_id", "")
@@ -479,7 +479,7 @@ class PaymentProcessor:
             recipient = getattr(sub, "email", "") if sub else ""
             if recipient:
                 send_daily_report_email(
-                    date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                    date=datetime.now(UTC).strftime("%Y-%m-%d"),
                     daily_pnl=float(amount),
                     daily_pnl_pct=0.0,
                     total_trades=0,
@@ -490,7 +490,7 @@ class PaymentProcessor:
         except Exception as exc:
             logger.warning("payment_succeeded.email_failed: %s", exc)
 
-    def _handle_payment_failed(self, event_data: Dict) -> None:
+    def _handle_payment_failed(self, event_data: dict) -> None:
         """Send failure notification email."""
         payment_id = event_data.get("payment_id", "")
         error = event_data.get("error", "Unknown error")
@@ -519,16 +519,16 @@ class PaymentProcessor:
         except Exception as exc:
             logger.warning("payment_failed.email_failed: %s", exc)
 
-    def _handle_subscription_created(self, event_data: Dict) -> None:
+    def _handle_subscription_created(self, event_data: dict) -> None:
         subscription_id = event_data.get("subscription_id", "")
         logger.info("webhook.subscription_created sub_id=%s", subscription_id)
 
-    def _handle_subscription_cancelled(self, event_data: Dict) -> None:
+    def _handle_subscription_cancelled(self, event_data: dict) -> None:
         subscription_id = event_data.get("subscription_id", "")
         logger.info("webhook.subscription_cancelled sub_id=%s", subscription_id)
         subscription_manager.cancel_subscription(subscription_id)
 
-    def _handle_invoice_payment_failed(self, event_data: Dict) -> None:
+    def _handle_invoice_payment_failed(self, event_data: dict) -> None:
         """Stripe invoice.payment_failed — schedule dunning retry."""
         customer_id = event_data.get("customer", "")
         logger.warning("webhook.invoice_payment_failed customer=%s", customer_id)
@@ -543,7 +543,7 @@ class PaymentProcessor:
                     payment.schedule_retry(delay_hours=_DUNNING_DELAYS_HOURS[idx])
                 break
 
-    def _handle_checkout_completed(self, event_data: Dict) -> None:
+    def _handle_checkout_completed(self, event_data: dict) -> None:
         """Stripe checkout.session.completed — activate subscription."""
         metadata = event_data.get("metadata", {})
         user_id = metadata.get("user_id", "")
@@ -612,10 +612,10 @@ class PaymentProcessor:
     def get_payment(self, payment_id: str) -> Optional[Payment]:
         return self._payments.get(payment_id)
 
-    def get_user_payments(self, user_id: str) -> List[Payment]:
+    def get_user_payments(self, user_id: str) -> list[Payment]:
         return [p for p in self._payments.values() if p.user_id == user_id]
 
-    def get_payment_stats(self) -> Dict:
+    def get_payment_stats(self) -> dict:
         total = len(self._payments)
         succeeded = sum(
             1 for p in self._payments.values() if p.status == PaymentStatus.SUCCEEDED

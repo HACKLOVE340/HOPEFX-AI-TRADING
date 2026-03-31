@@ -61,7 +61,7 @@ def _compute_features(df) -> Optional[np.ndarray]:
 
         c = df["close"].astype(float)
         h = df["high"].astype(float)
-        l = df["low"].astype(float)  # noqa: E741
+        l = df["low"].astype(float)
         v = df["volume"].astype(float)
 
         # ── momentum ──────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ def _regime_label(df) -> str:
 
         c = df["close"].astype(float)
         h = df["high"].astype(float)
-        l = df["low"].astype(float)  # noqa: E741
+        l = df["low"].astype(float)
         adx = ta.trend.ADXIndicator(h, l, c).adx().iloc[-1]
         rsi = ta.momentum.RSIIndicator(c, window=14).rsi().iloc[-1]
         ema20 = ta.trend.EMAIndicator(c, window=20).ema_indicator().iloc[-1]
@@ -202,7 +202,7 @@ class SimilarWindow:
     regime: str
     next_return: float  # actual return in the bar AFTER this window
     distance: float  # cosine distance (lower = more similar)
-    features: List[float]
+    features: list[float]
 
 
 # ── vector store ──────────────────────────────────────────────────────────────
@@ -252,7 +252,7 @@ class MarketVectorStore:
 
     async def ingest_candles(
         self,
-        candles: List[Dict],
+        candles: list[dict],
         symbol: str,
         timeframe: str,
         stride: int = 10,
@@ -296,7 +296,7 @@ class MarketVectorStore:
             # deterministic ID based on content
             uid = hashlib.md5(
                 f"{symbol}:{timeframe}:{ts}".encode(), usedforsecurity=False
-            ).hexdigest()  # noqa: S324
+            ).hexdigest()
 
             ids.append(uid)
             embeddings.append(vec.tolist())
@@ -336,10 +336,10 @@ class MarketVectorStore:
 
     def query_similar_regimes(
         self,
-        candles: List[Dict],
+        candles: list[dict],
         top_k: int = 5,
         symbol_filter: Optional[str] = None,
-    ) -> List[SimilarWindow]:
+    ) -> list[SimilarWindow]:
         """
         Given the most recent candles, find the top-k most similar historical
         windows and return their metadata + outcomes.
@@ -397,7 +397,7 @@ class MarketVectorStore:
 
     def rag_context_for_llm(
         self,
-        candles: List[Dict],
+        candles: list[dict],
         top_k: int = 5,
     ) -> str:
         """
@@ -437,7 +437,7 @@ class MarketVectorStore:
 
     # ── stats ─────────────────────────────────────────────────────────────────
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         self._ensure_connected()
         count = self._collection.count()
         return {

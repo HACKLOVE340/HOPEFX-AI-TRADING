@@ -15,9 +15,9 @@ import random
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone  # noqa: F401
+from datetime import datetime, timezone, UTC
 from enum import Enum
-from typing import Any, Dict, List, Optional  # noqa: F401
+from typing import Any, Dict, List, Optional
 
 try:
     import aiohttp
@@ -28,7 +28,7 @@ except ImportError:
     logging.warning("aiohttp not available, OANDA broker disabled")
 
 try:
-    import numpy as np  # noqa: F401
+    import numpy as np
 
     NUMPY_AVAILABLE = True
 except ImportError:
@@ -88,7 +88,7 @@ class Order:
             OrderStatus.REJECTED,
         )
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "symbol": self.symbol,
@@ -139,7 +139,7 @@ class Position:
         else:
             self.unrealized_pnl = (self.entry_price - new_price) * self.quantity
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "symbol": self.symbol,
@@ -183,7 +183,7 @@ class BaseBroker(abc.ABC):
         """Close the broker connection and release resources."""
 
     @abc.abstractmethod
-    async def get_account_info(self) -> Dict:
+    async def get_account_info(self) -> dict:
         """Return account balance, margin, and metadata."""
 
     @abc.abstractmethod
@@ -200,18 +200,18 @@ class BaseBroker(abc.ABC):
         """Cancel a pending order. Returns True on success."""
 
     @abc.abstractmethod
-    async def get_positions(self) -> List[Position]:
+    async def get_positions(self) -> list[Position]:
         """Return all open positions."""
 
     @abc.abstractmethod
     async def close_position(self, position_id: str) -> bool:
         """Close a single position by ID. Returns True on success."""
 
-    async def close_all_positions(self) -> List[str]:
+    async def close_all_positions(self) -> list[str]:
         """Close all open positions. Returns list of successfully closed IDs."""
         positions = await self.get_positions()
-        closed: List[str] = []
-        failed: List[str] = []
+        closed: list[str] = []
+        failed: list[str] = []
 
         for pos in positions:
             try:
@@ -229,14 +229,14 @@ class BaseBroker(abc.ABC):
         return closed
 
     @abc.abstractmethod
-    async def get_pending_orders(self) -> List[Order]:
+    async def get_pending_orders(self) -> list[Order]:
         """Return all pending (unfilled) orders."""
 
-    async def cancel_all_orders(self) -> List[str]:
+    async def cancel_all_orders(self) -> list[str]:
         """Cancel all pending orders. Returns list of successfully cancelled IDs."""
         orders = await self.get_pending_orders()
-        cancelled: List[str] = []
-        failed: List[str] = []
+        cancelled: list[str] = []
+        failed: list[str] = []
 
         for order in orders:
             try:
@@ -301,11 +301,11 @@ class PaperTradingBroker(BaseBroker):
         self._account_lock = asyncio.Lock()
 
         # Storage
-        self._orders: Dict[str, Order] = {}
-        self._positions: Dict[str, Position] = {}
-        self._order_history: List[Order] = []
-        self._trade_history: List[Dict] = []
-        self._market_prices: Dict[str, float] = {}
+        self._orders: dict[str, Order] = {}
+        self._positions: dict[str, Position] = {}
+        self._order_history: list[Order] = []
+        self._trade_history: list[dict] = []
+        self._market_prices: dict[str, float] = {}
 
         self.price_feed = None
 
@@ -348,7 +348,7 @@ class PaperTradingBroker(BaseBroker):
         logger.info("Final Trading Report:\n%s", report)
         return True
 
-    async def get_account_info(self) -> Dict:
+    async def get_account_info(self) -> dict:
         """Get account information with proper locking"""
         async with self._positions_lock, self._account_lock:
             # Calculate equity from positions
@@ -459,7 +459,7 @@ class PaperTradingBroker(BaseBroker):
         )
         return order
 
-    def _calculate_slippage(self, symbol: str, quantity: float, side: str) -> float:  # noqa: ARG002
+    def _calculate_slippage(self, symbol: str, quantity: float, side: str) -> float:
         """Calculate realistic slippage in pips based on order size."""
         if self.slippage_model == "none":
             return 0.0
@@ -470,18 +470,18 @@ class PaperTradingBroker(BaseBroker):
         if self.slippage_model == "gaussian":
             slippage = random.gauss(scaled_base, _PAPER_SLIPPAGE_GAUSS_STD)
         else:
-            slippage = random.uniform(0, scaled_base * 2)  # nosec B311 - paper trading slippage simulation  # noqa: S311
+            slippage = random.uniform(0, scaled_base * 2)  # nosec B311 - paper trading slippage simulation
 
         return max(0.0, slippage)
 
-    def _simulate_fill_quantity(self, quantity: float, symbol: str) -> float:  # noqa: ARG002
+    def _simulate_fill_quantity(self, quantity: float, symbol: str) -> float:
         """Return fill quantity, simulating partial fills for large orders."""
         if quantity < self.partial_fill_threshold:
             return quantity
 
         fill_prob = min(_PAPER_FILL_PROB_CAP, 0.5 + (self.partial_fill_threshold / quantity))
-        if random.random() > fill_prob:  # nosec B311 - paper trading fill simulation  # noqa: S311
-            return quantity * random.uniform(  # nosec B311 - paper trading partial fill simulation  # noqa: S311
+        if random.random() > fill_prob:  # nosec B311 - paper trading fill simulation
+            return quantity * random.uniform(  # nosec B311 - paper trading partial fill simulation
                 _PAPER_PARTIAL_FILL_MIN, _PAPER_PARTIAL_FILL_MAX
             )
         return quantity
@@ -557,7 +557,7 @@ class PaperTradingBroker(BaseBroker):
 
             return False
 
-    async def get_positions(self) -> List[Position]:
+    async def get_positions(self) -> list[Position]:
         """Get all open positions with updated prices"""
         async with self._positions_lock:
             positions = list(self._positions.values())
@@ -634,7 +634,7 @@ class PaperTradingBroker(BaseBroker):
                 logger.error("Error closing position %s: %s", position_id, e)
                 return False
 
-    async def get_pending_orders(self) -> List[Order]:
+    async def get_pending_orders(self) -> list[Order]:
         """Get pending orders"""
         async with self._orders_lock:
             return [o for o in self._orders.values() if o.status == OrderStatus.PENDING]
@@ -655,10 +655,10 @@ class PaperTradingBroker(BaseBroker):
 
             opened_at = record.get("opened_at")
             if isinstance(opened_at, (int, float)):
-                opened_at = datetime.fromtimestamp(opened_at, tz=timezone.utc)
+                opened_at = datetime.fromtimestamp(opened_at, tz=UTC)
             closed_at = record.get("closed_at")
             if isinstance(closed_at, (int, float)):
-                closed_at = datetime.fromtimestamp(closed_at, tz=timezone.utc)
+                closed_at = datetime.fromtimestamp(closed_at, tz=UTC)
 
             qty = float(record.get("quantity", 0))
             commission = float(record.get("commission", 0))
@@ -678,8 +678,8 @@ class PaperTradingBroker(BaseBroker):
                 status=TradeStatus.CLOSED,
                 is_open=False,
                 strategy="paper",
-                entry_time=opened_at or datetime.now(timezone.utc),
-                exit_time=closed_at or datetime.now(timezone.utc),
+                entry_time=opened_at or datetime.now(UTC),
+                exit_time=closed_at or datetime.now(UTC),
             )
             with self._session_factory() as session:
                 session.add(trade)
@@ -697,17 +697,17 @@ class PaperTradingBroker(BaseBroker):
     # ------------------------------------------------------------------
 
     @property
-    def positions(self) -> Dict:
+    def positions(self) -> dict:
         """Sync access to positions dict (keyed by symbol)."""
         return self._positions
 
     @property
-    def orders(self) -> Dict:
+    def orders(self) -> dict:
         """Sync access to orders dict."""
         return self._orders
 
     @property
-    def market_prices(self) -> Dict[str, float]:
+    def market_prices(self) -> dict[str, float]:
         """Current market prices used for fills."""
         return self._market_prices
 
@@ -730,7 +730,7 @@ class PaperTradingBroker(BaseBroker):
         take_profit: float = None,
     ) -> "Order":
         """Synchronous order placement for unit tests."""
-        import asyncio as _asyncio  # noqa: F401
+        import asyncio as _asyncio
 
         from brokers.base import OrderSide as _OS
         from brokers.base import OrderStatus as _OSt
@@ -919,7 +919,7 @@ class OANDABroker(BaseBroker):
         self._last_request_time = 0
 
         # Caching
-        self._positions_cache: Dict[str, Position] = {}
+        self._positions_cache: dict[str, Position] = {}
         self._cache_ttl = 5  # 5 seconds
         self._last_cache_update = 0
 
@@ -991,7 +991,7 @@ class OANDABroker(BaseBroker):
         logger.info("OANDA disconnected")
         return True
 
-    async def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict:
+    async def _make_request(self, method: str, endpoint: str, **kwargs) -> dict:
         """Make API request with rate limiting and error handling"""
         url = f"{self.base_url}/v3{endpoint}"
 
@@ -1030,7 +1030,7 @@ class OANDABroker(BaseBroker):
 
         raise ConnectionError("Max retries exceeded")
 
-    async def get_account_info(self) -> Dict:
+    async def get_account_info(self) -> dict:
         """Get account information"""
         data = await self._make_request("GET", f"/accounts/{self.account_id}")
 
@@ -1093,7 +1093,7 @@ class OANDABroker(BaseBroker):
             commission=float(order_fill.get("commission", 0)),
         )
 
-    async def get_positions(self) -> List[Position]:
+    async def get_positions(self) -> list[Position]:
         """Get open positions with caching"""
         # Check cache
         if time.time() - self._last_cache_update < self._cache_ttl:
@@ -1178,7 +1178,7 @@ class OANDABroker(BaseBroker):
             logger.error(f"Failed to cancel order {order_id}: {e}")
             return False
 
-    async def get_pending_orders(self) -> List[Order]:
+    async def get_pending_orders(self) -> list[Order]:
         """Get pending orders"""
         data = await self._make_request(
             "GET",
@@ -1204,7 +1204,7 @@ class OANDABroker(BaseBroker):
         return orders
 
 
-def create_broker(broker_type: str, config: Dict) -> BaseBroker:
+def create_broker(broker_type: str, config: dict) -> BaseBroker:
     """Factory function to create appropriate broker"""
     broker_type = broker_type.lower()
 
@@ -1238,34 +1238,34 @@ def create_broker(broker_type: str, config: Dict) -> BaseBroker:
 
 # Override with the dict-config-based PaperTradingBroker that tests expect
 try:
-    from brokers.paper_trading import PaperTradingBroker  # noqa: F811
+    from brokers.paper_trading import PaperTradingBroker
 except Exception as _exc:
     import logging as _logging
 
     _logging.getLogger(__name__).warning("PaperTradingBroker import failed: %s", _exc)
 
 
-from brokers.factory import BrokerFactory  # noqa: E402, F401
+from brokers.factory import BrokerFactory
 
 # ── YAML-config-based broker implementations ──────────────────────────────────
 # These complement the existing connector classes and are used by the new
 # yaml-driven BrokerFactory (config/brokers.yaml).
 try:
-    from brokers.mt5_broker import MT5Broker  # noqa: F401
+    from brokers.mt5_broker import MT5Broker
 except Exception as _exc:
     import logging as _logging
 
     _logging.getLogger(__name__).debug("MT5Broker unavailable: %s", _exc)
 
 try:
-    from brokers.oanda_broker import OandaBroker as OandaBrokerYaml  # noqa: F401
+    from brokers.oanda_broker import OandaBroker as OandaBrokerYaml
 except Exception as _exc:
     import logging as _logging
 
     _logging.getLogger(__name__).debug("OandaBroker (yaml) unavailable: %s", _exc)
 
 try:
-    from brokers.ibkr_broker import IBKRBroker  # noqa: F401
+    from brokers.ibkr_broker import IBKRBroker
 except Exception as _exc:
     import logging as _logging
 

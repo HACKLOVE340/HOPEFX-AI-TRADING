@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING
 logger = logging.getLogger(__name__)
 
 try:
-    import prometheus_client as prom  # noqa: F401
+    import prometheus_client as prom
     from prometheus_client import (
         Counter as PromCounter,
         Gauge as PromGauge,
@@ -170,7 +170,7 @@ def _sync_counter_collector(name: str, collector) -> None:
 
 def _sync_all_collectors(registry) -> None:
     """Iterate registry collectors and push each into prometheus_client."""
-    from infrastructure.metrics import Gauge, Counter  # noqa: PLC0415
+    from infrastructure.metrics import Gauge, Counter
 
     for name, collector in list(registry._collectors.items()):
         if isinstance(collector, Gauge):
@@ -181,7 +181,7 @@ def _sync_all_collectors(registry) -> None:
 
 async def _sync_loop(interval: float) -> None:
     """Periodically push MetricsRegistry values into prometheus_client objects."""
-    from infrastructure.metrics import get_metrics_registry  # noqa: PLC0415
+    from infrastructure.metrics import get_metrics_registry
 
     registry = get_metrics_registry()
 
@@ -207,7 +207,7 @@ def _sync_trading_gauges() -> None:
         return
     try:
         # ── Kill switch ───────────────────────────────────────────────────────
-        from app import kill_switch as _ks  # noqa: PLC0415
+        from app import kill_switch as _ks
 
         ks_gauge = _get_or_create_gauge(
             "hopefx_kill_switch_active",
@@ -220,7 +220,7 @@ def _sync_trading_gauges() -> None:
 
     try:
         # ── Broker connectivity ───────────────────────────────────────────────
-        from app import app_state as _app_state  # noqa: PLC0415
+        from app import app_state as _app_state
 
         broker = getattr(_app_state, "broker", None)
         broker_gauge = _get_or_create_gauge(
@@ -235,7 +235,7 @@ def _sync_trading_gauges() -> None:
 
     try:
         # ── Risk manager drawdown ─────────────────────────────────────────────
-        from app import app_state as _app_state  # noqa: PLC0415
+        from app import app_state as _app_state
 
         rm = getattr(_app_state, "risk_manager", None)
         if rm is not None:

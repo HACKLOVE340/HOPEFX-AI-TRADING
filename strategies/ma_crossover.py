@@ -10,7 +10,7 @@ A simple trend-following strategy based on moving average crossovers.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, Optional
 
 from .base import BaseStrategy, Signal, SignalType, StrategyConfig
@@ -54,7 +54,7 @@ class MovingAverageCrossover(BaseStrategy):
             f"fast={self.fast_period}, slow={self.slow_period}",
         )
 
-    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Analyze market data using moving averages.
 
@@ -113,7 +113,7 @@ class MovingAverageCrossover(BaseStrategy):
 
         return analysis
 
-    def generate_signal(self, analysis: Dict[str, Any]) -> Optional[Signal]:
+    def generate_signal(self, analysis: dict[str, Any]) -> Optional[Signal]:
         """
         Generate trading signal based on MA crossover.
 
@@ -156,7 +156,7 @@ class MovingAverageCrossover(BaseStrategy):
             signal_type=signal_type,
             symbol=self.config.symbol,
             price=close_price,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             confidence=confidence,
             metadata={
                 "fast_ma": fast_ma,

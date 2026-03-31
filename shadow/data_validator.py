@@ -40,7 +40,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -95,16 +95,16 @@ class DivergenceEvent:
 class ShadowTickBuffer:
     """Rolling buffer of recent ticks for a single feed."""
 
-    ticks: List[Dict] = field(default_factory=list)
+    ticks: list[dict] = field(default_factory=list)
     max_size: int = _WINDOW_SIZE
 
-    def push(self, tick: Dict) -> None:
+    def push(self, tick: dict) -> None:
         self.ticks.append(tick)
         if len(self.ticks) > self.max_size:
             self.ticks.pop(0)
 
     @property
-    def latest(self) -> Optional[Dict]:
+    def latest(self) -> Optional[dict]:
         return self.ticks[-1] if self.ticks else None
 
     @property
@@ -137,8 +137,8 @@ class ShadowDataValidator:
     def __init__(self) -> None:
         self._prod_buffer: ShadowTickBuffer = ShadowTickBuffer()
         self._shadow_buffer: ShadowTickBuffer = ShadowTickBuffer()
-        self._divergences: List[DivergenceEvent] = []
-        self._handlers: List[Callable[[DivergenceEvent], None]] = []
+        self._divergences: list[DivergenceEvent] = []
+        self._handlers: list[Callable[[DivergenceEvent], None]] = []
         self._last_alert_ts: float = 0.0
         self._started: bool = False
         self._lock = asyncio.Lock()
@@ -155,7 +155,6 @@ class ShadowDataValidator:
         if not _PROM_OK:
             return
         # Dedup guard — metrics registered at module level
-        pass
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -181,7 +180,7 @@ class ShadowDataValidator:
             "ask": getattr(tick, "ask", 0.0),
             "spread": getattr(tick, "spread", 0.0),
             "received_at": time.time(),
-            "ts": getattr(tick, "timestamp", datetime.now(timezone.utc)),
+            "ts": getattr(tick, "timestamp", datetime.now(UTC)),
         }
         self._prod_buffer.push(entry)
         self._maybe_compare()
@@ -197,7 +196,7 @@ class ShadowDataValidator:
             "ask": getattr(tick, "ask", 0.0),
             "spread": getattr(tick, "spread", 0.0),
             "received_at": time.time(),
-            "ts": getattr(tick, "timestamp", datetime.now(timezone.utc)),
+            "ts": getattr(tick, "timestamp", datetime.now(UTC)),
         }
         self._shadow_buffer.push(entry)
         self._maybe_compare()
@@ -228,7 +227,7 @@ class ShadowDataValidator:
         if price_gap_bps > _PRICE_DIVERGE_BPS:
             self._emit(
                 DivergenceEvent(
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     divergence_type="price",
                     production_val=mid_p,
                     shadow_val=mid_s,
@@ -248,7 +247,7 @@ class ShadowDataValidator:
             if spread_gap_bps > _SPREAD_DIVERGE_BPS:
                 self._emit(
                     DivergenceEvent(
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                         divergence_type="spread",
                         production_val=spread_p,
                         shadow_val=spread_s,
@@ -266,7 +265,7 @@ class ShadowDataValidator:
         if lat_gap_ms > _LATENCY_DIVERGE_MS:
             self._emit(
                 DivergenceEvent(
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     divergence_type="latency",
                     production_val=prod["received_at"] * 1000,
                     shadow_val=shadow["received_at"] * 1000,
@@ -281,7 +280,7 @@ class ShadowDataValidator:
         if shadow_age_s > 30.0:
             self._emit(
                 DivergenceEvent(
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     divergence_type="stale",
                     production_val=now,
                     shadow_val=shadow["received_at"],
@@ -319,7 +318,7 @@ class ShadowDataValidator:
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
-    def health(self) -> Dict[str, Any]:
+    def health(self) -> dict[str, Any]:
         prod = self._prod_buffer.latest
         shadow = self._shadow_buffer.latest
         now = time.time()

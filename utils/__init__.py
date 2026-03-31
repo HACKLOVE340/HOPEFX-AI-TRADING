@@ -12,14 +12,14 @@ import asyncio
 import functools
 import hashlib
 import inspect
-import json  # noqa: F401
+import json
 import logging
 import secrets
 import time
 from collections import deque
-from datetime import datetime, timedelta, timezone  # noqa: F401
+from datetime import datetime, timedelta, timezone, UTC
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar  # noqa: F401
+from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +194,7 @@ def safe_divide(numerator: float, denominator: float, default: float = 0.0) -> f
     return numerator / denominator if denominator != 0 else default
 
 
-def chunk_list(lst: List[T], chunk_size: int) -> List[List[T]]:
+def chunk_list(lst: list[T], chunk_size: int) -> list[list[T]]:
     """Split list into chunks"""
     return [lst[i : i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
@@ -236,13 +236,13 @@ def parse_timestamp(timestamp: Any) -> datetime:
         # Assume milliseconds if large number
         if timestamp > 1e10:
             timestamp = timestamp / 1000
-        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        return datetime.fromtimestamp(timestamp, tz=UTC)
     if isinstance(timestamp, str):
         return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     raise ValueError(f"Cannot parse timestamp: {timestamp}")
 
 
-def deep_merge(base: Dict, override: Dict) -> Dict:
+def deep_merge(base: dict, override: dict) -> dict:
     """Deep merge two dictionaries"""
     result = base.copy()
     for key, value in override.items():
@@ -273,7 +273,7 @@ def validate_symbol(symbol: str) -> bool:
     return False
 
 
-def calculate_correlation(x: List[float], y: List[float]) -> float:
+def calculate_correlation(x: list[float], y: list[float]) -> float:
     """Calculate Pearson correlation"""
     if len(x) != len(y) or len(x) < 2:
         return 0.0
@@ -337,11 +337,11 @@ def get_framework_version() -> str:
     return "2.1.0"
 
 
-def get_all_component_statuses(app=None) -> Dict[str, Any]:
+def get_all_component_statuses(app=None) -> dict[str, Any]:
     """Get status of all components"""
     statuses = {
         "framework_version": get_framework_version(),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "components": {},
     }
 

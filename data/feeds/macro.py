@@ -35,7 +35,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, Optional
 
 import pandas as pd
@@ -204,16 +204,16 @@ class MacroFeed:
 
     def __init__(self, cache_ttl_seconds: int = 3600):
         self._cache_ttl = cache_ttl_seconds
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
         self._cache_ts: Optional[datetime] = None
 
     def _is_cache_fresh(self) -> bool:
         if self._cache_ts is None:
             return False
-        age = (datetime.now(timezone.utc) - self._cache_ts).total_seconds()
+        age = (datetime.now(UTC) - self._cache_ts).total_seconds()
         return age < self._cache_ttl
 
-    def refresh(self) -> Dict[str, Any]:
+    def refresh(self) -> dict[str, Any]:
         """Synchronously refresh all macro data and return the snapshot."""
         dxy_df = _fetch_fred_sync(_SERIES_DXY, limit=5)
         y10_df = _fetch_fred_sync(_SERIES_10Y, limit=5)
@@ -254,13 +254,13 @@ class MacroFeed:
             "cpi_yoy_pct": cpi_yoy,
             "macro_regime_score": score,
             "macro_stance": _regime_label(score),
-            "refreshed_at": datetime.now(timezone.utc).isoformat(),
+            "refreshed_at": datetime.now(UTC).isoformat(),
         }
         self._cache = snapshot
-        self._cache_ts = datetime.now(timezone.utc)
+        self._cache_ts = datetime.now(UTC)
         return snapshot
 
-    def latest_snapshot(self) -> Dict[str, Any]:
+    def latest_snapshot(self) -> dict[str, Any]:
         """Return cached snapshot, refreshing if stale."""
         if not self._is_cache_fresh():
             try:
@@ -275,7 +275,7 @@ class MacroFeed:
                     }
         return self._cache
 
-    def as_ml_features(self) -> Dict[str, float]:
+    def as_ml_features(self) -> dict[str, float]:
         """
         Return macro values as a flat dict of floats for ML feature injection.
 
@@ -292,7 +292,7 @@ class MacroFeed:
             "macro_regime_score": snap.get("macro_regime_score") or 50.0,
         }
 
-    async def refresh_async(self) -> Dict[str, Any]:
+    async def refresh_async(self) -> dict[str, Any]:
         """Async version of refresh() — preferred in FastAPI context."""
         dxy_df, y10_df, y2_df, cpi_df = await asyncio.gather(
             fetch_dxy(5),
@@ -334,10 +334,10 @@ class MacroFeed:
             "cpi_yoy_pct": cpi_yoy,
             "macro_regime_score": score,
             "macro_stance": _regime_label(score),
-            "refreshed_at": datetime.now(timezone.utc).isoformat(),
+            "refreshed_at": datetime.now(UTC).isoformat(),
         }
         self._cache = snapshot
-        self._cache_ts = datetime.now(timezone.utc)
+        self._cache_ts = datetime.now(UTC)
         return snapshot
 
 

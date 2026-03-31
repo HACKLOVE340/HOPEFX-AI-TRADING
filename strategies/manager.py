@@ -29,7 +29,7 @@ import abc
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -67,7 +67,7 @@ except ImportError:
 
 # Minimum subscription tier required per strategy name.
 # Enforced at the API layer via require_plan; also checked in generate_signals().
-STRATEGY_PLAN_REQUIREMENTS: Dict[str, str] = {
+STRATEGY_PLAN_REQUIREMENTS: dict[str, str] = {
     "TrendFollowing": "starter",
     "EMAcrossover": "starter",
     "RSIReversal": "starter",
@@ -112,11 +112,11 @@ class Signal:
     take_profit: float
     timeframe: str
     timestamp: float = field(
-        default_factory=lambda: datetime.now(timezone.utc).timestamp()
+        default_factory=lambda: datetime.now(UTC).timestamp()
     )
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "action": self.action,
@@ -144,12 +144,12 @@ class BaseStrategy(abc.ABC):
     performance_metrics is updated by update_performance() after each trade.
     """
 
-    def __init__(self, name: str, config: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, name: str, config: Optional[dict[str, Any]] = None) -> None:
         self.name = name
-        self.config: Dict[str, Any] = config or {}
+        self.config: dict[str, Any] = config or {}
         self.enabled: bool = True
         self.status: StrategyStatus = StrategyStatus.IDLE
-        self.performance_metrics: Dict[str, Any] = {
+        self.performance_metrics: dict[str, Any] = {
             "signals_generated": 0,
             "trades_taken": 0,
             "winning_trades": 0,
@@ -161,7 +161,7 @@ class BaseStrategy(abc.ABC):
             "max_drawdown": 0.0,
             "last_signal_at": None,
         }
-        self._pnl_history: List[float] = []
+        self._pnl_history: list[float] = []
 
     @abc.abstractmethod
     async def generate_signals(
@@ -169,10 +169,10 @@ class BaseStrategy(abc.ABC):
         symbol: str,
         price_data: Any,
         market_regime: str,
-    ) -> List[Signal]:
+    ) -> list[Signal]:
         """Generate trading signals for *symbol* given current price data and regime."""
 
-    def update_performance(self, trade_result: Dict[str, Any]) -> None:
+    def update_performance(self, trade_result: dict[str, Any]) -> None:
         """
         Update performance metrics after a trade closes.
 
@@ -227,7 +227,7 @@ class BaseStrategy(abc.ABC):
 class TrendFollowingStrategy(BaseStrategy):
     """MA crossover trend-following strategy. Requires Starter plan."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, config: Optional[dict[str, Any]] = None) -> None:
         super().__init__("TrendFollowing", config)
         self.fast_period: int = self.config.get("fast_period", 20)
         self.slow_period: int = self.config.get("slow_period", 50)
@@ -240,7 +240,7 @@ class TrendFollowingStrategy(BaseStrategy):
         symbol: str,
         price_data: Any,
         market_regime: str,
-    ) -> List[Signal]:
+    ) -> list[Signal]:
         if market_regime not in ("trending_up", "trending_down"):
             return []
         try:
@@ -275,7 +275,7 @@ class TrendFollowingStrategy(BaseStrategy):
                 )
                 self.performance_metrics["signals_generated"] += 1
                 self.performance_metrics["last_signal_at"] = datetime.now(
-                    timezone.utc
+                    UTC
                 ).isoformat()
                 return [sig]
             elif fast_ma < slow_ma and market_regime == "trending_down":
@@ -296,7 +296,7 @@ class TrendFollowingStrategy(BaseStrategy):
                 )
                 self.performance_metrics["signals_generated"] += 1
                 self.performance_metrics["last_signal_at"] = datetime.now(
-                    timezone.utc
+                    UTC
                 ).isoformat()
                 return [sig]
             return []
@@ -309,7 +309,7 @@ class TrendFollowingStrategy(BaseStrategy):
 class MeanReversionStrategy(BaseStrategy):
     """Bollinger Band mean-reversion strategy. Requires Professional plan."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, config: Optional[dict[str, Any]] = None) -> None:
         super().__init__("MeanReversion", config)
         self.period: int = self.config.get("period", 20)
         self.std_dev: float = self.config.get("std_dev", 2.0)
@@ -321,7 +321,7 @@ class MeanReversionStrategy(BaseStrategy):
         symbol: str,
         price_data: Any,
         market_regime: str,
-    ) -> List[Signal]:
+    ) -> list[Signal]:
         if market_regime != "ranging":
             return []
         try:
@@ -336,7 +336,7 @@ class MeanReversionStrategy(BaseStrategy):
             current = float(closes[-1])
             z_score = (current - sma) / std if std > 0 else 0.0
 
-            signals: List[Signal] = []
+            signals: list[Signal] = []
             if z_score < self.oversold_threshold and current < lower:
                 signals.append(
                     Signal(
@@ -379,7 +379,7 @@ class MeanReversionStrategy(BaseStrategy):
             if signals:
                 self.performance_metrics["signals_generated"] += len(signals)
                 self.performance_metrics["last_signal_at"] = datetime.now(
-                    timezone.utc
+                    UTC
                 ).isoformat()
             return signals
         except Exception as exc:
@@ -391,7 +391,7 @@ class MeanReversionStrategy(BaseStrategy):
 class BreakoutStrategy(BaseStrategy):
     """Support/resistance breakout strategy. Requires Professional plan."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, config: Optional[dict[str, Any]] = None) -> None:
         super().__init__("Breakout", config)
         self.lookback_period: int = self.config.get("lookback_period", 20)
         self.breakout_threshold: float = self.config.get("breakout_threshold", 0.001)
@@ -401,7 +401,7 @@ class BreakoutStrategy(BaseStrategy):
         symbol: str,
         price_data: Any,
         market_regime: str,
-    ) -> List[Signal]:
+    ) -> list[Signal]:
         if market_regime != "ranging":
             return []
         try:
@@ -431,7 +431,7 @@ class BreakoutStrategy(BaseStrategy):
                 )
                 self.performance_metrics["signals_generated"] += 1
                 self.performance_metrics["last_signal_at"] = datetime.now(
-                    timezone.utc
+                    UTC
                 ).isoformat()
                 return [sig]
             elif current < support * (1 - self.breakout_threshold):
@@ -452,7 +452,7 @@ class BreakoutStrategy(BaseStrategy):
                 )
                 self.performance_metrics["signals_generated"] += 1
                 self.performance_metrics["last_signal_at"] = datetime.now(
-                    timezone.utc
+                    UTC
                 ).isoformat()
                 return [sig]
             return []
@@ -481,7 +481,7 @@ class StrategyManager:
     """
 
     def __init__(self, preload_defaults: bool = False) -> None:
-        self.strategies: Dict[str, BaseStrategy] = {}
+        self.strategies: dict[str, BaseStrategy] = {}
         if preload_defaults:
             self._initialize_default_strategies()
 
@@ -567,10 +567,10 @@ class StrategyManager:
 
     async def generate_signals(
         self,
-        market_regimes: Dict[str, Any],
+        market_regimes: dict[str, Any],
         price_engine: Any,
         user_plan: str = "starter",
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Generate signals from all enabled, running strategies.
 
@@ -583,7 +583,7 @@ class StrategyManager:
             price_engine:   Object with get_ohlcv(symbol, timeframe, limit) method
             user_plan:      User's subscription tier (trial/starter/professional/enterprise/elite)
         """
-        all_signals: List[Dict] = []
+        all_signals: list[dict] = []
 
         for symbol, regime in market_regimes.items():
             regime_value = regime.value if hasattr(regime, "value") else str(regime)
@@ -635,9 +635,9 @@ class StrategyManager:
 
         return self._deduplicate_signals(all_signals)
 
-    def _deduplicate_signals(self, signals: List[Dict]) -> List[Dict]:
+    def _deduplicate_signals(self, signals: list[dict]) -> list[dict]:
         """Keep the strongest signal per (symbol, action) pair."""
-        seen: Dict[tuple, Dict] = {}
+        seen: dict[tuple, dict] = {}
         for sig in signals:
             key = (sig["symbol"], sig["action"])
             if key not in seen or sig["strength"] > seen[key]["strength"]:
@@ -650,14 +650,14 @@ class StrategyManager:
     # Performance
     # ------------------------------------------------------------------
 
-    def get_strategy_performance(self, name: Optional[str] = None) -> Dict:
+    def get_strategy_performance(self, name: Optional[str] = None) -> dict:
         if name:
             s = self.strategies.get(name)
             return s.performance_metrics if s else {}
         return {n: s.performance_metrics for n, s in self.strategies.items()}
 
     def update_strategy_performance(
-        self, strategy_name: str, trade_result: Dict
+        self, strategy_name: str, trade_result: dict
     ) -> None:
         s = self.strategies.get(strategy_name)
         if s:
@@ -681,13 +681,13 @@ class StrategyManager:
         return status
 
     @staticmethod
-    def _strategy_metrics(s: Any) -> Dict:
+    def _strategy_metrics(s: Any) -> dict:
         """Return performance_metrics dict, defaulting to empty dict if absent."""
         metrics = getattr(s, "performance_metrics", None)
         return metrics if isinstance(metrics, dict) else {}
 
     @property
-    def performance_summary(self) -> Dict:
+    def performance_summary(self) -> dict:
         """Aggregate performance across all registered strategies."""
         total = len(self.strategies)
         active = sum(
@@ -722,7 +722,7 @@ class StrategyManager:
             },
         }
 
-    def list_strategies(self, user_plan: str = "starter") -> List[Dict]:
+    def list_strategies(self, user_plan: str = "starter") -> list[dict]:
         """
         List all registered strategies with their plan requirement and availability.
 

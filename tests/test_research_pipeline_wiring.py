@@ -57,7 +57,7 @@ class TestMTFFusionStore:
         """align_to_h1() must return a DataFrame or None — never raise."""
         from research.pipeline.mtf_fusion import MTFFusionStore
 
-        store = MTFFusionStore(symbol="XAU_USD", data_dir="/tmp/nonexistent_data_dir")  # noqa: S108
+        store = MTFFusionStore(symbol="XAU_USD", data_dir="/tmp/nonexistent_data_dir")
         ohlcv = _make_ohlcv(100)
         # Store is not bootstrapped — should return None or empty DataFrame gracefully
         result = store.align_to_h1(ohlcv)
@@ -66,7 +66,7 @@ class TestMTFFusionStore:
     def test_is_ready_false_before_bootstrap(self):
         from research.pipeline.mtf_fusion import MTFFusionStore
 
-        store = MTFFusionStore(symbol="XAU_USD", data_dir="/tmp/nonexistent_data_dir")  # noqa: S108
+        store = MTFFusionStore(symbol="XAU_USD", data_dir="/tmp/nonexistent_data_dir")
         assert store.is_ready is False
 
     def test_feature_flag_off_returns_none_from_signal_engine(self, monkeypatch):

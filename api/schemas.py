@@ -95,7 +95,7 @@ class TradeOut(BaseModel):
 
 
 class TradeListResponse(BaseModel):
-    trades: List[TradeOut]
+    trades: list[TradeOut]
     total: int
     page: int = Field(1)
     page_size: int = Field(50)
@@ -162,7 +162,7 @@ class RegimeHistoryEntry(BaseModel):
 
 
 class RegimeHistoryResponse(BaseModel):
-    history: List[RegimeHistoryEntry]
+    history: list[RegimeHistoryEntry]
     total: int
 
 
@@ -194,7 +194,7 @@ class SystemMetricsResponse(BaseModel):
     error_rate_pct: float = Field(0.0)
     active_websockets: int = Field(0)
     cache_hit_rate_pct: float = Field(0.0)
-    extra: Dict[str, Any] = Field(default_factory=dict)
+    extra: dict[str, Any] = Field(default_factory=dict)
 
 
 # ── Signals ───────────────────────────────────────────────────────────────────
@@ -214,11 +214,11 @@ class SignalOut(BaseModel):
     timeframe: str = Field("1h")
     generated_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class SignalListResponse(BaseModel):
-    signals: List[SignalOut]
+    signals: list[SignalOut]
     count: int
 
 

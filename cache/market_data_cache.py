@@ -13,7 +13,7 @@ import logging
 import time
 import threading
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -21,7 +21,7 @@ from enum import Enum
 try:
     import redis
     from redis import Redis
-    from redis.exceptions import ConnectionError, TimeoutError as RedisTimeoutError  # noqa: F401
+    from redis.exceptions import ConnectionError, TimeoutError as RedisTimeoutError
 
     REDIS_AVAILABLE = True
 except ImportError:
@@ -57,11 +57,11 @@ class OHLCVData:
     close_price: float
     volume: float
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "OHLCVData":
+    def from_dict(cls, data: dict) -> "OHLCVData":
         return cls(**data)
 
 
@@ -77,11 +77,11 @@ class TickData:
     bid_volume: float
     ask_volume: float
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict) -> "TickData":
+    def from_dict(cls, data: dict) -> "TickData":
         return cls(**data)
 
 
@@ -101,7 +101,7 @@ class CacheStatistics:
         total = self.total_hits + self.total_misses
         return (self.total_hits / total) * 100 if total > 0 else 0.0
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "total_hits": self.total_hits,
             "total_misses": self.total_misses,
@@ -122,8 +122,8 @@ class _InMemoryStore:
     """
 
     def __init__(self) -> None:
-        self._data: Dict[str, Any] = {}
-        self._expiry: Dict[str, float] = {}
+        self._data: dict[str, Any] = {}
+        self._expiry: dict[str, float] = {}
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -174,7 +174,7 @@ class _InMemoryStore:
         cursor: int = 0,
         match: Optional[str] = None,
         count: int = 100,
-    ) -> Tuple[int, List[str]]:
+    ) -> tuple[int, list[str]]:
         """Single-pass SCAN (always returns cursor=0, all matching keys)."""
         import fnmatch
 
@@ -187,7 +187,7 @@ class _InMemoryStore:
 
             return 0, all_keys
 
-    def info(self, section: str = "all") -> Dict[str, Any]:
+    def info(self, section: str = "all") -> dict[str, Any]:
         with self._lock:
             return {
                 "used_memory": sum(
@@ -258,8 +258,8 @@ class MarketDataCache:
         self._stats = CacheStatistics()
 
         # In-memory fallback
-        self._local_cache: Dict[str, Any] = {}
-        self._local_ttl: Dict[str, float] = {}
+        self._local_cache: dict[str, Any] = {}
+        self._local_ttl: dict[str, float] = {}
         self._using_fallback = False
 
         # Redis client (initialized on first use)
@@ -388,7 +388,7 @@ class MarketDataCache:
         self,
         symbol: str,
         timeframe,  # Timeframe enum or plain string e.g. "1h"
-        ohlcv_data: List,
+        ohlcv_data: list,
         ttl: Optional[int] = None,
     ) -> bool:
         """Cache OHLCV data. Accepts Timeframe enum or plain string timeframe."""
@@ -415,9 +415,9 @@ class MarketDataCache:
 
             cached_data = {
                 "data": data_list,
-                "cached_at": datetime.now(timezone.utc).isoformat(),
+                "cached_at": datetime.now(UTC).isoformat(),
                 "expiry": (
-                    datetime.now(timezone.utc) + timedelta(seconds=ttl)
+                    datetime.now(UTC) + timedelta(seconds=ttl)
                 ).isoformat(),
             }
 
@@ -442,7 +442,7 @@ class MarketDataCache:
 
     def get_ohlcv(
         self, symbol: str, timeframe, limit: Optional[int] = None
-    ) -> Optional[List]:
+    ) -> Optional[list]:
         """Retrieve OHLCV data from cache.
 
         Args:
@@ -518,7 +518,7 @@ class MarketDataCache:
 
             cached_data = {
                 "data": tick_dict,
-                "cached_at": datetime.now(timezone.utc).isoformat(),
+                "cached_at": datetime.now(UTC).isoformat(),
             }
 
             redis_client = self._get_redis()
@@ -708,7 +708,7 @@ class MarketDataCache:
                 data = data[-max_size:]
             envelope = {
                 "data": data,
-                "cached_at": datetime.now(timezone.utc).isoformat(),
+                "cached_at": datetime.now(UTC).isoformat(),
                 "count": len(data),
             }
             key = self._build_tick_key(symbol)
@@ -782,7 +782,7 @@ class MarketDataCache:
                 existing = existing[-max_size:]
             new_envelope = {
                 "data": existing,
-                "cached_at": datetime.now(timezone.utc).isoformat(),
+                "cached_at": datetime.now(UTC).isoformat(),
             }
             serialized = json.dumps(new_envelope)
             if redis_client:

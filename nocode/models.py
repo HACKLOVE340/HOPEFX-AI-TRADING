@@ -75,7 +75,7 @@ class Indicator:
     indicator_type: IndicatorType
     period: int = 14
     source: str = "close"  # open, high, low, close
-    params: Dict[str, Any] = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
 
     def get_id(self) -> str:
         """Get unique identifier for this indicator."""
@@ -89,9 +89,9 @@ class Condition:
     condition_id: str
     left_indicator: Indicator
     operator: ConditionOperator
-    right_indicator: Union[Indicator, float]  # Can be indicator or constant
+    right_indicator: Indicator | float  # Can be indicator or constant
 
-    def evaluate(self, data: Dict[str, float]) -> bool:
+    def evaluate(self, data: dict[str, float]) -> bool:
         """Evaluate the condition against current data."""
         left_value = self._get_value(self.left_indicator, data)
 
@@ -104,12 +104,12 @@ class Condition:
             return False
 
         operators = {
-            ConditionOperator.GREATER_THAN: lambda l, r: l > r,  # noqa: E741
-            ConditionOperator.LESS_THAN: lambda l, r: l < r,  # noqa: E741
-            ConditionOperator.GREATER_EQUAL: lambda l, r: l >= r,  # noqa: E741
-            ConditionOperator.LESS_EQUAL: lambda l, r: l <= r,  # noqa: E741
-            ConditionOperator.EQUAL: lambda l, r: l == r,  # noqa: E741
-            ConditionOperator.NOT_EQUAL: lambda l, r: l != r,  # noqa: E741
+            ConditionOperator.GREATER_THAN: lambda l, r: l > r,
+            ConditionOperator.LESS_THAN: lambda l, r: l < r,
+            ConditionOperator.GREATER_EQUAL: lambda l, r: l >= r,
+            ConditionOperator.LESS_EQUAL: lambda l, r: l <= r,
+            ConditionOperator.EQUAL: lambda l, r: l == r,
+            ConditionOperator.NOT_EQUAL: lambda l, r: l != r,
         }
 
         op_func = operators.get(self.operator)
@@ -118,7 +118,7 @@ class Condition:
         return False
 
     def _get_value(
-        self, indicator: Indicator, data: Dict[str, float]
+        self, indicator: Indicator, data: dict[str, float]
     ) -> Optional[float]:
         """Get indicator value from data."""
         key = indicator.get_id()
@@ -129,10 +129,10 @@ class Condition:
 class ConditionGroup:
     """Group of conditions combined with logic operators"""
 
-    conditions: List[Condition]
+    conditions: list[Condition]
     logic: LogicOperator = LogicOperator.AND
 
-    def evaluate(self, data: Dict[str, float]) -> bool:
+    def evaluate(self, data: dict[str, float]) -> bool:
         """Evaluate all conditions in the group."""
         if not self.conditions:
             return False
@@ -163,7 +163,7 @@ class StrategyRule:
 
     rule_id: str
     name: str
-    condition_groups: List[ConditionGroup]
+    condition_groups: list[ConditionGroup]
     action: TradingAction
     enabled: bool = True
     priority: int = 1  # Lower = higher priority
@@ -178,7 +178,7 @@ class NoCodeStrategy:
     description: str
     symbol: str
     timeframe: str
-    rules: List[StrategyRule]
+    rules: list[StrategyRule]
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     enabled: bool = True
@@ -187,7 +187,7 @@ class NoCodeStrategy:
         """Serialize strategy to JSON."""
         return json.dumps(self.to_dict(), indent=2)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "strategy_id": self.strategy_id,
@@ -201,7 +201,7 @@ class NoCodeStrategy:
             "updated_at": self.updated_at.isoformat(),
         }
 
-    def _rule_to_dict(self, rule: StrategyRule) -> Dict[str, Any]:
+    def _rule_to_dict(self, rule: StrategyRule) -> dict[str, Any]:
         """Convert rule to dictionary."""
         return {
             "rule_id": rule.rule_id,

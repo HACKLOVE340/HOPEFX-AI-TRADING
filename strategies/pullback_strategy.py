@@ -52,7 +52,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -160,7 +160,7 @@ class PullbackStrategy(BaseStrategy):
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def generate_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """
         Analyse OHLCV data and return a signal dict.
 
@@ -182,7 +182,7 @@ class PullbackStrategy(BaseStrategy):
           symbol       : str
           timestamp    : ISO string
         """
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         hold = {
             "signal_type": "HOLD",
             "confidence": 0.0,
@@ -238,11 +238,11 @@ class PullbackStrategy(BaseStrategy):
             "size": 0,  # sized by RiskManager.filter_signals()
         }
 
-    def analyze(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+    def analyze(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """Alias for generate_signal — satisfies BaseStrategy ABC."""
         return self.generate_signal(market_data)
 
-    def on_bar(self, bar: Dict[str, Any]) -> Optional[Signal]:
+    def on_bar(self, bar: dict[str, Any]) -> Optional[Signal]:
         """
         Process a single new bar and return a Signal if conditions are met.
 
@@ -274,7 +274,7 @@ class PullbackStrategy(BaseStrategy):
             signal_type=SignalType[result["signal_type"]],
             symbol=self.symbol,
             price=result["entry_price"],
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             confidence=result["confidence"],
             metadata={
                 "stop_loss": result["stop_loss"],
@@ -305,7 +305,7 @@ class PullbackStrategy(BaseStrategy):
             logger.debug("PullbackStrategy._prepare failed: %s", exc)
             return None
 
-    def _compute_indicators(self, df: pd.DataFrame) -> Optional[Dict[str, Any]]:
+    def _compute_indicators(self, df: pd.DataFrame) -> Optional[dict[str, Any]]:
         """
         Compute all indicators needed for entry condition evaluation.
 
@@ -315,7 +315,7 @@ class PullbackStrategy(BaseStrategy):
         try:
             c = df["close"]
             h = df["high"]
-            l = df["low"]  # noqa: E741
+            l = df["low"]
             v = df["volume"]
 
             # ── EMAs ──────────────────────────────────────────────────────────
@@ -395,7 +395,7 @@ class PullbackStrategy(BaseStrategy):
             logger.debug("PullbackStrategy._compute_indicators failed: %s", exc)
             return None
 
-    def _evaluate_conditions(self, ind: Dict[str, Any]) -> tuple:
+    def _evaluate_conditions(self, ind: dict[str, Any]) -> tuple:
         """
         Evaluate entry conditions and return (signal_type, confidence, reason).
 

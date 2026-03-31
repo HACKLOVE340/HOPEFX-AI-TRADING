@@ -27,7 +27,7 @@ GET  /api/data-layer/ml-features     — complete ML feature set
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -48,14 +48,14 @@ def _get_orchestrator():
 
 
 @router.get("/health")
-async def data_layer_health() -> Dict[str, Any]:
+async def data_layer_health() -> dict[str, Any]:
     """Full orchestrator health snapshot."""
     orch = _get_orchestrator()
     return orch.health()
 
 
 @router.get("/tick")
-async def get_latest_tick(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
+async def get_latest_tick(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
     """Latest validated consensus tick."""
     orch = _get_orchestrator()
     tick = orch.get_latest_tick(symbol)
@@ -76,7 +76,7 @@ async def get_latest_tick(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
 
 
 @router.get("/sentiment")
-async def get_sentiment() -> Dict[str, Any]:
+async def get_sentiment() -> dict[str, Any]:
     """Current news sentiment signal for gold — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -115,7 +115,7 @@ async def get_sentiment() -> Dict[str, Any]:
 
 
 @router.get("/macro")
-async def get_macro() -> Dict[str, Any]:
+async def get_macro() -> dict[str, Any]:
     """Current macro features and economic calendar — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -161,7 +161,7 @@ async def get_macro() -> Dict[str, Any]:
 
 
 @router.get("/microstructure")
-async def get_microstructure(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
+async def get_microstructure(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
     """Current microstructure snapshot — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -169,7 +169,7 @@ async def get_microstructure(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
         micro_features = {k: v for k, v in features.items() if k.startswith("micro_")}
 
         snap = orch._micro.get_snapshot()
-        snapshot_dict: Optional[Dict[str, Any]] = None
+        snapshot_dict: Optional[dict[str, Any]] = None
         if snap is not None:
             snapshot_dict = {
                 "timestamp": snap.timestamp.isoformat(),
@@ -197,7 +197,7 @@ async def get_microstructure(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
 
 
 @router.get("/quality")
-async def get_quality_report(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
+async def get_quality_report(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
     """Data quality report — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -231,7 +231,7 @@ async def get_lineage(
     record_type: Optional[str] = Query(None),
     symbol: Optional[str] = Query("XAU_USD"),
     limit: int = Query(50, ge=1, le=500),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Recent lineage records (immutable audit trail) — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -247,7 +247,7 @@ async def get_lineage(
 
 
 @router.get("/feeds")
-async def get_feed_health() -> Dict[str, Any]:
+async def get_feed_health() -> dict[str, Any]:
     """Per-feed health and configuration status — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -265,7 +265,7 @@ async def get_feed_health() -> Dict[str, Any]:
 
 
 @router.get("/ml-features")
-async def get_ml_features(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
+async def get_ml_features(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
     """Complete ML feature set from all data layer components — via orchestrator."""
     orch = _get_orchestrator()
     try:
@@ -274,7 +274,7 @@ async def get_ml_features(symbol: str = Query("XAU_USD")) -> Dict[str, Any]:
             "symbol": symbol,
             "features": features,
             "count": len(features),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

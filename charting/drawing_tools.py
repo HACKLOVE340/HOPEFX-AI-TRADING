@@ -11,12 +11,12 @@ horizontal lines, rectangles, Fibonacci retracements, text labels,
 channels, arc/circle annotations, pitchforks, and Elliott Wave labels.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 # Default Fibonacci retracement and extension levels
-DEFAULT_FIB_LEVELS: List[float] = [0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
-DEFAULT_FIB_EXTENSIONS: List[float] = [1.272, 1.618, 2.0, 2.618]
+DEFAULT_FIB_LEVELS: list[float] = [0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
+DEFAULT_FIB_EXTENSIONS: list[float] = [1.272, 1.618, 2.0, 2.618]
 
 _VALID_ARROW_DIRECTIONS = ("up", "down")
 
@@ -64,18 +64,18 @@ class Drawing:
         self.drawing_id = (
             drawing_id
             if drawing_id is not None
-            else f"{drawing_type}_{datetime.now(timezone.utc).timestamp()}"
+            else f"{drawing_type}_{datetime.now(UTC).timestamp()}"
         )
         self.color = color
         self.line_width = line_width
         self.visible: bool = True
-        self.properties: Dict[str, Any] = {}
-        self.created_at: datetime = datetime.now(timezone.utc)
+        self.properties: dict[str, Any] = {}
+        self.created_at: datetime = datetime.now(UTC)
 
     def __repr__(self) -> str:
         return f"Drawing(type={self.drawing_type!r}, id={self.drawing_id!r})"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise the drawing to a plain dictionary."""
         return {
             "drawing_id": self.drawing_id,
@@ -88,7 +88,7 @@ class Drawing:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Drawing":
+    def from_dict(cls, data: dict[str, Any]) -> "Drawing":
         """Restore a Drawing from a serialised dictionary."""
         drawing = cls(
             drawing_type=data["drawing_type"],
@@ -117,7 +117,7 @@ class DrawingToolkit:
     """
 
     def __init__(self) -> None:
-        self.drawings: Dict[str, Drawing] = {}
+        self.drawings: dict[str, Drawing] = {}
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -311,7 +311,7 @@ class DrawingToolkit:
         start_price: float,
         end_time: datetime,
         end_price: float,
-        levels: Optional[List[float]] = None,
+        levels: Optional[list[float]] = None,
     ) -> Drawing:
         """
         Add a Fibonacci retracement drawing.
@@ -329,7 +329,7 @@ class DrawingToolkit:
         if levels is None:
             levels = list(DEFAULT_FIB_LEVELS)
         price_range = end_price - start_price
-        level_prices: Dict[str, float] = {}
+        level_prices: dict[str, float] = {}
         for lvl in levels:
             pct = lvl * 100
             key = f"{int(pct)}%" if pct % 1 == 0 else f"{pct}%"
@@ -358,7 +358,7 @@ class DrawingToolkit:
         price_b: float,
         time_c: datetime,
         price_c: float,
-        levels: Optional[List[float]] = None,
+        levels: Optional[list[float]] = None,
     ) -> Drawing:
         """
         Add a Fibonacci extension drawing using three swing points (A, B, C).
@@ -378,7 +378,7 @@ class DrawingToolkit:
         if levels is None:
             levels = list(DEFAULT_FIB_EXTENSIONS)
         swing = price_b - price_a
-        level_prices: Dict[str, float] = {
+        level_prices: dict[str, float] = {
             str(lvl): price_c + lvl * swing for lvl in levels
         }
         drawing = Drawing(DrawingType.FIBONACCI_EXTENSION)
@@ -486,7 +486,7 @@ class DrawingToolkit:
 
     def draw_elliott_wave(
         self,
-        points: List[Dict],
+        points: list[dict],
         wave_type: str = "impulse",
     ) -> Drawing:
         """
@@ -510,7 +510,7 @@ class DrawingToolkit:
             "wave_count": len(points),
             "wave_type": wave_type,
         }
-        drawing.drawing_id = f"EW_{datetime.now(timezone.utc).timestamp()}"
+        drawing.drawing_id = f"EW_{datetime.now(UTC).timestamp()}"
         return self._store(drawing)
 
     # ------------------------------------------------------------------
@@ -599,7 +599,7 @@ class DrawingToolkit:
     # Query helpers
     # ------------------------------------------------------------------
 
-    def get_drawings(self, drawing_type: Optional[str] = None) -> List[Drawing]:
+    def get_drawings(self, drawing_type: Optional[str] = None) -> list[Drawing]:
         """
         Return stored drawings, optionally filtered by type.
 
@@ -712,11 +712,11 @@ class DrawingToolkit:
                 drawing.properties[key] = value
         return True
 
-    def export_drawings(self) -> List[Dict[str, Any]]:
+    def export_drawings(self) -> list[dict[str, Any]]:
         """Export all drawings as a list of serialised dictionaries."""
         return [d.to_dict() for d in self.drawings.values()]
 
-    def import_drawings(self, data: List[Dict[str, Any]]) -> int:
+    def import_drawings(self, data: list[dict[str, Any]]) -> int:
         """
         Import drawings from a list of serialised dictionaries.
 
@@ -737,6 +737,6 @@ class DrawingToolkit:
             count += 1
         return count
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise all drawings to a dictionary keyed by drawing ID."""
         return {k: v.to_dict() for k, v in self.drawings.items()}

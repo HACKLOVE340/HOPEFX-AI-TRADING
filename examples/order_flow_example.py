@@ -23,7 +23,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def print_metrics(analyzer, symbol: str) -> None:
     print(f"\n{'='*55}")
     print(
         f"  Order Flow Snapshot — {symbol}  "
-        f"{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
+        f"{datetime.now(UTC).strftime('%H:%M:%S UTC')}"
     )
     print(f"{'='*55}")
 
@@ -128,7 +128,7 @@ async def run_example(max_ticks: int = 100) -> None:
         # Access replay engine via orchestrator — single entry point rule
         from data_layer.orchestrator import orchestrator as _orch
 
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(hours=24)
         engine = _orch._replay
 

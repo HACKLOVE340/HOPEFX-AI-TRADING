@@ -68,7 +68,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from queue import Empty, Queue
 from typing import Callable, Dict, List, Optional
@@ -119,7 +119,7 @@ class FillResult:
     side: str
     lots: float
     fill_price: float
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     error_code: Optional[int] = None
     error_msg: Optional[str] = None
 
@@ -135,7 +135,7 @@ class TickData:
     symbol: str
     bid: float
     ask: float
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def mid(self) -> float:
@@ -189,10 +189,10 @@ class MT5ZmqBridge:
         self._stop_event = threading.Event()
 
         # Pending command futures: id → Queue(maxsize=1)
-        self._pending: Dict[str, Queue[dict]] = {}
+        self._pending: dict[str, Queue[dict]] = {}
 
         # Tick callbacks registered by callers
-        self._tick_callbacks: List[Callable[[TickData], None]] = []
+        self._tick_callbacks: list[Callable[[TickData], None]] = []
 
         # ZMQ context and sockets (None until start())
         self._ctx: Optional[object] = None
@@ -374,7 +374,7 @@ class MT5ZmqBridge:
             self._send_and_wait(cmd_id, payload, symbol="", side="PING", lots=0.0)
             latency = (time.monotonic() - t0) * 1000.0
             self._stats.latency_ms = latency
-            self._stats.last_heartbeat = datetime.now(timezone.utc)
+            self._stats.last_heartbeat = datetime.now(UTC)
             return latency
         except TimeoutError:
             return -1.0
@@ -495,7 +495,7 @@ class MT5ZmqBridge:
                 bid=float(msg.get("bid", 0)),
                 ask=float(msg.get("ask", 0)),
                 timestamp=datetime.fromtimestamp(
-                    msg.get("ts", time.time() * 1000) / 1000.0, tz=timezone.utc
+                    msg.get("ts", time.time() * 1000) / 1000.0, tz=UTC
                 ),
             )
             for cb in self._tick_callbacks:
@@ -555,7 +555,7 @@ class MT5ZmqBridge:
             side=resp.get("side", side),
             lots=float(resp.get("lots", lots)),
             fill_price=float(resp.get("price", 0.0)),
-            timestamp=datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc),
+            timestamp=datetime.fromtimestamp(ts_ms / 1000.0, tz=UTC),
         )
 
     # ── context manager ───────────────────────────────────────────────────────

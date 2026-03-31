@@ -38,7 +38,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from typing import List
 
 import redis.asyncio as aioredis
@@ -65,14 +65,14 @@ FF_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _parse_forexfactory(data: list) -> List[datetime]:
+def _parse_forexfactory(data: list) -> list[datetime]:
     """
     Parse ForexFactory JSON feed into a list of UTC event datetimes.
 
     ForexFactory impact values: "Low", "Medium", "High", "Holiday"
     We keep "High" and above for USD/XAU events.
     """
-    events: List[datetime] = []
+    events: list[datetime] = []
     impact_map = {"high": 3, "medium": 2, "low": 1, "holiday": 0}
     min_level = impact_map.get(MIN_IMPACT, 3)
 
@@ -93,7 +93,7 @@ def _parse_forexfactory(data: list) -> List[datetime]:
             dt_naive = datetime.strptime(f"{date_str} {time_str}", "%m-%d-%Y %I:%M%p")
             # ForexFactory times are US/Eastern — convert to UTC (approx EST = UTC-5)
             # For production, use pytz: pytz.timezone("America/New_York")
-            dt_utc = dt_naive.replace(tzinfo=timezone.utc) + timedelta(hours=5)
+            dt_utc = dt_naive.replace(tzinfo=UTC) + timedelta(hours=5)
             events.append(dt_utc)
         except ValueError:
             logger.debug("Could not parse FF event date: %s %s", date_str, time_str)
@@ -101,7 +101,7 @@ def _parse_forexfactory(data: list) -> List[datetime]:
     return events
 
 
-def _static_fallback() -> List[datetime]:
+def _static_fallback() -> list[datetime]:
     """
     Hard-coded upcoming high-impact dates as a last resort.
 
@@ -112,7 +112,7 @@ def _static_fallback() -> List[datetime]:
 
     This is approximate — replace with a real feed in production.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     events = []
 
     # NFP: first Friday of the month at 13:30 UTC
@@ -199,7 +199,7 @@ class NewsCalendarFeed:
 
     # ── ForexFactory fetch ────────────────────────────────────────────────────
 
-    async def _fetch_forexfactory(self) -> List[datetime]:
+    async def _fetch_forexfactory(self) -> list[datetime]:
         """Download and parse the ForexFactory weekly JSON feed."""
         try:
             import aiohttp
@@ -222,13 +222,13 @@ class NewsCalendarFeed:
                         len(events),
                     )
                     return events
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("NewsCalendarFeed: ForexFactory fetch failed: %s", exc)
             return []
 
     # ── Redis writer ──────────────────────────────────────────────────────────
 
-    async def _write_redis(self, events: List[datetime]) -> int:
+    async def _write_redis(self, events: list[datetime]) -> int:
         """
         Write event timestamps to Redis as a LIST of ISO-8601 strings.
 
@@ -251,7 +251,7 @@ class NewsCalendarFeed:
                 await pipe.execute()
             await r.aclose()
             return len(iso_strings)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error(
                 "NewsCalendarFeed: Redis write failed: %s — blackout calendar not updated.",
                 exc,
@@ -260,7 +260,7 @@ class NewsCalendarFeed:
 
     # ── manual query ──────────────────────────────────────────────────────────
 
-    async def list_events(self) -> List[str]:
+    async def list_events(self) -> list[str]:
         """Return all stored event timestamps from Redis (for debugging)."""
         try:
             r = aioredis.from_url(
@@ -269,7 +269,7 @@ class NewsCalendarFeed:
             events = await r.lrange(REDIS_KEY, 0, -1)
             await r.aclose()
             return events
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("NewsCalendarFeed: could not read Redis: %s", exc)
             return []
 

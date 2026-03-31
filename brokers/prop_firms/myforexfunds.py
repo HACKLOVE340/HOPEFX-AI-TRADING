@@ -46,7 +46,7 @@ class MyForexFundsConnector(MT5Connector):
         "MyForexFunds-Server",
     ]
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """Initialize MyForexFunds connector."""
         if "server" not in config:
             config["server"] = self.MFF_SERVERS[0]
@@ -60,7 +60,7 @@ class MyForexFundsConnector(MT5Connector):
             f"MyForexFunds Connector initialized for ${self.account_size} account",
         )
 
-    def get_myforexfunds_rules(self) -> Dict[str, Any]:
+    def get_myforexfunds_rules(self) -> dict[str, Any]:
         """Get MyForexFunds rules and limits."""
         rules = {
             "max_daily_loss": "5%",

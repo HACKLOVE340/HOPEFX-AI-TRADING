@@ -12,7 +12,7 @@ for collaborative trading environments.
 
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from enum import Enum
 import logging
 import hashlib
@@ -70,7 +70,7 @@ class Permission(Enum):
 
 
 # Role permission mapping
-ROLE_PERMISSIONS: Dict[UserRole, Set[Permission]] = {
+ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
     UserRole.OWNER: {p for p in Permission},  # All permissions
     UserRole.ADMIN: {
         Permission.TRADE_EXECUTE,
@@ -139,10 +139,10 @@ class TeamMember:
     role: UserRole
     joined_at: datetime
     last_active: Optional[datetime] = None
-    custom_permissions: Set[Permission] = field(default_factory=set)
+    custom_permissions: set[Permission] = field(default_factory=set)
     is_active: bool = True
     profile_image: Optional[str] = None
-    settings: Dict[str, Any] = field(default_factory=dict)
+    settings: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -152,12 +152,12 @@ class Team:
     team_id: str
     name: str
     owner_id: str
-    members: Dict[str, TeamMember]  # user_id -> TeamMember
+    members: dict[str, TeamMember]  # user_id -> TeamMember
     created_at: datetime
-    settings: Dict[str, Any] = field(default_factory=dict)
-    shared_strategies: List[str] = field(default_factory=list)
-    shared_portfolios: List[str] = field(default_factory=list)
-    api_keys: List[str] = field(default_factory=list)
+    settings: dict[str, Any] = field(default_factory=dict)
+    shared_strategies: list[str] = field(default_factory=list)
+    shared_portfolios: list[str] = field(default_factory=list)
+    api_keys: list[str] = field(default_factory=list)
     max_members: int = 10
     subscription_tier: str = "free"
 
@@ -187,7 +187,7 @@ class ActivityLog:
     action: str
     resource_type: str
     resource_id: str
-    details: Dict[str, Any]
+    details: dict[str, Any]
     timestamp: datetime
     ip_address: Optional[str] = None
 
@@ -207,12 +207,12 @@ class TeamManager:
     - API key management
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[dict[str, Any]] = None):
         """Initialize team manager."""
         self.config = config or {}
-        self.teams: Dict[str, Team] = {}
-        self.invitations: Dict[str, TeamInvitation] = {}
-        self.activity_logs: List[ActivityLog] = []
+        self.teams: dict[str, Team] = {}
+        self.invitations: dict[str, TeamInvitation] = {}
+        self.activity_logs: list[ActivityLog] = []
 
         logger.info("Team Manager initialized")
 
@@ -236,9 +236,9 @@ class TeamManager:
             New team object
         """
         team_id = (
-            f"team_{len(self.teams) + 1}_{int(datetime.now(timezone.utc).timestamp())}"
+            f"team_{len(self.teams) + 1}_{int(datetime.now(UTC).timestamp())}"
         )
-        owner_id = owner_id or f"user_{int(datetime.now(timezone.utc).timestamp())}"
+        owner_id = owner_id or f"user_{int(datetime.now(UTC).timestamp())}"
 
         # Create owner as first member
         owner = TeamMember(
@@ -246,8 +246,8 @@ class TeamManager:
             email=owner_email,
             display_name=owner_name,
             role=UserRole.OWNER,
-            joined_at=datetime.now(timezone.utc),
-            last_active=datetime.now(timezone.utc),
+            joined_at=datetime.now(UTC),
+            last_active=datetime.now(UTC),
         )
 
         team = Team(
@@ -255,7 +255,7 @@ class TeamManager:
             name=name,
             owner_id=owner_id,
             members={owner_id: owner},
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             settings={
                 "notifications_enabled": True,
                 "two_factor_required": False,
@@ -306,13 +306,13 @@ class TeamManager:
 
         # Create invitation
         invitation = TeamInvitation(
-            invitation_id=f"inv_{int(datetime.now(timezone.utc).timestamp())}_{secrets.token_hex(4)}",
+            invitation_id=f"inv_{int(datetime.now(UTC).timestamp())}_{secrets.token_hex(4)}",
             team_id=team_id,
             email=email,
             role=role,
             invited_by=invited_by,
-            created_at=datetime.now(timezone.utc),
-            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+            created_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(days=7),
             token=secrets.token_urlsafe(32),
         )
 
@@ -354,7 +354,7 @@ class TeamManager:
             logger.error("Invalid or expired invitation token")
             return None
 
-        if invitation.expires_at < datetime.now(timezone.utc):
+        if invitation.expires_at < datetime.now(UTC):
             logger.error("Invitation has expired")
             return None
 
@@ -369,8 +369,8 @@ class TeamManager:
             email=invitation.email,
             display_name=display_name,
             role=invitation.role,
-            joined_at=datetime.now(timezone.utc),
-            last_active=datetime.now(timezone.utc),
+            joined_at=datetime.now(UTC),
+            last_active=datetime.now(UTC),
         )
 
         team.members[user_id] = member
@@ -505,7 +505,7 @@ class TeamManager:
 
         return False
 
-    def get_user_permissions(self, team_id: str, user_id: str) -> Set[Permission]:
+    def get_user_permissions(self, team_id: str, user_id: str) -> set[Permission]:
         """Get all permissions for a user."""
         team = self.teams.get(team_id)
         if not team:
@@ -559,7 +559,7 @@ class TeamManager:
 
     def generate_api_key(
         self, team_id: str, generated_by: str, name: str = "API Key"
-    ) -> Optional[Dict[str, str]]:
+    ) -> Optional[dict[str, str]]:
         """Generate an API key for the team."""
         team = self.teams.get(team_id)
         if not team:
@@ -595,7 +595,7 @@ class TeamManager:
             "key": api_key,
             "key_id": api_key_hash[:16],
             "name": name,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
     def verify_api_key(self, team_id: str, api_key: str) -> bool:
@@ -637,7 +637,7 @@ class TeamManager:
         action: str,
         resource_type: str,
         resource_id: str,
-        details: Dict[str, Any],
+        details: dict[str, Any],
     ):
         """Log team activity."""
         log = ActivityLog(
@@ -648,13 +648,13 @@ class TeamManager:
             resource_type=resource_type,
             resource_id=resource_id,
             details=details,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         self.activity_logs.append(log)
 
     def get_activity_log(
         self, team_id: str, user_id: Optional[str] = None, limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get team activity log."""
         logs = [log for log in self.activity_logs if log.team_id == team_id]
 
@@ -676,7 +676,7 @@ class TeamManager:
             for log in logs
         ]
 
-    def get_team_summary(self, team_id: str) -> Optional[Dict[str, Any]]:
+    def get_team_summary(self, team_id: str) -> Optional[dict[str, Any]]:
         """Get team summary."""
         team = self.teams.get(team_id)
         if not team:

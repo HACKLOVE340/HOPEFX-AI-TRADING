@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Settings"])
 
 # In-memory fallback (used when DB is unavailable)
-_notification_config: Dict[str, Any] = {}
+_notification_config: dict[str, Any] = {}
 
 # Config key prefix in the configurations table
 _CONFIG_KEY_PREFIX = "notification_settings"

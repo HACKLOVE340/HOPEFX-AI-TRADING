@@ -14,7 +14,7 @@ import pytest
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -27,7 +27,7 @@ try:
         TickData,
         TransactionCostModel,
     )
-    from enhanced_realtime_engine import MultiSourceAggregator, MarketTick, MockProvider  # noqa: F401
+    from enhanced_realtime_engine import MultiSourceAggregator, MarketTick, MockProvider
     from enhanced_ml_predictor import EnhancedMLPredictor, FeatureEngineering
     from enhanced_smart_router import SmartOrderRouter, Order, OrderSide, OrderType
 
@@ -57,7 +57,7 @@ class TestResult:
     passed: bool
     duration_ms: float
     error_message: Optional[str] = None
-    metadata: Dict[str, Any] = None
+    metadata: dict[str, Any] = None
 
 
 class TestDataGenerator:
@@ -94,7 +94,7 @@ class TestDataGenerator:
     @staticmethod
     def generate_ticks(
         n: int = 1000, base_price: float = 1950.0, spread: float = 0.05
-    ) -> List[TickData]:
+    ) -> list[TickData]:
         """Generate synthetic tick data"""
         np.random.seed(42)
 
@@ -124,9 +124,9 @@ class UnitTests:
     """Unit test suite for individual components"""
 
     def __init__(self):
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
 
-    async def run_all(self) -> List[TestResult]:
+    async def run_all(self) -> list[TestResult]:
         """Run all unit tests"""
         tests = [
             self.test_tick_data_validation,
@@ -170,7 +170,7 @@ class UnitTests:
 
         # Valid tick
         tick = TickData(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             bid=1950.0,
             ask=1950.05,
             bid_size=10.0,
@@ -182,7 +182,7 @@ class UnitTests:
         # Invalid tick should raise
         try:
             TickData(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 bid=1950.0,
                 ask=1949.0,  # Invalid: ask < bid
                 bid_size=10.0,
@@ -265,9 +265,9 @@ class IntegrationTests:
     """Integration test suite"""
 
     def __init__(self):
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
 
-    async def run_all(self) -> List[TestResult]:
+    async def run_all(self) -> list[TestResult]:
         """Run all integration tests"""
         tests = [
             self.test_backtest_full_workflow,
@@ -428,9 +428,9 @@ class PerformanceTests:
     """Performance and load testing"""
 
     def __init__(self):
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
 
-    async def run_all(self) -> List[TestResult]:
+    async def run_all(self) -> list[TestResult]:
         """Run performance tests"""
         tests = [
             self.test_backtest_throughput,
@@ -541,9 +541,9 @@ class ChaosTests:
     """Chaos engineering tests"""
 
     def __init__(self):
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
 
-    async def run_all(self) -> List[TestResult]:
+    async def run_all(self) -> list[TestResult]:
         """Run chaos tests"""
         tests = [
             self.test_provider_failure,
@@ -640,9 +640,9 @@ class ComprehensiveTestFramework:
         self.performance_tests = PerformanceTests()
         self.chaos_tests = ChaosTests()
 
-        self.all_results: List[TestResult] = []
+        self.all_results: list[TestResult] = []
 
-    async def run_all_tests(self) -> Dict[str, Any]:
+    async def run_all_tests(self) -> dict[str, Any]:
         """Execute complete test suite"""
         print("=" * 70)
         print("COMPREHENSIVE TEST FRAMEWORK v3.0")
@@ -666,7 +666,7 @@ class ComprehensiveTestFramework:
 
         return report
 
-    def _generate_report(self, duration: float) -> Dict[str, Any]:
+    def _generate_report(self, duration: float) -> dict[str, Any]:
         """Generate comprehensive test report"""
         passed = sum(1 for r in self.all_results if r.passed)
         failed = len(self.all_results) - passed
@@ -688,7 +688,7 @@ class ComprehensiveTestFramework:
                 "failed": failed,
                 "pass_rate": passed / len(self.all_results) if self.all_results else 0,
                 "total_duration_sec": duration,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
             "by_category": by_category,
             "failed_tests": [
@@ -707,7 +707,7 @@ class ComprehensiveTestFramework:
             ],
         }
 
-    def _print_summary(self, report: Dict):
+    def _print_summary(self, report: dict):
         """Print formatted test summary"""
         print("\n" + "=" * 70)
         print("TEST EXECUTION SUMMARY")

@@ -55,7 +55,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ def _rr_ratio(entry: float, sl: Optional[float], tp: Optional[float]) -> str:
     return f"{reward / risk:.2f}:1"
 
 
-def _build_signal_embed(payload: Dict[str, Any]) -> Dict[str, Any]:
+def _build_signal_embed(payload: dict[str, Any]) -> dict[str, Any]:
     """Build a Discord embed dict from a signal payload."""
     symbol = payload.get("symbol", "UNKNOWN")
     direction = payload.get("direction", "NEUTRAL")
@@ -116,7 +116,7 @@ def _build_signal_embed(payload: Dict[str, Any]) -> Dict[str, Any]:
     entry = payload.get("entry_price")
     sl = payload.get("stop_loss")
     tp = payload.get("take_profit")
-    ts = payload.get("timestamp", datetime.now(timezone.utc).isoformat())
+    ts = payload.get("timestamp", datetime.now(UTC).isoformat())
 
     emoji = _direction_emoji(direction)
     rr = _rr_ratio(entry or 0, sl, tp)
@@ -125,7 +125,7 @@ def _build_signal_embed(payload: Dict[str, Any]) -> Dict[str, Any]:
     filled = round(ml_prob * 10)
     conf_bar = "█" * filled + "░" * (10 - filled)
 
-    fields: List[Dict[str, Any]] = [
+    fields: list[dict[str, Any]] = [
         {
             "name": "Direction",
             "value": f"{emoji} **{direction.upper()}**",
@@ -182,8 +182,8 @@ def _build_signal_embed(payload: Dict[str, Any]) -> Dict[str, Any]:
 def _build_alert_embed(
     message: str,
     level: str = "info",
-    details: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    details: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
     """Build a Discord embed for a system alert."""
     level_map = {
         "info": (_COLOUR_INFO, "ℹ️"),
@@ -193,7 +193,7 @@ def _build_alert_embed(
     }
     colour, emoji = level_map.get(level.lower(), (_COLOUR_INFO, "ℹ️"))
 
-    fields: List[Dict[str, Any]] = []
+    fields: list[dict[str, Any]] = []
     if details:
         for k, v in details.items():
             fields.append({"name": k, "value": str(v)[:1024], "inline": False})
@@ -204,18 +204,18 @@ def _build_alert_embed(
         "color": colour,
         "fields": fields,
         "footer": {
-            "text": f"HOPEFX AI Trading • {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC",
+            "text": f"HOPEFX AI Trading • {datetime.now(UTC).strftime('%Y-%m-%d %H:%M')} UTC",
         },
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
 def _build_payload(
-    embeds: List[Dict[str, Any]],
+    embeds: list[dict[str, Any]],
     content: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Wrap embeds in a Discord webhook payload."""
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "username": _BOT_USERNAME,
         "embeds": embeds,
     }
@@ -235,7 +235,7 @@ class DiscordSignalBot:
     """
 
     def __init__(self) -> None:
-        self._last_post: Dict[str, float] = {}  # symbol → last post timestamp
+        self._last_post: dict[str, float] = {}  # symbol → last post timestamp
 
     def _is_rate_limited(self, symbol: str) -> bool:
         last = self._last_post.get(symbol, 0.0)
@@ -245,7 +245,7 @@ class DiscordSignalBot:
         self._last_post[symbol] = time.monotonic()
 
     async def _post_async(
-        self, webhook_url: str, payload: Dict[str, Any], retries: int = 3
+        self, webhook_url: str, payload: dict[str, Any], retries: int = 3
     ) -> bool:
         """POST payload to webhook URL with retry on 429."""
         if not webhook_url:
@@ -285,7 +285,7 @@ class DiscordSignalBot:
             return False
         return False
 
-    def _post_sync(self, webhook_url: str, payload: Dict[str, Any]) -> bool:
+    def _post_sync(self, webhook_url: str, payload: dict[str, Any]) -> bool:
         """Synchronous fallback using requests."""
         if not webhook_url:
             return False
@@ -301,7 +301,7 @@ class DiscordSignalBot:
             logger.warning("Discord sync post failed: %s", exc)
             return False
 
-    async def post_signal(self, signal_payload: Dict[str, Any]) -> bool:
+    async def post_signal(self, signal_payload: dict[str, Any]) -> bool:
         """
         Post a signal embed to the Discord signals channel.
 
@@ -335,7 +335,7 @@ class DiscordSignalBot:
             )
         return ok
 
-    def post_signal_sync(self, signal_payload: Dict[str, Any]) -> bool:
+    def post_signal_sync(self, signal_payload: dict[str, Any]) -> bool:
         """Synchronous wrapper for post_signal (for non-async callers)."""
         if not _WEBHOOK_URL:
             return False
@@ -354,7 +354,7 @@ class DiscordSignalBot:
         self,
         message: str,
         level: str = "info",
-        details: Optional[Dict[str, Any]] = None,
+        details: Optional[dict[str, Any]] = None,
     ) -> bool:
         """
         Post a system alert embed to the fallback/alerts webhook.

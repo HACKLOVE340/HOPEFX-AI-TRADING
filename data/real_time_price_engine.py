@@ -15,7 +15,7 @@ import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
@@ -71,7 +71,7 @@ class OHLCV:
     close: float
     volume: float
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "timestamp": self.timestamp,
             "open": self.open,
@@ -94,12 +94,12 @@ class PriceFeedBase(abc.ABC):
     are concrete helpers shared by all implementations.
     """
 
-    def __init__(self, symbols: List[str], config: Dict[str, Any]):
+    def __init__(self, symbols: list[str], config: dict[str, Any]):
         self.symbols = symbols
         self.config = config
         self.active = False
-        self._callbacks: List[Callable] = []
-        self._last_prices: Dict[str, Tick] = {}
+        self._callbacks: list[Callable] = []
+        self._last_prices: dict[str, Tick] = {}
         self._lock = asyncio.Lock()
 
     @abc.abstractmethod
@@ -129,7 +129,7 @@ class PriceFeedBase(abc.ABC):
     @abc.abstractmethod
     async def get_ohlcv(
         self, symbol: str, timeframe: str, limit: int = 100
-    ) -> List[OHLCV]:
+    ) -> list[OHLCV]:
         """Return up to *limit* OHLCV bars for *symbol* at *timeframe*."""
 
 
@@ -139,7 +139,7 @@ class WebSocketPriceFeed(PriceFeedBase):
     Automatic reconnection with exponential backoff
     """
 
-    def __init__(self, symbols: List[str], config: Dict[str, Any]):
+    def __init__(self, symbols: list[str], config: dict[str, Any]):
         super().__init__(symbols, config)
         self.ws_url = config.get("websocket_url", "wss://ws-feed.exchange.coinbase.com")
         self.reconnect_delay = config.get("reconnect_delay", 1.0)
@@ -151,7 +151,7 @@ class WebSocketPriceFeed(PriceFeedBase):
         self._running = False
         self._heartbeat_task = None
         self._receive_task = None
-        self._ohlcv_buffers: Dict[str, Dict[str, deque]] = defaultdict(
+        self._ohlcv_buffers: dict[str, dict[str, deque]] = defaultdict(
             lambda: defaultdict(lambda: deque(maxlen=1000))
         )
 
@@ -243,7 +243,7 @@ class WebSocketPriceFeed(PriceFeedBase):
         except Exception as e:
             logger.error(f"Receive loop error: {e}")
 
-    async def _process_message(self, data: Dict):
+    async def _process_message(self, data: dict):
         """Process incoming message"""
         msg_type = data.get("type")
 
@@ -282,7 +282,7 @@ class WebSocketPriceFeed(PriceFeedBase):
 
     def _update_ohlcv_buffers(self, symbol: str, tick: Tick):
         """Update OHLCV buffers with new tick"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for timeframe, seconds in [
             ("1m", 60),
@@ -330,7 +330,7 @@ class WebSocketPriceFeed(PriceFeedBase):
 
     async def get_ohlcv(
         self, symbol: str, timeframe: str, limit: int = 100
-    ) -> List[OHLCV]:
+    ) -> list[OHLCV]:
         """Get OHLCV from buffer"""
         if (
             symbol not in self._ohlcv_buffers
@@ -352,13 +352,13 @@ class RESTPriceFeed(PriceFeedBase):
     REST API fallback for historical data
     """
 
-    def __init__(self, symbols: List[str], config: Dict[str, Any]):
+    def __init__(self, symbols: list[str], config: dict[str, Any]):
         super().__init__(symbols, config)
         self.rest_url = config.get("rest_url", "https://api.exchange.coinbase.com")
         self.rate_limit_per_sec = config.get("rate_limit_per_sec", 10)
         self._session: Optional[aiohttp.ClientSession] = None
         self._request_times: deque = deque(maxlen=100)
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
         self._cache_ttl = 5  # seconds
 
     async def connect(self):
@@ -379,7 +379,7 @@ class RESTPriceFeed(PriceFeedBase):
             await self._session.close()
         self.active = False
 
-    async def _rate_limited_request(self, url: str) -> Dict:
+    async def _rate_limited_request(self, url: str) -> dict:
         """Make rate-limited request"""
         # Enforce rate limit
         now = time.time()
@@ -400,7 +400,7 @@ class RESTPriceFeed(PriceFeedBase):
 
     async def get_ohlcv(
         self, symbol: str, timeframe: str, limit: int = 100
-    ) -> List[OHLCV]:
+    ) -> list[OHLCV]:
         """Get OHLCV from REST API"""
         cache_key = f"{symbol}_{timeframe}_{limit}"
 
@@ -422,7 +422,7 @@ class RESTPriceFeed(PriceFeedBase):
         granularity = granularity_map.get(timeframe, 3600)
 
         # Calculate time range
-        end_time = datetime.now(timezone.utc)
+        end_time = datetime.now(UTC)
         start_time = end_time - timedelta(seconds=granularity * limit)
 
         url = (
@@ -489,7 +489,7 @@ class RealTimePriceEngine:
                                session_factory is provided (useful in tests)
     """
 
-    def __init__(self, config: Dict[str, Any], session_factory=None):
+    def __init__(self, config: dict[str, Any], session_factory=None):
         self.config = config
         self.symbols = config.get("symbols", ["EURUSD", "XAUUSD"])
 
@@ -502,16 +502,16 @@ class RealTimePriceEngine:
         self._primary_active = False
         self._fallback_active = False
         self._latency_metrics: deque = deque(maxlen=1000)
-        self._spread_metrics: Dict[str, deque] = {
+        self._spread_metrics: dict[str, deque] = {
             s: deque(maxlen=100) for s in self.symbols
         }
 
         # Callbacks
-        self._price_callbacks: List[Callable[[Tick], None]] = []
-        self._candle_callbacks: List[Callable[[str, str, OHLCV], None]] = []
+        self._price_callbacks: list[Callable[[Tick], None]] = []
+        self._candle_callbacks: list[Callable[[str, str, OHLCV], None]] = []
 
         # Tasks
-        self._tasks: List[asyncio.Task] = []
+        self._tasks: list[asyncio.Task] = []
         self._monitor_task: Optional[asyncio.Task] = None
         self._tick_flush_task: Optional[asyncio.Task] = None
 
@@ -679,8 +679,8 @@ class RealTimePriceEngine:
         so a partial failure rolls back cleanly.
         """
         try:
-            from database.models import TickData  # noqa: PLC0415
-            from datetime import datetime, timezone  # noqa: PLC0415
+            from database.models import TickData
+            from datetime import datetime, timezone
         except ImportError as exc:
             logger.error("Tick persistence: could not import TickData model: %s", exc)
             return
@@ -695,7 +695,7 @@ class RealTimePriceEngine:
                         last_price=tick.mid,
                         volume=tick.volume,
                         timestamp=datetime.fromtimestamp(
-                            tick.timestamp, tz=timezone.utc
+                            tick.timestamp, tz=UTC
                         ),
                         source="websocket",
                     )
@@ -727,7 +727,7 @@ class RealTimePriceEngine:
 
     async def get_ohlcv(
         self, symbol: str, timeframe: str, limit: int = 100
-    ) -> List[OHLCV]:
+    ) -> list[OHLCV]:
         """Get OHLCV data"""
         # Try WebSocket buffer first
         if self._primary_active:
@@ -765,7 +765,7 @@ class RealTimePriceEngine:
                 logger.error(f"Monitor loop error: {e}")
                 await asyncio.sleep(5)
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get engine status"""
         return {
             "active": self.active,
@@ -778,7 +778,7 @@ class RealTimePriceEngine:
 
 
 # Convenience function
-async def create_price_engine(config: Dict[str, Any]) -> RealTimePriceEngine:
+async def create_price_engine(config: dict[str, Any]) -> RealTimePriceEngine:
     """Factory function to create price engine"""
     engine = RealTimePriceEngine(config)
     await engine.start()

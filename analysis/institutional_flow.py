@@ -17,7 +17,7 @@ Identifies institutional vs retail trading activity through:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
@@ -35,9 +35,9 @@ class InstitutionalTrade:
     side: str
     classification: str  # 'institutional', 'retail', 'unknown'
     confidence: float  # 0-1
-    indicators: List[str]  # Reasons for classification
+    indicators: list[str]  # Reasons for classification
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "timestamp": self.timestamp.isoformat(),
             "symbol": self.symbol,
@@ -61,9 +61,9 @@ class FlowSignal:
     direction: str  # 'bullish', 'bearish', 'neutral'
     price_level: float
     volume: float
-    details: Dict = field(default_factory=dict)
+    details: dict = field(default_factory=dict)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp.isoformat(),
@@ -89,7 +89,7 @@ class SmartMoneyDirection:
     confidence: float
     signal_count: int
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "timestamp": self.timestamp.isoformat(),
@@ -122,7 +122,7 @@ class InstitutionalFlowDetector:
         direction = detector.get_smart_money_direction('XAUUSD')
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize detector.
 
@@ -144,7 +144,7 @@ class InstitutionalFlowDetector:
         self._max_trades = self.config.get("max_trades", 50000)
 
         # Trade storage: symbol -> list of (timestamp, price, size, side)
-        self._trades: Dict[str, List] = defaultdict(list)
+        self._trades: dict[str, list] = defaultdict(list)
 
         logger.info("Institutional Flow Detector initialized")
 
@@ -161,7 +161,7 @@ class InstitutionalFlowDetector:
         timestamp: Optional[datetime] = None,
     ) -> None:
         """Add a trade for analysis."""
-        ts = timestamp or datetime.now(timezone.utc)
+        ts = timestamp or datetime.now(UTC)
         self._trades[symbol].append((ts, price, size, side.lower()))
         # Trim buffer
         if len(self._trades[symbol]) > self._max_trades:
@@ -175,7 +175,7 @@ class InstitutionalFlowDetector:
         self,
         symbol: str,
         lookback_minutes: int = 60,
-    ) -> List[InstitutionalTrade]:
+    ) -> list[InstitutionalTrade]:
         """
         Identify institutional-size trades.
 
@@ -186,7 +186,7 @@ class InstitutionalFlowDetector:
         Returns:
             List of InstitutionalTrade objects above size threshold
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         results = []
         for ts, price, size, side in self._trades.get(symbol, []):
             if ts < cutoff:
@@ -211,7 +211,7 @@ class InstitutionalFlowDetector:
         self,
         symbol: str,
         lookback_minutes: int = 60,
-    ) -> List[FlowSignal]:
+    ) -> list[FlowSignal]:
         """
         Find iceberg orders - repeated fills at (approximately) same price.
 
@@ -222,7 +222,7 @@ class InstitutionalFlowDetector:
         Returns:
             List of FlowSignal objects for detected icebergs
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = [
             (ts, price, size, side)
             for ts, price, size, side in self._trades.get(symbol, [])
@@ -233,7 +233,7 @@ class InstitutionalFlowDetector:
             return []
 
         # Round prices to 2 dp to group near-same price levels
-        price_groups: Dict[float, List] = defaultdict(list)
+        price_groups: dict[float, list] = defaultdict(list)
         for ts, price, size, side in trades:
             bucket = round(price, 2)
             price_groups[bucket].append((ts, price, size, side))
@@ -283,7 +283,7 @@ class InstitutionalFlowDetector:
         lookback_minutes: int = 60,
         baseline_minutes: int = 30,
         window_seconds: int = 60,
-    ) -> List[FlowSignal]:
+    ) -> list[FlowSignal]:
         """
         Detect unusual volume spikes.
 
@@ -298,7 +298,7 @@ class InstitutionalFlowDetector:
         Returns:
             List of FlowSignal objects for detected volume spikes
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now - timedelta(minutes=lookback_minutes)
         trades = [
             (ts, price, size, side)
@@ -310,7 +310,7 @@ class InstitutionalFlowDetector:
             return []
 
         # Build volume windows
-        windows: Dict[int, Dict] = defaultdict(
+        windows: dict[int, dict] = defaultdict(
             lambda: {"volume": 0.0, "buy": 0.0, "sell": 0.0, "prices": []}
         )
         for ts, price, size, side in trades:
@@ -367,7 +367,7 @@ class InstitutionalFlowDetector:
         symbol: str,
         lookback_minutes: int = 60,
         window_seconds: int = 30,
-    ) -> List[FlowSignal]:
+    ) -> list[FlowSignal]:
         """
         Detect absorption - high volume with low price movement.
 
@@ -379,7 +379,7 @@ class InstitutionalFlowDetector:
         Returns:
             List of FlowSignal objects for absorption levels
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=lookback_minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = [
             (ts, price, size, side)
             for ts, price, size, side in self._trades.get(symbol, [])
@@ -390,7 +390,7 @@ class InstitutionalFlowDetector:
             return []
 
         # Group trades into time windows
-        windows: Dict[int, List] = defaultdict(list)
+        windows: dict[int, list] = defaultdict(list)
         for ts, price, size, side in trades:
             epoch = int(ts.timestamp() // window_seconds)
             windows[epoch].append((ts, price, size, side))
@@ -464,7 +464,7 @@ class InstitutionalFlowDetector:
         Returns:
             InstitutionalTrade with classification
         """
-        indicators: List[str] = []
+        indicators: list[str] = []
         confidence = 0.0
 
         # Large order indicator
@@ -485,7 +485,7 @@ class InstitutionalFlowDetector:
         )
 
         return InstitutionalTrade(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             symbol="",
             price=price,
             size=size,
@@ -499,7 +499,7 @@ class InstitutionalFlowDetector:
         self,
         symbol: str,
         lookback_minutes: int = 60,
-    ) -> List[FlowSignal]:
+    ) -> list[FlowSignal]:
         """
         Run complete flow analysis and return all detected signals.
 
@@ -510,7 +510,7 @@ class InstitutionalFlowDetector:
         Returns:
             Combined list of all flow signals, sorted by timestamp
         """
-        signals: List[FlowSignal] = []
+        signals: list[FlowSignal] = []
         signals.extend(self.detect_iceberg_orders(symbol, lookback_minutes))
         signals.extend(self.detect_volume_spikes(symbol, lookback_minutes))
         signals.extend(self.detect_absorption(symbol, lookback_minutes))
@@ -561,7 +561,7 @@ class InstitutionalFlowDetector:
 
         return SmartMoneyDirection(
             symbol=symbol,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             direction=direction,
             institutional_buy_volume=buy_vol,
             institutional_sell_volume=sell_vol,
@@ -574,7 +574,7 @@ class InstitutionalFlowDetector:
     # UTILITY
     # ================================================================
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get detector statistics."""
         return {
             "symbols_tracked": len(self._trades),

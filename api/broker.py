@@ -24,6 +24,7 @@ from typing import Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -274,10 +275,10 @@ async def broker_status():
     """
     from datetime import datetime, timezone
 
-    checked_at = datetime.now(timezone.utc).isoformat()
+    checked_at = datetime.now(UTC).isoformat()
 
     try:
-        from app import app_state  # noqa: PLC0415
+        from app import app_state
 
         broker = getattr(app_state, "broker", None)
 
@@ -499,7 +500,7 @@ async def paper_clock_status():
             "account_id": None,
             "pending_real_account": True,
             "note": f"Clock unavailable: {exc}",
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checked_at": datetime.now(UTC).isoformat(),
         }
 
 

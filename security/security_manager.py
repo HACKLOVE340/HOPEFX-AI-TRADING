@@ -18,7 +18,7 @@ import secrets
 import threading
 import time
 from typing import Dict, Tuple
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +32,9 @@ class SecurityManager:
     def __init__(self, rate_limit_requests: int = 100, rate_limit_window: int = 3600):
         self.rate_limit_requests = rate_limit_requests
         self.rate_limit_window = rate_limit_window  # seconds
-        self.request_log: Dict[str, list] = {}
+        self.request_log: dict[str, list] = {}
         # CSRF token store: user_id → (token_hex, issued_at_monotonic)
-        self._csrf_store: Dict[str, Tuple[str, float]] = {}
+        self._csrf_store: dict[str, tuple[str, float]] = {}
         self._csrf_lock = threading.Lock()
 
     @staticmethod
@@ -76,7 +76,7 @@ class SecurityManager:
 
     def check_rate_limit(self, user_id: str) -> bool:
         """Check if user exceeded rate limit"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if user_id not in self.request_log:
             self.request_log[user_id] = []

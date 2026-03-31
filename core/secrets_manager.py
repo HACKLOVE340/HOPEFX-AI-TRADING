@@ -75,7 +75,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ _REFRESH_INTERVAL = float(os.getenv("SECRETS_REFRESH_INTERVAL_SECONDS", "300"))
 _REFRESH_ENABLED = os.getenv("SECRETS_REFRESH_ENABLED", "true").lower() != "false"
 
 # Mapping: secret key → env var name (fallback when backend is unavailable)
-_ENV_FALLBACK: Dict[str, str] = {
+_ENV_FALLBACK: dict[str, str] = {
     "jwt_secret_key": "JWT_SECRET_KEY",  # nosec B105 - env var name string, not a hardcoded secret
     "database_url": "DATABASE_URL",
     "db_password": "DB_PASSWORD",  # nosec B105 - env var name string, not a hardcoded secret
@@ -116,7 +116,7 @@ class SecretsManager:
     """
 
     def __init__(self) -> None:
-        self._cache: Dict[str, str] = {}
+        self._cache: dict[str, str] = {}
         self._last_refresh: Optional[datetime] = None
         self._refresh_count: int = 0
         self._error_count: int = 0
@@ -150,7 +150,7 @@ class SecretsManager:
         """Manually override a secret value in the cache (for testing)."""
         self._cache[key] = value
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         return {
             "backend": _BACKEND,
             "refresh_enabled": _REFRESH_ENABLED,
@@ -209,7 +209,7 @@ class SecretsManager:
         if new_secrets:
             changed = {k for k, v in new_secrets.items() if self._cache.get(k) != v}
             self._cache.update(new_secrets)
-            self._last_refresh = datetime.now(timezone.utc)
+            self._last_refresh = datetime.now(UTC)
             self._refresh_count += 1
 
             if changed:
@@ -270,16 +270,16 @@ class SecretsManager:
             if val:
                 self._cache[key] = val
 
-    def _fetch_env(self) -> Dict[str, str]:
+    def _fetch_env(self) -> dict[str, str]:
         """Re-read all mapped env vars (useful for testing rotation)."""
-        result: Dict[str, str] = {}
+        result: dict[str, str] = {}
         for key, env_var in _ENV_FALLBACK.items():
             val = os.getenv(env_var)
             if val:
                 result[key] = val
         return result
 
-    async def _fetch_vault(self) -> Dict[str, str]:
+    async def _fetch_vault(self) -> dict[str, str]:
         """Fetch secrets from HashiCorp Vault KV v2."""
         try:
             import hvac
@@ -329,7 +329,7 @@ class SecretsManager:
             )
             return self._fetch_env()
 
-    async def _fetch_aws(self) -> Dict[str, str]:
+    async def _fetch_aws(self) -> dict[str, str]:
         """Fetch secrets from AWS Secrets Manager."""
         try:
             import boto3

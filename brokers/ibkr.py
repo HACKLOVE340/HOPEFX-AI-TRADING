@@ -47,14 +47,14 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 # ib_insync — optional dependency
 try:
-    from ib_insync import (  # type: ignore[import]  # noqa: F401
+    from ib_insync import (  # type: ignore[import]
         IB,
         CFD,
         Commodity,
@@ -142,7 +142,7 @@ class IBKRBroker:
         Keys: server ("paper" | "live"), host (str), client_id (int).
     """
 
-    def __init__(self, config: Optional[Dict] = None) -> None:
+    def __init__(self, config: Optional[dict] = None) -> None:
         config = config or {}
         server = str(config.get("server", os.getenv("IBKR_ENV", "paper")))
         self._cfg = IBKRConfig(
@@ -156,7 +156,7 @@ class IBKRBroker:
         self._reconnects: int = 0
         self._total_orders: int = 0
         self._total_fills: int = 0
-        self._fill_callbacks: List[Callable] = []
+        self._fill_callbacks: list[Callable] = []
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -237,7 +237,7 @@ class IBKRBroker:
                 unrealized_pnl=float(vals.get("UnrealizedPnL", 0)),
                 buying_power=float(vals.get("BuyingPower", 0)),
                 margin_used=float(vals.get("MaintMarginReq", 0)),
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
         except Exception as exc:
             logger.error("IBKRBroker get_account_info: %s", exc)
@@ -245,7 +245,7 @@ class IBKRBroker:
 
     # ── Order placement ───────────────────────────────────────────────────────
 
-    async def place_order(self, order_request: Dict) -> Dict:
+    async def place_order(self, order_request: dict) -> dict:
         """
         Place a market or limit order for XAUUSD.
 
@@ -302,7 +302,7 @@ class IBKRBroker:
         return c
 
     def _build_ib_order(
-        self, action: str, quantity: float, order_type: str, req: Dict
+        self, action: str, quantity: float, order_type: str, req: dict
     ) -> Any:
         if not _IB_AVAILABLE:
             raise RuntimeError("ib_insync not available")
@@ -322,7 +322,7 @@ class IBKRBroker:
         else:
             return MarketOrder(action, qty)
 
-    async def _wait_for_fill(self, trade: Any, client_ref: str) -> Dict:
+    async def _wait_for_fill(self, trade: Any, client_ref: str) -> dict:
         """Poll trade status until filled, cancelled, or timeout."""
         deadline = time.monotonic() + _ORDER_TIMEOUT
         while time.monotonic() < deadline:
@@ -372,7 +372,7 @@ class IBKRBroker:
 
     # ── Position queries ──────────────────────────────────────────────────────
 
-    async def get_open_positions(self) -> List[Dict]:
+    async def get_open_positions(self) -> list[dict]:
         """Return open positions. Does NOT return price data."""
         if not self.connected or not self._ib:
             return []
@@ -469,7 +469,7 @@ class IBKRBroker:
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
-    def metrics(self) -> Dict[str, Any]:
+    def metrics(self) -> dict[str, Any]:
         return {
             "broker": "ibkr",
             "connected": self.connected,

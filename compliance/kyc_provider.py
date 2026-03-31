@@ -58,7 +58,7 @@ import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -85,11 +85,11 @@ class KYCApplicant:
     provider: str
     sdk_token: str = ""  # frontend SDK initialisation token
     status: VerificationStatus = VerificationStatus.PENDING
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     rejection_reason: str = ""
     review_answer: str = ""  # GREEN | RED | from provider
-    raw_response: Dict[str, Any] = field(default_factory=dict)
+    raw_response: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -97,10 +97,10 @@ class SanctionsResult:
     screened: bool
     is_match: bool
     match_score: float  # 0.0–1.0
-    matched_lists: List[str]  # e.g. ["OFAC_SDN", "EU_CONSOLIDATED"]
+    matched_lists: list[str]  # e.g. ["OFAC_SDN", "EU_CONSOLIDATED"]
     details: str = ""
     provider: str = "unknown"
-    screened_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    screened_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ── Abstract base ─────────────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ class SanctionsResult:
 class KYCProvider(ABC):
     @abstractmethod
     async def create_applicant(
-        self, user_id: str, metadata: Dict[str, Any]
+        self, user_id: str, metadata: dict[str, Any]
     ) -> KYCApplicant:
         """Create a new applicant and return SDK token for frontend."""
         ...
@@ -125,7 +125,7 @@ class KYCProvider(ABC):
         ...
 
     @abstractmethod
-    def parse_webhook(self, payload: Dict[str, Any]) -> tuple[str, VerificationStatus]:
+    def parse_webhook(self, payload: dict[str, Any]) -> tuple[str, VerificationStatus]:
         """Parse webhook payload → (applicant_id, new_status)."""
         ...
 
@@ -153,7 +153,7 @@ class SumsubProvider(KYCProvider):
         msg = f"{ts}{method.upper()}{path}".encode() + body
         return hmac.new(self._secret.encode(), msg, hashlib.sha256).hexdigest()
 
-    def _headers(self, method: str, path: str, body: bytes = b"") -> Dict[str, str]:
+    def _headers(self, method: str, path: str, body: bytes = b"") -> dict[str, str]:
         ts = int(time.time())
         return {
             "X-App-Token": self._app_token,
@@ -163,7 +163,7 @@ class SumsubProvider(KYCProvider):
         }
 
     async def create_applicant(
-        self, user_id: str, metadata: Dict[str, Any]
+        self, user_id: str, metadata: dict[str, Any]
     ) -> KYCApplicant:
         try:
             import aiohttp
@@ -245,7 +245,7 @@ class SumsubProvider(KYCProvider):
         expected = hmac.new(self._secret.encode(), payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
 
-    def parse_webhook(self, payload: Dict[str, Any]) -> tuple[str, VerificationStatus]:
+    def parse_webhook(self, payload: dict[str, Any]) -> tuple[str, VerificationStatus]:
         applicant_id = payload.get("applicantId", "")
         review = payload.get("reviewResult", {})
         answer = review.get("reviewAnswer", "")
@@ -276,14 +276,14 @@ class OnfidoProvider(KYCProvider):
         if not self._api_token:
             logger.warning("Onfido: ONFIDO_API_TOKEN not set")
 
-    def _headers(self) -> Dict[str, str]:
+    def _headers(self) -> dict[str, str]:
         return {
             "Authorization": f"Token token={self._api_token}",
             "Content-Type": "application/json",
         }
 
     async def create_applicant(
-        self, user_id: str, metadata: Dict[str, Any]
+        self, user_id: str, metadata: dict[str, Any]
     ) -> KYCApplicant:
         try:
             import aiohttp
@@ -374,7 +374,7 @@ class OnfidoProvider(KYCProvider):
         expected = hmac.new(webhook_token.encode(), payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
 
-    def parse_webhook(self, payload: Dict[str, Any]) -> tuple[str, VerificationStatus]:
+    def parse_webhook(self, payload: dict[str, Any]) -> tuple[str, VerificationStatus]:
         obj = payload.get("object", {})
         applicant_id = obj.get("applicant_id", "")
         result = obj.get("result", "")
@@ -395,7 +395,7 @@ class MockKYCProvider(KYCProvider):
     DELAY = float(os.getenv("KYC_MOCK_DELAY_S", "2"))
 
     async def create_applicant(
-        self, user_id: str, metadata: Dict[str, Any]
+        self, user_id: str, metadata: dict[str, Any]
     ) -> KYCApplicant:
         import uuid
 
@@ -419,7 +419,7 @@ class MockKYCProvider(KYCProvider):
     def verify_webhook(self, payload: bytes, signature: str) -> bool:
         return True
 
-    def parse_webhook(self, payload: Dict[str, Any]) -> tuple[str, VerificationStatus]:
+    def parse_webhook(self, payload: dict[str, Any]) -> tuple[str, VerificationStatus]:
         return payload.get("applicant_id", ""), VerificationStatus.APPROVED
 
 
@@ -443,7 +443,7 @@ class RefinitivScreener:
         self._api_secret = os.getenv("REFINITIV_API_SECRET", "")
         self._group_id = os.getenv("REFINITIV_GROUP_ID", "")
 
-    def _auth_header(self, method: str, path: str, body: str = "") -> Dict[str, str]:
+    def _auth_header(self, method: str, path: str, body: str = "") -> dict[str, str]:
         ts = str(int(time.time() * 1000))
         msg = f"{self._api_key}{ts}{method.upper()}{path}{body}"
         sig = hmac.new(
@@ -484,7 +484,7 @@ class RefinitivScreener:
             )
 
         path = f"/groups/{self._group_id}/screening-requests"
-        body_dict: Dict[str, Any] = {
+        body_dict: dict[str, Any] = {
             "entityType": "INDIVIDUAL",
             "name": full_name,
         }
@@ -562,7 +562,7 @@ class LocalSDNScreener:
     SDN_URL = "https://www.treasury.gov/ofac/downloads/sdn.xml"
 
     def __init__(self) -> None:
-        self._names: List[str] = []
+        self._names: list[str] = []
         self._loaded = False
 
     async def load(self) -> None:
@@ -634,7 +634,7 @@ class KYCGateway:
         self._screener = screener or RefinitivScreener()
         self._fallback_screener = LocalSDNScreener()
         self._compliance = compliance_manager
-        self._applicants: Dict[str, KYCApplicant] = {}
+        self._applicants: dict[str, KYCApplicant] = {}
 
     @staticmethod
     def _build_provider() -> KYCProvider:
@@ -666,7 +666,7 @@ class KYCGateway:
             )
 
     async def create_applicant(
-        self, user_id: str, metadata: Dict[str, Any]
+        self, user_id: str, metadata: dict[str, Any]
     ) -> KYCApplicant:
         """
         Create a KYC applicant and return SDK token for frontend widget.
@@ -727,7 +727,7 @@ class KYCGateway:
 
         if applicant and status != applicant.status:
             applicant.status = status
-            applicant.updated_at = datetime.now(timezone.utc)
+            applicant.updated_at = datetime.now(UTC)
 
             if self._compliance:
                 if status == VerificationStatus.APPROVED:
@@ -749,7 +749,7 @@ class KYCGateway:
         return status
 
     async def webhook_event(
-        self, payload: bytes, signature: str, raw_payload: Dict[str, Any]
+        self, payload: bytes, signature: str, raw_payload: dict[str, Any]
     ) -> bool:
         """
         Handle a webhook callback from the KYC provider.
@@ -791,7 +791,7 @@ class KYCGateway:
         )
         return result
 
-    def _audit(self, action: str, user_id: str, data: Dict[str, Any]) -> None:
+    def _audit(self, action: str, user_id: str, data: dict[str, Any]) -> None:
         if self._compliance and hasattr(self._compliance, "_log_audit"):
             self._compliance._log_audit("KYC", user_id, action, data)
 

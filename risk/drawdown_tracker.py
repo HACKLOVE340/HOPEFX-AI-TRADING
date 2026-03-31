@@ -58,7 +58,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ class DrawdownResult:
     # Metadata
     drawdown_mode: str  # "equity" or "balance"
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
 
@@ -123,7 +123,7 @@ class DrawdownTracker:
 
         # Daily anchor — resets at midnight UTC
         self._daily_open: float = initial_balance
-        self._day: int = datetime.now(timezone.utc).day
+        self._day: int = datetime.now(UTC).day
 
         # Cumulative realised PnL from partial fills today
         self._daily_realised_pnl: float = 0.0
@@ -154,7 +154,7 @@ class DrawdownTracker:
         self._last_balance = balance
 
         # ── Day rollover ──────────────────────────────────────────────────────
-        today = datetime.now(timezone.utc).day
+        today = datetime.now(UTC).day
         if today != self._day:
             # New day: anchor is the equity/balance at the start of the new day
             anchor = balance if self.drawdown_mode == "balance" else equity
@@ -169,8 +169,7 @@ class DrawdownTracker:
 
         # ── Trailing HWM update ───────────────────────────────────────────────
         # HWM tracks the highest equity ever seen (not just today)
-        if equity > self._total_hwm:
-            self._total_hwm = equity
+        self._total_hwm = max(self._total_hwm, equity)
 
         # ── Total drawdown (from all-time HWM) ────────────────────────────────
         total_dd = 0.0

@@ -357,7 +357,7 @@ class TestNotificationManagerExtended:
                 # Should not raise; either uses urllib fallback or logs an error
                 try:
                     mgr._send_discord("Test", NotificationLevel.INFO, None)
-                except Exception:  # noqa: S110
+                except Exception:
                     pass  # Error logging is acceptable for this code path
 
     def test_send_discord_http_scheme_rejected(self, mgr, caplog):

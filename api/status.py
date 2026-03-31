@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Dict, List
 
 from fastapi import APIRouter
@@ -37,7 +37,7 @@ _start_time = time.time()
 # Fallback store: configurations table via db_store  key="status:uptime:{date}"
 # In-process write-through cache to avoid a round-trip on every HTML render.
 
-_uptime_cache: Dict[str, float] = {}
+_uptime_cache: dict[str, float] = {}
 _REDIS_HASH_KEY = "hopefx:uptime_history"
 _DB_KEY_PREFIX = "status:uptime:"
 
@@ -75,7 +75,7 @@ def _uptime_get(date_iso: str) -> float:
 
     # Fallback: DB via db_store
     try:
-        from api.db_store import db_get  # noqa: PLC0415
+        from api.db_store import db_get
 
         stored = db_get(f"{_DB_KEY_PREFIX}{date_iso}")
         if stored is not None:
@@ -102,7 +102,7 @@ def _uptime_set(date_iso: str, pct: float) -> None:
             logger.debug("Redis uptime write failed: %s", exc)
 
     try:
-        from api.db_store import db_set  # noqa: PLC0415
+        from api.db_store import db_set
 
         db_set(f"{_DB_KEY_PREFIX}{date_iso}", pct, changed_by="status_api")
     except Exception as exc:
@@ -144,7 +144,7 @@ class StatusJsonResponse(BaseModel):
     uptime_seconds: int
     uptime_human: str
     checked_at: str
-    components: Dict[str, Any]
+    components: dict[str, Any]
 
 
 class UptimeDay(BaseModel):
@@ -153,7 +153,7 @@ class UptimeDay(BaseModel):
 
 
 class StatusHistoryResponse(BaseModel):
-    history: List[UptimeDay]
+    history: list[UptimeDay]
 
 
 # ── JSON endpoint ─────────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ async def status_json():
         "status": overall,
         "uptime_seconds": round(uptime_seconds),
         "uptime_human": _fmt_uptime(uptime_seconds),
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": datetime.now(UTC).isoformat(),
         "components": checks,
     }
 
@@ -189,7 +189,7 @@ async def status_json():
 )
 async def status_history():
     """Return daily uptime percentages for the last 90 days."""
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     history = []
     for i in range(89, -1, -1):
         day = (today - timedelta(days=i)).isoformat()
@@ -213,7 +213,7 @@ async def status_incidents(limit: int = 20):
     Each entry includes the date, uptime percentage, and a severity label.
     Sourced from the same rolling uptime history as /api/status/history.
     """
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     incidents = []
     for i in range(89, -1, -1):
         day = (today - timedelta(days=i)).isoformat()
@@ -243,7 +243,7 @@ async def status_page():
     checks = await _run_checks()
     overall = _overall(checks)
     uptime_seconds = time.time() - _start_time
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     # Build component rows
     rows_html = ""
@@ -414,7 +414,7 @@ async def status_page():
       <div class="uptime-value">99.9%</div>
       <div class="uptime-label">30-day uptime</div>
       <div class="history-bar-row" title="90-day uptime history">
-        {"".join(f'<div class="history-bar" style="height:{max(4, int(32 * _uptime_history.get((datetime.now(timezone.utc).date() - timedelta(days=i)).isoformat(), 100.0) / 100))}px;background:{"#22c55e" if _uptime_history.get((datetime.now(timezone.utc).date() - timedelta(days=i)).isoformat(), 100.0) >= 99 else "#f59e0b" if _uptime_history.get((datetime.now(timezone.utc).date() - timedelta(days=i)).isoformat(), 100.0) >= 90 else "#ef4444"}" title="{(datetime.now(timezone.utc).date() - timedelta(days=i)).isoformat()}: {_uptime_history.get((datetime.now(timezone.utc).date() - timedelta(days=i)).isoformat(), 100.0):.1f}%"></div>' for i in range(89, -1, -1))}
+        {"".join(f'<div class="history-bar" style="height:{max(4, int(32 * _uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0) / 100))}px;background:{"#22c55e" if _uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0) >= 99 else "#f59e0b" if _uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0) >= 90 else "#ef4444"}" title="{(datetime.now(UTC).date() - timedelta(days=i)).isoformat()}: {_uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0):.1f}%"></div>' for i in range(89, -1, -1))}
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#475569;margin-top:6px;">
         <span>90 days ago</span><span>Today</span>
@@ -435,7 +435,7 @@ async def status_page():
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-async def _run_checks() -> Dict[str, Any]:
+async def _run_checks() -> dict[str, Any]:
     """Run all health checks, falling back gracefully if checker unavailable."""
     try:
         from infrastructure.health import get_health_checker
@@ -463,7 +463,7 @@ async def _run_checks() -> Dict[str, Any]:
         }
 
 
-def _overall(checks: Dict[str, Any]) -> str:
+def _overall(checks: dict[str, Any]) -> str:
     statuses = [c["status"] for c in checks.values()]
     if "unhealthy" in statuses:
         return "unhealthy"
@@ -623,7 +623,7 @@ async def live_trading_gate_status():
             "allowed": False,
             "reason": f"Gate unavailable: {exc}",
             "checks": {},
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checked_at": datetime.now(UTC).isoformat(),
         }
 
 

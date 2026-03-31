@@ -28,9 +28,9 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 _CONFIG_PATH = Path(__file__).parents[2] / "prop_firm_mode.json"
-_config: Optional[Dict[str, Any]] = None
-_firm_rules: Optional[Dict[str, Any]] = None
-_enforcement: Optional[Dict[str, Any]] = None
+_config: Optional[dict[str, Any]] = None
+_firm_rules: Optional[dict[str, Any]] = None
+_enforcement: Optional[dict[str, Any]] = None
 
 
 def _load_config() -> None:

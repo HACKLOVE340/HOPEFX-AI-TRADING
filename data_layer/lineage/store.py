@@ -50,7 +50,7 @@ import queue
 import sqlite3
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -276,7 +276,7 @@ class DataLineageStore:
         lineage_id: str,
         symbol: str = "XAU_USD",
     ) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload = {
             "direction": direction,
             "confidence": confidence,
@@ -294,10 +294,10 @@ class DataLineageStore:
             payload=payload,
         )
 
-    def record_quality(self, report_dict: Dict[str, Any]) -> None:
+    def record_quality(self, report_dict: dict[str, Any]) -> None:
         import uuid
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self._enqueue(
             record_type="QUALITY",
             lineage_id=str(uuid.uuid4()),
@@ -316,12 +316,12 @@ class DataLineageStore:
         source: Optional[str] = None,
         since: Optional[datetime] = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         if not self._conn:
             return []
 
-        clauses: List[str] = []
-        params: List[Any] = []
+        clauses: list[str] = []
+        params: list[Any] = []
 
         if record_type:
             clauses.append("record_type = ?")
@@ -366,7 +366,7 @@ class DataLineageStore:
             logger.warning("DataLineageStore.query error: %s", exc)
             return []
 
-    def query_by_lineage_id(self, lineage_id: str) -> Optional[Dict[str, Any]]:
+    def query_by_lineage_id(self, lineage_id: str) -> Optional[dict[str, Any]]:
         """
         Retrieve a single record by its content-addressed lineage_id.
 
@@ -409,7 +409,7 @@ class DataLineageStore:
         source: str,
         record_type: Optional[str] = None,
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Return records from a specific data source.
 
@@ -432,7 +432,7 @@ class DataLineageStore:
         record_type: Optional[str] = None,
         symbol: Optional[str] = None,
         limit: int = 500,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Return records within a UTC time range.
 
@@ -449,9 +449,9 @@ class DataLineageStore:
         if not self._conn:
             return []
 
-        end = end or datetime.now(timezone.utc)
-        clauses: List[str] = ["timestamp >= ?", "timestamp <= ?"]
-        params: List[Any] = [start.isoformat(), end.isoformat()]
+        end = end or datetime.now(UTC)
+        clauses: list[str] = ["timestamp >= ?", "timestamp <= ?"]
+        params: list[Any] = [start.isoformat(), end.isoformat()]
 
         if record_type:
             clauses.append("record_type = ?")
@@ -609,7 +609,7 @@ class DataLineageStore:
         except Exception:
             return 0
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         return {
             "write_count": self._write_count,
             "drop_count": self._drop_count,
@@ -633,7 +633,7 @@ class DataLineageStore:
         source: Optional[str],
         symbol: Optional[str],
         timestamp: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
     ) -> None:
         record = {
             "record_type": record_type,
@@ -643,7 +643,7 @@ class DataLineageStore:
             "symbol": symbol,
             "timestamp": timestamp,
             "payload": json.dumps(payload, separators=(",", ":")),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         record["id"] = _content_id(payload)
 
@@ -673,7 +673,7 @@ class DataLineageStore:
         if not self._conn:
             return
 
-        batch: List[dict] = []
+        batch: list[dict] = []
         try:
             while len(batch) < _BATCH_SIZE:
                 batch.append(self._queue.get_nowait())

@@ -30,7 +30,7 @@ import threading
 import time
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Callable, Dict, List, Optional
 
 from brokers.base import (
@@ -65,7 +65,7 @@ try:
         MarketOrder,
         StopOrder,
         Trade,
-        util,  # noqa: F401
+        util,
     )
 
     IB_AVAILABLE = True
@@ -193,7 +193,7 @@ class IBKRConnector(BrokerConnector):
         self._running = False
 
         # Tick callbacks for live market data
-        self._tick_callbacks: List[Callable[[dict], None]] = []
+        self._tick_callbacks: list[Callable[[dict], None]] = []
 
         logger.info(
             "IBKRConnector initialised | host=%s port=%d client_id=%d mode=%s",
@@ -528,13 +528,13 @@ class IBKRConnector(BrokerConnector):
     # Positions
     # ------------------------------------------------------------------
 
-    def get_positions(self) -> List[Position]:
+    def get_positions(self) -> list[Position]:
         """Return all open positions."""
         if not self.connected or not self._ib:
             logger.error("IBKRConnector.get_positions: not connected.")
             return []
         try:
-            result: List[Position] = []
+            result: list[Position] = []
             for pos in self._ib.positions(account=self._account_id or ""):
                 if pos.position == 0:
                     continue
@@ -566,7 +566,7 @@ class IBKRConnector(BrokerConnector):
                         current_price=current_price,
                         unrealized_pnl=unrealized_pnl,
                         realized_pnl=0.0,
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                         id=str(pos.contract.conId),
                     )
                 )
@@ -629,7 +629,7 @@ class IBKRConnector(BrokerConnector):
                 margin_used=_f("MaintMarginReq"),
                 margin_available=_f("AvailableFunds"),
                 positions_count=len(self.get_positions()),
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
         except Exception as exc:
             logger.error("IBKRConnector.get_account_info error: %s", exc)
@@ -646,7 +646,7 @@ class IBKRConnector(BrokerConnector):
         timeframe: str = "1 hour",
         limit: int = 100,
         instrument: str = "commodity",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Fetch historical OHLCV bars.
 
@@ -715,7 +715,7 @@ class IBKRConnector(BrokerConnector):
             raise RuntimeError("IBKRConnector.subscribe_ticks: not connected.")
         try:
             contract = self._make_contract(symbol, instrument)
-            ticker = self._ib.reqMktData(contract, "", False, False)  # noqa: F841
+            ticker = self._ib.reqMktData(contract, "", False, False)
 
             def _on_pending_tickers(tickers):
                 for t in tickers:
@@ -785,7 +785,7 @@ class IBKRConnector(BrokerConnector):
             status=status,
             filled_quantity=filled_qty,
             average_price=avg_price if avg_price > 0 else None,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             metadata={
                 "ib_order_id": trade.order.orderId,
                 "ib_status": ib_status,

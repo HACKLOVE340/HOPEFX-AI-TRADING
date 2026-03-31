@@ -31,7 +31,7 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional
 
 from data_layer.feeds.gold.base import CircuitState, GoldFeedBase
@@ -46,7 +46,7 @@ from data_layer.types import FeedSource, GoldTick, TickQuality
 logger = logging.getLogger(__name__)
 
 # Poll interval per source (seconds)
-_POLL_INTERVALS: Dict[FeedSource, float] = {
+_POLL_INTERVALS: dict[FeedSource, float] = {
     FeedSource.GOLDAPI: 5.0,
     FeedSource.METALS_DEV: 10.0,
     FeedSource.METALS_API: 60.0,
@@ -55,7 +55,7 @@ _POLL_INTERVALS: Dict[FeedSource, float] = {
 }
 
 # Priority order for primary source selection (index 0 = highest priority)
-_PRIORITY: List[FeedSource] = [
+_PRIORITY: list[FeedSource] = [
     FeedSource.GOLDAPI,
     FeedSource.METALS_DEV,
     FeedSource.METALS_API,
@@ -76,17 +76,17 @@ class GoldFeedManager:
     """
 
     def __init__(self, redis_client=None) -> None:
-        self._feeds: Dict[FeedSource, GoldFeedBase] = {
+        self._feeds: dict[FeedSource, GoldFeedBase] = {
             FeedSource.GOLDAPI: GoldAPIFeed(),
             FeedSource.METALPRICEAPI: MetalpriceAPIFeed(),
             FeedSource.METALS_API: MetalsAPIFeed(),
             FeedSource.METALS_DEV: MetalsDevFeed(),
             FeedSource.COMMODITY_API: CommodityAPIFeed(),
         }
-        self._latest: Dict[FeedSource, GoldTick] = {}
+        self._latest: dict[FeedSource, GoldTick] = {}
         self._consensus_tick: Optional[GoldTick] = None
         self._redis = redis_client
-        self._tasks: List[asyncio.Task] = []
+        self._tasks: list[asyncio.Task] = []
         self._running = False
         self._lock = asyncio.Lock()
         self._tick_count: int = 0
@@ -298,7 +298,7 @@ class GoldFeedManager:
 
         self._consensus_tick = GoldTick(
             symbol="XAU_USD",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             bid=round(consensus_mid - half_spread, 4),
             ask=round(consensus_mid + half_spread, 4),
             mid=round(consensus_mid, 4),
@@ -312,12 +312,12 @@ class GoldFeedManager:
         if self._prom_consensus_price:
             try:
                 self._prom_consensus_price.set(consensus_mid)
-            except Exception:  # nosec B110 - Prometheus metric failure must not crash feed  # noqa: S110
+            except Exception:  # nosec B110 - Prometheus metric failure must not crash feed
                 pass
         if self._prom_active_sources:
             try:
                 self._prom_active_sources.set(len(live))
-            except Exception:  # nosec B110 - Prometheus metric failure must not crash feed  # noqa: S110
+            except Exception:  # nosec B110 - Prometheus metric failure must not crash feed
                 pass
 
         # Cache consensus tick to Redis for synchronous consumers.
@@ -404,7 +404,7 @@ class GoldFeedManager:
     def get_source_tick(self, source: FeedSource) -> Optional[GoldTick]:
         return self._latest.get(source)
 
-    def active_sources(self) -> List[FeedSource]:
+    def active_sources(self) -> list[FeedSource]:
         return [
             src
             for src, tick in self._latest.items()

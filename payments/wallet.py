@@ -13,7 +13,7 @@ Note: This wallet ONLY handles subscription fees and commission payments.
 Trading capital is managed directly by brokers/prop firms.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional, Tuple
 from decimal import Decimal
 import logging
@@ -57,10 +57,10 @@ class Wallet:
         self.commission_balance = commission_balance
         self.currency = currency
         self.status = status
-        self.created_at = created_at or datetime.now(timezone.utc)
-        self.updated_at = updated_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
+        self.updated_at = updated_at or datetime.now(UTC)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert wallet to dictionary"""
         return {
             "wallet_id": self.wallet_id,
@@ -86,15 +86,15 @@ class WalletManager:
     def __init__(self, session_factory=None):
         self._session_factory = session_factory
         # In-memory fallback
-        self._wallets: Dict[str, Wallet] = {}
-        self._transaction_history: Dict[str, List[Dict]] = {}
+        self._wallets: dict[str, Wallet] = {}
+        self._transaction_history: dict[str, list[dict]] = {}
         logger.info("WalletManager initialized (DB=%s)", session_factory is not None)
 
     def set_session_factory(self, session_factory):
         """Wire in DB session factory after construction."""
         self._session_factory = session_factory
 
-    def _persist_transaction(self, user_id: str, txn: Dict):
+    def _persist_transaction(self, user_id: str, txn: dict):
         """Write a transaction record to the DB."""
         if not self._session_factory:
             return
@@ -196,7 +196,7 @@ class WalletManager:
         wallet_id = f"WAL-{user_id}"
         return self._wallets.get(wallet_id)
 
-    def get_balance(self, user_id: str, wallet_type: Optional[str] = None) -> Dict:
+    def get_balance(self, user_id: str, wallet_type: Optional[str] = None) -> dict:
         """
         Get wallet balance(s)
 
@@ -247,7 +247,7 @@ class WalletManager:
         transaction_type: str = "deposit",
         method: str = "unknown",
         reference: Optional[str] = None,
-    ) -> Tuple[bool, str, Optional[Dict]]:
+    ) -> tuple[bool, str, Optional[dict]]:
         """
         Credit (add funds to) a wallet
 
@@ -280,11 +280,11 @@ class WalletManager:
         else:
             return False, f"Invalid wallet type: {wallet_type}", None
 
-        wallet.updated_at = datetime.now(timezone.utc)
+        wallet.updated_at = datetime.now(UTC)
 
         # Record transaction
         transaction = {
-            "transaction_id": f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
+            "transaction_id": f"TXN-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
             "type": transaction_type,
             "wallet_type": wallet_type,
             "amount": float(amount),
@@ -296,7 +296,7 @@ class WalletManager:
                 else wallet.commission_balance
             ),
             "status": "completed",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
         if user_id not in self._transaction_history:
@@ -314,7 +314,7 @@ class WalletManager:
         wallet_type: str = WalletType.SUBSCRIPTION,
         transaction_type: str = "withdrawal",
         reference: Optional[str] = None,
-    ) -> Tuple[bool, str, Optional[Dict]]:
+    ) -> tuple[bool, str, Optional[dict]]:
         """
         Debit (remove funds from) a wallet
 
@@ -371,11 +371,11 @@ class WalletManager:
         else:
             return False, f"Invalid wallet type: {wallet_type}", None
 
-        wallet.updated_at = datetime.now(timezone.utc)
+        wallet.updated_at = datetime.now(UTC)
 
         # Record transaction
         transaction = {
-            "transaction_id": f"TXN-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
+            "transaction_id": f"TXN-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
             "type": transaction_type,
             "wallet_type": wallet_type,
             "amount": float(amount),
@@ -386,7 +386,7 @@ class WalletManager:
                 else wallet.commission_balance
             ),
             "status": "completed",
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
         if user_id not in self._transaction_history:
@@ -399,7 +399,7 @@ class WalletManager:
 
     def transfer_between_wallets(
         self, user_id: str, amount: Decimal, from_wallet: str, to_wallet: str
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """
         Transfer funds between wallet types
 
@@ -453,7 +453,7 @@ class WalletManager:
         )
         return True, "Transfer successful"
 
-    def freeze_wallet(self, user_id: str) -> Tuple[bool, str]:
+    def freeze_wallet(self, user_id: str) -> tuple[bool, str]:
         """
         Freeze a wallet (prevent transactions)
 
@@ -468,12 +468,12 @@ class WalletManager:
             return False, "Wallet not found"
 
         wallet.status = WalletStatus.FROZEN
-        wallet.updated_at = datetime.now(timezone.utc)
+        wallet.updated_at = datetime.now(UTC)
 
         logger.warning(f"Wallet frozen for user {user_id}")
         return True, "Wallet frozen successfully"
 
-    def unfreeze_wallet(self, user_id: str) -> Tuple[bool, str]:
+    def unfreeze_wallet(self, user_id: str) -> tuple[bool, str]:
         """
         Unfreeze a wallet
 
@@ -488,12 +488,12 @@ class WalletManager:
             return False, "Wallet not found"
 
         wallet.status = WalletStatus.ACTIVE
-        wallet.updated_at = datetime.now(timezone.utc)
+        wallet.updated_at = datetime.now(UTC)
 
         logger.info(f"Wallet unfrozen for user {user_id}")
         return True, "Wallet activated successfully"
 
-    def get_transaction_history(self, user_id: str, limit: int = 50) -> List[Dict]:
+    def get_transaction_history(self, user_id: str, limit: int = 50) -> list[dict]:
         """
         Get transaction history for a user
 

@@ -38,8 +38,8 @@ class ParameterOptimizer:
         logger.info(f"Initialized parameter optimizer for {strategy_class.__name__}")
 
     def grid_search(
-        self, param_grid: Dict[str, List[Any]], metric: str = "sharpe_ratio"
-    ) -> Dict:
+        self, param_grid: dict[str, list[Any]], metric: str = "sharpe_ratio"
+    ) -> dict:
         """
         Perform grid search over parameter space.
 

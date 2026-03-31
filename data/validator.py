@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # Sanity bounds per symbol (extend as needed)
 # ---------------------------------------------------------------------------
 
-_PRICE_BOUNDS: Dict[str, tuple[float, float]] = {
+_PRICE_BOUNDS: dict[str, tuple[float, float]] = {
     # (min_price, max_price)
     "XAUUSD": (500.0, 10_000.0),  # Gold: $500–$10,000 per troy oz
     "EURUSD": (0.5, 2.5),
@@ -63,8 +63,8 @@ _STALE_MULTIPLIER = 2.0
 @dataclass
 class ValidationResult:
     ok: bool
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
     def add_error(self, msg: str) -> None:
         self.errors.append(msg)
@@ -102,7 +102,7 @@ class DataValidator:
     # Public API
     # ------------------------------------------------------------------
 
-    def validate_bar(self, bar: Dict) -> ValidationResult:
+    def validate_bar(self, bar: dict) -> ValidationResult:
         """
         Validate a single OHLCV bar dict.
 
@@ -114,7 +114,7 @@ class DataValidator:
         try:
             o = float(bar["open"])
             h = float(bar["high"])
-            l = float(bar["low"])  # noqa: E741
+            l = float(bar["low"])
             c = float(bar["close"])
             v = float(bar.get("volume", 0))
         except (KeyError, TypeError, ValueError) as exc:
@@ -167,7 +167,7 @@ class DataValidator:
             try:
                 dt = datetime.fromisoformat(str(ts)) if isinstance(ts, str) else ts
                 if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
+                    dt = dt.replace(tzinfo=UTC)
                 expected_max_gap = timedelta(
                     seconds=self.timeframe_secs * _STALE_MULTIPLIER
                 )
@@ -192,7 +192,7 @@ class DataValidator:
                 try:
                     dt = datetime.fromisoformat(str(ts)) if isinstance(ts, str) else ts
                     if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
+                        dt = dt.replace(tzinfo=UTC)
                     self._last_bar_time = dt
                 except Exception as exc:
                     logger.debug(
@@ -203,7 +203,7 @@ class DataValidator:
 
         return result
 
-    def validate_bars(self, bars: List[Dict]) -> List[ValidationResult]:
+    def validate_bars(self, bars: list[dict]) -> list[ValidationResult]:
         """Validate a sequence of bars in order. State is carried between bars."""
         return [self.validate_bar(b) for b in bars]
 
@@ -219,11 +219,11 @@ class DataValidator:
 
 
 def validate_ohlcv(
-    bars: List[Dict],
+    bars: list[dict],
     symbol: str = "XAUUSD",
     timeframe_secs: int = 3600,
     raise_on_error: bool = False,
-) -> List[ValidationResult]:
+) -> list[ValidationResult]:
     """
     Validate a list of OHLCV bars and optionally raise on the first error.
 

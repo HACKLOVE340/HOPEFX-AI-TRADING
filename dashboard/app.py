@@ -13,7 +13,7 @@ class DashboardDataManager:
     def __init__(self):
         self.data = {}  # In-memory data storage
 
-    def update_data(self, symbol: str, market_data: List[Dict]):
+    def update_data(self, symbol: str, market_data: list[dict]):
         # Update market data for the given symbol
         self.data[symbol] = market_data
 
@@ -26,7 +26,7 @@ class DashboardDataManager:
 # ChartGenerator creates visualizations
 class ChartGenerator:
     @staticmethod
-    def generate_candlestick_chart(symbol: str, data: List[Dict]):
+    def generate_candlestick_chart(symbol: str, data: list[dict]):
         fig = go.Figure(
             data=[
                 go.Candlestick(
@@ -42,7 +42,7 @@ class ChartGenerator:
         return fig.to_html(full_html=False)
 
     @staticmethod
-    def generate_line_chart(symbol: str, data: List[Dict]):
+    def generate_line_chart(symbol: str, data: list[dict]):
         fig = go.Figure(
             data=[
                 go.Scatter(
@@ -56,7 +56,7 @@ class ChartGenerator:
         return fig.to_html(full_html=False)
 
     @staticmethod
-    def generate_volume_chart(symbol: str, data: List[Dict]):
+    def generate_volume_chart(symbol: str, data: list[dict]):
         fig = go.Figure(
             data=[go.Bar(x=[d["date"] for d in data], y=[d["volume"] for d in data])]
         )
@@ -73,7 +73,7 @@ class DashboardApp:
 
     def setup_routes(self):
         @self.app.post("/api/market-data")
-        async def update_market_data(symbol: str, market_data: List[Dict]):
+        async def update_market_data(symbol: str, market_data: list[dict]):
             self.data_manager.update_data(symbol, market_data)
             return {"message": "Market data updated"}
 
@@ -111,4 +111,4 @@ class DashboardApp:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(DashboardApp().app, host="0.0.0.0", port=8000)  # nosec B104 - container deployment requires 0.0.0.0  # noqa: S104
+    uvicorn.run(DashboardApp().app, host="0.0.0.0", port=8000)  # nosec B104 - container deployment requires 0.0.0.0

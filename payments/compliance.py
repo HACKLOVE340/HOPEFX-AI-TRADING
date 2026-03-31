@@ -9,7 +9,7 @@ Compliance Module
 AML (Anti-Money Laundering) monitoring and regulatory compliance.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from decimal import Decimal
 from enum import Enum
 from typing import Dict, List, Optional
@@ -38,7 +38,7 @@ class AMLCheck:
     check_type: str
     risk_level: RiskLevel
     reason: str
-    checked_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    checked_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     resolved: bool = False
     resolution_notes: Optional[str] = None
 
@@ -52,17 +52,17 @@ class ComplianceReport:
     period_end: datetime
     total_transactions: int
     flagged_transactions: int
-    risk_breakdown: Dict[str, int]
-    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    risk_breakdown: dict[str, int]
+    generated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class ComplianceManager:
     """Manages AML and regulatory compliance"""
 
     def __init__(self):
-        self.aml_checks: Dict[str, AMLCheck] = {}
-        self.flagged_users: Dict[str, List[str]] = {}  # user_id -> [check_ids]
-        self.blacklist: List[str] = []  # user_ids or addresses
+        self.aml_checks: dict[str, AMLCheck] = {}
+        self.flagged_users: dict[str, list[str]] = {}  # user_id -> [check_ids]
+        self.blacklist: list[str] = []  # user_ids or addresses
 
         # Thresholds
         self.large_transaction_threshold = Decimal("10000.00")
@@ -88,7 +88,7 @@ class ComplianceManager:
         Returns:
             AMLCheck if flagged, None otherwise
         """
-        check_id = f"AML-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+        check_id = f"AML-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
 
         # Check if user is blacklisted
         if user_id in self.blacklist:
@@ -188,7 +188,7 @@ class ComplianceManager:
             self.aml_checks[cid]
             for cid in user_checks
             if cid in self.aml_checks
-            and datetime.now(timezone.utc) - self.aml_checks[cid].checked_at
+            and datetime.now(UTC) - self.aml_checks[cid].checked_at
             < timedelta(days=1)
         ]
 
@@ -206,7 +206,7 @@ class ComplianceManager:
             cid
             for cid in user_checks
             if cid in self.aml_checks
-            and datetime.now(timezone.utc) - self.aml_checks[cid].checked_at
+            and datetime.now(UTC) - self.aml_checks[cid].checked_at
             < timedelta(hours=1)
         ]
 
@@ -235,7 +235,7 @@ class ComplianceManager:
 
         return similar_count >= self.suspicious_pattern_threshold
 
-    def calculate_risk_score(self, user_id: str) -> Dict:
+    def calculate_risk_score(self, user_id: str) -> dict:
         """
         Calculate overall risk score for user
 
@@ -350,7 +350,7 @@ class ComplianceManager:
         Returns:
             Compliance report
         """
-        report_id = f"RPT-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+        report_id = f"RPT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
 
         # Get checks in period
         period_checks = [
@@ -390,7 +390,7 @@ class ComplianceManager:
 
     def get_flagged_users(
         self, min_risk_level: RiskLevel = RiskLevel.MEDIUM
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Get list of flagged users
 

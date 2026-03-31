@@ -41,12 +41,12 @@ try:
     from ib_insync import (  # type: ignore
         IB,
         Contract,
-        Forex,  # noqa: F401
-        Future,  # noqa: F401
+        Forex,
+        Future,
         LimitOrder,
         MarketOrder,
-        Order,  # noqa: F401
-        Stock,  # noqa: F401
+        Order,
+        Stock,
         StopOrder,
     )
 
@@ -89,7 +89,7 @@ class IBKRBroker:
         Optional: ``host`` (str, default "127.0.0.1"), ``client_id`` (int, default 1).
     """
 
-    def __init__(self, config: Dict) -> None:
+    def __init__(self, config: dict) -> None:
         self._config = config
         self.connected: bool = False
         self._ib: Optional[object] = IB() if _IB_AVAILABLE else None
@@ -156,7 +156,7 @@ class IBKRBroker:
                 self._port,
             )
             return False
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("IBKRBroker connect failed: %s", exc)
             return False
 
@@ -169,12 +169,12 @@ class IBKRBroker:
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    async def get_account_info(self) -> Optional[Dict]:
+    async def get_account_info(self) -> Optional[dict]:
         """Return account summary as a plain dict."""
         if not self._assert_connected("get_account_info"):
             return None
         summary = self._ib.accountSummary(account=self._account or "")
-        result: Dict = {}
+        result: dict = {}
         for item in summary:
             result[item.tag] = item.value
         # Normalise the most common fields.
@@ -190,7 +190,7 @@ class IBKRBroker:
             "raw": result,
         }
 
-    async def get_positions(self) -> List[Dict]:
+    async def get_positions(self) -> list[dict]:
         """Return all open positions."""
         if not self._assert_connected("get_positions"):
             return []
@@ -209,7 +209,7 @@ class IBKRBroker:
             for p in positions
         ]
 
-    async def get_orders(self) -> List[Dict]:
+    async def get_orders(self) -> list[dict]:
         """Return all open/pending orders."""
         if not self._assert_connected("get_orders"):
             return []
@@ -233,7 +233,7 @@ class IBKRBroker:
 
     # ── Order execution ───────────────────────────────────────────────────────
 
-    async def place_order(self, order_params: Dict) -> Dict:
+    async def place_order(self, order_params: dict) -> dict:
         """
         Place an order via TWS / IB Gateway.
 
@@ -316,11 +316,11 @@ class IBKRBroker:
                 "status": trade.orderStatus.status,
                 "comment": "OK",
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("IBKRBroker.place_order failed: %s", exc)
             return {"success": False, "order_id": 0, "comment": str(exc)}
 
-    async def cancel_order(self, order_id: int) -> Dict:
+    async def cancel_order(self, order_id: int) -> dict:
         """Cancel a pending order by order ID."""
         if not self._assert_connected("cancel_order"):
             return {"success": False, "comment": "Not connected"}
@@ -336,7 +336,7 @@ class IBKRBroker:
             await asyncio.sleep(0.1)
             logger.info("IBKR order cancelled | order_id=%s", order_id)
             return {"success": True, "comment": "OK"}
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"success": False, "comment": str(exc)}
 
     async def close_position(
@@ -345,7 +345,7 @@ class IBKRBroker:
         sec_type: str = "CASH",
         exchange: str = "IDEALPRO",
         currency: str = "USD",
-    ) -> Dict:
+    ) -> dict:
         """
         Close all open positions for *symbol* by placing a market order in the
         opposite direction.
@@ -377,7 +377,7 @@ class IBKRBroker:
         sec_type: str = "CASH",
         exchange: str = "IDEALPRO",
         currency: str = "USD",
-    ) -> Optional[Dict]:
+    ) -> Optional[dict]:
         """Request a snapshot tick for *symbol*."""
         if not self._assert_connected("get_tick"):
             return None
@@ -395,7 +395,7 @@ class IBKRBroker:
                 "mid": (bid + ask) / 2.0 if bid and ask else None,
                 "last": ticker.last,
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("IBKRBroker.get_tick error: %s", exc)
             return None
 
@@ -407,7 +407,7 @@ class IBKRBroker:
             return False
         return True
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         """Return a health snapshot for monitoring."""
         return {
             "broker": "ibkr",

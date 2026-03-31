@@ -69,7 +69,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
-    import pandas as pd  # noqa: F401
+    import pandas as pd
 
 # ── Component imports ─────────────────────────────────────────────────────────
 from data_layer.cache.redis_store import DataLayerRedisStore, dl_redis_store
@@ -128,7 +128,7 @@ class MarketDataOrchestrator:
 
         # Tick subscriber callbacks: name → Callable[[GoldTick], None]
         # Registered via subscribe_ticks(); called on every accepted tick.
-        self._tick_callbacks: Dict[str, Any] = {}
+        self._tick_callbacks: dict[str, Any] = {}
 
         # Prometheus
         self._prom_uptime = None
@@ -344,8 +344,8 @@ class MarketDataOrchestrator:
                         _r = self._redis_store._r
                         await asyncio.get_running_loop().run_in_executor(
                             None,
-                            lambda: _r.setex(  # noqa: B023
-                                "hopefx:dl:orchestrator_health", 30, payload  # noqa: B023
+                            lambda: _r.setex(
+                                "hopefx:dl:orchestrator_health", 30, payload
                             ),
                         )
                     except Exception as _exc:
@@ -480,7 +480,7 @@ class MarketDataOrchestrator:
         self,
         as_of: Optional[datetime] = None,
         symbol: str = "XAU_USD",
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Return all 26+ ML features from the data layer.
 
@@ -498,7 +498,7 @@ class MarketDataOrchestrator:
 
         Returns empty dict on error — never raises.
         """
-        features: Dict[str, float] = {}
+        features: dict[str, float] = {}
 
         # 1. Microstructure (16 features)
         try:
@@ -726,7 +726,7 @@ class MarketDataOrchestrator:
                             lineage_id=r.get("lineage_id", ""),
                         )
                     )
-                except Exception:  # nosec B112 - skip malformed tick record during replay  # noqa: S112
+                except Exception:  # nosec B112 - skip malformed tick record during replay
                     continue
 
             if len(ticks) < 2:
@@ -812,8 +812,8 @@ class MarketDataOrchestrator:
 
     # ── Health ────────────────────────────────────────────────────────────────
 
-    def health(self) -> Dict[str, Any]:
-        h: Dict[str, Any] = {
+    def health(self) -> dict[str, Any]:
+        h: dict[str, Any] = {
             "started": self._started,
             "uptime_s": round(time.time() - self._start_ts, 1) if self._started else 0,
             "tick_count": self._tick_count,

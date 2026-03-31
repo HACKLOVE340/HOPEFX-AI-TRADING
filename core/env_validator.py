@@ -33,7 +33,7 @@ class EnvVar:
 
 # ── Variable definitions ──────────────────────────────────────────────────────
 
-REQUIRED_VARS: List[EnvVar] = [
+REQUIRED_VARS: list[EnvVar] = [
     EnvVar(
         "SECURITY_JWT_SECRET",
         required=True,
@@ -48,7 +48,7 @@ REQUIRED_VARS: List[EnvVar] = [
     ),
 ]
 
-RECOMMENDED_VARS: List[EnvVar] = [
+RECOMMENDED_VARS: list[EnvVar] = [
     EnvVar(
         "DATABASE_URL",
         required=False,
@@ -195,8 +195,8 @@ RECOMMENDED_VARS: List[EnvVar] = [
 
 @dataclass
 class ValidationResult:
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:

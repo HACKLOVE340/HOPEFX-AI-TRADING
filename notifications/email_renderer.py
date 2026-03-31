@@ -13,7 +13,7 @@ Usage:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 
@@ -49,7 +49,7 @@ def render_email(template_name: str, **context: Any) -> str:
         Rendered HTML string.
     """
     # Inject common defaults
-    context.setdefault("sent_at", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
+    context.setdefault("sent_at", datetime.now(UTC).strftime("%Y-%m-%d %H:%M"))
     context.setdefault("unsubscribe_url", "#")
 
     if not JINJA2_AVAILABLE or _env is None:

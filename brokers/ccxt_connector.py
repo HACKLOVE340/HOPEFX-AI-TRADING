@@ -26,7 +26,7 @@ Usage:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 from brokers.base import (
@@ -64,7 +64,7 @@ _TF_MAP = {
 def _ts(ms: Optional[int]) -> Optional[datetime]:
     if ms is None:
         return None
-    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+    return datetime.fromtimestamp(ms / 1000, tz=UTC)
 
 
 class CCXTConnector(BrokerConnector):
@@ -75,7 +75,7 @@ class CCXTConnector(BrokerConnector):
     exchange and the ``options.defaultType`` config key.
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         super().__init__(config)
         self._exchange_id: str = config.get("exchange", "binance").lower()
         self._exchange = None
@@ -88,7 +88,7 @@ class CCXTConnector(BrokerConnector):
             import ccxt
 
             exchange_class = getattr(ccxt, self._exchange_id)
-            params: Dict[str, Any] = {
+            params: dict[str, Any] = {
                 "apiKey": self.config.get("api_key", ""),
                 "secret": self.config.get("api_secret", ""),
             }
@@ -183,7 +183,7 @@ class CCXTConnector(BrokerConnector):
 
     # ── Positions ────────────────────────────────────────────────────────────
 
-    def get_positions(self) -> List[Position]:
+    def get_positions(self) -> list[Position]:
         self._require_connected()
         try:
             if self._exchange.has.get("fetchPositions"):
@@ -207,7 +207,7 @@ class CCXTConnector(BrokerConnector):
                         entry_price=0.0,
                         current_price=0.0,
                         unrealized_pnl=0.0,
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                     ),
                 )
             return positions
@@ -248,12 +248,12 @@ class CCXTConnector(BrokerConnector):
                         margin_used=equity - available,
                         margin_available=available,
                         positions_count=len(self.get_positions()),
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                     )
-            return AccountInfo(0, 0, 0, 0, 0, datetime.now(timezone.utc))
+            return AccountInfo(0, 0, 0, 0, 0, datetime.now(UTC))
         except Exception as exc:
             logger.error("Fetch account info failed: %s", exc)
-            return AccountInfo(0, 0, 0, 0, 0, datetime.now(timezone.utc))
+            return AccountInfo(0, 0, 0, 0, 0, datetime.now(UTC))
 
     # ── Market data ──────────────────────────────────────────────────────────
 
@@ -262,7 +262,7 @@ class CCXTConnector(BrokerConnector):
         symbol: str,
         timeframe: str = "1h",
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         self._require_connected()
         tf = _TF_MAP.get(timeframe, timeframe)
         try:
@@ -282,7 +282,7 @@ class CCXTConnector(BrokerConnector):
             logger.error("Fetch OHLCV %s/%s failed: %s", symbol, timeframe, exc)
             return []
 
-    def get_ticker(self, symbol: str) -> Dict[str, Any]:
+    def get_ticker(self, symbol: str) -> dict[str, Any]:
         """Return latest ticker for a symbol."""
         self._require_connected()
         try:
@@ -291,7 +291,7 @@ class CCXTConnector(BrokerConnector):
             logger.error("Fetch ticker %s failed: %s", symbol, exc)
             return {}
 
-    def get_orderbook(self, symbol: str, limit: int = 20) -> Dict[str, Any]:
+    def get_orderbook(self, symbol: str, limit: int = 20) -> dict[str, Any]:
         """Return order book (bids/asks)."""
         self._require_connected()
         try:
@@ -300,7 +300,7 @@ class CCXTConnector(BrokerConnector):
             logger.error("Fetch orderbook %s failed: %s", symbol, exc)
             return {"bids": [], "asks": []}
 
-    def list_symbols(self) -> List[str]:
+    def list_symbols(self) -> list[str]:
         """Return all tradeable symbols on this exchange."""
         self._require_connected()
         return list(self._exchange.markets.keys())
@@ -311,7 +311,7 @@ class CCXTConnector(BrokerConnector):
         if not self.connected or self._exchange is None:
             raise RuntimeError(f"{self.name} is not connected. Call connect() first.")
 
-    def _parse_order(self, raw: Dict) -> Order:
+    def _parse_order(self, raw: dict) -> Order:
         status_map = {
             "open": OrderStatus.OPEN,
             "closed": OrderStatus.FILLED,
@@ -339,7 +339,7 @@ class CCXTConnector(BrokerConnector):
             timestamp=_ts(raw.get("timestamp")),
         )
 
-    def _parse_position(self, raw: Dict) -> Position:
+    def _parse_position(self, raw: dict) -> Position:
         side = (
             "LONG"
             if float(raw.get("contracts") or raw.get("size") or 0) > 0
@@ -353,11 +353,11 @@ class CCXTConnector(BrokerConnector):
             current_price=float(raw.get("markPrice") or raw.get("lastPrice") or 0),
             unrealized_pnl=float(raw.get("unrealizedPnl") or 0),
             realized_pnl=float(raw.get("realizedPnl") or 0),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
 
-def list_supported_exchanges() -> List[str]:
+def list_supported_exchanges() -> list[str]:
     """Return all exchange IDs supported by ccxt."""
     try:
         import ccxt

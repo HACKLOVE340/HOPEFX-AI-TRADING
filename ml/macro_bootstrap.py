@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
 
@@ -48,7 +48,7 @@ _MACRO_DIR = Path(os.getenv("MACRO_DATA_DIR", "data/macro"))
 _HISTORY_YEARS = int(os.getenv("MACRO_HISTORY_YEARS", "5"))
 
 # yfinance ticker → MacroStore series name → CSV filename
-_SERIES_MAP: Dict[str, Dict[str, str]] = {
+_SERIES_MAP: dict[str, dict[str, str]] = {
     "DX-Y.NYB": {"name": "dxy", "file": "dxy_daily.csv"},
     "^VIX": {"name": "vix", "file": "vix_daily.csv"},
     "^TNX": {"name": "us10y", "file": "us10y_daily.csv"},
@@ -64,7 +64,7 @@ def _fetch_series(ticker: str, years: int = _HISTORY_YEARS) -> Optional[pd.DataF
         import yfinance as yf
         import pandas as pd
 
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=years * 365)
         df = yf.download(
             ticker,

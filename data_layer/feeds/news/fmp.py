@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import List
 
 from data_layer.feeds.news.base import NewsFeedBase
@@ -37,11 +37,11 @@ class FMPFeed(NewsFeedBase):
     _api_key_env = "FMP_API_KEY"
     _min_interval_s = 30.0  # 250 req/day ≈ 1 req/5.8min; use 30s for bursts
 
-    async def fetch_articles(self, limit: int = 50) -> List[NewsArticle]:
+    async def fetch_articles(self, limit: int = 50) -> list[NewsArticle]:
         if not self.is_configured:
             return []
 
-        articles: List[NewsArticle] = []
+        articles: list[NewsArticle] = []
         try:
             # Gold-specific ticker news
             data = await self._get(
@@ -67,7 +67,7 @@ class FMPFeed(NewsFeedBase):
                 try:
                     published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
                 except Exception:
-                    published = datetime.now(timezone.utc)
+                    published = datetime.now(UTC)
 
                 articles.append(
                     NewsArticle(
@@ -77,7 +77,7 @@ class FMPFeed(NewsFeedBase):
                         summary=summary,
                         url=item.get("url", ""),
                         published_at=published,
-                        fetched_at=datetime.now(timezone.utc),
+                        fetched_at=datetime.now(UTC),
                         keywords=[item.get("symbol", "")],
                         lineage_id=str(uuid.uuid4()),
                     )

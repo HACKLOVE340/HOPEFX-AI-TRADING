@@ -89,7 +89,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
 
     # ── Lifespan defined before FastAPI() so it can be passed at construction ─
     @asynccontextmanager
-    async def lifespan(_app: FastAPI):  # noqa: F841 (used by FastAPI constructor)
+    async def lifespan(_app: FastAPI):
         logger.info("API server starting...")
         if trading_app:
             asyncio.create_task(health_checker.start_monitoring())
@@ -243,7 +243,7 @@ def _build_auth_deps(bearer):
 
     def _get_current_user(credentials=Depends(bearer)):
         try:
-            from api.auth import _decode_token  # noqa: PLC0415
+            from api.auth import _decode_token
             return _decode_token(credentials.credentials)
         except Exception as exc:
             logger.warning("Token decode failed: %s", exc)
@@ -447,7 +447,7 @@ def _register_system_routes(app, trading_app, require_admin):
 
 
 # Standalone server starter
-async def start_api_server(host: str = "0.0.0.0", port: int = 8000, trading_app=None):  # nosec B104 - host configurable via parameter  # noqa: S104
+async def start_api_server(host: str = "0.0.0.0", port: int = 8000, trading_app=None):  # nosec B104 - host configurable via parameter
     """Start API server"""
     if not FASTAPI_AVAILABLE:
         logger.error(

@@ -12,7 +12,7 @@ Production-grade observability with Prometheus/Grafana integration
 import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Callable, Dict, List
 
 import numpy as np
@@ -22,8 +22,8 @@ import numpy as np
 class Metric:
     name: str
     value: float
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    labels: Dict[str, str] = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+    labels: dict[str, str] = field(default_factory=dict)
     metric_type: str = "gauge"  # gauge, counter, histogram
 
 
@@ -34,16 +34,16 @@ class MetricsCollector:
 
     def __init__(self, service_name: str = "hopefx"):
         self.service_name = service_name
-        self.metrics: List[Metric] = []
-        self.counters: Dict[str, float] = defaultdict(float)
-        self.histograms: Dict[str, List[float]] = defaultdict(list)
+        self.metrics: list[Metric] = []
+        self.counters: dict[str, float] = defaultdict(float)
+        self.histograms: dict[str, list[float]] = defaultdict(list)
         self._lock = asyncio.Lock()
 
     async def record(
         self,
         name: str,
         value: float,
-        labels: Dict[str, str] = None,
+        labels: dict[str, str] = None,
         metric_type: str = "gauge",
     ):
         """Record a metric"""
@@ -93,7 +93,7 @@ class MetricsCollector:
 
         return "\n".join(lines)
 
-    def get_statsd_format(self) -> List[str]:
+    def get_statsd_format(self) -> list[str]:
         """Export metrics in StatsD format"""
         lines = []
         for metric in self.metrics[-100:]:
@@ -107,18 +107,18 @@ class HealthChecker:
     """
 
     def __init__(self):
-        self.checks: Dict[str, Callable] = {}
-        self.dependencies: Dict[str, List[str]] = defaultdict(list)
-        self.status: Dict[str, str] = {}
-        self.last_check: Dict[str, datetime] = {}
+        self.checks: dict[str, Callable] = {}
+        self.dependencies: dict[str, list[str]] = defaultdict(list)
+        self.status: dict[str, str] = {}
+        self.last_check: dict[str, datetime] = {}
 
-    def register(self, name: str, check_func: Callable, depends_on: List[str] = None):
+    def register(self, name: str, check_func: Callable, depends_on: list[str] = None):
         """Register a health check"""
         self.checks[name] = check_func
         self.dependencies[name] = depends_on or []
         self.status[name] = "unknown"
 
-    async def check_all(self) -> Dict[str, Dict]:
+    async def check_all(self) -> dict[str, dict]:
         """Run all health checks respecting dependencies"""
         results = {}
         checked = set()
@@ -136,7 +136,7 @@ class HealthChecker:
                     results[name] = {
                         "status": "unhealthy",
                         "reason": f"Dependency {dep} unhealthy",
-                        "timestamp": datetime.now(timezone.utc),
+                        "timestamp": datetime.now(UTC),
                     }
                     checked.add(name)
                     return results[name]
@@ -146,18 +146,18 @@ class HealthChecker:
                 is_healthy = await self.checks[name]()
                 results[name] = {
                     "status": "healthy" if is_healthy else "unhealthy",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
             except Exception as e:
                 results[name] = {
                     "status": "error",
                     "reason": str(e),
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
 
             checked.add(name)
             self.status[name] = results[name]["status"]
-            self.last_check[name] = datetime.now(timezone.utc)
+            self.last_check[name] = datetime.now(UTC)
             return results[name]
 
         for name in self.checks:
@@ -182,16 +182,16 @@ class AlertManager:
     SEVERITY_EMERGENCY = 3
 
     def __init__(self):
-        self.channels: Dict[str, Callable] = {}
-        self.rules: List[Dict] = []
-        self.alert_history: List[Dict] = []
+        self.channels: dict[str, Callable] = {}
+        self.rules: list[dict] = []
+        self.alert_history: list[dict] = []
 
     def add_channel(self, name: str, handler: Callable):
         """Add notification channel (email, slack, sms, etc.)"""
         self.channels[name] = handler
 
     def add_rule(
-        self, condition: Callable, message: str, severity: int, channels: List[str]
+        self, condition: Callable, message: str, severity: int, channels: list[str]
     ):
         """Add alert rule"""
         self.rules.append(
@@ -203,13 +203,13 @@ class AlertManager:
             }
         )
 
-    async def evaluate(self, context: Dict):
+    async def evaluate(self, context: dict):
         """Evaluate all alert rules"""
         for rule in self.rules:
             try:
                 if rule["condition"](context):
                     alert = {
-                        "timestamp": datetime.now(timezone.utc),
+                        "timestamp": datetime.now(UTC),
                         "message": rule["message"],
                         "severity": rule["severity"],
                         "context": context,
@@ -228,7 +228,7 @@ class AlertManager:
             except Exception as e:
                 print(f"Alert evaluation error: {e}")
 
-    async def _trigger_emergency_stop(self, alert: Dict):
+    async def _trigger_emergency_stop(self, alert: dict):
         """Trigger system emergency stop"""
         print(f"🚨 EMERGENCY ALERT TRIGGERING KILL SWITCH: {alert['message']}")
         # Emit kill switch event

@@ -12,7 +12,7 @@ Real-time P&L, exposure, and portfolio optimization
 import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 
 
@@ -26,8 +26,8 @@ class Position:
     market_price: Decimal = Decimal("0")
     unrealized_pnl: Decimal = Decimal("0")
     realized_pnl: Decimal = Decimal("0")
-    opened_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    trades: List[Dict] = field(default_factory=list)
+    opened_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    trades: list[dict] = field(default_factory=list)
 
     def update_market_price(self, price: Decimal):
         """Update with latest market price"""
@@ -38,7 +38,7 @@ class Position:
     def add_trade(self, trade_qty: Decimal, trade_price: Decimal, side: str):
         """Process new trade"""
         trade = {
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": datetime.now(UTC),
             "quantity": trade_qty,
             "price": trade_price,
             "side": side,
@@ -63,24 +63,23 @@ class Position:
                 self.quantity += trade_qty
                 if self.quantity == 0:
                     self.avg_entry_price = Decimal("0")
-        else:  # SELL
-            if self.quantity <= 0:
-                # Adding to short
-                total_cost = (abs(self.quantity) * self.avg_entry_price) + (
-                    trade_qty * trade_price
-                )
-                self.quantity -= trade_qty
-                self.avg_entry_price = (
-                    total_cost / abs(self.quantity)
-                    if self.quantity != 0
-                    else Decimal("0")
-                )
-            else:
-                # Reducing long
-                self.realized_pnl += trade_qty * (trade_price - self.avg_entry_price)
-                self.quantity -= trade_qty
-                if self.quantity == 0:
-                    self.avg_entry_price = Decimal("0")
+        elif self.quantity <= 0:
+            # Adding to short
+            total_cost = (abs(self.quantity) * self.avg_entry_price) + (
+                trade_qty * trade_price
+            )
+            self.quantity -= trade_qty
+            self.avg_entry_price = (
+                total_cost / abs(self.quantity)
+                if self.quantity != 0
+                else Decimal("0")
+            )
+        else:
+            # Reducing long
+            self.realized_pnl += trade_qty * (trade_price - self.avg_entry_price)
+            self.quantity -= trade_qty
+            if self.quantity == 0:
+                self.avg_entry_price = Decimal("0")
 
         self.update_market_price(trade_price)
 
@@ -100,15 +99,15 @@ class PortfolioManager:
 
     def __init__(self, base_currency: str = "USD"):
         self.base_currency = base_currency
-        self.positions: Dict[str, Position] = {}
+        self.positions: dict[str, Position] = {}
         self.cash: Decimal = Decimal("0")
         self.margin_used: Decimal = Decimal("0")
         self.daily_pnl: Decimal = Decimal("0")
         self.total_pnl: Decimal = Decimal("0")
         self.peak_value: Decimal = Decimal("0")
         self.max_drawdown: Decimal = Decimal("0")
-        self.trade_history: List[Dict] = []
-        self.last_update: datetime = datetime.now(timezone.utc)
+        self.trade_history: list[dict] = []
+        self.last_update: datetime = datetime.now(UTC)
 
     def update_price(self, symbol: str, price: Decimal):
         """Update market price for symbol"""
@@ -144,7 +143,7 @@ class PortfolioManager:
         # Record trade
         trade_record = {
             "order_id": order_id,
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": datetime.now(UTC),
             "symbol": symbol,
             "side": side,
             "quantity": quantity,
@@ -165,23 +164,21 @@ class PortfolioManager:
         )
 
         # Update peak and drawdown
-        if total_value > self.peak_value:
-            self.peak_value = total_value
+        self.peak_value = max(self.peak_value, total_value)
 
         current_drawdown = (
             (self.peak_value - total_value) / self.peak_value
             if self.peak_value > 0
             else Decimal("0")
         )
-        if current_drawdown > self.max_drawdown:
-            self.max_drawdown = current_drawdown
+        self.max_drawdown = max(self.max_drawdown, current_drawdown)
 
         # Update P&L
         self.total_pnl = sum(pos.total_pnl for pos in self.positions.values())
 
-        self.last_update = datetime.now(timezone.utc)
+        self.last_update = datetime.now(UTC)
 
-    def get_portfolio_summary(self) -> Dict:
+    def get_portfolio_summary(self) -> dict:
         """Get complete portfolio summary"""
         long_exposure = sum(
             pos.market_value for pos in self.positions.values() if pos.quantity > 0
@@ -230,7 +227,7 @@ class PortfolioOptimizer:
 
     def __init__(self, pms: PortfolioManager):
         self.pms = pms
-        self.returns_history: Dict[str, List[float]] = {}
+        self.returns_history: dict[str, list[float]] = {}
         self.covariance_matrix: Optional[np.ndarray] = None
         self.target_volatility = 0.15  # 15% annualized
 
@@ -242,7 +239,7 @@ class PortfolioOptimizer:
         if len(self.returns_history[symbol]) > 252:  # 1 year
             self.returns_history[symbol].pop(0)
 
-    def calculate_kelly_sizes(self) -> Dict[str, float]:
+    def calculate_kelly_sizes(self) -> dict[str, float]:
         """
         Kelly Criterion for optimal position sizing.
         f* = (p*b - q) / b
@@ -279,13 +276,13 @@ class PortfolioOptimizer:
 
         return kelly_sizes
 
-    def optimize_weights(self) -> Dict[str, float]:
+    def optimize_weights(self) -> dict[str, float]:
         """
         Mean-variance optimization with target volatility.
         """
         symbols = list(self.returns_history.keys())
         if len(symbols) < 2:
-            return {sym: 1.0 for sym in symbols}
+            return dict.fromkeys(symbols, 1.0)
 
         # Build returns matrix
         min_len = min(len(r) for r in self.returns_history.values())

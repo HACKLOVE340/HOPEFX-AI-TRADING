@@ -25,7 +25,7 @@ from fastapi.testclient import TestClient
 # Pin the JWT secret for this module — must be set before any api.auth import.
 # We force-set (not setdefault) so other tests that mutate the env var don't
 # break our token verification.
-_TEST_SECRET = "integration-test-secret-key-32chars!!"  # noqa: S105
+_TEST_SECRET = "integration-test-secret-key-32chars!!"
 os.environ["SECURITY_JWT_SECRET"] = _TEST_SECRET
 
 _SECRET = _TEST_SECRET
@@ -43,7 +43,7 @@ def _make_token(sub: str = "user-int-001", role: str = "trader") -> str:
     )
 
 
-def _auth(sub: str = "user-int-001", role: str = "trader") -> Dict[str, str]:
+def _auth(sub: str = "user-int-001", role: str = "trader") -> dict[str, str]:
     return {"Authorization": f"Bearer {_make_token(sub=sub, role=role)}"}
 
 

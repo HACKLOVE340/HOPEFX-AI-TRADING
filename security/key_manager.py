@@ -110,7 +110,6 @@ class KeyManager:
 class SecurityError(Exception):
     """Security-related errors"""
 
-    pass
 
 
 # Updated config_manager.py security section

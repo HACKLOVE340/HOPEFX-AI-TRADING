@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 
 import pytest
@@ -36,7 +36,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from research.pipeline.paper_trading_gate import (  # noqa: E402
+from research.pipeline.paper_trading_gate import (
     PHASE3_MIN_FILLS,
     PaperTradingGate,
 )
@@ -55,7 +55,7 @@ def gate(tmp_path):
 def gate_started(tmp_path):
     """Gate with run start set to 31 days ago."""
     g = PaperTradingGate(state_path=str(tmp_path / "gate.json"))
-    past = datetime.now(timezone.utc) - timedelta(days=31)
+    past = datetime.now(UTC) - timedelta(days=31)
     g.set_run_start(past)
     return g
 
@@ -64,7 +64,7 @@ def gate_started(tmp_path):
 def gate_phase3_ready(tmp_path):
     """Gate with 91 days elapsed and 500 fills."""
     g = PaperTradingGate(state_path=str(tmp_path / "gate.json"))
-    past = datetime.now(timezone.utc) - timedelta(days=91)
+    past = datetime.now(UTC) - timedelta(days=91)
     g.set_run_start(past)
     # Bulk-set fill count directly in state
     g._state["fill_count"] = PHASE3_MIN_FILLS
@@ -99,15 +99,15 @@ def test_state_file_created_on_save(tmp_path):
 
 
 def test_set_run_start_defaults_to_now(gate):
-    before = datetime.now(timezone.utc)
+    before = datetime.now(UTC)
     gate.set_run_start()
-    after = datetime.now(timezone.utc)
+    after = datetime.now(UTC)
     assert gate.run_start is not None
     assert before <= gate.run_start <= after
 
 
 def test_set_run_start_accepts_explicit_datetime(gate):
-    ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2025, 1, 1, tzinfo=UTC)
     gate.set_run_start(ts)
     assert gate.run_start == ts
 
@@ -120,7 +120,7 @@ def test_elapsed_days_zero_when_not_started(gate):
 
 
 def test_elapsed_days_correct(gate):
-    past = datetime.now(timezone.utc) - timedelta(days=15)
+    past = datetime.now(UTC) - timedelta(days=15)
     gate.set_run_start(past)
     assert 14 <= gate.elapsed_days <= 16
 
@@ -156,7 +156,7 @@ def test_phase2_not_ready_when_not_started(gate):
 
 
 def test_phase2_not_ready_before_30_days(gate):
-    gate.set_run_start(datetime.now(timezone.utc) - timedelta(days=10))
+    gate.set_run_start(datetime.now(UTC) - timedelta(days=10))
     ok, reason = gate.phase2_ready()
     assert not ok
     assert "remaining" in reason.lower() or "days" in reason.lower()
@@ -191,7 +191,7 @@ def test_phase3_not_ready_insufficient_fills(gate_started):
 
 def test_phase3_not_ready_insufficient_days(tmp_path):
     g = PaperTradingGate(state_path=str(tmp_path / "gate.json"))
-    g.set_run_start(datetime.now(timezone.utc) - timedelta(days=31))
+    g.set_run_start(datetime.now(UTC) - timedelta(days=31))
     g._state["fill_count"] = PHASE3_MIN_FILLS
     g._save_state()
     ok, reason = g.phase3_ready()

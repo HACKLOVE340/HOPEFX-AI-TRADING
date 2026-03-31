@@ -32,7 +32,7 @@ class RandomForestTradingClassifier(BaseMLModel):
     - Handles imbalanced data
     """
 
-    def __init__(self, name: str = "RF_Classifier", config: Optional[Dict] = None):
+    def __init__(self, name: str = "RF_Classifier", config: Optional[dict] = None):
         """
         Initialize Random Forest classifier.
 
@@ -59,7 +59,7 @@ class RandomForestTradingClassifier(BaseMLModel):
         self.class_weight = self.config.get("class_weight", "balanced")
 
         # Feature names (for interpretation)
-        self.feature_names: List[str] = []
+        self.feature_names: list[str] = []
         self.label_encoder = None
 
     def build(self) -> None:
@@ -93,8 +93,8 @@ class RandomForestTradingClassifier(BaseMLModel):
         y_train: np.ndarray,
         X_val: Optional[np.ndarray] = None,
         y_val: Optional[np.ndarray] = None,
-        feature_names: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        feature_names: Optional[list[str]] = None,
+    ) -> dict[str, Any]:
         """
         Train Random Forest classifier.
 
@@ -243,7 +243,7 @@ class RandomForestTradingClassifier(BaseMLModel):
 
         return predictions, confidences
 
-    def get_feature_importance_dict(self) -> Dict[str, float]:
+    def get_feature_importance_dict(self) -> dict[str, float]:
         """
         Get feature importance as dictionary.
 
@@ -260,7 +260,7 @@ class RandomForestTradingClassifier(BaseMLModel):
         else:
             return dict(enumerate(importances))
 
-    def get_top_features(self, n: int = 10) -> List[tuple]:
+    def get_top_features(self, n: int = 10) -> list[tuple]:
         """
         Get top N most important features.
 
@@ -282,7 +282,7 @@ class RandomForestTradingClassifier(BaseMLModel):
         self,
         X_test: np.ndarray,
         y_test: np.ndarray,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Detailed evaluation with classification report.
 
@@ -347,9 +347,9 @@ class RandomForestTradingClassifier(BaseMLModel):
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
-        param_grid: Optional[Dict] = None,
+        param_grid: Optional[dict] = None,
         cv: int = 5,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Optimize hyperparameters using GridSearchCV.
 

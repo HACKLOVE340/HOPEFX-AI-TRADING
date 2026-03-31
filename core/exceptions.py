@@ -25,31 +25,26 @@ class HopeFXError(Exception):
 class VaultError(HopeFXError):
     """Cryptographic vault error."""
 
-    pass
 
 
 class AuthenticationError(HopeFXError):
     """Auth failure."""
 
-    pass
 
 
 class EventBusError(HopeFXError):
     """Event bus failure."""
 
-    pass
 
 
 class DataValidationError(HopeFXError):
     """Tick/data validation failed."""
 
-    pass
 
 
 class CircuitBreakerError(HopeFXError):
     """Circuit breaker open."""
 
-    pass
 
 
 class RiskLimitError(HopeFXError):
@@ -72,19 +67,16 @@ class RiskLimitError(HopeFXError):
 class ExecutionError(HopeFXError):
     """Order execution failed."""
 
-    pass
 
 
 class ModelError(HopeFXError):
     """ML model error."""
 
-    pass
 
 
 class DriftDetectedError(HopeFXError):
     """Model drift threshold exceeded."""
 
-    pass
 
 
 # ── Aliases expected by tests ─────────────────────────────────────────────────

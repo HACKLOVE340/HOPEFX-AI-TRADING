@@ -11,7 +11,7 @@ continuation patterns in OHLCV price data.
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional
 
 try:
@@ -37,7 +37,7 @@ class CandlestickPattern:
     candles_count: int  # Number of candles in pattern (1, 2, or 3)
     description: str = ""
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "pattern_name": self.pattern_name,
             "pattern_type": self.pattern_type,
@@ -46,7 +46,7 @@ class CandlestickPattern:
             "index": self.index,
             "candles_count": self.candles_count,
             "description": self.description,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
 
@@ -109,10 +109,10 @@ def _is_doji(
 
 
 def _detect_hammer(
-    opens: List[float],
-    highs: List[float],
-    lows: List[float],
-    closes: List[float],
+    opens: list[float],
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
     i: int,
     doji_threshold: float = 0.05,
     wick_ratio: float = 2.0,
@@ -155,10 +155,10 @@ def _detect_hammer(
 
 
 def _detect_shooting_star(
-    opens: List[float],
-    highs: List[float],
-    lows: List[float],
-    closes: List[float],
+    opens: list[float],
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
     i: int,
     doji_threshold: float = 0.05,
     wick_ratio: float = 2.0,
@@ -200,10 +200,10 @@ def _detect_shooting_star(
 
 
 def _detect_marubozu(
-    opens: List[float],
-    highs: List[float],
-    lows: List[float],
-    closes: List[float],
+    opens: list[float],
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
     i: int,
     marubozu_threshold: float = 0.05,
 ) -> Optional[CandlestickPattern]:
@@ -245,10 +245,10 @@ def _detect_marubozu(
 
 
 def _detect_doji_pattern(
-    opens: List[float],
-    highs: List[float],
-    lows: List[float],
-    closes: List[float],
+    opens: list[float],
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
     i: int,
     doji_threshold: float = 0.05,
 ) -> Optional[CandlestickPattern]:
@@ -313,8 +313,8 @@ def _detect_doji_pattern(
 
 
 def _detect_engulfing(
-    opens: List[float],
-    closes: List[float],
+    opens: list[float],
+    closes: list[float],
     i: int,
 ) -> Optional[CandlestickPattern]:
     """Bullish / Bearish Engulfing detection ending at index *i*."""
@@ -369,8 +369,8 @@ def _detect_engulfing(
 
 
 def _detect_harami(
-    opens: List[float],
-    closes: List[float],
+    opens: list[float],
+    closes: list[float],
     i: int,
 ) -> Optional[CandlestickPattern]:
     """Bullish / Bearish Harami detection ending at index *i*."""
@@ -417,8 +417,8 @@ def _detect_harami(
 
 
 def _detect_piercing_dark_cloud(
-    opens: List[float],
-    closes: List[float],
+    opens: list[float],
+    closes: list[float],
     i: int,
 ) -> Optional[CandlestickPattern]:
     """Piercing Line / Dark Cloud Cover ending at index *i*."""
@@ -474,8 +474,8 @@ def _detect_piercing_dark_cloud(
 
 
 def _three_candle_trend(
-    opens: List[float],
-    closes: List[float],
+    opens: list[float],
+    closes: list[float],
     i: int,
 ) -> tuple:
     """Return (all_bullish, all_bearish, rising_closes, falling_closes)."""
@@ -487,8 +487,8 @@ def _three_candle_trend(
 
 
 def _detect_three_soldiers_crows(
-    opens: List[float],
-    closes: List[float],
+    opens: list[float],
+    closes: list[float],
     i: int,
 ) -> Optional[CandlestickPattern]:
     """Three White Soldiers / Three Black Crows ending at index *i*."""
@@ -523,8 +523,8 @@ def _detect_three_soldiers_crows(
 
 
 def _detect_morning_evening_star(
-    opens: List[float],
-    closes: List[float],
+    opens: list[float],
+    closes: list[float],
     i: int,
 ) -> Optional[CandlestickPattern]:
     """Morning Star / Evening Star ending at index *i*."""
@@ -596,7 +596,7 @@ class CandlestickPatternDetector:
             print(p.pattern_name, p.direction, p.confidence)
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialise detector.
 
@@ -646,7 +646,7 @@ class CandlestickPatternDetector:
         self,
         df: "pd.DataFrame",
         min_confidence: float = 0.5,
-    ) -> List[CandlestickPattern]:
+    ) -> list[CandlestickPattern]:
         """
         Detect all candlestick patterns in the given DataFrame.
 
@@ -669,7 +669,7 @@ class CandlestickPatternDetector:
         if opens is None:
             return []
 
-        patterns: List[CandlestickPattern] = []
+        patterns: list[CandlestickPattern] = []
         patterns.extend(self.detect_single_candle_patterns(df))
         patterns.extend(self.detect_two_candle_patterns(df))
         patterns.extend(self.detect_three_candle_patterns(df))
@@ -678,7 +678,7 @@ class CandlestickPatternDetector:
 
     def detect_single_candle_patterns(
         self, df: "pd.DataFrame"
-    ) -> List[CandlestickPattern]:
+    ) -> list[CandlestickPattern]:
         """
         Detect single-candle patterns (Doji, Hammer, Shooting Star, Marubozu).
 
@@ -692,7 +692,7 @@ class CandlestickPatternDetector:
         if opens is None:
             return []
 
-        patterns: List[CandlestickPattern] = []
+        patterns: list[CandlestickPattern] = []
         n = len(closes)
 
         for i in range(n):
@@ -735,7 +735,7 @@ class CandlestickPatternDetector:
 
     def detect_two_candle_patterns(
         self, df: "pd.DataFrame"
-    ) -> List[CandlestickPattern]:
+    ) -> list[CandlestickPattern]:
         """
         Detect two-candle patterns (Engulfing, Harami, Piercing/Dark Cloud).
 
@@ -749,7 +749,7 @@ class CandlestickPatternDetector:
         if opens is None:
             return []
 
-        patterns: List[CandlestickPattern] = []
+        patterns: list[CandlestickPattern] = []
         n = len(closes)
 
         for i in range(1, n):
@@ -767,7 +767,7 @@ class CandlestickPatternDetector:
 
     def detect_three_candle_patterns(
         self, df: "pd.DataFrame"
-    ) -> List[CandlestickPattern]:
+    ) -> list[CandlestickPattern]:
         """
         Detect three-candle patterns (Three Soldiers/Crows, Morning/Evening Star).
 
@@ -781,7 +781,7 @@ class CandlestickPatternDetector:
         if opens is None:
             return []
 
-        patterns: List[CandlestickPattern] = []
+        patterns: list[CandlestickPattern] = []
         n = len(closes)
 
         for i in range(2, n):
@@ -798,9 +798,9 @@ class CandlestickPatternDetector:
 
     def get_pattern_at_index(
         self,
-        patterns: List[CandlestickPattern],
+        patterns: list[CandlestickPattern],
         index: int,
-    ) -> List[CandlestickPattern]:
+    ) -> list[CandlestickPattern]:
         """
         Return patterns at a specific bar index, sorted by confidence descending.
 
@@ -821,11 +821,11 @@ class CandlestickPatternDetector:
 
     def detect(
         self,
-        opens: List[float],
-        highs: List[float],
-        lows: List[float],
-        closes: List[float],
-    ) -> List[CandlestickPattern]:
+        opens: list[float],
+        highs: list[float],
+        lows: list[float],
+        closes: list[float],
+    ) -> list[CandlestickPattern]:
         """
         Detect all candlestick patterns in the given OHLC lists.
 
@@ -842,7 +842,7 @@ class CandlestickPatternDetector:
         if n == 0:
             return []
 
-        patterns: List[CandlestickPattern] = []
+        patterns: list[CandlestickPattern] = []
 
         for i in range(n):
             p = _detect_doji_pattern(opens, highs, lows, closes, i, self.doji_threshold)
@@ -900,7 +900,7 @@ class CandlestickPatternDetector:
 
         return patterns
 
-    def detect_from_dataframe(self, df: "pd.DataFrame") -> List[CandlestickPattern]:
+    def detect_from_dataframe(self, df: "pd.DataFrame") -> list[CandlestickPattern]:
         """
         Detect patterns from a pandas DataFrame.
 
@@ -917,12 +917,12 @@ class CandlestickPatternDetector:
 
     def get_latest_signals(
         self,
-        opens: List[float],
-        highs: List[float],
-        lows: List[float],
-        closes: List[float],
+        opens: list[float],
+        highs: list[float],
+        lows: list[float],
+        closes: list[float],
         lookback: int = 5,
-    ) -> List[CandlestickPattern]:
+    ) -> list[CandlestickPattern]:
         """
         Return only patterns that end within the last *lookback* candles.
 

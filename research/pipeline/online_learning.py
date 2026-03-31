@@ -110,7 +110,7 @@ class DriftDetector:
         self._min_sum: float = 0.0
         self._n: int = 0
         self.drift_count: int = 0
-        self._error_history: Deque[float] = deque(maxlen=1000)
+        self._error_history: deque[float] = deque(maxlen=1000)
 
     def update(self, y_true: np.ndarray, y_prob: np.ndarray) -> bool:
         """
@@ -194,7 +194,7 @@ class ADWINDriftDetector:
     def __init__(self, delta: float = 0.002, max_buckets: int = 5) -> None:
         self.delta = delta
         self.max_buckets = max_buckets
-        self._window: Deque[float] = deque()
+        self._window: deque[float] = deque()
         self._total: float = 0.0
         self._n: int = 0
         self.drift_count: int = 0
@@ -312,8 +312,8 @@ class AdaptiveBlendWeights:
         self.learning_rate = learning_rate
         self.min_primary = min_primary
         self.max_primary = max_primary
-        self._primary_correct: Deque[float] = deque(maxlen=window)
-        self._online_correct: Deque[float] = deque(maxlen=window)
+        self._primary_correct: deque[float] = deque(maxlen=window)
+        self._online_correct: deque[float] = deque(maxlen=window)
 
     def update(
         self,
@@ -364,7 +364,7 @@ class AdaptiveBlendWeights:
     def online_weight(self) -> float:
         return 1.0 - self._primary_weight
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         return {
             "primary_weight": round(self._primary_weight, 4),
             "online_weight": round(self.online_weight, 4),
@@ -405,7 +405,7 @@ class IncrementalXGBoost:
         n_base_rounds: int = 300,
         n_new_rounds: int = 20,
         buffer_size: int = 5000,
-        xgb_params: Optional[Dict] = None,
+        xgb_params: Optional[dict] = None,
     ):
         if not XGB_AVAILABLE:
             raise RuntimeError("xgboost required for IncrementalXGBoost")
@@ -427,9 +427,9 @@ class IncrementalXGBoost:
 
         self._booster: Optional[xgb.Booster] = None
         self._scaler = StandardScaler()
-        self._feature_cols: Optional[List[str]] = None
-        self._replay_X: Deque[np.ndarray] = deque(maxlen=buffer_size)
-        self._replay_y: Deque[float] = deque(maxlen=buffer_size)
+        self._feature_cols: Optional[list[str]] = None
+        self._replay_X: deque[np.ndarray] = deque(maxlen=buffer_size)
+        self._replay_y: deque[float] = deque(maxlen=buffer_size)
         self._update_count: int = 0
 
     # ── Initial fit ───────────────────────────────────────────────────────────
@@ -560,7 +560,7 @@ class IncrementalXGBoost:
             obj = joblib.load(path)
         except Exception:
             with open(path, "rb") as f:
-                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback  # noqa: S301
+                obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         logger.info("IncrementalXGBoost loaded ← %s", path)
         return obj
 
@@ -728,8 +728,8 @@ class OnlineLearnerStore:
             else None
         )
 
-        self._fill_buffer_X: Deque[np.ndarray] = deque(maxlen=buffer_size)
-        self._fill_buffer_y: Deque[float] = deque(maxlen=buffer_size)
+        self._fill_buffer_X: deque[np.ndarray] = deque(maxlen=buffer_size)
+        self._fill_buffer_y: deque[float] = deque(maxlen=buffer_size)
         self._fill_count: int = 0
         self._ready: bool = False
         self._lock = threading.Lock()
@@ -959,7 +959,7 @@ class OnlineLearnerStore:
         adwin = self._adwin_detector.drift_count if self._adwin_detector else 0
         return ph + adwin
 
-    def status(self) -> Dict:
+    def status(self) -> dict:
         blend_status = self._blend_weights.status() if self._blend_weights else {}
         return {
             "ready": self.is_ready,
@@ -983,7 +983,7 @@ class OnlineLearnerStore:
 # Module-level singleton factory
 # ─────────────────────────────────────────────────────────────────────────────
 
-_store_registry: Dict[str, OnlineLearnerStore] = {}
+_store_registry: dict[str, OnlineLearnerStore] = {}
 _registry_lock = threading.Lock()
 
 
@@ -1054,7 +1054,7 @@ def reset_online_learner(symbol: str = "XAUUSD") -> bool:
         return False
 
 
-def list_online_learners() -> Dict[str, Dict]:
+def list_online_learners() -> dict[str, dict]:
     """Return status snapshots for all registered online learner stores."""
     with _registry_lock:
         return {sym: store.status() for sym, store in _store_registry.items()}

@@ -14,7 +14,7 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum, auto
 from typing import Any, Callable, Dict, List, Optional, Set
 
@@ -57,9 +57,9 @@ class Order:
     status: OrderStatus = OrderStatus.PENDING
     filled_qty: float = 0.0
     avg_fill_price: float = 0.0
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: Dict = field(default_factory=dict)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    metadata: dict = field(default_factory=dict)
 
     @property
     def remaining_qty(self) -> float:
@@ -88,7 +88,7 @@ class AsyncExecutionEngine:
 
     def __init__(
         self,
-        broker_configs: List[Dict],
+        broker_configs: list[dict],
         paper_mode: bool = True,
         paper_rng_seed: Optional[int] = 42,
     ):
@@ -96,18 +96,18 @@ class AsyncExecutionEngine:
         # Per-instance RNG for paper-mode fill simulation; seeded for
         # reproducibility.  Pass paper_rng_seed=None for non-deterministic runs.
         self._rng = np.random.default_rng(seed=paper_rng_seed)
-        self.brokers: Dict[str, Any] = {}  # name -> broker client
-        self.sessions: Dict[str, aiohttp.ClientSession] = {}
+        self.brokers: dict[str, Any] = {}  # name -> broker client
+        self.sessions: dict[str, aiohttp.ClientSession] = {}
 
         # Order management
-        self.orders: Dict[str, Order] = {}
-        self.order_locks: Dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
-        self.pending_orders: Set[str] = set()
-        self.position_cache: Dict[str, Dict] = {}
+        self.orders: dict[str, Order] = {}
+        self.order_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self.pending_orders: set[str] = set()
+        self.position_cache: dict[str, dict] = {}
 
         # Performance tracking
-        self.latency_stats: Dict[str, List[float]] = defaultdict(list)
-        self.fill_stats: Dict[str, Dict] = defaultdict(
+        self.latency_stats: dict[str, list[float]] = defaultdict(list)
+        self.fill_stats: dict[str, dict] = defaultdict(
             lambda: {"count": 0, "avg_slippage": 0.0},
         )
 
@@ -116,15 +116,15 @@ class AsyncExecutionEngine:
         self.on_order_update: Optional[Callable[[Order], None]] = None
 
         # Rate limiting
-        self.rate_limiters: Dict[str, asyncio.Semaphore] = {}
-        self.last_request_time: Dict[str, float] = {}
+        self.rate_limiters: dict[str, asyncio.Semaphore] = {}
+        self.last_request_time: dict[str, float] = {}
 
         # Market data
-        self.price_cache: Dict[str, Dict] = {}  # symbol -> {bid, ask, last_update}
+        self.price_cache: dict[str, dict] = {}  # symbol -> {bid, ask, last_update}
         self.price_lock = asyncio.Lock()
 
         # Tasks
-        self._tasks: Set[asyncio.Task] = set()
+        self._tasks: set[asyncio.Task] = set()
         self._shutdown = False
 
     async def initialize(self):
@@ -223,7 +223,7 @@ class AsyncExecutionEngine:
             try:
                 await self._rate_limited_request(venue, "cancel", order_id)
                 order.status = OrderStatus.CANCELLED
-                order.updated_at = datetime.now(timezone.utc)
+                order.updated_at = datetime.now(UTC)
                 self.pending_orders.discard(order_id)
 
                 if self.on_order_update:
@@ -266,12 +266,12 @@ class AsyncExecutionEngine:
             await self.submit_order(new_order)
             return True
 
-    async def batch_submit(self, orders: List[Order]) -> List[str]:
+    async def batch_submit(self, orders: list[Order]) -> list[str]:
         """Submit multiple orders concurrently"""
         tasks = [self.submit_order(order) for order in orders]
         return await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def close_all_positions(self, symbol: Optional[str] = None) -> List[str]:
+    async def close_all_positions(self, symbol: Optional[str] = None) -> list[str]:
         """Emergency position flattening"""
         positions = await self.get_positions()
 
@@ -298,7 +298,7 @@ class AsyncExecutionEngine:
 
         return [oid for oid in order_ids if not isinstance(oid, Exception)]
 
-    async def get_positions(self) -> List[Dict]:
+    async def get_positions(self) -> list[dict]:
         """Get current positions with caching"""
         # Return cached if recent
         if hasattr(self, "_position_cache_time"):
@@ -405,7 +405,7 @@ class AsyncExecutionEngine:
                 symbol=order.symbol,
                 quantity=fill_qty,
                 price=fill_price * (1 + self._rng.normal(0, 0.0001)),
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 side=order.side,
                 fees=fill_qty * fill_price * 0.0005,  # 5bps fee
             )
@@ -450,7 +450,7 @@ class AsyncExecutionEngine:
                 symbol=order.symbol,
                 quantity=order.quantity,
                 price=order.price,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 side=order.side,
             )
             await self._apply_fill(order, fill)
@@ -470,7 +470,7 @@ class AsyncExecutionEngine:
             else:
                 order.status = OrderStatus.PARTIAL_FILL
 
-            order.updated_at = datetime.now(timezone.utc)
+            order.updated_at = datetime.now(UTC)
 
             # Update stats
             self.fill_stats[order.symbol]["count"] += 1
@@ -704,7 +704,7 @@ class AsyncExecutionEngine:
 
         return True, ""
 
-    def _format_order(self, order: Order, broker: Dict) -> Dict:
+    def _format_order(self, order: Order, broker: dict) -> dict:
         """Format order for specific broker API"""
         mapping = {
             OrderType.MARKET: "MKT",
@@ -722,7 +722,7 @@ class AsyncExecutionEngine:
             "tif": order.time_in_force,
         }
 
-    async def get_latency_report(self) -> Dict:
+    async def get_latency_report(self) -> dict:
         """Generate latency statistics"""
         return {
             venue: {

@@ -37,7 +37,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -243,7 +243,7 @@ class EX5SignalExporter:
             "take_profit": order.take_profit,
             "magic": order.magic,
             "comment": order.comment,
-            "issued_at": datetime.now(timezone.utc).isoformat(),
+            "issued_at": datetime.now(UTC).isoformat(),
             "status": "PENDING",
         }
         path = self.signal_dir / f"{signal_id}.json"
@@ -270,7 +270,7 @@ class EX5SignalExporter:
             "symbol": symbol,
             "stop_loss": stop_loss,
             "take_profit": take_profit,
-            "issued_at": datetime.now(timezone.utc).isoformat(),
+            "issued_at": datetime.now(UTC).isoformat(),
             "status": "PENDING",
         }
         path = self.signal_dir / f"{signal_id}.json"
@@ -293,7 +293,7 @@ class EX5SignalExporter:
             "action": "CANCEL",
             "ticket": ticket,
             "symbol": symbol,
-            "issued_at": datetime.now(timezone.utc).isoformat(),
+            "issued_at": datetime.now(UTC).isoformat(),
             "status": "PENDING",
         }
         path = self.signal_dir / f"{signal_id}.json"
@@ -419,7 +419,7 @@ class MT5Bridge:
             self._connected = True
             return True
 
-        init_kwargs: Dict[str, Any] = {"portable": self.portable}
+        init_kwargs: dict[str, Any] = {"portable": self.portable}
         if self.path:
             init_kwargs["path"] = self.path
 
@@ -531,7 +531,7 @@ class MT5Bridge:
                 else mt5.ORDER_TYPE_SELL_STOP
             )
 
-        request: Dict[str, Any] = {
+        request: dict[str, Any] = {
             "action": action,
             "symbol": order.symbol,
             "volume": float(order.volume),
@@ -600,7 +600,7 @@ class MT5Bridge:
                 time.sleep(poll_interval)
                 continue
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             deals = mt5.history_deals_get(now - timedelta(minutes=5), now)
             if deals:
                 for deal in deals:
@@ -632,7 +632,7 @@ class MT5Bridge:
         deviation: int = 20,
         magic: int = 234_001,
         comment: str = "HOPEFX close",
-    ) -> List[MT5FillResult]:
+    ) -> list[MT5FillResult]:
         """Close all (or partial) open positions for symbol."""
         self._require_connected()
 
@@ -653,7 +653,7 @@ class MT5Bridge:
             logger.info("mt5_bridge.close_position: no open positions for %s", symbol)
             return []
 
-        results: List[MT5FillResult] = []
+        results: list[MT5FillResult] = []
         for pos in positions:
             close_type = (
                 mt5.ORDER_TYPE_SELL
@@ -714,7 +714,7 @@ class MT5Bridge:
 
     # ── account / position queries ────────────────────────────────────────────
 
-    def get_account(self) -> Dict[str, Any]:
+    def get_account(self) -> dict[str, Any]:
         self._require_connected()
         if not _MT5_AVAILABLE:
             return {"mode": "signal_export", "connected": True}
@@ -733,7 +733,7 @@ class MT5Bridge:
             "currency": info.currency,
         }
 
-    def get_position(self, symbol: str) -> Dict[str, Any]:
+    def get_position(self, symbol: str) -> dict[str, Any]:
         self._require_connected()
         if not _MT5_AVAILABLE:
             return {}
@@ -791,7 +791,7 @@ class MT5Bridge:
             return True
 
         # Direct MT5 mode
-        request: Dict[str, Any] = {
+        request: dict[str, Any] = {
             "action": mt5.TRADE_ACTION_SLTP,
             "position": ticket,
             "symbol": symbol,
@@ -860,7 +860,7 @@ class MT5Bridge:
         self,
         symbol: str,
         volume: Optional[float] = None,
-    ) -> List[MT5FillResult]:
+    ) -> list[MT5FillResult]:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.close_position, symbol, volume)
 

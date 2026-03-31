@@ -67,6 +67,7 @@ import os
 import signal
 import time
 from typing import Any, Callable, Dict, List, Optional
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +98,8 @@ class ExecutionSystem:
         self._gatekeeper = None
         self._router = None
         self._engine = None
-        self._brokers: Dict[str, Any] = {}
-        self._tasks: List[asyncio.Task] = []
+        self._brokers: dict[str, Any] = {}
+        self._tasks: list[asyncio.Task] = []
 
     # ── Startup ───────────────────────────────────────────────────────────────
 
@@ -326,7 +327,7 @@ class ExecutionSystem:
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
-    def health(self) -> Dict[str, Any]:
+    def health(self) -> dict[str, Any]:
         uptime = time.monotonic() - self._start_time if self._start_time else 0
         return {
             "started": self._started,
@@ -450,7 +451,7 @@ def _wire_notify_fill(orchestrator) -> None:
             "fill_price": fill_price,
             "broker": broker,
             "latency_ms": latency_ms,
-            "filled_at": datetime.now(timezone.utc).isoformat(),
+            "filled_at": datetime.now(UTC).isoformat(),
         }
 
         # Update Redis cache

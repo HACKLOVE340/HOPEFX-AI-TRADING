@@ -11,7 +11,7 @@ Invoices include access codes and are sent to users upon payment confirmation.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional, Dict, List
 from decimal import Decimal
 from enum import Enum
@@ -57,11 +57,11 @@ class Invoice:
         self.currency = currency
         self.access_code = access_code
         self.status = status
-        self.created_at = datetime.now(timezone.utc)
-        self.due_date = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
+        self.due_date = datetime.now(UTC)
         self.paid_at: Optional[datetime] = None
         self.cancelled_at: Optional[datetime] = None
-        self.items: List[Dict] = []
+        self.items: list[dict] = []
         self.notes: str = ""
 
     def add_item(self, description: str, amount: Decimal, quantity: int = 1) -> None:
@@ -78,13 +78,13 @@ class Invoice:
     def mark_paid(self) -> None:
         """Mark invoice as paid"""
         self.status = InvoiceStatus.PAID
-        self.paid_at = datetime.now(timezone.utc)
+        self.paid_at = datetime.now(UTC)
         logger.info(f"Invoice {self.invoice_number} marked as paid")
 
     def mark_cancelled(self) -> None:
         """Mark invoice as cancelled"""
         self.status = InvoiceStatus.CANCELLED
-        self.cancelled_at = datetime.now(timezone.utc)
+        self.cancelled_at = datetime.now(UTC)
         logger.info(f"Invoice {self.invoice_number} cancelled")
 
     def mark_refunded(self) -> None:
@@ -96,9 +96,9 @@ class Invoice:
         """Check if invoice is overdue"""
         if self.status == InvoiceStatus.PAID:
             return False
-        return datetime.now(timezone.utc) > self.due_date
+        return datetime.now(UTC) > self.due_date
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "invoice_id": self.invoice_id,
@@ -123,12 +123,12 @@ class InvoiceGenerator:
     """Generate and manage invoices"""
 
     def __init__(self):
-        self._invoices: Dict[str, Invoice] = {}
+        self._invoices: dict[str, Invoice] = {}
         self._invoice_counter = 1
 
     def _generate_invoice_number(self) -> str:
         """Generate unique invoice number"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         number = f"INV-{now.year}-{self._invoice_counter:06d}"
         self._invoice_counter += 1
         return number
@@ -230,25 +230,25 @@ class InvoiceGenerator:
                 return invoice
         return None
 
-    def get_user_invoices(self, user_id: str) -> List[Invoice]:
+    def get_user_invoices(self, user_id: str) -> list[Invoice]:
         """Get all invoices for a user"""
         return [inv for inv in self._invoices.values() if inv.user_id == user_id]
 
-    def get_pending_invoices(self, user_id: Optional[str] = None) -> List[Invoice]:
+    def get_pending_invoices(self, user_id: Optional[str] = None) -> list[Invoice]:
         """Get pending invoices"""
         invoices = self._invoices.values()
         if user_id:
             invoices = [inv for inv in invoices if inv.user_id == user_id]
         return [inv for inv in invoices if inv.status == InvoiceStatus.PENDING]
 
-    def get_paid_invoices(self, user_id: Optional[str] = None) -> List[Invoice]:
+    def get_paid_invoices(self, user_id: Optional[str] = None) -> list[Invoice]:
         """Get paid invoices"""
         invoices = self._invoices.values()
         if user_id:
             invoices = [inv for inv in invoices if inv.user_id == user_id]
         return [inv for inv in invoices if inv.status == InvoiceStatus.PAID]
 
-    def get_overdue_invoices(self, user_id: Optional[str] = None) -> List[Invoice]:
+    def get_overdue_invoices(self, user_id: Optional[str] = None) -> list[Invoice]:
         """Get overdue invoices"""
         invoices = self._invoices.values()
         if user_id:
@@ -282,7 +282,7 @@ class InvoiceGenerator:
         invoice.mark_refunded()
         return True
 
-    def get_invoice_stats(self, user_id: Optional[str] = None) -> Dict:
+    def get_invoice_stats(self, user_id: Optional[str] = None) -> dict:
         """Get invoice statistics"""
         if user_id:
             invoices = self.get_user_invoices(user_id)

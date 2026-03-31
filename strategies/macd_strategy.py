@@ -10,7 +10,7 @@ This strategy uses MACD indicator for trend-following signals.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict
 
 import pandas as pd
@@ -53,7 +53,7 @@ class MACDStrategy(BaseStrategy):
             f"slow={slow_period}, signal={signal_period}",
         )
 
-    def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute MACD from OHLCV data dict."""
         prices = data.get("prices") or data.get("close")
         if prices is None:
@@ -90,7 +90,7 @@ class MACDStrategy(BaseStrategy):
                 SignalType.BUY,
                 self.config.symbol,
                 price,
-                datetime.now(timezone.utc),
+                datetime.now(UTC),
                 confidence=0.85 if macd < 0 else 0.75,
             )
         if prev_macd >= prev_sig and macd < sig:
@@ -98,7 +98,7 @@ class MACDStrategy(BaseStrategy):
                 SignalType.SELL,
                 self.config.symbol,
                 price,
-                datetime.now(timezone.utc),
+                datetime.now(UTC),
                 confidence=0.85 if macd > 0 else 0.75,
             )
         return None
@@ -128,7 +128,7 @@ class MACDStrategy(BaseStrategy):
 
         return macd_line, signal_line, histogram
 
-    def _generate_dict_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+    def _generate_dict_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """Generate dict-style signal from OHLCV DataFrame (used by backtesting)."""
         try:
             min_length = self.slow_period + self.signal_period
@@ -137,7 +137,7 @@ class MACDStrategy(BaseStrategy):
                     "type": "HOLD",
                     "confidence": 0.0,
                     "reason": f"Insufficient data (need {min_length} periods)",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
 
             close = market_data["close"]
@@ -162,7 +162,7 @@ class MACDStrategy(BaseStrategy):
                     "type": "HOLD",
                     "confidence": 0.0,
                     "reason": "MACD calculation resulted in NaN",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
 
             signal_type = "HOLD"
@@ -235,7 +235,7 @@ class MACDStrategy(BaseStrategy):
                 "type": signal_type,
                 "confidence": confidence,
                 "reason": reason,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "metadata": {
                     "macd": current_macd,
                     "signal": current_signal,
@@ -250,6 +250,6 @@ class MACDStrategy(BaseStrategy):
             return {
                 "type": "HOLD",
                 "confidence": 0.0,
-                "reason": f"Error: {str(e)}",
-                "timestamp": datetime.now(timezone.utc),
+                "reason": f"Error: {e!s}",
+                "timestamp": datetime.now(UTC),
             }

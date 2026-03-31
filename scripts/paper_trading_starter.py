@@ -44,7 +44,7 @@ import os
 import signal
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -122,8 +122,8 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
         data = urllib.parse.urlencode(
             {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
         ).encode()
-        req = urllib.request.Request(url, data=data, method="POST")  # noqa: S310
-        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 - API URL is always https://  # noqa: S310
+        req = urllib.request.Request(url, data=data, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 - API URL is always https://
             return resp.status == 200
     except Exception as exc:
         logger.warning("Telegram send failed: %s", exc)
@@ -145,26 +145,26 @@ class OANDAPaperClient:
             "Content-Type": "application/json",
         }
 
-    def _get(self, path: str) -> Dict[str, Any]:
+    def _get(self, path: str) -> dict[str, Any]:
         import urllib.request
 
         url = f"{self.base_url}{path}"
-        req = urllib.request.Request(url, headers=self._headers)  # noqa: S310
-        with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310 - API URL is always https://  # noqa: S310
+        req = urllib.request.Request(url, headers=self._headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310 - API URL is always https://
             return json.loads(resp.read())
 
-    def _post(self, path: str, body: Dict) -> Dict[str, Any]:
+    def _post(self, path: str, body: dict) -> dict[str, Any]:
         import urllib.request
 
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode()
-        req = urllib.request.Request(  # noqa: S310
+        req = urllib.request.Request(
             url, data=data, headers=self._headers, method="POST"
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310 - API URL is always https://  # noqa: S310
+        with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310 - API URL is always https://
             return json.loads(resp.read())
 
-    def get_account(self) -> Dict[str, Any]:
+    def get_account(self) -> dict[str, Any]:
         return self._get(f"/v3/accounts/{self.account_id}/summary")
 
     def get_price(self, instrument: str) -> Optional[float]:
@@ -181,7 +181,7 @@ class OANDAPaperClient:
             logger.warning("Price fetch failed for %s: %s", instrument, exc)
         return None
 
-    def place_market_order(self, instrument: str, units: int) -> Dict[str, Any]:
+    def place_market_order(self, instrument: str, units: int) -> dict[str, Any]:
         body = {
             "order": {
                 "type": "MARKET",
@@ -221,7 +221,7 @@ class TradeLogger:
             with open(self.path, "w", newline="") as f:
                 csv.DictWriter(f, fieldnames=CSV_HEADERS).writeheader()
 
-    def log(self, record: Dict[str, Any]) -> None:
+    def log(self, record: dict[str, Any]) -> None:
         with open(self.path, "a", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
             writer.writerow({k: record.get(k, "") for k in CSV_HEADERS})
@@ -230,9 +230,9 @@ class TradeLogger:
 # ── Status writer ─────────────────────────────────────────────────────────────
 
 
-def write_status(data: Dict[str, Any]) -> None:
+def write_status(data: dict[str, Any]) -> None:
     """Write /api/status/paper-trading compatible JSON."""
-    payload = {**data, "updated_at": datetime.now(timezone.utc).isoformat()}
+    payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
     STATUS_JSON.write_text(json.dumps(payload, indent=2))
 
 
@@ -269,7 +269,7 @@ class PaperTradingRunner:
         self.current_balance: float = 0.0
         self.trade_count: int = 0
         self.start_time: float = time.time()
-        self._price_history: Dict[str, List[float]] = {i: [] for i in self.instruments}
+        self._price_history: dict[str, list[float]] = {i: [] for i in self.instruments}
         self._running = True
 
         # Graceful shutdown on SIGINT/SIGTERM
@@ -306,7 +306,7 @@ class PaperTradingRunner:
             anchor = {
                 "account_id": self.account_id,
                 "start_balance": self.start_balance,
-                "start_time": datetime.now(timezone.utc).isoformat(),
+                "start_time": datetime.now(UTC).isoformat(),
                 "environment": self.environment,
                 "instruments": self.instruments,
             }
@@ -450,8 +450,7 @@ class PaperTradingRunner:
             summary = self.client.get_account()
             acct = summary.get("account", {})
             self.current_balance = float(acct.get("balance", self.current_balance))
-            if self.current_balance > self.peak_balance:
-                self.peak_balance = self.current_balance
+            self.peak_balance = max(self.peak_balance, self.current_balance)
         except Exception as exc:
             logger.warning("Account refresh failed: %s", exc)
 
@@ -485,7 +484,7 @@ class PaperTradingRunner:
 
                 self.trade_count += 1
                 record = {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "instrument": instrument,
                     "side": signal,
                     "units": abs(units),

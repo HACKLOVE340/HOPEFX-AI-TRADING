@@ -20,7 +20,7 @@ import json as _json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path as _Path
 from typing import Any, Dict, List, Optional
 
@@ -62,7 +62,7 @@ def _get_kill_switch():
     if _kill_switch_instance is not None:
         return _kill_switch_instance
     try:
-        from app import kill_switch as _app_ks  # noqa: PLC0415
+        from app import kill_switch as _app_ks
 
         _kill_switch_instance = _app_ks
         return _kill_switch_instance
@@ -527,7 +527,7 @@ def _send_fill_push(order: "OrderRequest", result: Any, user_id: str) -> None:
 def _resolve_user_email(user_id: str) -> str:
     """Look up the authenticated user's email address from the DB."""
     try:
-        from auth.service import AuthService  # noqa: PLC0415
+        from auth.service import AuthService
         db_user = AuthService().get_user_by_id(user_id)
         return getattr(db_user, "email", "") or ""
     except Exception as exc:
@@ -538,7 +538,7 @@ def _resolve_user_email(user_id: str) -> str:
 def _send_fill_email(order: "OrderRequest", result: Any, user_id: str) -> None:
     """Send trade-fill email notification. Best-effort."""
     try:
-        from notifications.email_triggers import send_trade_fill_email  # noqa: PLC0415
+        from notifications.email_triggers import send_trade_fill_email
         send_trade_fill_email(
             symbol=order.symbol,
             direction=order.side,
@@ -593,7 +593,7 @@ async def _record_fill(
     order: "OrderRequest",
     result: Any,
     user_id: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Post-fill notifications and response construction.
 
@@ -700,7 +700,7 @@ async def place_order(
     return await _record_fill(order, result, user.sub)
 
 
-@router.get("/positions", response_model=List[PositionResponse])
+@router.get("/positions", response_model=list[PositionResponse])
 async def get_positions(
     user: TokenPayload = Depends(get_current_user),
 ):
@@ -864,7 +864,7 @@ async def get_account(
 
 @router.get(
     "/prices",
-    response_model=Dict[str, PriceQuote],
+    response_model=dict[str, PriceQuote],
     summary="Get current bid/ask prices for all tracked symbols",
 )
 async def get_prices(
@@ -877,7 +877,7 @@ async def get_prices(
             detail="Price engine not available",
         )
 
-    prices: Dict = {}
+    prices: dict = {}
     for symbol in app_state.price_engine.symbols:
         tick = app_state.price_engine.get_last_price(symbol)
         if tick:
@@ -893,7 +893,7 @@ async def get_prices(
 
 @router.get(
     "/ohlcv/{symbol}",
-    response_model=List[OHLCVBar],
+    response_model=list[OHLCVBar],
     summary="Get OHLCV candlestick data for a symbol",
 )
 async def get_ohlcv(
@@ -1062,7 +1062,7 @@ async def export_trade_history_csv(
         writer.writerow(_trade_to_dict(t))
 
     buf.seek(0)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     sym_part = f"_{symbol.upper()}" if symbol else ""
     filename = f"hopefx_trades{sym_part}_{ts}.csv"
 
@@ -1132,9 +1132,9 @@ class PositionSizeResponse(BaseModel):
 
 
 # ── In-memory strategy store for test endpoints ───────────────────────────────
-import uuid as _uuid  # noqa: E402
+import uuid as _uuid
 
-_strategy_store: Dict[str, dict] = {}
+_strategy_store: dict[str, dict] = {}
 
 
 def _make_strategy_router():
@@ -1267,11 +1267,9 @@ def _make_strategy_router():
                     values = [v for _, v in history]
                     peak = values[0]
                     for v in values:
-                        if v > peak:
-                            peak = v
+                        peak = max(peak, v)
                         dd = (peak - v) / peak if peak > 0 else 0.0
-                        if dd > max_dd:
-                            max_dd = dd
+                        max_dd = max(max_dd, dd)
 
             # Risk score: 0–100 based on drawdown + open positions
             open_count = len(positions)
@@ -1316,11 +1314,9 @@ def _make_strategy_router():
             # Max drawdown
             peak, max_dd = initial, 0.0
             for v in values:
-                if v > peak:
-                    peak = v
+                peak = max(peak, v)
                 dd = (peak - v) / peak if peak > 0 else 0.0
-                if dd > max_dd:
-                    max_dd = dd
+                max_dd = max(max_dd, dd)
 
             # Sharpe from point-to-point returns
             returns = [
@@ -1430,7 +1426,7 @@ async def get_regime_status():
     performance from the manifest (if available).
     """
     try:
-        from app import app_state  # noqa: PLC0415
+        from app import app_state
 
         broker = getattr(app_state, "broker", None)
         regime_router = getattr(app_state, "regime_router", None)
@@ -1478,7 +1474,7 @@ async def get_regime_status():
 async def get_regime_history(limit: int = 20):
     """Return the last N regime transitions with timestamps."""
     try:
-        from app import app_state  # noqa: PLC0415
+        from app import app_state
 
         regime_router = getattr(app_state, "regime_router", None)
         if regime_router is None:

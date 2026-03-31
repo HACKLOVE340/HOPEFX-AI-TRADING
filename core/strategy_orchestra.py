@@ -10,7 +10,7 @@ Coordinates multiple strategies to prevent conflicts and maximize returns
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional
 
 from core.event_bus import DomainEvent, EventBus
@@ -26,7 +26,7 @@ class StrategyPerformance:
     sharpe_ratio: float = 0.0
     current_drawdown: float = 0.0
     correlation_to_portfolio: float = 0.0
-    regime_suitability: Dict[str, float] = field(default_factory=dict)
+    regime_suitability: dict[str, float] = field(default_factory=dict)
 
 
 class StrategyOrchestra:
@@ -34,12 +34,12 @@ class StrategyOrchestra:
 
     def __init__(self, event_bus: EventBus):
         self.event_bus = event_bus
-        self.strategies: Dict[str, BaseStrategy] = {}
-        self.performance: Dict[str, StrategyPerformance] = {}
-        self.allocations: Dict[str, float] = {}
-        self.active_strategies: List[str] = []
+        self.strategies: dict[str, BaseStrategy] = {}
+        self.performance: dict[str, StrategyPerformance] = {}
+        self.allocations: dict[str, float] = {}
+        self.active_strategies: list[str] = []
         self.current_regime: str = "unknown"
-        self.signal_buffer: Dict[str, List[Signal]] = defaultdict(list)
+        self.signal_buffer: dict[str, list[Signal]] = defaultdict(list)
 
         self.event_bus.subscribe("POSITION_CLOSED", self._on_position_closed)
         self.event_bus.subscribe("REGIME_CHANGE", self._on_regime_change)
@@ -54,7 +54,7 @@ class StrategyOrchestra:
         )
         print(f"🎼 Strategy registered: {sid} (max alloc: {max_allocation:.0%})")
 
-    def _detect_regime_suitability(self, strategy: BaseStrategy) -> Dict[str, float]:
+    def _detect_regime_suitability(self, strategy: BaseStrategy) -> dict[str, float]:
         name = strategy.config.name.lower()
         if "trend" in name or "momentum" in name:
             return {
@@ -102,7 +102,7 @@ class StrategyOrchestra:
         """Distribute price to all active strategies"""
         for sid in self.active_strategies:
             try:
-                bar = {"close": price, "timestamp": datetime.now(timezone.utc)}
+                bar = {"close": price, "timestamp": datetime.now(UTC)}
                 signal = self.strategies[sid].on_bar(bar)
                 if signal:
                     self.signal_buffer[sid].append(signal)
@@ -163,7 +163,7 @@ class StrategyOrchestra:
                 signal_type=best_signal[0],
                 symbol="XAUUSD",
                 price=0,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 confidence=min(best_signal[1] / total_weight, 1.0),
             )
         return None
@@ -190,7 +190,7 @@ class StrategyOrchestra:
             elif suit < 0.3 and sid in self.active_strategies:
                 self.deactivate_strategy(sid, f"unsuitable for {new_regime}")
 
-    def get_heatmap_data(self) -> Dict:
+    def get_heatmap_data(self) -> dict:
         return {
             "strategies": {
                 sid: {

@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, Optional, Tuple
 
 import aiohttp
@@ -39,7 +39,7 @@ _FRED_KEY = os.getenv("FRED_API_KEY", "")
 
 # Series definitions: (series_id, human_name, gold_impact_direction)
 # gold_impact_direction: +1 = rising value is bullish for gold, -1 = bearish
-FRED_SERIES: Dict[str, Tuple[str, int]] = {
+FRED_SERIES: dict[str, tuple[str, int]] = {
     "dxy": ("DTWEXBGS", -1),  # strong dollar → bearish gold
     "us10y": ("DGS10", -1),  # rising yields → bearish gold
     "us2y": ("DGS2", -1),
@@ -87,7 +87,7 @@ class FREDFeed:
         Returns empty Series on error.
         """
         if not observation_start:
-            start = (datetime.now(timezone.utc) - timedelta(days=365 * 5)).strftime(
+            start = (datetime.now(UTC) - timedelta(days=365 * 5)).strftime(
                 "%Y-%m-%d"
             )
         else:
@@ -144,7 +144,7 @@ class FREDFeed:
 
     async def fetch_all(
         self, observation_start: Optional[str] = None
-    ) -> Dict[str, pd.Series]:
+    ) -> dict[str, pd.Series]:
         """
         Fetch all configured FRED series concurrently.
 
@@ -154,7 +154,7 @@ class FREDFeed:
             name: asyncio.create_task(self.fetch_series(series_id, observation_start))
             for name, (series_id, _) in FRED_SERIES.items()
         }
-        results: Dict[str, pd.Series] = {}
+        results: dict[str, pd.Series] = {}
         for name, task in tasks.items():
             try:
                 results[name] = await task
@@ -165,7 +165,7 @@ class FREDFeed:
 
         return results
 
-    async def fetch_latest_values(self) -> Dict[str, Optional[float]]:
+    async def fetch_latest_values(self) -> dict[str, Optional[float]]:
         """
         Return the most recent value for each series.
 
@@ -173,7 +173,7 @@ class FREDFeed:
         """
         all_series = await self.fetch_all(
             observation_start=(
-                datetime.now(timezone.utc) - timedelta(days=30)
+                datetime.now(UTC) - timedelta(days=30)
             ).strftime("%Y-%m-%d")
         )
         return {

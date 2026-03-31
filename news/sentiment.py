@@ -62,7 +62,7 @@ class SentimentScore:
     label: SentimentLabel
     compound_score: Optional[float] = None  # VADER compound score
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary"""
         return {
             "polarity": self.polarity,
@@ -151,11 +151,11 @@ class SentimentAnalyzer:
         else:
             return SentimentLabel.NEUTRAL
 
-    def analyze_multiple(self, texts: List[str]) -> List[SentimentScore]:
+    def analyze_multiple(self, texts: list[str]) -> list[SentimentScore]:
         """Analyze multiple texts"""
         return [self.analyze(text) for text in texts]
 
-    def get_average_sentiment(self, texts: List[str]) -> SentimentScore:
+    def get_average_sentiment(self, texts: list[str]) -> SentimentScore:
         """Get average sentiment across multiple texts"""
         scores = self.analyze_multiple(texts)
 
@@ -314,7 +314,7 @@ class FinancialSentimentAnalyzer:
         else:
             return SentimentLabel.NEUTRAL
 
-    def extract_entities(self, text: str) -> Dict[str, List[str]]:
+    def extract_entities(self, text: str) -> dict[str, list[str]]:
         """
         Extract financial entities from text
 
@@ -340,7 +340,7 @@ class FinancialSentimentAnalyzer:
 
     def analyze_with_entities(
         self, text: str, title: str = ""
-    ) -> Tuple[SentimentScore, Dict]:
+    ) -> tuple[SentimentScore, dict]:
         """Analyze sentiment and extract entities"""
         sentiment = self.analyze(text, title)
         entities = self.extract_entities(f"{title} {text}")

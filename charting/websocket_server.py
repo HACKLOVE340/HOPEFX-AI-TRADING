@@ -69,7 +69,7 @@ except ImportError:
     logger.warning("FastAPI not installed — nuclear WebSocket server disabled")
 
 # ── Internal imports ──────────────────────────────────────────────────────────
-from charting.nuclear_ai_chart_engine import get_chart_engine, NuclearAIChartEngine  # noqa: E402
+from charting.nuclear_ai_chart_engine import get_chart_engine, NuclearAIChartEngine
 
 NUCLEAR_WS_PORT: int = int(os.environ.get("NUCLEAR_WS_PORT", "8001"))
 HEARTBEAT_INTERVAL_S: int = 30
@@ -85,7 +85,7 @@ class NuclearConnectionManager:
     """Manages all active WebSocket connections to the nuclear dashboard."""
 
     def __init__(self) -> None:
-        self._connections: Set[WebSocket] = set()
+        self._connections: set[WebSocket] = set()
         self._lock = asyncio.Lock()
 
     async def connect(self, ws: WebSocket) -> None:
@@ -99,12 +99,12 @@ class NuclearConnectionManager:
             self._connections.discard(ws)
         logger.info("Nuclear WS client disconnected. Total: %d", len(self._connections))
 
-    async def broadcast(self, message: Dict) -> None:
+    async def broadcast(self, message: dict) -> None:
         """Broadcast a message to all connected clients."""
         if not self._connections:
             return
         payload = json.dumps(message, default=str)
-        dead: Set[WebSocket] = set()
+        dead: set[WebSocket] = set()
         async with self._lock:
             connections = set(self._connections)
         for ws in connections:
@@ -116,7 +116,7 @@ class NuclearConnectionManager:
             async with self._lock:
                 self._connections -= dead
 
-    async def send_to(self, ws: WebSocket, message: Dict) -> None:
+    async def send_to(self, ws: WebSocket, message: dict) -> None:
         """Send a message to a single client."""
         try:
             await ws.send_text(json.dumps(message, default=str))
@@ -137,7 +137,7 @@ _manager = NuclearConnectionManager()
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _sync_broadcast_callback(state: Dict) -> None:
+def _sync_broadcast_callback(state: dict) -> None:
     """
     Synchronous callback registered with NuclearAIChartEngine.
     Schedules the async broadcast on the running event loop.
@@ -150,7 +150,7 @@ def _sync_broadcast_callback(state: Dict) -> None:
         pass  # No event loop — standalone mode
 
 
-async def _async_broadcast(state: Dict) -> None:
+async def _async_broadcast(state: dict) -> None:
     await _manager.broadcast(state)
 
     # Also send an immediate nuclear_alert if severity is high
@@ -304,7 +304,7 @@ def mount_nuclear_routes(
 
 
 async def _handle_client_message(
-    ws: WebSocket, msg: Dict, engine: NuclearAIChartEngine
+    ws: WebSocket, msg: dict, engine: NuclearAIChartEngine
 ) -> None:
     msg_type = msg.get("type", "")
 
@@ -420,4 +420,4 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
     standalone_app = create_standalone_app()
-    uvicorn.run(standalone_app, host="0.0.0.0", port=NUCLEAR_WS_PORT, log_level="info")  # nosec B104 - container/K8s deployment requires 0.0.0.0  # noqa: S104
+    uvicorn.run(standalone_app, host="0.0.0.0", port=NUCLEAR_WS_PORT, log_level="info")  # nosec B104 - container/K8s deployment requires 0.0.0.0

@@ -18,7 +18,7 @@ import hashlib
 import hmac
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -198,7 +198,7 @@ class TestPaymentsWebhook:
     def test_verify_webhook_hmac_valid_signature(self):
         """Valid HMAC signature passes verification."""
 
-        secret = "test-webhook-secret-abc123"  # noqa: S105
+        secret = "test-webhook-secret-abc123"
         body = b'{"payment_id":"PAY_1","status":"complete"}'
         sig = self._make_signature(secret, body)
 
@@ -215,7 +215,7 @@ class TestPaymentsWebhook:
         """Invalid HMAC signature fails verification."""
         import api.payments as pm
 
-        pm._WEBHOOK_SECRET = "correct-secret"  # noqa: S105
+        pm._WEBHOOK_SECRET = "correct-secret"
         body = b'{"payment_id":"PAY_1","status":"complete"}'
         bad_sig = "deadbeef" * 8  # wrong signature
 
@@ -251,7 +251,7 @@ class TestPaymentDBHelpers:
     """api/payments.py — DB persistence helpers."""
 
     def _make_payment(self, payment_id: str = "PAY_test_BTC_1234") -> dict:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return {
             "payment_id": payment_id,
             "user_id": "user_123",
@@ -377,8 +377,8 @@ class TestPaymentStatusAutoExpiry:
             "confirmations": 0,
             "confirmations_required": 3,
             "tx_hash": None,
-            "created_at": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
-            "expires_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
+            "created_at": (datetime.now(UTC) - timedelta(hours=2)).isoformat(),
+            "expires_at": (datetime.now(UTC) - timedelta(hours=1)).isoformat(),
             "confirmed_at": None,
         }
 

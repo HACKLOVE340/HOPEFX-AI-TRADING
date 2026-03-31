@@ -13,7 +13,7 @@ Unit tests for TCA module:
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -36,7 +36,7 @@ class TestTCARecord:
     def _make_record(self, side="BUY", signal=2000.0, fill=2001.0):
         from execution.tca_recorder import TCARecord
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return TCARecord(
             request_id="req1",
             symbol="XAU_USD",
@@ -185,14 +185,14 @@ class TestTCARecorder:
         from execution.tca_recorder import TCARecorder
 
         assert (
-            TCARecorder._get_session(datetime(2024, 1, 1, 10, 0, tzinfo=timezone.utc))
+            TCARecorder._get_session(datetime(2024, 1, 1, 10, 0, tzinfo=UTC))
             == "london"
         )
         assert TCARecorder._get_session(
-            datetime(2024, 1, 1, 15, 0, tzinfo=timezone.utc)
+            datetime(2024, 1, 1, 15, 0, tzinfo=UTC)
         ) in ("london", "new_york")
         assert (
-            TCARecorder._get_session(datetime(2024, 1, 1, 3, 0, tzinfo=timezone.utc))
+            TCARecorder._get_session(datetime(2024, 1, 1, 3, 0, tzinfo=UTC))
             == "asia"
         )
 
@@ -412,7 +412,7 @@ class TestMarketContextProvider:
     def test_tick_accumulator_adv(self):
         from datetime import timedelta
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Simulate 200 ticks over 2 hours with volume=100 each
         for i in range(200):
             ts = now - timedelta(hours=2) + timedelta(seconds=i * 36)
@@ -468,7 +468,7 @@ class TestTCAEngine:
         fill.quantity = Decimal(str(qty))
         fill.commission = Decimal("0.5")
         fill.slippage = Decimal("0.1")
-        fill.timestamp = datetime.now(timezone.utc)
+        fill.timestamp = datetime.now(UTC)
         return fill
 
     @pytest.mark.asyncio

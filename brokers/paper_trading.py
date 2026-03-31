@@ -16,7 +16,7 @@ import random
 import time
 import uuid
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional, Tuple
 
 from .base import (
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # ── Per-symbol spread table (bid-ask half-spread in price units) ──────────────
 # Sources: typical retail broker spreads during liquid hours.
 # Used as the base spread; actual slippage adds a random component on top.
-_DEFAULT_SPREADS: Dict[str, float] = {
+_DEFAULT_SPREADS: dict[str, float] = {
     "XAUUSD": 0.30,  # Gold: ~$0.30 half-spread
     "XAGUSD": 0.02,
     "XPTUSD": 0.50,
@@ -96,7 +96,7 @@ class SlippageModel:
         self._fixed_pct = float(os.getenv("PAPER_FIXED_SLIPPAGE_PCT", "0.0005"))
         self._impact_factor = float(os.getenv("PAPER_IMPACT_FACTOR", "0.1"))
         self._noise_sigma_pct = float(os.getenv("PAPER_NOISE_SIGMA_PCT", "0.0001"))
-        self._rng = random.Random()  # not seeded  # nosec B311 - paper trading noise, intentionally non-deterministic — intentionally non-deterministic  # noqa: S311
+        self._rng = random.Random()  # not seeded  # nosec B311 - paper trading noise, intentionally non-deterministic — intentionally non-deterministic
 
     def fill_price(
         self,
@@ -191,7 +191,7 @@ class PaperTradingBroker(BrokerConnector):
 
     def __init__(
         self,
-        config: Dict[str, Any] = None,
+        config: dict[str, Any] = None,
         session_factory=None,
         user_id: str = "paper",
         initial_balance: float = None,
@@ -227,8 +227,8 @@ class PaperTradingBroker(BrokerConnector):
         self._commission_per_lot: float = float(config.get("commission_per_lot", 0.0))
         self._standard_lot_units: float = 100_000.0  # 1 standard lot = 100 000 units
 
-        self.orders: Dict[str, Order] = {}
-        self.positions: Dict[str, Position] = {}
+        self.orders: dict[str, Order] = {}
+        self.positions: dict[str, Position] = {}
 
         # Equity history: deque of (unix_timestamp, equity_value) tuples.
         # Bounded at 10 000 points (~2.7 hours at 1-second resolution or
@@ -333,7 +333,7 @@ class PaperTradingBroker(BrokerConnector):
             price=price,
             stop_price=stop_price,
             status=OrderStatus.PENDING,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
         # Process order
@@ -415,7 +415,7 @@ class PaperTradingBroker(BrokerConnector):
         """Get order by ID"""
         return self.orders.get(order_id)
 
-    def _get_positions_sync(self) -> List[Position]:
+    def _get_positions_sync(self) -> list[Position]:
         """Sync helper used internally."""
         positions = []
         for position in self.positions.values():
@@ -438,7 +438,7 @@ class PaperTradingBroker(BrokerConnector):
             positions.append(position)
         return positions
 
-    def get_positions(self) -> List[Position]:
+    def get_positions(self) -> list[Position]:
         """Get all open positions."""
         return self._get_positions_sync()
 
@@ -542,8 +542,8 @@ class PaperTradingBroker(BrokerConnector):
                 status=TradeStatus.CLOSED,
                 is_open=False,
                 strategy=getattr(position, "strategy", "paper"),
-                entry_time=getattr(position, "entry_time", datetime.now(timezone.utc)),
-                exit_time=datetime.now(timezone.utc),
+                entry_time=getattr(position, "entry_time", datetime.now(UTC)),
+                exit_time=datetime.now(UTC),
             )
             with self._session_factory() as session:
                 session.add(trade)
@@ -567,7 +567,7 @@ class PaperTradingBroker(BrokerConnector):
             margin_used=0.0,
             margin_available=equity,
             positions_count=len(self.positions),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
 
     def get_account_info(self) -> "AccountInfo":
@@ -589,7 +589,7 @@ class PaperTradingBroker(BrokerConnector):
         account = self._get_account_info_sync()
         self._equity_history.append((time.time(), float(account.equity)))
 
-    def get_equity_history(self) -> List[Tuple[float, float]]:
+    def get_equity_history(self) -> list[tuple[float, float]]:
         """
         Return the equity curve as a list of (unix_timestamp, equity) tuples.
 
@@ -628,7 +628,7 @@ class PaperTradingBroker(BrokerConnector):
         symbol: str,
         timeframe: str = "1h",
         limit: int = 100,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get simulated market data.
 
@@ -720,5 +720,5 @@ class PaperTradingBroker(BrokerConnector):
                 entry_price=price,
                 current_price=price,
                 unrealized_pnl=0.0,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )

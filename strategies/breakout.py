@@ -9,7 +9,7 @@ Breakout/Momentum Trading Strategy
 This strategy identifies and trades breakouts from consolidation periods.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict
 
 import pandas as pd
@@ -93,7 +93,7 @@ class BreakoutStrategy(BaseStrategy):
 
         return atr.iloc[-1]
 
-    def generate_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """
         Generate trading signal based on breakouts.
 
@@ -109,7 +109,7 @@ class BreakoutStrategy(BaseStrategy):
                     "type": "HOLD",
                     "confidence": 0.0,
                     "reason": "Insufficient data",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
 
             # Identify levels
@@ -202,7 +202,7 @@ class BreakoutStrategy(BaseStrategy):
                 "type": signal_type,
                 "confidence": confidence,
                 "reason": reason,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "metadata": {
                     "price": current_price,
                     "support": support,
@@ -220,6 +220,6 @@ class BreakoutStrategy(BaseStrategy):
             return {
                 "type": "HOLD",
                 "confidence": 0.0,
-                "reason": f"Error: {str(e)}",
-                "timestamp": datetime.now(timezone.utc),
+                "reason": f"Error: {e!s}",
+                "timestamp": datetime.now(UTC),
             }

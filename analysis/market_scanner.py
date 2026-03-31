@@ -17,7 +17,7 @@ Inspired by: TradeStation RadarScreen, TradingView Screener, TC2000
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -86,11 +86,11 @@ class ScanCriteria:
     """Single scan criterion configuration."""
 
     type: ScanCriteriaType
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
     weight: float = 1.0  # Importance weight
     required: bool = False  # Must be met?
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "type": self.type.value,
             "parameters": self.parameters,
@@ -104,15 +104,15 @@ class ScanResult:
     """Result for a single symbol from a scan."""
 
     symbol: str
-    criteria_met: List[str]
+    criteria_met: list[str]
     total_criteria: int
     match_score: float  # 0-1 weighted score
     direction: SignalDirection
     signal_strength: float  # 0-100
-    details: Dict[str, Any]
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    details: dict[str, Any]
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "criteria_met": self.criteria_met,
@@ -137,18 +137,18 @@ class MarketOpportunity:
     stop_loss: Optional[float]
     take_profit: Optional[float]
     risk_reward: Optional[float]
-    triggers: List[str]
-    analysis: Dict[str, Any]
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    triggers: list[str]
+    analysis: dict[str, Any]
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: Optional[datetime] = None
 
     @property
     def is_valid(self) -> bool:
         if not self.expires_at:
             return True
-        return datetime.now(timezone.utc) < self.expires_at
+        return datetime.now(UTC) < self.expires_at
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "symbol": self.symbol,
             "opportunity_type": self.opportunity_type,
@@ -195,7 +195,7 @@ class MarketScanner:
         opportunities = scanner.get_top_opportunities(limit=5)
     """
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize market scanner.
 
@@ -205,21 +205,21 @@ class MarketScanner:
         self.config = config or {}
 
         # Symbols to scan
-        self._symbols: List[str] = []
+        self._symbols: list[str] = []
 
         # Scan criteria
-        self._criteria: List[ScanCriteria] = []
+        self._criteria: list[ScanCriteria] = []
 
         # Results storage
-        self._last_results: Dict[str, ScanResult] = {}
-        self._opportunities: List[MarketOpportunity] = []
+        self._last_results: dict[str, ScanResult] = {}
+        self._opportunities: list[MarketOpportunity] = []
         self._max_opportunities = self.config.get("max_opportunities", 100)
 
         # Data providers
-        self._data_providers: Dict[str, Callable] = {}
+        self._data_providers: dict[str, Callable] = {}
 
         # Callbacks
-        self._on_opportunity_callbacks: List[Callable] = []
+        self._on_opportunity_callbacks: list[Callable] = []
 
         # Thread safety
         self._lock = threading.RLock()
@@ -242,7 +242,7 @@ class MarketScanner:
     # SYMBOL MANAGEMENT
     # ================================================================
 
-    def add_symbols(self, symbols: List[str]):
+    def add_symbols(self, symbols: list[str]):
         """Add symbols to scan."""
         with self._lock:
             for symbol in symbols:
@@ -256,12 +256,12 @@ class MarketScanner:
             if symbol in self._symbols:
                 self._symbols.remove(symbol)
 
-    def set_symbols(self, symbols: List[str]):
+    def set_symbols(self, symbols: list[str]):
         """Set the complete list of symbols to scan."""
         with self._lock:
             self._symbols = list(symbols)
 
-    def get_symbols(self) -> List[str]:
+    def get_symbols(self) -> list[str]:
         """Get list of symbols being scanned."""
         return self._symbols.copy()
 
@@ -272,7 +272,7 @@ class MarketScanner:
     def add_criteria(
         self,
         criteria_type: ScanCriteriaType,
-        parameters: Optional[Dict] = None,
+        parameters: Optional[dict] = None,
         weight: float = 1.0,
         required: bool = False,
     ):
@@ -299,7 +299,7 @@ class MarketScanner:
         with self._lock:
             self._criteria.clear()
 
-    def get_criteria(self) -> List[ScanCriteria]:
+    def get_criteria(self) -> list[ScanCriteria]:
         """Get current scan criteria."""
         return self._criteria.copy()
 
@@ -309,10 +309,10 @@ class MarketScanner:
 
     def scan(
         self,
-        market_data: Dict[str, Dict[str, Any]],
-        criteria: Optional[List[ScanCriteriaType]] = None,
+        market_data: dict[str, dict[str, Any]],
+        criteria: Optional[list[ScanCriteriaType]] = None,
         min_strength: Optional[float] = None,
-    ) -> List[ScanResult]:
+    ) -> list[ScanResult]:
         """
         Run scan across all symbols.
 
@@ -374,7 +374,7 @@ class MarketScanner:
 
             # Update stats
             self._stats["scans_performed"] += 1
-            self._stats["last_scan_time"] = datetime.now(timezone.utc).isoformat()
+            self._stats["last_scan_time"] = datetime.now(UTC).isoformat()
 
         # Generate opportunities from results
         self._generate_opportunities(results)
@@ -382,8 +382,8 @@ class MarketScanner:
         return results
 
     def _scan_sequential(
-        self, market_data: Dict[str, Dict[str, Any]], criteria: List[ScanCriteria]
-    ) -> List[ScanResult]:
+        self, market_data: dict[str, dict[str, Any]], criteria: list[ScanCriteria]
+    ) -> list[ScanResult]:
         """Scan symbols sequentially."""
         results = []
 
@@ -398,8 +398,8 @@ class MarketScanner:
         return results
 
     def _scan_parallel(
-        self, market_data: Dict[str, Dict[str, Any]], criteria: List[ScanCriteria]
-    ) -> List[ScanResult]:
+        self, market_data: dict[str, dict[str, Any]], criteria: list[ScanCriteria]
+    ) -> list[ScanResult]:
         """Scan symbols in parallel."""
         results = []
 
@@ -424,7 +424,7 @@ class MarketScanner:
         return results
 
     def _scan_symbol(
-        self, symbol: str, data: Dict[str, Any], criteria: List[ScanCriteria]
+        self, symbol: str, data: dict[str, Any], criteria: list[ScanCriteria]
     ) -> Optional[ScanResult]:
         """Scan a single symbol against criteria."""
         if not data:
@@ -483,7 +483,7 @@ class MarketScanner:
             details=details,
         )
 
-    def _check_criterion(self, criterion: ScanCriteria, data: Dict[str, Any]) -> tuple:
+    def _check_criterion(self, criterion: ScanCriteria, data: dict[str, Any]) -> tuple:
         """
         Check if a criterion is met.
 
@@ -729,7 +729,7 @@ class MarketScanner:
     # OPPORTUNITIES
     # ================================================================
 
-    def _generate_opportunities(self, results: List[ScanResult]):
+    def _generate_opportunities(self, results: list[ScanResult]):
         """Generate trading opportunities from scan results."""
         for result in results:
             if result.signal_strength >= 70:  # Strong signals only
@@ -781,7 +781,7 @@ class MarketScanner:
             risk_reward=risk_reward,
             triggers=result.criteria_met,
             analysis=result.details,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            expires_at=datetime.now(UTC) + timedelta(hours=4),
         )
 
     def _add_opportunity(self, opportunity: MarketOpportunity):
@@ -807,7 +807,7 @@ class MarketScanner:
         symbol: Optional[str] = None,
         direction: Optional[SignalDirection] = None,
         min_strength: float = 0,
-    ) -> List[MarketOpportunity]:
+    ) -> list[MarketOpportunity]:
         """Get stored opportunities with optional filters."""
         with self._lock:
             opportunities = [o for o in self._opportunities if o.is_valid]
@@ -821,7 +821,7 @@ class MarketScanner:
 
             return sorted(opportunities, key=lambda x: -x.strength)
 
-    def get_top_opportunities(self, limit: int = 10) -> List[MarketOpportunity]:
+    def get_top_opportunities(self, limit: int = 10) -> list[MarketOpportunity]:
         """Get top opportunities by strength."""
         return self.get_opportunities()[:limit]
 
@@ -837,11 +837,11 @@ class MarketScanner:
         """Get last scan result for a symbol."""
         return self._last_results.get(symbol)
 
-    def get_all_results(self) -> Dict[str, ScanResult]:
+    def get_all_results(self) -> dict[str, ScanResult]:
         """Get all last scan results."""
         return self._last_results.copy()
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get scanner statistics."""
         return {
             **self._stats,
@@ -873,13 +873,13 @@ def create_scanner_router(scanner: MarketScanner):
     router = APIRouter(prefix="/api/scanner", tags=["Market Scanner"])
 
     class ScanRequest(BaseModel):
-        market_data: Dict[str, Dict[str, Any]]
-        criteria: Optional[List[str]] = None
+        market_data: dict[str, dict[str, Any]]
+        criteria: Optional[list[str]] = None
         min_strength: Optional[float] = None
 
     class AddCriteriaRequest(BaseModel):
         criteria_type: str
-        parameters: Dict[str, Any] = {}
+        parameters: dict[str, Any] = {}
         weight: float = 1.0
         required: bool = False
 
@@ -921,7 +921,7 @@ def create_scanner_router(scanner: MarketScanner):
         return {"symbols": scanner.get_symbols()}
 
     @router.post("/symbols")
-    async def add_symbols(symbols: List[str]):
+    async def add_symbols(symbols: list[str]):
         """Add symbols to scan."""
         scanner.add_symbols(symbols)
         return {"status": "added", "symbols": symbols}

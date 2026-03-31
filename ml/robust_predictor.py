@@ -13,7 +13,7 @@ import logging
 import warnings
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from enum import Enum
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
@@ -69,7 +69,7 @@ class ModelConfig:
     learning_rate: float = 0.01  # Slow learning
 
     # Ensembling
-    ensemble_methods: List[str] = None  # ['xgb', 'lgb', 'rf']
+    ensemble_methods: list[str] = None  # ['xgb', 'lgb', 'rf']
     meta_model: str = "logistic"  # Stacking meta-learner
 
     def __post_init__(self):
@@ -88,7 +88,7 @@ class PredictionResult:
     uncertainty: float  # Prediction variance
     regime: Regime
     model_agreement: float  # Agreement across ensemble
-    features_importance: Dict[str, float]
+    features_importance: dict[str, float]
     timestamp: datetime
     # thresholds_calibrated=False means the confidence boundaries (high/medium/low)
     # were set by the default heuristic (0.3/0.4/0.6/0.7) rather than derived
@@ -111,16 +111,16 @@ class RobustPredictor:
 
     def __init__(self, config: Optional[ModelConfig] = None):
         self.config = config or ModelConfig()
-        self.models: Dict[str, Any] = {}
-        self.scalers: Dict[str, StandardScaler] = {}
+        self.models: dict[str, Any] = {}
+        self.scalers: dict[str, StandardScaler] = {}
         self.meta_model = None
-        self.selected_features: List[str] = []
-        self.feature_importance_history: List[Dict] = []
+        self.selected_features: list[str] = []
+        self.feature_importance_history: list[dict] = []
         self.regime_detector = RegimeDetector()
 
         # Performance tracking
-        self.oos_predictions: List[Dict] = []
-        self.model_performance: Dict[str, List[float]] = {}
+        self.oos_predictions: list[dict] = []
+        self.model_performance: dict[str, list[float]] = {}
         self.last_retrain: Optional[datetime] = None
 
         # Stability checks
@@ -150,7 +150,7 @@ class RobustPredictor:
         X: pd.DataFrame,
         y: pd.Series,
         sample_weights: Optional[np.ndarray] = None,
-    ) -> Dict:
+    ) -> dict:
         """
         Train with walk-forward validation and overfitting checks.
 
@@ -191,7 +191,7 @@ class RobustPredictor:
         stability = self._check_feature_stability()
         logger.info(f"Feature stability: {stability:.2f}")
 
-        self.last_retrain = datetime.now(timezone.utc)
+        self.last_retrain = datetime.now(UTC)
 
         return {
             "cv_results": cv_results,
@@ -207,7 +207,7 @@ class RobustPredictor:
         y: pd.Series,
         regimes: np.ndarray,
         sample_weights: Optional[np.ndarray],
-    ) -> Dict:
+    ) -> dict:
         """Perform purged walk-forward cross-validation"""
         n_samples = len(X)
         fold_size = n_samples // self.config.n_splits
@@ -265,7 +265,7 @@ class RobustPredictor:
         X: pd.DataFrame,
         y: pd.Series,
         sample_weights: Optional[np.ndarray],
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Train diverse models for ensemble"""
         models = {}
 
@@ -365,7 +365,7 @@ class RobustPredictor:
                 regime=regime,
                 model_agreement=0.0,
                 features_importance={},
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 thresholds_calibrated=self._thresholds_calibrated,
             )
 
@@ -385,8 +385,8 @@ class RobustPredictor:
             agreement_thr = min(agreement_thr + 0.10, 0.90)
 
         # ── Ensemble prediction ───────────────────────────────────────────────
-        predictions: List[int] = []
-        probabilities: List[float] = []
+        predictions: list[int] = []
+        probabilities: list[float] = []
 
         last_clean = last_row.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
@@ -416,7 +416,7 @@ class RobustPredictor:
                 regime=regime,
                 model_agreement=0.0,
                 features_importance={},
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 thresholds_calibrated=self._thresholds_calibrated,
             )
 
@@ -461,7 +461,7 @@ class RobustPredictor:
             regime=regime,
             model_agreement=agreement,
             features_importance=current_importance,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             thresholds_calibrated=self._thresholds_calibrated,
         )
 
@@ -471,7 +471,7 @@ class RobustPredictor:
         oos_outcomes: np.ndarray,
         n_bins: int = 10,
         min_precision: float = 0.55,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Derive confidence thresholds from held-out OOS predictions.
 
@@ -597,7 +597,7 @@ class RobustPredictor:
         )
         return result
 
-    def _current_thresholds(self) -> Dict[str, float]:
+    def _current_thresholds(self) -> dict[str, float]:
         """Return the current threshold values as a dict."""
         return {
             "bullish_high": self._bullish_high_threshold,
@@ -756,7 +756,7 @@ class RobustPredictor:
 
         return features.dropna()
 
-    def _select_features(self, X: pd.DataFrame, y: pd.Series) -> List[str]:
+    def _select_features(self, X: pd.DataFrame, y: pd.Series) -> list[str]:
         """Select stable features using mutual information"""
         from sklearn.feature_selection import SelectKBest, mutual_info_classif
 
@@ -776,7 +776,7 @@ class RobustPredictor:
         selected = X_filtered.columns[selector.get_support()].tolist()
         return selected
 
-    def _calculate_overfitting(self, cv_results: Dict) -> float:
+    def _calculate_overfitting(self, cv_results: dict) -> float:
         """Calculate overfitting score as train-test performance gap"""
         train_mean = np.mean(cv_results["train_scores"])
         test_mean = np.mean(cv_results["test_scores"])
@@ -817,7 +817,7 @@ class RobustPredictor:
         self,
         X: pd.DataFrame,
         y: pd.Series,
-    ) -> Tuple[pd.DataFrame, pd.Series]:
+    ) -> tuple[pd.DataFrame, pd.Series]:
         """Remove recent data to prevent information leakage"""
         embargo_idx = len(X) - self.config.embargo_length
         return X.iloc[:embargo_idx], y.iloc[:embargo_idx]
@@ -848,9 +848,9 @@ class RobustPredictor:
 
     def _ensemble_predict(
         self,
-        models: Dict,
+        models: dict,
         X: pd.DataFrame,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Generate ensemble predictions"""
         predictions = []
         probabilities = []
@@ -871,7 +871,7 @@ class RobustPredictor:
 
         return final_pred, avg_proba
 
-    def _aggregate_feature_importance(self, models: Dict) -> Dict[str, float]:
+    def _aggregate_feature_importance(self, models: dict) -> dict[str, float]:
         """Aggregate feature importance across ensemble"""
         importance = {}
 
@@ -883,7 +883,7 @@ class RobustPredictor:
 
         return importance
 
-    def _get_current_feature_importance(self, X_row: pd.Series) -> Dict[str, float]:
+    def _get_current_feature_importance(self, X_row: pd.Series) -> dict[str, float]:
         """Get feature importance for current prediction using SHAP-like approximation"""
         # Simplified - implement actual SHAP for production
         base_importance = self._aggregate_feature_importance(self.models)
@@ -905,7 +905,7 @@ class RobustPredictor:
         rs = gain / loss
         return 100 - (100 / (1 + rs))
 
-    def should_retrain(self, recent_performance: List[float]) -> bool:
+    def should_retrain(self, recent_performance: list[float]) -> bool:
         """Determine if model needs retraining based on performance decay"""
         if len(recent_performance) < 30:
             return False
@@ -927,7 +927,7 @@ class RobustPredictor:
         # Check time since last train
         if (
             self.last_retrain
-            and (datetime.now(timezone.utc) - self.last_retrain).days > 7
+            and (datetime.now(UTC) - self.last_retrain).days > 7
         ):
             return True
 
@@ -946,7 +946,7 @@ class RobustPredictor:
         os.makedirs(path, exist_ok=True)
 
         # Save each ensemble member individually
-        saved_members: Dict[str, str] = {}
+        saved_members: dict[str, str] = {}
         for name, model in self.models.items():
             member_path = os.path.join(path, f"{name}.joblib")
             joblib.dump(model, member_path)
@@ -1123,7 +1123,7 @@ class DriftResult:
     reference_mean: float  # mean of reference distribution
     window_size: int
     reference_size: int
-    extra: Dict[str, Any] = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 class DriftDetector:
@@ -1153,7 +1153,7 @@ class DriftDetector:
         self._window_size = window_size
         self._check_every = check_every
         self._p_threshold = p_threshold
-        self._window: Deque[float] = deque(maxlen=window_size)
+        self._window: deque[float] = deque(maxlen=window_size)
         self._reference: Optional[np.ndarray] = None
         self._update_count: int = 0
 

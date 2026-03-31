@@ -208,9 +208,9 @@ class TestSentryConfig:
             "nested": {"authorization": "Bearer xyz", "data": "ok"},
         }
         result = _scrub_dict(d)
-        assert result["password"] == "[Filtered]"  # noqa: S105
+        assert result["password"] == "[Filtered]"
         assert result["api_key"] == "[Filtered]"
-        assert result["token"] == "[Filtered]"  # noqa: S105
+        assert result["token"] == "[Filtered]"
         assert result["message"] == "hello"
         assert result["nested"]["authorization"] == "[Filtered]"
         assert result["nested"]["data"] == "ok"

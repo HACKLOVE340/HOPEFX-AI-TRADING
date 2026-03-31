@@ -50,7 +50,7 @@ import logging
 import os
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -68,12 +68,12 @@ router = APIRouter(tags=["Platform"])
 # PostgreSQL. The structures are intentionally simple so they can be swapped
 # without changing the API surface.
 
-_sessions: Dict[str, dict] = {}  # session_id → session info
-_audit_log: List[dict] = []  # append-only audit events
-_api_keys: Dict[str, dict] = {}  # key_id → key metadata
-_api_key_hashes: Dict[str, str] = {}  # sha256(raw_key) → key_id
-_users_admin: Dict[str, dict] = {}  # user_id → admin view
-_flag_overrides: Dict[str, Dict[str, bool]] = {}  # flag_name → {user_id: bool}
+_sessions: dict[str, dict] = {}  # session_id → session info
+_audit_log: list[dict] = []  # append-only audit events
+_api_keys: dict[str, dict] = {}  # key_id → key metadata
+_api_key_hashes: dict[str, str] = {}  # sha256(raw_key) → key_id
+_users_admin: dict[str, dict] = {}  # user_id → admin view
+_flag_overrides: dict[str, dict[str, bool]] = {}  # flag_name → {user_id: bool}
 
 # ── Admin role guard ──────────────────────────────────────────────────────────
 
@@ -118,7 +118,7 @@ def _seed_audit():
                 "event_type": event_type,
                 "detail": detail,
                 "ip_address": "127.0.0.1",
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -134,7 +134,7 @@ def _log_audit(user_id: str, event_type: str, detail: str, ip: str = ""):
             "event_type": event_type,
             "detail": detail,
             "ip_address": ip,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         },
     )
 
@@ -165,7 +165,7 @@ async def revoke_session(
     if not session or session["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="Session not found")
     session["revoked"] = True
-    session["revoked_at"] = datetime.now(timezone.utc).isoformat()
+    session["revoked_at"] = datetime.now(UTC).isoformat()
     _log_audit(user.sub, "session.revoked", f"Session {session_id[:8]} revoked")
     return {"revoked": True, "session_id": session_id}
 
@@ -177,7 +177,7 @@ async def revoke_all_sessions(user: TokenPayload = Depends(get_current_user)):
     for s in _sessions.values():
         if s["user_id"] == user.sub and not s.get("revoked"):
             s["revoked"] = True
-            s["revoked_at"] = datetime.now(timezone.utc).isoformat()
+            s["revoked_at"] = datetime.now(UTC).isoformat()
             count += 1
     _log_audit(user.sub, "session.revoke_all", f"All {count} sessions revoked")
     return {"revoked": count}
@@ -191,7 +191,7 @@ def register_session(user_id: str, device_info: str = "", ip_address: str = "") 
         "user_id": user_id,
         "device_info": device_info or "Unknown device",
         "ip_address": ip_address,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "revoked": False,
         "revoked_at": None,
     }
@@ -203,7 +203,7 @@ def register_session(user_id: str, device_info: str = "", ip_address: str = "") 
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _get_users_from_subscriptions() -> Dict[str, dict]:
+def _get_users_from_subscriptions() -> dict[str, dict]:
     """
     Build a user view from the live subscription manager.
 
@@ -325,7 +325,7 @@ async def get_user_trades(
 ):
     """View a user's trade history from the database. Admin only."""
     _require_admin(admin)
-    trades: List[dict] = []
+    trades: list[dict] = []
     try:
         from database.models import Trade
         from database.connection import get_db
@@ -466,7 +466,7 @@ async def export_audit_log(admin: TokenPayload = Depends(get_current_user)):
 
 class CreateApiKeyBody(BaseModel):
     name: str = Field(..., min_length=1, max_length=60)
-    scopes: List[str] = Field(default_factory=lambda: ["read"])
+    scopes: list[str] = Field(default_factory=lambda: ["read"])
 
 
 @router.get("/api/settings/api-keys")
@@ -496,7 +496,7 @@ async def create_api_key(
         "name": body.name,
         "scopes": body.scopes,
         "key_prefix": raw_key[:10] + "…",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "last_used": None,
         "revoked": False,
     }
@@ -519,7 +519,7 @@ async def revoke_api_key(key_id: str, user: TokenPayload = Depends(get_current_u
     if not key or key["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="API key not found")
     key["revoked"] = True
-    key["revoked_at"] = datetime.now(timezone.utc).isoformat()
+    key["revoked_at"] = datetime.now(UTC).isoformat()
     _log_audit(user.sub, "api_key.revoked", f"API key '{key['name']}' revoked")
     return {"revoked": True, "key_id": key_id}
 

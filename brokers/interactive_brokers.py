@@ -11,7 +11,7 @@ Supports stocks, options, futures, forex, and more.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
 try:
@@ -21,7 +21,7 @@ try:
         Future,
         LimitOrder,
         MarketOrder,
-        Option,  # noqa: F401
+        Option,
         Stock,
         StopOrder,
     )
@@ -74,7 +74,7 @@ class InteractiveBrokersConnector(BrokerConnector):
         ib.connect()
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """Initialize IB connector."""
         super().__init__(config)
 
@@ -86,7 +86,7 @@ class InteractiveBrokersConnector(BrokerConnector):
         self.host = config.get("host", "127.0.0.1")
         self.port = config.get("port", 7497)  # Paper trading default
         self.client_id = config.get("client_id", 1)
-        self.account = config.get("account", None)
+        self.account = config.get("account")
         self.paper = config.get("paper", True)
 
         self.ib = IB()
@@ -202,7 +202,7 @@ class InteractiveBrokersConnector(BrokerConnector):
                 quantity=quantity,
                 price=price,
                 status=OrderStatus.PENDING,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 metadata={"ib_order_id": trade.order.orderId},
             )
 
@@ -247,7 +247,7 @@ class InteractiveBrokersConnector(BrokerConnector):
             logger.error(f"IB get order error: {e}")
             return None
 
-    def get_positions(self, symbol: Optional[str] = None) -> List[Position]:
+    def get_positions(self, symbol: Optional[str] = None) -> list[Position]:
         """Get open positions."""
         if not self.connected:
             return []
@@ -279,7 +279,7 @@ class InteractiveBrokersConnector(BrokerConnector):
                     current_price=current_price,
                     unrealized_pnl=unrealized_pnl,
                     realized_pnl=0.0,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                 )
                 result.append(position)
 
@@ -353,7 +353,7 @@ class InteractiveBrokersConnector(BrokerConnector):
                 margin_used=margin_used,
                 margin_available=margin_available,
                 positions_count=positions,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
         except Exception as e:
@@ -365,7 +365,7 @@ class InteractiveBrokersConnector(BrokerConnector):
         symbol: str,
         timeframe: str = "1 hour",
         count: int = 100,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Optional[list[dict[str, Any]]]:
         """Get historical market data."""
         if not self.connected:
             return None
@@ -419,5 +419,5 @@ class InteractiveBrokersConnector(BrokerConnector):
             status=OrderStatus.OPEN
             if trade.orderStatus.status == "Submitted"
             else OrderStatus.FILLED,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )

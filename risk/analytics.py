@@ -204,9 +204,9 @@ class PreTradeRiskReport:
     sharpe: SharpeResult
     max_drawdown_pct: float
     approved: bool
-    block_reasons: List[str] = field(default_factory=list)
+    block_reasons: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "side": self.side,
@@ -614,7 +614,7 @@ def generate_pre_trade_report(
         PreTradeRiskReport.
     """
     notional = quantity * mid_price
-    block_reasons: List[str] = []
+    block_reasons: list[str] = []
 
     # VaR (95%)
     var_result = compute_var(returns, confidence=0.95)

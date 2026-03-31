@@ -34,7 +34,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from email import message_from_bytes
 from pathlib import Path
 
@@ -79,7 +79,7 @@ class _Handler:
         from_addr = envelope.mail_from
         to_addrs = envelope.rcpt_tos
         size = len(envelope.content)
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
 
         logger.info(
             "RECEIVED  from=%-30s  to=%s  subject=%r  size=%d bytes  ts=%s",
@@ -129,7 +129,7 @@ async def _serve(host: str, port: int) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="HOPEFX dev SMTP sink")
     parser.add_argument(
-        "--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)"  # noqa: S104
+        "--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)"
     )
     parser.add_argument(
         "--port", type=int, default=2525, help="Bind port (default: 2525)"

@@ -23,10 +23,10 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, List, Optional
 
-import pandas as pd  # noqa: F401 — used in type annotations below
+import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -40,12 +40,12 @@ router = APIRouter(prefix="/api/ml", tags=["ML Models"])
 # ── Lazy model loader ─────────────────────────────────────────────────────────
 
 
-def _load_model_registry() -> Dict[str, Any]:
+def _load_model_registry() -> dict[str, Any]:
     """Return a dict of available saved models with metadata."""
     import pathlib
 
     saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
-    registry: Dict[str, Any] = {}
+    registry: dict[str, Any] = {}
 
     model_files = {
         "xgb_macro": "xgb_macro.pkl",
@@ -65,7 +65,7 @@ def _load_model_registry() -> Dict[str, Any]:
                     "size_kb": round(stat.st_size / 1024, 1),
                     "trained_at": datetime.fromtimestamp(
                         stat.st_mtime,
-                        tz=timezone.utc,
+                        tz=UTC,
                     ).isoformat(),
                     "available": True,
                 }
@@ -176,7 +176,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
 
     # 3. Paper broker simulated prices
     try:
-        from app import app_state  # noqa: PLC0415
+        from app import app_state
 
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_market_data"):
@@ -333,7 +333,7 @@ class FeatureEntry(BaseModel):
 
 
 class FeatureImportancesResponse(BaseModel):
-    features: List[FeatureEntry]
+    features: list[FeatureEntry]
     model_id: Optional[str] = None
     note: Optional[str] = None
 
@@ -364,8 +364,8 @@ class MLHealthResponse(BaseModel):
     mtf_fusion_enabled: bool
     threshold_long: float
     threshold_short: float
-    signal_filter: Dict[str, Any] = Field(default_factory=dict)
-    pipeline: Dict[str, Any] = Field(default_factory=dict)
+    signal_filter: dict[str, Any] = Field(default_factory=dict)
+    pipeline: dict[str, Any] = Field(default_factory=dict)
     checked_at: str
 
 
@@ -373,10 +373,10 @@ class MLEngineHealthResponse(BaseModel):
     """Response schema for GET /api/ml/engine-health (admin)."""
 
     status: str  # "ok" | "degraded" | "unavailable"
-    engine: Dict[str, Any]
-    macro_store: Dict[str, Any]
-    mtf_store: Dict[str, Any]
-    saved_model_files_kb: Dict[str, float]
+    engine: dict[str, Any]
+    macro_store: dict[str, Any]
+    mtf_store: dict[str, Any]
+    saved_model_files_kb: dict[str, float]
     checked_at: str
     error: Optional[str] = None
 
@@ -466,7 +466,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                 evaluated_at = (
                     data.get("evaluated_at")
                     or data.get("validated_at")
-                    or datetime.now(timezone.utc).isoformat()
+                    or datetime.now(UTC).isoformat()
                 )
                 note = (
                     data.get("note")
@@ -529,7 +529,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                 sharpe=0.0,
                 win_rate=live_accuracy,
                 total_signals=total,
-                evaluated_at=datetime.now(timezone.utc).isoformat(),
+                evaluated_at=datetime.now(UTC).isoformat(),
                 note=f"Live ratio: {total - fallback}/{total} non-fallback predictions",
             )
     except Exception as _exc:
@@ -546,12 +546,12 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
         sharpe=0.0,
         win_rate=0.0,
         total_signals=0,
-        evaluated_at=datetime.now(timezone.utc).isoformat(),
+        evaluated_at=datetime.now(UTC).isoformat(),
         note="No evaluation data found. Run: python ml/train_with_macro.py --years 8",
     )
 
 
-@router.get("/models", response_model=List[ModelInfo])
+@router.get("/models", response_model=list[ModelInfo])
 async def list_models(user: TokenPayload = Depends(get_current_user)):
     """List all available trained models with metadata. Requires authentication."""
     registry = _load_model_registry()
@@ -599,7 +599,7 @@ async def predict(
         except ImportError:
             pass  # monetization not available in test/CI — allow through
     symbol_upper = symbol.upper().replace("-", "/")
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     predictor = _get_predictor()
 
@@ -882,11 +882,11 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
     import json as _json
     import pathlib
 
-    checked_at = datetime.now(timezone.utc).isoformat()
+    checked_at = datetime.now(UTC).isoformat()
 
     # ── Primary: InferenceEngine live health ──────────────────────────────────
     try:
-        from ml.inference_engine import get_inference_engine  # noqa: PLC0415
+        from ml.inference_engine import get_inference_engine
 
         engine = get_inference_engine()
         engine_health = engine.health()
@@ -912,7 +912,7 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
         # Derive feature_count from predictor when meta didn't have it
         if feature_count == 0:
             try:
-                from ml.live_inference import get_advanced_predictor  # noqa: PLC0415
+                from ml.live_inference import get_advanced_predictor
 
                 pred = get_advanced_predictor()
                 if pred.is_available and hasattr(pred, "_model"):
@@ -958,7 +958,7 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
         )
 
         if not model_available:
-            from fastapi.responses import JSONResponse  # noqa: PLC0415
+            from fastapi.responses import JSONResponse
 
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -998,7 +998,7 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
     )
 
     if not model_loaded:
-        from fastapi.responses import JSONResponse  # noqa: PLC0415
+        from fastapi.responses import JSONResponse
 
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -1032,18 +1032,18 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
     """
     import pathlib
 
-    checked_at = datetime.now(timezone.utc).isoformat()
+    checked_at = datetime.now(UTC).isoformat()
 
     try:
-        from ml.inference_engine import get_inference_engine  # noqa: PLC0415
+        from ml.inference_engine import get_inference_engine
 
         engine = get_inference_engine()
         health = engine.health()
 
         # MacroStore status
-        macro_status: Dict[str, Any] = {"available": False, "series_count": 0}
+        macro_status: dict[str, Any] = {"available": False, "series_count": 0}
         try:
-            from ml.macro_store import macro_store  # noqa: PLC0415
+            from ml.macro_store import macro_store
 
             macro_status = {
                 "available": len(macro_store) > 0,
@@ -1053,9 +1053,9 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
             logger.debug("Suppressed exception: %s", _exc)
 
         # MTF store status
-        mtf_status: Dict[str, Any] = {"available": False, "ready": False}
+        mtf_status: dict[str, Any] = {"available": False, "ready": False}
         try:
-            from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON  # noqa: PLC0415
+            from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
 
             if _MTF_STORE_SINGLETON is not None:
                 mtf_status = {
@@ -1067,7 +1067,7 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
 
         # Saved model files inventory (pkl + json metadata)
         saved_dir = pathlib.Path(__file__).parent.parent / "ml" / "saved_models"
-        model_files: Dict[str, float] = {}
+        model_files: dict[str, float] = {}
         if saved_dir.exists():
             for ext in ("*.pkl", "*.json"):
                 for f in saved_dir.glob(ext):
@@ -1093,7 +1093,7 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
         )
 
         if not model_available:
-            from fastapi.responses import JSONResponse  # noqa: PLC0415
+            from fastapi.responses import JSONResponse
 
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -1103,7 +1103,7 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
 
     except Exception as exc:
         logger.warning("ml_engine_health: %s", exc)
-        from fastapi.responses import JSONResponse  # noqa: PLC0415
+        from fastapi.responses import JSONResponse
 
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -1121,7 +1121,7 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
 
 # ── RL Agent endpoints ────────────────────────────────────────────────────────
 
-from pydantic import BaseModel as _BaseModel  # noqa: E402
+from pydantic import BaseModel as _BaseModel
 
 
 class RLTrainRequest(_BaseModel):
@@ -1152,7 +1152,7 @@ async def rl_train(
     Requires: admin role.
     """
     try:
-        from ml.rl_agent import RLAgent, ForexTradingEnv  # noqa: F401
+        from ml.rl_agent import RLAgent, ForexTradingEnv
         import asyncio
 
         # Load candles from the data layer

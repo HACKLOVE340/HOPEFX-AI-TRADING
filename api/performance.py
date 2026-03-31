@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/performance", tags=["Performance"])
 
-from pathlib import Path as _Path  # noqa: E402
+from pathlib import Path as _Path
 
 
 # ── models ────────────────────────────────────────────────────────────────────
@@ -51,13 +51,13 @@ class PublicPerformance(BaseModel):
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
-def _load_equity_curve() -> List[EquityPoint]:
+def _load_equity_curve() -> list[EquityPoint]:
     """
     Load equity curve from the paper trading engine if available.
     Falls back to an empty list — the frontend handles the empty case.
     """
     try:
-        from app import app_state  # noqa: PLC0415
+        from app import app_state
 
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_equity_history"):
@@ -68,7 +68,7 @@ def _load_equity_curve() -> List[EquityPoint]:
     return []
 
 
-def _compute_public_stats(curve: List[EquityPoint]) -> PublicPerformance:
+def _compute_public_stats(curve: list[EquityPoint]) -> PublicPerformance:
     """Compute honest public stats from the equity curve."""
     if not curve:
         return PublicPerformance(
@@ -89,11 +89,9 @@ def _compute_public_stats(curve: List[EquityPoint]) -> PublicPerformance:
     peak = start
     max_dd = 0.0
     for v in values:
-        if v > peak:
-            peak = v
+        peak = max(peak, v)
         dd = (peak - v) / peak if peak > 0 else 0.0
-        if dd > max_dd:
-            max_dd = dd
+        max_dd = max(max_dd, dd)
 
     # Returns
     returns = []
@@ -140,7 +138,7 @@ def _compute_public_stats(curve: List[EquityPoint]) -> PublicPerformance:
 
 @router.get(
     "/equity-curve",
-    response_model=List[EquityPoint],
+    response_model=list[EquityPoint],
     summary="Equity curve time series",
 )
 async def equity_curve():

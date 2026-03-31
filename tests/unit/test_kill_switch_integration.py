@@ -16,7 +16,7 @@ tests/unit/test_kill_switch_integration.py
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 
 
@@ -77,14 +77,14 @@ def test_halt_persists_to_disk(tmp_path):
 
 def test_restart_restores_halt_from_disk(tmp_path):
     halt_file = tmp_path / "halt_state.json"
-    future = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    future = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
     halt_file.write_text(
         json.dumps(
             {
                 "halted": True,
                 "reason": "restored halt",
                 "halt_until": future,
-                "persisted_at": datetime.now(timezone.utc).isoformat(),
+                "persisted_at": datetime.now(UTC).isoformat(),
             }
         )
     )
@@ -131,8 +131,8 @@ def test_wrong_token_rejected():
     import hashlib
     import hmac
 
-    secret = "correct_secret_key"  # noqa: S105
-    wrong_secret = "wrong_secret_key"  # noqa: S105
+    secret = "correct_secret_key"
+    wrong_secret = "wrong_secret_key"
     message = "deactivate"
 
     correct_sig = hmac.new(

@@ -48,7 +48,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # Re-export FIX types so callers only need to import from this module
-from execution.fix_adapter import (  # noqa: E402
+from execution.fix_adapter import (
     FIXAdapter,
     FIXFillReport,
     FIXOrder,
@@ -109,12 +109,12 @@ class IBKRFIXConfig:
     # Default uses tempfile.gettempdir() instead of hardcoded /tmp (B108).
     store_path: str = field(
         default_factory=lambda: os.environ.get(
-            "IBKR_FIX_STORE_PATH", "/tmp/ibkr_fix_store"  # noqa: S108
+            "IBKR_FIX_STORE_PATH", "/tmp/ibkr_fix_store"
         ),
     )
     log_path: str = field(
         default_factory=lambda: os.environ.get(
-            "IBKR_FIX_LOG_PATH", "/tmp/ibkr_fix_logs"  # noqa: S108
+            "IBKR_FIX_LOG_PATH", "/tmp/ibkr_fix_logs"
         ),
     )
 

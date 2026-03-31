@@ -33,7 +33,7 @@ Single-tick operations are pure Python for minimal latency.
 from __future__ import annotations
 
 import logging
-from datetime import timezone
+from datetime import timezone, UTC
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -95,7 +95,7 @@ class NormalizationPipeline:
         # 1. UTC timestamp
         ts = tick.timestamp
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.replace(tzinfo=UTC)
 
         # 2. Round prices
         bid = round(tick.bid, _PRICE_DECIMALS)
@@ -265,9 +265,9 @@ class NormalizationPipeline:
 
     def normalize_bar(
         self,
-        bar: Dict[str, float],
+        bar: dict[str, float],
         prev_close: Optional[float] = None,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Normalize a single OHLCV bar dict.
 
@@ -322,9 +322,9 @@ class NormalizationPipeline:
 
     def normalize_tick_to_bar(
         self,
-        ticks: List[Dict[str, float]],
+        ticks: list[dict[str, float]],
         prev_close: Optional[float] = None,
-    ) -> Optional[Dict[str, float]]:
+    ) -> Optional[dict[str, float]]:
         """
         Aggregate a list of tick dicts into a single normalized OHLCV bar.
 
@@ -351,7 +351,7 @@ class NormalizationPipeline:
         }
         return self.normalize_bar(bar, prev_close=prev_close)
 
-    def normalize_ticks_batch(self, ticks: List[GoldTick]) -> List[GoldTick]:
+    def normalize_ticks_batch(self, ticks: list[GoldTick]) -> list[GoldTick]:
         """
         Normalise a batch of GoldTicks in one call.
 
@@ -371,7 +371,7 @@ class NormalizationPipeline:
 
     def tick_to_ohlcv(
         self,
-        ticks: List[GoldTick],
+        ticks: list[GoldTick],
         timeframe_minutes: int = 60,
     ) -> pd.DataFrame:
         """

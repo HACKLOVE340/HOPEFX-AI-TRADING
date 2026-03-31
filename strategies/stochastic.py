@@ -9,7 +9,7 @@ Stochastic Oscillator Trading Strategy
 This strategy uses the Stochastic Oscillator to identify overbought/oversold conditions.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict
 
 import pandas as pd
@@ -81,7 +81,7 @@ class StochasticStrategy(BaseStrategy):
 
         return k_percent, d_percent
 
-    def generate_signal(self, market_data: pd.DataFrame) -> Dict[str, Any]:
+    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
         """
         Generate trading signal based on Stochastic Oscillator.
 
@@ -98,7 +98,7 @@ class StochasticStrategy(BaseStrategy):
                     "type": "HOLD",
                     "confidence": 0.0,
                     "reason": f"Insufficient data (need {min_length} periods)",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
 
             # Calculate Stochastic
@@ -119,7 +119,7 @@ class StochasticStrategy(BaseStrategy):
                     "type": "HOLD",
                     "confidence": 0.0,
                     "reason": "Stochastic calculation resulted in NaN",
-                    "timestamp": datetime.now(timezone.utc),
+                    "timestamp": datetime.now(UTC),
                 }
 
             signal_type = "HOLD"
@@ -196,7 +196,7 @@ class StochasticStrategy(BaseStrategy):
                 "type": signal_type,
                 "confidence": confidence,
                 "reason": reason,
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "metadata": {
                     "k_percent": current_k,
                     "d_percent": current_d,
@@ -213,6 +213,6 @@ class StochasticStrategy(BaseStrategy):
             return {
                 "type": "HOLD",
                 "confidence": 0.0,
-                "reason": f"Error: {str(e)}",
-                "timestamp": datetime.now(timezone.utc),
+                "reason": f"Error: {e!s}",
+                "timestamp": datetime.now(UTC),
             }

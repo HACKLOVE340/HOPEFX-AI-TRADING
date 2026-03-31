@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import List
 
 from data_layer.feeds.news.base import NewsFeedBase
@@ -37,11 +37,11 @@ class FinnhubFeed(NewsFeedBase):
     _api_key_env = "FINNHUB_API_KEY"
     _min_interval_s = 5.0  # free tier: 60 req/min
 
-    async def fetch_articles(self, limit: int = 50) -> List[NewsArticle]:
+    async def fetch_articles(self, limit: int = 50) -> list[NewsArticle]:
         if not self.is_configured:
             return []
 
-        articles: List[NewsArticle] = []
+        articles: list[NewsArticle] = []
         try:
             data = await self._get(
                 f"{_BASE}/news",
@@ -65,9 +65,9 @@ class FinnhubFeed(NewsFeedBase):
 
                 ts = item.get("datetime", 0)
                 published = (
-                    datetime.fromtimestamp(ts, tz=timezone.utc)
+                    datetime.fromtimestamp(ts, tz=UTC)
                     if ts
-                    else datetime.now(timezone.utc)
+                    else datetime.now(UTC)
                 )
 
                 articles.append(
@@ -78,7 +78,7 @@ class FinnhubFeed(NewsFeedBase):
                         summary=summary,
                         url=item.get("url", ""),
                         published_at=published,
-                        fetched_at=datetime.now(timezone.utc),
+                        fetched_at=datetime.now(UTC),
                         gold_relevance=0.0,  # scored by SentimentEngine
                         lineage_id=str(uuid.uuid4()),
                     )
