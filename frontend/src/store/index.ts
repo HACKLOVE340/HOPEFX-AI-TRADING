@@ -117,7 +117,7 @@ export type AppStore =
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MAX_TICK_HISTORY = 300;
+const MAX_TICK_HISTORY = 200;
 const MAX_SIGNALS      = 50;
 
 // ─── Store implementation ─────────────────────────────────────────────────────
