@@ -22,6 +22,7 @@ Responsibilities
 
 All decisions are logged with structured fields and written to the lineage store.
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,7 +30,9 @@ import threading
 import time
 from collections import deque
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
+
+import os
 
 import numpy as np
 
@@ -37,40 +40,38 @@ from data_layer.types import FeedSource, GoldTick, QualityReport, TickQuality
 
 logger = logging.getLogger(__name__)
 
-import os
-
-MAX_JUMP_PCT          = float(os.getenv("DQE_MAX_JUMP_PCT",          "0.005"))  # 0.5%
-STALE_THRESHOLD_S     = float(os.getenv("DQE_STALE_THRESHOLD_S",     "30.0"))
-LATENCY_WARN_MS       = float(os.getenv("DQE_LATENCY_WARN_MS",       "500.0"))
-ANOMALY_ZSCORE_THRESH = float(os.getenv("DQE_ANOMALY_ZSCORE",        "4.0"))
+MAX_JUMP_PCT = float(os.getenv("DQE_MAX_JUMP_PCT", "0.005"))  # 0.5%
+STALE_THRESHOLD_S = float(os.getenv("DQE_STALE_THRESHOLD_S", "30.0"))
+LATENCY_WARN_MS = float(os.getenv("DQE_LATENCY_WARN_MS", "500.0"))
+ANOMALY_ZSCORE_THRESH = float(os.getenv("DQE_ANOMALY_ZSCORE", "4.0"))
 CROSS_SOURCE_MAX_DIFF = float(os.getenv("DQE_CROSS_SOURCE_MAX_DIFF", "0.003"))  # 0.3%
-CONFIDENCE_DECAY      = float(os.getenv("DQE_CONFIDENCE_DECAY",      "0.95"))
-MIN_CONFIDENCE        = float(os.getenv("DQE_MIN_CONFIDENCE",        "0.30"))
-WINDOW_SIZE           = int(os.getenv("DQE_WINDOW_SIZE",             "200"))
-MAX_SPREAD_PCT        = float(os.getenv("DQE_MAX_SPREAD_PCT",        "0.01"))   # 1%
-MIN_GOLD_PRICE        = float(os.getenv("DQE_MIN_GOLD_PRICE",        "500.0"))  # sanity floor
-MAX_GOLD_PRICE        = float(os.getenv("DQE_MAX_GOLD_PRICE",        "10000.0")) # sanity ceiling
+CONFIDENCE_DECAY = float(os.getenv("DQE_CONFIDENCE_DECAY", "0.95"))
+MIN_CONFIDENCE = float(os.getenv("DQE_MIN_CONFIDENCE", "0.30"))
+WINDOW_SIZE = int(os.getenv("DQE_WINDOW_SIZE", "200"))
+MAX_SPREAD_PCT = float(os.getenv("DQE_MAX_SPREAD_PCT", "0.01"))  # 1%
+MIN_GOLD_PRICE = float(os.getenv("DQE_MIN_GOLD_PRICE", "500.0"))  # sanity floor
+MAX_GOLD_PRICE = float(os.getenv("DQE_MAX_GOLD_PRICE", "10000.0"))  # sanity ceiling
 
 
 class _SourceState:
     """Per-source rolling statistics."""
 
     def __init__(self, source: FeedSource) -> None:
-        self.source         = source
-        self.last_tick_ts   = 0.0
-        self.last_mid       = 0.0
-        self.seq            = -1
-        self.confidence     = 1.0
-        self.error_count    = 0
-        self.accept_count   = 0
-        self.reject_count   = 0
-        self.stale_count    = 0
-        self.jump_count     = 0
-        self.anomaly_count  = 0
+        self.source = source
+        self.last_tick_ts = 0.0
+        self.last_mid = 0.0
+        self.seq = -1
+        self.confidence = 1.0
+        self.error_count = 0
+        self.accept_count = 0
+        self.reject_count = 0
+        self.stale_count = 0
+        self.jump_count = 0
+        self.anomaly_count = 0
         self.latencies_ms: deque = deque(maxlen=WINDOW_SIZE)
-        self.mids:          deque = deque(maxlen=WINDOW_SIZE)
-        self.spreads:       deque = deque(maxlen=WINDOW_SIZE)
-        self._lock          = threading.Lock()
+        self.mids: deque = deque(maxlen=WINDOW_SIZE)
+        self.spreads: deque = deque(maxlen=WINDOW_SIZE)
+        self._lock = threading.Lock()
 
     def record_latency(self, ms: float) -> None:
         with self._lock:
@@ -105,7 +106,9 @@ class _SourceState:
             self.confidence = max(MIN_CONFIDENCE, min(1.0, self.confidence + delta))
 
     def is_stale(self) -> bool:
-        return (time.time() - self.last_tick_ts) > STALE_THRESHOLD_S and self.last_tick_ts > 0
+        return (
+            time.time() - self.last_tick_ts
+        ) > STALE_THRESHOLD_S and self.last_tick_ts > 0
 
 
 class DataQualityEngine:
@@ -121,15 +124,15 @@ class DataQualityEngine:
             src: _SourceState(src) for src in FeedSource
         }
         self._global_seq = 0
-        self._seq_lock   = threading.Lock()
+        self._seq_lock = threading.Lock()
         self._report_window: deque = deque(maxlen=1000)
 
         # Prometheus metrics
-        self._prom_accepted  = None
-        self._prom_rejected  = None
-        self._prom_latency   = None
+        self._prom_accepted = None
+        self._prom_rejected = None
+        self._prom_latency = None
         self._prom_confidence = None
-        self._prom_consensus  = None
+        self._prom_consensus = None
         self._init_prometheus()
 
     def _init_prometheus(self) -> None:
@@ -157,17 +160,17 @@ class DataQualityEngine:
                 except ValueError:
                     return REGISTRY._names_to_collectors.get(name)
 
-            self._prom_accepted  = _counter(
+            self._prom_accepted = _counter(
                 "hopefx_dqe_ticks_accepted_total",
                 "Ticks accepted by DataQualityEngine",
                 ["source"],
             )
-            self._prom_rejected  = _counter(
+            self._prom_rejected = _counter(
                 "hopefx_dqe_ticks_rejected_total",
                 "Ticks rejected by DataQualityEngine",
                 ["source", "reason"],
             )
-            self._prom_latency   = _histogram(
+            self._prom_latency = _histogram(
                 "hopefx_dqe_source_latency_ms",
                 "Per-source tick latency in milliseconds",
                 labels=["source"],
@@ -178,7 +181,7 @@ class DataQualityEngine:
                 "Per-source confidence score",
                 ["source"],
             )
-            self._prom_consensus  = _gauge(
+            self._prom_consensus = _gauge(
                 "hopefx_dqe_consensus_price_usd",
                 "Cross-source consensus gold price",
             )
@@ -187,7 +190,9 @@ class DataQualityEngine:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def validate_tick(self, tick: GoldTick, received_at: Optional[float] = None) -> GoldTick:
+    def validate_tick(
+        self, tick: GoldTick, received_at: Optional[float] = None
+    ) -> GoldTick:
         """
         Validate a raw tick from any gold feed.
 
@@ -227,7 +232,11 @@ class DataQualityEngine:
                 state.update_confidence(-0.05)
                 logger.warning(
                     "DQE jump detected source=%s jump_pct=%.4f mid=%.2f prev=%.2f seq=%d",
-                    tick.source.value, jump_pct, tick.mid, state.last_mid, seq,
+                    tick.source.value,
+                    jump_pct,
+                    tick.mid,
+                    state.last_mid,
+                    seq,
                 )
                 if self._prom_rejected:
                     try:
@@ -235,7 +244,7 @@ class DataQualityEngine:
                             source=tick.source.value, reason="price_jump"
                         ).inc()
                     except Exception as _exc:
-                        logger.debug('Suppressed exception: %s', _exc)
+                        logger.debug("Suppressed exception: %s", _exc)
                 return self._reject(tick, state, "price_jump", seq)
 
         # ── 5. Stale detection ─────────────────────────────────────────────
@@ -253,7 +262,7 @@ class DataQualityEngine:
         if len(state.mids) >= 20:
             arr = np.array(list(state.mids))
             mean = arr[:-1].mean()
-            std  = arr[:-1].std() + 1e-9
+            std = arr[:-1].std() + 1e-9
             z = abs((tick.mid - mean) / std)
             if z > ANOMALY_ZSCORE_THRESH:
                 state.anomaly_count += 1
@@ -261,16 +270,19 @@ class DataQualityEngine:
                 quality = TickQuality.SUSPECT
                 logger.debug(
                     "DQE anomaly source=%s z=%.2f mid=%.2f mean=%.2f",
-                    tick.source.value, z, tick.mid, mean,
+                    tick.source.value,
+                    z,
+                    tick.mid,
+                    mean,
                 )
 
         # ── 7. Multivariate anomaly (Mahalanobis) — when enough history ────
         if len(state.mids) >= 50 and len(state.spreads) >= 50:
             try:
-                mids_arr    = np.array(list(state.mids)[-50:])
+                mids_arr = np.array(list(state.mids)[-50:])
                 spreads_arr = np.array(list(state.spreads)[-50:])
                 X = np.column_stack([mids_arr, spreads_arr])
-                mu  = X[:-1].mean(axis=0)
+                mu = X[:-1].mean(axis=0)
                 cov = np.cov(X[:-1].T) + np.eye(2) * 1e-9
                 diff = np.array([tick.mid, tick.spread]) - mu
                 inv_cov = np.linalg.inv(cov)
@@ -282,10 +294,13 @@ class DataQualityEngine:
                         quality = TickQuality.SUSPECT
                     logger.debug(
                         "DQE Mahalanobis anomaly source=%s dist=%.2f",
-                        tick.source.value, mahal,
+                        tick.source.value,
+                        mahal,
                     )
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)  # singular matrix or other numerical issue — skip
+                logger.debug(
+                    "Suppressed exception: %s", _exc
+                )  # singular matrix or other numerical issue — skip
 
         # ── 8. Latency tracking ────────────────────────────────────────────
         tick_epoch = tick.timestamp.timestamp()
@@ -294,18 +309,21 @@ class DataQualityEngine:
             state.record_latency(latency_ms)
             if self._prom_latency:
                 try:
-                    self._prom_latency.labels(source=tick.source.value).observe(latency_ms)
+                    self._prom_latency.labels(source=tick.source.value).observe(
+                        latency_ms
+                    )
                 except Exception as _exc:
-                    logger.debug('Suppressed exception: %s', _exc)
+                    logger.debug("Suppressed exception: %s", _exc)
             if latency_ms > LATENCY_WARN_MS:
                 logger.warning(
                     "DQE high latency source=%s latency_ms=%.1f",
-                    tick.source.value, latency_ms,
+                    tick.source.value,
+                    latency_ms,
                 )
 
         # ── 9. Accept ──────────────────────────────────────────────────────
         state.last_tick_ts = received_at
-        state.last_mid     = tick.mid
+        state.last_mid = tick.mid
         state.accept_count += 1
         state.update_confidence(+0.001)
 
@@ -313,27 +331,27 @@ class DataQualityEngine:
             try:
                 self._prom_accepted.labels(source=tick.source.value).inc()
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
         if self._prom_confidence:
             try:
                 self._prom_confidence.labels(source=tick.source.value).set(
                     state.confidence
                 )
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
         validated = GoldTick(
-            symbol     = tick.symbol,
-            timestamp  = tick.timestamp,
-            bid        = tick.bid,
-            ask        = tick.ask,
-            mid        = tick.mid,
-            source     = tick.source,
-            quality    = quality,
-            confidence = state.confidence,
-            spread     = tick.spread,
-            lineage_id = tick.lineage_id,
-            raw        = tick.raw,
+            symbol=tick.symbol,
+            timestamp=tick.timestamp,
+            bid=tick.bid,
+            ask=tick.ask,
+            mid=tick.mid,
+            source=tick.source,
+            quality=quality,
+            confidence=state.confidence,
+            spread=tick.spread,
+            lineage_id=tick.lineage_id,
+            raw=tick.raw,
         )
         self._report_window.append(("accept", tick.source, tick.mid))
         return validated
@@ -361,7 +379,8 @@ class DataQualityEngine:
             return 0.0, 0.0, {}
 
         valid = {
-            src: t for src, t in ticks.items()
+            src: t
+            for src, t in ticks.items()
             if t.is_valid() and t.quality != TickQuality.REJECTED
         }
         if not valid:
@@ -371,12 +390,12 @@ class DataQualityEngine:
         weights: Dict[FeedSource, float] = {}
         for src, t in valid.items():
             state = self._sources[src]
-            lat   = max(state.p95_latency(), 1.0)
-            sprd  = max(t.spread, 0.01)
+            lat = max(state.p95_latency(), 1.0)
+            sprd = max(t.spread, 0.01)
             weights[src] = state.confidence / lat / sprd
 
         total_w = sum(weights.values()) or 1.0
-        norm_w  = {s: w / total_w for s, w in weights.items()}
+        norm_w = {s: w / total_w for s, w in weights.items()}
 
         # Pass 1: unfiltered consensus
         consensus_p1 = sum(t.mid * norm_w[s] for s, t in valid.items())
@@ -390,7 +409,10 @@ class DataQualityEngine:
                 logger.warning(
                     "DQE cross-source outlier EXCLUDED source=%s "
                     "mid=%.4f consensus_p1=%.4f diff_pct=%.4f",
-                    src.value, t.mid, consensus_p1, diff_pct,
+                    src.value,
+                    t.mid,
+                    consensus_p1,
+                    diff_pct,
                 )
                 if self._prom_rejected:
                     try:
@@ -414,18 +436,16 @@ class DataQualityEngine:
         # Pass 2: consensus over inliers only
         inlier_weights = {s: weights[s] for s in inliers}
         total_w2 = sum(inlier_weights.values()) or 1.0
-        norm_w2  = {s: w / total_w2 for s, w in inlier_weights.items()}
+        norm_w2 = {s: w / total_w2 for s, w in inlier_weights.items()}
         consensus = sum(t.mid * norm_w2[s] for s, t in inliers.items())
 
-        conf = sum(
-            self._sources[s].confidence * norm_w2[s] for s in inliers
-        )
+        conf = sum(self._sources[s].confidence * norm_w2[s] for s in inliers)
 
         if self._prom_consensus:
             try:
                 self._prom_consensus.set(consensus)
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
 
         return consensus, conf, norm_w2
 
@@ -433,17 +453,17 @@ class DataQualityEngine:
         out = {}
         for src, state in self._sources.items():
             out[src.value] = {
-                "is_alive":        not state.is_stale(),
-                "confidence":      round(state.confidence, 4),
-                "accept_count":    state.accept_count,
-                "reject_count":    state.reject_count,
-                "stale_count":     state.stale_count,
-                "jump_count":      state.jump_count,
-                "anomaly_count":   state.anomaly_count,
-                "p50_latency_ms":  round(state.p50_latency(), 2),
-                "p95_latency_ms":  round(state.p95_latency(), 2),
-                "p99_latency_ms":  round(state.p99_latency(), 2),
-                "last_mid":        state.last_mid,
+                "is_alive": not state.is_stale(),
+                "confidence": round(state.confidence, 4),
+                "accept_count": state.accept_count,
+                "reject_count": state.reject_count,
+                "stale_count": state.stale_count,
+                "jump_count": state.jump_count,
+                "anomaly_count": state.anomaly_count,
+                "p50_latency_ms": round(state.p50_latency(), 2),
+                "p95_latency_ms": round(state.p95_latency(), 2),
+                "p99_latency_ms": round(state.p99_latency(), 2),
+                "last_mid": state.last_mid,
             }
         return out
 
@@ -473,7 +493,7 @@ class DataQualityEngine:
                 "p50_ms": round(state.p50_latency(), 2),
                 "p95_ms": round(state.p95_latency(), 2),
                 "p99_ms": round(state.p99_latency(), 2),
-                "n":      len(state.latencies_ms),
+                "n": len(state.latencies_ms),
             }
         return report
 
@@ -487,18 +507,18 @@ class DataQualityEngine:
         if source in self._sources:
             state = self._sources[source]
             with state._lock:
-                state.confidence     = 1.0
-                state.error_count    = 0
-                state.accept_count   = 0
-                state.reject_count   = 0
-                state.stale_count    = 0
-                state.jump_count     = 0
-                state.anomaly_count  = 0
+                state.confidence = 1.0
+                state.error_count = 0
+                state.accept_count = 0
+                state.reject_count = 0
+                state.stale_count = 0
+                state.jump_count = 0
+                state.anomaly_count = 0
                 state.latencies_ms.clear()
                 state.mids.clear()
                 state.spreads.clear()
-                state.last_tick_ts   = 0.0
-                state.last_mid       = 0.0
+                state.last_tick_ts = 0.0
+                state.last_mid = 0.0
             logger.info("DQE: source %s reset", source.value)
 
     def mark_source_stale(self, source: FeedSource) -> None:
@@ -508,12 +528,13 @@ class DataQualityEngine:
             logger.info("DQE: source %s force-marked stale", source.value)
 
     def generate_report(self, symbol: str) -> QualityReport:
-        now    = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
         recent = list(self._report_window)
         accepted = sum(1 for r in recent if r[0] == "accept")
         rejected = sum(1 for r in recent if r[0] == "reject")
-        active   = [
-            s.value for s, st in self._sources.items()
+        active = [
+            s.value
+            for s, st in self._sources.items()
             if not st.is_stale() and st.accept_count > 0
         ]
         best = self.best_source()
@@ -527,28 +548,28 @@ class DataQualityEngine:
         for s, st in self._sources.items():
             if st.last_mid > 0 and not st.is_stale():
                 last_known_ticks[s] = GoldTick(
-                    symbol    = symbol,
-                    timestamp = now,
-                    bid       = st.last_mid * 0.9999,
-                    ask       = st.last_mid * 1.0001,
-                    mid       = st.last_mid,
-                    source    = s,
+                    symbol=symbol,
+                    timestamp=now,
+                    bid=st.last_mid * 0.9999,
+                    ask=st.last_mid * 1.0001,
+                    mid=st.last_mid,
+                    source=s,
                 )
         consensus, _, _ = self.cross_source_consensus(last_known_ticks)
 
         return QualityReport(
-            timestamp                    = now,
-            symbol                       = symbol,
-            ticks_received               = accepted + rejected,
-            ticks_accepted               = accepted,
-            ticks_rejected               = rejected,
-            stale_count                  = sum(st.stale_count for st in self._sources.values()),
-            jump_count                   = sum(st.jump_count for st in self._sources.values()),
-            anomaly_count                = sum(st.anomaly_count for st in self._sources.values()),
-            active_sources               = active,
-            primary_source               = best.value if best else "none",
-            consensus_price              = consensus,
-            price_spread_across_sources  = spread_across,
+            timestamp=now,
+            symbol=symbol,
+            ticks_received=accepted + rejected,
+            ticks_accepted=accepted,
+            ticks_rejected=rejected,
+            stale_count=sum(st.stale_count for st in self._sources.values()),
+            jump_count=sum(st.jump_count for st in self._sources.values()),
+            anomaly_count=sum(st.anomaly_count for st in self._sources.values()),
+            active_sources=active,
+            primary_source=best.value if best else "none",
+            consensus_price=consensus,
+            price_spread_across_sources=spread_across,
         )
 
     # ── Internal helpers ──────────────────────────────────────────────────────
@@ -561,7 +582,10 @@ class DataQualityEngine:
         self._report_window.append(("reject", tick.source, tick.mid))
         logger.debug(
             "DQE reject source=%s reason=%s mid=%.2f seq=%d",
-            tick.source.value, reason, tick.mid, seq,
+            tick.source.value,
+            reason,
+            tick.mid,
+            seq,
         )
         if self._prom_rejected:
             try:
@@ -569,19 +593,19 @@ class DataQualityEngine:
                     source=tick.source.value, reason=reason
                 ).inc()
             except Exception as _exc:
-                logger.debug('Suppressed exception: %s', _exc)
+                logger.debug("Suppressed exception: %s", _exc)
         return GoldTick(
-            symbol     = tick.symbol,
-            timestamp  = tick.timestamp,
-            bid        = tick.bid,
-            ask        = tick.ask,
-            mid        = tick.mid,
-            source     = tick.source,
-            quality    = TickQuality.REJECTED,
-            confidence = 0.0,
-            spread     = tick.spread,
-            lineage_id = tick.lineage_id,
-            raw        = tick.raw,
+            symbol=tick.symbol,
+            timestamp=tick.timestamp,
+            bid=tick.bid,
+            ask=tick.ask,
+            mid=tick.mid,
+            source=tick.source,
+            quality=TickQuality.REJECTED,
+            confidence=0.0,
+            spread=tick.spread,
+            lineage_id=tick.lineage_id,
+            raw=tick.raw,
         )
 
 

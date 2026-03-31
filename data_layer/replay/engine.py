@@ -37,26 +37,32 @@ Usage
     async for tick in engine.replay_ticks(start, end, symbol="XAUUSD"):
         features = engine.get_replay_features(tick.timestamp)
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
+from datetime import datetime, timedelta
+from typing import Any, AsyncIterator, Dict, Optional
 
 import pandas as pd
 
 from data_layer.normalization.pipeline import normalization_pipeline
-from data_layer.replay.dukascopy import DukascopyFetcher, dukascopy_fetcher, _parse_timeframe
-from data_layer.types import FeedSource, GoldTick, TickQuality
+from data_layer.replay.dukascopy import (
+    DukascopyFetcher,
+    dukascopy_fetcher,
+    _parse_timeframe,
+)
+import os
+
+from data_layer.types import FeedSource, GoldTick
 
 logger = logging.getLogger(__name__)
 
-import os
-_DEFAULT_SYMBOL    = os.getenv("REPLAY_DEFAULT_SYMBOL",    "XAUUSD")
-_DEFAULT_TF_MIN    = int(os.getenv("REPLAY_DEFAULT_TF_MIN", "60"))
-_MAX_REPLAY_DAYS   = int(os.getenv("REPLAY_MAX_DAYS",       "365"))
-_REPLAY_SPEED      = float(os.getenv("REPLAY_SPEED",        "0.0"))  # 0 = as fast as possible
+_DEFAULT_SYMBOL = os.getenv("REPLAY_DEFAULT_SYMBOL", "XAUUSD")
+_DEFAULT_TF_MIN = int(os.getenv("REPLAY_DEFAULT_TF_MIN", "60"))
+_MAX_REPLAY_DAYS = int(os.getenv("REPLAY_MAX_DAYS", "365"))
+_REPLAY_SPEED = float(os.getenv("REPLAY_SPEED", "0.0"))  # 0 = as fast as possible
 
 
 class MarketReplayEngine:
@@ -105,21 +111,25 @@ class MarketReplayEngine:
         """
         # Resolve timeframe — accept both parameter names
         tf_spec = timeframe if timeframe is not None else timeframe_minutes
-        tf_min  = _parse_timeframe(tf_spec)
+        tf_min = _parse_timeframe(tf_spec)
 
         # Enforce max range
         max_end = start + timedelta(days=_MAX_REPLAY_DAYS)
         if end > max_end:
             logger.warning(
                 "MarketReplayEngine: clamping end from %s to %s (%d day limit)",
-                end.isoformat(), max_end.isoformat(), _MAX_REPLAY_DAYS,
+                end.isoformat(),
+                max_end.isoformat(),
+                _MAX_REPLAY_DAYS,
             )
             end = max_end
 
         logger.info(
             "MarketReplayEngine: fetching %s %dmin bars %s → %s",
-            symbol, tf_min,
-            start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"),
+            symbol,
+            tf_min,
+            start.strftime("%Y-%m-%d"),
+            end.strftime("%Y-%m-%d"),
         )
 
         df = await self._fetcher.fetch_ohlcv(
@@ -132,16 +142,16 @@ class MarketReplayEngine:
         if df.empty:
             logger.warning(
                 "MarketReplayEngine: no data returned for %s %s→%s",
-                symbol, start.date(), end.date(),
+                symbol,
+                start.date(),
+                end.date(),
             )
             return pd.DataFrame()
 
         if normalize:
             df = normalization_pipeline.normalize_ohlcv(df)
 
-        logger.info(
-            "MarketReplayEngine: built %d bars for %s", len(df), symbol
-        )
+        logger.info("MarketReplayEngine: built %d bars for %s", len(df), symbol)
         return df
 
     # ── Tick replay ───────────────────────────────────────────────────────────
@@ -158,12 +168,14 @@ class MarketReplayEngine:
         Call this before replay_ticks() to avoid streaming latency.
         """
         ticks = await self._fetcher.fetch_ticks(symbol, start, end)
-        self._replay_ticks  = ticks
+        self._replay_ticks = ticks
         self._replay_cursor = start
-        self._is_replaying  = False
+        self._is_replaying = False
         logger.info(
             "MarketReplayEngine: loaded %d ticks for replay (%s → %s)",
-            len(ticks), start.date(), end.date(),
+            len(ticks),
+            start.date(),
+            end.date(),
         )
         return len(ticks)
 
@@ -196,7 +208,7 @@ class MarketReplayEngine:
 
         # Pre-compute Timestamp bounds once (not on every iteration)
         ts_start = pd.Timestamp(start, tz="UTC")
-        ts_end   = pd.Timestamp(end,   tz="UTC")
+        ts_end = pd.Timestamp(end, tz="UTC")
 
         self._is_replaying = True
         prev_ts: Optional[datetime] = None
@@ -221,22 +233,24 @@ class MarketReplayEngine:
             if ask < bid:
                 logger.debug(
                     "MarketReplayEngine: inverted spread at %s bid=%.4f ask=%.4f — skipped",
-                    ts, bid, ask,
+                    ts,
+                    bid,
+                    ask,
                 )
                 continue
 
             raw_tick = GoldTick(
-                symbol     = "XAU_USD",
-                timestamp  = self._replay_cursor,
-                bid        = round(bid, 4),
-                ask        = round(ask, 4),
-                mid        = round(mid, 4),
-                source     = FeedSource.REPLAY,
-                spread     = round(ask - bid, 4),
+                symbol="XAU_USD",
+                timestamp=self._replay_cursor,
+                bid=round(bid, 4),
+                ask=round(ask, 4),
+                mid=round(mid, 4),
+                source=FeedSource.REPLAY,
+                spread=round(ask - bid, 4),
             )
 
             # Pass through DQE then normalisation — same pipeline as live ticks
-            validated  = dqe.validate_tick(raw_tick, received_at=ts.timestamp())
+            validated = dqe.validate_tick(raw_tick, received_at=ts.timestamp())
             normalised = normalization_pipeline.normalize_tick(validated)
 
             # Speed control for real-time simulation
@@ -269,6 +283,7 @@ class MarketReplayEngine:
         """
         try:
             from data_layer.orchestrator import orchestrator
+
             return orchestrator.get_ml_features(as_of=as_of)
         except Exception as exc:
             logger.debug("MarketReplayEngine.get_replay_features error: %s", exc)
@@ -304,13 +319,15 @@ class MarketReplayEngine:
         Returns a pd.DataFrame with OHLCV + all ML features, or None on error.
         """
         try:
-            import pandas as pd
             from data_layer.normalization.pipeline import normalization_pipeline
             from ml.features_extended import build_extended_features_with_data_layer
 
             logger.info(
                 "MarketReplayEngine: building replay OHLCV %s %s→%s [%s]",
-                symbol, start.date(), end.date(), timeframe,
+                symbol,
+                start.date(),
+                end.date(),
+                timeframe,
             )
 
             # 1. Fetch raw OHLCV from Dukascopy
@@ -323,7 +340,9 @@ class MarketReplayEngine:
             if ohlcv is None or ohlcv.empty:
                 logger.warning(
                     "MarketReplayEngine: no OHLCV data for %s %s→%s",
-                    symbol, start.date(), end.date(),
+                    symbol,
+                    start.date(),
+                    end.date(),
                 )
                 return None
 
@@ -338,7 +357,8 @@ class MarketReplayEngine:
 
             logger.info(
                 "MarketReplayEngine: replay complete — %d bars, %d features",
-                len(featured), len(featured.columns),
+                len(featured),
+                len(featured.columns),
             )
             return featured
 
@@ -371,15 +391,16 @@ class MarketReplayEngine:
 
         Returns the number of bars replayed.
         """
-        import asyncio
         import inspect
 
         try:
-            import pandas as pd
             from data_layer.normalization.pipeline import normalization_pipeline
 
             ohlcv = await self.build_ohlcv_dataframe(
-                symbol=symbol, start=start, end=end, timeframe=timeframe,
+                symbol=symbol,
+                start=start,
+                end=end,
+                timeframe=timeframe,
             )
             if ohlcv is None or ohlcv.empty:
                 return 0
@@ -388,7 +409,9 @@ class MarketReplayEngine:
             count = 0
 
             for ts, bar in ohlcv.iterrows():
-                self._replay_cursor = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
+                self._replay_cursor = (
+                    ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
+                )
                 features = self.get_replay_features(as_of=self._replay_cursor)
 
                 if callback is not None:
@@ -400,14 +423,16 @@ class MarketReplayEngine:
                     except Exception as cb_exc:
                         logger.debug(
                             "MarketReplayEngine.replay_bar_by_bar callback error at %s: %s",
-                            ts, cb_exc,
+                            ts,
+                            cb_exc,
                         )
                 count += 1
 
             self._replay_cursor = None
             logger.info(
                 "MarketReplayEngine.replay_bar_by_bar: replayed %d bars for %s",
-                count, symbol,
+                count,
+                symbol,
             )
             return count
 
@@ -415,7 +440,9 @@ class MarketReplayEngine:
             logger.error("MarketReplayEngine.replay_bar_by_bar error: %s", exc)
             return 0
 
-    def get_feature_snapshot(self, as_of: Optional[datetime] = None) -> Dict[str, float]:
+    def get_feature_snapshot(
+        self, as_of: Optional[datetime] = None
+    ) -> Dict[str, float]:
         """
         Return a complete ML feature snapshot at a given time.
 
@@ -431,6 +458,7 @@ class MarketReplayEngine:
             return self.get_replay_features(as_of=target)
         try:
             from data_layer.orchestrator import orchestrator
+
             return orchestrator.get_ml_features()
         except Exception as exc:
             logger.debug("MarketReplayEngine.get_feature_snapshot error: %s", exc)
@@ -438,9 +466,13 @@ class MarketReplayEngine:
 
     def health(self) -> dict:
         return {
-            "is_replaying":   self._is_replaying,
-            "replay_cursor":  self._replay_cursor.isoformat() if self._replay_cursor else None,
-            "ticks_loaded":   len(self._replay_ticks) if self._replay_ticks is not None else 0,
+            "is_replaying": self._is_replaying,
+            "replay_cursor": self._replay_cursor.isoformat()
+            if self._replay_cursor
+            else None,
+            "ticks_loaded": len(self._replay_ticks)
+            if self._replay_ticks is not None
+            else 0,
         }
 
 

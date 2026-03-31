@@ -29,33 +29,43 @@ Steps applied to OHLCV DataFrames (vectorised)
 All OHLCV operations are vectorised (numpy/pandas) for performance.
 Single-tick operations are pure Python for minimal latency.
 """
+
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Dict, List, Optional
 
 import numpy as np
+import os
+
 import pandas as pd
 
-from data_layer.types import FeedSource, GoldTick, TickQuality
+from data_layer.types import GoldTick
 
 logger = logging.getLogger(__name__)
 
-import os
-_PRICE_DECIMALS   = int(os.getenv("NORM_PRICE_DECIMALS",   "4"))
-_MIN_SPREAD       = float(os.getenv("NORM_MIN_SPREAD",     "0.01"))
-_MAX_SPREAD_PCT   = float(os.getenv("NORM_MAX_SPREAD_PCT", "0.01"))   # 1%
-_GAP_MULTIPLIER   = float(os.getenv("NORM_GAP_MULTIPLIER", "3.0"))
-_GAP_WINDOW       = int(os.getenv("NORM_GAP_WINDOW",       "20"))
-_MIN_GOLD_PRICE   = float(os.getenv("NORM_MIN_GOLD_PRICE", "100.0"))
+_PRICE_DECIMALS = int(os.getenv("NORM_PRICE_DECIMALS", "4"))
+_MIN_SPREAD = float(os.getenv("NORM_MIN_SPREAD", "0.01"))
+_MAX_SPREAD_PCT = float(os.getenv("NORM_MAX_SPREAD_PCT", "0.01"))  # 1%
+_GAP_MULTIPLIER = float(os.getenv("NORM_GAP_MULTIPLIER", "3.0"))
+_GAP_WINDOW = int(os.getenv("NORM_GAP_WINDOW", "20"))
+_MIN_GOLD_PRICE = float(os.getenv("NORM_MIN_GOLD_PRICE", "100.0"))
 
 # Column name aliases — normalise to standard names
 _COL_ALIASES = {
-    "Open":   "open",  "High":   "high",  "Low":   "low",
-    "Close":  "close", "Volume": "volume","Adj Close": "close",
-    "open_price": "open", "high_price": "high", "low_price": "low",
-    "close_price": "close", "vol": "volume", "qty": "volume",
+    "Open": "open",
+    "High": "high",
+    "Low": "low",
+    "Close": "close",
+    "Volume": "volume",
+    "Adj Close": "close",
+    "open_price": "open",
+    "high_price": "high",
+    "low_price": "low",
+    "close_price": "close",
+    "vol": "volume",
+    "qty": "volume",
 }
 
 
@@ -105,22 +115,27 @@ class NormalizationPipeline:
         confidence = max(0.0, min(1.0, tick.confidence))
 
         # Only create new object if something changed
-        if (ts == tick.timestamp and bid == tick.bid and ask == tick.ask
-                and mid == tick.mid and confidence == tick.confidence):
+        if (
+            ts == tick.timestamp
+            and bid == tick.bid
+            and ask == tick.ask
+            and mid == tick.mid
+            and confidence == tick.confidence
+        ):
             return tick
 
         return GoldTick(
-            symbol     = tick.symbol,
-            timestamp  = ts,
-            bid        = bid,
-            ask        = ask,
-            mid        = mid,
-            source     = tick.source,
-            quality    = tick.quality,
-            confidence = confidence,
-            spread     = round(ask - bid, _PRICE_DECIMALS),
-            lineage_id = tick.lineage_id,
-            raw        = tick.raw,
+            symbol=tick.symbol,
+            timestamp=ts,
+            bid=bid,
+            ask=ask,
+            mid=mid,
+            source=tick.source,
+            quality=tick.quality,
+            confidence=confidence,
+            spread=round(ask - bid, _PRICE_DECIMALS),
+            lineage_id=tick.lineage_id,
+            raw=tick.raw,
         )
 
     # ── OHLCV normalisation ───────────────────────────────────────────────────
@@ -147,7 +162,7 @@ class NormalizationPipeline:
         d.columns = [c.lower().strip() for c in d.columns]
 
         required = {"open", "high", "low", "close"}
-        missing  = required - set(d.columns)
+        missing = required - set(d.columns)
         if missing:
             logger.warning("NormalizationPipeline: missing columns %s", missing)
             return pd.DataFrame()
@@ -168,7 +183,9 @@ class NormalizationPipeline:
                 try:
                     d.index = pd.to_datetime(d.index, utc=True)
                 except Exception:
-                    logger.warning("NormalizationPipeline: cannot parse timestamp index")
+                    logger.warning(
+                        "NormalizationPipeline: cannot parse timestamp index"
+                    )
                     return pd.DataFrame()
 
         # Ensure UTC
@@ -196,36 +213,29 @@ class NormalizationPipeline:
         # high must be >= max(open, close)
         d["high"] = np.maximum(d["high"], np.maximum(d["open"], d["close"]))
         # low must be <= min(open, close)
-        d["low"]  = np.minimum(d["low"],  np.minimum(d["open"], d["close"]))
+        d["low"] = np.minimum(d["low"], np.minimum(d["open"], d["close"]))
         # Ensure high >= low
         swap_mask = d["high"] < d["low"]
         if swap_mask.any():
-            d.loc[swap_mask, ["high", "low"]] = (
-                d.loc[swap_mask, ["low", "high"]].values
-            )
+            d.loc[swap_mask, ["high", "low"]] = d.loc[swap_mask, ["low", "high"]].values
 
         # ── 7. Volume normalisation ────────────────────────────────────────
-        d["volume"]     = d["volume"].fillna(0.0).clip(lower=0.0)
+        d["volume"] = d["volume"].fillna(0.0).clip(lower=0.0)
         d["log_volume"] = np.log1p(d["volume"])
 
         # ── 8. Gap detection ───────────────────────────────────────────────
         # Gap = |open - prev_close| / prev_close
         prev_close = d["close"].shift(1)
-        gap_pct    = (d["open"] - prev_close).abs() / prev_close.replace(0, np.nan)
+        gap_pct = (d["open"] - prev_close).abs() / prev_close.replace(0, np.nan)
         rolling_gap_mean = gap_pct.rolling(_GAP_WINDOW, min_periods=3).mean()
         d["gap_flag"] = (
-            (gap_pct > rolling_gap_mean * _GAP_MULTIPLIER)
-            & gap_pct.notna()
+            (gap_pct > rolling_gap_mean * _GAP_MULTIPLIER) & gap_pct.notna()
         ).astype(int)
         d["gap_flag"] = d["gap_flag"].fillna(0).astype(int)
 
         # ── 9. Log returns (causal — uses shift(1)) ────────────────────────
-        d["log_return"] = np.log(
-            d["close"] / d["close"].shift(1).replace(0, np.nan)
-        )
-        d["log_return"] = d["log_return"].replace(
-            [np.inf, -np.inf], np.nan
-        ).fillna(0.0)
+        d["log_return"] = np.log(d["close"] / d["close"].shift(1).replace(0, np.nan))
+        d["log_return"] = d["log_return"].replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
         # ── 10. OHLCV validity flag ────────────────────────────────────────
         ohlcv_cols = ["open", "high", "low", "close"]
@@ -237,17 +247,11 @@ class NormalizationPipeline:
 
         # ── 11. Final NaN/inf cleanup ──────────────────────────────────────
         numeric_cols = d.select_dtypes(include=[np.number]).columns
-        d[numeric_cols] = (
-            d[numeric_cols]
-            .replace([np.inf, -np.inf], np.nan)
-            .fillna(0.0)
-        )
+        d[numeric_cols] = d[numeric_cols].replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
         return d
 
-    def validate_ohlcv_shape(
-        self, df: pd.DataFrame, min_bars: int = 50
-    ) -> bool:
+    def validate_ohlcv_shape(self, df: pd.DataFrame, min_bars: int = 50) -> bool:
         """Return True if DataFrame has sufficient clean bars for ML."""
         if df is None or df.empty:
             return False
@@ -284,10 +288,10 @@ class NormalizationPipeline:
         """
         out = dict(bar)
 
-        o = float(out.get("open",   0.0))
-        h = float(out.get("high",   0.0))
-        l = float(out.get("low",    0.0))
-        c = float(out.get("close",  0.0))
+        o = float(out.get("open", 0.0))
+        h = float(out.get("high", 0.0))
+        lo = float(out.get("low", 0.0))
+        c = float(out.get("close", 0.0))
         v = float(out.get("volume", 0.0))
 
         # Sanity checks
@@ -295,8 +299,8 @@ class NormalizationPipeline:
             c > 0.0
             and o > 0.0
             and h >= max(o, c)
-            and l <= min(o, c)
-            and l > 0.0
+            and lo <= min(o, c)
+            and lo > 0.0
             and v >= 0.0
         )
         out["ohlcv_valid"] = 1 if valid else 0
@@ -339,17 +343,15 @@ class NormalizationPipeline:
 
         volumes = [float(t.get("volume", 1.0)) for t in ticks]
         bar = {
-            "open":   mids[0],
-            "high":   max(mids),
-            "low":    min(mids),
-            "close":  mids[-1],
+            "open": mids[0],
+            "high": max(mids),
+            "low": min(mids),
+            "close": mids[-1],
             "volume": sum(volumes),
         }
         return self.normalize_bar(bar, prev_close=prev_close)
 
-    def normalize_ticks_batch(
-        self, ticks: List[GoldTick]
-    ) -> List[GoldTick]:
+    def normalize_ticks_batch(self, ticks: List[GoldTick]) -> List[GoldTick]:
         """
         Normalise a batch of GoldTicks in one call.
 
@@ -401,11 +403,11 @@ class NormalizationPipeline:
         records = [
             {
                 "timestamp": t.timestamp,
-                "open":      t.mid,
-                "high":      t.mid,
-                "low":       t.mid,
-                "close":     t.mid,
-                "volume":    1.0,
+                "open": t.mid,
+                "high": t.mid,
+                "low": t.mid,
+                "close": t.mid,
+                "volume": 1.0,
             }
             for t in valid
         ]
@@ -414,11 +416,15 @@ class NormalizationPipeline:
         df = df.set_index("timestamp").sort_index()
 
         freq = f"{timeframe_minutes}min"
-        ohlcv = df["close"].resample(freq).agg(
-            open  = "first",
-            high  = "max",
-            low   = "min",
-            close = "last",
+        ohlcv = (
+            df["close"]
+            .resample(freq)
+            .agg(
+                open="first",
+                high="max",
+                low="min",
+                close="last",
+            )
         )
         ohlcv["volume"] = df["volume"].resample(freq).sum()
         ohlcv = ohlcv.dropna(subset=["open", "close"])
@@ -443,13 +449,18 @@ class NormalizationPipeline:
 
         Returns a boolean Series aligned to df.index (True = gap bar).
         """
-        if df is None or df.empty or "open" not in df.columns or "close" not in df.columns:
+        if (
+            df is None
+            or df.empty
+            or "open" not in df.columns
+            or "close" not in df.columns
+        ):
             return pd.Series(False, index=df.index if df is not None else [])
 
         prev_close = df["close"].shift(1)
-        log_gap    = np.log(df["open"] / prev_close.replace(0, np.nan)).abs()
-        threshold  = threshold_pct / 100.0
-        gaps       = log_gap > threshold
+        log_gap = np.log(df["open"] / prev_close.replace(0, np.nan)).abs()
+        threshold = threshold_pct / 100.0
+        gaps = log_gap > threshold
         gaps.iloc[0] = False  # first bar has no previous close
         return gaps.fillna(False)
 
