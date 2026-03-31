@@ -447,7 +447,7 @@ def _register_system_routes(app, trading_app, require_admin):
 
 
 # Standalone server starter
-async def start_api_server(host: str = "0.0.0.0", port: int = 8000, trading_app=None):
+async def start_api_server(host: str = "0.0.0.0", port: int = 8000, trading_app=None):  # nosec B104 - host configurable via parameter
     """Start API server"""
     if not FASTAPI_AVAILABLE:
         logger.error(

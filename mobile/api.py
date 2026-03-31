@@ -155,7 +155,7 @@ class MobileAPIServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",
+        host: str = "0.0.0.0",  # nosec B104 - host configurable via parameter
         port: int = 8001,
         jwt_secret: str | None = None,
         broker=None,

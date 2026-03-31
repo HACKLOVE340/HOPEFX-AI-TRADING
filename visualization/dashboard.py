@@ -112,4 +112,4 @@ class DashboardServer:
     def run(self, port=8080):
         import uvicorn
 
-        uvicorn.run(self.app, host="0.0.0.0", port=port)
+        uvicorn.run(self.app, host="0.0.0.0", port=port)  # nosec B104 - container deployment requires 0.0.0.0
