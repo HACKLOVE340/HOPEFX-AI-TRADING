@@ -50,7 +50,7 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
+import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input
 import sys
 import time
 from dataclasses import dataclass, field
@@ -177,7 +177,7 @@ class MutationTestRunner:
 
     def _mutmut_available(self) -> bool:
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
                 [sys.executable, "-m", "mutmut", "--version"],
                 capture_output=True,
                 timeout=5,

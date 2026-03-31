@@ -350,9 +350,9 @@ async def _run_backtest(args: argparse.Namespace) -> None:
         await engine.run()
     except ImportError:
         # Fallback to the existing backtest runner
-        import subprocess
+        import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input
 
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
             [sys.executable, "backtest_runner.py", "--config", args.config],
             check=False,
         )

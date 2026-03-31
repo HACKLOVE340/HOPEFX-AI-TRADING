@@ -646,7 +646,7 @@ def stage_kill_switch_gate() -> str:
             )
 
         # Deactivate and verify brain can act again
-        ks.deactivate("test-token")
+        ks.deactivate("test-token")  # nosec B106 - test token in kill switch validation, not a real credential
         assert not ks.is_active(), "KillSwitch.deactivate() did not clear active state"
 
     return (

@@ -27,7 +27,7 @@ import importlib
 import os
 import pathlib
 import socket
-import subprocess
+import subprocess  # nosec B404 - list-form calls with fixed tool names; no shell=True, no user input
 import sys
 import urllib.parse
 from typing import List
@@ -194,7 +194,7 @@ def check_alembic() -> None:
         _warn("alembic.ini not found — migrations cannot run")
         return
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - list-form calls with fixed tool names; no shell=True, no user input
             ["python", "-m", "alembic", "current"],
             capture_output=True,
             text=True,
@@ -212,7 +212,7 @@ def check_docker() -> None:
     print("\n── Docker ────────────────────────────────────────────────────")
     for cmd in (["docker", "--version"], ["docker", "compose", "version"]):
         try:
-            out = subprocess.check_output(
+            out = subprocess.check_output(  # nosec B603 B607 - list-form calls with fixed tool names; no shell=True, no user input
                 cmd, stderr=subprocess.DEVNULL, text=True
             ).strip()
             _good(out[:60])

@@ -311,6 +311,7 @@ data:
   {{ $key }}: {{ $val | b64enc | quote }}
   {{- end }}
 """
+)
 
 HELPERS_TPL = """\
 {{/*
