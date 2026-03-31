@@ -93,9 +93,9 @@ def detect_regime(df: pd.DataFrame, lookback: int = 50) -> Tuple[str, float]:
     if len(df) < lookback:
         return REGIME_UNKNOWN, 0.0
 
-    closes = df["close"].astype(float).values[-lookback:]
-    highs = df["high"].astype(float).values[-lookback:]
-    lows = df["low"].astype(float).values[-lookback:]
+    closes = df["close"].astype(float).to_numpy()[-lookback:]
+    highs = df["high"].astype(float).to_numpy()[-lookback:]
+    lows = df["low"].astype(float).to_numpy()[-lookback:]
 
     # ── Trend: compare short vs long EMA ─────────────────────────────────────
     ema_fast = _ema(closes, 10)
