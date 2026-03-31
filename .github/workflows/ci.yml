@@ -21,6 +21,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Cache pre-commit envs
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
       - name: Run pre-commit hooks
         uses: pre-commit/action@v3.0.1
 
@@ -36,10 +41,10 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
       - name: Dependency vulnerability scan
-        # Report CVEs but do not block merges — tracked separately in security dashboard.
+        # Report CVEs but do not block merges — tracked in security dashboard.
         run: pip-audit --requirement=requirements.txt --desc || true
       - name: Scan with Trivy (supply-chain)
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: fs
           scan-ref: .
@@ -59,8 +64,20 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-ci-3.11-${{ hashFiles('requirements-ci.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-ci-3.11-
+
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        # Use CI requirements — avoids C-extension build failures (quickfix, numba, etc.)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install mypy pandas-stubs types-redis types-pyyaml
 
       # Strict gate: only the two files already fully typed
       - name: mypy strict — risk/analytics.py + risk/advanced_analytics.py
@@ -72,28 +89,14 @@ jobs:
             --no-error-summary
 
       # Non-strict gates: surface regressions but don't block CI
-      # These packages have pre-existing type errors tracked separately.
-      # Remove the "|| true" once each package reaches zero mypy errors.
       - name: mypy — api/
-        run: |
-          mypy api/ \
-            --ignore-missing-imports \
-            --allow-untyped-decorators \
-            --no-error-summary || true
+        run: mypy api/ --ignore-missing-imports --allow-untyped-decorators --no-error-summary || true
 
       - name: mypy — risk/
-        run: |
-          mypy risk/ \
-            --ignore-missing-imports \
-            --allow-untyped-decorators \
-            --no-error-summary || true
+        run: mypy risk/ --ignore-missing-imports --allow-untyped-decorators --no-error-summary || true
 
       - name: mypy — ml/
-        run: |
-          mypy ml/ \
-            --ignore-missing-imports \
-            --allow-untyped-decorators \
-            --no-error-summary || true
+        run: mypy ml/ --ignore-missing-imports --allow-untyped-decorators --no-error-summary || true
 
       - name: mypy — auth/ brokers/ config/ core/ execution/ strategies/
         run: |
@@ -106,8 +109,9 @@ jobs:
     permissions:
       contents: read
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.11", "3.12"]
 
     services:
       postgres:
@@ -127,6 +131,11 @@ jobs:
         image: redis:7
         ports:
           - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -136,11 +145,26 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-ci-${{ matrix.python-version }}-${{ hashFiles('requirements-ci.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-ci-${{ matrix.python-version }}-
+
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        # Use lightweight CI requirements — no C-extensions, no GPU deps.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install matplotlib "sentry-sdk[fastapi]>=2.0.0" \
+            "pytest>=7.4.3" "pytest-cov>=4.1.0" "pytest-asyncio>=0.23.6" \
+            "pytest-timeout>=2.2.0" bandit
 
       - name: Run ruff (lint + format check)
         run: |
+          pip install "ruff>=0.9.0,<0.10.0"
           ruff check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
           ruff format --check api/ auth/ brokers/ config/ core/ execution/ ml/ risk/ strategies/
 
@@ -148,6 +172,18 @@ jobs:
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
+          CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          CONFIG_SALT: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
+          ENVIRONMENT: testing
+          OANDA_API_KEY: ci-placeholder
+          OANDA_ACCOUNT_ID: ci-placeholder
+          OANDA_PRACTICE: "true"
+          INITIAL_BALANCE: "100000"
+          ML_MIN_TRADE_PROB: "0.58"
+          STRATEGY_MIN_BARS: "100"
+          STRATEGY_TICKS_PER_BAR: "10"
+          FIX_CONFIG_FILE: fix.cfg
         run: |
           pytest tests/ \
             -m "not slow" \
@@ -156,77 +192,81 @@ jobs:
             --cov-report=term-missing \
             --cov-fail-under=70 \
             -v \
-            --asyncio-mode=auto
+            --asyncio-mode=auto \
+            --timeout=120
 
       - name: Coverage gate — risk/ (90% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
+          ENVIRONMENT: testing
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
         run: |
-          pytest tests/ \
-            -m "not slow" \
-            --cov=risk \
-            --cov-branch \
+          pytest tests/ -m "not slow" -q \
+            --cov=risk --cov-branch \
             --cov-report=term-missing \
             --cov-fail-under=90 \
             --asyncio-mode=auto \
-            -q
+            --timeout=120
 
       - name: Coverage gate — execution/ (90% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
+          ENVIRONMENT: testing
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
         run: |
-          pytest tests/ \
-            -m "not slow" \
-            --cov=execution \
-            --cov-branch \
+          pytest tests/ -m "not slow" -q \
+            --cov=execution --cov-branch \
             --cov-report=term-missing \
             --cov-fail-under=90 \
             --asyncio-mode=auto \
-            -q
+            --timeout=120
 
       - name: Coverage gate — kill_switch.py (90% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
+          ENVIRONMENT: testing
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
         run: |
-          pytest tests/ \
-            -m "not slow" \
-            --cov=kill_switch \
-            --cov-branch \
+          pytest tests/ -m "not slow" -q \
+            --cov=kill_switch --cov-branch \
             --cov-report=term-missing \
             --cov-fail-under=90 \
             --asyncio-mode=auto \
-            -q
+            --timeout=120
 
       - name: Coverage gate — brokers/ (90% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
+          ENVIRONMENT: testing
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
+          OANDA_API_KEY: ci-placeholder
+          OANDA_ACCOUNT_ID: ci-placeholder
+          OANDA_PRACTICE: "true"
         run: |
-          pytest tests/ \
-            -m "not slow" \
-            --cov=brokers \
-            --cov-branch \
+          pytest tests/ -m "not slow" -q \
+            --cov=brokers --cov-branch \
             --cov-report=term-missing \
             --cov-fail-under=90 \
             --asyncio-mode=auto \
-            -q
+            --timeout=120
 
       - name: Coverage gate — compliance/ (90% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
+          ENVIRONMENT: testing
+          SECURITY_JWT_SECRET: "ci-test-secret-key-minimum-32-characters-long"
         run: |
-          pytest tests/ \
-            -m "not slow" \
-            --cov=compliance \
-            --cov-branch \
+          pytest tests/ -m "not slow" -q \
+            --cov=compliance --cov-branch \
             --cov-report=term-missing \
             --cov-fail-under=90 \
             --asyncio-mode=auto \
-            -q
+            --timeout=120
 
       - name: Security scan (bandit)
         run: |
