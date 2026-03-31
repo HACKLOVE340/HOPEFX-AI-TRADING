@@ -360,8 +360,6 @@ class GeopoliticalRiskProvider:
         events = []
 
         try:
-            # Simulate fetching from World Monitor
-            # In production, this would make actual API calls
             events = self._fetch_events_from_source()
 
             # Assess gold impact for each event
@@ -544,6 +542,15 @@ class GeopoliticalRiskProvider:
                     len(cached),
                 )
                 return cached
+            # Secondary fallback: GDELT GKG (free, no API key required)
+            gdelt_events = self._fetch_events_from_gdelt()
+            if gdelt_events:
+                logger.info(
+                    "World Monitor unavailable — using %d events from GDELT fallback",
+                    len(gdelt_events),
+                )
+                return gdelt_events
+
             if _is_production:
                 raise RuntimeError(
                     f"World Monitor API unreachable and no cached events available. "
@@ -558,6 +565,64 @@ class GeopoliticalRiskProvider:
 
         logger.info("Fetched %d geopolitical events from World Monitor", len(events))
         return events
+
+    def _fetch_events_from_gdelt(self) -> List[GeopoliticalEvent]:
+        """
+        Fetch geopolitical events from the GDELT Project GKG API.
+
+        Uses the GDELT 2.0 Event Database query API (free, no key required).
+        Filters for conflict/crisis themes relevant to gold trading.
+
+        Reference: https://blog.gdeltproject.org/gdelt-2-0-our-global-world-in-realtime/
+        """
+        import os as _os  # noqa: PLC0415
+
+        timeout = int(self.config.get("request_timeout", 15))
+        # GDELT GKG API — returns JSON articles matching a theme query
+        # Themes: CRISISLEX_CRISISLEXREC, CONFLICT, WB_2671_POLITICAL_STABILITY
+        gdelt_url = (
+            "https://api.gdeltproject.org/api/v2/doc/doc"
+            "?query=gold+conflict+sanctions+geopolitical"
+            "&mode=artlist&maxrecords=25&format=json"
+            "&timespan=1d"
+        )
+        try:
+            resp = requests.get(gdelt_url, timeout=timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            articles = data.get("articles", [])
+            events: List[GeopoliticalEvent] = []
+            for article in articles:
+                title = article.get("title", "")
+                url_str = article.get("url", "")
+                seendate = article.get("seendate", "")
+                domain = article.get("domain", "")
+                try:
+                    # GDELT seendate format: YYYYMMDDTHHMMSSZ
+                    ts = datetime.strptime(seendate, "%Y%m%dT%H%M%SZ").replace(
+                        tzinfo=timezone.utc
+                    )
+                except (ValueError, TypeError):
+                    ts = datetime.now(timezone.utc)
+
+                event = GeopoliticalEvent(
+                    event_id=f"gdelt_{hash(url_str) & 0xFFFFFFFF:08x}",
+                    event_type=GeopoliticalEventType.POLITICAL_UNREST,
+                    title=title,
+                    description=f"Source: {domain}",
+                    severity=RiskSeverity.MEDIUM,
+                    region="Global",
+                    countries=[],
+                    timestamp=ts,
+                    source="GDELT",
+                    url=url_str,
+                )
+                events.append(event)
+            logger.debug("GDELT returned %d articles", len(events))
+            return events
+        except Exception as exc:
+            logger.warning("GDELT fallback fetch failed: %s", exc)
+            return []
 
     # ── Severity / type mapping helpers ──────────────────────────────────────
 
