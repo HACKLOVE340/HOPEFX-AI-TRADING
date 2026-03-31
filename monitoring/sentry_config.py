@@ -54,6 +54,9 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+# Log message constant reused across multiple except blocks
+_SUPPRESSED_EXC_MSG = "Suppressed exception: %s"
+
 # ── Sensitive field names to scrub from Sentry payloads ──────────────────────
 _SCRUB_FIELDS = frozenset(
     {
@@ -124,8 +127,8 @@ _SCRUB_FIELDS = frozenset(
 import re as _re  # noqa: E402
 
 _PII_PATTERNS = [
-    # Bearer tokens
-    (_re.compile(r"Bearer\s+[A-Za-z0-9\-._~+/]+=*", _re.I), "Bearer [Filtered]"),
+    # Bearer tokens — match base64url + padding chars after "Bearer "
+    (_re.compile(r"Bearer\s+\S+", _re.I), "Bearer [Filtered]"),
     # JWT tokens (3 base64 segments)
     (
         _re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"),
@@ -135,9 +138,9 @@ _PII_PATTERNS = [
     (_re.compile(r"\b[0-9a-f]{32}\b"), "[Key Filtered]"),
     # IPv4 addresses
     (_re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"), "[IP Filtered]"),
-    # Email addresses
+    # Email addresses (- moved to end of character class)
     (
-        _re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"),
+        _re.compile(r"\b[A-Za-z0-9._%+]+@[A-Za-z0-9.]+\.[A-Za-z]{2,}\b"),
         "[Email Filtered]",
     ),
 ]
@@ -150,27 +153,27 @@ def _scrub_string(s: str) -> str:
     return s
 
 
+def _scrub_value(v: Any) -> Any:
+    """Scrub a single value: recurse into dicts, scrub strings, pass others through."""
+    if isinstance(v, dict):
+        return _scrub_dict(v)
+    if isinstance(v, list):
+        return [_scrub_value(i) for i in v]
+    if isinstance(v, str):
+        return _scrub_string(v)
+    return v
+
+
 def _scrub_dict(d: Dict[str, Any]) -> Dict[str, Any]:
-    """Recursively replace sensitive values with '[Filtered]' and scrub PII strings."""
+    """Recursively replace sensitive fields with '[Filtered]' and scrub PII strings."""
     if not isinstance(d, dict):
         return d
     out = {}
     for k, v in d.items():
         if isinstance(k, str) and k.lower() in _SCRUB_FIELDS:
             out[k] = "[Filtered]"
-        elif isinstance(v, dict):
-            out[k] = _scrub_dict(v)
-        elif isinstance(v, list):
-            out[k] = [
-                _scrub_dict(i)
-                if isinstance(i, dict)
-                else (_scrub_string(i) if isinstance(i, str) else i)
-                for i in v
-            ]
-        elif isinstance(v, str):
-            out[k] = _scrub_string(v)
         else:
-            out[k] = v
+            out[k] = _scrub_value(v)
     return out
 
 
@@ -206,7 +209,7 @@ def _before_send(
 
         event.setdefault("tags", {})["model_version"] = get_model_version()
     except Exception as _exc:
-        logger.debug("Suppressed exception: %s", _exc)
+        logger.debug(_SUPPRESSED_EXC_MSG, _exc)
 
     return event
 
@@ -223,6 +226,76 @@ def _before_send_transaction(
     if transaction in ("/health", "/metrics", "/favicon.ico"):
         return None
     return event
+
+
+def _build_sentry_integrations() -> list:
+    """Auto-detect and return available Sentry SDK integrations."""
+    import logging as _logging
+
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    integrations: list = [
+        LoggingIntegration(
+            level=_logging.WARNING,   # breadcrumb level
+            event_level=_logging.ERROR,  # issue level
+        )
+    ]
+
+    try:
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.starlette import StarletteIntegration
+
+        integrations.append(StarletteIntegration(transaction_style="endpoint"))
+        integrations.append(FastApiIntegration())
+        logger.debug("Sentry: FastAPI integration enabled")
+    except ImportError:
+        pass
+
+    try:
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+        integrations.append(SqlalchemyIntegration())
+        logger.debug("Sentry: SQLAlchemy integration enabled")
+    except ImportError:
+        pass
+
+    try:
+        from sentry_sdk.integrations.redis import RedisIntegration
+
+        integrations.append(RedisIntegration())
+        logger.debug("Sentry: Redis integration enabled")
+    except ImportError:
+        pass
+
+    try:
+        from sentry_sdk.integrations.aiohttp import AioHttpIntegration
+
+        integrations.append(AioHttpIntegration())
+        logger.debug("Sentry: aiohttp integration enabled")
+    except ImportError:
+        pass
+
+    return integrations
+
+
+def _set_sentry_global_tags(
+    sentry_sdk: Any, environment: str, release: str
+) -> None:
+    """Set global tags visible on every Sentry event."""
+    with sentry_sdk.new_scope() as scope:
+        scope.set_tag("service", "hopefx-api")
+        scope.set_tag("environment", environment)
+        scope.set_tag("release", release)
+        try:
+            from ml import get_model_version
+
+            scope.set_tag("model_version", get_model_version())
+        except Exception as _exc:
+            logger.debug(_SUPPRESSED_EXC_MSG, _exc)
+        try:
+            scope.set_tag("oanda_region", os.getenv("OANDA_REGION", "us"))
+        except Exception as _exc:
+            logger.debug(_SUPPRESSED_EXC_MSG, _exc)
 
 
 def init_sentry() -> bool:
@@ -249,64 +322,8 @@ def init_sentry() -> bool:
 
     try:
         import sentry_sdk
-        from sentry_sdk.integrations.logging import LoggingIntegration
 
-        # Auto-detect available integrations
-        integrations = []
-
-        # Logging: capture ERROR+ as Sentry issues, WARNING+ as breadcrumbs
-        integrations.append(
-            LoggingIntegration(
-                level=logging.WARNING,  # breadcrumb level
-                event_level=logging.ERROR,  # issue level
-            )
-        )
-
-        # FastAPI integration
-        try:
-            from sentry_sdk.integrations.fastapi import FastApiIntegration
-            from sentry_sdk.integrations.starlette import StarletteIntegration
-
-            integrations.append(StarletteIntegration(transaction_style="endpoint"))
-            integrations.append(FastApiIntegration())
-            logger.debug("Sentry: FastAPI integration enabled")
-        except ImportError:
-            pass
-
-        # SQLAlchemy integration
-        try:
-            from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-
-            integrations.append(SqlalchemyIntegration())
-            logger.debug("Sentry: SQLAlchemy integration enabled")
-        except ImportError:
-            pass
-
-        # Redis integration
-        try:
-            from sentry_sdk.integrations.redis import RedisIntegration
-
-            integrations.append(RedisIntegration())
-            logger.debug("Sentry: Redis integration enabled")
-        except ImportError:
-            pass
-
-        # aiohttp integration (used by AsyncOANDAConnector)
-        try:
-            from sentry_sdk.integrations.aiohttp import AioHttpIntegration
-
-            integrations.append(AioHttpIntegration())
-            logger.debug("Sentry: aiohttp integration enabled")
-        except ImportError:
-            pass
-
-        # Determine release string
-        release = os.getenv(
-            "SENTRY_RELEASE",
-            os.getenv("GIT_COMMIT", "unknown"),
-        )
-
-        # Sample rates
+        release = os.getenv("SENTRY_RELEASE", os.getenv("GIT_COMMIT", "unknown"))
         traces_rate = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
         profiles_rate = float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.05"))
         environment = os.getenv(
@@ -317,43 +334,18 @@ def init_sentry() -> bool:
             dsn=dsn,
             environment=environment,
             release=release,
-            # Performance monitoring
             traces_sample_rate=traces_rate,
             profiles_sample_rate=profiles_rate,
-            # Privacy
             send_default_pii=False,
-            # Hooks
             before_send=_before_send,
             before_send_transaction=_before_send_transaction,
-            # Integrations
-            integrations=integrations,
-            # Attach stack traces to all log-level events
+            integrations=_build_sentry_integrations(),
             attach_stacktrace=True,
-            # Max breadcrumbs per event
             max_breadcrumbs=50,
-            # Ignore common noise
-            ignore_errors=[
-                KeyboardInterrupt,
-                SystemExit,
-            ],
+            ignore_errors=[KeyboardInterrupt, SystemExit],
         )
 
-        # Set global tags visible on every event
-        with sentry_sdk.new_scope() as scope:
-            scope.set_tag("service", "hopefx-api")
-            scope.set_tag("environment", environment)
-            scope.set_tag("release", release)
-            try:
-                from ml import get_model_version
-
-                scope.set_tag("model_version", get_model_version())
-            except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
-            try:
-                oanda_region = os.getenv("OANDA_REGION", "us")
-                scope.set_tag("oanda_region", oanda_region)
-            except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
+        _set_sentry_global_tags(sentry_sdk, environment, release)
 
         logger.info(
             "Sentry initialised: env=%s release=%s traces=%.0f%% profiles=%.0f%%",
@@ -426,7 +418,6 @@ def capture_ml_fallback_event(
 def capture_paper_clock_alert(
     elapsed_days: float,
     remaining_days: float,
-    account_id: str = "",
     environment: str = "practice",
 ) -> None:
     """
