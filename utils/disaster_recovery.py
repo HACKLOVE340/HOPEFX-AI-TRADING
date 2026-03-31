@@ -12,12 +12,15 @@ Automated backup, failover, and state restoration
 import asyncio
 import json
 import gzip
-from typing import Dict, List
+from typing import TYPE_CHECKING, Dict, List
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
 import aiofiles
+
+if TYPE_CHECKING:
+    import aiohttp  # noqa: F401
 
 
 @dataclass
@@ -252,9 +255,7 @@ class FailoverManager:
                 if resp.status < 300:
                     self.last_peer_heartbeat[peer] = datetime.now(timezone.utc)
                 else:
-                    print(
-                        f"⚠️ Heartbeat to {peer} returned HTTP {resp.status}"
-                    )
+                    print(f"⚠️ Heartbeat to {peer} returned HTTP {resp.status}")
         except aiohttp.ClientError as exc:
             # Network errors are expected when a peer is down — log and continue
             print(f"⚠️ Heartbeat to {peer} failed: {exc}")
