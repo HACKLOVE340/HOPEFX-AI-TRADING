@@ -222,20 +222,31 @@ class MobileAPIServer:
         # WebSocket connections tracking
         self.active_connections: Dict[str, List[WebSocket]] = {}
 
-    def _setup_routes(self):
-        """Setup all API routes"""
+    def _setup_routes(self) -> None:
+        """Register all route groups."""
+        self._register_health_routes()
+        self._register_auth_routes()
+        self._register_account_routes()
+        self._register_trading_routes()
+        self._register_performance_routes()
+        self._register_news_routes()
+        self._register_notification_routes()
+        self._register_websocket_routes()
 
-        # ============ HEALTH CHECK ============
+    # ── Health ────────────────────────────────────────────────────────────────
+
+    def _register_health_routes(self) -> None:
         @self.app.get("/health", tags=["Health"])
         async def health_check():
-            """Health check endpoint"""
             return {
                 "status": "healthy",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "version": "2.0.0",
             }
 
-        # ============ AUTHENTICATION ============
+    # ── Authentication ────────────────────────────────────────────────────────
+
+    def _register_auth_routes(self) -> None:
         @self.app.post("/api/v2/auth/register", response_model=AuthToken, tags=["Auth"])
         async def register(user: MobileUserRegistration):
             """Register new mobile user"""
@@ -347,7 +358,9 @@ class MobileAPIServer:
             except jwt.DecodeError:
                 raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-        # ============ ACCOUNT ============
+    # ── Account ───────────────────────────────────────────────────────────────
+
+    def _register_account_routes(self) -> None:
         @self.app.get("/api/v2/account", response_model=Account, tags=["Account"])
         async def get_account(user_id: str = Depends(self._verify_token)):
             """Get account overview"""
@@ -389,7 +402,9 @@ class MobileAPIServer:
                 logger.error(f"Failed to fetch account: {e}")
                 raise HTTPException(status_code=500, detail="Failed to fetch account")
 
-        # ============ TRADING ============
+    # ── Trading ───────────────────────────────────────────────────────────────
+
+    def _register_trading_routes(self) -> None:
         @self.app.get(
             "/api/v2/quotes/{symbol}", response_model=QuoteData, tags=["Trading"]
         )
@@ -564,7 +579,9 @@ class MobileAPIServer:
                 logger.error(f"Failed to close trade: {e}")
                 raise HTTPException(status_code=500, detail="Failed to close trade")
 
-        # ============ PERFORMANCE ============
+    # ── Performance ───────────────────────────────────────────────────────────
+
+    def _register_performance_routes(self) -> None:
         @self.app.get(
             "/api/v2/performance",
             response_model=List[PerformanceData],
@@ -601,7 +618,9 @@ class MobileAPIServer:
                     status_code=500, detail="Failed to fetch performance"
                 )
 
-        # ============ NEWS & ECONOMIC CALENDAR ============
+    # ── News ──────────────────────────────────────────────────────────────────
+
+    def _register_news_routes(self) -> None:
         @self.app.get("/api/v2/news", response_model=List[NewsItem], tags=["News"])
         async def get_news(
             limit: int = Query(20, ge=1, le=100),
@@ -617,7 +636,9 @@ class MobileAPIServer:
                 logger.error(f"Failed to fetch news: {e}")
                 raise HTTPException(status_code=500, detail="Failed to fetch news")
 
-        # ============ NOTIFICATIONS ============
+    # ── Notifications ─────────────────────────────────────────────────────────
+
+    def _register_notification_routes(self) -> None:
         @self.app.get("/api/v2/notifications/preferences", tags=["Notifications"])
         async def get_notification_preferences(
             user_id: str = Depends(self._verify_token),
@@ -660,7 +681,9 @@ class MobileAPIServer:
                     status_code=500, detail="Failed to update preferences"
                 )
 
-        # ============ WEBSOCKET (REAL-TIME) ============
+    # ── WebSocket ─────────────────────────────────────────────────────────────
+
+    def _register_websocket_routes(self) -> None:
         @self.app.websocket("/api/v2/ws/quotes")
         async def websocket_quotes(websocket: WebSocket, symbols: str = Query(...)):
             """WebSocket for real-time quotes"""
