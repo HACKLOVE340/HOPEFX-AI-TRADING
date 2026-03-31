@@ -13,24 +13,27 @@ on:
 
   workflow_dispatch:   # allow manual trigger from GitHub UI
 
+# Workflow-level permissions are read-only; write is scoped to the job that needs it.
 permissions:
-  contents: write   # needed to commit cover.png back to the repo
+  contents: read
 
 jobs:
   update-cover:
     name: Regenerate assets/cover.png
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to commit cover.png back to the repo
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           # persist-credentials required: this job commits and pushes cover.png
           persist-credentials: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.11"
 
