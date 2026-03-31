@@ -724,6 +724,110 @@ class RiskManager:
         )
         return sized
 
+    # ── Factor-aware position scaling ─────────────────────────────────────────
+
+    def factor_scale_size(
+        self,
+        sizing: "PositionSizingResult",
+        positions: dict[str, float],
+        total_pnl: float = 0.0,
+        app_state: Any | None = None,
+    ) -> "PositionSizingResult":
+        """
+        Apply factor-model-based position scaling to an already-sized order.
+
+        Reduces position size when the portfolio has high systematic factor
+        exposure (rates, vol, macro) to avoid doubling up on factor risk.
+
+        Scaling rule
+        ------------
+        factor_var_ratio = factor_VaR_for_this_symbol / total_portfolio_VaR
+        If factor_var_ratio > FACTOR_VAR_LIMIT (default 0.40):
+            scale = FACTOR_VAR_LIMIT / factor_var_ratio   (reduce size)
+        Else:
+            scale = 1.0   (no change)
+
+        Non-blocking: returns sizing unchanged on any error.
+        """
+        _FACTOR_VAR_LIMIT = float(os.getenv("RISK_FACTOR_VAR_LIMIT", "0.40"))
+
+        try:
+            from core.signal_engine import _get_factor_engine
+            engine = _get_factor_engine(app_state)
+            if engine is None:
+                return sizing
+
+            factor_var = engine.factor_var(positions)
+            total_factor_var = sum(factor_var.values())
+            symbol_var = factor_var.get(sizing.symbol, 0.0)
+
+            if total_factor_var <= 0 or symbol_var <= 0:
+                return sizing
+
+            ratio = symbol_var / total_factor_var
+            if ratio > _FACTOR_VAR_LIMIT:
+                scale = _FACTOR_VAR_LIMIT / ratio
+                new_qty = round(sizing.quantity * scale, 4)
+                new_notional = round(sizing.notional_usd * scale, 2)
+                logger.info(
+                    "RiskManager: factor VaR scale %.3f applied to %s "
+                    "(factor_var_ratio=%.3f > limit=%.2f)",
+                    scale, sizing.symbol, ratio, _FACTOR_VAR_LIMIT,
+                )
+                return PositionSizingResult(
+                    symbol=sizing.symbol,
+                    direction=sizing.direction,
+                    quantity=new_qty,
+                    notional_usd=new_notional,
+                    kelly_f=sizing.kelly_f,
+                    quality_f=sizing.quality_f,
+                    sentiment_f=sizing.sentiment_f,
+                    impact_f=sizing.impact_f,
+                    dd_f=sizing.dd_f * scale,
+                    stop_loss_usd=sizing.stop_loss_usd,
+                    take_profit_usd=sizing.take_profit_usd,
+                    risk_usd=round(sizing.risk_usd * scale, 2),
+                    lineage_id=sizing.lineage_id,
+                )
+        except Exception as exc:
+            logger.debug("factor_scale_size failed (non-fatal): %s", exc)
+
+        return sizing
+
+    def get_factor_risk_report(
+        self,
+        positions: dict[str, float],
+        total_pnl: float = 0.0,
+        app_state: Any | None = None,
+    ) -> dict[str, Any]:
+        """
+        Return a factor risk report for the current portfolio.
+
+        Includes factor VaR contributions and factor attribution of P&L.
+        Returns empty dict when factor engine is unavailable.
+        """
+        try:
+            from core.signal_engine import _get_factor_engine
+            engine = _get_factor_engine(app_state)
+            if engine is None:
+                return {"available": False, "reason": "factor_engine_not_started"}
+
+            attribution = engine.attribute(positions, total_pnl)
+            factor_var = engine.factor_var(positions)
+            exposures = {
+                sym: exp.to_dict() for sym, exp in engine.exposures.items()
+            }
+            return {
+                "available": True,
+                "attribution": attribution.to_dict(),
+                "factor_var": {k: round(v, 2) for k, v in factor_var.items()},
+                "exposures": exposures,
+                "engine_status": engine.status(),
+            }
+        except Exception as exc:
+            logger.warning("get_factor_risk_report failed: %s", exc)
+            return {"available": False, "reason": str(exc)}
+
     # ── Convenience public API (used by tests and downstream callers) ─────────
 
     @property

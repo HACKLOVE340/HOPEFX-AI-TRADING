@@ -639,6 +639,62 @@ def notify_fill(
         logger.debug("notify_fill failed (non-fatal): %s", exc)
 
 
+# ── Factor model integration ──────────────────────────────────────────────────
+# The LiveFactorEngine is started by startup_factories.py and stored on
+# app_state.factor_engine.  The signal engine reads factor exposures and
+# appends them to the signal payload so downstream consumers (risk manager,
+# compliance, WebSocket) can see the factor breakdown without re-computing it.
+
+
+def _get_factor_engine(app_state: Any = None) -> Any | None:
+    """Return the LiveFactorEngine from app_state or the module singleton."""
+    if app_state is not None:
+        engine = getattr(app_state, "factor_engine", None)
+        if engine is not None:
+            return engine
+    try:
+        from portfolio.factor_model import get_live_factor_engine
+        return get_live_factor_engine()
+    except Exception:
+        return None
+
+
+def _enrich_signal_with_factors(
+    signal_payload: dict[str, Any],
+    positions: dict[str, float],
+    total_pnl: float,
+    app_state: Any = None,
+) -> dict[str, Any]:
+    """
+    Append live factor attribution to a signal payload.
+
+    Adds ``factor_attribution`` key with factor P&L breakdown and
+    ``factor_exposures`` key with per-symbol beta loadings.
+
+    Non-blocking: returns the original payload unchanged on any error.
+    """
+    engine = _get_factor_engine(app_state)
+    if engine is None:
+        return signal_payload
+
+    try:
+        attribution = engine.attribute(positions, total_pnl)
+        exposures = {
+            sym: exp.to_dict()
+            for sym, exp in engine.exposures.items()
+        }
+        signal_payload["factor_attribution"] = attribution.to_dict()
+        signal_payload["factor_exposures"] = exposures
+        logger.debug(
+            "Factor attribution appended: residual_pnl=%.4f",
+            attribution.residual_pnl,
+        )
+    except Exception as exc:
+        logger.debug("Factor enrichment failed (non-fatal): %s", exc)
+
+    return signal_payload
+
+
 def get_signal_engine_status() -> dict[str, Any]:
     """
     Return a health-check dict for all active Phase 1–4 stores.
