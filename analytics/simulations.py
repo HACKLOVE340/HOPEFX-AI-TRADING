@@ -19,7 +19,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-from analytics.monte_carlo import MonteCarloEngine, BootstrapResult, run_bootstrap
+from analytics.monte_carlo import BootstrapResult, run_bootstrap
 
 
 class SimulationEngine:
@@ -64,7 +64,11 @@ class SimulationEngine:
         summary = result.summary()
         # Add legacy keys for backward compatibility
         summary["mean_return"] = result.original_cagr
-        summary["std_dev"] = float(np.std(result.final_equity_distribution)) if result.final_equity_distribution else 0.0
+        summary["std_dev"] = (
+            float(np.std(result.final_equity_distribution))
+            if result.final_equity_distribution
+            else 0.0
+        )
         summary["var_95"] = result.final_equity_ci_95[0]
         summary["var_99"] = result.sharpe_ci_99[0]
         summary["max_drawdown"] = result.original_max_dd
