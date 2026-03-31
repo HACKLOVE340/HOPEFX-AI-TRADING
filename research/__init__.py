@@ -422,7 +422,7 @@ print("Feature engineering functions ready")
 
         try:
             with contextlib.redirect_stdout(stdout_capture):
-                exec(compile(code, "<cell>", "exec"), exec_globals)  # noqa: S102
+                exec(compile(code, "<cell>", "exec"), exec_globals)  # noqa: S102  # nosec B102 - research notebook cell executor; code is user-authored research, not untrusted input
             output = stdout_capture.getvalue()
             return output if output else "Cell executed successfully (no output)"
         except Exception as exc:

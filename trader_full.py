@@ -405,7 +405,7 @@ class StateManager:
 class AlertManager:
     """Sends alerts via Telegram bot and structured logging."""
 
-    def __init__(self, token: str = "", chat_id: str = "") -> None:
+    def __init__(self, token: str = "", chat_id: str = "") -> None:  # nosec B107 - empty defaults; Telegram is optional, configured via env vars
         self._bot: Optional[Any] = None
         self._token = token
         self._chat_id = chat_id

@@ -48,7 +48,7 @@ except ImportError:
     pass
 
 PROJECT_ROOT = Path(__file__).parent.parent
-_PASS = "  ✓"
+_PASS = "  ✓"  # nosec B105 - test result symbol, not a password
 _FAIL = "  ✗"
 
 
