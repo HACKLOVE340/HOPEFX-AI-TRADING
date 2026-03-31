@@ -648,7 +648,7 @@ class MockProvider(DataProvider):
         # Initialize any missing prices
         for sym in symbols:
             if sym not in self.prices:
-                self.prices[sym] = 100.0 + random.random() * 900
+                self.prices[sym] = 100.0 + random.random() * 900  # nosec B311 - mock provider initial price, not cryptographic
         return True
 
     async def stream(self) -> AsyncIterator[MarketTick]:

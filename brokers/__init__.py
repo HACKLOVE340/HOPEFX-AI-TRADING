@@ -466,7 +466,7 @@ class PaperTradingBroker(BaseBroker):
         if self.slippage_model == "gaussian":
             slippage = random.gauss(base_slippage * size_factor, 0.2)
         else:
-            slippage = random.uniform(0, base_slippage * size_factor * 2)
+            slippage = random.uniform(0, base_slippage * size_factor * 2)  # nosec B311 - paper trading slippage simulation
 
         return max(0, slippage)
 
@@ -477,9 +477,9 @@ class PaperTradingBroker(BaseBroker):
 
         fill_prob = min(0.95, 0.5 + (self.partial_fill_threshold / quantity))
 
-        if random.random() > fill_prob:
+        if random.random() > fill_prob:  # nosec B311 - paper trading fill simulation
             # Partial fill
-            return quantity * random.uniform(0.6, 0.95)
+            return quantity * random.uniform(0.6, 0.95)  # nosec B311 - paper trading partial fill simulation
 
         return quantity
 

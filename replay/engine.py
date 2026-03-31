@@ -138,12 +138,12 @@ class ChartReplayEngine:
         delta = tf_map.get(session.timeframe, timedelta(hours=1))
 
         while current_time <= session.end_date:
-            change = random.uniform(-0.5, 0.5)
+            change = random.uniform(-0.5, 0.5)  # nosec B311 - replay bar generation, not cryptographic
             open_price = price
             close_price = price + change
-            high_price = max(open_price, close_price) + random.uniform(0, 0.3)
-            low_price = min(open_price, close_price) - random.uniform(0, 0.3)
-            volume = random.uniform(1000, 10000)
+            high_price = max(open_price, close_price) + random.uniform(0, 0.3)  # nosec B311 - replay bar generation, not cryptographic
+            low_price = min(open_price, close_price) - random.uniform(0, 0.3)  # nosec B311 - replay bar generation, not cryptographic
+            volume = random.uniform(1000, 10000)  # nosec B311 - replay bar generation, not cryptographic
 
             bars.append(
                 ReplayBar(

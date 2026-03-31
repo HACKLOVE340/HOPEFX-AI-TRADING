@@ -788,7 +788,7 @@ def _run_monte_carlo(
     simulations: int,
 ) -> dict:
     # Use OS entropy so each run produces independent results
-    rng = random.Random()
+    rng = random.Random()  # nosec B311 - Monte Carlo simulation, not cryptographic use
     final_equities = []
     ruin_count = 0
     ruin_threshold = initial_capital * 0.5  # 50% drawdown = ruin

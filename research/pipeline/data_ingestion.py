@@ -125,7 +125,7 @@ def _backoff_download(ticker: str, **kwargs) -> pd.DataFrame:
             logger.warning(
                 "yfinance attempt %d failed for %s: %s", attempt + 1, ticker, exc
             )
-        sleep = (2**attempt) + random.uniform(0, 1)
+        sleep = (2**attempt) + random.uniform(0, 1)  # nosec B311 - exponential backoff jitter, not cryptographic
         time.sleep(sleep)
     return pd.DataFrame()
 
@@ -306,7 +306,7 @@ def fetch_intraday(
 
         chunk_end = chunk_start - timedelta(days=1)
         # Respect rate limits
-        time.sleep(random.uniform(0.5, 1.5))
+        time.sleep(random.uniform(0.5, 1.5))  # nosec B311 - rate-limit sleep jitter, not cryptographic
 
         if chunk_start <= end_dt - timedelta(days=lookback_days):
             break

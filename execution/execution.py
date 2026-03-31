@@ -394,31 +394,16 @@ async def _connect_ibkr() -> Optional[Any]:
 
 
 def _build_paper_broker() -> Any:
-    """Minimal paper broker for simulation when no live broker is available."""
-    import random
+    """Paper broker for simulation when no live broker is available."""
+    try:
+        from brokers.paper_trading import PaperTradingBroker
 
-    class _PaperBroker:
-        async def place_order(self, order_request: Dict) -> Dict:
-            await asyncio.sleep(0.05)  # simulate 50ms latency
-            mid = float(order_request.get("mid_price", 1900.0))
-            slip = random.uniform(-0.5, 0.5)
-            return {
-                "status": "filled",
-                "fill_price": round(mid + slip, 4),
-                "quantity": float(order_request.get("quantity", 0)),
-                "direction": order_request.get("direction", "long"),
-                "broker": "paper",
-                "latency_ms": 50.0,
-            }
-
-        async def ping(self) -> float:
-            return 1.0
-
-        async def disconnect(self) -> None:
-            pass
-
-    logger.warning("Using paper broker — no live execution")
-    return _PaperBroker()
+        broker = PaperTradingBroker(config={})
+        logger.warning("Using PaperTradingBroker — no live execution")
+        return broker
+    except Exception as exc:
+        logger.error("PaperTradingBroker init failed: %s", exc)
+        raise RuntimeError("Cannot start paper broker") from exc
 
 
 # ── notify_fill wiring ────────────────────────────────────────────────────────
