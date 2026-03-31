@@ -280,7 +280,7 @@ class TechnicalFeatureEngineer:
         close = df["close"]
 
         # Returns
-        df["returns_1"] = close.pct_change()
+        df["returns_1"] = close.pct_change(fill_method=None)
         df["returns_5"] = close.pct_change(5)
         df["returns_10"] = close.pct_change(10)
         df["returns_20"] = close.pct_change(20)

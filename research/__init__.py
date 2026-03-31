@@ -261,7 +261,7 @@ def create_features(df):
     features = pd.DataFrame()
 
     # Price-based features
-    features['returns'] = df['close'].pct_change()
+    features['returns'] = df['close'].pct_change(fill_method=None)
     features['volatility'] = features['returns'].rolling(20).std()
 
     # Moving averages
@@ -732,7 +732,7 @@ def create_features(df):
     import pandas as pd
 
     features = pd.DataFrame(index=df.index)
-    features["returns"] = df["close"].pct_change()
+    features["returns"] = df["close"].pct_change(fill_method=None)
     features["volatility"] = features["returns"].rolling(20).std()
     features["sma_10"] = df["close"].rolling(10).mean()
     features["sma_50"] = df["close"].rolling(50).mean()

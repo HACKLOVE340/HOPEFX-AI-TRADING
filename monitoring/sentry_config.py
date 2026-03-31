@@ -339,7 +339,7 @@ def init_sentry() -> bool:
         )
 
         # Set global tags visible on every event
-        with sentry_sdk.configure_scope() as scope:
+        with sentry_sdk.new_scope() as scope:
             scope.set_tag("service", "hopefx-api")
             scope.set_tag("environment", environment)
             scope.set_tag("release", release)
@@ -396,7 +396,7 @@ def capture_ml_fallback_event(
     try:
         import sentry_sdk
 
-        with sentry_sdk.push_scope() as scope:
+        with sentry_sdk.new_scope() as scope:
             scope.set_level("fatal")
             scope.set_tag("alert_type", "ml_fallback_activated")
             scope.set_tag("fallback_model", fallback_model)
@@ -439,7 +439,7 @@ def capture_paper_clock_alert(
     try:
         import sentry_sdk
 
-        with sentry_sdk.push_scope() as scope:
+        with sentry_sdk.new_scope() as scope:
             scope.set_level("warning")
             scope.set_tag("alert_type", "paper_clock_gate")
             scope.set_tag("oanda_environment", environment)
@@ -475,7 +475,7 @@ def capture_sharpe_gate_alert(
     try:
         import sentry_sdk
 
-        with sentry_sdk.push_scope() as scope:
+        with sentry_sdk.new_scope() as scope:
             scope.set_level("warning")
             scope.set_tag("alert_type", "sharpe_gate_blocked")
             scope.set_extra("n_trades", n_trades)
@@ -511,7 +511,7 @@ def capture_kill_switch_alert(
     try:
         import sentry_sdk
 
-        with sentry_sdk.push_scope() as scope:
+        with sentry_sdk.new_scope() as scope:
             scope.set_level("fatal")
             scope.set_tag("alert_type", "kill_switch_triggered")
             scope.set_tag("triggered_by", triggered_by)

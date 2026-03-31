@@ -494,7 +494,7 @@ class NewsSentimentEngine:
             import json
             features = self.get_ml_features()
             payload  = json.dumps(features)
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             # Primary key used by orchestrator and get_ml_features() cold-start read
             await loop.run_in_executor(
                 None,

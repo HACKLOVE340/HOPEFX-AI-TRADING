@@ -160,7 +160,7 @@ def add_mtf_momentum(df: pd.DataFrame) -> pd.DataFrame:
 def add_volatility_regime(df: pd.DataFrame) -> pd.DataFrame:
     """Realised vol, vol-of-vol, GARCH-proxy, vol regime label, vol skew."""
     d = df.copy()
-    ret = d["close"].pct_change()
+    ret = d["close"].pct_change(fill_method=None)
 
     for w in [5, 10, 20, 60]:
         d[f"rvol_{w}"] = ret.rolling(w).std() * np.sqrt(252)
@@ -213,7 +213,7 @@ def add_microstructure_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # Amihud illiquidity proxy
     if "volume" in d.columns and d["volume"].sum() > 0:
-        ret_abs = c.pct_change().abs()
+        ret_abs = c.pct_change(fill_method=None).abs()
         d["amihud"] = (
             (ret_abs / d["volume"].replace(0, np.nan)).rolling(20).mean()
         ).fillna(0.0)
@@ -232,10 +232,10 @@ def add_microstructure_features(df: pd.DataFrame) -> pd.DataFrame:
     # Open interest momentum proxy (if available)
     if "open_interest" in d.columns and d["open_interest"].sum() > 0:
         oi = d["open_interest"]
-        d["oi_chg"] = oi.pct_change().fillna(0.0)
+        d["oi_chg"] = oi.pct_change(fill_method=None).fillna(0.0)
         d["oi_z20"] = _zscore(oi, 20)
         # Price up + OI up = strong trend; price up + OI down = weak trend
-        price_up = (c.pct_change() > 0).astype(float)
+        price_up = (c.pct_change(fill_method=None) > 0).astype(float)
         oi_up = (d["oi_chg"] > 0).astype(float)
         d["oi_price_confirm"] = (price_up == oi_up).astype(float)
     else:
@@ -397,11 +397,11 @@ def add_intermarket_features(
         d.index = d.index.tz_localize(d_tz)
         macro.index = macro.index.tz_localize(d_tz)
 
-    gold_ret = d["close"].pct_change().fillna(0.0)
+    gold_ret = d["close"].pct_change(fill_method=None).fillna(0.0)
 
     # Gold-DXY divergence: both rising = exceptional demand (bullish)
     if "dxy" in macro.columns:
-        dxy_ret = macro["dxy"].pct_change().fillna(0.0)
+        dxy_ret = macro["dxy"].pct_change(fill_method=None).fillna(0.0)
         d["im_gold_dxy_div"] = (gold_ret * dxy_ret).rolling(5).mean()
         d["im_gold_strong_demand"] = ((gold_ret > 0) & (dxy_ret > 0)).astype(float)
     else:
@@ -409,21 +409,21 @@ def add_intermarket_features(
 
     # Gold-SPX divergence: gold up + SPX down = risk-off (bullish for gold)
     if "spx" in macro.columns:
-        spx_ret = macro["spx"].pct_change().fillna(0.0)
+        spx_ret = macro["spx"].pct_change(fill_method=None).fillna(0.0)
         d["im_gold_spx_div"] = (gold_ret * (-spx_ret)).rolling(5).mean()
     else:
         d["im_gold_spx_div"] = 0.0
 
     # Gold-oil divergence: gold up + oil down = deflation fear (mixed signal)
     if "oil" in macro.columns:
-        oil_ret = macro["oil"].pct_change().fillna(0.0)
+        oil_ret = macro["oil"].pct_change(fill_method=None).fillna(0.0)
         d["im_gold_oil_div"] = (gold_ret * oil_ret).rolling(5).mean()
     else:
         d["im_gold_oil_div"] = 0.0
 
     # Forced liquidation: gold down + VIX up (risk-off but gold sold for margin)
     if "vix" in macro.columns:
-        vix_ret = macro["vix"].pct_change().fillna(0.0)
+        vix_ret = macro["vix"].pct_change(fill_method=None).fillna(0.0)
         d["im_forced_liquidation"] = ((gold_ret < -0.005) & (vix_ret > 0.05)).astype(
             float,
         )
@@ -476,14 +476,14 @@ def add_cot_proxy_features(
 
         # Net long proxy: OI direction × price direction
         oi_dir = np.sign(d["cot_oi_momentum_5"])
-        price_dir = np.sign(d["close"].pct_change())
+        price_dir = np.sign(d["close"].pct_change(fill_method=None))
         d["cot_net_long_proxy"] = (oi_dir * price_dir).fillna(0.0)
 
         # Demand surge: OI momentum > 1 std above its 60-bar mean AND price up
         oi_mom_mean = d["cot_oi_momentum_5"].rolling(60).mean()
         oi_mom_std = d["cot_oi_momentum_5"].rolling(60).std().replace(0, np.nan)
         oi_z = ((d["cot_oi_momentum_5"] - oi_mom_mean) / oi_mom_std).fillna(0.0)
-        d["cot_demand_surge"] = ((oi_z > 1.0) & (d["close"].pct_change() > 0)).astype(
+        d["cot_demand_surge"] = ((oi_z > 1.0) & (d["close"].pct_change(fill_method=None) > 0)).astype(
             float,
         )
     else:
@@ -519,13 +519,13 @@ def add_cot_proxy_features(
             d.index = d.index.tz_localize(d_tz)
             macro.index = macro.index.tz_localize(d_tz)
 
-        gold_ret = d["close"].pct_change().fillna(0.0)
+        gold_ret = d["close"].pct_change(fill_method=None).fillna(0.0)
 
         # GLD vs futures divergence (institutional demand proxy)
         # When GLD ETF (spot demand) outperforms futures, it signals
         # physical/institutional buying rather than speculative positioning.
         if "gold_etf" in macro.columns and macro["gold_etf"].abs().sum() > 0:
-            gld_ret = macro["gold_etf"].pct_change().fillna(0.0)
+            gld_ret = macro["gold_etf"].pct_change(fill_method=None).fillna(0.0)
             d["cot_large_spec_proxy"] = (
                 (gold_ret - gld_ret).rolling(5).mean().fillna(0.0)
             )
@@ -538,7 +538,7 @@ def add_cot_proxy_features(
         has_dxy = "dxy" in macro.columns and macro["dxy"].abs().sum() > 0
         has_yield = "yield_10y" in macro.columns and macro["yield_10y"].abs().sum() > 0
         if has_dxy and has_yield:
-            dxy_ret = macro["dxy"].pct_change().fillna(0.0)
+            dxy_ret = macro["dxy"].pct_change(fill_method=None).fillna(0.0)
             yield_chg = macro["yield_10y"].diff().fillna(0.0)
             # All three rising simultaneously = central bank / geopolitical demand
             d["cot_cb_buying_proxy"] = (
@@ -557,7 +557,7 @@ def add_cot_proxy_features(
         has_spx = "spx" in macro.columns and macro["spx"].abs().sum() > 0
         if has_vix and has_spx:
             vix_spike = (macro["vix"] > 25).astype(float)
-            spx_ret = macro["spx"].pct_change().fillna(0.0)
+            spx_ret = macro["spx"].pct_change(fill_method=None).fillna(0.0)
             gold_vs_spx = gold_ret - spx_ret
             d["cot_geopolitical"] = (
                 vix_spike * (gold_vs_spx > 0).astype(float)

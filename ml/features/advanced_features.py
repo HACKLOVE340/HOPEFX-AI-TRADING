@@ -87,7 +87,7 @@ class AdvancedFeatureEngineer:
     def _add_price_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add price-based features"""
 
-        df["returns"] = df["close"].pct_change()
+        df["returns"] = df["close"].pct_change(fill_method=None)
         df["log_returns"] = np.log(df["close"] / df["close"].shift(1))
 
         # Price position in range
@@ -244,7 +244,7 @@ class AdvancedFeatureEngineer:
         df["mfi"] = self._calculate_mfi(df, period=14)
 
         # Volume ROC
-        df["volume_roc"] = df["volume"].pct_change() * 100
+        df["volume_roc"] = df["volume"].pct_change(fill_method=None) * 100
 
         # Accumulation/Distribution
         hlc_ratio = (df["close"] - df["low"]) - (df["high"] - df["close"])

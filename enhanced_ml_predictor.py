@@ -325,7 +325,7 @@ class AdvancedFeatureEngineer:
         features = pd.DataFrame(index=df.index)
 
         # Basic price features
-        features["returns"] = df["close"].pct_change()
+        features["returns"] = df["close"].pct_change(fill_method=None)
         features["log_returns"] = np.log1p(features["returns"])
         features["realized_var"] = features["returns"] ** 2
 

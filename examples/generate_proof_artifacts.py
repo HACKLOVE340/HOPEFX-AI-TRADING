@@ -334,7 +334,7 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
 
         if "dxy" in macro.columns:
             dxy = macro["dxy"]
-            d["macro_dxy_ret"] = dxy.pct_change().fillna(0.0)
+            d["macro_dxy_ret"] = dxy.pct_change(fill_method=None).fillna(0.0)
             d["macro_dxy_z20"] = _zscore(dxy, 20)
         else:
             d["macro_dxy_ret"] = d["macro_dxy_z20"] = 0.0
@@ -353,7 +353,7 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
             d["macro_yield_10y_chg"] = 0.0
 
         if "spx" in macro.columns:
-            spx_ret = macro["spx"].pct_change().fillna(0.0)
+            spx_ret = macro["spx"].pct_change(fill_method=None).fillna(0.0)
             d["macro_spx_ret"] = spx_ret
             d["macro_gold_spx_div"] = (gold_ret - spx_ret).rolling(5).mean().fillna(0.0)
         else:
@@ -363,7 +363,7 @@ def add_features(df: pd.DataFrame, macro_df=None) -> pd.DataFrame:
         has_dxy = "dxy" in macro.columns and macro["dxy"].abs().sum() > 0
         has_yield = "yield_10y" in macro.columns and macro["yield_10y"].abs().sum() > 0
         if has_dxy and has_yield:
-            dxy_ret = macro["dxy"].pct_change().fillna(0.0)
+            dxy_ret = macro["dxy"].pct_change(fill_method=None).fillna(0.0)
             yield_chg = macro["yield_10y"].diff().fillna(0.0)
             d["cot_cb_buying_proxy"] = (
                 (gold_ret > 0.002) & (dxy_ret > 0) & (yield_chg > 0)

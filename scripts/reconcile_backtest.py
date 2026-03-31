@@ -148,7 +148,7 @@ def _build_base_features(df: pd.DataFrame) -> pd.DataFrame:
     """Minimal feature set as fallback (fewer features than training)."""
     out = pd.DataFrame(index=df.index)
     out["close"] = df["close"]
-    out["returns"] = df["close"].pct_change()
+    out["returns"] = df["close"].pct_change(fill_method=None)
     out["atr14"] = _atr(df, 14)
     out["rsi14"] = _rsi(df["close"], 14)
     out["sma20"] = df["close"].rolling(20).mean()
@@ -211,7 +211,7 @@ def generate_signals(
     - Signal only when predict_proba >= confidence_threshold
     """
     atr = _atr(raw_df, ATR_PERIOD).reindex(feat_df.index)
-    returns = raw_df["close"].pct_change().reindex(feat_df.index)
+    returns = raw_df["close"].pct_change(fill_method=None).reindex(feat_df.index)
 
     # Filtered-target mask: only trade on bars with meaningful moves
     abs_move = returns.abs() * raw_df["close"].reindex(feat_df.index)
@@ -380,7 +380,7 @@ def compute_metrics(
     max_dd = float(dd.min())
 
     # Sharpe (annualised, daily returns)
-    daily_ret = equity.pct_change().dropna()
+    daily_ret = equity.pct_change(fill_method=None).dropna()
     sharpe = (
         float(daily_ret.mean() / daily_ret.std() * np.sqrt(252))
         if daily_ret.std() > 0 else 0.0

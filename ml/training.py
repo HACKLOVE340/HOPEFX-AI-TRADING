@@ -127,7 +127,7 @@ class FeatureEngineer:
         data = df.copy()
 
         # ── Stationary price-based features ──────────────────────────────────
-        data["returns"] = data[target_col].pct_change()
+        data["returns"] = data[target_col].pct_change(fill_method=None)
         data["log_returns"] = np.log(data[target_col] / data[target_col].shift(1))
 
         # Lag features: return lags only (stationary).
