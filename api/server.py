@@ -89,7 +89,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
 
     # ── Lifespan defined before FastAPI() so it can be passed at construction ─
     @asynccontextmanager
-    async def lifespan(_app: FastAPI):
+    async def lifespan(_app: FastAPI):  # noqa: F841 (used by FastAPI constructor)
         logger.info("API server starting...")
         if trading_app:
             asyncio.create_task(health_checker.start_monitoring())
@@ -189,15 +189,37 @@ def create_api_app(trading_app=None) -> Optional[Any]:
     )
 
     # ── Middleware ────────────────────────────────────────────────────────────
+    _configure_middleware(app, _allowed_origins, BaseHTTPMiddleware, StarletteRequest)
+
+    # ── Auth dependencies ─────────────────────────────────────────────────────
+    _bearer = HTTPBearer(auto_error=True)
+    _get_current_user, _require_trader, _require_admin = _build_auth_deps(_bearer)
+
+    # Store reference to trading app
+    app.state.trading_app = trading_app
+
+    _register_probe_routes(app, trading_app, health_checker)
+    _register_trading_routes(app, trading_app, _get_current_user, _require_trader, _ALLOWED_SYMBOLS, _MAX_QTY)
+    _register_brain_routes(app, trading_app, _get_current_user, _require_admin)
+    _register_system_routes(app, trading_app, _require_admin)
+
+    return app
+
+
+# ── Helpers extracted from create_api_app ─────────────────────────────────────
+
+
+def _configure_middleware(app, allowed_origins, BaseHTTPMiddleware, StarletteRequest):
+    """Add CORS and security-headers middleware."""
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=_allowed_origins,
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "DELETE", "PUT"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
 
-    class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    class _SecurityHeaders(BaseHTTPMiddleware):
         async def dispatch(self, request: StarletteRequest, call_next):
             response = await call_next(request)
             response.headers["X-Content-Type-Options"] = "nosniff"
@@ -212,15 +234,16 @@ def create_api_app(trading_app=None) -> Optional[Any]:
             )
             return response
 
-    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(_SecurityHeaders)
 
-    # ── Auth dependencies ─────────────────────────────────────────────────────
-    _bearer = HTTPBearer(auto_error=True)
 
-    def _get_current_user(credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
+def _build_auth_deps(bearer):
+    """Return (get_current_user, require_trader, require_admin) dependency callables."""
+    _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
+
+    def _get_current_user(credentials=Depends(bearer)):
         try:
-            from api.auth import _decode_token
-
+            from api.auth import _decode_token  # noqa: PLC0415
             return _decode_token(credentials.credentials)
         except Exception as exc:
             logger.warning("Token decode failed: %s", exc)
@@ -230,152 +253,105 @@ def create_api_app(trading_app=None) -> Optional[Any]:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-    def _require_trader(credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
+    def _require_trader(credentials=Depends(bearer)):
         user = _get_current_user(credentials)
-        _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
         if _ROLE_RANK.get(user.role, -1) < _ROLE_RANK["trader"]:
             raise HTTPException(status_code=403, detail="Role 'trader' required")
         return user
 
-    def _require_admin(credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
+    def _require_admin(credentials=Depends(bearer)):
         user = _get_current_user(credentials)
-        _ROLE_RANK = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
         if _ROLE_RANK.get(user.role, -1) < _ROLE_RANK["admin"]:
             raise HTTPException(status_code=403, detail="Role 'admin' required")
         return user
 
-    # Store reference to trading app
-    app.state.trading_app = trading_app
+    return _get_current_user, _require_trader, _require_admin
 
-    # Health endpoints
+
+def _register_probe_routes(app, trading_app, health_checker):
+    """Register /health, /ready, /live, /metrics probes."""
+
     @app.get("/health")
     async def health():
-        """Comprehensive health check"""
         health_data = await health_checker.run_all_checks()
-
-        status_code = 200
-        if health_data.status == HealthStatus.UNHEALTHY:
-            status_code = 503
-        elif health_data.status == HealthStatus.DEGRADED:
-            status_code = 503  # or 200 depending on your LB config
-
+        status_code = 503 if health_data.status in (HealthStatus.UNHEALTHY, HealthStatus.DEGRADED) else 200
         return JSONResponse(content=health_data.to_dict(), status_code=status_code)
 
     @app.get("/ready")
     async def ready():
-        """Readiness probe"""
         if not trading_app:
-            return {"ready": False}
-
-        ready = trading_app._components_initialized and trading_app.running
-        return JSONResponse(content={"ready": ready}, status_code=200 if ready else 503)
+            return JSONResponse(content={"ready": False}, status_code=503)
+        is_ready = trading_app._components_initialized and trading_app.running
+        return JSONResponse(content={"ready": is_ready}, status_code=200 if is_ready else 503)
 
     @app.get("/live")
     async def live():
-        """Liveness probe"""
         return {"alive": True}
 
-    # Metrics endpoint (Prometheus format)
     @app.get("/metrics")
     async def metrics():
-        """Prometheus metrics"""
         registry = get_metrics_registry()
-        return PlainTextResponse(
-            content=registry.export_prometheus(),
-            media_type="text/plain",
-        )
+        return PlainTextResponse(content=registry.export_prometheus(), media_type="text/plain")
 
-    # Trading endpoints
+
+def _register_trading_routes(app, trading_app, get_current_user, require_trader, allowed_symbols, max_qty):
+    """Register account, position, and order endpoints."""
+
     @app.get("/api/v1/status")
-    async def get_status(user=Depends(_get_current_user)):
-        """Get trading system status. Requires: authenticated user."""
+    async def get_status(user=Depends(get_current_user)):
         if not trading_app:
             raise HTTPException(status_code=503, detail="Trading app not available")
         return trading_app.get_status()
 
     @app.get("/api/v1/account")
-    async def get_account(user=Depends(_get_current_user)):
-        """Get account information. Requires: authenticated user."""
+    async def get_account(user=Depends(get_current_user)):
         if not trading_app or not trading_app.broker:
             raise HTTPException(status_code=503, detail="Broker not available")
         try:
             return await trading_app.broker.get_account_info()
-        except Exception as e:
-            logger.error("Error getting account info: %s", e)
-            raise HTTPException(status_code=500, detail=str(e))
+        except Exception as exc:
+            logger.error("Error getting account info: %s", exc)
+            raise HTTPException(status_code=500, detail=str(exc))
 
     @app.get("/api/v1/positions")
-    async def get_positions(user=Depends(_get_current_user)):
-        """Get open positions. Requires: authenticated user."""
+    async def get_positions(user=Depends(get_current_user)):
         if not trading_app or not trading_app.broker:
             raise HTTPException(status_code=503, detail="Broker not available")
         try:
             positions = await trading_app.broker.get_positions()
-            return {
-                "positions": [p.to_dict() for p in positions],
-                "count": len(positions),
-            }
-        except Exception as e:
-            logger.error("Error getting positions: %s", e)
-            raise HTTPException(status_code=500, detail=str(e))
+            return {"positions": [p.to_dict() for p in positions], "count": len(positions)}
+        except Exception as exc:
+            logger.error("Error getting positions: %s", exc)
+            raise HTTPException(status_code=500, detail=str(exc))
 
     @app.post("/api/v1/orders", status_code=201)
     async def place_order(
         request: TradeRequest,
         background_tasks: BackgroundTasks,
-        user=Depends(_require_trader),
+        user=Depends(require_trader),
     ):
-        """Place a new order. Requires: role >= 'trader'. Symbol and quantity validated."""
         if not trading_app or not trading_app.broker:
             raise HTTPException(status_code=503, detail="Broker not available")
-
-        # Server-side symbol validation
         symbol = request.symbol.upper().strip()
-        if symbol not in _ALLOWED_SYMBOLS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Symbol '{symbol}' not permitted. Allowed: {sorted(_ALLOWED_SYMBOLS)}",
-            )
-
-        # Server-side quantity validation
-        if request.quantity <= 0 or request.quantity > _MAX_QTY:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Quantity must be > 0 and <= {_MAX_QTY}",
-            )
-
-        # Side validation
+        if symbol not in allowed_symbols:
+            raise HTTPException(status_code=400, detail=f"Symbol '{symbol}' not permitted. Allowed: {sorted(allowed_symbols)}")
+        if request.quantity <= 0 or request.quantity > max_qty:
+            raise HTTPException(status_code=400, detail=f"Quantity must be > 0 and <= {max_qty}")
         if request.side.lower() not in ("buy", "sell"):
             raise HTTPException(status_code=400, detail="side must be 'buy' or 'sell'")
-
         try:
             order = await trading_app.broker.place_market_order(
-                symbol=symbol,
-                side=request.side.lower(),
-                quantity=request.quantity,
+                symbol=symbol, side=request.side.lower(), quantity=request.quantity,
             )
-            logger.info(
-                "Order placed: user=%s symbol=%s side=%s qty=%s id=%s",
-                user.sub,
-                symbol,
-                request.side,
-                request.quantity,
-                order.id,
-            )
+            logger.info("Order placed: user=%s symbol=%s side=%s qty=%s id=%s", user.sub, symbol, request.side, request.quantity, order.id)
             background_tasks.add_task(get_metrics_registry().record_order_latency, 0)
-            return {
-                "order_id": order.id,
-                "status": order.status.value,
-                "filled_quantity": order.filled_quantity,
-                "average_price": order.average_fill_price,
-            }
-        except Exception as e:
-            logger.error("Order error for user=%s: %s", user.sub, e)
-            raise HTTPException(status_code=400, detail=str(e))
+            return {"order_id": order.id, "status": order.status.value, "filled_quantity": order.filled_quantity, "average_price": order.average_fill_price}
+        except Exception as exc:
+            logger.error("Order error for user=%s: %s", user.sub, exc)
+            raise HTTPException(status_code=400, detail=str(exc))
 
     @app.delete("/api/v1/positions/{position_id}")
-    async def close_position(position_id: str, user=Depends(_require_trader)):
-        """Close a position. Requires: role >= 'trader'."""
+    async def close_position(position_id: str, user=Depends(require_trader)):
         if not trading_app or not trading_app.broker:
             raise HTTPException(status_code=503, detail="Broker not available")
         try:
@@ -386,14 +362,16 @@ def create_api_app(trading_app=None) -> Optional[Any]:
             return {"success": True, "position_id": position_id}
         except HTTPException:
             raise
-        except Exception as e:
-            logger.error("Error closing position: %s", e)
-            raise HTTPException(status_code=500, detail=str(e))
+        except Exception as exc:
+            logger.error("Error closing position: %s", exc)
+            raise HTTPException(status_code=500, detail=str(exc))
 
-    # Brain control endpoints
+
+def _register_brain_routes(app, trading_app, get_current_user, require_admin):
+    """Register brain control and state endpoints."""
+
     @app.post("/api/v1/brain/pause")
-    async def pause_brain(user=Depends(_require_admin)):
-        """Pause trading. Requires: role >= 'admin'."""
+    async def pause_brain(user=Depends(require_admin)):
         if not trading_app or not trading_app.brain:
             raise HTTPException(status_code=503, detail="Brain not available")
         trading_app.brain.pause()
@@ -401,8 +379,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         return {"status": "paused"}
 
     @app.post("/api/v1/brain/resume")
-    async def resume_brain(user=Depends(_require_admin)):
-        """Resume trading. Requires: role >= 'admin'."""
+    async def resume_brain(user=Depends(require_admin)):
         if not trading_app or not trading_app.brain:
             raise HTTPException(status_code=503, detail="Brain not available")
         trading_app.brain.resume()
@@ -410,8 +387,7 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         return {"status": "resumed"}
 
     @app.get("/api/v1/brain/state")
-    async def get_brain_state(user=Depends(_get_current_user)):
-        """Get brain state. Requires: authenticated user."""
+    async def get_brain_state(user=Depends(get_current_user)):
         if not trading_app or not trading_app.brain:
             raise HTTPException(status_code=503, detail="Brain not available")
         return {
@@ -420,27 +396,16 @@ def create_api_app(trading_app=None) -> Optional[Any]:
             "decision_history_count": len(trading_app.brain.decision_history),
         }
 
-    # Metrics and logs
     @app.get("/api/v1/metrics/json")
-    async def get_metrics_json(user=Depends(_require_admin)):
-        """Get metrics as JSON. Requires: role >= 'admin'."""
-        registry = get_metrics_registry()
-        return registry.get_all_metrics()
+    async def get_metrics_json(user=Depends(require_admin)):
+        return get_metrics_registry().get_all_metrics()
+
+
+def _register_system_routes(app, trading_app, require_admin):
+    """Register logs and system-control endpoints."""
 
     @app.get("/api/v1/logs/recent")
-    async def get_recent_logs(lines: int = 100, user=Depends(_require_admin)):
-        """
-        Return the last *lines* entries from the application log file.
-
-        Reads from the rotating log file written by infrastructure/logging.py.
-        Log directory and app name are resolved from environment variables:
-            LOG_DIR   — default "logs"
-            APP_NAME  — default "hopefx"
-
-        Returns raw text lines when the file is plain-text, or parsed JSON
-        objects when the file uses structured (JSON) format.  Falls back to
-        an empty list with an error message when the log file is absent.
-        """
+    async def get_recent_logs(lines: int = 100, user=Depends(require_admin)):
         import os as _os
         import json as _json
         from pathlib import Path as _Path
@@ -450,57 +415,35 @@ def create_api_app(trading_app=None) -> Optional[Any]:
         log_path = _Path(log_dir) / f"{app_name}.log"
 
         if not log_path.exists():
-            return {
-                "logs": [],
-                "source": str(log_path),
-                "error": f"Log file not found: {log_path}. "
-                "Ensure LOG_DIR and APP_NAME env vars match the logging setup.",
-            }
+            return {"logs": [], "source": str(log_path), "error": f"Log file not found: {log_path}"}
 
         try:
-            # Efficient tail: read last chunk and split lines
-            max_bytes = 512 * 1024  # read at most 512 KB from the end
+            max_bytes = 512 * 1024
             with open(log_path, "rb") as fh:
                 fh.seek(0, 2)
                 file_size = fh.tell()
-                seek_pos = max(0, file_size - max_bytes)
-                fh.seek(seek_pos)
+                fh.seek(max(0, file_size - max_bytes))
                 raw = fh.read().decode("utf-8", errors="replace")
-
             all_lines = [line for line in raw.splitlines() if line.strip()]
             tail = all_lines[-lines:] if len(all_lines) > lines else all_lines
-
-            # Attempt JSON parse (structured logging format)
             parsed = []
             for line in tail:
                 try:
                     parsed.append(_json.loads(line))
                 except _json.JSONDecodeError:
                     parsed.append({"message": line})
-
-            return {
-                "logs": parsed,
-                "source": str(log_path),
-                "total_returned": len(parsed),
-            }
+            return {"logs": parsed, "source": str(log_path), "total_returned": len(parsed)}
         except OSError as exc:
             logger.warning("get_recent_logs: could not read %s: %s", log_path, exc)
             return {"logs": [], "source": str(log_path), "error": str(exc)}
 
-    # System control
     @app.post("/api/v1/system/shutdown")
-    async def shutdown_system(
-        background_tasks: BackgroundTasks,
-        user=Depends(_require_admin),
-    ):
-        """Shutdown the trading system. Requires: role >= 'admin'."""
+    async def shutdown_system(background_tasks: BackgroundTasks, user=Depends(require_admin)):
         if not trading_app:
             raise HTTPException(status_code=503, detail="Trading app not available")
         logger.critical("System shutdown initiated by user=%s", user.sub)
         background_tasks.add_task(trading_app.shutdown)
         return {"status": "shutdown_initiated"}
-
-    return app
 
 
 # Standalone server starter
