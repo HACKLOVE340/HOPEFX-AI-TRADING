@@ -690,20 +690,18 @@ class SklearnOnlineLearner:
         }
 
     def _save(self) -> None:
-        import pickle as _pkl
+        import joblib as _jl
         import pathlib as _pl
 
         path = _pl.Path(self.persist_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
-            _pkl.dump(self, f)
+        _jl.dump(self, path, compress=3)
 
     @classmethod
     def load(cls, path: str) -> "SklearnOnlineLearner":
-        import pickle as _pkl
+        import joblib as _jl
 
-        with open(path, "rb") as f:
-            return _pkl.load(f)
+        return _jl.load(path)
 
 
 # ── Module-level singleton registry ──────────────────────────────────────────
