@@ -35,9 +35,10 @@ from __future__ import annotations
 import logging
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
+from numpy.typing import NDArray
 from scipy import stats
 
 logger = logging.getLogger(__name__)
@@ -205,7 +206,7 @@ class PreTradeRiskReport:
     approved: bool
     block_reasons: List[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "symbol": self.symbol,
             "side": self.side,
@@ -230,7 +231,7 @@ class PreTradeRiskReport:
 
 
 def compute_var(
-    returns: np.ndarray,
+    returns: NDArray[np.float64],
     confidence: float = 0.95,
     horizon_days: int = 1,
 ) -> VaRResult:
@@ -296,7 +297,7 @@ def compute_var(
 
 
 def compute_es(
-    returns: np.ndarray,
+    returns: NDArray[np.float64],
     confidence: float = 0.99,
 ) -> ESResult:
     """
@@ -421,8 +422,8 @@ def simulate_slippage(
 
 
 def compute_regime_drift(
-    reference_returns: np.ndarray,
-    current_returns: np.ndarray,
+    reference_returns: NDArray[np.float64],
+    current_returns: NDArray[np.float64],
     drift_threshold: float = 1.5,
 ) -> RegimeDriftScore:
     """
@@ -479,7 +480,7 @@ def compute_regime_drift(
 
 
 def compute_sharpe(
-    returns: np.ndarray,
+    returns: NDArray[np.float64],
     risk_free_rate: float = 0.05,
     periods_per_year: int = 252,
     sharpe_target: float = 1.5,
@@ -548,7 +549,7 @@ def compute_sharpe(
 # ---------------------------------------------------------------------------
 
 
-def compute_max_drawdown(equity_curve: np.ndarray) -> float:
+def compute_max_drawdown(equity_curve: NDArray[np.float64]) -> float:
     """
     Compute maximum drawdown from an equity curve.
 
@@ -576,9 +577,9 @@ def generate_pre_trade_report(
     side: str,
     quantity: float,
     mid_price: float,
-    returns: np.ndarray,
-    equity_curve: Optional[np.ndarray] = None,
-    reference_returns: Optional[np.ndarray] = None,
+    returns: NDArray[np.float64],
+    equity_curve: Optional[NDArray[np.float64]] = None,
+    reference_returns: Optional[NDArray[np.float64]] = None,
     bid_ask_spread_bps: float = 5.0,
     max_var_pct: float = 0.02,  # block if VaR > 2% of notional
     max_es_pct: float = 0.03,  # block if ES > 3% of notional
@@ -666,7 +667,7 @@ def generate_pre_trade_report(
         mdd = compute_max_drawdown(equity_curve)
     else:
         # Estimate from returns
-        eq = np.cumprod(1 + returns)
+        eq: NDArray[np.float64] = np.asarray(np.cumprod(1 + returns), dtype=np.float64)
         mdd = compute_max_drawdown(eq)
 
     if mdd > max_drawdown_limit:
@@ -725,7 +726,7 @@ def generate_pre_trade_report(
 
 
 def calculate_var_multiday(
-    returns: np.ndarray,
+    returns: NDArray[np.float64],
     confidence: float = 0.95,
     horizon_days: int = 10,
 ) -> MultiDayVaRResult:
@@ -807,7 +808,7 @@ def calculate_var_multiday(
 
 
 def calculate_var_ewma(
-    returns: np.ndarray,
+    returns: NDArray[np.float64],
     confidence: float = 0.95,
     horizon_days: int = 1,
     lambda_: float = 0.94,
@@ -871,8 +872,8 @@ def calculate_var_ewma(
 
 
 def _garch11_loglik(
-    params: np.ndarray,
-    returns: np.ndarray,
+    params: NDArray[np.float64],
+    returns: NDArray[np.float64],
 ) -> float:
     """Negative log-likelihood for GARCH(1,1)."""
     omega, alpha, beta = params
@@ -895,7 +896,7 @@ def _garch11_loglik(
 
 
 def calculate_var_garch(
-    returns: np.ndarray,
+    returns: NDArray[np.float64],
     confidence: float = 0.95,
     horizon_days: int = 10,
 ) -> GARCHVaRResult:
