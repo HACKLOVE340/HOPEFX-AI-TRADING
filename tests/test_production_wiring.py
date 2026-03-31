@@ -201,9 +201,9 @@ class TestSentryConfig:
         from monitoring.sentry_config import _scrub_dict
 
         d = {
-            "password": "secret",
+            "password": "secret",  # nosec B105 - test file
             "api_key": "abc123",
-            "token": "tok_xyz",
+            "token": "tok_xyz",  # nosec B105 - test file
             "message": "hello",
             "nested": {"authorization": "Bearer xyz", "data": "ok"},
         }

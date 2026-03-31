@@ -39,7 +39,7 @@ class TestKillSwitch:
         return KillSwitch(
             flag_file=tmp_path / "ks.flag",
             poll_interval_sec=0.05,
-            deactivation_token="test-token-abc",
+            deactivation_token="test-token-abc",  # nosec B106 - test file
         )
 
     def test_initial_state_inactive(self, tmp_path):
@@ -452,7 +452,7 @@ class TestCompliance:
             {"first_name": "John", "last_name": "Doe", "email": "j@example.com"},
         )
         assert applicant.applicant_id.startswith("mock_")
-        assert applicant.sdk_token != ""
+        assert applicant.sdk_token != ""  # nosec B105 - test file
 
     @pytest.mark.asyncio
     async def test_kyc_gateway_sanctions_screen_no_match(self):

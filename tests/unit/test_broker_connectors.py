@@ -119,14 +119,14 @@ from brokers.base import OrderType, OrderSide, OrderStatus  # noqa: E402
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-ALPACA_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "paper": True}
-BINANCE_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "testnet": True}
+ALPACA_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "paper": True}  # nosec B105 - test credential
+BINANCE_CONFIG = {"api_key": "test_key", "api_secret": "test_secret", "testnet": True}  # nosec B105 - test credential
 OANDA_CONFIG = {
     "api_key": "test_token",
     "account_id": "test_account",
     "environment": "practice",
 }
-MT5_CONFIG = {"server": "Demo-Server", "login": 12345678, "password": "test_pass"}
+MT5_CONFIG = {"server": "Demo-Server", "login": 12345678, "password": "test_pass"}  # nosec B105 - test file
 IB_CONFIG = {"host": "127.0.0.1", "port": 7497, "client_id": 1, "paper": True}
 
 
@@ -154,7 +154,7 @@ class TestAlpacaConnector:
     def test_initialization_paper(self):
         broker = AlpacaConnector(ALPACA_CONFIG)
         assert broker.api_key == "test_key"
-        assert broker.api_secret == "test_secret"
+        assert broker.api_secret == "test_secret"  # nosec B105 - test credential
         assert broker.paper is True
         assert broker.base_url == AlpacaConnector.PAPER_URL
         assert not broker.connected
@@ -1644,13 +1644,13 @@ class TestFTMOConnector:
     """Tests for FTMOConnector."""
 
     def test_initialization_auto_server(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file
         broker = FTMOConnector(cfg)
         assert "FTMO" in broker.server
         assert broker.challenge_type == "demo"
 
     def test_initialization_live_auto_server(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "live"}
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "live"}  # nosec B105 - test file
         broker = FTMOConnector(cfg)
         assert broker.server in FTMOConnector.FTMO_SERVERS["live"]
 
@@ -1660,7 +1660,7 @@ class TestFTMOConnector:
         assert broker.server == "FTMO-Demo2"
 
     def test_get_ftmo_rules(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file
         broker = FTMOConnector(cfg)
         rules = broker.get_ftmo_rules()
         assert "max_daily_loss" in rules
@@ -1668,14 +1668,14 @@ class TestFTMOConnector:
         assert "profit_split" in rules
 
     def test_check_ftmo_compliance_not_connected(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file
         broker = FTMOConnector(cfg)
         # Not connected → get_account_info returns None
         compliance = broker.check_ftmo_compliance()
         assert compliance["compliant"] is False
 
     def test_check_ftmo_compliance_connected(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file
         broker = FTMOConnector(cfg)
         broker.connected = True
         _mt5_stub.account_info.return_value = MagicMock(
@@ -1690,7 +1690,7 @@ class TestFTMOConnector:
         assert "equity" in compliance
 
     def test_inherits_mt5_connect(self):
-        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}
+        cfg = {"login": 12345, "password": "pass", "challenge_type": "demo"}  # nosec B105 - test file
         broker = FTMOConnector(cfg)
         _mt5_stub.initialize.return_value = True
         _mt5_stub.login.return_value = True
@@ -1702,7 +1702,7 @@ class TestMyForexFundsConnector:
     """Tests for MyForexFundsConnector."""
 
     def test_initialization_auto_server(self):
-        cfg = {"login": 12345, "password": "pass"}
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
         broker = MyForexFundsConnector(cfg)
         assert broker.server == "MyForexFunds-Demo"
         assert broker.account_size == 100000
@@ -1710,7 +1710,7 @@ class TestMyForexFundsConnector:
     def test_initialization_explicit_server(self):
         cfg = {
             "login": 12345,
-            "password": "pass",
+            "password": "pass",  # nosec B105 - test file
             "server": "MyForexFunds-Live",
             "account_size": 50000,
         }
@@ -1719,7 +1719,7 @@ class TestMyForexFundsConnector:
         assert broker.account_size == 50000
 
     def test_get_myforexfunds_rules(self):
-        cfg = {"login": 12345, "password": "pass"}
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
         broker = MyForexFundsConnector(cfg)
         rules = broker.get_myforexfunds_rules()
         assert "max_daily_loss" in rules
@@ -1727,7 +1727,7 @@ class TestMyForexFundsConnector:
         assert "scaling" in rules
 
     def test_inherits_mt5_methods(self):
-        cfg = {"login": 12345, "password": "pass"}
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
         broker = MyForexFundsConnector(cfg)
         assert hasattr(broker, "place_order")
         assert hasattr(broker, "get_account_info")
@@ -1739,18 +1739,18 @@ class TestThe5ersConnector:
     """Tests for The5ersConnector."""
 
     def test_initialization_auto_server(self):
-        cfg = {"login": 12345, "password": "pass"}
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
         broker = The5ersConnector(cfg)
         assert broker.server == "The5ers-Demo"
         assert broker.program == "high_stakes"
 
     def test_initialization_with_program(self):
-        cfg = {"login": 12345, "password": "pass", "program": "instant_funding"}
+        cfg = {"login": 12345, "password": "pass", "program": "instant_funding"}  # nosec B105 - test file
         broker = The5ersConnector(cfg)
         assert broker.program == "instant_funding"
 
     def test_get_the5ers_rules(self):
-        cfg = {"login": 12345, "password": "pass"}
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
         broker = The5ersConnector(cfg)
         rules = broker.get_the5ers_rules()
         assert "profit_split" in rules
@@ -1758,7 +1758,7 @@ class TestThe5ersConnector:
         assert "high_stakes" in rules["programs"]
 
     def test_inherits_mt5_methods(self):
-        cfg = {"login": 12345, "password": "pass"}
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
         broker = The5ersConnector(cfg)
         assert hasattr(broker, "connect")
         assert hasattr(broker, "cancel_order")
@@ -1769,18 +1769,18 @@ class TestTopstepTraderConnector:
     """Tests for TopstepTraderConnector."""
 
     def test_initialization_auto_server(self):
-        cfg = {"login": 12345, "password": "pass"}
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
         broker = TopstepTraderConnector(cfg)
         assert broker.server == "TopstepTrader-Server01"
         assert broker.account_type == "combine"
 
     def test_initialization_funded_type(self):
-        cfg = {"login": 12345, "password": "pass", "account_type": "funded"}
+        cfg = {"login": 12345, "password": "pass", "account_type": "funded"}  # nosec B105 - test file
         broker = TopstepTraderConnector(cfg)
         assert broker.account_type == "funded"
 
     def test_get_topstep_rules(self):
-        cfg = {"login": 12345, "password": "pass"}
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
         broker = TopstepTraderConnector(cfg)
         rules = broker.get_topstep_rules()
         assert "max_daily_loss" in rules
@@ -1788,7 +1788,7 @@ class TestTopstepTraderConnector:
         assert "profit_split" in rules
 
     def test_inherits_mt5_connect(self):
-        cfg = {"login": 12345, "password": "pass"}
+        cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
         broker = TopstepTraderConnector(cfg)
         _mt5_stub.initialize.return_value = True
         _mt5_stub.login.return_value = True

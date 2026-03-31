@@ -456,7 +456,7 @@ class TestLSTMPricePredictorExtended:
             lstm.build()
         except (ImportError, ModuleNotFoundError):
             pass  # Expected when TensorFlow is not installed
-        except Exception:
+        except Exception:  # nosec B110 - test file
             pass  # Other errors also acceptable
 
     def test_initialization_custom_config(self):

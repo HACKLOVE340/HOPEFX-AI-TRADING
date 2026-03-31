@@ -72,7 +72,7 @@ class TestKillSwitchGate:
 
         ks = KillSwitch(
             flag_file=tmp_path / "ks.flag",
-            deactivation_token="tok",
+            deactivation_token="tok",  # nosec B106 - test file
         )
         ks.activate("drawdown exceeded")
         trading_mod._set_kill_switch(ks)
@@ -89,7 +89,7 @@ class TestKillSwitchGate:
         import api.trading as trading_mod
         from kill_switch import KillSwitch
 
-        ks = KillSwitch(flag_file=tmp_path / "ks.flag", deactivation_token="tok")
+        ks = KillSwitch(flag_file=tmp_path / "ks.flag", deactivation_token="tok")  # nosec B106 - test file
         trading_mod._set_kill_switch(ks)
         try:
             trading_mod._check_kill_switch()  # must not raise
@@ -102,7 +102,7 @@ class TestKillSwitchGate:
         from fastapi import HTTPException
         from kill_switch import KillSwitch
 
-        ks = KillSwitch(flag_file=tmp_path / "ks.flag", deactivation_token="tok")
+        ks = KillSwitch(flag_file=tmp_path / "ks.flag", deactivation_token="tok")  # nosec B106 - test file
         ks.activate("test ordering")
         trading_mod._set_kill_switch(ks)
         try:

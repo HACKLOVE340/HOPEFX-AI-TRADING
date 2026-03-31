@@ -41,7 +41,7 @@ os.environ.setdefault(
 # ---------------------------------------------------------------------------
 
 
-def _make_ks(tmp_path: Path, token: str = "test-deactivation-token"):
+def _make_ks(tmp_path: Path, token: str = "test-deactivation-token"):  # nosec B107 - test file
     """Create a KillSwitch backed by a temp directory."""
     from kill_switch import KillSwitch
 
@@ -215,23 +215,23 @@ class TestDrawdownAutoActivation:
 # ===========================================================================
 class TestDeactivationSecurity:
     def test_wrong_token_raises_permission_error(self, tmp_path):
-        ks = _make_ks(tmp_path, token="correct-token")
+        ks = _make_ks(tmp_path, token="correct-token")  # nosec B106 - test file
         ks.activate("test")
         with pytest.raises(PermissionError):
-            ks.deactivate(token="wrong-token")
+            ks.deactivate(token="wrong-token")  # nosec B106 - test file
         assert ks.is_active() is True  # still active
 
     def test_no_token_raises_permission_error(self, tmp_path):
-        ks = _make_ks(tmp_path, token="correct-token")
+        ks = _make_ks(tmp_path, token="correct-token")  # nosec B106 - test file
         ks.activate("test")
         with pytest.raises(PermissionError):
             ks.deactivate(token=None)
         assert ks.is_active() is True
 
     def test_correct_token_deactivates(self, tmp_path):
-        ks = _make_ks(tmp_path, token="correct-token")
+        ks = _make_ks(tmp_path, token="correct-token")  # nosec B106 - test file
         ks.activate("test")
-        ks.deactivate(token="correct-token")
+        ks.deactivate(token="correct-token")  # nosec B106 - test file
         assert ks.is_active() is False
 
     def test_no_token_configured_blocks_deactivation(self, tmp_path):
@@ -244,7 +244,7 @@ class TestDeactivationSecurity:
         )
         ks.activate("test")
         with pytest.raises(PermissionError):
-            ks.deactivate(token="anything")
+            ks.deactivate(token="anything")  # nosec B106 - test file
 
 
 # ===========================================================================
@@ -258,12 +258,12 @@ class TestStatePersistence:
         flag = tmp_path / "ks.flag"
 
         # First instance — activate
-        ks1 = KillSwitch(flag_file=flag, deactivation_token="tok")
+        ks1 = KillSwitch(flag_file=flag, deactivation_token="tok")  # nosec B106 - test file
         ks1.activate("drawdown exceeded")
         assert ks1.is_active() is True
 
         # Second instance — simulates process restart
-        ks2 = KillSwitch(flag_file=flag, deactivation_token="tok")
+        ks2 = KillSwitch(flag_file=flag, deactivation_token="tok")  # nosec B106 - test file
         assert ks2.is_active() is True
         assert "drawdown" in ks2.reason.lower()
 
@@ -273,11 +273,11 @@ class TestStatePersistence:
 
         flag = tmp_path / "ks.flag"
 
-        ks1 = KillSwitch(flag_file=flag, deactivation_token="tok")
+        ks1 = KillSwitch(flag_file=flag, deactivation_token="tok")  # nosec B106 - test file
         ks1.activate("test")
-        ks1.deactivate(token="tok")
+        ks1.deactivate(token="tok")  # nosec B106 - test file
 
-        ks2 = KillSwitch(flag_file=flag, deactivation_token="tok")
+        ks2 = KillSwitch(flag_file=flag, deactivation_token="tok")  # nosec B106 - test file
         assert ks2.is_active() is False
 
 
@@ -292,7 +292,7 @@ class TestFileFlagPolling:
 
         flag = tmp_path / "ks.flag"
         ks = KillSwitch(
-            flag_file=flag, poll_interval_sec=0.05, deactivation_token="tok"
+            flag_file=flag, poll_interval_sec=0.05, deactivation_token="tok"  # nosec B106 - test file
         )
 
         await ks.start()

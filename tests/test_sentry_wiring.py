@@ -230,7 +230,7 @@ class TestScrubDict:
         self.scrub = sc._scrub_dict
 
     def test_scrubs_password(self):
-        result = self.scrub({"password": "secret123", "username": "alice"})
+        result = self.scrub({"password": "secret123", "username": "alice"})  # nosec B105 - test file
         assert result["password"] == "[Filtered]"
         assert result["username"] == "alice"
 
@@ -241,7 +241,7 @@ class TestScrubDict:
 
     def test_scrubs_token(self):
         # user_id is in _SCRUB_FIELDS (account IDs are PII); use a safe field instead
-        result = self.scrub({"token": "Bearer xyz", "request_id": 42})
+        result = self.scrub({"token": "Bearer xyz", "request_id": 42})  # nosec B105 - test file
         assert result["token"] == "[Filtered]"
         assert result["request_id"] == 42
 
@@ -251,7 +251,7 @@ class TestScrubDict:
         assert result["outer"]["safe"] == "value"
 
     def test_scrubs_list_of_dicts(self):
-        result = self.scrub({"items": [{"password": "pw1"}, {"name": "bob"}]})
+        result = self.scrub({"items": [{"password": "pw1"}, {"name": "bob"}]})  # nosec B105 - test file
         assert result["items"][0]["password"] == "[Filtered]"
         assert result["items"][1]["name"] == "bob"
 
@@ -303,7 +303,7 @@ class TestBeforeSend:
     def test_scrubs_request_data(self):
         event = {
             "transaction": "/api/auth/login",
-            "request": {"data": {"password": "secret", "username": "alice"}},
+            "request": {"data": {"password": "secret", "username": "alice"}},  # nosec B105 - test file
         }
         result = self.before_send(event, {})
         assert result["request"]["data"]["password"] == "[Filtered]"

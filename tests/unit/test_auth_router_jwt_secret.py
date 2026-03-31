@@ -27,14 +27,14 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-_VALID_SECRET = "a-valid-secret-that-is-at-least-32-chars-long!"
-_OTHER_SECRET = "another-valid-secret-that-is-32-chars-long!!"
+_VALID_SECRET = "a-valid-secret-that-is-at-least-32-chars-long!"  # nosec B105 - test file
+_OTHER_SECRET = "another-valid-secret-that-is-32-chars-long!!"  # nosec B105 - test file
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _make_token(
+def _make_token(  # nosec B107 - test file
     secret: str,
     sub: str = "user-123",
     token_type: str = "access",
@@ -75,7 +75,7 @@ class TestJWTSecretMisconfiguration:
 
     def test_unset_secret_returns_503(self, monkeypatch):
         monkeypatch.delenv("SECURITY_JWT_SECRET", raising=False)
-        forged = _make_token(secret="")  # old bypass vector
+        forged = _make_token(secret="")  # old bypass vector  # nosec B106 - test file
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
         assert exc_info.value.status_code == 503, (
@@ -85,7 +85,7 @@ class TestJWTSecretMisconfiguration:
 
     def test_short_secret_returns_503(self, monkeypatch):
         monkeypatch.setenv("SECURITY_JWT_SECRET", "tooshort")
-        forged = _make_token(secret="tooshort")
+        forged = _make_token(secret="tooshort")  # nosec B106 - test file
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
         assert (
@@ -101,7 +101,7 @@ class TestEmptySecretBypass:
 
     def test_empty_string_signed_token_rejected(self, monkeypatch):
         monkeypatch.setenv("SECURITY_JWT_SECRET", _VALID_SECRET)
-        forged = _make_token(secret="")
+        forged = _make_token(secret="")  # nosec B106 - test file
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
         assert exc_info.value.status_code == 401, (
@@ -145,7 +145,7 @@ class TestTokenClaimsValidation:
 
     def test_refresh_token_type_rejected(self, monkeypatch):
         monkeypatch.setenv("SECURITY_JWT_SECRET", _VALID_SECRET)
-        token = _make_token(secret=_VALID_SECRET, token_type="refresh")
+        token = _make_token(secret=_VALID_SECRET, token_type="refresh")  # nosec B106 - test file
         with pytest.raises(HTTPException) as exc_info:
             _call(token)
         assert exc_info.value.status_code == 401

@@ -176,7 +176,7 @@ def test_payments_flutterwave_import():
 def test_payments_flutterwave_client_instantiate():
     from payments.fintech.flutterwave import FlutterwaveClient
 
-    client = FlutterwaveClient(secret_key="test_key_smoke")
+    client = FlutterwaveClient(secret_key="test_key_smoke")  # nosec B106 - test file
     assert client is not None
 
 
