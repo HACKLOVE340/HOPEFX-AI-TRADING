@@ -30,10 +30,110 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Status"])
 
-# Rolling uptime history — keyed by ISO date string, value = uptime_pct
-# In production this would be persisted to a time-series DB.
-_uptime_history: Dict[str, float] = {}
 _start_time = time.time()
+
+# ── Persistent uptime history ─────────────────────────────────────────────────
+# Primary store: Redis hash  "hopefx:uptime_history"  field=ISO-date value=pct
+# Fallback store: configurations table via db_store  key="status:uptime:{date}"
+# In-process write-through cache to avoid a round-trip on every HTML render.
+
+_uptime_cache: Dict[str, float] = {}
+_REDIS_HASH_KEY = "hopefx:uptime_history"
+_DB_KEY_PREFIX = "status:uptime:"
+
+
+def _get_redis():
+    """Return a Redis client or None if unavailable."""
+    try:
+        import os as _os
+        import redis as _redis
+
+        url = _os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        client = _redis.from_url(url, socket_connect_timeout=1, socket_timeout=1)
+        client.ping()
+        return client
+    except Exception:
+        return None
+
+
+def _uptime_get(date_iso: str) -> float:
+    """Read uptime percentage for a date from Redis → DB → cache → default 100."""
+    if date_iso in _uptime_cache:
+        return _uptime_cache[date_iso]
+
+    # Try Redis first
+    r = _get_redis()
+    if r:
+        try:
+            val = r.hget(_REDIS_HASH_KEY, date_iso)
+            if val is not None:
+                pct = float(val)
+                _uptime_cache[date_iso] = pct
+                return pct
+        except Exception as exc:
+            logger.debug("Redis uptime read failed: %s", exc)
+
+    # Fallback: DB via db_store
+    try:
+        from api.db_store import db_get  # noqa: PLC0415
+
+        stored = db_get(f"{_DB_KEY_PREFIX}{date_iso}")
+        if stored is not None:
+            pct = float(stored)
+            _uptime_cache[date_iso] = pct
+            return pct
+    except Exception as exc:
+        logger.debug("DB uptime read failed: %s", exc)
+
+    return 100.0
+
+
+def _uptime_set(date_iso: str, pct: float) -> None:
+    """Write uptime percentage to Redis + DB + in-process cache."""
+    _uptime_cache[date_iso] = pct
+
+    r = _get_redis()
+    if r:
+        try:
+            r.hset(_REDIS_HASH_KEY, date_iso, str(pct))
+            # Expire the hash after 100 days to avoid unbounded growth
+            r.expire(_REDIS_HASH_KEY, 100 * 86400)
+        except Exception as exc:
+            logger.debug("Redis uptime write failed: %s", exc)
+
+    try:
+        from api.db_store import db_set  # noqa: PLC0415
+
+        db_set(f"{_DB_KEY_PREFIX}{date_iso}", pct, changed_by="status_api")
+    except Exception as exc:
+        logger.debug("DB uptime write failed: %s", exc)
+
+
+def record_uptime(date_iso: str, pct: float) -> None:
+    """Public helper — call from health-check scheduler to record daily uptime."""
+    _uptime_set(date_iso, pct)
+
+
+# Backwards-compatible shim so existing code that reads _uptime_history[day]
+# still works without modification.
+class _UptimeHistoryProxy:
+    """Dict-like proxy that reads/writes through the persistent store."""
+
+    def get(self, key: str, default: float = 100.0) -> float:
+        val = _uptime_get(key)
+        return val if val != 100.0 or key in _uptime_cache else default
+
+    def __setitem__(self, key: str, value: float) -> None:
+        _uptime_set(key, value)
+
+    def __getitem__(self, key: str) -> float:
+        return _uptime_get(key)
+
+    def __contains__(self, key: object) -> bool:
+        return _uptime_get(str(key)) != 100.0 or str(key) in _uptime_cache
+
+
+_uptime_history = _UptimeHistoryProxy()
 
 
 # ── Response models ───────────────────────────────────────────────────────────
