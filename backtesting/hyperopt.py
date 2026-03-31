@@ -310,7 +310,7 @@ class HyperoptEngine:
 
     def _compute_metric(self, df: pd.DataFrame, signals: List[str]) -> float:
         """Compute the target metric from a signal list."""
-        close = df["close"].values
+        close = df["close"].to_numpy()
         n = len(signals)
         offset = len(close) - n
 

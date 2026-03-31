@@ -120,9 +120,9 @@ class AdvancedPatternDetector:
         patterns = []
 
         # Price data
-        high = df["high"].values
-        low = df["low"].values
-        close = df["close"].values
+        high = df["high"].to_numpy()
+        low = df["low"].to_numpy()
+        close = df["close"].to_numpy()
 
         try:
             # Detect each pattern type

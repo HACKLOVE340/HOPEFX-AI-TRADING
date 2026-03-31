@@ -193,7 +193,7 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
         return self._obs(), reward, done, False, {}
 
     def _obs(self) -> np.ndarray:
-        closes = self.df["close"].iloc[self._step - self.window : self._step].values
+        closes = self.df["close"].iloc[self._step - self.window : self._step].to_numpy()
         returns = np.diff(closes) / (closes[:-1] + 1e-9)
         if len(returns) < self.window:
             returns = np.pad(returns, (self.window - len(returns), 0))

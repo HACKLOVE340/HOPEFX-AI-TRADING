@@ -99,9 +99,9 @@ class AdvancedPatternDetector:
         patterns = []
 
         # Price data
-        high = df["high"].values
-        low = df["low"].values
-        close = df["close"].values
+        high = df["high"].to_numpy()
+        low = df["low"].to_numpy()
+        close = df["close"].to_numpy()
 
         # Detect each pattern type
         patterns.extend(self._detect_head_shoulders(high, low, close, df.index))
