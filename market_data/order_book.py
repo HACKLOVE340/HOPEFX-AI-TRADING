@@ -478,9 +478,10 @@ class MockL2Feed:
     def __init__(self) -> None:
         import os as _os
 
-        if _os.getenv("APP_ENV", "production").lower() == "production":
+        _env = _os.getenv("APP_ENV", "production").lower()
+        if _env in ("production", "staging"):
             raise RuntimeError(
-                "MockL2Feed cannot be used in production (APP_ENV=production). "
+                f"MockL2Feed cannot be used in {_env} (APP_ENV={_env}). "
                 "Set L2_PROVIDER=oanda or L2_PROVIDER=ibkr and configure the "
                 "corresponding credentials (OANDA_API_KEY / IBKR_HOST)."
             )
