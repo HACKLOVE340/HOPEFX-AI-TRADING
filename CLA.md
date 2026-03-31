@@ -1,6 +1,6 @@
 # Contributor License Agreement (CLA)
 
-**HOPEFX-AI-TRADING**  
+**HOPEFX-AI-TRADING**
 Copyright (c) 2025-2026 Opeyemi (HACKLOVE340)
 
 ---

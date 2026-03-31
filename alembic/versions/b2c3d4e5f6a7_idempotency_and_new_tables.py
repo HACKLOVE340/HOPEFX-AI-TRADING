@@ -87,7 +87,9 @@ def upgrade() -> None:
         sa.Column("amount_usd", sa.Float(), nullable=False),
         sa.Column("amount_crypto", sa.Float(), nullable=False),
         sa.Column("rate_usd", sa.Float(), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="pending"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="pending"
+        ),
         sa.Column("confirmations", sa.Integer(), nullable=True, server_default="0"),
         sa.Column("confirmations_required", sa.Integer(), nullable=False),
         sa.Column("tx_hash", sa.String(length=200), nullable=True),
@@ -109,10 +111,18 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("payment_id", name="uq_crypto_payments_payment_id"),
     )
-    op.create_index("ix_crypto_payments_payment_id", "crypto_payments", ["payment_id"], unique=True)
-    op.create_index("ix_crypto_payments_user_id", "crypto_payments", ["user_id"], unique=False)
-    op.create_index("ix_crypto_payments_status", "crypto_payments", ["status"], unique=False)
-    op.create_index("ix_crypto_payments_created_at", "crypto_payments", ["created_at"], unique=False)
+    op.create_index(
+        "ix_crypto_payments_payment_id", "crypto_payments", ["payment_id"], unique=True
+    )
+    op.create_index(
+        "ix_crypto_payments_user_id", "crypto_payments", ["user_id"], unique=False
+    )
+    op.create_index(
+        "ix_crypto_payments_status", "crypto_payments", ["status"], unique=False
+    )
+    op.create_index(
+        "ix_crypto_payments_created_at", "crypto_payments", ["created_at"], unique=False
+    )
 
     # ── 4. outbox_events table ────────────────────────────────────────────────
     op.create_table(
@@ -132,7 +142,9 @@ def upgrade() -> None:
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_outbox_event_type", "outbox_events", ["event_type"], unique=False)
+    op.create_index(
+        "ix_outbox_event_type", "outbox_events", ["event_type"], unique=False
+    )
     op.create_index(
         "idx_outbox_unpublished",
         "outbox_events",

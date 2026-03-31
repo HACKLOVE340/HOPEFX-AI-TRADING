@@ -1,4 +1,5 @@
 import logging
+
 logger = logging.getLogger(__name__)
 # HOPEFX-AI-TRADING
 # Copyright (c) 2025-2026
@@ -19,17 +20,17 @@ __license__ = "MIT"
 try:
     from config import ConfigManager, initialize_config
 except Exception as _exc:  # pragma: no cover
-    logger.debug('Suppressed exception: %s', _exc)
+    logger.debug("Suppressed exception: %s", _exc)
 
 try:
     from cache import MarketDataCache, Timeframe
 except Exception as _exc:  # pragma: no cover
-    logger.debug('Suppressed exception: %s', _exc)
+    logger.debug("Suppressed exception: %s", _exc)
 
 try:
     from database import Base
 except Exception as _exc:  # pragma: no cover
-    logger.debug('Suppressed exception: %s', _exc)
+    logger.debug("Suppressed exception: %s", _exc)
 
 # Import trading components — wrapped so partial installs don't break the package
 try:
@@ -42,12 +43,12 @@ try:
         MovingAverageCrossover,
     )
 except Exception as _exc:  # pragma: no cover
-    logger.debug('Suppressed exception: %s', _exc)
+    logger.debug("Suppressed exception: %s", _exc)
 
 try:
     from risk import RiskManager, RiskConfig, PositionSize, PositionSizeMethod
 except Exception as _exc:  # pragma: no cover
-    logger.debug('Suppressed exception: %s', _exc)
+    logger.debug("Suppressed exception: %s", _exc)
 
 try:
     from brokers import (
@@ -61,7 +62,7 @@ try:
         PaperTradingBroker,
     )
 except Exception as _exc:  # pragma: no cover
-    logger.debug('Suppressed exception: %s', _exc)
+    logger.debug("Suppressed exception: %s", _exc)
 
 try:
     from notifications import (
@@ -70,7 +71,7 @@ try:
         NotificationChannel,
     )
 except Exception as _exc:  # pragma: no cover
-    logger.debug('Suppressed exception: %s', _exc)
+    logger.debug("Suppressed exception: %s", _exc)
 
 __all__ = [
     # Version info
