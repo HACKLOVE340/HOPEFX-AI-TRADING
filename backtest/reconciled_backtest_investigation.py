@@ -206,7 +206,20 @@ def sweep_confidence_thresholds(
 
 
 def _load_xauusd_daily() -> pd.DataFrame | None:
-    """Load XAUUSD daily OHLCV from CSV cache or yfinance."""
+    """Load XAUUSD daily OHLCV for hold-period re-simulation.
+
+    Source priority
+    ---------------
+    1. CSV cache at data/XAUUSD_D1.csv (fastest, no network)
+    2. yfinance GC=F (gold futures — highly correlated with XAU/USD spot,
+       suitable for hold-period exit price lookup)
+
+    Note: GC=F is gold futures, not XAU/USD spot.  The price difference is
+    typically <0.5% and does not materially affect hold-period sweep results.
+    For production-grade reconciliation, replace with OANDA v20 candles:
+      GET /v3/instruments/XAU_USD/candles?granularity=D&count=2500
+    and save to data/XAUUSD_D1.csv before running this script.
+    """
     csv_path = DATA_DIR / "XAUUSD_D1.csv"
     if csv_path.exists():
         try:
@@ -218,7 +231,7 @@ def _load_xauusd_daily() -> pd.DataFrame | None:
         except Exception as exc:
             logger.debug("CSV load failed: %s", exc)
 
-    # Try yfinance
+    # Try yfinance (GC=F — gold futures, highly correlated with XAU/USD spot)
     try:
         import yfinance as yf
 
@@ -226,14 +239,25 @@ def _load_xauusd_daily() -> pd.DataFrame | None:
             "GC=F", period="10y", interval="1d", progress=False, auto_adjust=True
         )
         if df is not None and len(df) > 100:  # noqa: PLR2004
-            df.columns = [c.lower() for c in df.columns]
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = [col[0].lower() for col in df.columns]
+            else:
+                df.columns = [c.lower() for c in df.columns]
             df.index.name = "timestamp"
             df.to_csv(csv_path)
-            logger.info("Downloaded %d daily bars from yfinance", len(df))
+            logger.info(
+                "Downloaded %d daily bars from yfinance (GC=F gold futures)", len(df)
+            )
             return df
     except Exception as exc:
         logger.debug("yfinance download failed: %s", exc)
 
+    logger.warning(
+        "_load_xauusd_daily: no OHLCV data available. "
+        "Hold-period sweep will use approximate P&L scaling. "
+        "For accurate results, save OANDA XAU_USD daily candles to %s",
+        csv_path,
+    )
     return None
 
 
