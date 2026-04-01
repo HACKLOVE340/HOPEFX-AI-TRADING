@@ -90,7 +90,7 @@ BROKER_TYPE=paper
     try:
         import stat
         ENV_PATH.chmod(stat.S_IRUSR | stat.S_IWUSR)
-    except Exception:
+    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         pass  # chmod may fail on Windows; non-fatal
     return True
 
@@ -179,7 +179,7 @@ def bootstrap(verbose: bool = True) -> None:
             print("  Start the server:  python app.py")
             print("  Login at:          http://localhost:8000/login")
             print("─" * 58 + "\n")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         if verbose:
             print(f"  ⚠️  Admin seed skipped: {exc}")
 
