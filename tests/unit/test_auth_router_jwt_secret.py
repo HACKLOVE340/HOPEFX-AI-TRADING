@@ -78,7 +78,7 @@ class TestJWTSecretMisconfiguration:
         forged = _make_token(secret="")  # old bypass vector  # nosec B106 - test file
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
-        assert exc_info.value.status_code == 503, (
+        assert exc_info.value.status_code == 503, (  # noqa: PLR2004
             f"Expected 503 (misconfigured), got {exc_info.value.status_code}. "
             "Empty-secret bypass may still be present."
         )
@@ -89,7 +89,7 @@ class TestJWTSecretMisconfiguration:
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
         assert (
-            exc_info.value.status_code == 503
+            exc_info.value.status_code == 503  # noqa: PLR2004
         ), f"Expected 503 (misconfigured), got {exc_info.value.status_code}."
 
 
@@ -104,7 +104,7 @@ class TestEmptySecretBypass:
         forged = _make_token(secret="")  # nosec B106 - test file
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
-        assert exc_info.value.status_code == 401, (
+        assert exc_info.value.status_code == 401, (  # noqa: PLR2004
             f"Expected 401 for empty-secret token, got {exc_info.value.status_code}. "
             "Empty-secret bypass may still be present."
         )
@@ -114,7 +114,7 @@ class TestEmptySecretBypass:
         forged = _make_token(secret=_OTHER_SECRET)
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
-        assert exc_info.value.status_code == 401
+        assert exc_info.value.status_code == 401  # noqa: PLR2004
 
 
 # ── Tests: valid token → success ─────────────────────────────────────────────
@@ -141,17 +141,17 @@ class TestTokenClaimsValidation:
         token = _make_token(secret=_VALID_SECRET, exp_offset=-10)
         with pytest.raises(HTTPException) as exc_info:
             _call(token)
-        assert exc_info.value.status_code == 401
+        assert exc_info.value.status_code == 401  # noqa: PLR2004
 
     def test_refresh_token_type_rejected(self, monkeypatch):
         monkeypatch.setenv("SECURITY_JWT_SECRET", _VALID_SECRET)
         token = _make_token(secret=_VALID_SECRET, token_type="refresh")
         with pytest.raises(HTTPException) as exc_info:
             _call(token)
-        assert exc_info.value.status_code == 401
+        assert exc_info.value.status_code == 401  # noqa: PLR2004
 
     def test_malformed_token_rejected(self, monkeypatch):
         monkeypatch.setenv("SECURITY_JWT_SECRET", _VALID_SECRET)
         with pytest.raises(HTTPException) as exc_info:
             _call("not.a.jwt")
-        assert exc_info.value.status_code == 401
+        assert exc_info.value.status_code == 401  # noqa: PLR2004

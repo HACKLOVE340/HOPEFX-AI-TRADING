@@ -116,7 +116,7 @@ ALGORITHM = "HS256"
 
 def _get_secret() -> str:
     s = os.getenv("SECURITY_JWT_SECRET")
-    if not s or len(s) < 32:
+    if not s or len(s) < 32:  # noqa: PLR2004
         raise RuntimeError("SECURITY_JWT_SECRET not set or too short")
     return s
 
@@ -235,7 +235,7 @@ class AuthService:
         email = email.lower().strip()
         username = username.strip()
 
-        if len(password) < 8:
+        if len(password) < 8:  # noqa: PLR2004
             return False, "Password must be at least 8 characters", None
 
         with self._sf() as session:
@@ -564,7 +564,7 @@ class AuthService:
     def reset_password(self, token: str, new_password: str) -> tuple[bool, str]:
         from database.user_models import User
 
-        if len(new_password) < 8:
+        if len(new_password) < 8:  # noqa: PLR2004
             return False, "Password must be at least 8 characters"
 
         token_hash = _hash_token(token)

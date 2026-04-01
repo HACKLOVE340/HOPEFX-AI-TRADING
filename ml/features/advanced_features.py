@@ -493,7 +493,7 @@ class AdvancedFeatureEngineer:
     def _calculate_hurst(self, prices: np.ndarray) -> float:
         """Calculate Hurst exponent"""
         try:
-            if len(prices) < 10:
+            if len(prices) < 10:  # noqa: PLR2004
                 return 0.5
 
             returns = np.diff(np.log(prices))
@@ -520,7 +520,7 @@ class AdvancedFeatureEngineer:
     def _calculate_dfa(self, prices: np.ndarray) -> float:
         """Calculate Detrended Fluctuation Analysis"""
         try:
-            if len(prices) < 10:
+            if len(prices) < 10:  # noqa: PLR2004
                 return 0.5
 
             # Simple DFA approximation

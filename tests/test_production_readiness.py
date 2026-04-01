@@ -49,7 +49,7 @@ def test_app_imports_with_only_jwt_secret(monkeypatch):
 
     importlib.reload(_app)  # re-run module-level code with patched env
     assert (
-        len(_app.app.routes) > 100
+        len(_app.app.routes) > 100  # noqa: PLR2004
     ), f"Expected >100 routes, got {len(_app.app.routes)}"
 
 

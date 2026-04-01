@@ -490,9 +490,9 @@ class HopeFXEngine:
         sent = features.get("news_sentiment_score", 0.0)
         score = 0.5 * ofi + 0.3 * press + 0.2 * sent
 
-        if score > 0.15:
+        if score > 0.15:  # noqa: PLR2004
             return "long", min(0.5 + abs(score), 0.95), 0.5 + abs(score) * 0.5
-        if score < -0.15:
+        if score < -0.15:  # noqa: PLR2004
             return "short", min(0.5 + abs(score), 0.95), 0.5 + abs(score) * 0.5
         return "neutral", 0.0, 0.5
 

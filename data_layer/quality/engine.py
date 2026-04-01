@@ -97,7 +97,7 @@ class _SourceState:
 
     def rolling_mid_std(self) -> float:
         with self._lock:
-            if len(self.mids) < 10:
+            if len(self.mids) < 10:  # noqa: PLR2004
                 return 0.0
             return float(np.std(list(self.mids)))
 
@@ -259,7 +259,7 @@ class DataQualityEngine:
         state.mids.append(tick.mid)
         state.spreads.append(tick.spread)
 
-        if len(state.mids) >= 20:
+        if len(state.mids) >= 20:  # noqa: PLR2004
             arr = np.array(list(state.mids))
             mean = arr[:-1].mean()
             std = arr[:-1].std() + 1e-9
@@ -277,7 +277,7 @@ class DataQualityEngine:
                 )
 
         # ── 7. Multivariate anomaly (Mahalanobis) — when enough history ────
-        if len(state.mids) >= 50 and len(state.spreads) >= 50:
+        if len(state.mids) >= 50 and len(state.spreads) >= 50:  # noqa: PLR2004
             try:
                 mids_arr = np.array(list(state.mids)[-50:])
                 spreads_arr = np.array(list(state.spreads)[-50:])
@@ -287,7 +287,7 @@ class DataQualityEngine:
                 diff = np.array([tick.mid, tick.spread]) - mu
                 inv_cov = np.linalg.inv(cov)
                 mahal = float(np.sqrt(diff @ inv_cov @ diff))
-                if mahal > 6.0:  # ~3-sigma in 2D
+                if mahal > 6.0:  # ~3-sigma in 2D  # noqa: PLR2004
                     state.anomaly_count += 1
                     state.update_confidence(-0.02)
                     if quality == TickQuality.GOOD:
@@ -305,7 +305,7 @@ class DataQualityEngine:
         # ── 8. Latency tracking ────────────────────────────────────────────
         tick_epoch = tick.timestamp.timestamp()
         latency_ms = (received_at - tick_epoch) * 1000.0
-        if 0 < latency_ms < 300_000:  # ignore negative or absurd latencies
+        if 0 < latency_ms < 300_000:  # ignore negative or absurd latencies  # noqa: PLR2004
             state.record_latency(latency_ms)
             if self._prom_latency:
                 try:

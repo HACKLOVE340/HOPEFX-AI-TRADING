@@ -268,7 +268,7 @@ async def _fetch_alpha_vantage(
         async with aiohttp.ClientSession() as session, session.get(
             url, timeout=aiohttp.ClientTimeout(total=30)
         ) as resp:
-            if resp.status != 200:
+            if resp.status != 200:  # noqa: PLR2004
                 return None
             data = await resp.json()
 

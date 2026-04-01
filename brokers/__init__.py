@@ -942,7 +942,7 @@ class OANDABroker(BaseBroker):
                 async with self._rate_limiter, self._session.get(
                     f"{self.base_url}/v3/accounts/{self.account_id}",
                 ) as resp:
-                    if resp.status == 200:
+                    if resp.status == 200:  # noqa: PLR2004
                         data = await resp.json()
                         account = data.get("account", {})
 
@@ -1001,9 +1001,9 @@ class OANDABroker(BaseBroker):
                         self._request_count += 1
                         self._last_request_time = time.time()
 
-                        if resp.status == 200 or resp.status == 201:
+                        if resp.status == 200 or resp.status == 201:  # noqa: PLR2004
                             return await resp.json()
-                        elif resp.status == 429:  # Rate limited
+                        elif resp.status == 429:  # Rate limited  # noqa: PLR2004
                             retry_after = int(resp.headers.get("Retry-After", 1))
                             logger.warning(f"Rate limited, waiting {retry_after}s")
                             await asyncio.sleep(retry_after)
@@ -1135,7 +1135,7 @@ class OANDABroker(BaseBroker):
         """Close position"""
         # Parse position ID
         parts = position_id.rsplit("_", 1)
-        if len(parts) != 2:
+        if len(parts) != 2:  # noqa: PLR2004
             logger.error(f"Invalid position ID format: {position_id}")
             return False
 

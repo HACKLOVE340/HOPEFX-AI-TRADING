@@ -158,8 +158,8 @@ class TestAPIConfig:
         config = APIConfig(provider="Binance", api_key="key", api_secret="secret")
 
         assert config.sandbox_mode is True  # Default should be sandbox
-        assert config.timeout == 30
-        assert config.max_retries == 3
+        assert config.timeout == 30  # noqa: PLR2004
+        assert config.max_retries == 3  # noqa: PLR2004
 
     def test_api_config_validate(self):
         """Test APIConfig validation."""
@@ -231,7 +231,7 @@ class TestTradingConfig:
         config = TradingConfig()
 
         assert config.paper_trading_mode is True  # Default to paper trading
-        assert config.max_position_size == 10000.0
+        assert config.max_position_size == 10000.0  # noqa: PLR2004
         assert config.risk_per_trade == 1.0  # 1% risk per trade
 
     def test_trading_config_validate(self):

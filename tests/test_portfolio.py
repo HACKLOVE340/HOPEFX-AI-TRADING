@@ -21,7 +21,7 @@ class TestPortfolioManager:
         )
 
         assert portfolio.total_exposure == 1.0
-        assert portfolio.asset_count == 4
+        assert portfolio.asset_count == 4  # noqa: PLR2004
 
     def test_correlation_matrix(self, test_config):
         """Test correlation calculation between assets."""
@@ -62,7 +62,7 @@ class TestPortfolioManager:
         )
 
         assert sum(optimal["weights"].values()) == pytest.approx(1.0)
-        assert all(w <= 0.5 for w in optimal["weights"].values())
+        assert all(w <= 0.5 for w in optimal["weights"].values())  # noqa: PLR2004
         assert optimal["expected_sharpe"] > 0
 
     def test_risk_contribution(self, test_config):

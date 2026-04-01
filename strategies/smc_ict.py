@@ -189,7 +189,7 @@ class SMCICTStrategy(BaseStrategy):
                 if liquidity_swept:
                     bullish_score += 0.1
 
-                if bullish_score >= 0.5:  # Need at least 50% confidence
+                if bullish_score >= 0.5:  # Need at least 50% confidence  # noqa: PLR2004
                     signal_type = SignalType.BUY
                     confidence = min(bullish_score, 1.0)
                     metadata = {
@@ -240,7 +240,7 @@ class SMCICTStrategy(BaseStrategy):
                 if liquidity_swept:
                     bearish_score += 0.1
 
-                if bearish_score >= 0.5:  # Need at least 50% confidence
+                if bearish_score >= 0.5:  # Need at least 50% confidence  # noqa: PLR2004
                     signal_type = SignalType.SELL
                     confidence = min(bearish_score, 1.0)
                     metadata = {
@@ -327,7 +327,7 @@ class SMCICTStrategy(BaseStrategy):
 
         try:
             for i in range(len(prices) - self.ob_lookback, len(prices) - 1):
-                if i < 2:
+                if i < 2:  # noqa: PLR2004
                     continue
 
                 # Bullish OB: Last down candle before strong up move

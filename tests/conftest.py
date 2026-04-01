@@ -73,7 +73,7 @@ def _restore_critical_env_vars():
         else:
             os.environ[k] = v
     # Always guarantee a valid JWT secret after teardown
-    if len(os.environ.get("SECURITY_JWT_SECRET", "")) < 32:
+    if len(os.environ.get("SECURITY_JWT_SECRET", "")) < 32:  # noqa: PLR2004
         os.environ["SECURITY_JWT_SECRET"] = _CANONICAL_JWT_SECRET
 
 

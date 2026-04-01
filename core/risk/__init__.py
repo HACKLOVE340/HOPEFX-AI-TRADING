@@ -49,7 +49,7 @@ class GARCHModel:
             negative_alpha = alpha < 0
             negative_beta = beta < 0
             non_stationary = alpha + beta >= 1
-            invalid_df = nu <= 2  # Student-t requires df > 2 for finite variance
+            invalid_df = nu <= 2  # Student-t requires df > 2 for finite variance  # noqa: PLR2004
             return non_positive_omega or negative_alpha or negative_beta or non_stationary or invalid_df
 
         def neg_log_likelihood(params):
@@ -215,7 +215,7 @@ class MonteCarloRiskEngine:
     def _stress_correlation(self, weights: dict[str, float]) -> float:
         """Calculate correlation under stress (tail dependence)"""
         # Simplified: use historical correlation in worst 5% of days
-        if len(self.historical_returns) < 100:
+        if len(self.historical_returns) < 100:  # noqa: PLR2004
             return 0.5
 
         worst_days = self.historical_returns.sum(axis=1).quantile(0.05)
@@ -223,7 +223,7 @@ class MonteCarloRiskEngine:
             self.historical_returns.sum(axis=1) <= worst_days
         ]
 
-        if len(stress_data) < 10:
+        if len(stress_data) < 10:  # noqa: PLR2004
             return 0.5
 
         return float(stress_data.corr().values.mean())

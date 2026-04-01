@@ -415,7 +415,7 @@ def _compute_atr_sl_tp(
 
         broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
         buf = _data_buffers.get(broker_sym) or _data_buffers.get(symbol)
-        if buf is not None and len(buf) >= 15:
+        if buf is not None and len(buf) >= 15:  # noqa: PLR2004
             import numpy as _np
 
             highs = _np.array([b["high"] for b in list(buf)[-15:]], dtype=float)
@@ -428,7 +428,7 @@ def _compute_atr_sl_tp(
                     _np.abs(lows[1:] - closes[:-1]),
                 ),
             )
-            if len(tr) >= 14:
+            if len(tr) >= 14:  # noqa: PLR2004
                 atr = float(_np.mean(tr[-14:]))
     except Exception as exc:
         logger.debug(
@@ -448,7 +448,7 @@ def _compute_atr_sl_tp(
                 csv_path = pathlib.Path(f"data/{symbol.replace('/', '')}_H1.csv")
             if csv_path.exists():
                 df = _pd.read_csv(csv_path, usecols=["high", "low", "close"]).tail(20)
-                if len(df) >= 15:
+                if len(df) >= 15:  # noqa: PLR2004
                     highs = df["high"].to_numpy(dtype=float)
                     lows = df["low"].to_numpy(dtype=float)
                     closes = df["close"].to_numpy(dtype=float)

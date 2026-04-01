@@ -27,8 +27,8 @@ class TestTick:
         )
 
         assert tick.symbol == "XAUUSD"
-        assert tick.bid == 1950.0
-        assert tick.ask == 1950.1
+        assert tick.bid == 1950.0  # noqa: PLR2004
+        assert tick.ask == 1950.1  # noqa: PLR2004
 
     def test_tick_mid(self):
         from data.streaming import Tick
@@ -95,7 +95,7 @@ class TestAggregatedBar:
         d = bar.to_dict()
         assert d["symbol"] == "XAUUSD"
         assert d["timeframe"] == "1m"
-        assert d["high"] == 1951.0
+        assert d["high"] == 1951.0  # noqa: PLR2004
 
 
 class TestTickAggregator:
@@ -131,8 +131,8 @@ class TestTickAggregator:
 
         assert bar is not None
         assert bar.symbol == "XAUUSD"
-        assert bar.close == 1950.0
-        assert bar.volume == 100.0
+        assert bar.close == 1950.0  # noqa: PLR2004
+        assert bar.volume == 100.0  # noqa: PLR2004
 
     def test_ohlc_tracking(self):
         from data.streaming import Tick, TickAggregator
@@ -157,9 +157,9 @@ class TestTickAggregator:
         bar = agg.add_tick(Tick("XAUUSD", ts_next, 1950.0, 1950.1, 1950.0))
 
         assert bar is not None
-        assert bar.high == 1952.0
-        assert bar.low == 1948.0
-        assert bar.open == 1950.0
+        assert bar.high == 1952.0  # noqa: PLR2004
+        assert bar.low == 1948.0  # noqa: PLR2004
+        assert bar.open == 1950.0  # noqa: PLR2004
 
     def test_get_open_bar(self):
         from data.streaming import Tick, TickAggregator
@@ -170,7 +170,7 @@ class TestTickAggregator:
 
         open_bar = agg.get_open_bar("XAUUSD")
         assert open_bar is not None
-        assert open_bar["open"] == 1950.05
+        assert open_bar["open"] == 1950.05  # noqa: PLR2004
 
 
 class TestStreamingService:
@@ -237,7 +237,7 @@ class TestStreamingService:
 
         # At least one tick event per symbol
         tick_events = [e for e in all_events if e.event_type == "tick"]
-        assert len(tick_events) == 2
+        assert len(tick_events) == 2  # noqa: PLR2004
 
     def test_get_recent_ticks(self):
         from data.streaming import StreamingService, Tick
@@ -249,7 +249,7 @@ class TestStreamingService:
             )
 
         ticks = service.get_recent_ticks("XAUUSD", n=5)
-        assert len(ticks) == 5
+        assert len(ticks) == 5  # noqa: PLR2004
 
     def test_get_recent_ticks_empty(self):
         from data.streaming import StreamingService
@@ -270,7 +270,7 @@ class TestStreamingService:
 
         latest = service.get_latest_tick("XAUUSD")
         assert latest is not None
-        assert latest.last == 1951.0
+        assert latest.last == 1951.0  # noqa: PLR2004
 
     def test_get_latest_tick_empty(self):
         from data.streaming import StreamingService
@@ -298,7 +298,7 @@ class TestStreamingService:
 
         assert len(bars_received) == 1
         bar_data = bars_received[0].data
-        assert bar_data["volume"] == 100.0
+        assert bar_data["volume"] == 100.0  # noqa: PLR2004
 
     def test_get_bars(self):
         from data.streaming import StreamingService, Tick
@@ -360,7 +360,7 @@ class TestStreamingService:
 
         def mock_connect():
             call_count[0] += 1
-            return call_count[0] >= 2  # Succeed on second attempt
+            return call_count[0] >= 2  # Succeed on second attempt  # noqa: PLR2004
 
         result = service.reconnect_with_backoff(mock_connect, max_attempts=3)
         assert result is True

@@ -92,7 +92,7 @@ class TestGitHubPRPublisher:
             )
 
         assert result["status"] == "created"
-        assert result["pr_number"] == 42
+        assert result["pr_number"] == 42  # noqa: PLR2004
         assert "pull/42" in result["pr_url"]
         assert "auto-heal" in result["branch"]
 
@@ -391,7 +391,7 @@ class TestAutoHeal:
             mock_llm.return_value = "fixed code"
             await brain.auto_heal()
 
-        assert mock_redis.rpush.call_count == 3
+        assert mock_redis.rpush.call_count == 3  # noqa: PLR2004
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -482,7 +482,7 @@ class TestFixesRouter:
 
         assert result["status"] == "approved"
         assert result["pr_url"] == "https://github.com/owner/repo/pull/99"
-        assert result["pr_number"] == 99
+        assert result["pr_number"] == 99  # noqa: PLR2004
         # Record removed from queue
         mock_redis.lrem.assert_called_once()
         # Archived to approved list
@@ -506,7 +506,7 @@ class TestFixesRouter:
             body = ApproveFixRequest(endpoint="/api/nonexistent")
             with pytest.raises(HTTPException) as exc_info:
                 await approve_fix(body, mock_request)
-        assert exc_info.value.status_code == 404
+        assert exc_info.value.status_code == 404  # noqa: PLR2004
 
     @pytest.mark.asyncio
     async def test_approve_fix_handles_pr_error_gracefully(self):
@@ -579,7 +579,7 @@ class TestFixesRouter:
             body = DeclineFixRequest(endpoint="/api/nonexistent")
             with pytest.raises(HTTPException) as exc_info:
                 await decline_fix(body, mock_request)
-        assert exc_info.value.status_code == 404
+        assert exc_info.value.status_code == 404  # noqa: PLR2004
 
     @pytest.mark.asyncio
     async def test_push_scan_entry_queues_to_redis(self):
@@ -644,10 +644,10 @@ class TestFixesRouter:
         ):
             result = await get_fix_stats(mock_request)
 
-        assert result["pending"] == 3
-        assert result["approved"] == 10
-        assert result["declined"] == 2
-        assert result["prs_created"] == 2
+        assert result["pending"] == 3  # noqa: PLR2004
+        assert result["approved"] == 10  # noqa: PLR2004
+        assert result["declined"] == 2  # noqa: PLR2004
+        assert result["prs_created"] == 2  # noqa: PLR2004
         assert result["pr_errors"] == 1
 
     @pytest.mark.asyncio
@@ -664,4 +664,4 @@ class TestFixesRouter:
             body = ApproveFixRequest(endpoint="/api/auth/login")
             with pytest.raises(HTTPException) as exc_info:
                 await approve_fix(body, mock_request)
-        assert exc_info.value.status_code == 403
+        assert exc_info.value.status_code == 403  # noqa: PLR2004

@@ -212,9 +212,9 @@ class FactorLibrary:
         if "cpi" in fred_data:
             macro_inputs["cpi_chg"] = fred_data["cpi"].pct_change().dropna()
 
-        if len(macro_inputs) >= 2:
+        if len(macro_inputs) >= 2:  # noqa: PLR2004
             macro_df = pd.DataFrame(macro_inputs).dropna()
-            if len(macro_df) >= 10:
+            if len(macro_df) >= 10:  # noqa: PLR2004
                 scaler = StandardScaler()
                 scaled = scaler.fit_transform(macro_df.values)
                 pca = PCA(n_components=1)

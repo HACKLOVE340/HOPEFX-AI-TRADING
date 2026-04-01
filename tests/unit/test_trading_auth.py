@@ -204,7 +204,7 @@ class TestAuthRejection:
             json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0},
             headers={"Authorization": "Bearer not.a.valid.token"},
         )
-        assert resp.status_code == 401
+        assert resp.status_code == 401  # noqa: PLR2004
 
     def test_place_order_expired_token(self, client):
         resp = client.post(
@@ -212,7 +212,7 @@ class TestAuthRejection:
             json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0},
             headers={"Authorization": f"Bearer {_make_token(expired=True)}"},
         )
-        assert resp.status_code == 401
+        assert resp.status_code == 401  # noqa: PLR2004
         assert "expired" in resp.json()["detail"].lower()
 
     def test_get_positions_no_token(self, client):
@@ -241,37 +241,37 @@ class TestRoleEnforcement:
             json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0},
             headers=_auth("user"),
         )
-        assert resp.status_code == 403
+        assert resp.status_code == 403  # noqa: PLR2004
         assert "trader" in resp.json()["detail"]
 
     def test_close_position_user_role_rejected(self, client):
         resp = client.delete("/api/trading/positions/POS-1", headers=_auth("user"))
-        assert resp.status_code == 403
+        assert resp.status_code == 403  # noqa: PLR2004
 
     def test_close_all_positions_user_role_rejected(self, client):
         resp = client.delete("/api/trading/positions", headers=_auth("user"))
-        assert resp.status_code == 403
+        assert resp.status_code == 403  # noqa: PLR2004
 
     def test_emergency_stop_trader_role_rejected(self, client):
         """Traders must not trigger emergency stop — admin only."""
         resp = client.post("/api/trading/emergency-stop", headers=_auth("trader"))
-        assert resp.status_code == 403
+        assert resp.status_code == 403  # noqa: PLR2004
         assert "admin" in resp.json()["detail"]
 
     def test_emergency_stop_admin_allowed(self, client, mock_brain):
         resp = client.post("/api/trading/emergency-stop", headers=_auth("admin"))
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         mock_brain.emergency_stop.assert_called_once()
         assert resp.json()["triggered_by"] == "user-123"
 
     def test_get_positions_user_role_allowed(self, client):
         """Read-only endpoints allow any authenticated user."""
         resp = client.get("/api/trading/positions", headers=_auth("user"))
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
 
     def test_get_account_user_role_allowed(self, client):
         resp = client.get("/api/trading/account", headers=_auth("user"))
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
 
     def test_trader_can_place_order(self, client, mock_broker):
         resp = client.post(
@@ -279,7 +279,7 @@ class TestRoleEnforcement:
             json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0},
             headers=_auth("trader"),
         )
-        assert resp.status_code == 201
+        assert resp.status_code == 201  # noqa: PLR2004
         assert resp.json()["order_id"] == "ORD-001"
         mock_broker.place_market_order.assert_called_once()
 
@@ -290,7 +290,7 @@ class TestRoleEnforcement:
             json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0},
             headers=_auth("admin"),
         )
-        assert resp.status_code == 201
+        assert resp.status_code == 201  # noqa: PLR2004
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +314,7 @@ class TestSymbolValidation:
             json={"symbol": "'; DROP TABLE trades; --", "side": "buy", "quantity": 1.0},
             headers=_auth("trader"),
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 422  # noqa: PLR2004
 
     def test_symbol_case_insensitive(self, client):
         """Lowercase symbol should be normalised and accepted."""
@@ -323,11 +323,11 @@ class TestSymbolValidation:
             json={"symbol": "xauusd", "side": "buy", "quantity": 1.0},
             headers=_auth("trader"),
         )
-        assert resp.status_code == 201
+        assert resp.status_code == 201  # noqa: PLR2004
 
     def test_ohlcv_disallowed_symbol_rejected(self, client):
         resp = client.get("/api/trading/ohlcv/AAPL", headers=_auth("user"))
-        assert resp.status_code == 400
+        assert resp.status_code == 400  # noqa: PLR2004
 
 
 # ---------------------------------------------------------------------------
@@ -342,7 +342,7 @@ class TestQuantityValidation:
             json={"symbol": "XAUUSD", "side": "buy", "quantity": 0},
             headers=_auth("trader"),
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 422  # noqa: PLR2004
 
     def test_negative_quantity_rejected(self, client):
         resp = client.post(
@@ -350,7 +350,7 @@ class TestQuantityValidation:
             json={"symbol": "XAUUSD", "side": "buy", "quantity": -5.0},
             headers=_auth("trader"),
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 422  # noqa: PLR2004
 
     def test_quantity_exceeds_max_rejected(self, client):
         # validate_order_quantity raises HTTPException(400); FastAPI surfaces it as 400
@@ -367,7 +367,7 @@ class TestQuantityValidation:
             json={"symbol": "XAUUSD", "side": "buy", "quantity": 10.0},
             headers=_auth("trader"),
         )
-        assert resp.status_code == 201
+        assert resp.status_code == 201  # noqa: PLR2004
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +382,7 @@ class TestOrderFieldValidation:
             json={"symbol": "XAUUSD", "side": "long", "quantity": 1.0},
             headers=_auth("trader"),
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 422  # noqa: PLR2004
 
     def test_invalid_order_type_rejected(self, client):
         resp = client.post(
@@ -395,7 +395,7 @@ class TestOrderFieldValidation:
             },
             headers=_auth("trader"),
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 422  # noqa: PLR2004
 
     def test_sell_order_accepted(self, client):
         resp = client.post(
@@ -403,7 +403,7 @@ class TestOrderFieldValidation:
             json={"symbol": "EURUSD", "side": "sell", "quantity": 2.0},
             headers=_auth("trader"),
         )
-        assert resp.status_code == 201
+        assert resp.status_code == 201  # noqa: PLR2004
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +425,7 @@ class TestAuthHelpers:
 
         with pytest.raises(HTTPException) as exc_info:
             validate_order_symbol("TSLA")
-        assert exc_info.value.status_code == 400
+        assert exc_info.value.status_code == 400  # noqa: PLR2004
 
     def test_validate_order_quantity_rejects_zero(self):
         from fastapi import HTTPException
@@ -440,4 +440,4 @@ class TestAuthHelpers:
             validate_order_quantity(999.0)
 
     def test_validate_order_quantity_accepts_valid(self):
-        assert validate_order_quantity(5.0) == 5.0
+        assert validate_order_quantity(5.0) == 5.0  # noqa: PLR2004

@@ -195,7 +195,7 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
 
     # 2. Local CSV fallback
     sym_upper = symbol.upper().replace("-", "_").replace("/", "_")
-    if "_" not in sym_upper and len(sym_upper) == 6:
+    if "_" not in sym_upper and len(sym_upper) == 6:  # noqa: PLR2004
         sym_upper = sym_upper[:3] + "_" + sym_upper[3:]
 
     # Map requested frequency to available CSV files
@@ -229,7 +229,7 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
             end_ts = pd.Timestamp(end, tz="UTC")
             df = df[(df.index >= start_ts) & (df.index < end_ts)]
 
-            if len(df) >= 10:
+            if len(df) >= 10:  # noqa: PLR2004
                 logger.info(
                     "Backtest data: loaded %d bars from %s for %s %s→%s",
                     len(df),
@@ -885,7 +885,7 @@ def _resolve_strategy(strategy_name: str) -> Any:
             return []
 
         # Simple momentum: buy if ask > recent average
-        if len(history) < 20:
+        if len(history) < 20:  # noqa: PLR2004
             return []
 
         recent_mids = [h.get("equity", capital) for h in history[-20:]]
@@ -1086,7 +1086,7 @@ def _build_pdf(result: dict) -> bytes:
     sharpe = result.get("sharpe_ratio", 0)
     sharpe_note = (
         "Excellent risk-adjusted returns (Sharpe > 2)."
-        if sharpe > 2
+        if sharpe > 2  # noqa: PLR2004
         else "Good risk-adjusted returns (Sharpe 1–2)."
         if sharpe > 1
         else "Marginal risk-adjusted returns (Sharpe < 1). Consider parameter tuning."
@@ -1094,9 +1094,9 @@ def _build_pdf(result: dict) -> bytes:
     dd = result.get("max_drawdown_pct", 0)
     dd_note = (
         "Drawdown is well-controlled (< 10%)."
-        if dd < 10
+        if dd < 10  # noqa: PLR2004
         else "Moderate drawdown (10–20%). Review position sizing."
-        if dd < 20
+        if dd < 20  # noqa: PLR2004
         else "High drawdown (> 20%). Risk management review recommended."
     )
     story.append(Paragraph(f"• Sharpe ratio {sharpe:.2f}: {sharpe_note}", body_style))

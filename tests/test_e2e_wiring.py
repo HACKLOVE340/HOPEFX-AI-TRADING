@@ -195,7 +195,7 @@ class TestMacroStoreWiring:
         aligned = store.align_to_hourly(ohlcv)
 
         assert "dxy" in aligned.columns
-        assert aligned.shape[0] == 48
+        assert aligned.shape[0] == 48  # noqa: PLR2004
         assert aligned["dxy"].iloc[0] == pytest.approx(102.5)
         assert aligned["dxy"].iloc[24] == pytest.approx(103.0)
 
@@ -230,7 +230,7 @@ class TestMacroStoreWiring:
         try:
             client = TestClient(app)
             resp = client.get("/api/macro/store")
-            assert resp.status_code == 200
+            assert resp.status_code == 200  # noqa: PLR2004
             data = resp.json()
             assert data["status"] == "ok"
             assert data["total_series"] >= 1
@@ -263,7 +263,7 @@ class TestMacroStoreWiring:
                     "value": 4.25,
                 },
             )
-            assert resp.status_code == 200
+            assert resp.status_code == 200  # noqa: PLR2004
             data = resp.json()
             assert data["status"] == "updated"
             assert data["series"] == "us10y"
@@ -291,7 +291,7 @@ class TestMacroStoreWiring:
         try:
             client = TestClient(app)
             resp = client.get("/api/macro/features")
-            assert resp.status_code == 200
+            assert resp.status_code == 200  # noqa: PLR2004
             data = resp.json()
             assert "macro_dxy" in data
             assert data["macro_dxy"] == pytest.approx(102.5)
@@ -325,7 +325,7 @@ class TestMLEndpoints:
     def test_accuracy_endpoint_shape(self, ml_client):
         """GET /api/ml/accuracy returns AccuracyResponse fields."""
         resp = ml_client.get("/api/ml/accuracy")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json()
         for field in (
             "model_id",
@@ -344,7 +344,7 @@ class TestMLEndpoints:
     def test_models_endpoint_returns_list(self, ml_client):
         """GET /api/ml/models returns a list."""
         resp = ml_client.get("/api/ml/models")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         assert isinstance(resp.json(), list)
 
     def test_predict_endpoint_fallback(self, ml_client):
@@ -352,11 +352,11 @@ class TestMLEndpoints:
         resp = ml_client.post(
             "/api/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 100}
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json()
         assert data["symbol"] == "XAUUSD"
         assert data["direction"] in ("BUY", "SELL", "HOLD")
-        assert 0.0 <= data["confidence"] <= 100.0
+        assert 0.0 <= data["confidence"] <= 100.0  # noqa: PLR2004
         assert "generated_at" in data
 
     def test_predict_normalises_symbol(self, ml_client):
@@ -364,7 +364,7 @@ class TestMLEndpoints:
         resp = ml_client.post(
             "/api/ml/predict/xau-usd", json={"timeframe": "H1", "lookback": 50}
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         assert resp.json()["symbol"] == "XAU/USD"
 
 
@@ -524,7 +524,7 @@ class TestSocialLeaderboard:
     def test_leaderboard_returns_ranked_list(self, leaderboard_client):
         """GET /api/social/leaderboard returns a list (may be empty in test env)."""
         resp = leaderboard_client.get("/api/social/leaderboard")
-        assert resp.status_code == 200
+        assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json()
         assert isinstance(data, list)
         # Empty list is valid — no real trader data in test environment
@@ -546,7 +546,7 @@ class TestSocialLeaderboard:
         for period in ("monthly", "quarterly", "all"):
             resp = leaderboard_client.get(f"/api/social/leaderboard?period={period}")
             assert (
-                resp.status_code == 200
+                resp.status_code == 200  # noqa: PLR2004
             ), f"period={period} returned {resp.status_code}"
 
     def test_leaderboard_ranks_are_sequential(self, leaderboard_client):

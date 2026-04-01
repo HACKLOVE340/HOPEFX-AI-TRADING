@@ -124,7 +124,7 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
         ).encode()
         req = urllib.request.Request(url, data=data, method="POST")
         with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 - API URL is always https://
-            return resp.status == 200
+            return resp.status == 200  # noqa: PLR2004
     except Exception as exc:
         logger.warning("Telegram send failed: %s", exc)
         return False
@@ -334,9 +334,9 @@ class PaperTradingRunner:
         """
         history = self._price_history[instrument]
         history.append(price)
-        if len(history) > 20:
+        if len(history) > 20:  # noqa: PLR2004
             history.pop(0)
-        if len(history) < 20:
+        if len(history) < 20:  # noqa: PLR2004
             return None
         sma = sum(history) / len(history)
         if price > sma * 1.001:
@@ -408,7 +408,7 @@ class PaperTradingRunner:
                 logger.error("Tick error: %s", exc)
 
             # Daily Telegram alert
-            if time.time() - last_daily_alert >= 86400:
+            if time.time() - last_daily_alert >= 86400:  # noqa: PLR2004
                 dd = self._check_drawdown()
                 self._send_daily_summary(dd)
                 last_daily_alert = time.time()

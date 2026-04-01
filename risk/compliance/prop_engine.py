@@ -288,11 +288,11 @@ class PropComplianceEngine:
         weekday = now.weekday()  # 0=Mon … 6=Sun
         t = now.time()
 
-        if weekday == 4 and t >= time(21, 0):  # Friday after 21:00
+        if weekday == 4 and t >= time(21, 0):  # Friday after 21:00  # noqa: PLR2004
             return True
-        if weekday == 5:  # Saturday
+        if weekday == 5:  # Saturday  # noqa: PLR2004
             return True
-        return weekday == 6 and t < time(23, 0)  # Sunday before 23:00
+        return weekday == 6 and t < time(23, 0)  # Sunday before 23:00  # noqa: PLR2004
 
     def _breach(self, breach_type: BreachType, detail: str) -> None:
         """Handle a compliance breach: pause/kill + alert."""

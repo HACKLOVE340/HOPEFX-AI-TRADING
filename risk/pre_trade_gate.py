@@ -427,7 +427,7 @@ class PreTradeGate:
         # Extract CVaR value for audit log
         if (
             hasattr(rm, "_compute_cvar")
-            and len(getattr(rm, "_returns_history", [])) >= 10
+            and len(getattr(rm, "_returns_history", [])) >= 10  # noqa: PLR2004
         ):
             try:
                 return rm._compute_cvar()

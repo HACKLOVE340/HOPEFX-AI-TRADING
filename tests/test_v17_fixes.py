@@ -135,7 +135,7 @@ class TestRiskManagerFailSafe:
             return_value=[],
         ), pytest.raises(HTTPException) as exc_info:
             await trading_mod._apply_risk_checks(fake_order, "user-1")
-        assert exc_info.value.status_code == 503
+        assert exc_info.value.status_code == 503  # noqa: PLR2004
 
     @pytest.mark.asyncio
     async def test_risk_block_still_raises_403(self):
@@ -164,7 +164,7 @@ class TestRiskManagerFailSafe:
             return_value=[],
         ), pytest.raises(HTTPException) as exc_info:
             await trading_mod._apply_risk_checks(fake_order, "user-1")
-        assert exc_info.value.status_code == 403
+        assert exc_info.value.status_code == 403  # noqa: PLR2004
 
 
 # ===========================================================================
@@ -183,28 +183,28 @@ class TestJWTExpiryUnified:
         monkeypatch.delenv("JWT_EXPIRE_MINUTES", raising=False)
         from auth.jwt import _get_access_token_expire_minutes
 
-        assert _get_access_token_expire_minutes() == 20
+        assert _get_access_token_expire_minutes() == 20  # noqa: PLR2004
 
     def test_legacy_jwt_expire_minutes_fallback(self, monkeypatch):
         monkeypatch.delenv("ACCESS_TOKEN_EXPIRE_MINUTES", raising=False)
         monkeypatch.setenv("JWT_EXPIRE_MINUTES", "25")
         from auth.jwt import _get_access_token_expire_minutes
 
-        assert _get_access_token_expire_minutes() == 25
+        assert _get_access_token_expire_minutes() == 25  # noqa: PLR2004
 
     def test_access_token_takes_precedence_over_jwt_expire(self, monkeypatch):
         monkeypatch.setenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10")
         monkeypatch.setenv("JWT_EXPIRE_MINUTES", "99")
         from auth.jwt import _get_access_token_expire_minutes
 
-        assert _get_access_token_expire_minutes() == 10
+        assert _get_access_token_expire_minutes() == 10  # noqa: PLR2004
 
     def test_default_is_15_when_neither_set(self, monkeypatch):
         monkeypatch.delenv("ACCESS_TOKEN_EXPIRE_MINUTES", raising=False)
         monkeypatch.delenv("JWT_EXPIRE_MINUTES", raising=False)
         from auth.jwt import _get_access_token_expire_minutes
 
-        assert _get_access_token_expire_minutes() == 15
+        assert _get_access_token_expire_minutes() == 15  # noqa: PLR2004
 
 
 # ===========================================================================
@@ -270,7 +270,7 @@ class TestPropFirmGuardFailSafe:
             side_effect=RuntimeError("guard crashed"),
         ), pytest.raises(HTTPException) as exc_info:
             await trading_mod._validate_order(MagicMock())
-        assert exc_info.value.status_code == 503
+        assert exc_info.value.status_code == 503  # noqa: PLR2004
 
     @pytest.mark.asyncio
     async def test_prop_firm_http_exception_propagates(self):
@@ -294,7 +294,7 @@ class TestPropFirmGuardFailSafe:
             ),
         ), pytest.raises(HTTPException) as exc_info:
             await trading_mod._validate_order(MagicMock())
-        assert exc_info.value.status_code == 403
+        assert exc_info.value.status_code == 403  # noqa: PLR2004
 
 
 # ===========================================================================

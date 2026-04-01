@@ -447,7 +447,7 @@ class TestKillSwitchActive:
 
         assert all(not r.success for r in results)
         assert all(o.is_rejected for o in orders)
-        assert mock_executor.execute_signal.call_count == 5
+        assert mock_executor.execute_signal.call_count == 5  # noqa: PLR2004
 
 
 # ─────────────────────────────────────────────────────────────────────────────

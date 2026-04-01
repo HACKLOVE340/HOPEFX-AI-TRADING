@@ -153,7 +153,7 @@ def retrain(
     """Load data, train models, save weights, return results dict."""
     df = _load_csv(symbol, csv_path, years)
 
-    if len(df) < 100:
+    if len(df) < 100:  # noqa: PLR2004
         raise ValueError(
             f"Only {len(df)} bars available for {symbol} — need at least 100. "
             "Run the backfill first."

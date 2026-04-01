@@ -134,7 +134,7 @@ class NotificationManager:
         payload = {"embeds": [embed]}
 
         async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
-            if resp.status != 204:
+            if resp.status != 204:  # noqa: PLR2004
                 logger.error(f"Discord notification failed: {resp.status}")
 
     @staticmethod
@@ -189,7 +189,7 @@ class NotificationManager:
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "MarkdownV2"}
 
         async with aiohttp.ClientSession() as session, session.post(url, json=payload) as resp:
-            if resp.status != 200:
+            if resp.status != 200:  # noqa: PLR2004
                 body = await resp.text()
                 logger.error(
                     "Telegram notification failed: status=%s body=%s",
@@ -212,7 +212,7 @@ class NotificationManager:
         }
 
         async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
-            if resp.status >= 400:
+            if resp.status >= 400:  # noqa: PLR2004
                 logger.error(f"Webhook notification failed: {resp.status}")
 
     def _format_timestamp(self, timestamp: float) -> str:

@@ -215,7 +215,7 @@ class TestNotificationManager:
         notification = manager.notification_history[0]
         assert "SELL" in notification["message"]
         assert "GBP_USD" in notification["message"]
-        assert notification["metadata"]["confidence"] == 0.85
+        assert notification["metadata"]["confidence"] == 0.85  # noqa: PLR2004
 
     def test_notification_levels(self):
         """Test different notification levels"""
@@ -229,7 +229,7 @@ class TestNotificationManager:
         ]:
             manager.send(message=f"Test {level.value} message", level=level)
 
-        assert len(manager.notification_history) == 4
+        assert len(manager.notification_history) == 4  # noqa: PLR2004
 
     def test_notification_with_metadata(self):
         """Test notification with metadata"""

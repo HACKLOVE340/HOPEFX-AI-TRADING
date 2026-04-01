@@ -394,11 +394,11 @@ class PricingEngine:
         self, trading_volume: float, account_balance: float
     ) -> SubscriptionTier:
         """Recommend subscription tier based on user profile"""
-        if account_balance < 1000:
+        if account_balance < 1000:  # noqa: PLR2004
             return SubscriptionTier.FREE
-        elif trading_volume < 100000:
+        elif trading_volume < 100000:  # noqa: PLR2004
             return SubscriptionTier.BASIC
-        elif trading_volume < 1000000:
+        elif trading_volume < 1000000:  # noqa: PLR2004
             return SubscriptionTier.PRO
         else:
             return SubscriptionTier.ENTERPRISE

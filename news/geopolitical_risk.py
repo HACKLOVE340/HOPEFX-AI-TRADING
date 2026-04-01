@@ -4,6 +4,19 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
+
+# ── Module constants ─────────────────────────────────────────────────────────
+_RISK_HIGH = 70
+_RISK_MEDIUM = 50
+_RISK_LOW = 30
+_RISK_VERY_LOW = 60
+_EVENT_WEIGHT_MAJOR = 6
+_EVENT_WEIGHT_MODERATE = 4
+_EVENT_WEIGHT_MINOR = 5
+_EVENT_WEIGHT_MICRO = 3
+_BULLISH_RATIO_STRONG = 2
+_BLACKOUT_MINUTES = 60
+
 Geopolitical Risk Intelligence Module
 
 Integrates World Monitor data for geopolitical risk assessment in trading:
@@ -683,7 +696,7 @@ class GeopoliticalRiskProvider:
                 coordinates: tuple[float, float] | None = None
                 if geom.get("type") == "Point":
                     coords = geom.get("coordinates", [])
-                    if len(coords) >= 2:
+                    if len(coords) >= 2:  # noqa: PLR2004
                         coordinates = (float(coords[1]), float(coords[0]))
 
                 # Confidence from API quality score (0–1), default 0.8
@@ -762,11 +775,11 @@ class GeopoliticalRiskProvider:
                 break
 
         # Map score to gold impact
-        if impact_score >= 6:
+        if impact_score >= 6:  # noqa: PLR2004
             return GoldImpact.STRONGLY_BULLISH
-        elif impact_score >= 4:
+        elif impact_score >= 4:  # noqa: PLR2004
             return GoldImpact.BULLISH
-        elif impact_score >= 2:
+        elif impact_score >= 2:  # noqa: PLR2004
             return GoldImpact.NEUTRAL
         elif impact_score >= 1:
             return GoldImpact.BEARISH
@@ -871,9 +884,9 @@ class GeopoliticalRiskProvider:
         )
 
         # Consider global risk level
-        if global_risk >= 70:
+        if global_risk >= 70:  # noqa: PLR2004
             return GoldImpact.STRONGLY_BULLISH
-        elif global_risk >= 50 and bullish_count > bearish_count:
+        elif global_risk >= 50 and bullish_count > bearish_count:  # noqa: PLR2004
                 return GoldImpact.BULLISH
 
         # Default based on event balance
@@ -899,7 +912,7 @@ class GeopoliticalRiskProvider:
         sorted_regions = sorted(region_scores.items(), key=lambda x: -x[1])
 
         # Return top 5 high-risk regions
-        return [region for region, score in sorted_regions[:5] if score >= 30]
+        return [region for region, score in sorted_regions[:5] if score >= 30]  # noqa: PLR2004
 
     def _get_country_risks(
         self, events: list[GeopoliticalEvent]
@@ -943,14 +956,14 @@ class GeopoliticalRiskProvider:
         recommendations = []
 
         # Risk-based recommendations
-        if global_risk >= 70:
+        if global_risk >= 70:  # noqa: PLR2004
             recommendations.append(
                 "HIGH ALERT: Elevated geopolitical risk - Consider increasing gold allocation"
             )
             recommendations.append(
                 "Reduce exposure to risk assets during heightened uncertainty"
             )
-        elif global_risk >= 50:
+        elif global_risk >= 50:  # noqa: PLR2004
             recommendations.append(
                 "MODERATE RISK: Monitor developing situations - Gold as portfolio hedge"
             )
@@ -1005,9 +1018,9 @@ class GeopoliticalRiskProvider:
 
         # More events = more data = higher confidence
         event_count = len(assessment.key_events)
-        if event_count >= 5:
+        if event_count >= 5:  # noqa: PLR2004
             confidence += 0.2
-        elif event_count >= 3:
+        elif event_count >= 3:  # noqa: PLR2004
             confidence += 0.1
 
         # Clear direction = higher confidence
@@ -1020,7 +1033,7 @@ class GeopoliticalRiskProvider:
             confidence += 0.1
 
         # High risk = higher confidence in bullish gold
-        if assessment.global_risk_score >= 60:
+        if assessment.global_risk_score >= 60:  # noqa: PLR2004
             confidence += 0.1
 
         return min(confidence, 1.0)
@@ -1524,11 +1537,11 @@ class WorldMonitorAPIClient:
         final_score = total_score / total_weight if total_weight > 0 else 0
 
         # Determine gold outlook
-        if final_score >= 70:
+        if final_score >= 70:  # noqa: PLR2004
             outlook = GoldImpact.STRONGLY_BULLISH
-        elif final_score >= 50:
+        elif final_score >= 50:  # noqa: PLR2004
             outlook = GoldImpact.BULLISH
-        elif final_score >= 30:
+        elif final_score >= 30:  # noqa: PLR2004
             outlook = GoldImpact.NEUTRAL
         else:
             outlook = GoldImpact.BEARISH

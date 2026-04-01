@@ -386,7 +386,7 @@ class ShadowTradingEngine:
             for f in self._fills
             if f.live_slippage_bps is not None
         ]
-        if len(paired) < 2:
+        if len(paired) < 2:  # noqa: PLR2004
             return 0.0
 
         _shadow_vals = [p[0] for p in paired]
@@ -396,7 +396,7 @@ class ShadowTradingEngine:
         ss_res = sum((s - lv) ** 2 for s, lv in paired)
         ss_tot = sum((lv - mean_live) ** 2 for lv in live_vals)
 
-        if ss_tot < 1e-12:
+        if ss_tot < 1e-12:  # noqa: PLR2004
             return 1.0  # perfect prediction (zero variance in live)
         return max(0.0, round(1.0 - ss_res / ss_tot, 4))
 

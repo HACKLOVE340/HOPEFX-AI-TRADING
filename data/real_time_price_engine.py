@@ -395,7 +395,7 @@ class RESTPriceFeed(PriceFeedBase):
         self._request_times.append(now)
 
         async with self._session.get(url) as response:
-            if response.status == 200:
+            if response.status == 200:  # noqa: PLR2004
                 return await response.json()
             else:
                 raise ValueError(f"HTTP {response.status}: {await response.text()}")

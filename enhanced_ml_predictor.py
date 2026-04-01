@@ -261,7 +261,7 @@ class Prediction:
         unc_thresh = (
             threshold if threshold is not None else self.DEFAULT_UNCERTAINTY_THRESHOLD
         )
-        return self.confidence >= 0.6 and self.total_uncertainty < unc_thresh
+        return self.confidence >= 0.6 and self.total_uncertainty < unc_thresh  # noqa: PLR2004
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization"""
@@ -454,7 +454,7 @@ class AdvancedFeatureEngineer:
         # Candlestick patterns (simplified)
         features["doji"] = (
             abs(df["close"] - df["open"]) / (df["high"] - df["low"] + 1e-10)
-        ) < 0.1
+        ) < 0.1  # noqa: PLR2004
         features["hammer"] = (
             (features["lower_shadow"] > 2 * abs(features["body"]))
             & (features["upper_shadow"] < abs(features["body"]))
@@ -493,12 +493,12 @@ class AdvancedFeatureEngineer:
 
             # Session indicators
             features["is_market_open"] = (
-                (df.index.hour >= 9) & (df.index.hour < 16)
+                (df.index.hour >= 9) & (df.index.hour < 16)  # noqa: PLR2004
             ).astype(int)
             features["is_london"] = (
-                (df.index.hour >= 8) & (df.index.hour < 17)
+                (df.index.hour >= 8) & (df.index.hour < 17)  # noqa: PLR2004
             ).astype(int)
-            features["is_ny"] = ((df.index.hour >= 13) & (df.index.hour < 22)).astype(
+            features["is_ny"] = ((df.index.hour >= 13) & (df.index.hour < 22)).astype(  # noqa: PLR2004
                 int
             )
 
@@ -901,7 +901,7 @@ class DeepLearningModel:
         cfg = self.config
 
         # Update feature count
-        if len(X_train.shape) == 2:
+        if len(X_train.shape) == 2:  # noqa: PLR2004
             self.n_features = X_train.shape[1]
             # Rebuild model with correct input shape
             self._build_model()
@@ -1011,7 +1011,7 @@ class DeepLearningModel:
         start_time = datetime.now(UTC)
 
         # Ensure correct shape
-        if len(X.shape) == 2:
+        if len(X.shape) == 2:  # noqa: PLR2004
             X = X.reshape(1, *X.shape)
 
         if X.shape[1] != self.config.sequence_length:
@@ -1250,7 +1250,7 @@ class EnsemblePredictor:
 
                 # Calibrate probabilities using a held-out portion of the
                 # validation set — never shuffle time-series data.
-                if hasattr(model, "predict_proba") and len(X_val) >= 20:
+                if hasattr(model, "predict_proba") and len(X_val) >= 20:  # noqa: PLR2004
                     cal_split = max(10, len(X_val) // 2)
                     X_cal = X_val.iloc[cal_split:]
                     y_cal = y_val.iloc[cal_split:]
@@ -1859,7 +1859,7 @@ class EnhancedMLPredictor:
             y_train = y.iloc[train_idx]
             y_test = y.iloc[test_idx]
 
-            if len(X_train_raw) < 50 or len(X_test_raw) < 10:
+            if len(X_train_raw) < 50 or len(X_test_raw) < 10:  # noqa: PLR2004
                 logger.warning("Fold %d: insufficient data, skipping", fold + 1)
                 continue
 
@@ -1961,9 +1961,9 @@ class EnhancedMLPredictor:
         # Determine if prediction was correct
         actual_direction = (
             "up"
-            if actual_return > 0.001
+            if actual_return > 0.001  # noqa: PLR2004
             else "down"
-            if actual_return < -0.001
+            if actual_return < -0.001  # noqa: PLR2004
             else "neutral"
         )
         correct = last_pred.prediction == actual_direction
@@ -2171,12 +2171,12 @@ def run_ml_test():
     print("\n[5] Generating predictions...")
     predictions = []
     for i in range(50):
-        pred_df = df.iloc[max(0, i - 100) : i + 100] if i > 100 else df.iloc[:200]
+        pred_df = df.iloc[max(0, i - 100) : i + 100] if i > 100 else df.iloc[:200]  # noqa: PLR2004
         pred = predictor.predict(pred_df)
 
         if pred:
             predictions.append(pred)
-            if i < 5:
+            if i < 5:  # noqa: PLR2004
                 print(
                     f"    Prediction {i+1}: {pred.prediction} "
                     f"(conf: {pred.confidence:.1%}, "

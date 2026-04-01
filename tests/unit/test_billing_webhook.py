@@ -60,7 +60,7 @@ class TestStripeWebhook:
                 headers={"stripe-signature": "t=123,v1=abc"},
             )
             # Must ack (200) even when stripe package missing
-            assert res.status_code == 200
+            assert res.status_code == 200  # noqa: PLR2004
             assert res.json().get("received") is True
 
     def test_webhook_processes_valid_event(self, client):
@@ -74,7 +74,7 @@ class TestStripeWebhook:
                 content=b'{"type":"checkout.session.completed","data":{}}',
                 headers={"stripe-signature": "t=123,v1=abc"},
             )
-            assert res.status_code == 200
+            assert res.status_code == 200  # noqa: PLR2004
             assert res.json().get("received") is True
 
 

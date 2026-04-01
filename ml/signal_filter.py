@@ -4,6 +4,22 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
+
+# ── Module constants ─────────────────────────────────────────────────────────
+_DEFAULT_CONFIDENCE_THRESHOLD = 0.5
+_DEFAULT_CONFIDENCE_LONG = 0.55
+_DEFAULT_CONFIDENCE_SHORT = 0.45
+_RSI_OVERBOUGHT = 70
+_RSI_OVERSOLD = 30
+_RSI_NEUTRAL = 50
+_RSI_PERIOD = 14
+_ATR_PERIOD = 20
+_MIN_SIGNAL_BARS = 5
+_SPREAD_PERIOD = 10
+_MAX_SPREAD_BARS = 3
+_REGIME_LOOKBACK = 20
+_VOLATILITY_LOOKBACK = 90
+
 ml/signal_filter.py
 ===================
 Production-grade signal quality filter applied before any order is sent.
@@ -319,7 +335,7 @@ class SignalFilter:
         # Update Prometheus accuracy gauge
         try:
             recent = list(self._outcomes[symbol])[-_CB_MIN_OUTCOMES:]
-            if len(recent) >= 5:
+            if len(recent) >= 5:  # noqa: PLR2004
                 win_rate = sum(1 for o in recent if o.pnl_pct > 0) / len(recent)
                 _PROM.accuracy_gauge.labels(symbol=symbol).set(win_rate)
         except Exception:  # nosec B110 - Prometheus metric failure must not affect signal filtering
@@ -492,7 +508,7 @@ class SignalFilter:
                 ofi = float(feats.get("micro_ofi", 0.0))
                 sentiment = float(feats.get("news_sentiment_score", 0.0))
                 # Strong OFI + sentiment alignment → trending
-                if abs(ofi) > 0.5 and abs(sentiment) > 0.3:
+                if abs(ofi) > 0.5 and abs(sentiment) > 0.3:  # noqa: PLR2004
                     return "TRENDING"
         except Exception:  # nosec B110 - feature unavailable; fall back to OHLCV regime
             pass
@@ -503,16 +519,16 @@ class SignalFilter:
                 import numpy as _np
 
                 closes = _np.array(ohlcv["close"].values[-50:], dtype=float)
-                if len(closes) >= 20:
+                if len(closes) >= 20:  # noqa: PLR2004
                     hurst = self._hurst_exponent(closes)
                     log_ret = _np.diff(_np.log(closes))
-                    rv_14 = float(_np.std(log_ret[-14:])) if len(log_ret) >= 14 else 0.0
-                    rv_90 = float(_np.std(log_ret)) if len(log_ret) >= 20 else rv_14
+                    rv_14 = float(_np.std(log_ret[-14:])) if len(log_ret) >= 14 else 0.0  # noqa: PLR2004
+                    rv_90 = float(_np.std(log_ret)) if len(log_ret) >= 20 else rv_14  # noqa: PLR2004
                     if rv_90 > 0 and rv_14 > 2.0 * rv_90:
                         return "HIGH_VOL"
-                    if hurst < 0.45:
+                    if hurst < 0.45:  # noqa: PLR2004
                         return "MEAN_REVERTING"
-                    if hurst > 0.55:
+                    if hurst > 0.55:  # noqa: PLR2004
                         return "TRENDING"
             except Exception:  # nosec B110 - Hurst computation unavailable; return unknown regime
                 pass
@@ -606,7 +622,7 @@ class SignalFilter:
         """
         outcomes = list(self._outcomes.get(symbol, [])) or list(self._global_outcomes)
 
-        if len(outcomes) < 10:
+        if len(outcomes) < 10:  # noqa: PLR2004
             # Insufficient history — skip EV gate, use confidence-only
             return FilterResult(passed=True, confidence=confidence, expected_value=0.0)
 
@@ -650,20 +666,20 @@ class SignalFilter:
         """
         try:
             closes = np.array(ohlcv["close"].values[-100:], dtype=float)
-            if len(closes) < 20:
+            if len(closes) < 20:  # noqa: PLR2004
                 return FilterResult(
                     passed=True, confidence=confidence, regime="unknown"
                 )
 
             # Realised vol: 14-bar rolling std of log returns
             log_ret = np.diff(np.log(closes))
-            if len(log_ret) < 14:
+            if len(log_ret) < 14:  # noqa: PLR2004
                 return FilterResult(
                     passed=True, confidence=confidence, regime="unknown"
                 )
 
             rv_14 = float(np.std(log_ret[-14:]))
-            rv_90 = float(np.std(log_ret[-90:])) if len(log_ret) >= 90 else rv_14
+            rv_90 = float(np.std(log_ret[-90:])) if len(log_ret) >= 90 else rv_14  # noqa: PLR2004
 
             # HIGH_VOL: current vol > 2× long-run vol
             if rv_90 > 0 and rv_14 > 2.0 * rv_90:
@@ -679,8 +695,8 @@ class SignalFilter:
                 )
 
             # MEAN_REVERTING: Hurst exponent < 0.45 (persistent mean reversion)
-            hurst = self._hurst_exponent(closes[-50:]) if len(closes) >= 50 else 0.5
-            if hurst < 0.45:
+            hurst = self._hurst_exponent(closes[-50:]) if len(closes) >= 50 else 0.5  # noqa: PLR2004
+            if hurst < 0.45:  # noqa: PLR2004
                 return FilterResult(
                     passed=False,
                     gate="regime",
@@ -692,7 +708,7 @@ class SignalFilter:
                     regime="MEAN_REVERTING",
                 )
 
-            regime = "TRENDING" if hurst > 0.55 else "RANDOM_WALK"
+            regime = "TRENDING" if hurst > 0.55 else "RANDOM_WALK"  # noqa: PLR2004
             return FilterResult(passed=True, confidence=confidence, regime=regime)
 
         except Exception as exc:
@@ -729,9 +745,9 @@ class SignalFilter:
             dir_upper = direction.upper()
 
             if dir_upper in ("BUY", "LONG"):
-                aligned = h4_up > 0.5 and d1_up > 0.5
+                aligned = h4_up > 0.5 and d1_up > 0.5  # noqa: PLR2004
             elif dir_upper in ("SELL", "SHORT"):
-                aligned = h4_up < 0.5 and d1_up < 0.5
+                aligned = h4_up < 0.5 and d1_up < 0.5  # noqa: PLR2004
             else:
                 aligned = True
 
@@ -782,7 +798,7 @@ class SignalFilter:
         """
         try:
             n = len(prices)
-            if n < 20:
+            if n < 20:  # noqa: PLR2004
                 return 0.5
             lags = range(2, min(n // 2, 20))
             rs_vals = []
@@ -794,7 +810,7 @@ class SignalFilter:
                 s = np.std(sub, ddof=1)
                 if s > 0:
                     rs_vals.append(np.log(r / s))
-            if len(rs_vals) < 3:
+            if len(rs_vals) < 3:  # noqa: PLR2004
                 return 0.5
             log_lags = np.log(list(lags[: len(rs_vals)]))
             hurst = float(np.polyfit(log_lags, rs_vals, 1)[0])

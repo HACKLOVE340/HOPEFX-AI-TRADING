@@ -39,7 +39,7 @@ class TestPortfolioOptimizer:
 
         # Weights should sum to approximately 1
         total_weight = sum(result["weights"].values())
-        assert abs(total_weight - 1.0) < 0.01
+        assert abs(total_weight - 1.0) < 0.01  # noqa: PLR2004
 
     def test_optimize_portfolio_with_method(self):
         """Test portfolio optimization with specific method."""
@@ -61,7 +61,7 @@ class TestPortfolioOptimizer:
 
         frontier = optimizer.efficient_frontier(assets, returns, num_portfolios=50)
 
-        assert len(frontier) == 50
+        assert len(frontier) == 50  # noqa: PLR2004
         assert all("risk" in p and "return" in p for p in frontier)
 
 
@@ -164,7 +164,7 @@ class TestSimulationEngine:
         assert "var_99" in result
         assert "paths" in result
         # paths is truncated to 100 entries max
-        assert len(result["paths"]) <= 1000
+        assert len(result["paths"]) <= 1000  # noqa: PLR2004
 
     def test_monte_carlo_simulation_statistics(self):
         """Test Monte Carlo simulation statistics are reasonable."""
@@ -207,7 +207,7 @@ class TestSimulationEngine:
         assert "best_parameters" in result
         assert "fitness_score" in result
         assert "generations" in result
-        assert result["generations"] == 20
+        assert result["generations"] == 20  # noqa: PLR2004
         assert result["fitness_score"] >= 0
 
 
@@ -294,10 +294,10 @@ class TestOptionsAnalyzer:
         analyzer = OptionsAnalyzer()
 
         # CDF(0) should be 0.5
-        assert abs(analyzer._norm_cdf(0) - 0.5) < 0.001
+        assert abs(analyzer._norm_cdf(0) - 0.5) < 0.001  # noqa: PLR2004
 
         # CDF(-infinity) should approach 0
-        assert analyzer._norm_cdf(-10) < 0.001
+        assert analyzer._norm_cdf(-10) < 0.001  # noqa: PLR2004
 
         # CDF(+infinity) should approach 1
-        assert analyzer._norm_cdf(10) > 0.999
+        assert analyzer._norm_cdf(10) > 0.999  # noqa: PLR2004

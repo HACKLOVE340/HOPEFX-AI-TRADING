@@ -312,7 +312,7 @@ if "maxmemory_unlimited" in redis_src:
 else:
     fail("RedisStore: missing maxmemory_unlimited key in health dict")
 
-if redis_src.count("self.get_memory_info()") >= 2:
+if redis_src.count("self.get_memory_info()") >= 2:  # noqa: PLR2004
     ok("RedisStore: get_memory_info() called in both Sentinel and URL connect paths")
 else:
     fail("RedisStore: get_memory_info() not called in both connect paths")
@@ -522,7 +522,7 @@ for path in sorted(pathlib.Path(".").rglob("*.py")):
 if bare_excepts:
     for b in bare_excepts[:5]:
         fail(f"Bare except:pass: {b}")
-    if len(bare_excepts) > 5:
+    if len(bare_excepts) > 5:  # noqa: PLR2004
         fail(f"... and {len(bare_excepts) - 5} more bare except:pass")
 else:
     ok("No bare except:pass found")
@@ -603,7 +603,7 @@ try:
     from data_layer.orchestrator import orchestrator
 
     features = orchestrator.get_ml_features()
-    if len(features) >= 20:
+    if len(features) >= 20:  # noqa: PLR2004
         ok(f"Orchestrator: {len(features)} ML features available")
     else:
         fail(f"Orchestrator: only {len(features)} ML features (expected ≥20)")
@@ -769,7 +769,7 @@ try:
         raw_volume = df["volume"].iloc[0] if "volume" in df.columns else None
         # After log1p normalisation, log1p(20) ≈ 3.04
         # If spread*1000 was used, volume would be ~500
-        if raw_volume is not None and raw_volume < 100:
+        if raw_volume is not None and raw_volume < 100:  # noqa: PLR2004
             ok(
                 f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} (unit-based, not spread*1000)"
             )

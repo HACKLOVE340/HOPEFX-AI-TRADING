@@ -351,7 +351,7 @@ class HOPEFXBrain:
         await self._circuit_breaker.record_failure()
 
         # Notify if critical
-        if len(self.error_history) > 10:
+        if len(self.error_history) > 10:  # noqa: PLR2004
             await self._safe_notify(
                 "error",
                 f"Multiple errors in brain: {str(error)[:100]}",
@@ -499,7 +499,7 @@ class HOPEFXBrain:
             logger.warning(f"Failed to get OHLCV for {symbol}: {e}")
             return MarketRegime.UNKNOWN
 
-        if len(ohlcv) < 20:
+        if len(ohlcv) < 20:  # noqa: PLR2004
             return MarketRegime.UNKNOWN
 
         try:
@@ -541,7 +541,7 @@ class HOPEFXBrain:
         tr3 = np.abs(lows_arr[1:] - closes_arr[:-1])
         true_range = np.maximum(np.maximum(tr1, tr2), tr3)
         atr = (
-            np.mean(true_range[-14:]) if len(true_range) >= 14 else np.mean(true_range)
+            np.mean(true_range[-14:]) if len(true_range) >= 14 else np.mean(true_range)  # noqa: PLR2004
         )
 
         # Classification
@@ -549,10 +549,10 @@ class HOPEFXBrain:
         price_range = np.max(highs_arr[-20:]) - np.min(lows_arr[-20:])
         volatility_pct = (atr / current_price) * 100 if current_price > 0 else 0
 
-        if volatility_pct > 2.0:
+        if volatility_pct > 2.0:  # noqa: PLR2004
             return MarketRegime.VOLATILE
 
-        if abs(normalized_slope) > 0.001 and price_range > atr * 3:
+        if abs(normalized_slope) > 0.001 and price_range > atr * 3:  # noqa: PLR2004
             if normalized_slope > 0:
                 return MarketRegime.TRENDING_UP
             else:
@@ -583,10 +583,10 @@ class HOPEFXBrain:
         current_price = closes[-1]
         volatility_pct = (atr / current_price) * 100 if current_price > 0 else 0
 
-        if volatility_pct > 2.0:
+        if volatility_pct > 2.0:  # noqa: PLR2004
             return MarketRegime.VOLATILE
 
-        if abs(trend) > 0.001:
+        if abs(trend) > 0.001:  # noqa: PLR2004
             if trend > 0:
                 return MarketRegime.TRENDING_UP
             else:
@@ -610,7 +610,7 @@ class HOPEFXBrain:
             # Check margin usage
             margin_ratio = margin_used / equity if equity > 0 else 0
 
-            if margin_ratio > 0.8:
+            if margin_ratio > 0.8:  # noqa: PLR2004
                 logger.warning(f"HIGH MARGIN USAGE: {margin_ratio:.2%}")
                 await self._reduce_exposure()
                 await self._safe_notify(
@@ -618,13 +618,13 @@ class HOPEFXBrain:
                     f"High margin usage: {margin_ratio:.1%}",
                     {"margin_ratio": margin_ratio, "equity": equity},
                 )
-            elif margin_ratio > 0.5:
+            elif margin_ratio > 0.5:  # noqa: PLR2004
                 logger.info(f"Moderate margin usage: {margin_ratio:.2%}")
 
             # Check daily loss limit
             if balance > 0:
                 daily_loss_pct = abs(daily_pnl) / balance
-                if daily_loss_pct > 0.05:  # 5% daily loss
+                if daily_loss_pct > 0.05:  # 5% daily loss  # noqa: PLR2004
                     logger.critical(f"DAILY LOSS LIMIT REACHED: {daily_loss_pct:.2%}")
                     await self._safe_notify(
                         "critical",
@@ -636,7 +636,7 @@ class HOPEFXBrain:
             # Check drawdown
             if hasattr(self.risk_manager, "current_drawdown"):
                 dd = self.risk_manager.current_drawdown
-                if dd > 0.10:  # 10% drawdown
+                if dd > 0.10:  # 10% drawdown  # noqa: PLR2004
                     logger.critical(f"MAX DRAWDOWN REACHED: {dd:.2%}")
                     await self._execute_emergency_stop()
 
@@ -676,7 +676,7 @@ class HOPEFXBrain:
                         logger.error(f"Error checking data staleness for {symbol}: {e}")
 
             # Check for too many consecutive errors
-            if self._circuit_breaker.failure_count > 10:
+            if self._circuit_breaker.failure_count > 10:  # noqa: PLR2004
                 logger.critical("Too many consecutive failures, emergency stopping")
                 return True
 

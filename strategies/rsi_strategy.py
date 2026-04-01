@@ -185,7 +185,7 @@ class RSIStrategy(BaseStrategy):
             elif (
                 hasattr(self, "position")
                 and self.position == "LONG"
-                and current_rsi > 50
+                and current_rsi > 50  # noqa: PLR2004
             ):
                 if current_rsi > self.overbought or current_rsi < previous_rsi:
                     signal_type = "SELL"
@@ -196,7 +196,7 @@ class RSIStrategy(BaseStrategy):
             elif (
                 hasattr(self, "position")
                 and self.position == "SHORT"
-                and current_rsi < 50
+                and current_rsi < 50  # noqa: PLR2004
             ):
                 if current_rsi < self.oversold or current_rsi > previous_rsi:
                     signal_type = "BUY"

@@ -237,7 +237,7 @@ def _load_models() -> None:
                     _trained_at,
                 )
                 # Warn if loaded model accuracy is below the validated 68% threshold
-                if isinstance(_oos_acc, float) and _oos_acc < 0.60:
+                if isinstance(_oos_acc, float) and _oos_acc < 0.60:  # noqa: PLR2004
                     _ml_logger.warning(
                         "advanced_oos.pkl OOS accuracy %.3f is below 60%% — "
                         "model may need retraining. Run: "
@@ -440,7 +440,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         """
         import pandas as pd
 
-        if len(req.bars) < 10:
+        if len(req.bars) < 10:  # noqa: PLR2004
             raise HTTPException(
                 status_code=422,
                 detail="At least 10 bars are required to compute features.",

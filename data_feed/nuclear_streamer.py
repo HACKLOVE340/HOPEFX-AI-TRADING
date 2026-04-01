@@ -547,7 +547,7 @@ class NuclearStreamer:
                         continue
                     # Normalise timestamp to Unix seconds.
                     if isinstance(ts_raw, (int, float)):
-                        ts = float(ts_raw) / 1000.0 if ts_raw > 1e10 else float(ts_raw)
+                        ts = float(ts_raw) / 1000.0 if ts_raw > 1e10 else float(ts_raw)  # noqa: PLR2004
                     else:
                         try:
                             ts = datetime.fromisoformat(str(ts_raw)).timestamp()

@@ -87,7 +87,7 @@ class TestHealthEndpoints:
         """
         response = client.get("/health")
 
-        assert response.status_code == 200
+        assert response.status_code == 200  # noqa: PLR2004
         data = response.json()
         assert data["status"] in ("healthy", "degraded")
 
@@ -96,7 +96,7 @@ class TestHealthEndpoints:
         # /status is the public HTML status page; /api/status/json is the JSON API.
         response = client.get("/api/status/json")
 
-        assert response.status_code == 200
+        assert response.status_code == 200  # noqa: PLR2004
         data = response.json()
         assert "status" in data
         assert "uptime_seconds" in data
@@ -110,7 +110,7 @@ class TestTradingEndpoints:
         """Test listing strategies."""
         response = client.get("/api/trading/strategies")
 
-        assert response.status_code == 200
+        assert response.status_code == 200  # noqa: PLR2004
         data = response.json()
         assert isinstance(data, list)
 

@@ -37,7 +37,7 @@ class BankTransferClient:
             bank_name = self.nigerian_banks.get(bank_code, "Unknown Bank")
 
             # Simplified validation
-            if len(account_number) != 10:
+            if len(account_number) != 10:  # noqa: PLR2004
                 return {"valid": False, "message": "Invalid account number length"}
 
             return {

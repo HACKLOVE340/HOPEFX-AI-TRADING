@@ -151,10 +151,10 @@ def test_smoke_flag_overrides_args():
             args.no_macro = True
             args.splits = 2
             args.use_cached = True
-        assert args.years == 2
+        assert args.years == 2  # noqa: PLR2004
         assert args.oos_years == 0.0
         assert args.no_macro is True
-        assert args.splits == 2
+        assert args.splits == 2  # noqa: PLR2004
         assert args.use_cached is True
     finally:
         sys.argv = sys.argv[:1]
@@ -217,7 +217,7 @@ def test_advanced_training_report_feature_count(monkeypatch):
         report = json.load(f)
     fc = report.get("feature_count", 0)
     # Smoke mode uses 100 features (no macro); full run uses 122
-    assert fc >= 50, f"Feature count {fc} is suspiciously low"
+    assert fc >= 50, f"Feature count {fc} is suspiciously low"  # noqa: PLR2004
 
 
 # ── retrain_model.py --smoke ──────────────────────────────────────────────────

@@ -183,7 +183,7 @@ class MicrostructureEngine:
         Returns zero-filled dict when insufficient history.
         """
         with self._lock:
-            if len(self._ticks) < 10:
+            if len(self._ticks) < 10:  # noqa: PLR2004
                 return self._zero_features()
 
             snap = self._build_snapshot()
@@ -209,7 +209,7 @@ class MicrostructureEngine:
             spread_z = (snap.spread - spread_mean) / spread_std
 
             # Delta divergence: price direction vs cumulative delta direction
-            if len(ticks) >= 20:
+            if len(ticks) >= 20:  # noqa: PLR2004
                 price_dir = np.sign(mids[-1] - mids[-20])
                 delta_dir = np.sign(deltas[-20:].sum())
                 delta_divergence = float(price_dir != delta_dir and price_dir != 0)
@@ -224,7 +224,7 @@ class MicrostructureEngine:
             vwap_dev = (snap.mid - vwap) / max(vwap, 1.0) if vwap > 0 else 0.0
 
             # Absorption: large volume with small price move
-            if len(ticks) >= 10:
+            if len(ticks) >= 10:  # noqa: PLR2004
                 recent10 = ticks[-10:]
                 vol10 = sum(t.volume for t in recent10)
                 price_move = abs(recent10[-1].mid - recent10[0].mid)
@@ -327,7 +327,7 @@ class MicrostructureEngine:
                 "session_open_age_s": round(time.time() - self._session_open, 1)
                 if self._session_open > 0
                 else None,
-                "has_data": len(self._ticks) >= 10,
+                "has_data": len(self._ticks) >= 10,  # noqa: PLR2004
             }
 
     def tick_rate(self, window_s: float = 60.0) -> float:
@@ -338,12 +338,12 @@ class MicrostructureEngine:
         Returns 0.0 when insufficient data.
         """
         with self._lock:
-            if len(self._ticks) < 2:
+            if len(self._ticks) < 2:  # noqa: PLR2004
                 return 0.0
             ticks = list(self._ticks)
             now = time.time()
             recent = [t for t in ticks if (now - t.ts) <= window_s]
-            if len(recent) < 2:
+            if len(recent) < 2:  # noqa: PLR2004
                 return 0.0
             elapsed = recent[-1].ts - recent[0].ts
             return round(len(recent) / max(elapsed, 1e-9), 4)

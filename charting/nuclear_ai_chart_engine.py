@@ -591,9 +591,9 @@ class NuclearAIChartEngine:
 
         # Amplifiers
         amplifiers = []
-        if vol_factor > 1.1:
+        if vol_factor > 1.1:  # noqa: PLR2004
             amplifiers.append(f"volatility spike (×{vol_factor:.2f})")
-        if sentiment_factor > 0.2:
+        if sentiment_factor > 0.2:  # noqa: PLR2004
             amplifiers.append(f"negative sentiment (+{sentiment_factor:.2f})")
         if amplifiers:
             parts.append(f"Amplified by: {', '.join(amplifiers)}.")
@@ -723,11 +723,11 @@ class NuclearAIChartEngine:
 
         # Under nuclear conditions, widen cones dramatically
         vol_multiplier = 1.0
-        if severity >= 9:
+        if severity >= 9:  # noqa: PLR2004
             vol_multiplier = 8.0
-        elif severity >= 7:
+        elif severity >= 7:  # noqa: PLR2004
             vol_multiplier = 4.0
-        elif severity >= 5:
+        elif severity >= 5:  # noqa: PLR2004
             vol_multiplier = 2.0
 
         vol = base_vol_per_min * vol_multiplier
@@ -744,7 +744,7 @@ class NuclearAIChartEngine:
                     "price": round(base, 3),
                     "low": round(base - cone_width, 3),
                     "high": round(base + cone_width, 3),
-                    "scenario": "nuclear" if severity >= 7 else "normal",
+                    "scenario": "nuclear" if severity >= 7 else "normal",  # noqa: PLR2004
                 }
             )
 

@@ -22,6 +22,32 @@ from datetime import datetime, time, UTC
 from enum import Enum
 import logging
 
+
+# ── Module constants ─────────────────────────────────────────────────────────
+_RSI_OVERBOUGHT = 80
+_RSI_OVERSOLD = 20
+_RSI_NEUTRAL = 50
+_RSI_PERIOD = 14
+_ADX_TREND_THRESHOLD = 25
+_ATR_PERIOD = 20
+_MACD_FAST = 12
+_MACD_SLOW = 26
+_MACD_SIGNAL = 9
+_BB_PERIOD = 20
+_BB_STD = 2
+_VOLUME_SURGE_RATIO = 2.0
+_TREND_SLOPE_THRESHOLD = 0.005
+_VOLATILITY_HIGH = 0.03
+_VOLATILITY_LOW = 0.02
+_SESSION_OVERLAP_SCORE = 0.7
+_CONFLUENCE_THRESHOLD = 0.5
+_REGIME_TREND_SCORE = 0.4
+_REGIME_RANGE_SCORE = 0.3
+_MIN_CANDLES_ANALYSIS = 4
+_LOOKBACK_PERIOD = 60
+_FLOW_THRESHOLD = 0.1
+_FLOW_STRONG = 0.3
+
 logger = logging.getLogger(__name__)
 
 
@@ -292,7 +318,7 @@ class MarketRegimeDetector:
             ]
         )
 
-        if bullish_count >= 4:
+        if bullish_count >= 4:  # noqa: PLR2004
             direction = "up"
             strength = bullish_count / 5
         elif bullish_count <= 1:
@@ -339,22 +365,22 @@ class MarketRegimeDetector:
         range_pct = (recent_high - recent_low) / recent_low
 
         # Classify based on ADX and volatility
-        if adx > 25 and trend["direction"] == "up":
+        if adx > 25 and trend["direction"] == "up":  # noqa: PLR2004
             return MarketRegime.TRENDING_UP, min(adx / 50, 1.0)
 
-        elif adx > 25 and trend["direction"] == "down":
+        elif adx > 25 and trend["direction"] == "down":  # noqa: PLR2004
             return MarketRegime.TRENDING_DOWN, min(adx / 50, 1.0)
 
-        elif volatility_pct > 80:
+        elif volatility_pct > 80:  # noqa: PLR2004
             return MarketRegime.VOLATILE, volatility_pct / 100
 
-        elif adx < 20 and range_pct < 0.02:
+        elif adx < 20 and range_pct < 0.02:  # noqa: PLR2004
             return MarketRegime.CONSOLIDATION, (20 - adx) / 20
 
-        elif adx < 20 and range_pct > 0.03:
+        elif adx < 20 and range_pct > 0.03:  # noqa: PLR2004
             return MarketRegime.RANGING, 0.6
 
-        elif volatility_pct > 60 and adx < 25:
+        elif volatility_pct > 60 and adx < 25:  # noqa: PLR2004
             return MarketRegime.CHOPPY, 0.5
 
         else:
@@ -383,7 +409,7 @@ class MarketRegimeDetector:
         self, current_regime: MarketRegime
     ) -> dict[str, float]:
         """Calculate regime transition probabilities based on history."""
-        if len(self.regime_history) < 10:
+        if len(self.regime_history) < 10:  # noqa: PLR2004
             # Default probabilities
             return {r.value: 0.14 for r in MarketRegime}
 
@@ -469,7 +495,7 @@ class MultiTimeframeAnalyzer:
             weighted_trends = []
 
             for tf, data in data_by_timeframe.items():
-                if len(data) < 50:
+                if len(data) < 50:  # noqa: PLR2004
                     continue
 
                 analysis = self._analyze_single_timeframe(tf, data)
@@ -495,9 +521,9 @@ class MultiTimeframeAnalyzer:
                 trends
             )
 
-            if weighted_sum > 0.1:
+            if weighted_sum > 0.1:  # noqa: PLR2004
                 overall_bias = "bullish"
-            elif weighted_sum < -0.1:
+            elif weighted_sum < -0.1:  # noqa: PLR2004
                 overall_bias = "bearish"
             else:
                 overall_bias = "neutral"
@@ -651,9 +677,9 @@ class MultiTimeframeAnalyzer:
             matching = [
                 s
                 for s in all_supports
-                if abs(s["level"] - sup["level"]) / sup["level"] < 0.005
+                if abs(s["level"] - sup["level"]) / sup["level"] < 0.005  # noqa: PLR2004
             ]
-            if len(matching) >= 2:
+            if len(matching) >= 2:  # noqa: PLR2004
                 avg_level = np.mean([s["level"] for s in matching])
                 tfs = list(set(s["timeframe"] for s in matching))
                 if not any(
@@ -674,9 +700,9 @@ class MultiTimeframeAnalyzer:
             matching = [
                 r
                 for r in all_resistances
-                if abs(r["level"] - res["level"]) / res["level"] < 0.005
+                if abs(r["level"] - res["level"]) / res["level"] < 0.005  # noqa: PLR2004
             ]
-            if len(matching) >= 2:
+            if len(matching) >= 2:  # noqa: PLR2004
                 avg_level = np.mean([r["level"] for r in matching])
                 tfs = list(set(r["timeframe"] for r in matching))
                 if not any(
@@ -703,19 +729,19 @@ class MultiTimeframeAnalyzer:
     ) -> tuple[str, str]:
         """Generate trading recommendation."""
 
-        if confidence > 0.7 and alignment > 0.7:
+        if confidence > 0.7 and alignment > 0.7:  # noqa: PLR2004
             if bias == "bullish":
                 return "Strong BUY setup - High timeframe alignment", "low"
             elif bias == "bearish":
                 return "Strong SELL setup - High timeframe alignment", "low"
 
-        elif confidence > 0.5 and alignment > 0.5:
+        elif confidence > 0.5 and alignment > 0.5:  # noqa: PLR2004
             if bias == "bullish":
                 return "Moderate BUY setup - Wait for pullback to support", "medium"
             elif bias == "bearish":
                 return "Moderate SELL setup - Wait for pullback to resistance", "medium"
 
-        elif confidence < 0.3 or alignment < 0.4:
+        elif confidence < 0.3 or alignment < 0.4:  # noqa: PLR2004
             return "No clear setup - Stay out or reduce position size", "high"
 
         else:

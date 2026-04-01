@@ -205,12 +205,12 @@ def _check_rate_limit_memory(key_hash: str, tier_config: TierConfig) -> None:
     c = _mem_counters[key_hash]
 
     # Reset minute window
-    if now - c["min_reset"] >= 60.0:
+    if now - c["min_reset"] >= 60.0:  # noqa: PLR2004
         c["min_count"] = 0
         c["min_reset"] = now
 
     # Reset day window
-    if now - c["day_reset"] >= 86400.0:
+    if now - c["day_reset"] >= 86400.0:  # noqa: PLR2004
         c["day_count"] = 0
         c["day_reset"] = now
 

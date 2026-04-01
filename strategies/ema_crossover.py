@@ -101,7 +101,7 @@ class EMAcrossoverStrategy(BaseStrategy):
                 )
 
                 # Higher confidence if EMAs are converging with momentum
-                if ema_diff < 0.001:
+                if ema_diff < 0.001:  # noqa: PLR2004
                     confidence = min(0.95, confidence + 0.10)
                     reason += " (strong momentum)"
 
@@ -114,7 +114,7 @@ class EMAcrossoverStrategy(BaseStrategy):
                 )
 
                 # Higher confidence if EMAs are converging with momentum
-                if ema_diff < 0.001:
+                if ema_diff < 0.001:  # noqa: PLR2004
                     confidence = min(0.95, confidence + 0.10)
                     reason += " (strong momentum)"
 

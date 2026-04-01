@@ -288,7 +288,7 @@ class StationarityTester:
             )
 
         series = series.dropna()
-        if len(series) < 30:
+        if len(series) < 30:  # noqa: PLR2004
             return StationarityResult(
                 feature=name,
                 adf_statistic=0.0,

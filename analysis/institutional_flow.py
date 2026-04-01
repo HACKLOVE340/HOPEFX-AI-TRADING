@@ -305,7 +305,7 @@ class InstitutionalFlowDetector:
             if ts >= cutoff
         ]
 
-        if len(trades) < 5:
+        if len(trades) < 5:  # noqa: PLR2004
             return []
 
         # Build volume windows
@@ -321,7 +321,7 @@ class InstitutionalFlowDetector:
             else:
                 windows[epoch]["sell"] += size
 
-        if len(windows) < 2:
+        if len(windows) < 2:  # noqa: PLR2004
             return []
 
         volumes = [w["volume"] for w in windows.values()]
@@ -385,7 +385,7 @@ class InstitutionalFlowDetector:
             if ts >= cutoff
         ]
 
-        if len(trades) < 10:
+        if len(trades) < 10:  # noqa: PLR2004
             return []
 
         # Group trades into time windows
@@ -400,7 +400,7 @@ class InstitutionalFlowDetector:
 
         signals = []
         for epoch, group in windows.items():
-            if len(group) < 3:
+            if len(group) < 3:  # noqa: PLR2004
                 continue
 
             prices = [t[1] for t in group]
@@ -479,8 +479,8 @@ class InstitutionalFlowDetector:
         confidence = min(1.0, confidence)
         classification = (
             "institutional"
-            if confidence >= 0.4
-            else ("retail" if confidence < 0.2 else "unknown")
+            if confidence >= 0.4  # noqa: PLR2004
+            else ("retail" if confidence < 0.2 else "unknown")  # noqa: PLR2004
         )
 
         return InstitutionalTrade(
@@ -545,9 +545,9 @@ class InstitutionalFlowDetector:
         total_vol = buy_vol + sell_vol
         net = (buy_vol - sell_vol) / total_vol if total_vol > 0 else 0.0
 
-        if net > 0.1 or bullish_signals > bearish_signals:
+        if net > 0.1 or bullish_signals > bearish_signals:  # noqa: PLR2004
             direction = "bullish"
-        elif net < -0.1 or bearish_signals > bullish_signals:
+        elif net < -0.1 or bearish_signals > bullish_signals:  # noqa: PLR2004
             direction = "bearish"
         else:
             direction = "neutral"

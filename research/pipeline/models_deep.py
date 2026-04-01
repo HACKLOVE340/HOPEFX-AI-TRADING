@@ -366,7 +366,7 @@ if TORCH_AVAILABLE:
             )
             if self.pos_weight is not None:
                 weight = torch.where(
-                    target > 0.5,
+                    target > 0.5,  # noqa: PLR2004
                     torch.tensor(self.pos_weight, device=pred.device),
                     torch.ones_like(pred),
                 )

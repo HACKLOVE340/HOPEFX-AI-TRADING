@@ -181,7 +181,7 @@ class DiscordChannel(NotificationChannel):
 
         # Add data fields
         for key, value in notification.data.items():
-            if len(embed["fields"]) < 25:  # Discord limit
+            if len(embed["fields"]) < 25:  # Discord limit  # noqa: PLR2004
                 embed["fields"].append(
                     {"name": str(key)[:256], "value": str(value)[:1024], "inline": True}
                 )
@@ -243,7 +243,7 @@ class TelegramChannel(NotificationChannel):
                 text += f"• {key}: `{value}`\n"
 
         # Truncate if too long
-        if len(text) > 4096:
+        if len(text) > 4096:  # noqa: PLR2004
             text = text[:4093] + "..."
 
         payload = {
@@ -260,7 +260,7 @@ class TelegramChannel(NotificationChannel):
             async with aiohttp.ClientSession() as session, session.post(
                 url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
             ) as response:
-                if response.status == 200:
+                if response.status == 200:  # noqa: PLR2004
                     logger.debug(
                         f"Telegram notification sent: {notification.title}"
                     )

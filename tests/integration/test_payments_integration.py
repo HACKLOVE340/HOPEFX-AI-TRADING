@@ -108,7 +108,7 @@ class TestCryptoPaymentModel:
         )
         assert retrieved is not None
         assert retrieved.currency == "BTC"
-        assert retrieved.amount_usd == 99.0
+        assert retrieved.amount_usd == 99.0  # noqa: PLR2004
         assert retrieved.status == "pending"
 
     def test_payment_id_is_unique(self, db_session):
@@ -138,7 +138,7 @@ class TestCryptoPaymentModel:
         assert d["currency"] == "BTC"
         assert d["status"] == "pending"
         assert d["confirmations"] == 0
-        assert d["confirmations_required"] == 3
+        assert d["confirmations_required"] == 3  # noqa: PLR2004
         assert "expires_at" in d
 
     def test_update_payment_status(self, db_session):
@@ -161,7 +161,7 @@ class TestCryptoPaymentModel:
             .first()
         )
         assert updated.status == "complete"
-        assert updated.confirmations == 3
+        assert updated.confirmations == 3  # noqa: PLR2004
         assert updated.confirmed_at is not None
 
     def test_webhook_payload_stored_as_json(self, db_session):
@@ -295,7 +295,7 @@ class TestConfigStoreModel:
         )
         assert retrieved is not None
         value = json.loads(retrieved.value_json)
-        assert value["max_risk_per_trade"] == 2.0
+        assert value["max_risk_per_trade"] == 2.0  # noqa: PLR2004
 
     def test_config_key_is_unique(self, db_session):
         """Duplicate config key raises IntegrityError."""
@@ -330,7 +330,7 @@ class TestConfigStoreModel:
         )
         value = json.loads(updated.value_json)
         assert value["enabled"] is True
-        assert value["minutes_before"] == 15
+        assert value["minutes_before"] == 15  # noqa: PLR2004
 
 
 # ── Rate feed integration test ────────────────────────────────────────────────
@@ -372,4 +372,4 @@ class TestRateFeedIntegration:
 
             rates = await get_rates(force_refresh=True)
 
-        assert abs(rates.get("USDT", 0) - 1.0) < 0.01
+        assert abs(rates.get("USDT", 0) - 1.0) < 0.01  # noqa: PLR2004

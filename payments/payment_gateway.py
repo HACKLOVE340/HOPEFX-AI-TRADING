@@ -161,7 +161,7 @@ class PaymentGateway:
         # bank_code and account_number are passed via payment.description
         # as "bank_code:account_number" when this method is called.
         parts = (payment.description or "").split(":")
-        if len(parts) < 2:
+        if len(parts) < 2:  # noqa: PLR2004
             raise ValueError(
                 "Bank transfer requires description in format 'bank_code:account_number'. "
                 f"Got: '{payment.description}'"

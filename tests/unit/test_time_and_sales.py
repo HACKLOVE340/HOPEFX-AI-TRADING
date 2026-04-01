@@ -27,8 +27,8 @@ class TestExecutedTrade:
         )
 
         assert trade.symbol == "XAUUSD"
-        assert trade.price == 1950.0
-        assert trade.size == 100.0
+        assert trade.price == 1950.0  # noqa: PLR2004
+        assert trade.size == 100.0  # noqa: PLR2004
         assert trade.side == "buy"
         assert trade.is_aggressive_buy is True
 
@@ -45,7 +45,7 @@ class TestExecutedTrade:
 
         d = trade.to_dict()
         assert d["symbol"] == "XAUUSD"
-        assert d["price"] == 1950.0
+        assert d["price"] == 1950.0  # noqa: PLR2004
         assert "timestamp" in d
         assert "is_large_trade" in d
 
@@ -67,8 +67,8 @@ class TestTradeVelocity:
 
         d = v.to_dict()
         assert d["symbol"] == "XAUUSD"
-        assert d["trades_per_minute"] == 10.0
-        assert d["buy_trades_pct"] == 60.0
+        assert d["trades_per_minute"] == 10.0  # noqa: PLR2004
+        assert d["buy_trades_pct"] == 60.0  # noqa: PLR2004
 
 
 class TestTimeAndSalesService:
@@ -88,7 +88,7 @@ class TestTimeAndSalesService:
 
         assert trade is not None
         assert trade.symbol == "XAUUSD"
-        assert trade.price == 1950.0
+        assert trade.price == 1950.0  # noqa: PLR2004
         assert service.get_trade_count("XAUUSD") == 1
 
     def test_add_trade_buy_aggression(self):
@@ -134,7 +134,7 @@ class TestTimeAndSalesService:
         service.add_trade("XAUUSD", 1950.0, 50.0, "sell")
 
         assert len(alerts) == 1
-        assert alerts[0].size == 200.0
+        assert alerts[0].size == 200.0  # noqa: PLR2004
 
     def test_circular_buffer_limit(self):
         from data.time_and_sales import TimeAndSalesService
@@ -143,7 +143,7 @@ class TestTimeAndSalesService:
         for i in range(10):
             service.add_trade("XAUUSD", 1950.0, float(i + 1), "buy")
 
-        assert service.get_trade_count("XAUUSD") == 5
+        assert service.get_trade_count("XAUUSD") == 5  # noqa: PLR2004
 
     def test_get_recent_trades(self):
         from data.time_and_sales import TimeAndSalesService
@@ -153,7 +153,7 @@ class TestTimeAndSalesService:
             service.add_trade("XAUUSD", 1950.0, 10.0, "buy")
 
         recent = service.get_recent_trades("XAUUSD", n=5)
-        assert len(recent) == 5
+        assert len(recent) == 5  # noqa: PLR2004
 
     def test_get_recent_trades_empty(self):
         from data.time_and_sales import TimeAndSalesService
@@ -179,7 +179,7 @@ class TestTimeAndSalesService:
             start_time=base - timedelta(minutes=1),
         )
         assert len(trades) == 1
-        assert trades[0].price == 1951.0
+        assert trades[0].price == 1951.0  # noqa: PLR2004
 
     def test_get_large_trades(self):
         from data.time_and_sales import TimeAndSalesService
@@ -193,7 +193,7 @@ class TestTimeAndSalesService:
 
         large = service.get_large_trades("XAUUSD")
         assert len(large) == 1
-        assert large[0].size == 500.0
+        assert large[0].size == 500.0  # noqa: PLR2004
 
     def test_get_trade_velocity_no_data(self):
         from data.time_and_sales import TimeAndSalesService
@@ -238,8 +238,8 @@ class TestTimeAndSalesService:
 
         stats = service.get_aggressor_stats("XAUUSD")
         assert stats is not None
-        assert stats.buy_trades == 7
-        assert stats.sell_trades == 3
+        assert stats.buy_trades == 7  # noqa: PLR2004
+        assert stats.sell_trades == 3  # noqa: PLR2004
         assert stats.buy_pct == pytest.approx(70.0)
         assert stats.net_aggression > 0
 
@@ -289,7 +289,7 @@ class TestTimeAndSalesService:
             )
 
         stats = service.get_trade_statistics("XAUUSD")
-        assert stats["trade_count"] == 10
+        assert stats["trade_count"] == 10  # noqa: PLR2004
         assert "total_volume" in stats
         assert stats["price_high"] > stats["price_low"]
 

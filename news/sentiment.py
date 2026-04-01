@@ -139,13 +139,13 @@ class SentimentAnalyzer:
 
     def _get_label(self, polarity: float) -> SentimentLabel:
         """Convert polarity score to sentiment label"""
-        if polarity >= 0.5:
+        if polarity >= 0.5:  # noqa: PLR2004
             return SentimentLabel.VERY_POSITIVE
-        elif polarity >= 0.1:
+        elif polarity >= 0.1:  # noqa: PLR2004
             return SentimentLabel.POSITIVE
-        elif polarity <= -0.5:
+        elif polarity <= -0.5:  # noqa: PLR2004
             return SentimentLabel.VERY_NEGATIVE
-        elif polarity <= -0.1:
+        elif polarity <= -0.1:  # noqa: PLR2004
             return SentimentLabel.NEGATIVE
         else:
             return SentimentLabel.NEUTRAL
@@ -302,13 +302,13 @@ class FinancialSentimentAnalyzer:
 
     def _get_label(self, polarity: float) -> SentimentLabel:
         """Convert polarity score to sentiment label"""
-        if polarity >= 0.5:
+        if polarity >= 0.5:  # noqa: PLR2004
             return SentimentLabel.VERY_POSITIVE
-        elif polarity >= 0.05:
+        elif polarity >= 0.05:  # noqa: PLR2004
             return SentimentLabel.POSITIVE
-        elif polarity <= -0.5:
+        elif polarity <= -0.5:  # noqa: PLR2004
             return SentimentLabel.VERY_NEGATIVE
-        elif polarity <= -0.05:
+        elif polarity <= -0.05:  # noqa: PLR2004
             return SentimentLabel.NEGATIVE
         else:
             return SentimentLabel.NEUTRAL

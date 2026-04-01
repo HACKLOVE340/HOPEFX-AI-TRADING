@@ -196,8 +196,8 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     sma_signal = np.sign(df["sma20"] - df["sma50"])
     # 2. RSI momentum: +1 when RSI > 55, -1 when RSI < 45, 0 otherwise
     rsi_signal = pd.Series(0.0, index=df.index)
-    rsi_signal[df["rsi14"] > 55] = 1.0
-    rsi_signal[df["rsi14"] < 45] = -1.0
+    rsi_signal[df["rsi14"] > 55] = 1.0  # noqa: PLR2004
+    rsi_signal[df["rsi14"] < 45] = -1.0  # noqa: PLR2004
     # 3. Price vs SMA20: +1 / -1
     price_signal = np.sign(df["close"] - df["sma20"])
 
@@ -219,7 +219,7 @@ def _pip_value_for_price(price: float) -> float:
     Gold (price > $100): 1 pip = $0.10
     Crypto/Forex (price ≤ $100): 1 pip = $0.01
     """
-    return GOLD_PIP_VALUE if price > 100 else CRYPTO_PIP_VALUE
+    return GOLD_PIP_VALUE if price > 100 else CRYPTO_PIP_VALUE  # noqa: PLR2004
 
 
 # ---------------------------------------------------------------------------
@@ -426,7 +426,7 @@ def trade_level_sharpe(
     """
     arr = np.array(trade_pnls, dtype=float)
     n = len(arr)
-    if n < 2 or np.std(arr, ddof=1) == 0:
+    if n < 2 or np.std(arr, ddof=1) == 0:  # noqa: PLR2004
         return 0.0, 0.0
     avg_hold_days = avg_hold_hours / 24.0
     ann_factor = math.sqrt(252.0 / max(avg_hold_days, 0.04))

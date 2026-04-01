@@ -50,9 +50,10 @@ import os
 import time
 from abc import ABC, abstractmethod
 from collections import deque
-from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from dataclasses import dataclass
+from datetime import datetime, UTC
 from typing import Any, Callable, Dict, List, Optional
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -135,9 +136,7 @@ def _is_valid_tick(tick: Tick) -> bool:
     if tick.bid > tick.ask:
         return False
     mid = tick.mid
-    if mid < _PRICE_MIN or mid > _PRICE_MAX:
-        return False
-    return True
+    return not (mid < _PRICE_MIN or mid > _PRICE_MAX)
 
 
 # ── Abstract tick source ──────────────────────────────────────────────────────
@@ -253,9 +252,8 @@ class OandaTickSource(TickSource):
         }
 
         logger.info("OandaTickSource: connecting to %s", url)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=None)) as resp:
-                if resp.status != 200:
+        async with aiohttp.ClientSession() as session, session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=None)) as resp:
+                if resp.status != 200:  # noqa: PLR2004
                     body = await resp.text()
                     raise ConnectionError(f"OANDA stream HTTP {resp.status}: {body[:200]}")
 
@@ -263,7 +261,7 @@ class OandaTickSource(TickSource):
                 async for line in resp.content:
                     if not self._running:
                         break
-                    line = line.strip()
+                    line = line.strip()  # noqa: PLW2901
                     if not line:
                         continue
                     try:
@@ -524,10 +522,8 @@ class TickBus:
         logger.info("TickBus: %s subscribed", type(component).__name__)
 
     def unsubscribe(self, component: Any) -> None:
-        try:
+        with contextlib.suppress(ValueError):
             self._subscribers.remove(component)
-        except ValueError:
-            pass
 
     async def publish(self, tick: Tick) -> None:
         """Validate, deduplicate, and fan-out a tick to all subscribers."""
@@ -538,7 +534,7 @@ class TickBus:
         now_ms = tick.timestamp.timestamp() * 1000
         mid = tick.mid
         for prev_ms, prev_mid in self._recent:
-            if abs(now_ms - prev_ms) <= self._dedup_window_ms and abs(mid - prev_mid) < 0.001:
+            if abs(now_ms - prev_ms) <= self._dedup_window_ms and abs(mid - prev_mid) < 0.001:  # noqa: PLR2004
                 return
 
         self._recent.append((now_ms, mid))

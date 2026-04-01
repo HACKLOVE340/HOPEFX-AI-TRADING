@@ -152,7 +152,7 @@ class FTMOBroker:
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
-                if resp.status != 200:
+                if resp.status != 200:  # noqa: PLR2004
                     error_data = await resp.json()
                     raise RuntimeError(f"FTMO API Error: {error_data}")
 
@@ -285,7 +285,7 @@ class FTMOBroker:
                 headers=headers,
                 params=params,
             ) as resp:
-                if resp.status != 200:
+                if resp.status != 200:  # noqa: PLR2004
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -312,7 +312,7 @@ class FTMOBroker:
         if metrics.remaining_monthly_loss <= 0:
             return True, "Monthly loss limit exceeded"
 
-        if metrics.drawdown >= 0.05:  # 5% max drawdown
+        if metrics.drawdown >= 0.05:  # 5% max drawdown  # noqa: PLR2004
             return True, "Maximum drawdown exceeded"
 
         return False, None
@@ -388,7 +388,7 @@ try:
             daily_loss_pct = (
                 (info.balance - info.equity) / info.balance * 100 if info.balance else 0
             )
-            compliant = daily_loss_pct < 5.0
+            compliant = daily_loss_pct < 5.0  # noqa: PLR2004
             return {
                 "compliant": compliant,
                 "equity": info.equity,

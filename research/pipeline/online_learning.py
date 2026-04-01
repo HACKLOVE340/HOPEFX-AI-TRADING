@@ -211,7 +211,7 @@ class ADWINDriftDetector:
         self._n += 1
 
         # Limit window to avoid O(n²) scan on very long runs
-        if self._n > 2000:
+        if self._n > 2000:  # noqa: PLR2004
             removed = self._window.popleft()
             self._total -= removed
             self._n -= 1
@@ -223,7 +223,7 @@ class ADWINDriftDetector:
         Scan all cut-points in the window for a significant mean shift.
         Uses Hoeffding bound: |μ₀ - μ₁| > ε_cut → drift.
         """
-        if self._n < 30:
+        if self._n < 30:  # noqa: PLR2004
             return False
 
         window = list(self._window)
@@ -335,7 +335,7 @@ class AdaptiveBlendWeights:
         self._primary_correct.append(primary_correct)
         self._online_correct.append(online_correct)
 
-        if len(self._primary_correct) < 10:
+        if len(self._primary_correct) < 10:  # noqa: PLR2004
             return  # not enough data yet
 
         primary_acc = float(np.mean(self._primary_correct))
@@ -643,7 +643,7 @@ class OnlineEnsemble:
 
         # Update blend weights based on recent accuracy
         xgb_prob = self.xgb.predict_proba(X)
-        xgb_acc = float(((xgb_prob > 0.5).astype(int) == y).mean())
+        xgb_acc = float(((xgb_prob > 0.5).astype(int) == y).mean())  # noqa: PLR2004
         self._xgb_acc_ema = (
             1 - self.ema_alpha
         ) * self._xgb_acc_ema + self.ema_alpha * xgb_acc

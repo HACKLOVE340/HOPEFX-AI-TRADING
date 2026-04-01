@@ -208,7 +208,7 @@ class LogSanitizer:
             key_lower = key.lower()
             for s in sensitive:
                 if s in key_lower:
-                    if isinstance(value, str) and len(value) > 4:
+                    if isinstance(value, str) and len(value) > 4:  # noqa: PLR2004
                         return f"{value[:2]}...{self.redaction_text}"
                     return self.redaction_text
 
@@ -400,7 +400,7 @@ class CredentialRotationTracker:
                 "status": "expired"
                 if days_until_rotation == 0
                 else "warning"
-                if days_until_rotation <= 14
+                if days_until_rotation <= 14  # noqa: PLR2004
                 else "ok",
             }
 
@@ -457,7 +457,7 @@ class SecurityConfigValidator:
                     }
                 )
                 is_valid = False
-            elif var == "CONFIG_ENCRYPTION_KEY" and len(value) < 32:
+            elif var == "CONFIG_ENCRYPTION_KEY" and len(value) < 32:  # noqa: PLR2004
                 self.issues.append(
                     {
                         "level": "error",

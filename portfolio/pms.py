@@ -302,7 +302,7 @@ class PortfolioOptimizer:
         if symbol not in self.returns_history:
             self.returns_history[symbol] = []
         self.returns_history[symbol].append(daily_return)
-        if len(self.returns_history[symbol]) > 252:  # 1 year
+        if len(self.returns_history[symbol]) > 252:  # 1 year  # noqa: PLR2004
             self.returns_history[symbol].pop(0)
 
     def calculate_kelly_sizes(self) -> dict[str, float]:
@@ -313,7 +313,7 @@ class PortfolioOptimizer:
         kelly_sizes = {}
 
         for symbol, returns in self.returns_history.items():
-            if len(returns) < 30:
+            if len(returns) < 30:  # noqa: PLR2004
                 continue
 
             returns_arr = np.array(returns)
@@ -347,7 +347,7 @@ class PortfolioOptimizer:
         Mean-variance optimization with target volatility.
         """
         symbols = list(self.returns_history.keys())
-        if len(symbols) < 2:
+        if len(symbols) < 2:  # noqa: PLR2004
             return dict.fromkeys(symbols, 1.0)
 
         # Build returns matrix
