@@ -32,9 +32,7 @@ import pytest
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 
-def _make_ohlcv(
-    n: int = 300, freq: str = "1h", start: str = "2023-01-01"
-) -> pd.DataFrame:
+def _make_ohlcv(n: int = 300, freq: str = "1h", start: str = "2023-01-01") -> pd.DataFrame:
     """Generate synthetic OHLCV with a UTC DatetimeIndex."""
     idx = pd.date_range(start, periods=n, freq=freq, tz="UTC")
     rng = np.random.default_rng(42)

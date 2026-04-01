@@ -83,9 +83,7 @@ from collections.abc import Callable
 logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-TICK_INTERVAL_S: float = float(
-    __import__("os").environ.get("CHART_TICK_INTERVAL", "1.0")
-)
+TICK_INTERVAL_S: float = float(__import__("os").environ.get("CHART_TICK_INTERVAL", "1.0"))
 MAX_BARS: int = 500
 MAX_EQUITY_PTS: int = 500
 MAX_SIGNALS: int = 50
@@ -215,9 +213,7 @@ class NuclearAIChartEngine:
         self._broadcast_callbacks.append(fn)
 
     def remove_broadcast_callback(self, fn: Callable[[dict], None]) -> None:
-        self._broadcast_callbacks = [
-            c for c in self._broadcast_callbacks if c is not fn
-        ]
+        self._broadcast_callbacks = [c for c in self._broadcast_callbacks if c is not fn]
 
     async def start(self) -> None:
         """Start the tick loop. Runs until stop() is called."""
@@ -244,9 +240,7 @@ class NuclearAIChartEngine:
         """Return the latest chart state synchronously (for HTTP polling)."""
         return self._build_state()
 
-    def inject_news_event(
-        self, text: str, volatility: float = 1.0, sentiment: float = 0.0
-    ) -> dict:
+    def inject_news_event(self, text: str, volatility: float = 1.0, sentiment: float = 0.0) -> dict:
         """
         Score a news event immediately and return the nuclear assessment.
         Called by connect_to_life.py when a news item arrives.
@@ -260,9 +254,7 @@ class NuclearAIChartEngine:
                 "explanation": "Scorer unavailable",
             }
 
-        severity, action, raw_score, meta = self._wordmap_scorer.score_event(
-            text, volatility, sentiment
-        )
+        severity, action, raw_score, meta = self._wordmap_scorer.score_event(text, volatility, sentiment)
         nuclear_state = self._build_nuclear_state(severity, action, raw_score, meta)
         self._last_nuclear = nuclear_state
 
@@ -289,9 +281,7 @@ class NuclearAIChartEngine:
     async def _tick_loop(self) -> None:
         while self._running:
             try:
-                state = await asyncio.get_event_loop().run_in_executor(
-                    None, self._build_state
-                )
+                state = await asyncio.get_event_loop().run_in_executor(None, self._build_state)
                 self._broadcast(state)
                 self._tick_count += 1
             except Exception as exc:
@@ -344,9 +334,7 @@ class NuclearAIChartEngine:
             if self._data_orch:
                 tick = self._data_orch.get_latest_tick()
                 if tick:
-                    mid = getattr(tick, "mid", None) or (
-                        (getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2
-                    )
+                    mid = getattr(tick, "mid", None) or ((getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2)
                     bid = getattr(tick, "bid", mid)
                     ask = getattr(tick, "ask", mid)
                     spread = ask - bid
@@ -563,9 +551,7 @@ class NuclearAIChartEngine:
     ) -> str:
         """Generate a human-readable co-pilot explanation."""
         if severity == 0 and not trading_paused:
-            return (
-                "All clear. No geopolitical risk detected. Normal trading conditions."
-            )
+            return "All clear. No geopolitical risk detected. Normal trading conditions."
 
         parts: list[str] = []
 
@@ -575,12 +561,8 @@ class NuclearAIChartEngine:
 
         # Top matched terms
         if matched_terms:
-            top = sorted(
-                matched_terms, key=lambda x: x.get("contribution", 0), reverse=True
-            )[:3]
-            terms_str = ", ".join(
-                f'"{t["term"]}" ({t["category"]}, w={t["weight"]:.1f})' for t in top
-            )
+            top = sorted(matched_terms, key=lambda x: x.get("contribution", 0), reverse=True)[:3]
+            terms_str = ", ".join(f'"{t["term"]}" ({t["category"]}, w={t["weight"]:.1f})' for t in top)
             parts.append(f"WORDMAP matched: {terms_str}.")
 
         # Category breakdown
@@ -599,7 +581,7 @@ class NuclearAIChartEngine:
             parts.append(f"Amplified by: {', '.join(amplifiers)}.")
 
         # Confidence
-        parts.append(f"Confidence: {confidence*100:.0f}%.")
+        parts.append(f"Confidence: {confidence * 100:.0f}%.")
 
         # Action description
         action_desc = {
@@ -634,11 +616,7 @@ class NuclearAIChartEngine:
 
         try:
             if self._risk_orch:
-                status = (
-                    self._risk_orch.get_status()
-                    if hasattr(self._risk_orch, "get_status")
-                    else {}
-                )
+                status = self._risk_orch.get_status() if hasattr(self._risk_orch, "get_status") else {}
                 defaults.update(
                     {
                         "exposure": round(status.get("current_exposure", 0.0), 4),
@@ -675,11 +653,7 @@ class NuclearAIChartEngine:
                     direction = (
                         "long"
                         if feats.get("signal_direction", 0) > 0
-                        else (
-                            "short"
-                            if feats.get("signal_direction", 0) < 0
-                            else "neutral"
-                        )
+                        else ("short" if feats.get("signal_direction", 0) < 0 else "neutral")
                     )
                     confidence = feats.get("signal_confidence", 0.5)
                     price = self._last_price or 2650.0
@@ -689,12 +663,8 @@ class NuclearAIChartEngine:
                         "confidence": round(confidence, 4),
                         "model": "XGBoost+RL",
                         "entry": round(price, 3),
-                        "sl": round(
-                            price * (0.998 if direction == "long" else 1.002), 3
-                        ),
-                        "tp": round(
-                            price * (1.004 if direction == "long" else 0.996), 3
-                        ),
+                        "sl": round(price * (0.998 if direction == "long" else 1.002), 3),
+                        "tp": round(price * (1.004 if direction == "long" else 0.996), 3),
                         "reason": feats.get("signal_reason", "ML ensemble signal"),
                         "ts": int(time.time() * 1000),
                     }
@@ -706,9 +676,7 @@ class NuclearAIChartEngine:
 
     # ── Prediction path ───────────────────────────────────────────────────────
 
-    def _build_prediction_path(
-        self, price_data: dict, nuclear_data: dict
-    ) -> list[dict]:
+    def _build_prediction_path(self, price_data: dict, nuclear_data: dict) -> list[dict]:
         """
         Build a forward price prediction path with confidence cones.
         Under nuclear conditions, shows expected drawdown scenarios.
@@ -772,9 +740,7 @@ class NuclearAIChartEngine:
 
     # ── Equity curve update ───────────────────────────────────────────────────
 
-    def record_equity_point(
-        self, equity: float, balance: float, annotation: str | None = None
-    ) -> None:
+    def record_equity_point(self, equity: float, balance: float, annotation: str | None = None) -> None:
         """Called by connect_to_life.py on each status poll to record equity."""
         drawdown = 0.0
         if balance > 0:

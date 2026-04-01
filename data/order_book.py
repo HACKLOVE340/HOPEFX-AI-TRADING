@@ -42,9 +42,7 @@ class OrderBook:
             return self.best_ask - self.best_bid
         return None
 
-    def update(
-        self, bids: list[tuple[float, float]], asks: list[tuple[float, float]]
-    ) -> None:
+    def update(self, bids: list[tuple[float, float]], asks: list[tuple[float, float]]) -> None:
         self.bids = [OrderBookLevel(p, s) for p, s in sorted(bids, reverse=True)]
         self.asks = [OrderBookLevel(p, s) for p, s in sorted(asks)]
         self.timestamp = time.time()

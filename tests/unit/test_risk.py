@@ -36,9 +36,7 @@ def test_position_sizing_atr(test_account):
     """Test ATR-based position sizing."""
     sizer = PositionSizer(method="atr")
 
-    size = sizer.calculate_size(
-        account=test_account, entry_price=Decimal("1800"), atr=Decimal("2.0")
-    )
+    size = sizer.calculate_size(account=test_account, entry_price=Decimal("1800"), atr=Decimal("2.0"))
 
     # Should be reasonable size
     assert size > 0

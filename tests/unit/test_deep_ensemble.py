@@ -159,9 +159,7 @@ class TestDeepEnsembleStore:
         store._active = True
         store._predictor = MagicMock()
         df = _make_ohlcv(100)
-        with patch.object(
-            self._cls, "_extract_features", side_effect=RuntimeError("boom")
-        ):
+        with patch.object(self._cls, "_extract_features", side_effect=RuntimeError("boom")):
             result = store.blend(0.65, df)
         assert result == 0.65  # noqa: PLR2004
 

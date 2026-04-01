@@ -142,10 +142,7 @@ def _setup_env(args: argparse.Namespace) -> None:
     elif args.mode == "live":
         practice = os.environ.get("OANDA_PRACTICE", "true").lower()
         if practice == "true":
-            logger.warning(
-                "Mode=live but OANDA_PRACTICE=true — "
-                "set OANDA_PRACTICE=false in .env to trade real money."
-            )
+            logger.warning("Mode=live but OANDA_PRACTICE=true — set OANDA_PRACTICE=false in .env to trade real money.")
 
     # Map broker flag to exchange identifier used by MarketIngest
     broker_exchange_map = {
@@ -402,10 +399,7 @@ def main() -> None:
                 "Set OANDA_PRACTICE=false in .env to trade real money."
             )
             sys.exit(1)
-        confirm = input(
-            "\n⚠️  LIVE MODE — real money will be traded.\n"
-            "   Type 'CONFIRM LIVE' to proceed: "
-        ).strip()
+        confirm = input("\n⚠️  LIVE MODE — real money will be traded.\n   Type 'CONFIRM LIVE' to proceed: ").strip()
         if confirm != "CONFIRM LIVE":
             print("Aborted.")
             sys.exit(0)

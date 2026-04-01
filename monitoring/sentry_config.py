@@ -177,9 +177,7 @@ def _scrub_dict(d: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _before_send(
-    event: dict[str, Any], hint: dict[str, Any]
-) -> dict[str, Any] | None:
+def _before_send(event: dict[str, Any], hint: dict[str, Any]) -> dict[str, Any] | None:
     """
     Sentry before_send hook.
 
@@ -214,9 +212,7 @@ def _before_send(
     return event
 
 
-def _before_send_transaction(
-    event: dict[str, Any], hint: dict[str, Any]
-) -> dict[str, Any] | None:
+def _before_send_transaction(event: dict[str, Any], hint: dict[str, Any]) -> dict[str, Any] | None:
     """
     Sentry before_send_transaction hook.
 
@@ -236,7 +232,7 @@ def _build_sentry_integrations() -> list:
 
     integrations: list = [
         LoggingIntegration(
-            level=_logging.WARNING,   # breadcrumb level
+            level=_logging.WARNING,  # breadcrumb level
             event_level=_logging.ERROR,  # issue level
         )
     ]
@@ -278,9 +274,7 @@ def _build_sentry_integrations() -> list:
     return integrations
 
 
-def _set_sentry_global_tags(
-    sentry_sdk: Any, environment: str, release: str
-) -> None:
+def _set_sentry_global_tags(sentry_sdk: Any, environment: str, release: str) -> None:
     """Set global tags visible on every Sentry event."""
     with sentry_sdk.new_scope() as scope:
         scope.set_tag("service", "hopefx-api")
@@ -315,9 +309,7 @@ def init_sentry() -> bool:
                 "create a FastAPI project, and set SENTRY_DSN in your .env."
             )
         else:
-            logger.info(
-                "Sentry disabled (SENTRY_DSN not set) — set it to enable error tracking"
-            )
+            logger.info("Sentry disabled (SENTRY_DSN not set) — set it to enable error tracking")
         return False
 
     try:
@@ -326,9 +318,7 @@ def init_sentry() -> bool:
         release = os.getenv("SENTRY_RELEASE", os.getenv("GIT_COMMIT", "unknown"))
         traces_rate = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
         profiles_rate = float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.05"))
-        environment = os.getenv(
-            "SENTRY_ENVIRONMENT", os.getenv("APP_ENV", "development")
-        )
+        environment = os.getenv("SENTRY_ENVIRONMENT", os.getenv("APP_ENV", "development"))
 
         sentry_sdk.init(
             dsn=dsn,
@@ -358,8 +348,7 @@ def init_sentry() -> bool:
 
     except ImportError:
         logger.warning(
-            "sentry-sdk not installed — error tracking disabled. "
-            "Install with: pip install sentry-sdk[fastapi]"
+            "sentry-sdk not installed — error tracking disabled. Install with: pip install sentry-sdk[fastapi]"
         )
         return False
     except Exception as exc:
@@ -396,7 +385,7 @@ def capture_ml_fallback_event(
             scope.set_extra("fallback_accuracy", fallback_accuracy)
             scope.set_extra(
                 "impact",
-                f"Live model degraded from 68.0% OOS to {fallback_accuracy*100:.1f}% OOS. "
+                f"Live model degraded from 68.0% OOS to {fallback_accuracy * 100:.1f}% OOS. "
                 "No demonstrated edge above chance on fallback model.",
             )
             scope.set_extra(
@@ -407,7 +396,7 @@ def capture_ml_fallback_event(
             )
             sentry_sdk.capture_message(
                 f"ML FALLBACK ACTIVATED: advanced_oos.pkl unavailable — "
-                f"running on {fallback_model} ({fallback_accuracy*100:.1f}% OOS, no edge)",
+                f"running on {fallback_model} ({fallback_accuracy * 100:.1f}% OOS, no edge)",
                 level="fatal",
             )
         logger.debug("Sentry: ML fallback event captured")

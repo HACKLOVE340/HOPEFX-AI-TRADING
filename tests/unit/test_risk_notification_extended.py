@@ -43,21 +43,15 @@ class TestRiskManagerExtended:
     # --- Position sizing methods ---
 
     def test_calculate_position_size_fixed_method(self, risk_mgr):
-        result = risk_mgr.calculate_position_size(
-            "XAUUSD", 1950.0, method="fixed", amount=5000.0
-        )
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="fixed", amount=5000.0)
         assert result.size > 0
 
     def test_calculate_position_size_percent_method(self, risk_mgr):
-        result = risk_mgr.calculate_position_size(
-            "XAUUSD", 1950.0, method="percent", percent=0.02
-        )
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="percent", percent=0.02)
         assert result.size > 0
 
     def test_calculate_position_size_risk_method_with_stop(self, risk_mgr):
-        result = risk_mgr.calculate_position_size(
-            "XAUUSD", 1950.0, method="risk", stop_loss=1930.0
-        )
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="risk", stop_loss=1930.0)
         assert result.size > 0
 
     def test_calculate_position_size_risk_method_no_stop(self, risk_mgr):
@@ -66,16 +60,12 @@ class TestRiskManagerExtended:
 
     def test_calculate_position_size_risk_zero_distance(self, risk_mgr):
         """Cover risk method with stop == entry (zero distance)."""
-        result = risk_mgr.calculate_position_size(
-            "XAUUSD", 1950.0, method="risk", stop_loss=1950.0
-        )
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="risk", stop_loss=1950.0)
         assert result.size > 0
 
     def test_calculate_position_size_unknown_method(self, risk_mgr):
         """Cover else branch for unknown method."""
-        result = risk_mgr.calculate_position_size(
-            "XAUUSD", 1950.0, method="unknown_method"
-        )
+        result = risk_mgr.calculate_position_size("XAUUSD", 1950.0, method="unknown_method")
         assert result.size > 0
 
     def test_calculate_position_size_with_price_alias(self, risk_mgr):
@@ -94,9 +84,7 @@ class TestRiskManagerExtended:
     def test_can_open_position_max_positions(self, risk_mgr):
         # Fill up positions
         for i in range(5):
-            risk_mgr.open_positions.append(
-                {"id": str(i), "symbol": "XAUUSD", "size": 100.0}
-            )
+            risk_mgr.open_positions.append({"id": str(i), "symbol": "XAUUSD", "size": 100.0})
         can_open, reason = risk_mgr.can_open_position(100.0)
         assert can_open is False
         assert "Max open positions" in reason
@@ -298,9 +286,7 @@ class TestNotificationManagerExtended:
         # Ensure CONSOLE is in enabled_channels
         if NotificationChannel.CONSOLE not in mgr.enabled_channels:
             mgr.enabled_channels.append(NotificationChannel.CONSOLE)
-        mgr.send(
-            "Test", level=NotificationLevel.INFO, channels=[NotificationChannel.CONSOLE]
-        )
+        mgr.send("Test", level=NotificationLevel.INFO, channels=[NotificationChannel.CONSOLE])
 
     def test_notify_multiple_channels(self, mgr):
         from notifications.manager import NotificationLevel, NotificationChannel
@@ -352,7 +338,10 @@ class TestNotificationManagerExtended:
 
         mgr.config["discord_webhook_url"] = "https://discord.com/api/webhooks/test"
         # Simulate ImportError on requests, fallback to urllib
-        with patch("requests.post", side_effect=ImportError("no requests")), patch("urllib.request.urlopen") as mock_urlopen:
+        with (
+            patch("requests.post", side_effect=ImportError("no requests")),
+            patch("urllib.request.urlopen") as mock_urlopen,
+        ):
             mock_urlopen.return_value = MagicMock()
             # Should not raise; either uses urllib fallback or logs an error
             with contextlib.suppress(Exception):
@@ -363,7 +352,10 @@ class TestNotificationManagerExtended:
         from notifications.manager import NotificationLevel
 
         mgr.config["discord_webhook_url"] = "http://discord.com/api/webhooks/test"
-        with patch("requests.post", side_effect=ImportError("no requests")), patch("urllib.request.urlopen") as mock_urlopen:
+        with (
+            patch("requests.post", side_effect=ImportError("no requests")),
+            patch("urllib.request.urlopen") as mock_urlopen,
+        ):
             with caplog.at_level(logging.ERROR):
                 mgr._send_discord("Test", NotificationLevel.INFO, None)
             # urlopen must NOT be called because http scheme is rejected

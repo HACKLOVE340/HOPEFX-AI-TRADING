@@ -17,14 +17,13 @@ from __future__ import annotations
 import pytest
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _make_jwt(
-    sub: str = "user123", role: str = "trader", secret: str = "test-secret"
-) -> str:
+def _make_jwt(sub: str = "user123", role: str = "trader", secret: str = "test-secret") -> str:
     import jwt
 
     payload = {
@@ -130,9 +129,7 @@ class TestFreeTierAssignment:
             assert existing is None
             sub = mock_mgr.create_subscription("new_user", SubscriptionTier.FREE)
             assert sub.tier.value == "free"
-            mock_mgr.create_subscription.assert_called_once_with(
-                "new_user", SubscriptionTier.FREE
-            )
+            mock_mgr.create_subscription.assert_called_once_with("new_user", SubscriptionTier.FREE)
 
     def test_activate_free_tier_idempotent(self):
         """

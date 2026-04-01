@@ -25,6 +25,7 @@ import pytest
 import asyncio
 import numpy as np
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 # Import core components for testing
@@ -216,8 +217,7 @@ def generate_ohlcv_from_close(closes: list) -> list:
 
         ohlcv.append(
             OHLCV(
-                timestamp=datetime.now(UTC).timestamp()
-                - (len(closes) - i) * 3600,
+                timestamp=datetime.now(UTC).timestamp() - (len(closes) - i) * 3600,
                 open=open_price,
                 high=high,
                 low=low,

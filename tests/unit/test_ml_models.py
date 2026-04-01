@@ -17,7 +17,6 @@ import os
 # Maximum fraction of feature_names allowed to be uncategorised in feature groups
 _MAX_UNCATEGORISED_FRACTION = 0.3
 import tempfile
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
@@ -174,7 +173,7 @@ class TestBaseMLModel:
         fi = model.get_feature_importance()
         assert fi is not None
         assert len(fi) == 3  # noqa: PLR2004
-        assert abs(sum(fi.values()) - 1.0) < 1e-6  # importances sum to 1
+        assert abs(sum(fi.values()) - 1.0) < 1e-6  # importances sum to 1  # noqa: PLR2004
 
     def test_get_feature_importance_with_coef_(self):
         """coef_ path — use a real trained LogisticRegression."""
@@ -439,7 +438,6 @@ class TestRandomForestTradingClassifier:
 
         Uses n_estimators=5 for speed. All assertions use real sklearn outputs.
         """
-        from sklearn.ensemble import RandomForestClassifier
 
         np.random.seed(seed)
         X = np.random.randn(n_samples, n_features)
@@ -453,7 +451,7 @@ class TestRandomForestTradingClassifier:
 
     def test_train_and_predict_real_model(self):
         """Train/predict pipeline using a real sklearn RandomForest."""
-        rf, X, y = self._make_trained_rf(n_features=5, feature_names=["f1","f2","f3","f4","f5"])
+        rf, X, y = self._make_trained_rf(n_features=5, feature_names=["f1", "f2", "f3", "f4", "f5"])
 
         assert rf.is_trained is True
         assert "train_accuracy" in rf.training_history[-1]["metrics"]
@@ -461,7 +459,7 @@ class TestRandomForestTradingClassifier:
 
     def test_train_stores_feature_names(self):
         """train() stores the provided feature names."""
-        rf, X, y = self._make_trained_rf(n_features=3, feature_names=["rsi","macd","atr"])
+        rf, X, y = self._make_trained_rf(n_features=3, feature_names=["rsi", "macd", "atr"])
         assert rf.feature_names == ["rsi", "macd", "atr"]
 
     def test_train_infers_feature_names_when_not_provided(self):
@@ -501,12 +499,12 @@ class TestRandomForestTradingClassifier:
 
     def test_get_feature_importance_dict_with_names(self):
         """get_feature_importance_dict() maps feature names to real importances."""
-        rf, X, y = self._make_trained_rf(n_features=3, feature_names=["a","b","c"])
+        rf, X, y = self._make_trained_rf(n_features=3, feature_names=["a", "b", "c"])
         fi = rf.get_feature_importance_dict()
         assert set(fi.keys()) == {"a", "b", "c"}
         # Importances are non-negative and sum to ~1
         assert all(v >= 0 for v in fi.values())
-        assert abs(sum(fi.values()) - 1.0) < 1e-6
+        assert abs(sum(fi.values()) - 1.0) < 1e-6  # noqa: PLR2004
 
     def test_get_feature_importance_dict_without_names(self):
         """get_feature_importance_dict() uses integer keys when no names set."""
@@ -517,7 +515,7 @@ class TestRandomForestTradingClassifier:
 
     def test_get_top_features(self):
         """get_top_features(n) returns the n highest-importance features in order."""
-        rf, X, y = self._make_trained_rf(n_features=4, feature_names=["a","b","c","d"])
+        rf, X, y = self._make_trained_rf(n_features=4, feature_names=["a", "b", "c", "d"])
         top2 = rf.get_top_features(n=2)
         assert len(top2) == 2  # noqa: PLR2004
         # First entry must have higher importance than second
@@ -686,9 +684,7 @@ class TestEnsemblePredictor:
         ep.model_performance["gradient_boosting"]["total"] = 10
         ep.model_performance["gradient_boosting"]["correct"] = 6
         ep._update_weights()
-        total = (
-            ep.model_weights["random_forest"] + ep.model_weights["gradient_boosting"]
-        )
+        total = ep.model_weights["random_forest"] + ep.model_weights["gradient_boosting"]
         assert total == pytest.approx(1.0, abs=1e-6)
 
     def test_get_model_summary_structure(self):
@@ -850,9 +846,7 @@ class TestTechnicalFeatureEngineerExtended:
         result = fe.create_features(df)
         # After dropna(), result may be empty for n=50 (sma_200 requires 200 rows)
         if len(result) == 0:
-            pytest.skip(
-                "Insufficient rows survive dropna() for n=50 with 200-period indicators"
-            )
+            pytest.skip("Insufficient rows survive dropna() for n=50 with 200-period indicators")
         assert result["rsi_14"].between(0, 100).all()
 
     def test_stochastic_columns_present(self, fe, ohlcv):
@@ -1011,9 +1005,7 @@ class TestTechnicalFeatureEngineerExtended:
 
     def test_create_labels_forward_return(self, fe, ohlcv):
         fe.create_features(ohlcv)
-        labels = fe.create_labels(
-            ohlcv, method="forward_return", periods=5, threshold=0.01
-        )
+        labels = fe.create_labels(ohlcv, method="forward_return", periods=5, threshold=0.01)
         assert isinstance(labels, pd.Series)
         assert set(labels.unique()).issubset({0, 1, 2})
 

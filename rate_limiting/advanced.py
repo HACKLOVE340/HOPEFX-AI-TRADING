@@ -224,9 +224,7 @@ def rate_limit_dependency(rate_str: str, key_func: Callable | None = None):
     try:
         limit, window = _parse_rate(rate_str)
     except ValueError:
-        logger.error(
-            "Invalid rate string %r — rate limiting disabled for this route", rate_str
-        )
+        logger.error("Invalid rate string %r — rate limiting disabled for this route", rate_str)
         limit, window = 10_000, 60  # effectively unlimited
 
     async def _dependency(request: Request) -> None:
@@ -235,9 +233,7 @@ def rate_limit_dependency(rate_str: str, key_func: Callable | None = None):
         else:
             forwarded = request.headers.get("X-Forwarded-For")
             key = (
-                forwarded.split(",")[0].strip()
-                if forwarded
-                else (request.client.host if request.client else "unknown")
+                forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
             )
 
         route_key = f"{request.url.path}:{key}"

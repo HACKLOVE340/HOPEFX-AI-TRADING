@@ -146,15 +146,11 @@ def _run_stage(
     try:
         detail = fn() or ""
         elapsed = time.perf_counter() - t0
-        result = StageResult(
-            name=name, passed=True, elapsed_s=elapsed, detail=detail, sla_s=sla
-        )
+        result = StageResult(name=name, passed=True, elapsed_s=elapsed, detail=detail, sla_s=sla)
     except Exception as exc:
         elapsed = time.perf_counter() - t0
         tb = traceback.format_exc()
-        result = StageResult(
-            name=name, passed=False, elapsed_s=elapsed, detail=f"{exc}\n{tb}", sla_s=sla
-        )
+        result = StageResult(name=name, passed=False, elapsed_s=elapsed, detail=f"{exc}\n{tb}", sla_s=sla)
 
     if not quiet:
         _print_result(result)
@@ -189,10 +185,7 @@ def _print_summary(report: ValidationReport) -> None:
     print(f"\n{_BOLD}{'═' * 60}{_RESET}")
     colour = _GREEN if report.passed else _RED
     label = "ALL STAGES PASSED" if report.passed else "VALIDATION FAILED"
-    print(
-        f"{colour}{_BOLD}  {label}  "
-        f"({report.n_passed}/{len(report.results)} stages){_RESET}"
-    )
+    print(f"{colour}{_BOLD}  {label}  ({report.n_passed}/{len(report.results)} stages){_RESET}")
     if not report.passed:
         print(f"\n  {_RED}Failed stages:{_RESET}")
         for r in report.results:
@@ -388,11 +381,7 @@ def stage_online_learning() -> str:
 
     ctx.online_learner = learner
     prob_str = f"{prob:.4f}" if prob is not None else "None"
-    return (
-        f"updates={update_count}  "
-        f"rolling_acc={status.get('rolling_accuracy', 'n/a')}  "
-        f"predict_proba={prob_str}"
-    )
+    return f"updates={update_count}  rolling_acc={status.get('rolling_accuracy', 'n/a')}  predict_proba={prob_str}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -409,9 +398,7 @@ def stage_brain_signal() -> str:
     decision = brain.process_bar(ctx.ohlcv_df.tail(300), symbol="XAUUSD")
 
     if not isinstance(decision, BrainDecision):
-        raise TypeError(
-            f"process_bar() returned {type(decision)}, expected BrainDecision"
-        )
+        raise TypeError(f"process_bar() returned {type(decision)}, expected BrainDecision")
 
     if decision.action not in ("long", "short", "hold"):
         raise ValueError(f"unexpected action: {decision.action!r}")
@@ -482,9 +469,7 @@ def stage_risk_sizing() -> str:
         if sizing.take_profit_usd <= 0:
             raise ValueError(f"take_profit_usd not set: {sizing.take_profit_usd}")
         if sizing.stop_loss_usd >= sizing.take_profit_usd:
-            raise ValueError(
-                f"stop ({sizing.stop_loss_usd}) >= tp ({sizing.take_profit_usd})"
-            )
+            raise ValueError(f"stop ({sizing.stop_loss_usd}) >= tp ({sizing.take_profit_usd})")
 
     ctx.risk_manager = rm
     ctx.sizing_result = sizing
@@ -514,18 +499,14 @@ def stage_order_execution() -> str:
     broker.market_prices["XAUUSD"] = mid
 
     # Market buy
-    order_buy = broker.place_order(
-        "XAUUSD", OrderSide.BUY, OrderType.MARKET, quantity=0.1
-    )
+    order_buy = broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, quantity=0.1)
     if order_buy.status != OrderStatus.FILLED:
         raise RuntimeError(f"Market buy not filled: {order_buy.status}")
     if order_buy.average_price <= 0:
         raise ValueError(f"Fill price not set: {order_buy.average_price}")
 
     # Market sell
-    order_sell = broker.place_order(
-        "XAUUSD", OrderSide.SELL, OrderType.MARKET, quantity=0.1
-    )
+    order_sell = broker.place_order("XAUUSD", OrderSide.SELL, OrderType.MARKET, quantity=0.1)
     if order_sell.status != OrderStatus.FILLED:
         raise RuntimeError(f"Market sell not filled: {order_sell.status}")
 
@@ -568,9 +549,7 @@ def stage_position_accounting() -> str:
     broker.market_prices["XAUUSD"] = mid
 
     # Open a long position
-    buy_order = broker.place_order(
-        "XAUUSD", OrderSide.BUY, OrderType.MARKET, quantity=1.0
-    )
+    buy_order = broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, quantity=1.0)
     if buy_order.status.name != "FILLED":
         raise RuntimeError(f"Buy order not filled: {buy_order.status}")
 
@@ -635,23 +614,15 @@ def stage_kill_switch_gate() -> str:
 
         decision = brain.process_bar(ctx.ohlcv_df.tail(300), symbol="XAUUSD")
         if decision.action != "hold":
-            raise RuntimeError(
-                f"Brain returned {decision.action!r} with kill switch active "
-                f"(expected 'hold')"
-            )
+            raise RuntimeError(f"Brain returned {decision.action!r} with kill switch active (expected 'hold')")
         if decision.confidence != 0.0:
-            raise ValueError(
-                f"Brain confidence={decision.confidence} with kill switch active "
-                f"(expected 0.0)"
-            )
+            raise ValueError(f"Brain confidence={decision.confidence} with kill switch active (expected 0.0)")
 
         # Deactivate and verify brain can act again
         ks.deactivate("test-token")  # nosec B106 - test token in kill switch validation, not a real credential
         assert not ks.is_active(), "KillSwitch.deactivate() did not clear active state"
 
-    return (
-        "kill_switch activated → brain returned hold  |  deactivated → brain unblocked"
-    )
+    return "kill_switch activated → brain returned hold  |  deactivated → brain unblocked"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -697,9 +668,7 @@ _report = ValidationReport()
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="End-to-end ML flow validation for HOPEFX-AI-TRADING"
-    )
+    parser = argparse.ArgumentParser(description="End-to-end ML flow validation for HOPEFX-AI-TRADING")
     parser.add_argument(
         "--quiet",
         "-q",

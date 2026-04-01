@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 from unittest.mock import MagicMock
@@ -185,17 +186,9 @@ class TestTCARecorder:
     def test_session_classification(self):
         from execution.tca_recorder import TCARecorder
 
-        assert (
-            TCARecorder._get_session(datetime(2024, 1, 1, 10, 0, tzinfo=UTC))
-            == "london"
-        )
-        assert TCARecorder._get_session(
-            datetime(2024, 1, 1, 15, 0, tzinfo=UTC)
-        ) in ("london", "new_york")
-        assert (
-            TCARecorder._get_session(datetime(2024, 1, 1, 3, 0, tzinfo=UTC))
-            == "asia"
-        )
+        assert TCARecorder._get_session(datetime(2024, 1, 1, 10, 0, tzinfo=UTC)) == "london"
+        assert TCARecorder._get_session(datetime(2024, 1, 1, 15, 0, tzinfo=UTC)) in ("london", "new_york")
+        assert TCARecorder._get_session(datetime(2024, 1, 1, 3, 0, tzinfo=UTC)) == "asia"
 
     def test_report_alert_triggered(self):
         for i in range(15):
@@ -364,9 +357,7 @@ class TestFillSimulator:
             )
             for _ in range(5)
         ]
-        fills = self.sim.simulate_fills_batch(
-            signals, adv=10000, volatility_daily=0.012
-        )
+        fills = self.sim.simulate_fills_batch(signals, adv=10000, volatility_daily=0.012)
         assert len(fills) == 5  # noqa: PLR2004
 
     def test_get_fill_simulator_singleton(self):
@@ -553,7 +544,7 @@ class TestTCAEngine:
         from execution.tca import BenchmarkType, Side
 
         fired = []
-        self.engine.register_cost_callback(lambda m: fired.append(m))  # noqa: PLW0108
+        self.engine.register_cost_callback(lambda m: fired.append(m))
         await self.engine.start_order(
             "ord5",
             "XAU_USD",

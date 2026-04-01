@@ -18,6 +18,7 @@ import json
 import pytest
 import tempfile
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from unittest.mock import patch
@@ -223,9 +224,7 @@ import jwt as _jwt
 def _admin_token() -> str:
     # Read the secret at call time — other test modules may have set it.
     # Do NOT overwrite the env var here; just use whatever is current.
-    secret = _os.environ.get(
-        "SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!"
-    )
+    secret = _os.environ.get("SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!")
     return _jwt.encode(
         {"sub": "test-admin", "role": "admin", "exp": int(_time.time()) + 3600},
         secret,
@@ -1295,9 +1294,7 @@ class TestWebSocketManager:
     async def test_handle_message_ping(self):
         ws = _MockWebSocket()
         conn_id = self.manager.register_connection(ws)
-        resp = await self.manager.handle_message(
-            conn_id, json.dumps({"action": "ping"})
-        )
+        resp = await self.manager.handle_message(conn_id, json.dumps({"action": "ping"}))
         assert resp["action"] == "pong"
 
     async def test_handle_message_auth(self):
@@ -1306,9 +1303,7 @@ class TestWebSocketManager:
         import jwt as _jwt_mod
 
         # Build a valid signed JWT using the same secret _decode_token reads.
-        secret = os.environ.get(
-            "SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!"
-        )
+        secret = os.environ.get("SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!")
         os.environ.setdefault("SECURITY_JWT_SECRET", secret)
         now = int(time.time())
         token = _jwt_mod.encode(
@@ -1319,9 +1314,7 @@ class TestWebSocketManager:
 
         ws = _MockWebSocket()
         conn_id = self.manager.register_connection(ws)
-        resp = await self.manager.handle_message(
-            conn_id, json.dumps({"action": "auth", "token": token})
-        )
+        resp = await self.manager.handle_message(conn_id, json.dumps({"action": "auth", "token": token}))
         assert resp["status"] == "authenticated"
         assert resp["user_id"] == "ws-test-user"
 
@@ -1332,9 +1325,7 @@ class TestWebSocketManager:
         assert "error" in resp
 
     async def test_handle_message_unknown_connection(self):
-        resp = await self.manager.handle_message(
-            "no_conn", json.dumps({"action": "ping"})
-        )
+        resp = await self.manager.handle_message("no_conn", json.dumps({"action": "ping"}))
         assert resp is None
 
     def test_get_stats(self):
@@ -1363,7 +1354,7 @@ class TestWebSocketManager:
 
     def test_on_disconnect_callback(self):
         fired = []
-        self.manager.on_disconnect(lambda cid: fired.append(cid))  # noqa: PLW0108
+        self.manager.on_disconnect(lambda cid: fired.append(cid))
         ws = _MockWebSocket()
         conn_id = self.manager.register_connection(ws)
         self.manager.unregister_connection(conn_id)

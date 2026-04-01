@@ -13,6 +13,7 @@ Tests for:
 """
 
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 
@@ -73,9 +74,7 @@ class TestScanCriteria:
         """Test creating scan criteria."""
         from analysis.market_scanner import ScanCriteria, ScanCriteriaType
 
-        criteria = ScanCriteria(
-            type=ScanCriteriaType.RSI_OVERSOLD, parameters={"threshold": 30}, weight=1.5
-        )
+        criteria = ScanCriteria(type=ScanCriteriaType.RSI_OVERSOLD, parameters={"threshold": 30}, weight=1.5)
 
         assert criteria.type == ScanCriteriaType.RSI_OVERSOLD
         assert criteria.parameters["threshold"] == 30  # noqa: PLR2004
@@ -85,9 +84,7 @@ class TestScanCriteria:
         """Test criteria serialization."""
         from analysis.market_scanner import ScanCriteria, ScanCriteriaType
 
-        criteria = ScanCriteria(
-            type=ScanCriteriaType.BREAKOUT, parameters={"period": 20}
-        )
+        criteria = ScanCriteria(type=ScanCriteriaType.BREAKOUT, parameters={"period": 20})
 
         result = criteria.to_dict()
         assert result["type"] == "breakout"
@@ -433,7 +430,7 @@ class TestMarketScanner:
         scanner.add_criteria(ScanCriteriaType.MOMENTUM)
 
         callbacks = []
-        scanner.on_opportunity(lambda opp: callbacks.append(opp))  # noqa: PLW0108
+        scanner.on_opportunity(lambda opp: callbacks.append(opp))
 
         market_data = {
             "XAUUSD": {

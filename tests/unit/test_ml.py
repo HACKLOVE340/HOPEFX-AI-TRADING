@@ -124,9 +124,7 @@ class TestTechnicalFeatureEngineer:
 
         # Check for volatility features (e.g., Bollinger Bands)
         # Bollinger Bands or ATR should be present
-        volatility_features = [
-            col for col in result.columns if "bb_" in col or "atr" in col
-        ]
+        volatility_features = [col for col in result.columns if "bb_" in col or "atr" in col]
         assert len(volatility_features) >= 1
 
     def test_volume_features_created(self, sample_ohlcv_data):
@@ -136,9 +134,7 @@ class TestTechnicalFeatureEngineer:
         result = fe.create_features(sample_ohlcv_data)
 
         # Check for volume-related features
-        volume_features = [
-            col for col in result.columns if "volume" in col.lower() or "vol_" in col
-        ]
+        volume_features = [col for col in result.columns if "volume" in col.lower() or "vol_" in col]
         assert len(volume_features) >= 1
 
     def test_feature_names_populated(self, sample_ohlcv_data):

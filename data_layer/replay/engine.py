@@ -410,9 +410,7 @@ class MarketReplayEngine:
             count = 0
 
             for ts, bar in ohlcv.iterrows():
-                self._replay_cursor = (
-                    ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
-                )
+                self._replay_cursor = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
                 features = self.get_replay_features(as_of=self._replay_cursor)
 
                 if callback is not None:
@@ -441,9 +439,7 @@ class MarketReplayEngine:
             logger.error("MarketReplayEngine.replay_bar_by_bar error: %s", exc)
             return 0
 
-    def get_feature_snapshot(
-        self, as_of: datetime | None = None
-    ) -> dict[str, float]:
+    def get_feature_snapshot(self, as_of: datetime | None = None) -> dict[str, float]:
         """
         Return a complete ML feature snapshot at a given time.
 
@@ -468,12 +464,8 @@ class MarketReplayEngine:
     def health(self) -> dict:
         return {
             "is_replaying": self._is_replaying,
-            "replay_cursor": self._replay_cursor.isoformat()
-            if self._replay_cursor
-            else None,
-            "ticks_loaded": len(self._replay_ticks)
-            if self._replay_ticks is not None
-            else 0,
+            "replay_cursor": self._replay_cursor.isoformat() if self._replay_cursor else None,
+            "ticks_loaded": len(self._replay_ticks) if self._replay_ticks is not None else 0,
         }
 
 

@@ -17,6 +17,7 @@ tests/unit/test_kill_switch_integration.py
 
 import json
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -136,16 +137,10 @@ def test_wrong_token_rejected():
     wrong_secret = "wrong_secret_key"
     message = "deactivate"
 
-    correct_sig = hmac.new(
-        secret.encode(), message.encode(), hashlib.sha256
-    ).hexdigest()
-    wrong_sig = hmac.new(
-        wrong_secret.encode(), message.encode(), hashlib.sha256
-    ).hexdigest()
+    correct_sig = hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
+    wrong_sig = hmac.new(wrong_secret.encode(), message.encode(), hashlib.sha256).hexdigest()
 
-    assert not hmac.compare_digest(
-        correct_sig, wrong_sig
-    ), "Wrong token must not match the correct HMAC signature"
+    assert not hmac.compare_digest(correct_sig, wrong_sig), "Wrong token must not match the correct HMAC signature"
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +163,4 @@ def test_amber_warning_fires_before_halt(tmp_path, caplog):
 
     assert rm._amber_warned is True, "Amber flag should be set"
     assert rm._trading_halted is False, "Trading should NOT be halted at amber level"
-    assert any(
-        "AMBER" in r.message for r in caplog.records
-    ), "Expected AMBER warning in log"
+    assert any("AMBER" in r.message for r in caplog.records), "Expected AMBER warning in log"

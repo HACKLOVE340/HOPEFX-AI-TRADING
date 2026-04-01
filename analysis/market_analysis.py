@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
 from datetime import datetime, time, timezone
+
 UTC = timezone.utc
 from enum import Enum
 import logging
@@ -225,9 +226,7 @@ class MarketRegimeDetector:
             )
 
             # Update history
-            self.regime_history.append(
-                {"regime": regime, "timestamp": datetime.now(UTC)}
-            )
+            self.regime_history.append({"regime": regime, "timestamp": datetime.now(UTC)})
             self.regime_history = self.regime_history[-1000:]  # Keep last 1000
 
             return analysis
@@ -281,9 +280,7 @@ class MarketRegimeDetector:
 
         return float(adx.iloc[-1]) if not np.isnan(adx.iloc[-1]) else 20.0
 
-    def _calculate_volatility_percentile(
-        self, prices: pd.DataFrame, atr: pd.Series
-    ) -> float:
+    def _calculate_volatility_percentile(self, prices: pd.DataFrame, atr: pd.Series) -> float:
         """Calculate current volatility percentile vs history."""
         current_atr = atr.iloc[-1]
         historical_atr = atr.dropna()
@@ -406,9 +403,7 @@ class MarketRegimeDetector:
 
         return duration + 1
 
-    def _calculate_transition_probability(
-        self, current_regime: MarketRegime
-    ) -> dict[str, float]:
+    def _calculate_transition_probability(self, current_regime: MarketRegime) -> dict[str, float]:
         """Calculate regime transition probabilities based on history."""
         if len(self.regime_history) < 10:  # noqa: PLR2004
             # Default probabilities
@@ -478,9 +473,7 @@ class MultiTimeframeAnalyzer:
 
         logger.info(f"MTF Analyzer initialized with timeframes: {self.timeframes}")
 
-    def analyze_confluence(
-        self, data_by_timeframe: dict[str, pd.DataFrame]
-    ) -> ConfluenceAnalysis:
+    def analyze_confluence(self, data_by_timeframe: dict[str, pd.DataFrame]) -> ConfluenceAnalysis:
         """
         Analyze confluence across multiple timeframes.
 
@@ -518,9 +511,7 @@ class MultiTimeframeAnalyzer:
                 return self._default_confluence()
 
             weighted_sum = sum(weighted_trends)
-            alignment = sum(1 for t in trends if t == np.sign(weighted_sum)) / len(
-                trends
-            )
+            alignment = sum(1 for t in trends if t == np.sign(weighted_sum)) / len(trends)
 
             if weighted_sum > 0.1:  # noqa: PLR2004
                 overall_bias = "bullish"
@@ -536,9 +527,7 @@ class MultiTimeframeAnalyzer:
             confluence_levels = self._find_confluence_levels(tf_analyses)
 
             # Generate recommendation
-            recommendation, risk_level = self._generate_recommendation(
-                overall_bias, confidence, alignment, tf_analyses
-            )
+            recommendation, risk_level = self._generate_recommendation(overall_bias, confidence, alignment, tf_analyses)
 
             return ConfluenceAnalysis(
                 overall_bias=overall_bias,
@@ -554,9 +543,7 @@ class MultiTimeframeAnalyzer:
             logger.error(f"Error in confluence analysis: {e}")
             return self._default_confluence()
 
-    def _analyze_single_timeframe(
-        self, tf: str, data: pd.DataFrame
-    ) -> TimeframeAnalysis:
+    def _analyze_single_timeframe(self, tf: str, data: pd.DataFrame) -> TimeframeAnalysis:
         """Analyze a single timeframe."""
         close = data["close"]
         data["high"]
@@ -592,9 +579,7 @@ class MultiTimeframeAnalyzer:
         # Calculate proximity to key levels
         all_levels = support_levels + resistance_levels
         if all_levels:
-            distances = [
-                abs(current_price - level) / current_price for level in all_levels
-            ]
+            distances = [abs(current_price - level) / current_price for level in all_levels]
             key_level_proximity = min(distances)
         else:
             key_level_proximity = 1.0
@@ -620,28 +605,19 @@ class MultiTimeframeAnalyzer:
             volume_trend=volume_trend,
         )
 
-    def _find_support_levels(
-        self, data: pd.DataFrame, num_levels: int = 3
-    ) -> list[float]:
+    def _find_support_levels(self, data: pd.DataFrame, num_levels: int = 3) -> list[float]:
         """Find support levels using swing lows."""
         lows = data["low"].to_numpy()
         levels = []
 
         for i in range(2, len(lows) - 2):
-            if (
-                lows[i] < lows[i - 1]
-                and lows[i] < lows[i - 2]
-                and lows[i] < lows[i + 1]
-                and lows[i] < lows[i + 2]
-            ):
+            if lows[i] < lows[i - 1] and lows[i] < lows[i - 2] and lows[i] < lows[i + 1] and lows[i] < lows[i + 2]:
                 levels.append(float(lows[i]))
 
         # Return most recent levels
         return levels[-num_levels:] if levels else []
 
-    def _find_resistance_levels(
-        self, data: pd.DataFrame, num_levels: int = 3
-    ) -> list[float]:
+    def _find_resistance_levels(self, data: pd.DataFrame, num_levels: int = 3) -> list[float]:
         """Find resistance levels using swing highs."""
         highs = data["high"].to_numpy()
         levels = []
@@ -657,9 +633,7 @@ class MultiTimeframeAnalyzer:
 
         return levels[-num_levels:] if levels else []
 
-    def _find_confluence_levels(
-        self, tf_analyses: dict[str, TimeframeAnalysis]
-    ) -> list[dict]:
+    def _find_confluence_levels(self, tf_analyses: dict[str, TimeframeAnalysis]) -> list[dict]:
         """Find levels that appear on multiple timeframes."""
         all_supports = []
         all_resistances = []
@@ -683,10 +657,7 @@ class MultiTimeframeAnalyzer:
             if len(matching) >= 2:  # noqa: PLR2004
                 avg_level = np.mean([s["level"] for s in matching])
                 tfs = list(set(s["timeframe"] for s in matching))
-                if not any(
-                    abs(cl["level"] - avg_level) < avg_level * 0.003
-                    for cl in confluence_levels
-                ):
+                if not any(abs(cl["level"] - avg_level) < avg_level * 0.003 for cl in confluence_levels):
                     confluence_levels.append(
                         {
                             "level": avg_level,
@@ -706,10 +677,7 @@ class MultiTimeframeAnalyzer:
             if len(matching) >= 2:  # noqa: PLR2004
                 avg_level = np.mean([r["level"] for r in matching])
                 tfs = list(set(r["timeframe"] for r in matching))
-                if not any(
-                    abs(cl["level"] - avg_level) < avg_level * 0.003
-                    for cl in confluence_levels
-                ):
+                if not any(abs(cl["level"] - avg_level) < avg_level * 0.003 for cl in confluence_levels):
                     confluence_levels.append(
                         {
                             "level": avg_level,
@@ -811,9 +779,7 @@ class SessionAnalyzer:
 
         return active_sessions
 
-    def analyze_session(
-        self, session: TradingSession, utc_time: datetime = None
-    ) -> SessionAnalysis:
+    def analyze_session(self, session: TradingSession, utc_time: datetime = None) -> SessionAnalysis:
         """Analyze a specific trading session."""
         if utc_time is None:
             utc_time = datetime.now(UTC)

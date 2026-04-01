@@ -20,6 +20,7 @@ Enhances the base OrderFlowAnalyzer with:
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from dataclasses import dataclass
 
@@ -326,11 +327,7 @@ class AdvancedOrderFlowAnalyzer:
         for idx in sorted(levels):
             d = levels[idx]
             total = d["buy_volume"] + d["sell_volume"]
-            imbalance = (
-                round((d["buy_volume"] - d["sell_volume"]) / total, 4)
-                if total > 0
-                else 0.0
-            )
+            imbalance = round((d["buy_volume"] - d["sell_volume"]) / total, 4) if total > 0 else 0.0
             result.append(
                 {
                     "price": d["price"],
@@ -473,9 +470,7 @@ class AdvancedOrderFlowAnalyzer:
 
         # Bullish divergence: price down but delta up
         # Bearish divergence: price up but delta down
-        divergence_type = (
-            "bullish" if price_dir == "down" and delta_dir == "up" else "bearish"
-        )
+        divergence_type = "bullish" if price_dir == "down" and delta_dir == "up" else "bearish"
 
         price_move = abs(p2 - p1) / p1 if p1 > 0 else 0.0
         delta_move = abs(d2 - d1) / (abs(d1) + 1)
@@ -563,11 +558,7 @@ class AdvancedOrderFlowAnalyzer:
         clusters = []
         for b in significant:
             strength = round(b["total"] / max_vol, 4) if max_vol > 0 else 0.0
-            cluster_type = (
-                "support"
-                if b["price"] < cur
-                else ("resistance" if b["price"] > cur else "neutral")
-            )
+            cluster_type = "support" if b["price"] < cur else ("resistance" if b["price"] > cur else "neutral")
             clusters.append(
                 VolumeCluster(
                     price_level=b["price"],

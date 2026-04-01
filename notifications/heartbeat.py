@@ -50,6 +50,7 @@ import os
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
@@ -77,15 +78,14 @@ async def _send_telegram(token: str, chat_id: str, text: str) -> bool:
             "parse_mode": "HTML",
             "disable_web_page_preview": True,
         }
-        async with aiohttp.ClientSession() as session, session.post(
-            url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
-        ) as resp:
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp,
+        ):
             if resp.status == 200:  # noqa: PLR2004
                 return True
             body = await resp.text()
-            logger.warning(
-                "Telegram heartbeat send failed: %d %s", resp.status, body[:200]
-            )
+            logger.warning("Telegram heartbeat send failed: %d %s", resp.status, body[:200])
             return False
     except Exception as exc:
         logger.warning("Telegram heartbeat send error: %s", exc)
@@ -131,9 +131,7 @@ def _build_message(status: dict[str, Any], uptime_seconds: float) -> str:
 
     alerts_text = ""
     if risk_alerts:
-        alerts_text = "\n⚠️ Risk alerts:\n" + "\n".join(
-            f"  • {a}" for a in risk_alerts[:3]
-        )
+        alerts_text = "\n⚠️ Risk alerts:\n" + "\n".join(f"  • {a}" for a in risk_alerts[:3])
 
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -209,12 +207,8 @@ class HeartbeatService:
                 rm = getattr(self._app_state, "risk_manager", None)
                 if rm:
                     status["daily_pnl"] = float(getattr(rm, "daily_pnl", 0))
-                    status["drawdown_pct"] = (
-                        float(getattr(rm, "current_drawdown", 0)) * 100
-                    )
-                    status["risk_alerts"] = (
-                        (getattr(rm, "_halt_reason", None) and [rm._halt_reason]) or []
-                    )
+                    status["drawdown_pct"] = float(getattr(rm, "current_drawdown", 0)) * 100
+                    status["risk_alerts"] = (getattr(rm, "_halt_reason", None) and [rm._halt_reason]) or []
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
 
@@ -287,20 +281,14 @@ class HeartbeatService:
             logger.info("HeartbeatService disabled (HEARTBEAT_ENABLED=false)")
             return self
         if not self._token:
-            logger.warning(
-                "HeartbeatService: TELEGRAM_BOT_TOKEN not set — heartbeat disabled"
-            )
+            logger.warning("HeartbeatService: TELEGRAM_BOT_TOKEN not set — heartbeat disabled")
             return self
         if not self._chat_ids:
-            logger.warning(
-                "HeartbeatService: TELEGRAM_CHAT_ID not set — heartbeat disabled"
-            )
+            logger.warning("HeartbeatService: TELEGRAM_CHAT_ID not set — heartbeat disabled")
             return self
 
         self._running = True
-        self._thread = threading.Thread(
-            target=self._loop, daemon=True, name="telegram-heartbeat"
-        )
+        self._thread = threading.Thread(target=self._loop, daemon=True, name="telegram-heartbeat")
         self._thread.start()
         return self
 
@@ -323,11 +311,7 @@ class HeartbeatService:
             "running": self._running,
             "ping_count": self._ping_count,
             "interval_hours": self._interval / 3600,
-            "last_ping_ago_s": (
-                round(time.monotonic() - self._last_ping, 1)
-                if self._last_ping
-                else None
-            ),
+            "last_ping_ago_s": (round(time.monotonic() - self._last_ping, 1) if self._last_ping else None),
             "chat_ids": len(self._chat_ids),
             "token_set": bool(self._token),
         }

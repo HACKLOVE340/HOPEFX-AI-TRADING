@@ -16,6 +16,7 @@ import asyncio
 import json
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -53,9 +54,7 @@ class TestTelegramHelper:
     async def test_swallows_network_error(self):
         """aiohttp errors must not propagate."""
         with patch("aiohttp.ClientSession") as mock_session:
-            mock_session.return_value.__aenter__ = AsyncMock(
-                side_effect=OSError("network down")
-            )
+            mock_session.return_value.__aenter__ = AsyncMock(side_effect=OSError("network down"))
             # Should not raise
             await _telegram("tok", "chat", "msg")
 
@@ -78,9 +77,7 @@ class TestDailyReporter:
 
         # Simulate hour != 0
         now = datetime(2025, 1, 15, 10, 0, 0, tzinfo=UTC)
-        with patch("connect_to_life.datetime") as mock_dt, patch(
-            "connect_to_life._telegram", fake_telegram
-        ):
+        with patch("connect_to_life.datetime") as mock_dt, patch("connect_to_life._telegram", fake_telegram):
             mock_dt.now.return_value = now
             await reporter.maybe_send({"equity": 100_000})
 
@@ -95,9 +92,7 @@ class TestDailyReporter:
             sent.append(text)
 
         now = datetime(2025, 1, 15, 0, 0, 0, tzinfo=UTC)
-        with patch("connect_to_life.datetime") as mock_dt, patch(
-            "connect_to_life._telegram", fake_telegram
-        ):
+        with patch("connect_to_life.datetime") as mock_dt, patch("connect_to_life._telegram", fake_telegram):
             mock_dt.now.return_value = now
             await reporter.maybe_send(
                 {
@@ -123,9 +118,7 @@ class TestDailyReporter:
             sent.append(text)
 
         now = datetime(2025, 1, 15, 0, 0, 0, tzinfo=UTC)
-        with patch("connect_to_life.datetime") as mock_dt, patch(
-            "connect_to_life._telegram", fake_telegram
-        ):
+        with patch("connect_to_life.datetime") as mock_dt, patch("connect_to_life._telegram", fake_telegram):
             mock_dt.now.return_value = now
             await reporter.maybe_send({"equity": 100_000})
             await reporter.maybe_send({"equity": 100_000})  # second call same day

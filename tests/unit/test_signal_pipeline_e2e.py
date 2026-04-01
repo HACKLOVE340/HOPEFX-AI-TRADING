@@ -29,9 +29,7 @@ from risk.manager import RiskManager, RiskConfig
 
 def _make_rm(tmp_path: Path, **kwargs) -> RiskManager:
     cfg = RiskConfig(**kwargs)
-    return RiskManager(
-        config=cfg, initial_balance=100_000.0, halt_state_file=tmp_path / "halt.json"
-    )
+    return RiskManager(config=cfg, initial_balance=100_000.0, halt_state_file=tmp_path / "halt.json")
 
 
 def _make_signal(
@@ -240,6 +238,6 @@ def test_ml_probability_used_in_kelly(tmp_path):
     # Both should be approved; high-probability signal should produce >= size
     assert result_high.approved is True
     assert result_low.approved is True
-    assert (
-        result_high.recommended_size >= result_low.recommended_size
-    ), "Higher ML probability should produce equal or larger position size"
+    assert result_high.recommended_size >= result_low.recommended_size, (
+        "Higher ML probability should produce equal or larger position size"
+    )

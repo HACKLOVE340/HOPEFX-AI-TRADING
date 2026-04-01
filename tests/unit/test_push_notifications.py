@@ -129,9 +129,7 @@ class TestFCMHttpCall:
         assert mock_open.called
         # The request should include the Authorization header
         call_args = mock_open.call_args[0][0]
-        assert b"fake-server-key" in call_args.data or "fake-server-key" in str(
-            call_args.headers
-        )
+        assert b"fake-server-key" in call_args.data or "fake-server-key" in str(call_args.headers)
 
     def test_fcm_failure_response_returns_false(self):
         mgr = _make_manager(server_key="fake-key")

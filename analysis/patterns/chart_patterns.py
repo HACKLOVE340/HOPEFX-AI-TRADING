@@ -22,6 +22,7 @@ Identifies classic chart patterns in price series:
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 try:
@@ -139,9 +140,7 @@ def _detect_head_and_shoulders(
         head_h = prices[head_idx]
         right_h = prices[right_idx]
 
-        shoulders_similar = _price_symmetry(
-            left_h, right_h, tolerance=symmetry_tolerance
-        )
+        shoulders_similar = _price_symmetry(left_h, right_h, tolerance=symmetry_tolerance)
         head_higher = head_h > left_h and head_h > right_h
 
         if not (shoulders_similar and head_higher):
@@ -201,9 +200,7 @@ def _detect_inverse_head_and_shoulders(
         head_l = prices[head_idx]
         right_l = prices[right_idx]
 
-        shoulders_similar = _price_symmetry(
-            left_l, right_l, tolerance=symmetry_tolerance
-        )
+        shoulders_similar = _price_symmetry(left_l, right_l, tolerance=symmetry_tolerance)
         head_lower = head_l < left_l and head_l < right_l
 
         if not (shoulders_similar and head_lower):
@@ -261,9 +258,7 @@ def _detect_double_top(
         idx1 = peaks[k]
         idx2 = peaks[k + 1]
 
-        if not _price_symmetry(
-            prices[idx1], prices[idx2], tolerance=symmetry_tolerance
-        ):
+        if not _price_symmetry(prices[idx1], prices[idx2], tolerance=symmetry_tolerance):
             continue
 
         trough_prices = prices[idx1 : idx2 + 1]
@@ -307,9 +302,7 @@ def _detect_double_bottom(
         idx1 = troughs[k]
         idx2 = troughs[k + 1]
 
-        if not _price_symmetry(
-            prices[idx1], prices[idx2], tolerance=symmetry_tolerance
-        ):
+        if not _price_symmetry(prices[idx1], prices[idx2], tolerance=symmetry_tolerance):
             continue
 
         peak_prices = prices[idx1 : idx2 + 1]
@@ -568,9 +561,7 @@ class ChartPatternDetector:
     def _get_closes(self, df: "pd.DataFrame") -> list[float] | None:
         """Extract close prices from DataFrame; return None on failure."""
         if not HAS_PANDAS:
-            logger.warning(
-                "pandas is not available; DataFrame input cannot be processed."
-            )
+            logger.warning("pandas is not available; DataFrame input cannot be processed.")
             return None
         if not isinstance(df, pd.DataFrame) or df.empty:
             return None
@@ -581,9 +572,7 @@ class ChartPatternDetector:
         return df[cols["close"]].tolist()
 
     def _peaks_and_troughs(self, closes: list[float]) -> tuple[list[int], list[int]]:
-        return _find_peaks(closes, self.swing_window), _find_troughs(
-            closes, self.swing_window
-        )
+        return _find_peaks(closes, self.swing_window), _find_troughs(closes, self.swing_window)
 
     # ------------------------------------------------------------------
     # Public API
@@ -605,10 +594,7 @@ class ChartPatternDetector:
             List of ChartPattern objects sorted by confidence descending.
         """
         if not HAS_PANDAS:
-            logger.warning(
-                "pandas is not available; detect_patterns cannot process "
-                "DataFrame input."
-            )
+            logger.warning("pandas is not available; detect_patterns cannot process DataFrame input.")
             return []
         if not isinstance(df, pd.DataFrame) or df.empty:
             return []
@@ -644,14 +630,10 @@ class ChartPatternDetector:
             return []
         peaks, troughs = self._peaks_and_troughs(closes)
         results = []
-        p = _detect_head_and_shoulders(
-            closes, peaks, troughs, symmetry_tolerance=self.sensitivity
-        )
+        p = _detect_head_and_shoulders(closes, peaks, troughs, symmetry_tolerance=self.sensitivity)
         if p:
             results.append(p)
-        p = _detect_inverse_head_and_shoulders(
-            closes, peaks, troughs, symmetry_tolerance=self.sensitivity
-        )
+        p = _detect_inverse_head_and_shoulders(closes, peaks, troughs, symmetry_tolerance=self.sensitivity)
         if p:
             results.append(p)
         return results

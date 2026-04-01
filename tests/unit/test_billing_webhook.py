@@ -49,9 +49,7 @@ class TestStripeWebhook:
     def test_webhook_acks_when_stripe_unavailable(self, client):
         """When stripe package is missing, webhook must still return 200 (ack to avoid retries)."""
         mock_mgr = MagicMock()
-        mock_mgr.handle_stripe_webhook.side_effect = RuntimeError(
-            "stripe not installed"
-        )
+        mock_mgr.handle_stripe_webhook.side_effect = RuntimeError("stripe not installed")
 
         with patch("api.billing._get_subscription_manager", return_value=mock_mgr):
             res = client.post(

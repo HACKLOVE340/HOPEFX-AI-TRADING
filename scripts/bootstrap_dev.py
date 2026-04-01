@@ -112,10 +112,7 @@ def _seed_admin() -> str:
     # Read the generated admin password from .env (written by _generate_env)
     admin_password = os.environ.get(_ADMIN_PASSWORD_KEY, "").strip()
     if not admin_password:
-        raise RuntimeError(
-            f"{_ADMIN_PASSWORD_KEY} not found in environment. "
-            "Run bootstrap_dev.py to regenerate .env."
-        )
+        raise RuntimeError(f"{_ADMIN_PASSWORD_KEY} not found in environment. Run bootstrap_dev.py to regenerate .env.")
 
     from database.models import Base
     from database.user_models import User, UserRole, UserStatus
@@ -164,14 +161,14 @@ def bootstrap(verbose: bool = True) -> None:
     try:
         admin_password = _seed_admin()
         if verbose and created:
-                print("  ✅  Admin user seeded")
-                print(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
-                print(f"      Username : {DEFAULT_ADMIN_USERNAME}")
-                print(f"      Password : {admin_password}  ← save this now")
-                print("─" * 58)
-                print("  Start the server:  python app.py")
-                print("  Login at:          http://localhost:8000/login")
-                print("─" * 58 + "\n")
+            print("  ✅  Admin user seeded")
+            print(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
+            print(f"      Username : {DEFAULT_ADMIN_USERNAME}")
+            print(f"      Password : {admin_password}  ← save this now")
+            print("─" * 58)
+            print("  Start the server:  python app.py")
+            print("  Login at:          http://localhost:8000/login")
+            print("─" * 58 + "\n")
     except Exception as exc:
         if verbose:
             print(f"  ⚠️  Admin seed skipped: {exc}")

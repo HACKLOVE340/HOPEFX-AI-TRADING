@@ -12,6 +12,7 @@ based on user subscriptions and access codes.
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 
@@ -87,9 +88,7 @@ class LicenseValidator:
         cache_key = f"{user_id}:{feature_name}"
         if cache_key in self._validation_cache:
             cache_entry = self._validation_cache[cache_key]
-            if (
-                datetime.now(UTC) - cache_entry["timestamp"]
-            ).seconds < self._cache_duration:
+            if (datetime.now(UTC) - cache_entry["timestamp"]).seconds < self._cache_duration:
                 return cache_entry["has_access"]
 
         # Validate subscription
@@ -200,9 +199,7 @@ class LicenseValidator:
             "days_remaining": subscription.days_remaining(),
             "features": features,
             "limits": limits,
-            "commission_rate": float(
-                pricing_manager.get_commission_rate(subscription.tier)
-            ),
+            "commission_rate": float(pricing_manager.get_commission_rate(subscription.tier)),
         }
 
     def can_upgrade_tier(self, user_id: str, new_tier: SubscriptionTier) -> bool:
@@ -227,9 +224,7 @@ class LicenseValidator:
         """Clear validation cache"""
         if user_id:
             # Clear only user's cache
-            keys_to_remove = [
-                k for k in self._validation_cache if k.startswith(f"{user_id}:")
-            ]
+            keys_to_remove = [k for k in self._validation_cache if k.startswith(f"{user_id}:")]
             for key in keys_to_remove:
                 del self._validation_cache[key]
         else:

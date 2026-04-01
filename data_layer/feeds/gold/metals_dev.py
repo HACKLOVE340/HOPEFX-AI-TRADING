@@ -123,8 +123,7 @@ class MetalsDevFeed(GoldFeedBase):
                                 if not self._ws_enabled:
                                     self._ws_enabled = True
                                     logger.info(
-                                        "Metals.dev WebSocket: first tick received "
-                                        "(price=%.4f) — switching to WS mode",
+                                        "Metals.dev WebSocket: first tick received (price=%.4f) — switching to WS mode",
                                         price,
                                     )
                         except Exception as exc:

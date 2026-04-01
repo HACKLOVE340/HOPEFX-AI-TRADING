@@ -75,6 +75,7 @@ import os
 import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input
 import sys
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -475,17 +476,14 @@ def verify_output_artifacts(args: argparse.Namespace) -> bool:
                     rpt["horizon"],
                 )
         except Exception as exc:
-            logger.error(
-                "CI GATE FAILED: could not parse horizon5_training_report.json: %s", exc
-            )
+            logger.error("CI GATE FAILED: could not parse horizon5_training_report.json: %s", exc)
             all_ok = False
 
     if all_ok:
         logger.info("CI GATE PASSED: all artifacts present and valid")
     else:
         logger.error(
-            "CI GATE FAILED: one or more artifacts missing or invalid. "
-            "The retrain did not complete successfully."
+            "CI GATE FAILED: one or more artifacts missing or invalid. The retrain did not complete successfully."
         )
 
     return all_ok
@@ -526,8 +524,7 @@ def run_training(args: argparse.Namespace) -> dict:
 
     logger.info("Running: %s", " ".join(cmd))
     logger.info(
-        "Training with horizon=%d (hold period alignment fix). "
-        "This may take 10–60 minutes depending on --years.",
+        "Training with horizon=%d (hold period alignment fix). This may take 10–60 minutes depending on --years.",
         args.horizon,
     )
 
@@ -568,9 +565,7 @@ def print_horizon_summary(args: argparse.Namespace, report: dict) -> None:
     print(f"  Samples          : {report.get('sample_count', '?')}")
     print()
     if wf:
-        print(
-            f"  Walk-forward acc : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}"
-        )
+        print(f"  Walk-forward acc : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}")
         print(f"  Walk-forward F1  : {wf.get('mean_f1', 0):.3f}")
     if oos:
         sig = "✓ significant" if oos.get("significant") else "✗ not significant"
@@ -594,9 +589,7 @@ def main() -> None:
 
     # Smoke-test overrides
     if args.smoke:
-        logger.info(
-            "Smoke-test mode: overriding years=2, oos_years=0, no_macro, splits=2"
-        )
+        logger.info("Smoke-test mode: overriding years=2, oos_years=0, no_macro, splits=2")
         args.years = 2
         args.oos_years = 0.0
         args.no_macro = True
@@ -641,10 +634,7 @@ def main() -> None:
     # CI gate: verify all expected artifacts were written
     artifacts_ok = verify_output_artifacts(args)
     if not artifacts_ok:
-        logger.error(
-            "Retrain completed but artifact verification failed. "
-            "Check the logs above for missing files."
-        )
+        logger.error("Retrain completed but artifact verification failed. Check the logs above for missing files.")
         sys.exit(1)
 
     # Print summary

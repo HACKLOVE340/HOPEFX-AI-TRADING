@@ -19,6 +19,7 @@ import hmac
 import os
 import time
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -80,14 +81,17 @@ class TestRateFeed:
         """Falls back to Binance when CoinGecko raises."""
         binance_rates = {"BTC": 66_000.0, "ETH": 3_100.0, "USDT": 1.0}
 
-        with patch(
-            "payments.crypto.rate_feed._fetch_coingecko",
-            new_callable=AsyncMock,
-            side_effect=Exception("CoinGecko timeout"),
-        ), patch(
-            "payments.crypto.rate_feed._fetch_binance_fallback",
-            new_callable=AsyncMock,
-            return_value=binance_rates,
+        with (
+            patch(
+                "payments.crypto.rate_feed._fetch_coingecko",
+                new_callable=AsyncMock,
+                side_effect=Exception("CoinGecko timeout"),
+            ),
+            patch(
+                "payments.crypto.rate_feed._fetch_binance_fallback",
+                new_callable=AsyncMock,
+                return_value=binance_rates,
+            ),
         ):
             from payments.crypto.rate_feed import get_rates
 
@@ -103,14 +107,17 @@ class TestRateFeed:
         rf._cached_rates = {"BTC": 64_000.0, "ETH": 2_900.0, "USDT": 1.0}
         rf._cache_ts = time.monotonic() - 999  # expired
 
-        with patch(
-            "payments.crypto.rate_feed._fetch_coingecko",
-            new_callable=AsyncMock,
-            side_effect=Exception("down"),
-        ), patch(
-            "payments.crypto.rate_feed._fetch_binance_fallback",
-            new_callable=AsyncMock,
-            side_effect=Exception("down"),
+        with (
+            patch(
+                "payments.crypto.rate_feed._fetch_coingecko",
+                new_callable=AsyncMock,
+                side_effect=Exception("down"),
+            ),
+            patch(
+                "payments.crypto.rate_feed._fetch_binance_fallback",
+                new_callable=AsyncMock,
+                side_effect=Exception("down"),
+            ),
         ):
             from payments.crypto.rate_feed import get_rates
 
@@ -126,14 +133,17 @@ class TestRateFeed:
         rf._cached_rates = {}
         rf._cache_ts = 0.0
 
-        with patch(
-            "payments.crypto.rate_feed._fetch_coingecko",
-            new_callable=AsyncMock,
-            side_effect=Exception("down"),
-        ), patch(
-            "payments.crypto.rate_feed._fetch_binance_fallback",
-            new_callable=AsyncMock,
-            side_effect=Exception("down"),
+        with (
+            patch(
+                "payments.crypto.rate_feed._fetch_coingecko",
+                new_callable=AsyncMock,
+                side_effect=Exception("down"),
+            ),
+            patch(
+                "payments.crypto.rate_feed._fetch_binance_fallback",
+                new_callable=AsyncMock,
+                side_effect=Exception("down"),
+            ),
         ):
             from payments.crypto.rate_feed import get_rates
 
@@ -275,13 +285,13 @@ class TestPaymentDBHelpers:
         import logging
         from api.payments import _save_payment
 
-        with patch("api.payments._get_db_session", return_value=None), caplog.at_level(logging.WARNING, logger="api.payments"):
+        with (
+            patch("api.payments._get_db_session", return_value=None),
+            caplog.at_level(logging.WARNING, logger="api.payments"),
+        ):
             _save_payment(self._make_payment())
 
-        assert (
-            "not persisted" in caplog.text.lower()
-            or "unavailable" in caplog.text.lower()
-        )
+        assert "not persisted" in caplog.text.lower() or "unavailable" in caplog.text.lower()
 
     def test_load_payment_returns_none_when_db_unavailable(self):
         """_load_payment() returns None when DB session is None."""
@@ -303,9 +313,7 @@ class TestPaymentDBHelpers:
         mock_record.to_dict.return_value = payment
 
         mock_session = MagicMock()
-        mock_session.query.return_value.filter.return_value.first.return_value = (
-            mock_record
-        )
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_record
 
         with patch("api.payments._get_db_session", return_value=mock_session):
             result = _load_payment("PAY_roundtrip_001")
@@ -323,9 +331,7 @@ class TestPaymentDBHelpers:
         mock_record.payment_id = "PAY_update_001"
 
         mock_session = MagicMock()
-        mock_session.query.return_value.filter.return_value.first.return_value = (
-            mock_record
-        )
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_record
 
         with patch("api.payments._get_db_session", return_value=mock_session):
             _update_payment("PAY_update_001", status="complete", confirmations=3)
@@ -339,9 +345,7 @@ class TestPaymentDBHelpers:
         from api.payments import _update_payment
 
         mock_session = MagicMock()
-        mock_session.query.return_value.filter.return_value.first.side_effect = (
-            Exception("DB error")
-        )
+        mock_session.query.return_value.filter.return_value.first.side_effect = Exception("DB error")
 
         with patch("api.payments._get_db_session", return_value=mock_session):
             _update_payment("PAY_err_001", status="failed")
@@ -382,9 +386,10 @@ class TestPaymentStatusAutoExpiry:
             "confirmed_at": None,
         }
 
-        with patch("api.payments._load_payment", return_value=expired_payment), patch(
-            "api.payments._update_payment"
-        ) as mock_update:
+        with (
+            patch("api.payments._load_payment", return_value=expired_payment),
+            patch("api.payments._update_payment") as mock_update,
+        ):
             response = client.get("/api/payments/crypto/status/PAY_expired_001")
 
         assert response.status_code == 200  # noqa: PLR2004

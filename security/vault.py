@@ -17,6 +17,7 @@ import os
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -54,9 +55,7 @@ class HSMVault:
 
         os.makedirs(key_store_path, exist_ok=True)
 
-    def initialize(
-        self, password: str | None = None, hardware_token: str | None = None
-    ) -> None:
+    def initialize(self, password: str | None = None, hardware_token: str | None = None) -> None:
         """
         Derive or generate the master key and mark the vault ready.
 
@@ -84,22 +83,15 @@ class HSMVault:
             self._master_key = self._derive_key_cloud(hardware_token)
 
         else:
-            raise ValueError(
-                f"Unknown hsm_type {self.hsm_type!r}. "
-                "Valid values: 'software', 'yubikey', 'cloudhsm'."
-            )
+            raise ValueError(f"Unknown hsm_type {self.hsm_type!r}. Valid values: 'software', 'yubikey', 'cloudhsm'.")
 
         if not self._master_key:
-            raise RuntimeError(
-                f"Master key derivation returned empty bytes for hsm_type={self.hsm_type!r}"
-            )
+            raise RuntimeError(f"Master key derivation returned empty bytes for hsm_type={self.hsm_type!r}")
 
         self._initialized = True
         logger.info("HSMVault initialised: %s", self.hsm_type)
 
-    def _derive_key_software(
-        self, password: str, hardware_token: str | None
-    ) -> bytes:
+    def _derive_key_software(self, password: str, hardware_token: str | None) -> bytes:
         """PBKDF2 key derivation with hardware binding"""
         # Combine password with hardware fingerprint
         salt = secrets.token_bytes(32)
@@ -196,8 +188,7 @@ class HSMVault:
             import boto3  # type: ignore[import]
         except ImportError:
             raise RuntimeError(
-                "boto3 is required for AWS KMS integration. "
-                "Install it with: pip install boto3"
+                "boto3 is required for AWS KMS integration. Install it with: pip install boto3"
             ) from None
 
         key_id = os.getenv("AWS_KMS_KEY_ID")
@@ -231,9 +222,7 @@ class HSMVault:
         except OSError as exc:
             logger.warning("Could not persist KMS encrypted key blob: %s", exc)
 
-        logger.info(
-            "Master key derived via AWS KMS (key_id=%s, region=%s)", key_id, region
-        )
+        logger.info("Master key derived via AWS KMS (key_id=%s, region=%s)", key_id, region)
         return plaintext_key
 
     def _derive_key_azure_keyvault(self) -> bytes:
@@ -292,9 +281,7 @@ class HSMVault:
 
             # Generate a random 256-bit master key and wrap it with the Key Vault key
             plaintext_key = secrets.token_bytes(32)
-            wrap_result = crypto_client.wrap_key(
-                KeyWrapAlgorithm.rsa_oaep, plaintext_key
-            )
+            wrap_result = crypto_client.wrap_key(KeyWrapAlgorithm.rsa_oaep, plaintext_key)
             wrapped_key: bytes = wrap_result.encrypted_key
         except Exception as exc:
             raise RuntimeError(f"Azure Key Vault wrap_key failed: {exc}") from exc
@@ -429,9 +416,7 @@ class HSMVault:
         # Overwrite memory
         if self._master_key:
             for i in range(len(self._master_key)):
-                self._master_key = (
-                    self._master_key[:i] + b"\x00" + self._master_key[i + 1 :]
-                )
+                self._master_key = self._master_key[:i] + b"\x00" + self._master_key[i + 1 :]
             self._master_key = None
 
         self._key_cache.clear()
@@ -448,9 +433,7 @@ class APICredentialManager:
         self.credentials: dict[str, EncryptedSecret] = {}
         self.rotation_schedule: dict[str, datetime] = {}
 
-    def add_credential(
-        self, name: str, api_key: str, api_secret: str, rotation_days: int = 90
-    ):
+    def add_credential(self, name: str, api_key: str, api_secret: str, rotation_days: int = 90):
         """Store API credentials encrypted"""
         credential_data = json.dumps(
             {
@@ -466,9 +449,7 @@ class APICredentialManager:
         # Schedule rotation
         from datetime import timedelta
 
-        self.rotation_schedule[name] = datetime.now(UTC) + timedelta(
-            days=rotation_days
-        )
+        self.rotation_schedule[name] = datetime.now(UTC) + timedelta(days=rotation_days)
 
         logger.info("Credential '%s' encrypted and stored", name)
 
@@ -478,18 +459,14 @@ class APICredentialManager:
             raise KeyError(f"Credential '{name}' not found")
 
         # Check rotation
-        if datetime.now(UTC) > self.rotation_schedule.get(
-            name, datetime.now(UTC)
-        ):
+        if datetime.now(UTC) > self.rotation_schedule.get(name, datetime.now(UTC)):
             logger.warning("Credential '%s' needs rotation", name)
 
         encrypted = self.credentials[name]
         plaintext = self.vault.decrypt(encrypted)
         return json.loads(plaintext)
 
-    def rotate_credential(
-        self, name: str, new_api_key: str, new_api_secret: str
-    ) -> None:
+    def rotate_credential(self, name: str, new_api_key: str, new_api_secret: str) -> None:
         """Rotate credentials atomically with rollback on failure.
 
         Validates inputs before touching the stored credential so the old
@@ -497,8 +474,7 @@ class APICredentialManager:
         """
         if not new_api_key or not new_api_secret:
             raise ValueError(
-                f"Cannot rotate credential '{name}': new_api_key and new_api_secret "
-                "must both be non-empty strings."
+                f"Cannot rotate credential '{name}': new_api_key and new_api_secret must both be non-empty strings."
             )
 
         old_secret = self.credentials.get(name)

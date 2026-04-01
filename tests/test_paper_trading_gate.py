@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import sys
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -283,8 +284,4 @@ def test_validate_oanda_gate_flag_runs(capsys):
 
     validate_gate()  # should not raise
     captured = capsys.readouterr()
-    assert (
-        "Phase" in captured.out
-        or "Gate" in captured.out
-        or "gate" in captured.out.lower()
-    )
+    assert "Phase" in captured.out or "Gate" in captured.out or "gate" in captured.out.lower()

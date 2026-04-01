@@ -114,9 +114,7 @@ class TestAnomalyWeighter:
         path = tmp_path / "aw.pkl"
         aw.save(path)
         loaded = self._cls.load(path)
-        np.testing.assert_allclose(
-            aw.decision_scores(X), loaded.decision_scores(X), rtol=1e-5
-        )
+        np.testing.assert_allclose(aw.decision_scores(X), loaded.decision_scores(X), rtol=1e-5)
 
 
 # ── AnomalyWeightStore ────────────────────────────────────────────────────────
@@ -175,9 +173,7 @@ class TestAnomalyWeightStore:
         from unittest import mock
 
         # Patch decision_scores to return a very anomalous score
-        with mock.patch.object(
-            mock_weighter, "decision_scores", return_value=np.array([-10.0])
-        ):
+        with mock.patch.object(mock_weighter, "decision_scores", return_value=np.array([-10.0])):
             store._weighter = mock_weighter
             store._fitted = True
             df = _make_ohlcv(100)

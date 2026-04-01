@@ -16,9 +16,7 @@ class TestPortfolioManager:
 
         assets = {"XAUUSD": 0.4, "EURUSD": 0.3, "GBPUSD": 0.2, "USDJPY": 0.1}
 
-        portfolio = manager.create_portfolio(
-            name="Test Portfolio", assets=assets, rebalancing="monthly"
-        )
+        portfolio = manager.create_portfolio(name="Test Portfolio", assets=assets, rebalancing="monthly")
 
         assert portfolio.total_exposure == 1.0
         assert portfolio.asset_count == 4  # noqa: PLR2004

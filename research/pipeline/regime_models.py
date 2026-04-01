@@ -144,9 +144,7 @@ class RegimeClassifier:
                 self._hmm.fit(feats_sc)
                 logger.info("RegimeClassifier: HMM fitted (%d regimes)", self.n_regimes)
             except Exception as exc:
-                logger.warning(
-                    "HMM fit failed (%s) — falling back to vol quantiles", exc
-                )
+                logger.warning("HMM fit failed (%s) — falling back to vol quantiles", exc)
                 self._hmm = None
                 self.use_hmm = False
 
@@ -156,9 +154,7 @@ class RegimeClassifier:
                 feats_sc[:, 0],
                 np.linspace(0, 1, self.n_regimes + 1)[1:-1],
             )
-            logger.info(
-                "RegimeClassifier: vol-quantile bucketing (%d regimes)", self.n_regimes
-            )
+            logger.info("RegimeClassifier: vol-quantile bucketing (%d regimes)", self.n_regimes)
 
         self._fitted = True
         return self

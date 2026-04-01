@@ -35,9 +35,7 @@ import pytest
 import contextlib
 
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault(
-    "SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!"
-)
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -146,9 +144,7 @@ class TestProcessTick:
         streamer.subscribe(collector)
 
         await streamer.process_tick(2000.0, time.time(), "finnhub")
-        await streamer.process_tick(
-            2200.0, time.time(), "finnhub"
-        )  # anomaly — discarded
+        await streamer.process_tick(2200.0, time.time(), "finnhub")  # anomaly — discarded
         await streamer.process_tick(2010.0, time.time(), "finnhub")  # 0.5% — accepted
 
         assert collector.prices == [2000.0, 2010.0]
@@ -316,9 +312,7 @@ class TestCircuitBreaker:
         assert streamer._is_circuit_open("finnhub") is False
 
     def test_circuit_resets_after_cooldown(self):
-        streamer = _make_streamer(
-            circuit_breaker_threshold=1, circuit_breaker_cooldown=0.01
-        )
+        streamer = _make_streamer(circuit_breaker_threshold=1, circuit_breaker_cooldown=0.01)
         streamer._record_failure("finnhub")
         assert streamer._is_circuit_open("finnhub") is True
 
@@ -631,7 +625,10 @@ class TestRunNoKeys:
             t.cancel()  # cancel immediately so run() exits
             return t
 
-        with patch("asyncio.create_task", side_effect=_spy_create_task), contextlib.suppress((TimeoutError, asyncio.CancelledError)):
+        with (
+            patch("asyncio.create_task", side_effect=_spy_create_task),
+            contextlib.suppress((TimeoutError, asyncio.CancelledError)),
+        ):
             await asyncio.wait_for(streamer.run(), timeout=1.0)
 
         assert len(tasks_created) >= 1

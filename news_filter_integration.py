@@ -9,18 +9,15 @@ import requests
 import redis
 import time
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
 
 class NewsFilterIntegration:
-    def __init__(
-        self, redis_host="localhost", redis_port=6379, event_cache_duration=300
-    ):
-        self.redis_client = redis.StrictRedis(
-            host=redis_host, port=redis_port, decode_responses=True
-        )
+    def __init__(self, redis_host="localhost", redis_port=6379, event_cache_duration=300):
+        self.redis_client = redis.StrictRedis(host=redis_host, port=redis_port, decode_responses=True)
         self.event_cache_duration = event_cache_duration
 
     # ForexFactory calendar endpoint — returns JSON array of upcoming events.
@@ -55,18 +52,14 @@ class NewsFilterIntegration:
             try:
                 raw = event.get("date", "")
                 # Parse as UTC-aware; ForexFactory returns UTC timestamps.
-                event_time = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").replace(
-                    tzinfo=UTC
-                )
+                event_time = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
                 duration_s = float(event.get("duration", 0)) * 60
                 delta = (event_time - now).total_seconds()
                 if 0 <= delta <= duration_s:
                     upcoming_events.append(event)
                     self.cache_event(event)
             except (KeyError, ValueError, TypeError) as exc:
-                log.warning(
-                    "filter_events: skipping malformed event %r: %s", event, exc
-                )
+                log.warning("filter_events: skipping malformed event %r: %s", event, exc)
         return upcoming_events
 
     def cache_event(self, event):
@@ -74,9 +67,7 @@ class NewsFilterIntegration:
         try:
             self.redis_client.set(key, json.dumps(event), ex=self.event_cache_duration)
         except Exception as exc:
-            logger.warning(
-                "cache_event: failed to cache event %s: %s", event.get("id"), exc
-            )
+            logger.warning("cache_event: failed to cache event %s: %s", event.get("id"), exc)
 
     def is_trading_paused(self) -> bool:
         """Return True if trading is currently paused due to a high-impact news window.
