@@ -1158,69 +1158,84 @@ async def _execute_if_approved(
             order.id,
         )
 
-        # Compliance log
-        compliance = getattr(app_state, "compliance_manager", None)
-        if compliance is not None:
-            compliance.log_trade(
-                user_id="signal_engine",
-                trade_data={
-                    "symbol": symbol,
-                    "side": direction.lower(),
-                    "quantity": quantity,
-                    "source": "strategy_brain_auto",
-                    "confidence": signal_payload["confidence"],
-                },
-            )
-
-        # Broadcast fill
-        if ws is not None:
-            try:
-                await ws.broadcast_trade(
-                    symbol=symbol,
-                    price=order.average_fill_price or signal_payload["entry_price"],
-                    quantity=quantity,
-                    side=direction.lower(),
-                    trade_id=order.id,
-                )
-            except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
-
-        # Paper trading gate fill counter.
-        try:
-            from research.pipeline.paper_trading_gate import get_gate as _get_gate
-
-            _get_gate().record_fill(pnl=0.0)
-        except Exception as _gate_exc:
-            logger.debug("gate.record_fill skipped in signal_engine: %s", _gate_exc)
-
-        # Online learner feedback — notify Phase-3 store of the confirmed fill.
-        # label=1 (trade was approved by risk + ML gates, so it's a positive sample).
-        try:
-            import pandas as _pd
-
-            _fill_price = order.average_fill_price or signal_payload["entry_price"]
-            _features = _pd.DataFrame(
-                [
-                    {
-                        "symbol": symbol,
-                        "direction": direction,
-                        "confidence": signal_payload.get("confidence", 0.0),
-                        "fill_price": _fill_price,
-                        "ml_prob": signal_payload.get("probability", 0.5),
-                        "source": "signal_engine_auto",
-                    }
-                ]
-            )
-            notify_fill(
-                _features,
-                label=1,
-                primary_prob=signal_payload.get("probability"),
-            )
-        except Exception as _ol_exc:
-            logger.debug("notify_fill skipped after auto-trade: %s", _ol_exc)
-
+        await _handle_post_fill_actions(
+            app_state, order, symbol, direction, quantity, signal_payload, ws
+        )
     except Exception as order_exc:
         logger.error("Auto-trade order failed for %s: %s", symbol, order_exc)
+
+
+
+async def _handle_post_fill_actions(
+    app_state: Any,
+    order: Any,
+    symbol: str,
+    direction: str,
+    quantity: float,
+    signal_payload: dict[str, Any],
+    ws: Any,
+) -> None:
+    """Handle post-fill side-effects: compliance logging, broadcast, paper gate, and online learner."""
+    # Compliance log
+    compliance = getattr(app_state, "compliance_manager", None)
+    if compliance is not None:
+        compliance.log_trade(
+            user_id="signal_engine",
+            trade_data={
+                "symbol": symbol,
+                "side": direction.lower(),
+                "quantity": quantity,
+                "source": "strategy_brain_auto",
+                "confidence": signal_payload["confidence"],
+            },
+        )
+
+    # Broadcast fill
+    if ws is not None:
+        try:
+            await ws.broadcast_trade(
+                symbol=symbol,
+                price=order.average_fill_price or signal_payload["entry_price"],
+                quantity=quantity,
+                side=direction.lower(),
+                trade_id=order.id,
+            )
+        except Exception as _exc:
+            logger.debug("Suppressed exception: %s", _exc)
+
+    # Paper trading gate fill counter.
+    try:
+        from research.pipeline.paper_trading_gate import get_gate as _get_gate
+
+        _get_gate().record_fill(pnl=0.0)
+    except Exception as _gate_exc:
+        logger.debug("gate.record_fill skipped in signal_engine: %s", _gate_exc)
+
+    # Online learner feedback — notify Phase-3 store of the confirmed fill.
+    # label=1 (trade was approved by risk + ML gates, so it's a positive sample).
+    try:
+        import pandas as _pd
+
+        _fill_price = order.average_fill_price or signal_payload["entry_price"]
+        _features = _pd.DataFrame(
+            [
+                {
+                    "symbol": symbol,
+                    "direction": direction,
+                    "confidence": signal_payload.get("confidence", 0.0),
+                    "fill_price": _fill_price,
+                    "ml_prob": signal_payload.get("probability", 0.5),
+                    "source": "signal_engine_auto",
+                }
+            ]
+        )
+        notify_fill(
+            _features,
+            label=1,
+            primary_prob=signal_payload.get("probability"),
+        )
+    except Exception as _ol_exc:
+        logger.debug("notify_fill skipped after auto-trade: %s", _ol_exc)
 
 
 _SL_ATR_MULT_DEFAULT = 1.5
