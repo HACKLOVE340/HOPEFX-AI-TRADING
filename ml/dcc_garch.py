@@ -83,13 +83,12 @@ class GARCH11:
         try:
             result = minimize(
                 neg_loglik, x0, method="L-BFGS-B",
-                bounds=bounds, options={"maxiter": 200, "ftol": 1e-8},
-            )
-            omega, alpha, beta = result.x
-        except Exception as exc:
-            logger.warning("GARCH11: optimisation failed (%s), using moments", exc)
-            omega = var0 * 0.05
-            alpha, beta = 0.05, 0.90
+        result = minimize(
+            neg_loglik, x0, method="SLSQP",
+            bounds=bounds,
+            constraints=constraints,
+            options={"maxiter": 200, "ftol": 1e-8},
+        )
 
         return {
             "omega": float(omega),
