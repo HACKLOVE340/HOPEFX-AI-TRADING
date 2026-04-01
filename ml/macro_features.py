@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 import numpy as np
@@ -89,13 +90,13 @@ MACRO_COLUMNS: list[str] = [
     "macro_gold_headwind",
     # WGC gold demand features (quarterly/monthly, forward-filled)
     # Rising central bank demand and investment demand are structurally bullish.
-    "macro_wgc_total_demand_chg",   # QoQ change in total demand (tonnes)
-    "macro_wgc_investment_chg",     # QoQ change in investment demand (tonnes)
-    "macro_wgc_central_bank_chg",   # QoQ change in central bank purchases (tonnes)
-    "macro_wgc_jewellery_chg",      # QoQ change in jewellery demand (tonnes)
-    "macro_wgc_etf_flow",           # Monthly ETF net flow (tonnes, level)
-    "macro_wgc_etf_flow_z4",        # ETF flow z-score over 4 quarters
-    "macro_wgc_demand_score",       # Composite WGC demand score (0–3, bullish count)
+    "macro_wgc_total_demand_chg",  # QoQ change in total demand (tonnes)
+    "macro_wgc_investment_chg",  # QoQ change in investment demand (tonnes)
+    "macro_wgc_central_bank_chg",  # QoQ change in central bank purchases (tonnes)
+    "macro_wgc_jewellery_chg",  # QoQ change in jewellery demand (tonnes)
+    "macro_wgc_etf_flow",  # Monthly ETF net flow (tonnes, level)
+    "macro_wgc_etf_flow_z4",  # ETF flow z-score over 4 quarters
+    "macro_wgc_demand_score",  # Composite WGC demand score (0–3, bullish count)
 ]
 
 
@@ -250,9 +251,7 @@ def add_macro_features(
     else:
         df["macro_yield_5y_chg"] = 0.0
 
-    y10_raw = (
-        macro["yield_10y"] if _has("yield_10y") else pd.Series(0.0, index=df.index)
-    )
+    y10_raw = macro["yield_10y"] if _has("yield_10y") else pd.Series(0.0, index=df.index)
     y5_raw = macro["yield_5y"] if _has("yield_5y") else pd.Series(0.0, index=df.index)
     spread = (y10_raw - y5_raw).reindex(df.index).fillna(0.0)
     df["macro_yield_spread"] = spread
@@ -322,9 +321,9 @@ def add_macro_features(
 
     # Composite WGC demand score (0–3): count of bullish demand signals
     df["macro_wgc_demand_score"] = (
-        (df["macro_wgc_central_bank_chg"] > 0).astype(float)   # CB buying more
-        + (df["macro_wgc_investment_chg"] > 0).astype(float)   # investment rising
-        + (df["macro_wgc_etf_flow"] > 0).astype(float)         # ETF inflows
+        (df["macro_wgc_central_bank_chg"] > 0).astype(float)  # CB buying more
+        + (df["macro_wgc_investment_chg"] > 0).astype(float)  # investment rising
+        + (df["macro_wgc_etf_flow"] > 0).astype(float)  # ETF inflows
     )
 
     # ── Composite scores ─────────────────────────────────────────────────────
@@ -405,9 +404,7 @@ def add_regime_features(df: pd.DataFrame, lookback: int = 60) -> pd.DataFrame:
     # Vol regime: 0=low, 1=normal, 2=high
     pct = rv.rolling(lookback).rank(pct=True).fillna(0.5)
     df["regime_vol_regime"] = (
-        pd.cut(pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True)
-        .astype(float)
-        .fillna(1.0)
+        pd.cut(pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True).astype(float).fillna(1.0)
     )
 
     # 20-day momentum z-score

@@ -42,6 +42,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 from core.event_bus import bus, CH_SIGNAL, CH_BREACH
@@ -99,9 +100,7 @@ class _NewsCalendar:
 
     def is_blackout(self, window_minutes: int = None) -> bool:
         """Return True if any registered event is within *window_minutes* of now."""
-        window = (
-            window_minutes if window_minutes is not None else self._BLACKOUT_MINUTES
-        )
+        window = window_minutes if window_minutes is not None else self._BLACKOUT_MINUTES
         now = datetime.now(UTC)
         cutoff = timedelta(minutes=window)
         for ev in self._events:
@@ -370,9 +369,7 @@ class Gatekeeper:
         _paused = paused_until if paused_until is not None else 0.0
         if time.monotonic() < _paused:
             remaining = _paused - time.monotonic()
-            return [
-                {"reason": "post_breach_pause", "detail": f"{remaining:.0f}s remaining"}
-            ]
+            return [{"reason": "post_breach_pause", "detail": f"{remaining:.0f}s remaining"}]
 
         # 3. Daily drawdown
         if daily_dd >= _DAILY_DD_LIMIT:
@@ -544,9 +541,7 @@ class Gatekeeper:
             self._daily_trades = 0
             self._trade_day = today
 
-    def _write_rejection_lineage(
-        self, signal, reason: str, failures: list[dict]
-    ) -> None:
+    def _write_rejection_lineage(self, signal, reason: str, failures: list[dict]) -> None:
         if self._lineage is None:
             return
         try:

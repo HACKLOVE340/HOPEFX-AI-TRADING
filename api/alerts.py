@@ -110,9 +110,7 @@ def _serialise(alert) -> dict[str, Any]:
     if "condition_type" in d and "conditions" not in d:
         d["conditions"] = [
             {
-                "type": d["condition_type"].value
-                if hasattr(d["condition_type"], "value")
-                else d["condition_type"],
+                "type": d["condition_type"].value if hasattr(d["condition_type"], "value") else d["condition_type"],
                 "threshold": d.get("threshold", 0),
             },
         ]

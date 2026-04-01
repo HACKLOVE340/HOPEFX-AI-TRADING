@@ -53,6 +53,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -283,9 +284,7 @@ def _get_live_price(symbol: str) -> float | None:
             broker_key = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
             tick = pe.get_last_price(broker_key)
             if tick is not None:
-                mid = getattr(tick, "mid", None) or (
-                    (getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2
-                )
+                mid = getattr(tick, "mid", None) or ((getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2)
                 if mid and mid > 0:
                     return float(mid)
 
@@ -502,13 +501,7 @@ async def _eventbus_signal_broadcaster() -> None:
             # Normalise to the frontend WsMessage schema:
             # { type: "signal", data: Signal }
             direction_raw = (msg.get("direction") or "neutral").lower()
-            direction_fe = (
-                "long"
-                if direction_raw == "buy"
-                else "short"
-                if direction_raw == "sell"
-                else "neutral"
-            )
+            direction_fe = "long" if direction_raw == "buy" else "short" if direction_raw == "sell" else "neutral"
             mid = msg.get("mid", 0.0)
             symbol = msg.get("symbol", "XAU/USD")
 
@@ -557,10 +550,7 @@ async def _broadcast_no_live_feed() -> None:
                 "prices",
                 {
                     "type": "no_live_feed",
-                    "message": (
-                        "No live broker connection. "
-                        "Connect a broker in Settings to receive real-time prices."
-                    ),
+                    "message": ("No live broker connection. Connect a broker in Settings to receive real-time prices."),
                     "timestamp": int(datetime.now(UTC).timestamp() * 1000),
                 },
             )
@@ -594,9 +584,7 @@ async def _price_broadcaster_live_only() -> None:
                     {
                         "type": "no_live_feed",
                         "symbol": symbol,
-                        "message": (
-                            f"No live price for {symbol}. Connect a broker in Settings."
-                        ),
+                        "message": (f"No live price for {symbol}. Connect a broker in Settings."),
                         "timestamp": int(datetime.now(UTC).timestamp() * 1000),
                     },
                 )
@@ -640,9 +628,7 @@ async def _heartbeat_broadcaster() -> None:
         for cid in list(_manager._connections.keys()):
             misses = _manager.record_hb_miss(cid)
             if misses > HEARTBEAT_MISS_LIMIT:
-                logger.info(
-                    "WS closing stale connection %s (missed %d heartbeats)", cid, misses
-                )
+                logger.info("WS closing stale connection %s (missed %d heartbeats)", cid, misses)
                 dead.append(cid)
             else:
                 await _manager.send(cid, {"type": "heartbeat"})
@@ -720,9 +706,7 @@ async def ws_live(websocket: WebSocket) -> None:
     # ── Auth gate ─────────────────────────────────────────────────────────────
     if WS_AUTH_REQUIRED:
         try:
-            raw = await asyncio.wait_for(
-                websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS
-            )
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
             msg = json.loads(raw)
             if msg.get("type") != "auth":
                 await _manager.send(
@@ -865,6 +849,7 @@ async def ws_live(websocket: WebSocket) -> None:
         _manager.disconnect(cid)
     finally:
         from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+
         await get_ws_limiter().release(get_client_ip(websocket))
 
 

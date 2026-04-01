@@ -24,6 +24,7 @@ import time
 from fastapi import APIRouter
 from pydantic import BaseModel
 from datetime import timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -90,11 +91,7 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
             error="Account ID is required",
         )
 
-    base = (
-        "https://api-fxpractice.oanda.com"
-        if req.practice
-        else "https://api-fxtrade.oanda.com"
-    )
+    base = "https://api-fxpractice.oanda.com" if req.practice else "https://api-fxtrade.oanda.com"
     url = f"{base}/v3/accounts/{req.accountId}/summary"
     headers = {
         "Authorization": f"Bearer {req.apiKey}",
@@ -208,11 +205,7 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
             error="API Key ID and Secret Key are both required",
         )
 
-    base = (
-        "https://paper-api.alpaca.markets"
-        if req.practice
-        else "https://api.alpaca.markets"
-    )
+    base = "https://paper-api.alpaca.markets" if req.practice else "https://api.alpaca.markets"
     url = f"{base}/v2/account"
     headers = {
         "APCA-API-KEY-ID": req.apiKey,
@@ -256,9 +249,7 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
         )
 
 
-@router.get(
-    "/status", summary="Current broker connection status, balance, and data feed"
-)
+@router.get("/status", summary="Current broker connection status, balance, and data feed")
 async def broker_status():
     """
     Return the current broker type, connection state, account balance, and
@@ -324,14 +315,10 @@ async def broker_status():
                     if hasattr(info, "__dict__"):
                         info = info.__dict__
                     if isinstance(info, dict):
-                        balance = (
-                            info.get("balance") or info.get("equity") or info.get("nav")
-                        )
+                        balance = info.get("balance") or info.get("equity") or info.get("nav")
                         currency = info.get("currency", "USD")
                     else:
-                        balance = getattr(info, "balance", None) or getattr(
-                            info, "equity", None
-                        )
+                        balance = getattr(info, "balance", None) or getattr(info, "equity", None)
                         currency = getattr(info, "currency", "USD")
                 elif hasattr(broker, "get_account_balance"):
                     balance = broker.get_account_balance()
@@ -429,9 +416,7 @@ async def broker_status():
             }
 
         # ── Signal engine status ──────────────────────────────────────────────
-        signal_engine_running = any(
-            not t.done() for t in getattr(app_state, "background_tasks", [])
-        )
+        signal_engine_running = any(not t.done() for t in getattr(app_state, "background_tasks", []))
 
         # ── ML engine status ──────────────────────────────────────────────────
         ml_engine: dict = {"status": "unavailable", "model_available": False}

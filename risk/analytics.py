@@ -274,12 +274,7 @@ def compute_var(
     # Cornish-Fisher (adjusts for skewness and excess kurtosis)
     skew = float(stats.skew(returns))
     kurt = float(stats.kurtosis(returns))  # excess kurtosis
-    z_cf = (
-        z
-        + (z**2 - 1) * skew / 6
-        + (z**3 - 3 * z) * kurt / 24
-        - (2 * z**3 - 5 * z) * skew**2 / 36
-    )
+    z_cf = z + (z**2 - 1) * skew / 6 + (z**3 - 3 * z) * kurt / 24 - (2 * z**3 - 5 * z) * skew**2 / 36
     var_cf = float(-(mu + z_cf * sigma)) * scale
 
     return VaRResult(
@@ -584,6 +579,7 @@ class PreTradeRiskLimits:
     min_sharpe: float = 1.5
     max_drawdown_limit: float = 0.08
 
+
 def generate_pre_trade_report(
     symbol: str,
     side: str,
@@ -691,8 +687,7 @@ def generate_pre_trade_report(
 
     if not approved:
         logger.warning(
-            "PRE-TRADE RISK REPORT: BLOCKED | symbol=%s side=%s qty=%.4f "
-            "notional=%.2f reasons=%s",
+            "PRE-TRADE RISK REPORT: BLOCKED | symbol=%s side=%s qty=%.4f notional=%.2f reasons=%s",
             symbol,
             side,
             quantity,
@@ -765,10 +760,7 @@ def calculate_var_multiday(
     returns = np.asarray(returns, dtype=float)
     min_obs = max(30, horizon_days * 3)
     if len(returns) < min_obs:
-        raise ValueError(
-            f"Need at least {min_obs} observations for {horizon_days}-day VaR, "
-            f"got {len(returns)}"
-        )
+        raise ValueError(f"Need at least {min_obs} observations for {horizon_days}-day VaR, got {len(returns)}")
     if not 0 < confidence < 1:
         raise ValueError(f"confidence must be in (0,1), got {confidence}")
     if horizon_days < 1:
@@ -777,9 +769,7 @@ def calculate_var_multiday(
     # Build overlapping h-day log-return windows
     # r_t^(h) = sum(r_{t}, r_{t+1}, ..., r_{t+h-1})
     n = len(returns)
-    h_returns = np.array(
-        [np.sum(returns[i : i + horizon_days]) for i in range(n - horizon_days + 1)]
-    )
+    h_returns = np.array([np.sum(returns[i : i + horizon_days]) for i in range(n - horizon_days + 1)])
     n_windows = len(h_returns)
 
     alpha = 1 - confidence
@@ -796,12 +786,7 @@ def calculate_var_multiday(
     # Cornish-Fisher on h-day distribution
     skew_h = float(stats.skew(h_returns))
     kurt_h = float(stats.kurtosis(h_returns))
-    z_cf = (
-        z
-        + (z**2 - 1) * skew_h / 6
-        + (z**3 - 3 * z) * kurt_h / 24
-        - (2 * z**3 - 5 * z) * skew_h**2 / 36
-    )
+    z_cf = z + (z**2 - 1) * skew_h / 6 + (z**3 - 3 * z) * kurt_h / 24 - (2 * z**3 - 5 * z) * skew_h**2 / 36
     var_cf = float(-(mu_h + z_cf * sigma_h))
 
     return MultiDayVaRResult(

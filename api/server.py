@@ -64,9 +64,7 @@ def create_api_app(trading_app=None) -> Any | None:
 
     # Hard-fail in production if ALLOWED_ORIGINS is still localhost — the
     # frontend can never reach the API from a real domain in that state.
-    if os.getenv("APP_ENV") == "production" and all(
-        "localhost" in o or "127." in o for o in _allowed_origins
-    ):
+    if os.getenv("APP_ENV") == "production" and all("localhost" in o or "127." in o for o in _allowed_origins):
         import sys as _sys
 
         logger.critical(
@@ -117,13 +115,9 @@ def create_api_app(trading_app=None) -> Any | None:
 
                     async def on_new_price(self, price: float) -> None:
                         try:
-                            await bus.publish(
-                                CH_TICK, {"price": price, "symbol": "XAUUSD"}
-                            )
+                            await bus.publish(CH_TICK, {"price": price, "symbol": "XAUUSD"})
                         except Exception as _exc:
-                            logger.debug(
-                                "NuclearStreamer EventBus forward error: %s", _exc
-                            )
+                            logger.debug("NuclearStreamer EventBus forward error: %s", _exc)
 
                 _streamer = NuclearStreamer()
                 _streamer.subscribe(_EventBusSubscriber())
@@ -153,8 +147,7 @@ def create_api_app(trading_app=None) -> Any | None:
             _scheduler.start()
         except ImportError:
             logger.info(
-                "APScheduler not installed — weekly report scheduling disabled. "
-                "Install: pip install apscheduler"
+                "APScheduler not installed — weekly report scheduling disabled. Install: pip install apscheduler"
             )
         except Exception as _exc:
             logger.warning("Scheduler init failed (non-fatal): %s", _exc)
@@ -222,12 +215,8 @@ def _configure_middleware(app, allowed_origins, BaseHTTPMiddleware, StarletteReq
             response.headers["X-Frame-Options"] = "DENY"
             response.headers["X-XSS-Protection"] = "1; mode=block"
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains"
-            )
-            response.headers["Permissions-Policy"] = (
-                "geolocation=(), microphone=(), camera=()"
-            )
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
             return response
 
     app.add_middleware(_SecurityHeaders)
@@ -240,6 +229,7 @@ def _build_auth_deps(bearer):
     def _get_current_user(credentials=Depends(bearer)):
         try:
             from api.auth import _decode_token
+
             return _decode_token(credentials.credentials)
         except Exception as exc:
             logger.warning("Token decode failed: %s", exc)
@@ -330,18 +320,34 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             raise HTTPException(status_code=503, detail="Broker not available")
         symbol = request.symbol.upper().strip()
         if symbol not in allowed_symbols:
-            raise HTTPException(status_code=400, detail=f"Symbol '{symbol}' not permitted. Allowed: {sorted(allowed_symbols)}")
+            raise HTTPException(
+                status_code=400, detail=f"Symbol '{symbol}' not permitted. Allowed: {sorted(allowed_symbols)}"
+            )
         if request.quantity <= 0 or request.quantity > max_qty:
             raise HTTPException(status_code=400, detail=f"Quantity must be > 0 and <= {max_qty}")
         if request.side.lower() not in ("buy", "sell"):
             raise HTTPException(status_code=400, detail="side must be 'buy' or 'sell'")
         try:
             order = await trading_app.broker.place_market_order(
-                symbol=symbol, side=request.side.lower(), quantity=request.quantity,
+                symbol=symbol,
+                side=request.side.lower(),
+                quantity=request.quantity,
             )
-            logger.info("Order placed: user=%s symbol=%s side=%s qty=%s id=%s", user.sub, symbol, request.side, request.quantity, order.id)
+            logger.info(
+                "Order placed: user=%s symbol=%s side=%s qty=%s id=%s",
+                user.sub,
+                symbol,
+                request.side,
+                request.quantity,
+                order.id,
+            )
             background_tasks.add_task(get_metrics_registry().record_order_latency, 0)
-            return {"order_id": order.id, "status": order.status.value, "filled_quantity": order.filled_quantity, "average_price": order.average_fill_price}
+            return {
+                "order_id": order.id,
+                "status": order.status.value,
+                "filled_quantity": order.filled_quantity,
+                "average_price": order.average_fill_price,
+            }
         except Exception as exc:
             logger.error("Order error for user=%s: %s", user.sub, exc)
             raise HTTPException(status_code=400, detail=str(exc)) from exc

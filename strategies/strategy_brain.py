@@ -21,6 +21,7 @@ Features:
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -165,15 +166,12 @@ class StrategyBrain:
                 self.stats["consensus_reached"] += 1
                 if consensus_result["consensus_signal"].signal_type == SignalType.BUY:
                     self.stats["bullish_consensus"] += 1
-                elif (
-                    consensus_result["consensus_signal"].signal_type == SignalType.SELL
-                ):
+                elif consensus_result["consensus_signal"].signal_type == SignalType.SELL:
                     self.stats["bearish_consensus"] += 1
 
                 # Update average confidence
                 self.stats["average_confidence"] = (
-                    self.stats["average_confidence"]
-                    * (self.stats["total_analyses"] - 1)
+                    self.stats["average_confidence"] * (self.stats["total_analyses"] - 1)
                     + consensus_result["consensus_signal"].confidence
                 ) / self.stats["total_analyses"]
 
@@ -188,9 +186,7 @@ class StrategyBrain:
                     "timestamp": datetime.now(UTC),
                     "strategy_signals": strategy_signals,
                     "consensus": consensus_result,
-                    "data_snapshot": data.get("prices", [])[-1]
-                    if data.get("prices")
-                    else {},
+                    "data_snapshot": data.get("prices", [])[-1] if data.get("prices") else {},
                 },
             )
 
@@ -233,8 +229,7 @@ class StrategyBrain:
                 # Weight the signal by strategy performance and confidence
                 weighted_confidence = (
                     signal.confidence * self.confidence_weight
-                    + self.strategy_performance[strategy_name]["win_rate"]
-                    * self.performance_weight
+                    + self.strategy_performance[strategy_name]["win_rate"] * self.performance_weight
                 ) * weight
 
                 if signal.signal_type == SignalType.BUY:
@@ -284,9 +279,7 @@ class StrategyBrain:
 
                 # Create consensus signal
                 avg_price = np.mean([s["signal"].price for s in buy_signals])
-                consensus_confidence = (
-                    total_buy_confidence / len(buy_signals) if buy_signals else 0
-                )
+                consensus_confidence = total_buy_confidence / len(buy_signals) if buy_signals else 0
 
                 consensus_signal = Signal(
                     signal_type=SignalType.BUY,
@@ -318,9 +311,7 @@ class StrategyBrain:
 
                 # Create consensus signal
                 avg_price = np.mean([s["signal"].price for s in sell_signals])
-                consensus_confidence = (
-                    total_sell_confidence / len(sell_signals) if sell_signals else 0
-                )
+                consensus_confidence = total_sell_confidence / len(sell_signals) if sell_signals else 0
 
                 consensus_signal = Signal(
                     signal_type=SignalType.SELL,
@@ -406,8 +397,7 @@ class StrategyBrain:
         self._recalculate_weights()
 
         logger.info(
-            f"Updated performance for {strategy_name}: "
-            f"Win rate: {perf['win_rate']:.2%}, PnL: ${perf['total_pnl']:.2f}",
+            f"Updated performance for {strategy_name}: Win rate: {perf['win_rate']:.2%}, PnL: ${perf['total_pnl']:.2f}",
         )
 
     def _recalculate_weights(self):
@@ -423,9 +413,7 @@ class StrategyBrain:
             if name in self.strategy_performance:
                 perf = self.strategy_performance[name]
                 # Combine win rate and normalized PnL for score
-                score = (
-                    perf["win_rate"] * 0.7 + min(perf["total_pnl"] / 1000, 1.0) * 0.3
-                )
+                score = perf["win_rate"] * 0.7 + min(perf["total_pnl"] / 1000, 1.0) * 0.3
             else:
                 score = 0.5  # Default score for new strategies
 
@@ -434,10 +422,7 @@ class StrategyBrain:
 
         # Normalize weights
         if total_performance > 0:
-            self.strategy_weights = {
-                name: score / total_performance
-                for name, score in strategy_scores.items()
-            }
+            self.strategy_weights = {name: score / total_performance for name, score in strategy_scores.items()}
         else:
             # Equal weights if no performance data
             equal_weight = 1.0 / len(self.strategies)
@@ -451,9 +436,7 @@ class StrategyBrain:
             Statistics dictionary
         """
         consensus_rate = (
-            self.stats["consensus_reached"] / self.stats["total_analyses"]
-            if self.stats["total_analyses"] > 0
-            else 0
+            self.stats["consensus_reached"] / self.stats["total_analyses"] if self.stats["total_analyses"] > 0 else 0
         )
 
         return {
@@ -494,15 +477,10 @@ class StrategyBrain:
                         signals = history_entry["strategy_signals"]
                         if strategy1 in signals and strategy2 in signals:
                             total_comparisons += 1
-                            if (
-                                signals[strategy1].signal_type
-                                == signals[strategy2].signal_type
-                            ):
+                            if signals[strategy1].signal_type == signals[strategy2].signal_type:
                                 agreements += 1
 
-                    correlation = (
-                        agreements / total_comparisons if total_comparisons > 0 else 0.5
-                    )
+                    correlation = agreements / total_comparisons if total_comparisons > 0 else 0.5
                     correlations[strategy1][strategy2] = correlation
 
         return correlations

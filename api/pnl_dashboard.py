@@ -50,8 +50,8 @@ class PnLSummary(BaseModel):
     total_return_pct: float
     total_fills: int
     open_positions: int
-    win_rate: float | None          # None until _MIN_FILLS_FOR_SHARPE fills
-    sharpe_ratio: float | None      # None until _MIN_FILLS_FOR_SHARPE fills
+    win_rate: float | None  # None until _MIN_FILLS_FOR_SHARPE fills
+    sharpe_ratio: float | None  # None until _MIN_FILLS_FOR_SHARPE fills
     max_drawdown_pct: float
     current_drawdown_pct: float
     avg_slippage_bps: float
@@ -61,12 +61,12 @@ class PnLSummary(BaseModel):
 
 
 class EquityPoint(BaseModel):
-    time: float   # Unix timestamp (seconds)
+    time: float  # Unix timestamp (seconds)
     value: float  # Equity in account currency
 
 
 class DrawdownPoint(BaseModel):
-    time: float   # Unix timestamp (seconds)
+    time: float  # Unix timestamp (seconds)
     drawdown_pct: float  # 0–100
 
 
@@ -82,7 +82,7 @@ class FillEntry(BaseModel):
     slippage_bps: float
     broker: str
     latency_ms: float
-    filled_at: str   # ISO-8601
+    filled_at: str  # ISO-8601
     lineage_id: str
 
 
@@ -105,6 +105,7 @@ def _get_engine() -> Any | None:
     """Return the live HopeFXEngine from app_state, or None if not started."""
     try:
         from app import app_state
+
         return getattr(app_state, "hopefx_engine", None)
     except Exception:
         return None
@@ -175,11 +176,7 @@ def _compute_sharpe(equity_series: list[tuple[float, float]]) -> float | None:
     if len(equity_series) < _MIN_FILLS_FOR_SHARPE:
         return None
     values = [v for _, v in equity_series]
-    returns = [
-        (values[i] - values[i - 1]) / values[i - 1]
-        for i in range(1, len(values))
-        if values[i - 1] > 0
-    ]
+    returns = [(values[i] - values[i - 1]) / values[i - 1] for i in range(1, len(values)) if values[i - 1] > 0]
     if len(returns) < 2:  # noqa: PLR2004
         return None
     n = len(returns)
@@ -260,9 +257,7 @@ async def pnl_summary(
     max_dd = _compute_max_drawdown(equity_series)
     cur_dd = _compute_current_drawdown(equity_series)
 
-    total_return_pct = (
-        (current_equity - starting) / starting * 100.0 if starting > 0 else 0.0
-    )
+    total_return_pct = (current_equity - starting) / starting * 100.0 if starting > 0 else 0.0
 
     # Win rate from post-trade analyser
     post = getattr(engine, "_post_analyzer", None)
@@ -276,21 +271,12 @@ async def pnl_summary(
         except Exception:
             pass
 
-    avg_slip = (
-        sum(f.slippage_bps for f in fills) / len(fills) if fills else 0.0
-    )
-    avg_lat = (
-        sum(f.latency_ms for f in fills) / len(fills) if fills else 0.0
-    )
-    last_fill_at = (
-        fills[-1].filled_at.isoformat()
-        if fills and isinstance(fills[-1].filled_at, datetime)
-        else None
-    )
+    avg_slip = sum(f.slippage_bps for f in fills) / len(fills) if fills else 0.0
+    avg_lat = sum(f.latency_ms for f in fills) / len(fills) if fills else 0.0
+    last_fill_at = fills[-1].filled_at.isoformat() if fills and isinstance(fills[-1].filled_at, datetime) else None
 
     note = (
-        f"Live data. Sharpe shown after {_MIN_FILLS_FOR_SHARPE}+ fills "
-        f"({len(fills)} so far)."
+        f"Live data. Sharpe shown after {_MIN_FILLS_FOR_SHARPE}+ fills ({len(fills)} so far)."
         if len(fills) < _MIN_FILLS_FOR_SHARPE
         else "Live data. All metrics computed from real fills."
     )
@@ -405,9 +391,7 @@ async def trade_log(
             slippage_bps=f.slippage_bps,
             broker=f.broker,
             latency_ms=f.latency_ms,
-            filled_at=f.filled_at.isoformat()
-            if isinstance(f.filled_at, datetime)
-            else str(f.filled_at),
+            filled_at=f.filled_at.isoformat() if isinstance(f.filled_at, datetime) else str(f.filled_at),
             lineage_id=f.lineage_id,
         )
         for f in page
@@ -440,6 +424,7 @@ async def open_positions(
     current_prices: dict[str, float] = {}
     try:
         from data_layer.orchestrator import orchestrator
+
         for sym in open_pos:
             tick = orchestrator.get_latest_tick(sym)
             if tick is not None:
@@ -461,9 +446,7 @@ async def open_positions(
 
         opened_at = getattr(pos, "opened_at", None)
         opened_at_str = (
-            opened_at.isoformat()
-            if isinstance(opened_at, datetime)
-            else str(opened_at) if opened_at else ""
+            opened_at.isoformat() if isinstance(opened_at, datetime) else str(opened_at) if opened_at else ""
         )
 
         result.append(

@@ -67,13 +67,9 @@ async def get_broker_report(
     _require_auth(request)
     from execution.tca_recorder import get_tca_recorder
 
-    report = get_tca_recorder().get_report(
-        broker=broker, symbol=symbol, session=session, last_n=last_n
-    )
+    report = get_tca_recorder().get_report(broker=broker, symbol=symbol, session=session, last_n=last_n)
     if report is None:
-        raise HTTPException(
-            status_code=404, detail=f"No TCA data for broker '{broker}'"
-        )
+        raise HTTPException(status_code=404, detail=f"No TCA data for broker '{broker}'")
     return _report_to_dict(report)
 
 
@@ -154,16 +150,12 @@ async def get_stats(
     # Per-session breakdown
     session_stats: dict[str, Any] = {}
     for session in ("london", "new_york", "asia", "off_hours"):
-        sess_slips = [
-            r["slippage_bps"] for r in records_raw if r.get("session") == session
-        ]
+        sess_slips = [r["slippage_bps"] for r in records_raw if r.get("session") == session]
         if sess_slips:
             session_stats[session] = {
                 "n_trades": len(sess_slips),
                 "mean_slippage_bps": round(sum(sess_slips) / len(sess_slips), 4),
-                "adverse_rate": round(
-                    sum(1 for s in sess_slips if s > 0) / len(sess_slips), 4
-                ),
+                "adverse_rate": round(sum(1 for s in sess_slips if s > 0) / len(sess_slips), 4),
             }
 
     # Per-broker breakdown

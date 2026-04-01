@@ -39,6 +39,7 @@ import os
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -60,16 +61,10 @@ _VOL_BASELINE_WINDOW = int(os.getenv("INTRA_VOL_BASELINE_WINDOW", "100"))
 try:
     from prometheus_client import Counter, Gauge
 
-    _prom_unwinds = Counter(
-        "hopefx_intra_unwinds_total", "Auto-unwind signals emitted", ["reason"]
-    )
+    _prom_unwinds = Counter("hopefx_intra_unwinds_total", "Auto-unwind signals emitted", ["reason"])
     _prom_cvar = Gauge("hopefx_intra_cvar_pct", "Current portfolio CVaR as % equity")
-    _prom_port_dd = Gauge(
-        "hopefx_intra_portfolio_dd_pct", "Current portfolio drawdown %"
-    )
-    _prom_vol_ratio = Gauge(
-        "hopefx_intra_vol_ratio", "Current vol / baseline vol ratio"
-    )
+    _prom_port_dd = Gauge("hopefx_intra_portfolio_dd_pct", "Current portfolio drawdown %")
+    _prom_vol_ratio = Gauge("hopefx_intra_vol_ratio", "Current vol / baseline vol ratio")
     _PROM_OK = True
 except Exception:
     _PROM_OK = False
@@ -300,9 +295,7 @@ class IntraTradeMonitor:
             return 0.0
         arr = np.array(self._returns)
         # Total position exposure in USD
-        total_exposure = sum(
-            abs(pos.entry_price * pos.lots * 100.0) for pos in self._positions.values()
-        )
+        total_exposure = sum(abs(pos.entry_price * pos.lots * 100.0) for pos in self._positions.values())
         if total_exposure <= 0:
             return 0.0
         # Dollar returns on the exposure

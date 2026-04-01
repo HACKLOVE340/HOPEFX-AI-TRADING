@@ -225,9 +225,7 @@ class StressTester:
         _equity = equity or self.equity
         _max = max_loss_pct or self.max_loss_pct
 
-        breaching = [
-            res for res in r if res.pnl_usd < 0 and abs(res.pnl_usd / _equity) > _max
-        ]
+        breaching = [res for res in r if res.pnl_usd < 0 and abs(res.pnl_usd / _equity) > _max]
         if breaching:
             logger.warning(
                 "StressTester gate FAILED: %d scenario(s) breach %.0f%% equity loss limit: %s",
@@ -251,9 +249,7 @@ class StressTester:
             "worst_case": {
                 "name": self.worst_case(r).name,
                 "pnl_usd": round(self.worst_case(r).pnl_usd, 2),
-                "equity_impact_pct": round(
-                    self.worst_case(r).equity_impact_pct * 100, 2
-                ),
+                "equity_impact_pct": round(self.worst_case(r).equity_impact_pct * 100, 2),
             },
             "results": [
                 {

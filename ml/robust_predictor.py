@@ -14,6 +14,7 @@ import warnings
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -125,9 +126,7 @@ class RobustPredictor:
         self.last_retrain: datetime | None = None
 
         # Stability checks
-        self.feature_stability_threshold = (
-            0.6  # Pearson correlation of importance across folds
-        )
+        self.feature_stability_threshold = 0.6  # Pearson correlation of importance across folds
 
         # ── Confidence thresholds ─────────────────────────────────────────────
         # Default heuristic thresholds (uncalibrated).
@@ -639,9 +638,7 @@ class RobustPredictor:
             Regime.UNKNOWN: 0.0,
         }
 
-        return (
-            base_return * regime_multipliers.get(regime, 1.0) * (probability - 0.5) * 2
-        )
+        return base_return * regime_multipliers.get(regime, 1.0) * (probability - 0.5) * 2
 
     def _engineer_features(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -657,14 +654,10 @@ class RobustPredictor:
         # ── Price-based features (lagged) ─────────────────────────────────────
         for lag in [1, 2, 5, 10, 20]:
             features[f"return_lag_{lag}"] = X["close"].pct_change(lag).shift(1)
-            features[f"volatility_{lag}"] = (
-                X["close"].pct_change(fill_method=None).rolling(lag).std().shift(1)
-            )
+            features[f"volatility_{lag}"] = X["close"].pct_change(fill_method=None).rolling(lag).std().shift(1)
 
         # ── Technical indicators (past data only) ─────────────────────────────
-        features["sma_ratio"] = (
-            X["close"].rolling(10).mean() / X["close"].rolling(30).mean()
-        ).shift(1)
+        features["sma_ratio"] = (X["close"].rolling(10).mean() / X["close"].rolling(30).mean()).shift(1)
         features["rsi"] = self._calculate_rsi(X["close"], 14).shift(1)
 
         # ATR (14-bar)
@@ -678,24 +671,18 @@ class RobustPredictor:
                 axis=1,
             ).max(axis=1)
             features["atr_14"] = tr.rolling(14).mean().shift(1)
-            features["atr_ratio"] = features["atr_14"] / X["close"].rolling(
-                14
-            ).mean().shift(1)
+            features["atr_ratio"] = features["atr_14"] / X["close"].rolling(14).mean().shift(1)
 
         # Bollinger band position
         roll_mean = X["close"].rolling(20).mean()
         roll_std = X["close"].rolling(20).std()
-        features["bb_position"] = ((X["close"] - roll_mean) / (roll_std + 1e-9)).shift(
-            1
-        )
+        features["bb_position"] = ((X["close"] - roll_mean) / (roll_std + 1e-9)).shift(1)
 
         # MACD signal
         ema12 = X["close"].ewm(span=12, adjust=False).mean()
         ema26 = X["close"].ewm(span=26, adjust=False).mean()
         macd = ema12 - ema26
-        features["macd_signal"] = (macd - macd.ewm(span=9, adjust=False).mean()).shift(
-            1
-        )
+        features["macd_signal"] = (macd - macd.ewm(span=9, adjust=False).mean()).shift(1)
 
         # Hurst exponent proxy (rolling R/S over 40 bars)
         def _rolling_hurst(prices: pd.Series, window: int = 40) -> pd.Series:
@@ -733,9 +720,7 @@ class RobustPredictor:
 
         # ── Volume features ───────────────────────────────────────────────────
         if "volume" in X.columns:
-            features["volume_sma_ratio"] = (
-                X["volume"] / X["volume"].rolling(20).mean()
-            ).shift(1)
+            features["volume_sma_ratio"] = (X["volume"] / X["volume"].rolling(20).mean()).shift(1)
 
         # ── Time features ─────────────────────────────────────────────────────
         if hasattr(X.index, "hour"):
@@ -927,8 +912,7 @@ class RobustPredictor:
 
         # Check time since last train
         return bool(
-            self.last_retrain
-            and (datetime.now(UTC) - self.last_retrain).days > 7  # noqa: PLR2004
+            self.last_retrain and (datetime.now(UTC) - self.last_retrain).days > 7  # noqa: PLR2004
         )
 
     def save(self, path: str) -> str:
@@ -972,9 +956,7 @@ class RobustPredictor:
         }
         manifest = os.path.join(path, "state.joblib")
         joblib.dump(state, manifest)
-        logger.info(
-            "RobustPredictor saved to %s (%d members)", path, len(saved_members)
-        )
+        logger.info("RobustPredictor saved to %s (%d members)", path, len(saved_members))
         return manifest
 
     def load(self, path: str) -> None:
@@ -1000,18 +982,10 @@ class RobustPredictor:
         # Restore calibrated thresholds
         thresholds = state.get("thresholds", {})
         if thresholds:
-            self._bullish_high_threshold = thresholds.get(
-                "bullish_high", self._bullish_high_threshold
-            )
-            self._bullish_med_threshold = thresholds.get(
-                "bullish_med", self._bullish_med_threshold
-            )
-            self._bearish_high_threshold = thresholds.get(
-                "bearish_high", self._bearish_high_threshold
-            )
-            self._bearish_med_threshold = thresholds.get(
-                "bearish_med", self._bearish_med_threshold
-            )
+            self._bullish_high_threshold = thresholds.get("bullish_high", self._bullish_high_threshold)
+            self._bullish_med_threshold = thresholds.get("bullish_med", self._bullish_med_threshold)
+            self._bearish_high_threshold = thresholds.get("bearish_high", self._bearish_high_threshold)
+            self._bearish_med_threshold = thresholds.get("bearish_med", self._bearish_med_threshold)
 
         # Load ensemble members
         self.models = {}
@@ -1019,9 +993,7 @@ class RobustPredictor:
             if os.path.exists(member_path):
                 self.models[name] = joblib.load(member_path)
             else:
-                logger.warning(
-                    "RobustPredictor: member %s not found at %s", name, member_path
-                )
+                logger.warning("RobustPredictor: member %s not found at %s", name, member_path)
 
         # Load meta-model
         meta_path = state.get("meta_model_path")
@@ -1054,11 +1026,7 @@ class RegimeDetector:
         """Detect regime for each time point"""
         returns = X["close"].pct_change(fill_method=None)
         volatility = returns.rolling(self.lookback).std()
-        trend = (
-            X["close"]
-            .rolling(self.lookback)
-            .apply(lambda x: np.polyfit(range(len(x)), x, 1)[0])
-        )
+        trend = X["close"].rolling(self.lookback).apply(lambda x: np.polyfit(range(len(x)), x, 1)[0])
 
         regimes = []
         for i in range(len(X)):

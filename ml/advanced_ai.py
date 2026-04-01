@@ -232,8 +232,7 @@ class PPORLAgent:
     ) -> None:
         if not (_SB3_AVAILABLE and _GYM_AVAILABLE):
             raise ImportError(
-                "stable-baselines3 and gymnasium are required for PPORLAgent. "
-                "pip install stable-baselines3 gymnasium",
+                "stable-baselines3 and gymnasium are required for PPORLAgent. pip install stable-baselines3 gymnasium",
             )
         self.total_timesteps = total_timesteps
         self.policy = policy

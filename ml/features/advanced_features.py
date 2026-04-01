@@ -90,9 +90,7 @@ class AdvancedFeatureEngineer:
         df["log_returns"] = np.log(df["close"] / df["close"].shift(1))
 
         # Price position in range
-        df["high_low_ratio"] = (df["close"] - df["low"]) / (
-            df["high"] - df["low"] + 1e-10
-        )
+        df["high_low_ratio"] = (df["close"] - df["low"]) / (df["high"] - df["low"] + 1e-10)
 
         # Close to open
         df["close_open_ratio"] = df["close"] / df["open"]
@@ -102,12 +100,8 @@ class AdvancedFeatureEngineer:
         df["body_size"] = abs(df["close"] - df["open"]) / (range_size + 1e-10)
 
         # Shadows
-        df["upper_shadow"] = (df["high"] - np.maximum(df["open"], df["close"])) / (
-            range_size + 1e-10
-        )
-        df["lower_shadow"] = (np.minimum(df["open"], df["close"]) - df["low"]) / (
-            range_size + 1e-10
-        )
+        df["upper_shadow"] = (df["high"] - np.maximum(df["open"], df["close"])) / (range_size + 1e-10)
+        df["lower_shadow"] = (np.minimum(df["open"], df["close"]) - df["low"]) / (range_size + 1e-10)
 
         # Multi-period returns
         for period in [2, 5, 10, 20, 60]:
@@ -153,9 +147,7 @@ class AdvancedFeatureEngineer:
         df["vol_of_vol"] = df["volatility_20d"].rolling(20).std()
 
         # Normalized volatility
-        df["vol_normalized"] = (
-            df["volatility_20d"] / df["volatility_20d"].rolling(60).mean()
-        )
+        df["vol_normalized"] = df["volatility_20d"] / df["volatility_20d"].rolling(60).mean()
 
         return df
 
@@ -201,19 +193,11 @@ class AdvancedFeatureEngineer:
         # Momentum
         for period in [10, 20]:
             df[f"momentum_{period}"] = df["close"] - df["close"].shift(period)
-            df[f"momentum_pct_{period}"] = (
-                (df["close"] - df["close"].shift(period))
-                / df["close"].shift(period)
-                * 100
-            )
+            df[f"momentum_pct_{period}"] = (df["close"] - df["close"].shift(period)) / df["close"].shift(period) * 100
 
         # Rate of Change
         for period in [5, 10, 20]:
-            df[f"roc_{period}"] = (
-                (df["close"] - df["close"].shift(period))
-                / df["close"].shift(period)
-                * 100
-            )
+            df[f"roc_{period}"] = (df["close"] - df["close"].shift(period)) / df["close"].shift(period) * 100
 
         # Stochastic
         df["stoch_k"], df["stoch_d"] = self._calculate_stochastic(df, period=14)
@@ -263,9 +247,9 @@ class AdvancedFeatureEngineer:
         df["high"] - df["low"]
 
         # Hammer/Hanging Man
-        df["hammer_score"] = (lower_shadow > 2 * upper_shadow).astype(int) * (
-            body < body.rolling(20).mean()
-        ).astype(int)
+        df["hammer_score"] = (lower_shadow > 2 * upper_shadow).astype(int) * (body < body.rolling(20).mean()).astype(
+            int
+        )
 
         # Doji
         df["doji_score"] = (body < 0.1 * (df["high"] - df["low"])).astype(int)
@@ -284,9 +268,7 @@ class AdvancedFeatureEngineer:
         )
 
         # Marubozu (no shadows)
-        df["marubozu_score"] = (upper_shadow < body * 0.01).astype(int) * (
-            lower_shadow < body * 0.01
-        ).astype(int)
+        df["marubozu_score"] = (upper_shadow < body * 0.01).astype(int) * (lower_shadow < body * 0.01).astype(int)
 
         return df
 
@@ -304,9 +286,7 @@ class AdvancedFeatureEngineer:
 
         # VWAP (Volume Weighted Average Price)
         typical_price = (df["high"] + df["low"] + df["close"]) / 3
-        df["vwap"] = (typical_price * df["volume"]).rolling(20).sum() / df[
-            "volume"
-        ].rolling(20).sum()
+        df["vwap"] = (typical_price * df["volume"]).rolling(20).sum() / df["volume"].rolling(20).sum()
 
         # Distance from VWAP
         df["price_vwap_dist"] = (df["close"] - df["vwap"]) / df["vwap"] * 100
@@ -318,18 +298,10 @@ class AdvancedFeatureEngineer:
 
         # Approximate entropy
         for period in [10, 20]:
-            df[f"entropy_{period}"] = (
-                df["returns"]
-                .rolling(period)
-                .apply(self._calculate_entropy, raw=True)
-            )
+            df[f"entropy_{period}"] = df["returns"].rolling(period).apply(self._calculate_entropy, raw=True)
 
         # Permutation entropy
-        df["perm_entropy_10"] = (
-            df["returns"]
-            .rolling(10)
-            .apply(self._calculate_permutation_entropy, raw=True)
-        )
+        df["perm_entropy_10"] = df["returns"].rolling(10).apply(self._calculate_permutation_entropy, raw=True)
 
         return df
 
@@ -338,16 +310,10 @@ class AdvancedFeatureEngineer:
 
         # Hurst exponent
         for period in [20, 50]:
-            df[f"hurst_{period}"] = (
-                df["returns"]
-                .rolling(period)
-                .apply(self._calculate_hurst, raw=True)
-            )
+            df[f"hurst_{period}"] = df["returns"].rolling(period).apply(self._calculate_hurst, raw=True)
 
         # Detrended fluctuation analysis
-        df["dfa_10"] = (
-            df["returns"].rolling(10).apply(self._calculate_dfa, raw=True)
-        )
+        df["dfa_10"] = df["returns"].rolling(10).apply(self._calculate_dfa, raw=True)
 
         return df
 

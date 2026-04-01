@@ -11,6 +11,7 @@ This strategy uses MACD indicator for trend-following signals.
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -50,8 +51,7 @@ class MACDStrategy(BaseStrategy):
         self.slow_period = slow_period
         self.signal_period = signal_period
         logger.info(
-            f"MACD Strategy initialized: fast={fast_period}, "
-            f"slow={slow_period}, signal={signal_period}",
+            f"MACD Strategy initialized: fast={fast_period}, slow={slow_period}, signal={signal_period}",
         )
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -63,14 +63,10 @@ class MACDStrategy(BaseStrategy):
         macd_line, signal_line, histogram = self.calculate_macd(series)
         return {
             "macd": float(macd_line.iloc[-1]) if not macd_line.empty else None,
-            "signal_line": float(signal_line.iloc[-1])
-            if not signal_line.empty
-            else None,
+            "signal_line": float(signal_line.iloc[-1]) if not signal_line.empty else None,
             "histogram": float(histogram.iloc[-1]) if not histogram.empty else None,
             "prev_macd": float(macd_line.iloc[-2]) if len(macd_line) > 1 else None,
-            "prev_signal": float(signal_line.iloc[-2])
-            if len(signal_line) > 1
-            else None,
+            "prev_signal": float(signal_line.iloc[-2]) if len(signal_line) > 1 else None,
             "price": float(series.iloc[-1]),
         }
 

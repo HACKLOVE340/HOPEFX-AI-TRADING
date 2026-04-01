@@ -40,9 +40,7 @@ class CreateApplicantRequest(BaseModel):
     dob: str | None = Field(None, description="Date of birth YYYY-MM-DD")
     country: str | None = Field(None, description="ISO 3166-1 alpha-2 country code")
     phone: str | None = None
-    document_type: str = Field(
-        "passport", description="passport | driving_licence | id_card"
-    )
+    document_type: str = Field("passport", description="passport | driving_licence | id_card")
 
 
 class ApplicantResponse(BaseModel):

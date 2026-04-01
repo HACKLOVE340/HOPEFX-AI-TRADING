@@ -39,6 +39,7 @@ import math
 import random
 import uuid
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -78,9 +79,7 @@ class ABTestRequest(BaseModel):
     initial_capital: float = 10000.0
 
 
-def _run_real_backtest(
-    strategy_name: str, symbol: str, duration_days: int, initial_capital: float
-) -> dict:
+def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, initial_capital: float) -> dict:
     """
     Run a real backtest for a named strategy using the backtesting engine.
 
@@ -99,9 +98,7 @@ def _run_real_backtest(
         )
         return {
             "strategy": strategy_name,
-            "final_equity": round(
-                float(result.get("final_equity", initial_capital)), 2
-            ),
+            "final_equity": round(float(result.get("final_equity", initial_capital)), 2),
             "total_return": round(float(result.get("total_return_pct", 0.0)), 2),
             "sharpe_ratio": round(float(result.get("sharpe_ratio", 0.0)), 3),
             "max_drawdown": round(float(result.get("max_drawdown_pct", 0.0)), 2),
@@ -111,8 +108,7 @@ def _run_real_backtest(
         }
     except ImportError:
         raise ValueError(
-            "BacktestEngine is not available. "
-            "Ensure the backtest module is installed and configured."
+            "BacktestEngine is not available. Ensure the backtest module is installed and configured."
         ) from None
     except Exception as exc:
         raise ValueError(f"Backtest failed for strategy '{strategy_name}': {exc}") from exc
@@ -131,21 +127,13 @@ async def start_ab_test(
     historical data is unavailable for the requested period.
     """
     try:
-        result_a = _run_real_backtest(
-            req.strategy_a, req.symbol, req.duration_days, req.initial_capital
-        )
-        result_b = _run_real_backtest(
-            req.strategy_b, req.symbol, req.duration_days, req.initial_capital
-        )
+        result_a = _run_real_backtest(req.strategy_a, req.symbol, req.duration_days, req.initial_capital)
+        result_b = _run_real_backtest(req.strategy_b, req.symbol, req.duration_days, req.initial_capital)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     # Winner by Sharpe ratio (risk-adjusted)
-    winner = (
-        req.strategy_a
-        if result_a["sharpe_ratio"] >= result_b["sharpe_ratio"]
-        else req.strategy_b
-    )
+    winner = req.strategy_a if result_a["sharpe_ratio"] >= result_b["sharpe_ratio"] else req.strategy_b
     best_sharpe = max(result_a["sharpe_ratio"], result_b["sharpe_ratio"])
 
     test_id = str(uuid.uuid4())[:12]
@@ -159,9 +147,7 @@ async def start_ab_test(
         "strategy_a": result_a,
         "strategy_b": result_b,
         "winner": winner,
-        "recommendation": (
-            f"Deploy {winner} — higher risk-adjusted returns (Sharpe {best_sharpe:.2f})"
-        ),
+        "recommendation": (f"Deploy {winner} — higher risk-adjusted returns (Sharpe {best_sharpe:.2f})"),
     }
     return _ab_tests[test_id]
 
@@ -275,9 +261,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
                         "open": df["open"].tolist(),
                         "high": df["high"].tolist(),
                         "low": df["low"].tolist(),
-                        "volume": df["volume"].tolist()
-                        if "volume" in df.columns
-                        else [0.0] * len(df),
+                        "volume": df["volume"].tolist() if "volume" in df.columns else [0.0] * len(df),
                     }
             except Exception as exc:
                 logger.debug("Indicator CSV load failed (%s): %s", csv_path, exc)
@@ -328,9 +312,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     import ast
 
     # ── AST whitelist ─────────────────────────────────────────────────────────
-    _ALLOWED_NAMES = frozenset(
-        {"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"}
-    )
+    _ALLOWED_NAMES = frozenset({"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"})
     _ALLOWED_NODES = (
         ast.Module,
         ast.Expr,
@@ -364,28 +346,15 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
                 "Only arithmetic and EMA/SMA/RSI calls are permitted."
             )
         if isinstance(node, ast.Name) and node.id not in _ALLOWED_NAMES:
-            raise ValueError(
-                f"Unknown name '{node.id}'. "
-                f"Allowed: {', '.join(sorted(_ALLOWED_NAMES))}"
-            )
+            raise ValueError(f"Unknown name '{node.id}'. Allowed: {', '.join(sorted(_ALLOWED_NAMES))}")
         if isinstance(node, ast.Call):
             # Function must be a bare Name, not an attribute or subscript
             if not isinstance(node.func, ast.Name):
-                raise ValueError(
-                    "Only direct function calls are allowed (e.g. EMA(...))"
-                )
+                raise ValueError("Only direct function calls are allowed (e.g. EMA(...))")
             if node.func.id not in {"EMA", "SMA", "RSI"}:
-                raise ValueError(
-                    f"Unknown function '{node.func.id}'. Allowed: EMA, SMA, RSI"
-                )
-            if (
-                node.keywords or node.starargs
-                if hasattr(node, "starargs")
-                else node.keywords
-            ):
-                raise ValueError(
-                    "Keyword arguments are not allowed in indicator formulas"
-                )
+                raise ValueError(f"Unknown function '{node.func.id}'. Allowed: EMA, SMA, RSI")
+            if node.keywords or node.starargs if hasattr(node, "starargs") else node.keywords:
+                raise ValueError("Keyword arguments are not allowed in indicator formulas")
         for child in ast.iter_child_nodes(node):
             _check_node(child)
 
@@ -458,11 +427,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
         if isinstance(node, ast.UnaryOp):
             operand = _interp(node.operand)
             if isinstance(node.op, ast.USub):
-                return (
-                    [-v if v is not None else None for v in operand]
-                    if isinstance(operand, list)
-                    else -operand
-                )
+                return [-v if v is not None else None for v in operand] if isinstance(operand, list) else -operand
             return operand
         if isinstance(node, ast.BinOp):
             left = _interp(node.left)
@@ -489,8 +454,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
 
             if isinstance(left, list) and isinstance(right, list):
                 return [
-                    _apply(a, b) if a is not None and b is not None else None
-                    for a, b in zip(left, right, strict=False)
+                    _apply(a, b) if a is not None and b is not None else None for a, b in zip(left, right, strict=False)
                 ]
             if isinstance(left, list):
                 return [_apply(a, right) if a is not None else None for a in left]
@@ -621,9 +585,7 @@ async def get_correlation(
                         for bar in ohlcv
                     ]
                     returns = [
-                        (closes[i] - closes[i - 1]) / closes[i - 1]
-                        for i in range(1, len(closes))
-                        if closes[i - 1] > 0
+                        (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0
                     ]
                     if returns:
                         series[sym] = returns
@@ -649,9 +611,7 @@ async def get_correlation(
                     df = _pd.read_csv(csv_path, usecols=["close"]).tail(window + 5)
                     closes = df["close"].tolist()
                     returns = [
-                        (closes[i] - closes[i - 1]) / closes[i - 1]
-                        for i in range(1, len(closes))
-                        if closes[i - 1] > 0
+                        (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0
                     ]
                     if len(returns) >= 5:  # noqa: PLR2004
                         series[sym] = returns
@@ -874,9 +834,7 @@ async def run_monte_carlo(
             ),
         )
 
-    mc = _run_monte_carlo(
-        win_rate, avg_win, avg_loss, n_trades, capital, req.simulations
-    )
+    mc = _run_monte_carlo(win_rate, avg_win, avg_loss, n_trades, capital, req.simulations)
     mc["run_id"] = run_id
     mc["computed_at"] = datetime.now(UTC).isoformat()
     _mc_cache[run_id] = mc

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -82,9 +83,7 @@ async def get_sentiment() -> dict[str, Any]:
     orch = _get_orchestrator()
     try:
         features = orch.get_ml_features()
-        sentiment_features = {
-            k: v for k, v in features.items() if k.startswith("news_")
-        }
+        sentiment_features = {k: v for k, v in features.items() if k.startswith("news_")}
         health = orch.health()
         sentiment_health = health.get("sentiment", {})
 

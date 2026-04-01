@@ -132,8 +132,7 @@ async def generate_strategy(
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail=(
-            "LLM backend not configured. "
-            "Set OPENAI_API_KEY or ANTHROPIC_API_KEY to enable AI strategy generation."
+            "LLM backend not configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY to enable AI strategy generation."
         ),
     )
 
