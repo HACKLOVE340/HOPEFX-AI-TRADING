@@ -91,18 +91,14 @@ def register_email_webhook(app: FastAPI) -> None:
                     "SendGrid webhook received but SENDGRID_WEBHOOK_PUBLIC_KEY is not set — "
                     "rejecting request. Set the key or SENDGRID_WEBHOOK_VERIFY=false for dev."
                 )
-                raise HTTPException(
-                    status_code=403, detail="Webhook signature key not configured"
-                )
+                raise HTTPException(status_code=403, detail="Webhook signature key not configured")
 
             sig = request.headers.get("X-Twilio-Email-Event-Webhook-Signature", "")
             ts = request.headers.get("X-Twilio-Email-Event-Webhook-Timestamp", "")
 
             if not sig or not ts:
                 logger.warning("SendGrid webhook missing signature headers — rejected")
-                raise HTTPException(
-                    status_code=403, detail="Missing webhook signature headers"
-                )
+                raise HTTPException(status_code=403, detail="Missing webhook signature headers")
 
             if not _verify_sendgrid_signature(webhook_pub_key, raw_body, sig, ts):
                 logger.critical(
@@ -143,23 +139,13 @@ def register_email_webhook(app: FastAPI) -> None:
                 if app_state.db_engine:
                     _Session = sessionmaker(bind=app_state.db_engine)
                     with _Session() as session:
-                        exists = (
-                            session.query(EmailSuppression)
-                            .filter_by(email=email)
-                            .first()
-                        )
+                        exists = session.query(EmailSuppression).filter_by(email=email).first()
                         if not exists:
-                            session.add(
-                                EmailSuppression(email=email, reason=event_type)
-                            )
+                            session.add(EmailSuppression(email=email, reason=event_type))
                             session.commit()
                             suppressed.append(email)
-                            logger.info(
-                                "Email suppressed: %s (reason: %s)", email, event_type
-                            )
+                            logger.info("Email suppressed: %s (reason: %s)", email, event_type)
             except Exception as exc:
-                logger.error(
-                    "Failed to record email suppression for %s: %s", email, exc
-                )
+                logger.error("Failed to record email suppression for %s: %s", email, exc)
 
         return {"suppressed": suppressed, "processed": len(events)}

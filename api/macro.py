@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -152,9 +153,7 @@ async def macro_snapshot():
     # 3. No-data response — all values null so callers know data is absent.
     # Do NOT substitute hardcoded numbers here; stale guesses would silently
     # corrupt ML features and regime scoring.  Consumers must handle null.
-    logger.info(
-        "Returning null macro fallback. Set FRED_API_KEY in .env for live data."
-    )
+    logger.info("Returning null macro fallback. Set FRED_API_KEY in .env for live data.")
     return {
         "dxy": None,
         "yield_10y": None,
@@ -174,9 +173,7 @@ async def macro_snapshot():
     }
 
 
-@router.get(
-    "/refresh", summary="Force-refresh macro data from FRED and update MacroStore"
-)
+@router.get("/refresh", summary="Force-refresh macro data from FRED and update MacroStore")
 async def macro_refresh():
     """
     Force a fresh pull from FRED, bypassing the 1-hour cache, and push
@@ -232,9 +229,7 @@ async def macro_features():
         ) from exc
 
 
-@router.get(
-    "/store", summary="MacroStore snapshot — all loaded series with latest values"
-)
+@router.get("/store", summary="MacroStore snapshot — all loaded series with latest values")
 async def macro_store_snapshot():
     """
     Return the current state of the in-memory MacroStore: which series are
@@ -256,9 +251,7 @@ async def macro_store_snapshot():
 
 
 class MacroUpdateRequest(BaseModel):
-    series_name: str = Field(
-        ..., description="MacroStore series name, e.g. 'dxy', 'us10y'"
-    )
+    series_name: str = Field(..., description="MacroStore series name, e.g. 'dxy', 'us10y'")
     date: str = Field(..., description="ISO date string, e.g. '2026-03-26'")
     value: float = Field(..., description="Observed value")
 

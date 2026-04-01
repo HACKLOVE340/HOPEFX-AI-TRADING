@@ -56,6 +56,7 @@ import logging
 import sys
 import warnings
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -102,9 +103,7 @@ def fetch_gold_ohlcv(symbol: str, years: int) -> pd.DataFrame:
     )
     if raw.empty:
         raise ValueError(f"No data returned for {symbol}")
-    raw.columns = [
-        c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns
-    ]
+    raw.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in raw.columns]
     raw.index = pd.to_datetime(raw.index).tz_localize(None)
     actual_years = (raw.index[-1] - raw.index[0]).days / 365.25
     logger.info(
@@ -254,8 +253,7 @@ def walk_forward_eval(
                 gamma=0.1,
                 reg_alpha=0.1,
                 reg_lambda=1.0,
-                scale_pos_weight=float((y_train == 0).sum())
-                / max((y_train == 1).sum(), 1),
+                scale_pos_weight=float((y_train == 0).sum()) / max((y_train == 1).sum(), 1),
                 eval_metric="logloss",
                 random_state=42,
                 n_jobs=-1,
@@ -273,11 +271,7 @@ def walk_forward_eval(
 
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
-        (
-            model.predict_proba(X_test)[:, 1]
-            if hasattr(model, "predict_proba")
-            else preds
-        )
+        (model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else preds)
 
         acc = accuracy_score(y_test, preds)
         f1 = f1_score(y_test, preds, zero_division=0)
@@ -494,16 +488,8 @@ def oos_eval(
     p_value = float(binom_result.pvalue)
 
     # OOS date range
-    oos_start = (
-        X_oos.index[0].date()
-        if hasattr(X_oos.index[0], "date")
-        else str(X_oos.index[0])
-    )
-    oos_end = (
-        X_oos.index[-1].date()
-        if hasattr(X_oos.index[-1], "date")
-        else str(X_oos.index[-1])
-    )
+    oos_start = X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else str(X_oos.index[0])
+    oos_end = X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else str(X_oos.index[-1])
 
     logger.info(
         "OOS %s  acc=%.3f±%.3f  f1=%.3f  auc=%.3f  n=%d  k=%d  p=%.4f  significant=%s",
@@ -546,10 +532,7 @@ def oos_eval(
         "oos_period": f"{oos_start} → {oos_end}",
         "test": "one-sided binomial (H0: accuracy <= 0.5)",
         "top_features": top10,
-        "sharpe_note": (
-            "N=45 trades: Sharpe SE ≈ ±0.54. "
-            "Use OOS accuracy as the credible performance number."
-        ),
+        "sharpe_note": ("N=45 trades: Sharpe SE ≈ ±0.54. Use OOS accuracy as the credible performance number."),
     }
 
 
@@ -648,12 +631,8 @@ def main():
                 len(X_cv),
                 oos_n,
                 args.oos_years,
-                X_oos.index[0].date()
-                if hasattr(X_oos.index[0], "date")
-                else X_oos.index[0],
-                X_oos.index[-1].date()
-                if hasattr(X_oos.index[-1], "date")
-                else X_oos.index[-1],
+                X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else X_oos.index[0],
+                X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else X_oos.index[-1],
             )
 
     # ── Walk-forward evaluation (on CV portion only) ──────────────────────────
@@ -715,8 +694,7 @@ def main():
         print(f"  Walk-forward F1       : {wf['mean_f1']:.3f}")
         mean_sharpe = wf.get("mean_sharpe", 0.0)
         print(
-            f"  Walk-forward Sharpe   : {mean_sharpe:.3f}"
-            f"  (annualised, 1-bar, no costs — N < 250: SE ≈ ±0.54)",
+            f"  Walk-forward Sharpe   : {mean_sharpe:.3f}  (annualised, 1-bar, no costs — N < 250: SE ≈ ±0.54)",
         )
         print(
             f"  p-value (vs random)   : {wf['p_value']:.4f}"
@@ -733,8 +711,7 @@ def main():
                 f"  OOS period            : {oos.get('oos_period', 'n/a')}",
             )
             print(
-                f"  OOS accuracy          : {oos['accuracy']:.3f} ± {acc_se:.3f}"
-                f"  (n={oos['oos_size']})",
+                f"  OOS accuracy          : {oos['accuracy']:.3f} ± {acc_se:.3f}  (n={oos['oos_size']})",
             )
             print(f"  OOS F1                : {oos['f1']:.3f}")
             print(f"  OOS AUC               : {oos.get('auc', 0.0):.3f}")

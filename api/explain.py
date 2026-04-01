@@ -32,6 +32,7 @@ from pydantic import BaseModel
 
 from api.auth import TokenPayload, get_current_user
 from datetime import timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -133,9 +134,7 @@ def _enforce_rate_limit(request: Request, limit_str: str) -> None:
         logger.warning("explain.py: invalid rate limit string %r — skipping", limit_str)
         return
 
-    client_ip = (
-        getattr(request.client, "host", "unknown") if request.client else "unknown"
-    )
+    client_ip = getattr(request.client, "host", "unknown") if request.client else "unknown"
     now = time.monotonic()
     cutoff = now - window_secs
 
@@ -278,9 +277,7 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
 def _template_summary(features: list[FeatureImportance], direction: str) -> str:
     top = features[:3] if features else []
     parts = [f"{f.feature} ({f.description})" for f in top]
-    return (
-        f"Signal direction: {direction}. Top contributing factors: {', '.join(parts)}."
-    )
+    return f"Signal direction: {direction}. Top contributing factors: {', '.join(parts)}."
 
 
 # ── routes ────────────────────────────────────────────────────────────────────

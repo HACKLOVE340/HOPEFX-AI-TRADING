@@ -37,8 +37,7 @@ except ImportError:
     _mt5 = None  # type: ignore
     _MT5_AVAILABLE = False
     logger.warning(
-        "MetaTrader5 SDK not installed — MT5Broker will be unavailable. "
-        "Install with: pip install MetaTrader5"
+        "MetaTrader5 SDK not installed — MT5Broker will be unavailable. Install with: pip install MetaTrader5"
     )
 
 
@@ -174,20 +173,14 @@ class MT5Broker:
         if not self._assert_connected("close_position"):
             return {"success": False, "comment": "Not connected"}
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None, self._sync_close_position, ticket, volume
-        )
+        return await loop.run_in_executor(None, self._sync_close_position, ticket, volume)
 
-    async def modify_position(
-        self, ticket: int, sl: float = 0.0, tp: float = 0.0
-    ) -> dict:
+    async def modify_position(self, ticket: int, sl: float = 0.0, tp: float = 0.0) -> dict:
         """Modify the SL/TP of an open position."""
         if not self._assert_connected("modify_position"):
             return {"success": False, "comment": "Not connected"}
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None, self._sync_modify_position, ticket, sl, tp
-        )
+        return await loop.run_in_executor(None, self._sync_modify_position, ticket, sl, tp)
 
     async def cancel_order(self, ticket: int) -> dict:
         """Delete a pending order by ticket number."""
@@ -343,14 +336,10 @@ class MT5Broker:
             mt5_order_type = ORDER_TYPE_BUY if action_str == "buy" else ORDER_TYPE_SELL
         elif order_type_str == "limit":
             trade_action = TRADE_ACTION_PENDING
-            mt5_order_type = (
-                ORDER_TYPE_BUY_LIMIT if action_str == "buy" else ORDER_TYPE_SELL_LIMIT
-            )
+            mt5_order_type = ORDER_TYPE_BUY_LIMIT if action_str == "buy" else ORDER_TYPE_SELL_LIMIT
         elif order_type_str == "stop":
             trade_action = TRADE_ACTION_PENDING
-            mt5_order_type = (
-                ORDER_TYPE_BUY_STOP if action_str == "buy" else ORDER_TYPE_SELL_STOP
-            )
+            mt5_order_type = ORDER_TYPE_BUY_STOP if action_str == "buy" else ORDER_TYPE_SELL_STOP
         else:
             return {
                 "success": False,

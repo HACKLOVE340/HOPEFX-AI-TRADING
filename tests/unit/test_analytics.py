@@ -85,7 +85,7 @@ class TestRiskAnalyzer:
             returns, confidence_level=0.95, method="historical"
         )
 
-        assert isinstance(var_95, (float, np.floating))
+        assert isinstance(var_95, float | np.floating)
         assert var_95 < 0  # VaR should be negative for losses
 
     def test_calculate_var_parametric(self):
@@ -99,7 +99,7 @@ class TestRiskAnalyzer:
             returns, confidence_level=0.95, method="parametric"
         )
 
-        assert isinstance(var_95, (float, np.floating))
+        assert isinstance(var_95, float | np.floating)
 
     def test_calculate_cvar(self):
         """Test CVaR (Expected Shortfall) calculation."""

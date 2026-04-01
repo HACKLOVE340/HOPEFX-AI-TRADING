@@ -170,7 +170,7 @@ class NoCodeStrategyBuilder:
         for i, cond in enumerate(conditions):
             left_ind = self._parse_indicator(cond["left"])
 
-            if isinstance(cond["right"], (int, float)):
+            if isinstance(cond["right"], int | float):
                 right_ind = cond["right"]
             else:
                 right_ind = self._parse_indicator(cond["right"])

@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 import numpy as np
@@ -241,9 +242,7 @@ def add_macro_features(
     else:
         df["macro_yield_5y_chg"] = 0.0
 
-    y10_raw = (
-        macro["yield_10y"] if _has("yield_10y") else pd.Series(0.0, index=df.index)
-    )
+    y10_raw = macro["yield_10y"] if _has("yield_10y") else pd.Series(0.0, index=df.index)
     y5_raw = macro["yield_5y"] if _has("yield_5y") else pd.Series(0.0, index=df.index)
     spread = (y10_raw - y5_raw).reindex(df.index).fillna(0.0)
     df["macro_yield_spread"] = spread
@@ -353,9 +352,7 @@ def add_regime_features(df: pd.DataFrame, lookback: int = 60) -> pd.DataFrame:
     # Vol regime: 0=low, 1=normal, 2=high
     pct = rv.rolling(lookback).rank(pct=True).fillna(0.5)
     df["regime_vol_regime"] = (
-        pd.cut(pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True)
-        .astype(float)
-        .fillna(1.0)
+        pd.cut(pct, bins=[0, 0.33, 0.67, 1.0], labels=[0, 1, 2], include_lowest=True).astype(float).fillna(1.0)
     )
 
     # 20-day momentum z-score

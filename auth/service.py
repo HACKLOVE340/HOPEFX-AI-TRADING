@@ -27,6 +27,7 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 import jwt
@@ -449,11 +450,7 @@ class AuthService:
 
         token_hash = _hash_token(raw_refresh_token)
         with self._sf() as session:
-            sess_row = (
-                session.query(UserSession)
-                .filter_by(refresh_token_hash=token_hash, is_revoked=False)
-                .first()
-            )
+            sess_row = session.query(UserSession).filter_by(refresh_token_hash=token_hash, is_revoked=False).first()
             if not sess_row:
                 return False, "Invalid or expired refresh token", None
             if _now() > sess_row.expires_at.replace(tzinfo=UTC):
@@ -502,11 +499,7 @@ class AuthService:
         # Revoke refresh session in DB
         token_hash = _hash_token(raw_refresh_token)
         with self._sf() as session:
-            sess_row = (
-                session.query(UserSession)
-                .filter_by(refresh_token_hash=token_hash)
-                .first()
-            )
+            sess_row = session.query(UserSession).filter_by(refresh_token_hash=token_hash).first()
             if sess_row:
                 sess_row.is_revoked = True
                 sess_row.revoked_at = _now()
@@ -572,15 +565,10 @@ class AuthService:
 
         token_hash = _hash_token(token)
         with self._sf() as session:
-            user = (
-                session.query(User).filter_by(password_reset_token=token_hash).first()
-            )
+            user = session.query(User).filter_by(password_reset_token=token_hash).first()
             if not user:
                 return False, "Invalid or expired reset token"
-            if (
-                user.password_reset_expires
-                and _now() > user.password_reset_expires.replace(tzinfo=UTC)
-            ):
+            if user.password_reset_expires and _now() > user.password_reset_expires.replace(tzinfo=UTC):
                 return False, "Reset token expired. Request a new one."
             user.hashed_password = hash_password(new_password)
             user.password_reset_token = None

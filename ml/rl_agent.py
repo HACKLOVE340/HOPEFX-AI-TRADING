@@ -53,6 +53,7 @@ from typing import Any
 
 import numpy as np
 from datetime import timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -156,8 +157,7 @@ class ForexTradingEnv:
 
         if len(self._features) < 10:  # noqa: PLR2004
             raise ValueError(
-                f"Not enough valid windows: {len(self._features)} "
-                f"(need at least 10, have {len(df)} candles)",
+                f"Not enough valid windows: {len(self._features)} (need at least 10, have {len(df)} candles)",
             )
 
         obs_dim = _FEATURE_DIM + 3
@@ -235,10 +235,7 @@ class ForexTradingEnv:
             # Insufficient history — normalise by initial balance
             raw_reward = float(delta_pnl / self.initial_balance)
 
-        reward = (
-            float(np.clip(raw_reward, -self.reward_clip, self.reward_clip))
-            * self.reward_scaling
-        )
+        reward = float(np.clip(raw_reward, -self.reward_clip, self.reward_clip)) * self.reward_scaling
 
         info = {
             "equity": new_equity,
@@ -258,9 +255,7 @@ class ForexTradingEnv:
         feat = self._features[self._step_idx].copy()
         price = self._prices[self._step_idx]
         upnl = (
-            self._position * (price - self._entry_price) / (self._entry_price + 1e-9)
-            if self._entry_price > 0
-            else 0.0
+            self._position * (price - self._entry_price) / (self._entry_price + 1e-9) if self._entry_price > 0 else 0.0
         )
         extra = np.array(
             [
@@ -288,9 +283,7 @@ class ForexTradingEnv:
         self._balance -= cost
         self._position = direction
         # Effective entry price includes slippage adverse fill
-        slip = (
-            price * self.slippage_bps * direction
-        )  # positive for BUY, negative for SELL
+        slip = price * self.slippage_bps * direction  # positive for BUY, negative for SELL
         self._entry_price = price + slip
         self._steps_held = 0
 
@@ -519,15 +512,11 @@ class RLAgentTrainer:
         oanda_stream: Any = None,
     ):
         if candle_source is None and oanda_stream is not None:
-            logger.warning(
-                "RLAgentTrainer: 'oanda_stream' parameter is deprecated — "
-                "use 'candle_source' instead."
-            )
+            logger.warning("RLAgentTrainer: 'oanda_stream' parameter is deprecated — use 'candle_source' instead.")
             candle_source = oanda_stream
         if candle_source is None:
             raise ValueError(
-                "RLAgentTrainer requires a 'candle_source' with a "
-                "get_candles(symbol, timeframe, count) coroutine."
+                "RLAgentTrainer requires a 'candle_source' with a get_candles(symbol, timeframe, count) coroutine."
             )
         self.stream = candle_source
         self.agent = RLAgent(model_name=model_name)
@@ -714,9 +703,7 @@ def walk_forward_eval(
             logger.warning("Fold %d env creation failed: %s", fold_idx + 1, exc)
             continue
 
-        logger.info(
-            "Fold %d/%d: training %d steps …", fold_idx + 1, n_folds, timesteps_per_fold
-        )
+        logger.info("Fold %d/%d: training %d steps …", fold_idx + 1, n_folds, timesteps_per_fold)
         agent.train(train_env, timesteps=timesteps_per_fold, verbose=0)
 
         metrics = agent.evaluate(test_env)

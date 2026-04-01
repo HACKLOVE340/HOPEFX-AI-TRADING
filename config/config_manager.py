@@ -135,18 +135,12 @@ class DatabaseConfig:
         if self.db_type == "sqlite":
             return f"sqlite:///{self.database}"
         if self.db_type == "postgresql":
-            base = (
-                f"postgresql://{self.username}:{self.password}"
-                f"@{self.host}:{self.port}/{self.database}"
-            )
+            base = f"postgresql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
             if self.ssl_enabled:
                 base += f"?sslmode={self.ssl_mode}"
             return base
         if self.db_type == "mysql":
-            base = (
-                f"mysql+pymysql://{self.username}:{self.password}"
-                f"@{self.host}:{self.port}/{self.database}"
-            )
+            base = f"mysql+pymysql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
             if self.ssl_enabled:
                 base += "?ssl=true"
             return base
@@ -231,9 +225,7 @@ class AppConfig:
         db_d = d.get("database", {})
         if db_d:
             cfg.database = DatabaseConfig(
-                **{
-                    k: db_d[k] for k in DatabaseConfig.__dataclass_fields__ if k in db_d
-                },
+                **{k: db_d[k] for k in DatabaseConfig.__dataclass_fields__ if k in db_d},
             )
         tr_d = d.get("trading", {})
         if tr_d:

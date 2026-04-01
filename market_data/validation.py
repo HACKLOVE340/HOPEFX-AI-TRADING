@@ -68,7 +68,7 @@ class MarketDataValidator:
         # 1. Staleness check
         tick_time = tick.get("timestamp")
         if tick_time:
-            if isinstance(tick_time, (int, float)):
+            if isinstance(tick_time, int | float):
                 tick_time = datetime.fromtimestamp(tick_time)
             age = datetime.now(UTC) - tick_time
             if age > self.max_staleness:

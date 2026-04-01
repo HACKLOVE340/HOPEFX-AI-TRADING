@@ -77,7 +77,9 @@ class SelfTradePrevention:
                 continue
 
             # Check if prices cross
-            if (new_order.side == "buy" and new_order.price >= resting.price) or (new_order.side == "sell" and new_order.price <= resting.price):
+            if (new_order.side == "buy" and new_order.price >= resting.price) or (
+                new_order.side == "sell" and new_order.price <= resting.price
+            ):
                 return self._handle_cross(new_order, resting)
 
         return None
@@ -102,8 +104,7 @@ class SelfTradePrevention:
     def _handle_cross(self, new_order: Order, resting_order: Order) -> dict:
         """Determine action when self-trade detected"""
         logger.warning(
-            f"Self-trade detected: {new_order.id} vs {resting_order.id} "
-            f"on {new_order.symbol}",
+            f"Self-trade detected: {new_order.id} vs {resting_order.id} on {new_order.symbol}",
         )
 
         if self.action == SelfTradeAction.CANCEL_RESTING:
@@ -149,6 +150,4 @@ class SelfTradePrevention:
     def remove_resting_order(self, order_id: str, symbol: str) -> None:
         """Remove filled or cancelled order"""
         if symbol in self.resting_orders:
-            self.resting_orders[symbol] = [
-                o for o in self.resting_orders[symbol] if o.id != order_id
-            ]
+            self.resting_orders[symbol] = [o for o in self.resting_orders[symbol] if o.id != order_id]

@@ -49,9 +49,11 @@ router = APIRouter(prefix="/api/portfolio", tags=["Portfolio"])
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _get_app_state() -> Any:
     try:
         from core.app_state import app_state
+
         return app_state
     except ImportError:
         return None
@@ -65,6 +67,7 @@ def _get_factor_engine() -> Any:
             return engine
     try:
         from portfolio.factor_model import get_live_factor_engine
+
         return get_live_factor_engine()
     except Exception as exc:  # nosec B110 — graceful fallback when module unavailable
         logger.debug("_get_factor_engine unavailable: %s", exc)
@@ -79,6 +82,7 @@ def _get_rebalancer() -> Any:
             return rb
     try:
         from portfolio.rebalancer import get_rebalancer
+
         return get_rebalancer()
     except Exception as exc:  # nosec B110 — graceful fallback when module unavailable
         logger.debug("_get_rebalancer unavailable: %s", exc)
@@ -93,6 +97,7 @@ def _get_tick_feed() -> Any:
             return tf
     try:
         from data.tick_feed import get_tick_feed
+
         return get_tick_feed()
     except Exception as exc:  # nosec B110 — graceful fallback when module unavailable
         logger.debug("_get_tick_feed unavailable: %s", exc)
@@ -105,6 +110,7 @@ def _get_execution_engine() -> Any:
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
+
 
 class AttributeRequest(BaseModel):
     positions: Dict[str, float] = Field(
@@ -148,6 +154,7 @@ class FeedReturnsRequest(BaseModel):
 
 
 # ── Factor Model routes ───────────────────────────────────────────────────────
+
 
 @router.get(
     "/factor/status",
@@ -239,6 +246,7 @@ async def factor_var(
 
 # ── Rebalancer routes ─────────────────────────────────────────────────────────
 
+
 @router.get(
     "/rebalancer/status",
     summary="DynamicRebalancer status",
@@ -329,6 +337,7 @@ async def feed_returns(
             detail="Rebalancer not initialised",
         )
     import pandas as pd
+
     returns_series = pd.Series(body.returns)
     rb.update_strategy_returns(body.strategy_id, returns_series)
     rb.update_drawdown(body.strategy_id, body.drawdown)
@@ -341,6 +350,7 @@ async def feed_returns(
 
 
 # ── Tick Feed routes ──────────────────────────────────────────────────────────
+
 
 @router.get(
     "/tick-feed/status",
@@ -397,6 +407,7 @@ async def tick_feed_execution_status(
 
 
 # ── Combined factor risk report ───────────────────────────────────────────────
+
 
 @router.get(
     "/risk/factor-report",

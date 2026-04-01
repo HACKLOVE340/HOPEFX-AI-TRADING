@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
 from datetime import timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -168,9 +169,7 @@ async def chat_status(user: TokenPayload = Depends(get_current_user)):
         llm_error = str(exc)
 
     # Count active sessions for this user
-    user_sessions = [
-        k for k in _agents if k.startswith(f"{user.sub}:") or k == user.sub
-    ]
+    user_sessions = [k for k in _agents if k.startswith(f"{user.sub}:") or k == user.sub]
 
     ready = api_key_set and llm_available
 

@@ -11,6 +11,7 @@ expecting it to revert back to the average.
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -112,28 +113,16 @@ class MeanReversionStrategy(BaseStrategy):
                 reason = f"Price above upper band (overbought): {current_price:.5f} > {current_upper:.5f}"
 
             # SELL if we're long and price returns to mean
-            elif (
-                hasattr(self, "position")
-                and self.position == "LONG"
-                and current_price >= current_sma
-            ):
+            elif hasattr(self, "position") and self.position == "LONG" and current_price >= current_sma:
                 signal_type = "SELL"
                 confidence = 0.6
-                reason = (
-                    f"Price reverted to mean: {current_price:.5f} >= {current_sma:.5f}"
-                )
+                reason = f"Price reverted to mean: {current_price:.5f} >= {current_sma:.5f}"
 
             # BUY to close if we're short and price returns to mean
-            elif (
-                hasattr(self, "position")
-                and self.position == "SHORT"
-                and current_price <= current_sma
-            ):
+            elif hasattr(self, "position") and self.position == "SHORT" and current_price <= current_sma:
                 signal_type = "BUY"
                 confidence = 0.6
-                reason = (
-                    f"Price reverted to mean: {current_price:.5f} <= {current_sma:.5f}"
-                )
+                reason = f"Price reverted to mean: {current_price:.5f} <= {current_sma:.5f}"
 
             else:
                 reason = f"Price within bands: {current_lower:.5f} < {current_price:.5f} < {current_upper:.5f}"

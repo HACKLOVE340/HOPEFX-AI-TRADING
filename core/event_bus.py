@@ -37,6 +37,7 @@ import threading
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 from collections.abc import AsyncIterator, Callable
@@ -100,9 +101,7 @@ class DomainEvent:
         return cls._TYPE_CODES
 
     @classmethod
-    def create(
-        cls, event_type: str, source: str, data: dict, priority: int = 5
-    ) -> DomainEvent:
+    def create(cls, event_type: str, source: str, data: dict, priority: int = 5) -> DomainEvent:
         try:
             import lz4.frame
             import msgpack
@@ -132,9 +131,7 @@ class DomainEvent:
 class MemoryMappedEventStore:
     """Persistent event store backed by memory-mapped files (legacy)."""
 
-    def __init__(
-        self, base_path: str = "data/events/", max_file_size: int = 1_073_741_824
-    ) -> None:
+    def __init__(self, base_path: str = "data/events/", max_file_size: int = 1_073_741_824) -> None:
         self.base_path = base_path
         self.max_file_size = max_file_size
         self.current_file = None
@@ -164,21 +161,15 @@ class MemoryMappedEventStore:
         with self._lock:
             self._sequence += 1
             src_bytes = event.source.encode()
-            header = struct.pack(
-                ">QQH", self._sequence, event.timestamp, event.event_type
-            )
+            header = struct.pack(">QQH", self._sequence, event.timestamp, event.event_type)
             header += struct.pack("B", len(src_bytes)) + src_bytes
             header += struct.pack(">I", len(event.payload))
             record = header + event.payload
             if self.current_offset + len(record) > self.max_file_size:
                 self._rotate_file()
-            self.current_mmap[
-                self.current_offset : self.current_offset + len(record)
-            ] = record
+            self.current_mmap[self.current_offset : self.current_offset + len(record)] = record
             self.current_offset += len(record)
-            self._index[event.source].append(
-                (self.file_counter - 1, self.current_offset - len(record))
-            )
+            self._index[event.source].append((self.file_counter - 1, self.current_offset - len(record)))
             return self._sequence
 
     def query(
@@ -210,9 +201,7 @@ class MemoryMappedEventStore:
             src = f.read(src_len).decode()
             payload_len = struct.unpack(">I", f.read(4))[0]
             payload = f.read(payload_len)
-            return DomainEvent(
-                timestamp=ts, event_type=evt_type, source=src, payload=payload
-            )
+            return DomainEvent(timestamp=ts, event_type=evt_type, source=src, payload=payload)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -286,9 +275,7 @@ def _make_redis() -> aioredis.Redis:
             logger.info("EventBus: using Redis Sentinel (master=%s)", master_name)
             return sentinel.master_for(master_name)
         except Exception as exc:
-            logger.warning(
-                "EventBus: Sentinel init failed (%s) — falling back to REDIS_URL", exc
-            )
+            logger.warning("EventBus: Sentinel init failed (%s) — falling back to REDIS_URL", exc)
 
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     return aioredis.from_url(url, decode_responses=True, socket_timeout=5)
@@ -336,9 +323,7 @@ class EventBus:
             self._degraded = False
             logger.info("EventBus connected to Redis.")
         except Exception as exc:
-            logger.warning(
-                "EventBus: Redis unavailable (%s) — local fallback active.", exc
-            )
+            logger.warning("EventBus: Redis unavailable (%s) — local fallback active.", exc)
             self._degraded = True
 
     async def close(self) -> None:
@@ -398,9 +383,7 @@ class EventBus:
 
         # Exhausted retries — route through local fallback
         self._metrics["errors"] += 1
-        logger.error(
-            "EventBus: all retries exhausted for %s — using local fallback.", channel
-        )
+        logger.error("EventBus: all retries exhausted for %s — using local fallback.", channel)
         await _local_bus.publish_local(channel, message)
 
     # ── subscribe ─────────────────────────────────────────────────────────────
@@ -448,17 +431,13 @@ class EventBus:
 
                             trace_carrier = msg.pop("_trace", {})
                             if trace_carrier:
-                                msg["_trace_context"] = extract_trace_context(
-                                    trace_carrier
-                                )
+                                msg["_trace_context"] = extract_trace_context(trace_carrier)
                         except Exception as _exc:
                             logger.debug("Suppressed exception: %s", _exc)
                         self._metrics["delivered"] += 1
                         yield msg
                     except json.JSONDecodeError as exc:
-                        logger.warning(
-                            "EventBus: bad JSON on %s: %s", raw.get("channel"), exc
-                        )
+                        logger.warning("EventBus: bad JSON on %s: %s", raw.get("channel"), exc)
 
             except asyncio.CancelledError:
                 if pubsub:
@@ -474,9 +453,7 @@ class EventBus:
                     logger.info("EventBus reconnected to Redis.")
                 except Exception:  # nosec B110 — Redis reconnect resilience
                     self._degraded = True
-                    logger.error(
-                        "EventBus: Redis reconnect failed — switching to local fallback."
-                    )
+                    logger.error("EventBus: Redis reconnect failed — switching to local fallback.")
                     return
 
     # ── local subscription (in-process handlers) ──────────────────────────────

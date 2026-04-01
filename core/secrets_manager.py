@@ -76,6 +76,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -156,9 +157,7 @@ class SecretsManager:
             "backend": _BACKEND,
             "refresh_enabled": _REFRESH_ENABLED,
             "refresh_interval_seconds": _REFRESH_INTERVAL,
-            "last_refresh": self._last_refresh.isoformat()
-            if self._last_refresh
-            else None,
+            "last_refresh": self._last_refresh.isoformat() if self._last_refresh else None,
             "refresh_count": self._refresh_count,
             "error_count": self._error_count,
             "cached_keys": sorted(self._cache.keys()),
@@ -174,9 +173,7 @@ class SecretsManager:
         the last successfully fetched values remain in cache.
         """
         if not _REFRESH_ENABLED:
-            logger.info(
-                "SecretsManager: background refresh disabled (SECRETS_REFRESH_ENABLED=false)"
-            )
+            logger.info("SecretsManager: background refresh disabled (SECRETS_REFRESH_ENABLED=false)")
             return
 
         self._running = True
@@ -285,10 +282,7 @@ class SecretsManager:
         try:
             import hvac
         except ImportError:
-            logger.warning(
-                "SecretsManager: hvac not installed — falling back to env vars. "
-                "pip install hvac"
-            )
+            logger.warning("SecretsManager: hvac not installed — falling back to env vars. pip install hvac")
             return self._fetch_env()
 
         vault_addr = os.getenv("VAULT_ADDR", "http://localhost:8200")
@@ -314,20 +308,14 @@ class SecretsManager:
             loop = asyncio.get_event_loop()
             data = await loop.run_in_executor(
                 None,
-                lambda: client.secrets.kv.v2.read_secret_version(
-                    path=secret_path, mount_point=mount_point
-                ),
+                lambda: client.secrets.kv.v2.read_secret_version(path=secret_path, mount_point=mount_point),
             )
             secrets_data = data["data"]["data"]
-            logger.debug(
-                "SecretsManager: fetched %d keys from Vault", len(secrets_data)
-            )
+            logger.debug("SecretsManager: fetched %d keys from Vault", len(secrets_data))
             return {k.lower(): str(v) for k, v in secrets_data.items()}
 
         except Exception as exc:
-            logger.error(
-                "SecretsManager: Vault fetch failed: %s — using cached/env values", exc
-            )
+            logger.error("SecretsManager: Vault fetch failed: %s — using cached/env values", exc)
             return self._fetch_env()
 
     async def _fetch_aws(self) -> dict[str, str]:
@@ -336,10 +324,7 @@ class SecretsManager:
             import boto3
             import json as _json
         except ImportError:
-            logger.warning(
-                "SecretsManager: boto3 not installed — falling back to env vars. "
-                "pip install boto3"
-            )
+            logger.warning("SecretsManager: boto3 not installed — falling back to env vars. pip install boto3")
             return self._fetch_env()
 
         region = os.getenv("AWS_REGION", "us-east-1")

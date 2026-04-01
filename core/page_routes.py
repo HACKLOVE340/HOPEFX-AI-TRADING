@@ -40,9 +40,7 @@ def _serve_template(name: str, fallback_html: str) -> HTMLResponse:
 def register_page_routes(app: FastAPI) -> None:
     """Mount all HTML page routes and the React dashboard on *app*."""
 
-    @app.get(
-        "/admin", response_class=HTMLResponse, tags=["Admin"], include_in_schema=False
-    )
+    @app.get("/admin", response_class=HTMLResponse, tags=["Admin"], include_in_schema=False)
     async def admin_redirect():
         """Redirect /admin to the admin dashboard at /api/admin/."""
         return HTMLResponse(
@@ -51,20 +49,15 @@ def register_page_routes(app: FastAPI) -> None:
             status_code=200,
         )
 
-    @app.get(
-        "/login", response_class=HTMLResponse, tags=["Auth"], include_in_schema=False
-    )
+    @app.get("/login", response_class=HTMLResponse, tags=["Auth"], include_in_schema=False)
     async def login_page():
         """Serve the login page."""
         return _serve_template(
             "login.html",
-            "<html><body><p>Login template missing. "
-            '<a href="/docs">Use /docs to authenticate.</a></p></body></html>',
+            '<html><body><p>Login template missing. <a href="/docs">Use /docs to authenticate.</a></p></body></html>',
         )
 
-    @app.get(
-        "/register", response_class=HTMLResponse, tags=["Auth"], include_in_schema=False
-    )
+    @app.get("/register", response_class=HTMLResponse, tags=["Auth"], include_in_schema=False)
     async def register_page():
         """Redirect /register to the login page (registration is via API)."""
         return HTMLResponse(
@@ -150,6 +143,4 @@ def register_page_routes(app: FastAPI) -> None:
         )
         logger.info("React dashboard mounted at /app and / (dashboard/dist/)")
     else:
-        logger.warning(
-            "dashboard/dist/ not found — run 'cd dashboard && npm run build' to build the UI"
-        )
+        logger.warning("dashboard/dist/ not found — run 'cd dashboard && npm run build' to build the UI")

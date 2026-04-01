@@ -553,7 +553,7 @@ class TestTCAEngine:
         from execution.tca import BenchmarkType, Side
 
         fired = []
-        self.engine.register_cost_callback(lambda m: fired.append(m))  # noqa: PLW0108
+        self.engine.register_cost_callback(lambda m: fired.append(m))
         await self.engine.start_order(
             "ord5",
             "XAU_USD",

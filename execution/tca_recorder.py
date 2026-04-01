@@ -81,6 +81,7 @@ import os
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 import numpy as np
@@ -209,16 +210,12 @@ class TCARecorder:
         self._pending: dict[str, dict] = {}
 
         # Completed records: keyed by (broker, symbol) for fast aggregation
-        self._records: dict[str, deque[TCARecord]] = defaultdict(
-            lambda: deque(maxlen=TCA_MAX_MEMORY_RECORDS)
-        )
+        self._records: dict[str, deque[TCARecord]] = defaultdict(lambda: deque(maxlen=TCA_MAX_MEMORY_RECORDS))
         # Flat list for cross-slice queries
         self._all_records: deque[TCARecord] = deque(maxlen=TCA_MAX_MEMORY_RECORDS * 10)
 
         # Rolling slippage window per broker for alert evaluation
-        self._broker_slippage: dict[str, deque[float]] = defaultdict(
-            lambda: deque(maxlen=TCA_ALERT_WINDOW)
-        )
+        self._broker_slippage: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=TCA_ALERT_WINDOW))
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -343,9 +340,7 @@ class TCARecorder:
         total_slip_usd = sum(r.slippage_usd for r in records)
 
         mean_slip = float(np.mean(slippages))
-        rolling_mean = float(
-            np.mean(list(self._broker_slippage.get(broker or "", [])) or [mean_slip])
-        )
+        rolling_mean = float(np.mean(list(self._broker_slippage.get(broker or "", [])) or [mean_slip]))
         alert = rolling_mean > TCA_ALERT_THRESHOLD_BPS
 
         report = TCAReport(
@@ -426,9 +421,7 @@ class TCARecorder:
             )
             self._fire_alert(broker, rolling_mean, record)
 
-    def _fire_alert(
-        self, broker: str, mean_slippage_bps: float, record: TCARecord
-    ) -> None:
+    def _fire_alert(self, broker: str, mean_slippage_bps: float, record: TCARecord) -> None:
         """Publish a TCA alert to the outbox and alert engine."""
         try:
             from core.outbox import write_outbox_event_standalone

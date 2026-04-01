@@ -1368,7 +1368,7 @@ class TestWebSocketManager:
 
     def test_on_disconnect_callback(self):
         fired = []
-        self.manager.on_disconnect(lambda cid: fired.append(cid))  # noqa: PLW0108
+        self.manager.on_disconnect(lambda cid: fired.append(cid))
         ws = _MockWebSocket()
         conn_id = self.manager.register_connection(ws)
         self.manager.unregister_connection(conn_id)

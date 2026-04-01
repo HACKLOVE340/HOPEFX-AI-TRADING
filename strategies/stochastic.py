@@ -10,6 +10,7 @@ This strategy uses the Stochastic Oscillator to identify overbought/oversold con
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -148,11 +149,7 @@ class StochasticStrategy(BaseStrategy):
 
             # SELL signals
             # 1. Bearish crossover in overbought region
-            elif (
-                current_k > self.overbought
-                and prev_k >= prev_d
-                and current_k < current_d
-            ):
+            elif current_k > self.overbought and prev_k >= prev_d and current_k < current_d:
                 signal_type = "SELL"
                 confidence = 0.85
                 reason = f"Bearish crossover in overbought: %K={current_k:.1f} crossed below %D={current_d:.1f}"
@@ -176,9 +173,7 @@ class StochasticStrategy(BaseStrategy):
                     # Bearish crossover above 50
                     signal_type = "SELL"
                     confidence = 0.55
-                    reason = (
-                        f"Bearish crossover: %K={current_k:.1f} < %D={current_d:.1f}"
-                    )
+                    reason = f"Bearish crossover: %K={current_k:.1f} < %D={current_d:.1f}"
 
             elif current_k < 50:  # noqa: PLR2004
                 # In bearish territory
@@ -186,9 +181,7 @@ class StochasticStrategy(BaseStrategy):
                     # Bullish crossover below 50
                     signal_type = "BUY"
                     confidence = 0.55
-                    reason = (
-                        f"Bullish crossover: %K={current_k:.1f} > %D={current_d:.1f}"
-                    )
+                    reason = f"Bullish crossover: %K={current_k:.1f} > %D={current_d:.1f}"
 
             if signal_type == "HOLD":
                 reason = f"Stochastic neutral: %K={current_k:.1f}, %D={current_d:.1f}"

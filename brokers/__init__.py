@@ -16,6 +16,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone  # noqa: F401
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any, Dict, List, Optional  # noqa: F401
@@ -253,14 +254,14 @@ class BaseBroker(abc.ABC):
 
 
 # ── PaperTradingBroker simulation constants ───────────────────────────────────
-_PAPER_BASE_SLIPPAGE_PIPS  = 0.1    # base slippage in pips for a standard lot
-_PAPER_SLIPPAGE_GAUSS_STD  = 0.2    # std-dev for Gaussian slippage model
-_PAPER_FILL_PROB_CAP       = 0.95   # maximum fill probability for large orders
-_PAPER_PARTIAL_FILL_MIN    = 0.60   # minimum fraction filled on a partial fill
-_PAPER_PARTIAL_FILL_MAX    = 0.95   # maximum fraction filled on a partial fill
-_PAPER_MARGIN_RATE         = 0.02   # margin requirement per position (2%)
-_PAPER_STANDARD_LOT        = 100000 # units per standard lot
-_PAPER_SIZE_FACTOR_CAP     = 5.0    # maximum size-factor multiplier for slippage
+_PAPER_BASE_SLIPPAGE_PIPS = 0.1  # base slippage in pips for a standard lot
+_PAPER_SLIPPAGE_GAUSS_STD = 0.2  # std-dev for Gaussian slippage model
+_PAPER_FILL_PROB_CAP = 0.95  # maximum fill probability for large orders
+_PAPER_PARTIAL_FILL_MIN = 0.60  # minimum fraction filled on a partial fill
+_PAPER_PARTIAL_FILL_MAX = 0.95  # maximum fraction filled on a partial fill
+_PAPER_MARGIN_RATE = 0.02  # margin requirement per position (2%)
+_PAPER_STANDARD_LOT = 100000  # units per standard lot
+_PAPER_SIZE_FACTOR_CAP = 5.0  # maximum size-factor multiplier for slippage
 
 
 class PaperTradingBroker(BaseBroker):
@@ -436,13 +437,11 @@ class PaperTradingBroker(BaseBroker):
         await asyncio.sleep(latency_ms / 1000)
 
         slippage_pips = self._calculate_slippage(symbol, quantity, side)
-        fill_price    = self._resolve_fill_price(symbol, side, slippage_pips)
+        fill_price = self._resolve_fill_price(symbol, side, slippage_pips)
         fill_quantity = self._simulate_fill_quantity(quantity, symbol)
-        commission    = (fill_quantity / _PAPER_STANDARD_LOT) * self.commission_per_lot * 2
+        commission = (fill_quantity / _PAPER_STANDARD_LOT) * self.commission_per_lot * 2
 
-        order = self._build_paper_order(
-            symbol, side, quantity, fill_quantity, fill_price, commission, slippage_pips
-        )
+        order = self._build_paper_order(symbol, side, quantity, fill_quantity, fill_price, commission, slippage_pips)
 
         async with self._orders_lock:
             self._orders[order.id] = order
@@ -451,12 +450,18 @@ class PaperTradingBroker(BaseBroker):
         async with self._positions_lock:
             await self._update_position(order)
             self._total_commissions += commission
-            self._total_slippage    += abs(slippage_pips)
+            self._total_slippage += abs(slippage_pips)
 
         logger.info(
             "Order Executed | %s %.0f/%.0f %s | Price: %.5f | Slippage: %.1fpips | Commission: $%.2f | ID: %s",
-            side.upper(), fill_quantity, quantity, symbol,
-            fill_price, slippage_pips, commission, order.id,
+            side.upper(),
+            fill_quantity,
+            quantity,
+            symbol,
+            fill_price,
+            slippage_pips,
+            commission,
+            order.id,
         )
         return order
 
@@ -466,7 +471,7 @@ class PaperTradingBroker(BaseBroker):
             return 0.0
 
         size_factor = min(quantity / _PAPER_STANDARD_LOT, _PAPER_SIZE_FACTOR_CAP)
-        scaled_base  = _PAPER_BASE_SLIPPAGE_PIPS * size_factor
+        scaled_base = _PAPER_BASE_SLIPPAGE_PIPS * size_factor
 
         if self.slippage_model == "gaussian":
             slippage = random.gauss(scaled_base, _PAPER_SLIPPAGE_GAUSS_STD)
@@ -512,16 +517,16 @@ class PaperTradingBroker(BaseBroker):
 
             # Calculate new average entry price
             total_qty = pos.quantity + fill_qty
-            pos.entry_price = (
-                (pos.entry_price * pos.quantity) + (fill_price * fill_qty)
-            ) / total_qty
+            pos.entry_price = ((pos.entry_price * pos.quantity) + (fill_price * fill_qty)) / total_qty
             pos.quantity = total_qty
             pos.total_commission += order.commission
             pos.updated_at = time.time()
 
             logger.debug(
                 "Updated position %s: Qty=%.0f, AvgPrice=%.5f",
-                position_key, total_qty, pos.entry_price,
+                position_key,
+                total_qty,
+                pos.entry_price,
             )
         else:
             # Create new position
@@ -624,7 +629,8 @@ class PaperTradingBroker(BaseBroker):
 
                 logger.info(
                     "Position Closed | %s | P&L: $%.2f | Duration: %.1fh | Commission: $%.2f",
-                    position_id, realized_pnl,
+                    position_id,
+                    realized_pnl,
                     (time.time() - pos.opened_at) / 3600,
                     order.commission + pos.total_commission,
                 )
@@ -655,10 +661,10 @@ class PaperTradingBroker(BaseBroker):
             side_enum = DBOrderSide.BUY if "buy" in raw_side else DBOrderSide.SELL
 
             opened_at = record.get("opened_at")
-            if isinstance(opened_at, (int, float)):
+            if isinstance(opened_at, int | float):
                 opened_at = datetime.fromtimestamp(opened_at, tz=UTC)
             closed_at = record.get("closed_at")
-            if isinstance(closed_at, (int, float)):
+            if isinstance(closed_at, int | float):
                 closed_at = datetime.fromtimestamp(closed_at, tz=UTC)
 
             qty = float(record.get("quantity", 0))
@@ -745,11 +751,7 @@ class PaperTradingBroker(BaseBroker):
         if order_type is None:
             order_type = _OT.MARKET
         elif isinstance(order_type, str):
-            order_type = (
-                _OT[order_type.upper()]
-                if order_type.upper() in _OT.__members__
-                else _OT.MARKET
-            )
+            order_type = _OT[order_type.upper()] if order_type.upper() in _OT.__members__ else _OT.MARKET
 
         fill_price = price or self._market_prices.get(symbol, 100.0)
 
@@ -804,36 +806,36 @@ class PaperTradingBroker(BaseBroker):
 
     def _compute_trade_stats(self) -> dict:
         """Compute summary statistics from trade history."""
-        trades        = self._trade_history
-        winning       = [t for t in trades if t["realized_pnl"] > 0]
-        losing        = [t for t in trades if t["realized_pnl"] <= 0]
-        total_pnl     = sum(t["realized_pnl"] for t in trades)
-        gross_profit  = sum(t["realized_pnl"] for t in winning)
-        gross_loss    = sum(t["realized_pnl"] for t in losing)
-        n             = len(trades)
-        win_rate      = len(winning) / n if n else 0.0
-        avg_win       = gross_profit / len(winning) if winning else 0.0
-        avg_loss      = gross_loss  / len(losing)  if losing  else 0.0
+        trades = self._trade_history
+        winning = [t for t in trades if t["realized_pnl"] > 0]
+        losing = [t for t in trades if t["realized_pnl"] <= 0]
+        total_pnl = sum(t["realized_pnl"] for t in trades)
+        gross_profit = sum(t["realized_pnl"] for t in winning)
+        gross_loss = sum(t["realized_pnl"] for t in losing)
+        n = len(trades)
+        win_rate = len(winning) / n if n else 0.0
+        avg_win = gross_profit / len(winning) if winning else 0.0
+        avg_loss = gross_loss / len(losing) if losing else 0.0
         profit_factor = abs(gross_profit / gross_loss) if gross_loss else float("inf")
 
-        returns    = [t["realized_pnl"] for t in trades]
-        avg_ret    = sum(returns) / n if n else 0.0
-        variance   = sum((r - avg_ret) ** 2 for r in returns) / n if n else 0.0
-        std_ret    = variance ** 0.5
-        sharpe     = avg_ret / std_ret if std_ret > 0 else 0.0
+        returns = [t["realized_pnl"] for t in trades]
+        avg_ret = sum(returns) / n if n else 0.0
+        variance = sum((r - avg_ret) ** 2 for r in returns) / n if n else 0.0
+        std_ret = variance**0.5
+        sharpe = avg_ret / std_ret if std_ret > 0 else 0.0
 
         return {
-            "total_trades":  n,
-            "winning":       winning,
-            "losing":        losing,
-            "total_pnl":     total_pnl,
-            "gross_profit":  gross_profit,
-            "gross_loss":    gross_loss,
-            "win_rate":      win_rate,
-            "avg_win":       avg_win,
-            "avg_loss":      avg_loss,
+            "total_trades": n,
+            "winning": winning,
+            "losing": losing,
+            "total_pnl": total_pnl,
+            "gross_profit": gross_profit,
+            "gross_loss": gross_loss,
+            "win_rate": win_rate,
+            "avg_win": avg_win,
+            "avg_loss": avg_loss,
             "profit_factor": profit_factor,
-            "sharpe_like":   sharpe,
+            "sharpe_like": sharpe,
         }
 
     def _generate_report(self) -> str:
@@ -908,11 +910,7 @@ class OANDABroker(BaseBroker):
         self.timeout = timeout
         self.max_retries = max_retries
 
-        self.base_url = (
-            "https://api-fxpractice.oanda.com"
-            if practice
-            else "https://api-fxtrade.oanda.com"
-        )
+        self.base_url = "https://api-fxpractice.oanda.com" if practice else "https://api-fxtrade.oanda.com"
 
         # Rate limiting
         self._rate_limiter = asyncio.Semaphore(10)
@@ -940,9 +938,12 @@ class OANDABroker(BaseBroker):
                 )
 
                 # Verify connection
-                async with self._rate_limiter, self._session.get(
-                    f"{self.base_url}/v3/accounts/{self.account_id}",
-                ) as resp:
+                async with (
+                    self._rate_limiter,
+                    self._session.get(
+                        f"{self.base_url}/v3/accounts/{self.account_id}",
+                    ) as resp,
+                ):
                     if resp.status == 200:  # noqa: PLR2004
                         data = await resp.json()
                         account = data.get("account", {})
@@ -1194,9 +1195,7 @@ class OANDABroker(BaseBroker):
                     side=OrderSide((order_data.get("units", 0) > 0 and "buy") or "sell"),
                     type=OrderType(order_data.get("type", "MARKET").lower()),
                     quantity=abs(float(order_data.get("units", 0))),
-                    price=float(order_data.get("price", 0))
-                    if order_data.get("price")
-                    else None,
+                    price=float(order_data.get("price", 0)) if order_data.get("price") else None,
                     status=OrderStatus.PENDING,
                 ),
             )

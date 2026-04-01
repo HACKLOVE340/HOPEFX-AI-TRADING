@@ -21,6 +21,7 @@ import json
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -163,9 +164,7 @@ class WebSocketManager:
             Connection ID
         """
         if connection_id is None:
-            connection_id = (
-                f"ws_{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}"
-            )
+            connection_id = f"ws_{datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')}"
 
         self._connections[connection_id] = websocket
         self._connection_info[connection_id] = ConnectionInfo(
@@ -687,10 +686,7 @@ class WebSocketManager:
             **self._stats,
             "active_connections": len(self._connections),
             "active_channels": len(self._channels),
-            "channels": {
-                channel: len(subscribers)
-                for channel, subscribers in self._channels.items()
-            },
+            "channels": {channel: len(subscribers) for channel, subscribers in self._channels.items()},
         }
 
 

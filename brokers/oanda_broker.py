@@ -103,9 +103,7 @@ class OandaBroker:
         )
 
         try:
-            async with self._session.get(
-                f"{self._base_url}/v3/accounts/{self._account_id}"
-            ) as resp:
+            async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}") as resp:
                 if resp.status == 200:  # noqa: PLR2004
                     data = await resp.json()
                     currency = data.get("account", {}).get("currency", "?")
@@ -145,9 +143,7 @@ class OandaBroker:
         """Return account summary as a plain dict."""
         if not self._assert_connected("get_account_info"):
             return None
-        async with self._session.get(
-            f"{self._base_url}/v3/accounts/{self._account_id}/summary"
-        ) as resp:
+        async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/summary") as resp:
             if resp.status != 200:  # noqa: PLR2004
                 logger.error("get_account_info failed: %s", resp.status)
                 return None
@@ -171,9 +167,7 @@ class OandaBroker:
         """Return all open positions."""
         if not self._assert_connected("get_positions"):
             return []
-        async with self._session.get(
-            f"{self._base_url}/v3/accounts/{self._account_id}/openPositions"
-        ) as resp:
+        async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/openPositions") as resp:
             if resp.status != 200:  # noqa: PLR2004
                 return []
             data = await resp.json()
@@ -197,9 +191,7 @@ class OandaBroker:
         """Return all pending orders."""
         if not self._assert_connected("get_orders"):
             return []
-        async with self._session.get(
-            f"{self._base_url}/v3/accounts/{self._account_id}/pendingOrders"
-        ) as resp:
+        async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/pendingOrders") as resp:
             if resp.status != 200:  # noqa: PLR2004
                 return []
             data = await resp.json()
@@ -248,9 +240,7 @@ class OandaBroker:
         price = order_params.get("price")
         sl_distance = order_params.get("sl_distance")
         tp_price = order_params.get("tp_price")
-        time_in_force = order_params.get(
-            "time_in_force", "FOK" if order_type == "MARKET" else "GTC"
-        )
+        time_in_force = order_params.get("time_in_force", "FOK" if order_type == "MARKET" else "GTC")
         client_id = order_params.get("client_id")
 
         order_body: dict = {
@@ -307,9 +297,7 @@ class OandaBroker:
                         "comment": "OK",
                     }
                 error_msg = data.get("errorMessage", str(data))
-                logger.warning(
-                    "OANDA order failed | status=%s | error=%s", resp.status, error_msg
-                )
+                logger.warning("OANDA order failed | status=%s | error=%s", resp.status, error_msg)
                 return {"success": False, "order_id": None, "comment": error_msg}
         except aiohttp.ClientError as exc:
             logger.error("OandaBroker.place_order network error: %s", exc)
@@ -334,9 +322,7 @@ class OandaBroker:
             ) as resp:
                 data = await resp.json()
                 if resp.status == 200:  # noqa: PLR2004
-                    logger.info(
-                        "OANDA trade closed | trade_id=%s | units=%s", trade_id, units
-                    )
+                    logger.info("OANDA trade closed | trade_id=%s | units=%s", trade_id, units)
                     return {"success": True, "comment": "OK", "data": data}
                 error_msg = data.get("errorMessage", str(data))
                 return {"success": False, "comment": error_msg}

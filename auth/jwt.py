@@ -8,6 +8,7 @@ import hashlib
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 import jwt
@@ -20,10 +21,7 @@ logger = logging.getLogger(__name__)
 # No hardcoded fallback: a missing or placeholder secret raises RuntimeError at
 # token-creation time so the failure is loud and immediate.
 def _load_secret() -> str:
-    val = (
-        os.environ.get("SECURITY_JWT_SECRET", "").strip()
-        or os.environ.get("JWT_SECRET_KEY", "").strip()
-    )
+    val = os.environ.get("SECURITY_JWT_SECRET", "").strip() or os.environ.get("JWT_SECRET_KEY", "").strip()
     if not val:
         raise RuntimeError(
             "SECURITY_JWT_SECRET is not set. "
@@ -35,8 +33,7 @@ def _load_secret() -> str:
         )
     if val.startswith("CHANGE_ME"):
         raise RuntimeError(
-            "SECURITY_JWT_SECRET contains a placeholder value. "
-            "Replace it with a real random secret before deploying.",
+            "SECURITY_JWT_SECRET contains a placeholder value. Replace it with a real random secret before deploying.",
         )
     return val
 
@@ -67,11 +64,7 @@ def _get_access_token_expire_minutes() -> int:
     Evaluated at call time so tests can override the env var without
     reloading the module (which would mutate shared module state).
     """
-    return int(
-        os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES")
-        or os.environ.get("JWT_EXPIRE_MINUTES")
-        or "15"
-    )
+    return int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES") or os.environ.get("JWT_EXPIRE_MINUTES") or "15")
 
 
 # Module-level alias for code that reads auth.jwt.ACCESS_TOKEN_EXPIRE_MINUTES
@@ -113,8 +106,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     expire = (
         datetime.now(UTC) + expires_delta
         if expires_delta
-        else datetime.now(UTC)
-        + timedelta(minutes=_get_access_token_expire_minutes())
+        else datetime.now(UTC) + timedelta(minutes=_get_access_token_expire_minutes())
     )
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, _get_secret(), algorithm=ALGORITHM)
@@ -162,9 +154,7 @@ def hash_password(password: str) -> str:
     """Hash a password with bcrypt (SHA-256 pre-hash, cost factor 12)."""
     prepared = _prepare_password(password)
     if _BCRYPT_DIRECT:
-        return _bcrypt_lib.hashpw(prepared, _bcrypt_lib.gensalt(rounds=12)).decode(
-            "utf-8"
-        )
+        return _bcrypt_lib.hashpw(prepared, _bcrypt_lib.gensalt(rounds=12)).decode("utf-8")
     # passlib fallback (older bcrypt versions)
     return pwd_context.hash(prepared.decode("ascii"))
 

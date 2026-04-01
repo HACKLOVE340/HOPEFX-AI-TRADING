@@ -17,6 +17,7 @@ import threading
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from collections.abc import Callable
 
@@ -117,9 +118,7 @@ class MemoryMappedEventStore:
             if self.current_offset + len(record) > self.max_file_size:
                 self._rotate_file()
 
-            self.current_mmap[
-                self.current_offset : self.current_offset + len(record)
-            ] = record
+            self.current_mmap[self.current_offset : self.current_offset + len(record)] = record
             self.current_offset += len(record)
             self._index[event.source].append(
                 (self.file_counter - 1, self.current_offset - len(record)),

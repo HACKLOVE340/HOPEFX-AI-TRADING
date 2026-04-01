@@ -17,6 +17,7 @@ import time
 import uuid
 from collections import deque
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -129,9 +130,7 @@ class SlippageModel:
             return mid_price
 
         # Direction: +1 for buys (price goes up), -1 for sells (price goes down)
-        direction = (
-            1.0 if str(side).upper() in ("BUY", "ORDERSIDE.BUY", "LONG") else -1.0
-        )
+        direction = 1.0 if str(side).upper() in ("BUY", "ORDERSIDE.BUY", "LONG") else -1.0
 
         if self._model == "fixed":
             slippage = mid_price * self._fixed_pct * direction
@@ -154,12 +153,7 @@ class SlippageModel:
 
         # 2. Market impact: sqrt-law approximation
         #    impact = factor * mid * sqrt(qty / adv)
-        impact = (
-            self._impact_factor
-            * mid_price
-            * math.sqrt(max(quantity, 0.0) / max(notional_adv, 1.0))
-            * direction
-        )
+        impact = self._impact_factor * mid_price * math.sqrt(max(quantity, 0.0) / max(notional_adv, 1.0)) * direction
 
         # 3. Gaussian noise
         noise = self._rng.gauss(0.0, mid_price * self._noise_sigma_pct)
@@ -168,8 +162,7 @@ class SlippageModel:
         fill = mid_price + slippage
 
         logger.debug(
-            "SlippageModel[gaussian] %s %s qty=%.4f mid=%.5f "
-            "spread=%.5f impact=%.5f noise=%.5f fill=%.5f",
+            "SlippageModel[gaussian] %s %s qty=%.4f mid=%.5f spread=%.5f impact=%.5f noise=%.5f fill=%.5f",
             side,
             symbol,
             quantity,
@@ -220,9 +213,7 @@ class PaperTradingBroker(BrokerConnector):
         self.equity = self.initial_balance
         self._session_factory = session_factory
         self._user_id = user_id
-        self._slippage = SlippageModel(
-            model=config.get("slippage_model", slippage_model)
-        )
+        self._slippage = SlippageModel(model=config.get("slippage_model", slippage_model))
         # Commission per standard lot (100 000 units).  Charged on open AND close.
         # Default 0.0 so existing callers that don't pass commission_per_lot are unaffected.
         self._commission_per_lot: float = float(config.get("commission_per_lot", 0.0))
@@ -425,13 +416,9 @@ class PaperTradingBroker(BrokerConnector):
                 position.entry_price,
             )
             if position.side == "LONG":
-                unrealized_pnl = (
-                    current_price - position.entry_price
-                ) * position.quantity
+                unrealized_pnl = (current_price - position.entry_price) * position.quantity
             else:
-                unrealized_pnl = (
-                    position.entry_price - current_price
-                ) * position.quantity
+                unrealized_pnl = (position.entry_price - current_price) * position.quantity
             position.current_price = current_price
             position.unrealized_pnl = unrealized_pnl
             if not hasattr(position, "id") or not position.id:
@@ -461,11 +448,7 @@ class PaperTradingBroker(BrokerConnector):
         mid_price = self.market_prices.get(symbol, position.entry_price)
 
         # Closing a LONG = selling; closing a SHORT = buying
-        close_side = (
-            OrderSide.SELL
-            if str(position.side).upper() in ("LONG", "ORDERSIDE.BUY", "BUY")
-            else OrderSide.BUY
-        )
+        close_side = OrderSide.SELL if str(position.side).upper() in ("LONG", "ORDERSIDE.BUY", "BUY") else OrderSide.BUY
         exit_price = self._slippage.fill_price(
             symbol=symbol,
             mid_price=mid_price,
@@ -492,8 +475,7 @@ class PaperTradingBroker(BrokerConnector):
         del self.positions[symbol]
 
         logger.info(
-            "Position closed: %s gross_pnl=$%.2f commission=$%.4f net_pnl=$%.2f "
-            "balance=$%.2f",
+            "Position closed: %s gross_pnl=$%.2f commission=$%.4f net_pnl=$%.2f balance=$%.2f",
             symbol,
             gross_pnl,
             close_commission,
@@ -517,17 +499,9 @@ class PaperTradingBroker(BrokerConnector):
 
             # Normalise side to OrderSide enum
             raw_side = (
-                str(position.side)
-                .lower()
-                .replace("orderside.", "")
-                .replace("long", "buy")
-                .replace("short", "sell")
+                str(position.side).lower().replace("orderside.", "").replace("long", "buy").replace("short", "sell")
             )
-            side_enum = (
-                OrderSide.BUY
-                if "buy" in raw_side or "long" in raw_side
-                else OrderSide.SELL
-            )
+            side_enum = OrderSide.BUY if "buy" in raw_side or "long" in raw_side else OrderSide.SELL
 
             trade = Trade(
                 trade_id=str(uuid.uuid4()),
@@ -706,9 +680,7 @@ class PaperTradingBroker(BrokerConnector):
 
             # For simplicity, assume same side
             total_quantity = position.quantity + quantity
-            avg_price = (
-                position.entry_price * position.quantity + price * quantity
-            ) / total_quantity
+            avg_price = (position.entry_price * position.quantity + price * quantity) / total_quantity
 
             position.quantity = total_quantity
             position.entry_price = avg_price

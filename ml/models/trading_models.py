@@ -119,18 +119,10 @@ class EnsembleModel:
 
     def __init__(self, **kwargs):
         self.rf = RandomForestModel(
-            **{
-                k: v
-                for k, v in kwargs.items()
-                if k in ("n_estimators", "max_depth", "random_state")
-            },
+            **{k: v for k, v in kwargs.items() if k in ("n_estimators", "max_depth", "random_state")},
         )
         self.gb = GradientBoostingModel(
-            **{
-                k: v
-                for k, v in kwargs.items()
-                if k in ("n_estimators", "learning_rate", "max_depth", "random_state")
-            },
+            **{k: v for k, v in kwargs.items() if k in ("n_estimators", "learning_rate", "max_depth", "random_state")},
         )
         self.is_fitted = False
 
