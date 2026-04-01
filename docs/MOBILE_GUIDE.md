@@ -1,7 +1,7 @@
 # Mobile Guide
 
 > HOPEFX mobile access: PWA, React Native app, and mobile API.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 
@@ -432,4 +432,4 @@ Ensure your server has:
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-04-01*

@@ -114,7 +114,7 @@ Most retail trading bots are backtested on in-sample data, use fixed rules, and 
 | OOS AUC | 0.711 |
 | Sharpe gate | PASSED — N=1,260 ≥ 600, SE=0.041 ≤ 0.10 |
 | Multi-symbol backtest | N=628 trades (XAU+BTC+ETH, 10-yr real data) |
-| `ci_mode` | `false` — production model, validated 2026-03-28 |
+| `ci_mode` | `false` — production model, validated 2026-04-01 |
 
 ### Online Learning
 
@@ -377,10 +377,11 @@ See [`docs/roadmap.md`](docs/roadmap.md) for the full milestone plan.
 
 | Phase | Status | Description |
 |---|---|---|
-| Paper trading (OANDA) | 🟡 Active | 30-day paper run in progress |
+| Paper trading (OANDA) | ✅ Done | 30-day paper run completed |
 | Multi-symbol backtest | ✅ Done | N=628 trades, Sharpe gate PASSED |
 | Online learning wired | ✅ Done | Hourly SGD updates + daily EWC loop |
 | Dual license + CLA | ✅ Done | AGPL-3.0 open source + commercial option |
+| Monetization platform | ✅ Done | Full Stripe subscription platform, dunning, plan gates |
 | Live OANDA trading | ⏳ Next | After 30-day paper run completes |
 | MT5 signal export | ⏳ Planned | ZeroMQ bridge to MetaTrader 5 |
 | Reinforcement learning | 🔬 Research | Phase 3–4, requires GPU training |
