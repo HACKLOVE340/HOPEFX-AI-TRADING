@@ -530,6 +530,15 @@ def create_streaming_router(service: StreamingService):
     @router.websocket("/{symbol}/ws")
     async def websocket_stream(websocket: WebSocket, symbol: str):
         """WebSocket endpoint for real-time tick streaming."""
+        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+
+        limiter = get_ws_limiter()
+        client_ip = get_client_ip(websocket)
+        allowed, reason = await limiter.check_and_register(websocket, client_ip)
+        if not allowed:
+            await websocket.close(code=1008, reason=reason)
+            return
+
         await websocket.accept()
         queue = []
 
@@ -552,6 +561,7 @@ def create_streaming_router(service: StreamingService):
             logger.debug("websocket_stream(%s): connection error: %s", symbol, exc)
         finally:
             service.unsubscribe(symbol, on_event)
+            await limiter.release(client_ip)
 
     return router
 

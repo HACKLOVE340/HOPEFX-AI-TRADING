@@ -716,8 +716,17 @@ def create_websocket_router(manager: WebSocketManager):
     @router.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
         """Main WebSocket endpoint."""
-        await websocket.accept()
+        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
 
+        limiter = get_ws_limiter()
+        client_ip = get_client_ip(websocket)
+
+        allowed, reason = await limiter.check_and_register(websocket, client_ip)
+        if not allowed:
+            await websocket.close(code=1008, reason=reason)
+            return
+
+        await websocket.accept()
         connection_id = manager.register_connection(websocket)
 
         try:
@@ -745,6 +754,8 @@ def create_websocket_router(manager: WebSocketManager):
         except Exception as e:
             logger.error(f"WebSocket error: {e}")
             manager.unregister_connection(connection_id)
+        finally:
+            await limiter.release(client_ip)
 
     @router.get("/ws/stats")
     async def websocket_stats():
