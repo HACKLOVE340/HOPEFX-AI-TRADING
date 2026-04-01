@@ -472,7 +472,8 @@ class Gatekeeper:
         try:
             tick = getattr(self, "_orch", None) and self._orch.get_latest_tick()
             return tick.confidence if tick else 1.0
-        except Exception:
+        except Exception as exc:  # nosec B110 — safe fallback for unavailable orchestrator
+            logger.debug("_get_confidence fallback: %s", exc)
             return 1.0
 
     def _get_blackout(self) -> bool:
@@ -490,7 +491,8 @@ class Gatekeeper:
             return False
         try:
             return not self._orch.is_safe_to_trade()
-        except Exception:
+        except Exception as exc:  # nosec B110 — safe fallback for unavailable orchestrator
+            logger.debug("_get_blackout fallback: %s", exc)
             return False
 
     def _get_impact_score(self, signal) -> float:
@@ -504,7 +506,8 @@ class Gatekeeper:
             return 0.0
         try:
             return self._orch.get_macro_impact_score()
-        except Exception:
+        except Exception as exc:  # nosec B110 — safe fallback for unavailable orchestrator
+            logger.debug("_get_impact_score fallback: %s", exc)
             return 0.0
 
     def _get_sentiment(self, signal) -> float:
@@ -519,7 +522,8 @@ class Gatekeeper:
         try:
             features = self._orch.get_ml_features()
             return float(features.get("news_sentiment_score", 0.0))
-        except Exception:
+        except Exception as exc:  # nosec B110 — safe fallback for unavailable orchestrator
+            logger.debug("_get_sentiment fallback: %s", exc)
             return 0.0
 
     # ── Helpers ───────────────────────────────────────────────────────────────
@@ -588,7 +592,8 @@ def _make_gatekeeper() -> Gatekeeper:
             orchestrator=orchestrator,
             lineage_store=orchestrator._lineage,
         )
-    except Exception:
+    except Exception as exc:  # nosec B110 — graceful degradation to default gatekeeper
+        logger.debug("build_gatekeeper fallback to defaults: %s", exc)
         return Gatekeeper()
 
 

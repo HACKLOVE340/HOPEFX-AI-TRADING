@@ -173,7 +173,8 @@ class SecurityService:
             return _jwt.decode(
                 token, options={"verify_signature": False}, algorithms=[self._algorithm]
             ).get("jti")
-        except Exception:
+        except Exception as exc:  # nosec B110 — invalid/malformed token returns None
+            logger.debug("get_token_jti decode failed: %s", exc)
             return None
 
     # ── Password hashing ──────────────────────────────────────────────────────
@@ -199,7 +200,8 @@ class SecurityService:
         if self._pwd_context is not None and not hashed_password.startswith("pbkdf2:"):
             try:
                 return self._pwd_context.verify(plain_password, hashed_password)
-            except Exception:
+            except Exception as exc:  # nosec B110 — verification failure returns False
+                logger.debug("passlib verify failed: %s", exc)
                 return False
         try:
             _, hash_algo, rest = hashed_password.split(":", 2)
@@ -208,7 +210,8 @@ class SecurityService:
                 hash_algo, plain_password.encode(), salt.encode(), int(iterations_str)
             )
             return hmac.compare_digest(dk.hex(), stored_hex)
-        except Exception:
+        except Exception as exc:  # nosec B110 — malformed hash returns False
+            logger.debug("PBKDF2 verify failed: %s", exc)
             return False
 
     # ── Secure token generation ───────────────────────────────────────────────

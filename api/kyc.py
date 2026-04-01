@@ -174,7 +174,7 @@ async def get_my_kyc_status(request: Request) -> dict[str, str]:
             from app import app_state
 
             cm = getattr(app_state, "compliance_manager", None)
-        except Exception:
+        except ImportError:
             cm = None
         if cm is None:
             cm = ComplianceManager()
@@ -201,7 +201,7 @@ async def sumsub_webhook(
         import json
 
         raw = json.loads(payload_bytes)
-    except Exception:
+    except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from None
 
     gateway = _get_gateway()
@@ -227,7 +227,7 @@ async def onfido_webhook(
         import json
 
         raw = json.loads(payload_bytes)
-    except Exception:
+    except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from None
 
     gateway = _get_gateway()
