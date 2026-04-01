@@ -149,11 +149,25 @@ class BaseStrategy(ABC):
         Process new bar data.
 
         Args:
-            bar: OHLCV bar data
+            bar: OHLCV bar data — must contain a non-zero 'close' price.
 
         Returns:
-            Signal if generated, None otherwise
+            Signal if generated, None otherwise.
+            Returns None (without error) when the bar has no valid price,
+            preventing zero-price signals from reaching the execution engine.
         """
+        # Guard: reject bars with no real price before analysis.
+        # Strategies default to price=0.0 when the key is missing; a zero-price
+        # signal would produce a zero-price order at the broker.
+        close = bar.get("close") or bar.get("price") or bar.get("mid")
+        if not close or float(close) <= 0:
+            logger.warning(
+                "%s.on_bar: bar has no valid price (close=%s) — skipping",
+                self.config.name,
+                close,
+            )
+            return None
+
         try:
             # Analyze market data
             analysis = self.analyze(bar)
@@ -162,6 +176,16 @@ class BaseStrategy(ABC):
             signal = self.generate_signal(analysis)
 
             if signal:
+                # Guard: reject zero-price signals regardless of how they were built.
+                if signal.price <= 0:
+                    logger.error(
+                        "%s.generate_signal returned price=%.6f for %s — "
+                        "discarding signal to prevent zero-price order",
+                        self.config.name,
+                        signal.price,
+                        signal.symbol,
+                    )
+                    return None
                 self._record_signal(signal)
                 logger.info(
                     f"{self.config.name}: Generated {signal.signal_type.value} "
