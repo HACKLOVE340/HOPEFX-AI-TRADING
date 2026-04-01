@@ -91,9 +91,7 @@ class SentimentAnalyzer:
 
     def __init__(self):
         if not TEXTBLOB_AVAILABLE:
-            raise ImportError(
-                "TextBlob is required. Install with: pip install textblob"
-            )
+            raise ImportError("TextBlob is required. Install with: pip install textblob")
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def analyze(self, text: str) -> SentimentScore:
@@ -337,9 +335,7 @@ class FinancialSentimentAnalyzer:
 
         return entities
 
-    def analyze_with_entities(
-        self, text: str, title: str = ""
-    ) -> tuple[SentimentScore, dict]:
+    def analyze_with_entities(self, text: str, title: str = "") -> tuple[SentimentScore, dict]:
         """Analyze sentiment and extract entities"""
         sentiment = self.analyze(text, title)
         entities = self.extract_entities(f"{title} {text}")

@@ -62,9 +62,7 @@ class GoldAPIFeed(GoldFeedBase):
 
         return self._make_tick(mid=price, bid=bid, ask=ask, raw=data)
 
-    async def fetch_ohlcv(
-        self, timeframe: str = "1d", limit: int = 30
-    ) -> list[OHLCVBar]:
+    async def fetch_ohlcv(self, timeframe: str = "1d", limit: int = 30) -> list[OHLCVBar]:
         """GoldAPI supports date-range historical queries."""
         # GoldAPI historical: GET /api/XAU/USD/{YYYYMMDD}
         # For simplicity, return empty — orchestrator uses Dukascopy for history

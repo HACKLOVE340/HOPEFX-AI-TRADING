@@ -14,6 +14,7 @@ Tests for:
 """
 
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 
@@ -24,9 +25,7 @@ class TestTrade:
         """Test creating a trade."""
         from analysis.order_flow import Trade
 
-        trade = Trade(
-            timestamp=datetime.now(UTC), price=1950.00, size=100.0, side="buy"
-        )
+        trade = Trade(timestamp=datetime.now(UTC), price=1950.00, size=100.0, side="buy")
 
         assert trade.price == 1950.00  # noqa: PLR2004
         assert trade.size == 100.0  # noqa: PLR2004

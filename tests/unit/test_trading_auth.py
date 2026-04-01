@@ -92,9 +92,7 @@ router = trading_module.router
 _SECRET = os.environ["SECURITY_JWT_SECRET"]
 
 
-def _make_token(
-    role: str = "trader", expired: bool = False, sub: str = "user-123"
-) -> str:
+def _make_token(role: str = "trader", expired: bool = False, sub: str = "user-123") -> str:
     now = int(time.time())
     payload = {
         "sub": sub,
@@ -127,9 +125,7 @@ def mock_broker():
     broker.get_positions = AsyncMock(return_value=[])
     broker.close_position = AsyncMock(return_value=True)
     broker.close_all_positions = AsyncMock(return_value=2)
-    broker.get_account_info = AsyncMock(
-        return_value={"balance": 10000.0, "equity": 10050.0}
-    )
+    broker.get_account_info = AsyncMock(return_value={"balance": 10000.0, "equity": 10050.0})
     return broker
 
 

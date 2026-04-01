@@ -14,9 +14,7 @@ import pytest
 import numpy as np
 
 
-def _make_returns(
-    n: int = 500, seed: int = 42, mean: float = 0.0005, std: float = 0.01
-):
+def _make_returns(n: int = 500, seed: int = 42, mean: float = 0.0005, std: float = 0.01):
     """Create realistic daily returns array."""
     np.random.seed(seed)
     return np.random.normal(mean, std, n)
@@ -49,9 +47,7 @@ class TestVaRResult:
     def test_to_dict(self):
         from risk.advanced_analytics import VaRResult
 
-        result = VaRResult(
-            var_value=1000.0, confidence_level=0.95, time_horizon=1, method="historical"
-        )
+        result = VaRResult(var_value=1000.0, confidence_level=0.95, time_horizon=1, method="historical")
         d = result.to_dict()
         assert d["var_value"] == 1000.0  # noqa: PLR2004
         assert d["confidence_level"] == 0.95  # noqa: PLR2004
@@ -189,18 +185,12 @@ class TestAdvancedRiskAnalytics:
         assert result.method in ("monte_carlo_gaussian", "monte_carlo")
 
     def test_calculate_var_monte_carlo_with_portfolio_value(self, analytics, returns):
-        result = analytics.calculate_var_monte_carlo(
-            returns, portfolio_value=100000, num_simulations=500
-        )
+        result = analytics.calculate_var_monte_carlo(returns, portfolio_value=100000, num_simulations=500)
         assert result.var_value > 1
 
     def test_calculate_var_monte_carlo_multi_day(self, analytics, returns):
-        result_1d = analytics.calculate_var_monte_carlo(
-            returns, time_horizon=1, num_simulations=500
-        )
-        result_5d = analytics.calculate_var_monte_carlo(
-            returns, time_horizon=5, num_simulations=500
-        )
+        result_1d = analytics.calculate_var_monte_carlo(returns, time_horizon=1, num_simulations=500)
+        result_5d = analytics.calculate_var_monte_carlo(returns, time_horizon=5, num_simulations=500)
         assert result_5d.var_value > result_1d.var_value
 
     def test_calculate_cvar_basic(self, analytics, returns):
@@ -278,9 +268,7 @@ class TestAdvancedRiskAnalytics:
                 "asset_class": "gold",
             },
         }
-        result = analytics.simulate_portfolio_scenarios(
-            positions, time_horizon=30, num_simulations=200
-        )
+        result = analytics.simulate_portfolio_scenarios(positions, time_horizon=30, num_simulations=200)
         assert "initial_value" in result
         assert result["initial_value"] == 70000  # noqa: PLR2004
         assert "expected_final_value" in result
@@ -529,8 +517,6 @@ class TestAdvancedRiskAnalytics:
         metrics = analytics.calculate_all_metrics(returns, portfolio_value=100000)
         assert metrics["var_historical_95"] > 1  # Dollar value
 
-    def test_calculate_all_metrics_with_equity_curve(
-        self, analytics, returns, equity_curve
-    ):
+    def test_calculate_all_metrics_with_equity_curve(self, analytics, returns, equity_curve):
         metrics = analytics.calculate_all_metrics(returns, equity_curve=equity_curve)
         assert "total_return" in metrics

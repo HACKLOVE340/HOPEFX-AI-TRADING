@@ -8,7 +8,6 @@ Timeframe Management
 """
 
 
-
 class Timeframe:
     TICK = "tick"
     S1 = "1s"

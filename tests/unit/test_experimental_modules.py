@@ -251,9 +251,7 @@ class TestTeamsModule:
             owner_id="user_003",
         )
         # Owner should have trade execute permission
-        assert manager.has_permission(
-            team.team_id, "user_003", Permission.TRADE_EXECUTE
-        )
+        assert manager.has_permission(team.team_id, "user_003", Permission.TRADE_EXECUTE)
 
 
 # ---------------------------------------------------------------------------
@@ -499,9 +497,7 @@ class TestFeatureFlagIntegration:
             "REPLAY_ENGINE",
         )
         for name in experimental_off:
-            assert (
-                getattr(ff, name) is False
-            ), f"Experimental flag {name} should be off by default"
+            assert getattr(ff, name) is False, f"Experimental flag {name} should be off by default"
         # ML_PREDICTIONS is now STABLE and on by default
         assert ff.ML_PREDICTIONS is True, "ML_PREDICTIONS should be on (STABLE)"
 
@@ -525,11 +521,7 @@ class TestFeatureFlagIntegration:
         from unittest.mock import MagicMock, patch
 
         # Stub heavy optional deps so app.py can be imported in a test environment
-        stubs = {
-            mod: MagicMock()
-            for mod in ("uvicorn", "sqlalchemy", "sqlalchemy.orm")
-            if mod not in sys.modules
-        }
+        stubs = {mod: MagicMock() for mod in ("uvicorn", "sqlalchemy", "sqlalchemy.orm") if mod not in sys.modules}
         with patch.dict(sys.modules, stubs):
             from core.app_state import AppState
 

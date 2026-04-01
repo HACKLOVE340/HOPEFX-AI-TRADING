@@ -13,6 +13,7 @@ Multi-User Team Management
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 import logging
 import uuid
@@ -51,9 +52,7 @@ class Team:
         self.created_at = datetime.now(UTC)
         self.strategies = []
 
-    def add_member(
-        self, user_id: str, username: str, email: str, role: UserRole = UserRole.TRADER
-    ) -> TeamMember:
+    def add_member(self, user_id: str, username: str, email: str, role: UserRole = UserRole.TRADER) -> TeamMember:
         """Add team member"""
         member = TeamMember(user_id, username, email, role, datetime.now(UTC))
         self.members[user_id] = member

@@ -14,6 +14,7 @@ import time
 import threading
 import asyncio
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from typing import Any
 from dataclasses import dataclass, asdict
@@ -190,11 +191,7 @@ class _InMemoryStore:
 
     def info(self, section: str = "all") -> dict[str, Any]:
         with self._lock:
-            return {
-                "used_memory": sum(
-                    len(v) for v in self._data.values() if isinstance(v, (str, bytes))
-                )
-            }
+            return {"used_memory": sum(len(v) for v in self._data.values() if isinstance(v, str | bytes))}
 
     def close(self) -> None:
         """Release all in-memory data and expiry metadata."""
@@ -315,9 +312,7 @@ class MarketDataCache:
                 self._using_fallback = False
                 return self._redis_client
             except Exception as _exc:
-                logger.debug(
-                    "Suppressed exception: %s", _exc
-                )  # Connection lost, will retry
+                logger.debug("Suppressed exception: %s", _exc)  # Connection lost, will retry
 
         # Try to connect
         for attempt in range(self.max_retries):
@@ -357,9 +352,7 @@ class MarketDataCache:
             logger.warning("Using in-memory fallback for cache")
             return None
         else:
-            raise ConnectionError(
-                f"Could not connect to Redis at {self.host}:{self.port}"
-            )
+            raise ConnectionError(f"Could not connect to Redis at {self.host}:{self.port}")
 
     def _resolve_timeframe(self, timeframe) -> str:
         """Resolve timeframe to its string value, accepting Timeframe enum or raw string."""
@@ -417,9 +410,7 @@ class MarketDataCache:
             cached_data = {
                 "data": data_list,
                 "cached_at": datetime.now(UTC).isoformat(),
-                "expiry": (
-                    datetime.now(UTC) + timedelta(seconds=ttl)
-                ).isoformat(),
+                "expiry": (datetime.now(UTC) + timedelta(seconds=ttl)).isoformat(),
             }
 
             # Try Redis first
@@ -432,18 +423,14 @@ class MarketDataCache:
                     self._local_cache[key] = cached_data
                     self._local_ttl[key] = time.time() + ttl
 
-            logger.debug(
-                f"Cached OHLCV for {symbol} ({tf_key}): {len(ohlcv_data)} candles"
-            )
+            logger.debug(f"Cached OHLCV for {symbol} ({tf_key}): {len(ohlcv_data)} candles")
             return True
 
         except Exception as e:
             logger.error(f"Error caching OHLCV: {e}")
             return False
 
-    def get_ohlcv(
-        self, symbol: str, timeframe, limit: int | None = None
-    ) -> list | None:
+    def get_ohlcv(self, symbol: str, timeframe, limit: int | None = None) -> list | None:
         """Retrieve OHLCV data from cache.
 
         Args:
@@ -591,9 +578,7 @@ class MarketDataCache:
                 keys_to_delete = []
 
                 while True:
-                    cursor, keys = redis_client.scan(
-                        cursor=cursor, match=pattern, count=100
-                    )
+                    cursor, keys = redis_client.scan(cursor=cursor, match=pattern, count=100)
                     keys_to_delete.extend(keys)
                     if cursor == 0:
                         break
@@ -610,8 +595,7 @@ class MarketDataCache:
                     keys_to_remove = [
                         k
                         for k in self._local_cache
-                        if k.startswith(f"market_data:{symbol}:")
-                        or k == f"tick_data:{symbol}"
+                        if k.startswith(f"market_data:{symbol}:") or k == f"tick_data:{symbol}"
                     ]
                     for k in keys_to_remove:
                         self._local_cache.pop(k, None)
@@ -639,9 +623,7 @@ class MarketDataCache:
                 for pattern in ["market_data:*", "tick_data:*"]:
                     cursor = 0
                     while True:
-                        cursor, keys = redis_client.scan(
-                            cursor=cursor, match=pattern, count=100
-                        )
+                        cursor, keys = redis_client.scan(cursor=cursor, match=pattern, count=100)
                         all_keys.extend(keys)
                         if cursor == 0:
                             break
@@ -658,9 +640,7 @@ class MarketDataCache:
                     self._local_ttl.clear()
 
             with self._stats_lock:
-                self._stats.total_evictions += (
-                    len(all_keys) if redis_client else len(self._local_cache)
-                )
+                self._stats.total_evictions += len(all_keys) if redis_client else len(self._local_cache)
 
             logger.info("Cleared all cache")
             return True
@@ -689,9 +669,7 @@ class MarketDataCache:
                 "total_misses": s.total_misses,
                 "total_evictions": s.total_evictions,
                 "hit_rate": (
-                    s.total_hits / (s.total_hits + s.total_misses)
-                    if (s.total_hits + s.total_misses) > 0
-                    else 0.0
+                    s.total_hits / (s.total_hits + s.total_misses) if (s.total_hits + s.total_misses) > 0 else 0.0
                 ),
             }
 
@@ -699,9 +677,7 @@ class MarketDataCache:
     # Batch / multi-timeframe helpers expected by tests
     # ------------------------------------------------------------------
 
-    def cache_ticks(
-        self, symbol: str, ticks: list, ttl: int = 3600, max_size: int = 1000
-    ) -> bool:
+    def cache_ticks(self, symbol: str, ticks: list, ttl: int = 3600, max_size: int = 1000) -> bool:
         """Cache a list of TickData objects using {"data": [...], "count": N} envelope."""
         try:
             data = [t.to_dict() if hasattr(t, "to_dict") else t for t in ticks]
@@ -742,11 +718,7 @@ class MarketDataCache:
             with self._stats_lock:
                 self._stats.total_hits += 1
             envelope = json.loads(raw)
-            items = (
-                envelope.get("data", envelope)
-                if isinstance(envelope, dict)
-                else envelope
-            )
+            items = envelope.get("data", envelope) if isinstance(envelope, dict) else envelope
             return [TickData.from_dict(d) if isinstance(d, dict) else d for d in items]
         except Exception as e:
             logger.error(f"get_ticks error: {e}")
@@ -773,9 +745,7 @@ class MarketDataCache:
                 raw = self._local_cache.get(key)
             if raw:
                 envelope = json.loads(raw)
-                existing = (
-                    envelope.get("data", []) if isinstance(envelope, dict) else envelope
-                )
+                existing = envelope.get("data", []) if isinstance(envelope, dict) else envelope
             else:
                 existing = []
             existing.append(candle.to_dict() if hasattr(candle, "to_dict") else candle)
@@ -874,18 +844,14 @@ class MarketDataCache:
                         cursor = 0
                         key_count = 0
                         while True:
-                            cursor, keys = redis_client.scan(
-                                cursor=cursor, match="market_data:*", count=100
-                            )
+                            cursor, keys = redis_client.scan(cursor=cursor, match="market_data:*", count=100)
                             key_count += len(keys)
                             if cursor == 0:
                                 break
 
                         cursor = 0
                         while True:
-                            cursor, keys = redis_client.scan(
-                                cursor=cursor, match="tick_data:*", count=100
-                            )
+                            cursor, keys = redis_client.scan(cursor=cursor, match="tick_data:*", count=100)
                             key_count += len(keys)
                             if cursor == 0:
                                 break
@@ -897,9 +863,7 @@ class MarketDataCache:
                     with self._local_cache_lock:
                         stats.total_keys = len(self._local_cache)
                         # Estimate memory
-                        stats.memory_usage_bytes = len(
-                            str(self._local_cache).encode("utf-8")
-                        )
+                        stats.memory_usage_bytes = len(str(self._local_cache).encode("utf-8"))
 
                 return stats
 

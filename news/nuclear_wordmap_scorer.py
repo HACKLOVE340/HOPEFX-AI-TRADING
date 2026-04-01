@@ -342,8 +342,7 @@ class NuclearWordMapScorer:
 
         if severity >= 5:  # noqa: PLR2004
             logger.warning(
-                "NuclearWordMapScorer: severity=%d action=%s score=%.3f "
-                "categories=%s vol=%.2f sentiment=%.2f",
+                "NuclearWordMapScorer: severity=%d action=%s score=%.3f categories=%s vol=%.2f sentiment=%.2f",
                 severity,
                 action,
                 raw_score,
@@ -362,9 +361,7 @@ class NuclearWordMapScorer:
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
-    def _load_keywords(
-        self, wordmap_path: str | Path | None
-    ) -> dict[str, dict[str, float]]:
+    def _load_keywords(self, wordmap_path: str | Path | None) -> dict[str, dict[str, float]]:
         """
         Load keywords from WORDMAP.json (nuclear_risk section) merged with
         the built-in dictionary.  Falls back to built-in only if file is

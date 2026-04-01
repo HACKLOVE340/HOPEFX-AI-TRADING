@@ -55,6 +55,7 @@ import logging
 import sys
 import warnings
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -124,9 +125,7 @@ def fetch_gold_ohlcv(
                     df.index[-1].date(),
                 )
                 return df
-            logger.warning(
-                "Cached CSV empty after date filter — falling back to download"
-            )
+            logger.warning("Cached CSV empty after date filter — falling back to download")
 
     import yfinance as yf
 
@@ -722,20 +721,11 @@ class SharpeProgressTracker:
         pct = round(min(n / self._target_n * 100, 100.0), 1)
 
         if gate_passed:
-            msg = (
-                f"Gate PASSED: N={n}, Sharpe={sharpe:.3f} >= {self._target_sharpe}, "
-                f"SE={se:.3f}"
-            )
+            msg = f"Gate PASSED: N={n}, Sharpe={sharpe:.3f} >= {self._target_sharpe}, SE={se:.3f}"
         elif n < self._target_n:
-            msg = (
-                f"Progress: {n}/{self._target_n} trades ({pct}%), "
-                f"Sharpe={sharpe:.3f}, SE={se:.3f}"
-            )
+            msg = f"Progress: {n}/{self._target_n} trades ({pct}%), Sharpe={sharpe:.3f}, SE={se:.3f}"
         else:
-            msg = (
-                f"N={n} reached but Sharpe={sharpe:.3f} < {self._target_sharpe} — "
-                f"gate blocked"
-            )
+            msg = f"N={n} reached but Sharpe={sharpe:.3f} < {self._target_sharpe} — gate blocked"
 
         return {
             "n_trades": n,
@@ -856,16 +846,8 @@ def oos_eval_advanced(
     logger.info("\n%s", classification_report(y_oos, preds))
 
     # Determine OOS date range
-    oos_start = (
-        X_oos.index[0].date()
-        if hasattr(X_oos.index[0], "date")
-        else str(X_oos.index[0])
-    )
-    oos_end = (
-        X_oos.index[-1].date()
-        if hasattr(X_oos.index[-1], "date")
-        else str(X_oos.index[-1])
-    )
+    oos_start = X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else str(X_oos.index[0])
+    oos_end = X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else str(X_oos.index[-1])
 
     # Save OOS model with metadata sidecar
     out_path = MODEL_DIR / "advanced_oos.pkl"
@@ -1018,9 +1000,7 @@ def main():
 
     # ── Smoke-test overrides ──────────────────────────────────────────────────
     if args.smoke:
-        logger.info(
-            "Smoke-test mode: overriding --years 2 --oos-years 0 --no-macro --splits 2"
-        )
+        logger.info("Smoke-test mode: overriding --years 2 --oos-years 0 --no-macro --splits 2")
         args.years = 2
         args.oos_years = 0.0
         args.no_macro = True
@@ -1088,8 +1068,7 @@ def main():
         if oos_n < 100:  # noqa: PLR2004
             # < 100 bars gives SE > ±0.5 on accuracy — not meaningful.
             logger.warning(
-                "--oos-years %.1f produces only %d bars (need >= 100 for SE <= ±0.5). "
-                "Increase --oos-years or --years.",
+                "--oos-years %.1f produces only %d bars (need >= 100 for SE <= ±0.5). Increase --oos-years or --years.",
                 args.oos_years,
                 oos_n,
             )
@@ -1102,12 +1081,8 @@ def main():
                 len(X_cv),
                 oos_n,
                 args.oos_years,
-                X_oos.index[0].date()
-                if hasattr(X_oos.index[0], "date")
-                else X_oos.index[0],
-                X_oos.index[-1].date()
-                if hasattr(X_oos.index[-1], "date")
-                else X_oos.index[-1],
+                X_oos.index[0].date() if hasattr(X_oos.index[0], "date") else X_oos.index[0],
+                X_oos.index[-1].date() if hasattr(X_oos.index[-1], "date") else X_oos.index[-1],
             )
 
     # ── Walk-forward evaluation (on CV portion only) ──────────────────────────
@@ -1184,8 +1159,7 @@ def main():
     print(f"  Macro features  : {macro_df is not None}")
     print()
     print(
-        f"  Walk-forward accuracy : {wf.get('mean_accuracy', 0):.3f}"
-        f" ± {wf.get('std_accuracy', 0):.3f}",
+        f"  Walk-forward accuracy : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}",
     )
     print(f"  Walk-forward F1       : {wf.get('mean_f1', 0):.3f}")
     print(f"  Walk-forward AUC      : {wf.get('mean_auc', 0):.3f}")
@@ -1205,8 +1179,7 @@ def main():
         acc_se = oos_metrics.get("accuracy_se", 0)
         print(f"  OOS period            : {oos_period}")
         print(
-            f"  OOS accuracy          : {oos_metrics['accuracy']:.3f}"
-            f" ± {acc_se:.3f}  (n={oos_metrics['oos_size']})",
+            f"  OOS accuracy          : {oos_metrics['accuracy']:.3f} ± {acc_se:.3f}  (n={oos_metrics['oos_size']})",
         )
         print(f"  OOS F1                : {oos_metrics['f1']:.3f}")
         print(f"  OOS AUC               : {oos_metrics['auc']:.3f}")
@@ -1216,9 +1189,7 @@ def main():
         sg = oos_metrics.get("sharpe_gate", {})
         gate_status = "PASSED ✓" if sg.get("gate_passed") else "BLOCKED ✗"
         print("  ─── Sharpe SE Gate ────────────────────────────────────────")
-        print(
-            f"  N={sg.get('n_trades', '?')} OOS trades | SE={sg.get('se', '?')} | Gate: {gate_status}"
-        )
+        print(f"  N={sg.get('n_trades', '?')} OOS trades | SE={sg.get('se', '?')} | Gate: {gate_status}")
         print(f"  Need N>={sg.get('target_n', 600)} for SE<=0.10 (credible Sharpe).")
         print(f"  N_required for SE<=0.10: {sg.get('n_required_for_se_010', '?')}")
         print("  Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.")
@@ -1231,21 +1202,13 @@ def main():
     oos_acc = oos_metrics.get("accuracy", 0) if oos_metrics else 0
     final_acc = final_metrics["accuracy"]
     if oos_acc >= 0.68:  # noqa: PLR2004
-        print(
-            f"  ✓ OOS TARGET MET: {oos_acc:.1%} >= 68.0% (validated production threshold)"
-        )
+        print(f"  ✓ OOS TARGET MET: {oos_acc:.1%} >= 68.0% (validated production threshold)")
     elif oos_acc >= 0.55:  # noqa: PLR2004
-        print(
-            f"  ⚠ OOS above chance ({oos_acc:.1%}) but below 68% production threshold"
-        )
+        print(f"  ⚠ OOS above chance ({oos_acc:.1%}) but below 68% production threshold")
     elif oos_acc > 0:
-        print(
-            f"  ✗ OOS below target ({oos_acc:.1%}) — check feature quality and data volume"
-        )
+        print(f"  ✗ OOS below target ({oos_acc:.1%}) — check feature quality and data volume")
     elif final_acc >= 0.85:  # noqa: PLR2004
-        print(
-            "  ✓ In-sample target met (no OOS run — use --oos-years 8 for validation)"
-        )
+        print("  ✓ In-sample target met (no OOS run — use --oos-years 8 for validation)")
     elif final_acc >= 0.70:  # noqa: PLR2004
         print("  ⚠ Partial in-sample accuracy — run with --oos-years 8 to validate")
     else:

@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from data_layer.feeds.news.base import NewsFeedBase
@@ -64,11 +65,7 @@ class FinnhubFeed(NewsFeedBase):
                     continue
 
                 ts = item.get("datetime", 0)
-                published = (
-                    datetime.fromtimestamp(ts, tz=UTC)
-                    if ts
-                    else datetime.now(UTC)
-                )
+                published = datetime.fromtimestamp(ts, tz=UTC) if ts else datetime.now(UTC)
 
                 articles.append(
                     NewsArticle(

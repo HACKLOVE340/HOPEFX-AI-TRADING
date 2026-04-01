@@ -32,6 +32,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -89,11 +90,7 @@ class ConfigStore:
         try:
             from database.models import ConfigStore as ConfigStoreModel
 
-            record = (
-                session.query(ConfigStoreModel)
-                .filter(ConfigStoreModel.key == key)
-                .first()
-            )
+            record = session.query(ConfigStoreModel).filter(ConfigStoreModel.key == key).first()
             if record:
                 return json.loads(record.value_json)
             return None
@@ -111,11 +108,7 @@ class ConfigStore:
             from database.models import ConfigStore as ConfigStoreModel
 
             serialised = json.dumps(value)
-            record = (
-                session.query(ConfigStoreModel)
-                .filter(ConfigStoreModel.key == key)
-                .first()
-            )
+            record = session.query(ConfigStoreModel).filter(ConfigStoreModel.key == key).first()
             if record:
                 record.value_json = serialised
                 record.changed_by = changed_by
@@ -210,9 +203,7 @@ class ConfigStore:
                     json.dumps({"key": key, "changed_by": changed_by}),
                 )
             except Exception as exc:
-                logger.warning(
-                    "ConfigStore.set Redis write failed (DB write succeeded): %s", exc
-                )
+                logger.warning("ConfigStore.set Redis write failed (DB write succeeded): %s", exc)
 
         if db_ok:
             logger.info("ConfigStore.set: key=%s changed_by=%s", key, changed_by)

@@ -24,9 +24,7 @@ def rm(tmp_path):
         max_drawdown_pct=0.10,
         daily_loss_limit_pct=0.05,
     )
-    manager = RiskManager(
-        cfg, initial_balance=100_000.0, halt_state_file=tmp_path / "halt.json"
-    )
+    manager = RiskManager(cfg, initial_balance=100_000.0, halt_state_file=tmp_path / "halt.json")
     # Set a tight CVaR daily limit so we can trigger it easily
     manager._cvar_daily_limit = 0.01  # 1% CVaR limit
     return manager

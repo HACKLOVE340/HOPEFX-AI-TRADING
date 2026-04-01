@@ -126,8 +126,7 @@ def test_variable_slippage_higher_on_wide_bars():
     narrow_slip = b._calculate_slippage(price, bar_high=2001.0, bar_low=1999.0)
 
     assert wide_slip > narrow_slip, (
-        f"Wide bar slippage ({wide_slip:.6f}) should exceed "
-        f"narrow bar slippage ({narrow_slip:.6f})"
+        f"Wide bar slippage ({wide_slip:.6f}) should exceed narrow bar slippage ({narrow_slip:.6f})"
     )
 
 
@@ -154,10 +153,7 @@ def test_sortino_gte_sharpe_positive_skew():
     downside_std = float(np.std(downside)) if len(downside) > 0 else 1e-9
     sortino = float(np.mean(returns) / downside_std * ann)
 
-    assert sortino >= sharpe, (
-        f"Sortino ({sortino:.3f}) should be >= Sharpe ({sharpe:.3f}) "
-        "for positive-skew returns"
-    )
+    assert sortino >= sharpe, f"Sortino ({sortino:.3f}) should be >= Sharpe ({sharpe:.3f}) for positive-skew returns"
 
 
 # ---------------------------------------------------------------------------
@@ -202,9 +198,9 @@ def test_monte_carlo_ruin_zero_for_profitable():
     trade_returns = np.full(100, 0.01)
     mc = engine.run_monte_carlo_simulation(trade_returns, n_simulations=500)
 
-    assert mc["mc_ruin_probability"] == pytest.approx(
-        0.0
-    ), "A consistently profitable strategy should have zero ruin probability"
+    assert mc["mc_ruin_probability"] == pytest.approx(0.0), (
+        "A consistently profitable strategy should have zero ruin probability"
+    )
     assert mc["mc_median_final"] > 1.0
 
 

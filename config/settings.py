@@ -104,9 +104,9 @@ class SecuritySettings(BaseSettings):
     def _resolve_jwt_secret(cls, values: Any) -> Any:
         """Accept JWT_SECRET_KEY as a fallback alias for SECURITY_JWT_SECRET."""
         if isinstance(values, dict) and not values.get("jwt_secret"):
-                alias = os.getenv("JWT_SECRET_KEY", "")
-                if alias:
-                    values["jwt_secret"] = alias
+            alias = os.getenv("JWT_SECRET_KEY", "")
+            if alias:
+                values["jwt_secret"] = alias
         return values
 
     @field_validator("jwt_secret", mode="before")

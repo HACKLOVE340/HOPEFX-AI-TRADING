@@ -55,9 +55,7 @@ HEALTH_CHECK_RETRIES = 10
 HEALTH_CHECK_INTERVAL_S = 6
 
 
-def _run(
-    cmd: list[str], dry_run: bool = False, check: bool = True
-) -> subprocess.CompletedProcess:
+def _run(cmd: list[str], dry_run: bool = False, check: bool = True) -> subprocess.CompletedProcess:
     logger.info("$ %s", " ".join(cmd))
     if dry_run:
         logger.info("  [dry-run] skipped")
@@ -87,9 +85,7 @@ class DeploymentManager:
         Returns True on success, False on failure.
         """
         if environment not in self.environments:
-            logger.error(
-                "Unknown environment: %s. Valid: %s", environment, self.environments
-            )
+            logger.error("Unknown environment: %s. Valid: %s", environment, self.environments)
             return False
 
         logger.info("=== Deploying to %s ===", environment)
@@ -186,9 +182,7 @@ class DeploymentManager:
     def _pull_images(self, environment: str) -> None:
         compose_file = COMPOSE_FILES.get(environment, "docker-compose.yml")
         if self._is_compose_available():
-            _run(
-                ["docker", "compose", "-f", compose_file, "pull"], dry_run=self.dry_run
-            )
+            _run(["docker", "compose", "-f", compose_file, "pull"], dry_run=self.dry_run)
 
     def _apply_deployment(self, environment: str) -> None:
         if self._is_kubernetes_available():
@@ -268,9 +262,7 @@ class DeploymentManager:
         compose_file = COMPOSE_FILES.get(environment, "docker-compose.yml")
         logger.warning("Docker Compose rollback: %s", compose_file)
         try:
-            _run(
-                ["docker", "compose", "-f", compose_file, "down"], dry_run=self.dry_run
-            )
+            _run(["docker", "compose", "-f", compose_file, "down"], dry_run=self.dry_run)
             if self._previous_image:
                 logger.info("Restoring previous image: %s", self._previous_image[:20])
                 _run(
@@ -322,12 +314,8 @@ class DeploymentManager:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HOPEFX deployment manager")
-    parser.add_argument(
-        "environment", choices=VALID_ENVIRONMENTS, help="Target environment"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Print commands without executing"
-    )
+    parser.add_argument("environment", choices=VALID_ENVIRONMENTS, help="Target environment")
+    parser.add_argument("--dry-run", action="store_true", help="Print commands without executing")
     args = parser.parse_args()
 
     manager = DeploymentManager(environments=VALID_ENVIRONMENTS, dry_run=args.dry_run)

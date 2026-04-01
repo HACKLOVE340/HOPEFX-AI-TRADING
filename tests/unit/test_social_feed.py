@@ -52,9 +52,7 @@ def app(stub_user: TokenPayload) -> FastAPI:
     # Always use the canonical module instances — survive any sys.modules reloads
     # performed by other tests (e.g. test_oanda_paper_clock clears sys.modules).
     auth_mod = sys.modules.get("api.auth") or importlib.import_module("api.auth")
-    sf_mod = sys.modules.get("api.social_feed") or importlib.import_module(
-        "api.social_feed"
-    )
+    sf_mod = sys.modules.get("api.social_feed") or importlib.import_module("api.social_feed")
 
     _app = FastAPI()
     _app.include_router(sf_mod.router)
@@ -86,9 +84,7 @@ class TestPublishSignal:
     def test_publish_signal_creates_feed_item(self):
         import api.social_feed as sf
 
-        item = sf._publish_signal(
-            _make_signal("sig_001"), username="alice", trader_id="t1"
-        )
+        item = sf._publish_signal(_make_signal("sig_001"), username="alice", trader_id="t1")
         assert "sig_001" in sf._feed_items
         assert item["signal_id"] == "sig_001"
         assert item["username"] == "alice"
@@ -115,9 +111,7 @@ class TestPublishSignal:
     def test_publish_signal_sets_correct_defaults(self):
         import api.social_feed as sf
 
-        item = sf._publish_signal(
-            _make_signal("sig_defaults"), username="dave", trader_id="t4"
-        )
+        item = sf._publish_signal(_make_signal("sig_defaults"), username="dave", trader_id="t4")
         assert item["thumbs_up"] == 0
         assert item["thumbs_down"] == 0
         assert item["copies"] == 0

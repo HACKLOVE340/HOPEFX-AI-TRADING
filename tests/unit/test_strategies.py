@@ -237,9 +237,7 @@ class TestStrategyManager:
 
         assert strategy.status == StrategyStatus.STOPPED
 
-    def test_get_strategy_performance(
-        self, strategy_manager, test_config, mock_strategy
-    ):
+    def test_get_strategy_performance(self, strategy_manager, test_config, mock_strategy):
         """Test getting strategy performance."""
         strategy = mock_strategy()
         strategy.update_performance(100, "BUY")

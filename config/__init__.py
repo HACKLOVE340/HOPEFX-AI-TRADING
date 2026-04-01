@@ -31,20 +31,16 @@ class EncryptionManager:  # pragma: no cover
     """Backwards-compat shim. Encryption is handled by ConfigManager._setup_encryption."""
 
 
-
 class APIConfig:  # pragma: no cover
     """Backwards-compat shim. API configuration is managed by ConfigManager."""
-
 
 
 class LoggingConfig:  # pragma: no cover
     """Backwards-compat shim. Logging configuration is managed by ConfigManager."""
 
 
-
 class AppConfig:  # pragma: no cover
     """Backwards-compat shim. Application configuration is managed by ConfigManager."""
-
 
 
 from .feature_flags import FeatureFlags, FeatureStatus, flags

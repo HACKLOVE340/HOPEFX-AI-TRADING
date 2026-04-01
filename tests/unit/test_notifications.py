@@ -189,9 +189,7 @@ class TestNotificationManager:
         """Test trade notification helper"""
         manager = NotificationManager()
 
-        manager.notify_trade(
-            action="BUY", symbol="EUR_USD", quantity=10000, price=1.1850, pnl=None
-        )
+        manager.notify_trade(action="BUY", symbol="EUR_USD", quantity=10000, price=1.1850, pnl=None)
 
         assert len(manager.notification_history) == 1
         notification = manager.notification_history[0]

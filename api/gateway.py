@@ -32,6 +32,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 import jwt
@@ -177,9 +178,7 @@ class APIGateway:
                 "timestamp": datetime.now(UTC).isoformat(),
                 "version": "3.0",
                 "components": {
-                    "mcc": self.mcc.health
-                    if hasattr(self.mcc, "health")
-                    else "unknown",
+                    "mcc": self.mcc.health if hasattr(self.mcc, "health") else "unknown",
                     "orchestra": len(self.orchestra.active_strategies),
                     "portfolio": self.pms.get_portfolio_summary(),
                 },
@@ -193,9 +192,7 @@ class APIGateway:
             self._verify_token(credentials.credentials)
 
             return {
-                "system": self.mcc.get_status()
-                if hasattr(self.mcc, "get_status")
-                else {},
+                "system": self.mcc.get_status() if hasattr(self.mcc, "get_status") else {},
                 "orchestra": self.orchestra.get_heatmap_data(),
                 "portfolio": self.pms.get_portfolio_summary(),
                 "timestamp": datetime.now(UTC).isoformat(),

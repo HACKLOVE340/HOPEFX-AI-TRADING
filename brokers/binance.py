@@ -14,6 +14,7 @@ import hmac
 import logging
 import time
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -204,9 +205,7 @@ class BinanceConnector(BrokerConnector):
                 price=float(result.get("price", 0)) if result.get("price") else None,
                 status=self._parse_order_status(result["status"]),
                 filled_quantity=float(result.get("executedQty", 0)),
-                average_price=float(result.get("price", 0))
-                if result.get("price")
-                else None,
+                average_price=float(result.get("price", 0)) if result.get("price") else None,
                 timestamp=datetime.fromtimestamp(result["transactTime"] / 1000),
                 metadata=result,
             )

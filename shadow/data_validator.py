@@ -41,6 +41,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
@@ -235,9 +236,7 @@ class ShadowDataValidator:
                     shadow_val=mid_s,
                     gap_bps=price_gap_bps,
                     symbol="XAU_USD",
-                    severity="critical"
-                    if price_gap_bps > _PRICE_DIVERGE_BPS * 3
-                    else "warn",
+                    severity="critical" if price_gap_bps > _PRICE_DIVERGE_BPS * 3 else "warn",
                 )
             )
 

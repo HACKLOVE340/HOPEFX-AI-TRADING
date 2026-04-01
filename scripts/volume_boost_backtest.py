@@ -47,6 +47,7 @@ import json
 import logging
 import sys
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -109,9 +110,7 @@ def download_data(
                 if not df.empty:
                     chunks.append(df)
             except Exception as exc:
-                logger.warning(
-                    "Chunk %s→%s failed: %s", cursor.date(), chunk_end.date(), exc
-                )
+                logger.warning("Chunk %s→%s failed: %s", cursor.date(), chunk_end.date(), exc)
             cursor = chunk_end
         data = pd.concat(chunks) if chunks else pd.DataFrame()
     else:
@@ -134,9 +133,7 @@ def download_data(
 
     data = data[~data.index.duplicated(keep="first")].sort_index()
     data.dropna(inplace=True)
-    logger.info(
-        "Downloaded %d bars  (%s → %s)", len(data), data.index[0], data.index[-1]
-    )
+    logger.info("Downloaded %d bars  (%s → %s)", len(data), data.index[0], data.index[-1])
     return data
 
 
@@ -272,11 +269,7 @@ def run_backtest(
     # Sharpe on daily P&L
     try:
         daily_pnl = trades_df.set_index("exit_time")["pnl_usd"].resample("D").sum()
-        sharpe = (
-            (daily_pnl.mean() / daily_pnl.std() * (252**0.5))
-            if daily_pnl.std() > 0
-            else 0.0
-        )
+        sharpe = (daily_pnl.mean() / daily_pnl.std() * (252**0.5)) if daily_pnl.std() > 0 else 0.0
     except Exception:
         sharpe = 0.0
 
@@ -344,16 +337,16 @@ def monte_carlo(trades_df: pd.DataFrame, n_runs: int = 1000, seed: int = 42) -> 
 
 
 def print_summary(label: str, summary: dict, mc: dict) -> None:
-    print(f"\n{'='*62}")
+    print(f"\n{'=' * 62}")
     print(f"  HOPEFX Volume-Boost Backtest — {label}")
-    print(f"{'='*62}")
+    print(f"{'=' * 62}")
     for k, v in summary.items():
         print(f"  {k:<28} {v}")
     if mc:
         print(f"\n  Monte Carlo worst-case drawdown ({mc['n_runs']} runs)")
         for k, v in mc.items():
             print(f"  {k:<28} {v}")
-    print(f"{'='*62}")
+    print(f"{'=' * 62}")
     if summary.get("total_trades", 0) < 200:  # noqa: PLR2004
         logger.warning(
             "Trade count %d < 200 target (expected for daily bars — "
@@ -401,9 +394,7 @@ def main() -> None:
         logger.info("=== Run 2: 15m bars (last 60 days) ===")
         from datetime import timedelta
 
-        start_15m = (datetime.now(UTC) - timedelta(days=58)).strftime(
-            "%Y-%m-%d"
-        )
+        start_15m = (datetime.now(UTC) - timedelta(days=58)).strftime("%Y-%m-%d")
         df_15m = download_data(args.symbol, start_15m, args.end, "15m")
         if not df_15m.empty:
             df_15m = add_indicators(df_15m)

@@ -20,6 +20,7 @@ import logging
 import threading
 from collections import deque
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from dataclasses import dataclass
 
@@ -559,13 +560,9 @@ def create_time_and_sales_router(service: TimeAndSalesService):
         return [t.to_dict() for t in trades]
 
     @router.get("/{symbol}/large")
-    async def get_large_trades(
-        symbol: str, min_size: float | None = None, lookback_minutes: int = 60
-    ):
+    async def get_large_trades(symbol: str, min_size: float | None = None, lookback_minutes: int = 60):
         """Get large trades for a symbol."""
-        trades = service.get_large_trades(
-            symbol, min_size=min_size, lookback_minutes=lookback_minutes
-        )
+        trades = service.get_large_trades(symbol, min_size=min_size, lookback_minutes=lookback_minutes)
         return [t.to_dict() for t in trades]
 
     @router.get("/{symbol}/velocity")
@@ -587,9 +584,7 @@ def create_time_and_sales_router(service: TimeAndSalesService):
     @router.get("/{symbol}/histogram")
     async def get_histogram(symbol: str, bins: int = 20, lookback_minutes: int = 60):
         """Get price/volume histogram."""
-        return service.get_trade_histogram(
-            symbol, bins=bins, lookback_minutes=lookback_minutes
-        )
+        return service.get_trade_histogram(symbol, bins=bins, lookback_minutes=lookback_minutes)
 
     @router.get("/{symbol}/statistics")
     async def get_statistics(symbol: str, lookback_minutes: int = 60):

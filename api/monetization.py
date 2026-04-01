@@ -147,8 +147,9 @@ class StrategyPurchaseRequest(BaseModel):
 
     buyer_id: str
     strategy_id: str
-    # Stripe customer ID — required to create a PaymentIntent
-    stripe_customer_id: str
+    # Stripe customer ID — created server-side when absent; callers may
+    # supply an existing ID to reuse a Stripe customer record.
+    stripe_customer_id: str | None = None
     # Presentment currency (ISO 4217, e.g. "USD", "EUR", "NGN")
     currency: str = "USD"
 
@@ -754,12 +755,8 @@ async def get_revenue_breakdown():
     Get revenue breakdown by source and tier.
     """
     return {
-        "by_source": {
-            k: float(v) for k, v in revenue_analytics.get_revenue_by_source().items()
-        },
-        "by_tier": {
-            k: float(v) for k, v in revenue_analytics.get_revenue_by_tier().items()
-        },
+        "by_source": {k: float(v) for k, v in revenue_analytics.get_revenue_by_source().items()},
+        "by_tier": {k: float(v) for k, v in revenue_analytics.get_revenue_by_tier().items()},
     }
 
 
@@ -1054,9 +1051,7 @@ async def get_creator_balance(creator_id: str):
         "pending_usd": float(bal.pending_usd),
         "total_earned_usd": float(bal.total_earned_usd),
         "total_paid_usd": float(bal.total_paid_usd),
-        "last_payout_at": bal.last_payout_at.isoformat()
-        if bal.last_payout_at
-        else None,
+        "last_payout_at": bal.last_payout_at.isoformat() if bal.last_payout_at else None,
         "stripe_account_linked": bal.stripe_account_id is not None,
         "payout_eligible": bal.is_payout_eligible,
     }
@@ -1079,9 +1074,7 @@ async def get_creator_payouts(creator_id: str):
 @router.post("/marketplace/creators/stripe-account")
 async def register_stripe_account(request: RegisterStripeAccountRequest):
     """Link a creator's Stripe Connect account for payouts."""
-    revenue_engine.register_stripe_account(
-        request.creator_id, request.stripe_account_id
-    )
+    revenue_engine.register_stripe_account(request.creator_id, request.stripe_account_id)
     return {"linked": True, "creator_id": request.creator_id}
 
 

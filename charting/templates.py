@@ -9,6 +9,7 @@ Chart Template Management
 
 from typing import Any
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 
@@ -29,9 +30,7 @@ class TemplateManager:
     def __init__(self):
         self.templates: dict[str, ChartTemplate] = {}
 
-    def save_template(
-        self, name: str, description: str, config: dict[str, Any]
-    ) -> ChartTemplate:
+    def save_template(self, name: str, description: str, config: dict[str, Any]) -> ChartTemplate:
         """Save a chart template"""
         template = ChartTemplate(name, description)
         template.config = config

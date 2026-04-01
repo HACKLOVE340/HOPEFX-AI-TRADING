@@ -13,6 +13,7 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum, auto
 
@@ -52,15 +53,13 @@ class CircuitBreaker:
 
         if self.state == CircuitState.OPEN and self.last_failure_time:
             # Check if we should try half-open
-                elapsed = (
-                    datetime.now(UTC) - self.last_failure_time
-                ).total_seconds()
-                if elapsed > self.config.timeout_seconds:
-                    self.state = CircuitState.HALF_OPEN
-                    self.half_open_calls = 0
-                    print(f"🔌 Circuit {self.name}: HALF_OPEN (testing recovery)")
-                else:
-                    raise CircuitBreakerOpenError(f"Circuit {self.name} is OPEN")
+            elapsed = (datetime.now(UTC) - self.last_failure_time).total_seconds()
+            if elapsed > self.config.timeout_seconds:
+                self.state = CircuitState.HALF_OPEN
+                self.half_open_calls = 0
+                print(f"🔌 Circuit {self.name}: HALF_OPEN (testing recovery)")
+            else:
+                raise CircuitBreakerOpenError(f"Circuit {self.name} is OPEN")
 
         if self.state == CircuitState.HALF_OPEN:
             if self.half_open_calls >= self.config.half_open_max_calls:
@@ -116,15 +115,12 @@ class CircuitBreaker:
             "successes": self.successes,
             "total_calls": self.total_calls,
             "failure_rate": self.total_failures / max(self.total_calls, 1),
-            "last_failure": self.last_failure_time.isoformat()
-            if self.last_failure_time
-            else None,
+            "last_failure": self.last_failure_time.isoformat() if self.last_failure_time else None,
         }
 
 
 class CircuitBreakerOpenError(Exception):
     """Exception when circuit is open"""
-
 
 
 class Bulkhead:

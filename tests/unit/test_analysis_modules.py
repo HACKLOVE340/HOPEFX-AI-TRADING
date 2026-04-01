@@ -18,6 +18,7 @@ import pytest
 import numpy as np
 import pandas as pd
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from unittest.mock import MagicMock
 
@@ -713,9 +714,7 @@ class TestMarketScannerExtended:
         scanner.add_symbols(["XAUUSD"])
         scanner.add_criteria(ScanCriteriaType.VOLUME_SPIKE, {"multiplier": 2.0})
 
-        data = {
-            "XAUUSD": {"price": 1950.0, "volume": 3_000_000, "avg_volume": 1_000_000}
-        }
+        data = {"XAUUSD": {"price": 1950.0, "volume": 3_000_000, "avg_volume": 1_000_000}}
         results = scanner.scan(data, min_strength=0)
         assert len(results) == 1
         assert "volume_spike" in results[0].criteria_met
@@ -865,9 +864,7 @@ class TestMarketScannerExtended:
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
-        scanner.add_criteria(
-            ScanCriteriaType.MA_CROSSOVER, {"fast_period": 20, "slow_period": 50}
-        )
+        scanner.add_criteria(ScanCriteriaType.MA_CROSSOVER, {"fast_period": 20, "slow_period": 50})
 
         data = {
             "XAUUSD": {
@@ -886,9 +883,7 @@ class TestMarketScannerExtended:
 
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
-        scanner.add_criteria(
-            ScanCriteriaType.MA_CROSSOVER, {"fast_period": 20, "slow_period": 50}
-        )
+        scanner.add_criteria(ScanCriteriaType.MA_CROSSOVER, {"fast_period": 20, "slow_period": 50})
 
         data = {
             "XAUUSD": {
@@ -915,14 +910,10 @@ class TestMarketScannerExtended:
         scanner = self._make_scanner()
         scanner.add_symbols(["XAUUSD"])
         # Required: RSI oversold – but RSI is 60
-        scanner.add_criteria(
-            ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30}, required=True
-        )
+        scanner.add_criteria(ScanCriteriaType.RSI_OVERSOLD, {"threshold": 30}, required=True)
         scanner.add_criteria(ScanCriteriaType.UPTREND)
 
-        data = {
-            "XAUUSD": {"price": 1970.0, "rsi": 60, "ma_20": 1960.0, "ma_50": 1940.0}
-        }
+        data = {"XAUUSD": {"price": 1970.0, "rsi": 60, "ma_20": 1960.0, "ma_50": 1940.0}}
         results = scanner.scan(data, min_strength=0)
         assert results == []
 
@@ -1161,9 +1152,7 @@ class TestOrderFlowDashboard:
     def test_get_summary_full_dashboard_after_trades(self):
         dashboard = self._full_dashboard()
         for i in range(5):
-            dashboard.add_trade(
-                "XAUUSD", 1950.0 + i, 1.0, "buy" if i % 2 == 0 else "sell"
-            )
+            dashboard.add_trade("XAUUSD", 1950.0 + i, 1.0, "buy" if i % 2 == 0 else "sell")
         result = dashboard.get_summary("XAUUSD")
         assert result["symbol"] == "XAUUSD"
 

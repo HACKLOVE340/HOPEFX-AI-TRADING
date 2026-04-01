@@ -63,13 +63,9 @@ def test_k6_results_dir_exists():
 # ── scenarios ─────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize(
-    "scenario", ["smoke", "load", "soak", "spike", "stress", "breakpoint"]
-)
+@pytest.mark.parametrize("scenario", ["smoke", "load", "soak", "spike", "stress", "breakpoint"])
 def test_scenario_defined(k6_source, scenario):
-    assert (
-        scenario + ":" in k6_source
-    ), f"Scenario '{scenario}' not defined in load_tests.js"
+    assert scenario + ":" in k6_source, f"Scenario '{scenario}' not defined in load_tests.js"
 
 
 # ── thresholds ────────────────────────────────────────────────────────────────
@@ -88,9 +84,7 @@ def test_scenario_defined(k6_source, scenario):
     ],
 )
 def test_threshold_defined(k6_source, threshold):
-    assert (
-        threshold in k6_source
-    ), f"Threshold '{threshold}' not defined in load_tests.js"
+    assert threshold in k6_source, f"Threshold '{threshold}' not defined in load_tests.js"
 
 
 # ── endpoint coverage ─────────────────────────────────────────────────────────
@@ -124,15 +118,13 @@ def test_endpoint_covered(k6_source, endpoint):
 
 
 def test_rate_limit_probe_present(k6_source):
-    assert (
-        "rate_limit_probe" in k6_source or "rateLimitHits" in k6_source
-    ), "Rate-limit probe not found in load_tests.js"
+    assert "rate_limit_probe" in k6_source or "rateLimitHits" in k6_source, (
+        "Rate-limit probe not found in load_tests.js"
+    )
 
 
 def test_websocket_test_present(k6_source):
-    assert (
-        "ws.connect" in k6_source or "testWebSocket" in k6_source
-    ), "WebSocket test not found in load_tests.js"
+    assert "ws.connect" in k6_source or "testWebSocket" in k6_source, "WebSocket test not found in load_tests.js"
 
 
 def test_custom_metrics_defined(k6_source):

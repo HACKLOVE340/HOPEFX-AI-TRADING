@@ -29,12 +29,15 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 
 def _utcnow() -> datetime:
     """Return current UTC time as timezone-aware datetime."""
     return datetime.now(UTC)
+
+
 from collections.abc import AsyncGenerator
 
 import strawberry
@@ -402,9 +405,7 @@ class Query:
                         unrealized_pnl=float(p.get("unrealized_pnl", 0)),
                         stop_loss=p.get("stop_loss"),
                         take_profit=p.get("take_profit"),
-                        opened_at=str(
-                            p.get("opened_at", _utcnow().isoformat())
-                        ),
+                        opened_at=str(p.get("opened_at", _utcnow().isoformat())),
                     )
                     for p in (raw or [])
                 ]
@@ -463,9 +464,7 @@ class Query:
                         stop_loss=float(sig.get("stop_loss", 0.0)),
                         take_profit=float(sig.get("take_profit", 0.0)),
                         model_version=str(sig.get("model_version", pred.version)),
-                        created_at=str(
-                            sig.get("created_at", _utcnow().isoformat())
-                        ),
+                        created_at=str(sig.get("created_at", _utcnow().isoformat())),
                     )
                 )
             return results
@@ -546,11 +545,7 @@ class Query:
                     # Sharpe: mean / std of per-trade PnL (simplified)
                     import statistics
 
-                    sharpe = (
-                        statistics.mean(pnls) / statistics.stdev(pnls)
-                        if len(pnls) > 1
-                        else 0.0
-                    )
+                    sharpe = statistics.mean(pnls) / statistics.stdev(pnls) if len(pnls) > 1 else 0.0
                     # Max drawdown from cumulative PnL curve
                     cum = 0.0
                     peak = 0.0
@@ -719,9 +714,7 @@ class Mutation:
             message=f"Order {order_id} cancelled",
         )
 
-    @strawberry.mutation(
-        description="Modify stop-loss or take-profit on an open position"
-    )
+    @strawberry.mutation(description="Modify stop-loss or take-profit on an open position")
     def modify_order(
         self,
         info: Info,

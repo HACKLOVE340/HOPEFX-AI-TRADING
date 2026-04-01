@@ -40,6 +40,7 @@ from monetization.enterprise import (
 )
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from monetization.stripe_integration import StripeIntegration, StripeWebhookEvent
@@ -94,18 +95,10 @@ class TestPricing:
         pm = PricingManager()
 
         assert pm.get_commission_rate(SubscriptionTier.FREE) == Decimal("0.010")  # 1%
-        assert pm.get_commission_rate(SubscriptionTier.STARTER) == Decimal(
-            "0.005"
-        )  # 0.5%
-        assert pm.get_commission_rate(SubscriptionTier.PROFESSIONAL) == Decimal(
-            "0.003"
-        )  # 0.3%
-        assert pm.get_commission_rate(SubscriptionTier.ENTERPRISE) == Decimal(
-            "0.002"
-        )  # 0.2%
-        assert pm.get_commission_rate(SubscriptionTier.ELITE) == Decimal(
-            "0.001"
-        )  # 0.1%
+        assert pm.get_commission_rate(SubscriptionTier.STARTER) == Decimal("0.005")  # 0.5%
+        assert pm.get_commission_rate(SubscriptionTier.PROFESSIONAL) == Decimal("0.003")  # 0.3%
+        assert pm.get_commission_rate(SubscriptionTier.ENTERPRISE) == Decimal("0.002")  # 0.2%
+        assert pm.get_commission_rate(SubscriptionTier.ELITE) == Decimal("0.001")  # 0.1%
 
     def test_annual_pricing_discount(self):
         """Test annual pricing has discount (2 months free)"""
@@ -146,9 +139,7 @@ class TestPricing:
         pm = PricingManager()
         trade_amount = Decimal("10000.00")
 
-        starter_commission = pm.calculate_commission(
-            SubscriptionTier.STARTER, trade_amount
-        )
+        starter_commission = pm.calculate_commission(SubscriptionTier.STARTER, trade_amount)
         assert starter_commission == Decimal("50.00")  # 0.5%
 
         elite_commission = pm.calculate_commission(SubscriptionTier.ELITE, trade_amount)
@@ -161,9 +152,7 @@ class TestAffiliateProgram:
     def test_create_affiliate(self):
         """Test creating an affiliate account"""
         am = AffiliateManager()
-        affiliate = am.create_affiliate(
-            user_id="user123", payment_details={"email": "affiliate@test.com"}
-        )
+        affiliate = am.create_affiliate(user_id="user123", payment_details={"email": "affiliate@test.com"})
 
         assert affiliate is not None
         assert affiliate.user_id == "user123"
@@ -193,9 +182,7 @@ class TestAffiliateProgram:
         affiliate = am.create_affiliate(user_id="affiliate1")
         am.approve_affiliate(affiliate.affiliate_id)
 
-        referral = am.create_referral(
-            affiliate_code=affiliate.code, referred_user_id="newuser1"
-        )
+        referral = am.create_referral(affiliate_code=affiliate.code, referred_user_id="newuser1")
 
         assert referral is not None
         assert referral.affiliate_id == affiliate.affiliate_id
@@ -292,9 +279,7 @@ class TestMarketplace:
         )
         mp.approve_strategy(strategy.strategy_id)
 
-        purchase = mp.purchase_strategy(
-            buyer_id="buyer1", strategy_id=strategy.strategy_id
-        )
+        purchase = mp.purchase_strategy(buyer_id="buyer1", strategy_id=strategy.strategy_id)
 
         assert purchase is not None
         assert purchase.amount == Decimal("199.00")
@@ -471,9 +456,7 @@ class TestEnterpriseFeatures:
             secondary_color="#0000FF",
         )
 
-        instance = em.create_white_label_instance(
-            partner_id=partner.partner_id, name="WL Corp Platform", config=config
-        )
+        instance = em.create_white_label_instance(partner_id=partner.partner_id, name="WL Corp Platform", config=config)
 
         assert instance is not None
         assert instance.subdomain is not None
@@ -497,9 +480,7 @@ class TestEnterpriseFeatures:
             secondary_color="#00FF00",
         )
 
-        instance = em.create_white_label_instance(
-            partner_id=partner.partner_id, name="Deploy Platform", config=config
-        )
+        instance = em.create_white_label_instance(partner_id=partner.partner_id, name="Deploy Platform", config=config)
 
         em.deploy_white_label_instance(instance.instance_id)
 
@@ -604,9 +585,9 @@ class TestStripeIntegration:
         # through sys.modules to get the module itself.
         import importlib
 
-        _mod = sys.modules.get(
+        _mod = sys.modules.get("monetization.stripe_integration") or importlib.import_module(
             "monetization.stripe_integration"
-        ) or importlib.import_module("monetization.stripe_integration")
+        )
 
         mock_stripe = _make_stripe_mock()
         original_stripe = _mod._stripe
@@ -623,9 +604,7 @@ class TestStripeIntegration:
 
     def test_create_customer(self):
         def _test(si, mock_stripe):
-            customer = si.create_customer(
-                user_id="user123", email="customer@test.com", name="Test Customer"
-            )
+            customer = si.create_customer(user_id="user123", email="customer@test.com", name="Test Customer")
             assert customer is not None
             assert customer.email == "customer@test.com"
             assert customer.customer_id.startswith("cus_")
@@ -679,9 +658,7 @@ class TestStripeIntegration:
         def _test(si, mock_stripe):
             result = si.cancel_subscription("sub_test123456789012", at_period_end=True)
             assert result is True
-            mock_stripe.Subscription.modify.assert_called_once_with(
-                "sub_test123456789012", cancel_at_period_end=True
-            )
+            mock_stripe.Subscription.modify.assert_called_once_with("sub_test123456789012", cancel_at_period_end=True)
 
         self._run_with_mock(_test)
 

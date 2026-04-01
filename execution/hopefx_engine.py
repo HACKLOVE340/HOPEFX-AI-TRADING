@@ -38,6 +38,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -161,27 +162,17 @@ class HopeFXEngine:
 
         # ── Multi-layer risk components ────────────────────────────────────
         # Instantiate defaults if not injected — all three layers are mandatory
-        self._intra_monitor: IntraTradeMonitor = (
-            intra_trade_monitor or IntraTradeMonitor(equity=initial_equity)
-        )
-        self._post_analyzer: PostTradeAnalyzer = (
-            post_trade_analyzer or PostTradeAnalyzer(lineage_store=lineage_store)
-        )
-        self._dd_tracker: DrawdownTracker = drawdown_tracker or DrawdownTracker(
-            initial_balance=initial_equity
-        )
+        self._intra_monitor: IntraTradeMonitor = intra_trade_monitor or IntraTradeMonitor(equity=initial_equity)
+        self._post_analyzer: PostTradeAnalyzer = post_trade_analyzer or PostTradeAnalyzer(lineage_store=lineage_store)
+        self._dd_tracker: DrawdownTracker = drawdown_tracker or DrawdownTracker(initial_balance=initial_equity)
         self._current_equity: float = initial_equity
 
         # ── Shadow trading components ──────────────────────────────────────
         # ShadowTradingEngine: paper-executes every live signal in parallel.
         # ShadowDataValidator: compares production vs shadow feed on every tick.
         # Both are optional — if not injected, defaults are created.
-        self._shadow: ShadowTradingEngine = shadow_engine or ShadowTradingEngine(
-            initial_balance=initial_equity
-        )
-        self._shadow_validator: ShadowDataValidator = (
-            shadow_validator or ShadowDataValidator()
-        )
+        self._shadow: ShadowTradingEngine = shadow_engine or ShadowTradingEngine(initial_balance=initial_equity)
+        self._shadow_validator: ShadowDataValidator = shadow_validator or ShadowDataValidator()
 
         # ── Hot-standby replication ────────────────────────────────────────
         # Optional — only active when a Redis client is available.
@@ -218,9 +209,7 @@ class HopeFXEngine:
         if self._standby is not None:
             await self._standby.start()
 
-        self._loop_task = asyncio.create_task(
-            self._tick_loop(), name="hopefx_engine_tick_loop"
-        )
+        self._loop_task = asyncio.create_task(self._tick_loop(), name="hopefx_engine_tick_loop")
         logger.info(
             "HopeFXEngine started — min_conf=%.2f min_quality=%.2f max_spread=%.2f",
             _MIN_CONFIDENCE,
@@ -308,9 +297,7 @@ class HopeFXEngine:
         now_epoch = time.time()
         age_s = now_epoch - tick_epoch
         if age_s > _STALE_TICK_THRESHOLD:
-            logger.warning(
-                "Stale tick rejected: age=%.1fs symbol=%s", age_s, tick.symbol
-            )
+            logger.warning("Stale tick rejected: age=%.1fs symbol=%s", age_s, tick.symbol)
             return
 
         # Deduplicate — skip if same tick as last iteration
@@ -351,9 +338,7 @@ class HopeFXEngine:
 
         # ── Step 2c: Drawdown gate ─────────────────────────────────────────
         # Compute floating equity from open positions and check drawdown limits.
-        floating_pnl = sum(
-            pos.get("mtm_pnl", 0.0) for pos in self._open_positions.values()
-        )
+        floating_pnl = sum(pos.get("mtm_pnl", 0.0) for pos in self._open_positions.values())
         floating_equity = self._current_equity + floating_pnl
         dd_result = self._dd_tracker.update(equity=floating_equity)
         if dd_result.total_breach or dd_result.daily_breach:
@@ -361,21 +346,14 @@ class HopeFXEngine:
             logger.critical(
                 "DRAWDOWN BREACH type=%s pct=%.2f%% — halting engine",
                 breach_type,
-                (
-                    dd_result.total_drawdown_pct
-                    if dd_result.total_breach
-                    else dd_result.daily_drawdown_pct
-                )
-                * 100,
+                (dd_result.total_drawdown_pct if dd_result.total_breach else dd_result.daily_drawdown_pct) * 100,
             )
             self.halt(f"drawdown_breach:{breach_type}")
             return
 
         # ── Step 3: Spread gate ────────────────────────────────────────────
         if tick.spread > _MAX_SPREAD_USD:
-            logger.debug(
-                "Spread too wide: %.4f > %.4f — skipping", tick.spread, _MAX_SPREAD_USD
-            )
+            logger.debug("Spread too wide: %.4f > %.4f — skipping", tick.spread, _MAX_SPREAD_USD)
             return
 
         # ── Step 4: Data quality gate (from orchestrator DQE) ─────────────
@@ -453,9 +431,7 @@ class HopeFXEngine:
         gate_result = await self._gate.evaluate(signal)
         if not gate_result.passed:
             self._reject_count += 1
-            logger.warning(
-                "GATE BLOCK signal_id=%s reason=%s", signal_id, gate_result.reason
-            )
+            logger.warning("GATE BLOCK signal_id=%s reason=%s", signal_id, gate_result.reason)
             self._record_rejection(signal, gate_result.reason)
             return
 
@@ -515,15 +491,13 @@ class HopeFXEngine:
                 stop_loss=float(
                     signal.features.get(
                         "stop_loss",
-                        signal.tick_mid
-                        * (0.99 if signal.direction == "long" else 1.01),
+                        signal.tick_mid * (0.99 if signal.direction == "long" else 1.01),
                     )
                 ),
                 take_profit=float(
                     signal.features.get(
                         "take_profit",
-                        signal.tick_mid
-                        * (1.01 if signal.direction == "long" else 0.99),
+                        signal.tick_mid * (1.01 if signal.direction == "long" else 0.99),
                     )
                 ),
             )
@@ -660,18 +634,10 @@ class HopeFXEngine:
         # Use tick_mid as fallback reference price.
         if signal.direction == "long":
             ref_price = signal.tick_ask if signal.tick_ask > 0 else signal.tick_mid
-            slippage_bps = (
-                (fill_price - ref_price) / ref_price * 10_000
-                if ref_price > 0
-                else 0.0
-            )
+            slippage_bps = (fill_price - ref_price) / ref_price * 10_000 if ref_price > 0 else 0.0
         else:
             ref_price = signal.tick_bid if signal.tick_bid > 0 else signal.tick_mid
-            slippage_bps = (
-                (ref_price - fill_price) / ref_price * 10_000
-                if ref_price > 0
-                else 0.0
-            )
+            slippage_bps = (ref_price - fill_price) / ref_price * 10_000 if ref_price > 0 else 0.0
 
         fill_record = FillRecord(
             fill_id=str(uuid.uuid4()),
@@ -681,9 +647,7 @@ class HopeFXEngine:
             direction=signal.direction,
             quantity=quantity,
             fill_price=fill_price,
-            expected_price=signal.tick_ask
-            if signal.direction == "long"
-            else signal.tick_bid,
+            expected_price=signal.tick_ask if signal.direction == "long" else signal.tick_bid,
             slippage_bps=slippage_bps,
             broker=broker,
             latency_ms=latency_ms,
@@ -769,13 +733,9 @@ class HopeFXEngine:
                 # Compute live slippage for the closing leg so shadow engine
                 # can calibrate its slippage model via R² tracking.
                 if existing["direction"] == "long":
-                    live_slip = (
-                        (fill_price - prev_entry) / max(prev_entry, 1e-9) * 10_000
-                    )
+                    live_slip = (fill_price - prev_entry) / max(prev_entry, 1e-9) * 10_000
                 else:
-                    live_slip = (
-                        (prev_entry - fill_price) / max(prev_entry, 1e-9) * 10_000
-                    )
+                    live_slip = (prev_entry - fill_price) / max(prev_entry, 1e-9) * 10_000
                 self._shadow.on_live_close(
                     signal_id=existing.get("signal_id", ""),
                     live_pnl=prev_pnl,
@@ -815,8 +775,7 @@ class HopeFXEngine:
                 logger.error("orchestrator.notify_fill failed: %s", exc)
 
         logger.info(
-            "FILL symbol=%s dir=%s qty=%.4f price=%.4f slippage=%.2fbps "
-            "broker=%s latency=%.1fms",
+            "FILL symbol=%s dir=%s qty=%.4f price=%.4f slippage=%.2fbps broker=%s latency=%.1fms",
             signal.symbol,
             signal.direction,
             quantity,
@@ -963,9 +922,7 @@ class HopeFXEngine:
         avg_lat = sum(f.latency_ms for f in fills) / len(fills) if fills else 0.0
 
         # Drawdown snapshot
-        floating_pnl = sum(
-            pos.get("mtm_pnl", 0.0) for pos in self._open_positions.values()
-        )
+        floating_pnl = sum(pos.get("mtm_pnl", 0.0) for pos in self._open_positions.values())
         floating_equity = self._current_equity + floating_pnl
         dd_result = self._dd_tracker.update(equity=floating_equity)
 

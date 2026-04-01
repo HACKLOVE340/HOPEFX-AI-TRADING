@@ -145,9 +145,7 @@ class TestAPIConfig:
 
     def test_api_config_creation(self):
         """Test APIConfig creation."""
-        config = APIConfig(
-            provider="OANDA", api_key="test-api-key", api_secret="test-api-secret"
-        )
+        config = APIConfig(provider="OANDA", api_key="test-api-key", api_secret="test-api-secret")
 
         assert config.provider == "OANDA"
         assert config.api_key == "test-api-key"

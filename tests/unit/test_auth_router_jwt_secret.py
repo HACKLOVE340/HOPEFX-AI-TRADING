@@ -79,8 +79,7 @@ class TestJWTSecretMisconfiguration:
         with pytest.raises(HTTPException) as exc_info:
             _call(forged)
         assert exc_info.value.status_code == 503, (  # noqa: PLR2004
-            f"Expected 503 (misconfigured), got {exc_info.value.status_code}. "
-            "Empty-secret bypass may still be present."
+            f"Expected 503 (misconfigured), got {exc_info.value.status_code}. Empty-secret bypass may still be present."
         )
 
     def test_short_secret_returns_503(self, monkeypatch):

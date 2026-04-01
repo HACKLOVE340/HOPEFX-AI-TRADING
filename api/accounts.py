@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -319,9 +320,7 @@ async def update_member_role(
     return member
 
 
-@router.delete(
-    "/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_member(
     team_id: str,
     member_id: str,
@@ -337,9 +336,7 @@ async def remove_member(
         raise HTTPException(status_code=403, detail="Not a team member")
 
     if caller["role"] != "admin" and user.sub != member_id:
-        raise HTTPException(
-            status_code=403, detail="Admin role required to remove others"
-        )
+        raise HTTPException(status_code=403, detail="Admin role required to remove others")
 
     team["members"] = [m for m in team["members"] if m["user_id"] != member_id]
     _save_team(team)

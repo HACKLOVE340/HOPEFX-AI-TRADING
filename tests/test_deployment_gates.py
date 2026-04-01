@@ -205,9 +205,7 @@ class TestCIModelGuard:
         monkeypatch.setenv("APP_ENV", "production")
 
         # Gate passed but ci_mode=True — model is a CI stub
-        meta_path = self._patch_meta(
-            tmp_path, _meta(gate_passed=True, n_trades=650, ci_mode=True)
-        )
+        meta_path = self._patch_meta(tmp_path, _meta(gate_passed=True, n_trades=650, ci_mode=True))
         with patch.object(trading_mod, "_OOS_META_PATH", meta_path):
             trading_mod._deployment_gate_cache.clear()
             with pytest.raises(HTTPException) as exc_info:
@@ -221,9 +219,7 @@ class TestCIModelGuard:
         monkeypatch.setenv("BROKER_TYPE", "live")
         monkeypatch.setenv("APP_ENV", "production")
 
-        meta_path = self._patch_meta(
-            tmp_path, _meta(gate_passed=True, n_trades=650, ci_mode=False)
-        )
+        meta_path = self._patch_meta(tmp_path, _meta(gate_passed=True, n_trades=650, ci_mode=False))
         with patch.object(trading_mod, "_OOS_META_PATH", meta_path):
             trading_mod._deployment_gate_cache.clear()
             trading_mod._check_live_deployment_gates()  # must not raise

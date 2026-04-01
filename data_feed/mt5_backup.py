@@ -34,8 +34,7 @@ except ImportError:
     _mt5 = None  # type: ignore
     _MT5_AVAILABLE = False
     logger.warning(
-        "MetaTrader5 SDK not installed — MT5Backup provider will be unavailable. "
-        "Install with: pip install MetaTrader5"
+        "MetaTrader5 SDK not installed — MT5Backup provider will be unavailable. Install with: pip install MetaTrader5"
     )
 
 
@@ -118,10 +117,7 @@ class MT5Backup:
         server = _resolve_env(self._config.get("server", ""))
 
         if not login or login in ("your_mt5_demo_login", ""):
-            logger.error(
-                "MT5Backup: login not configured — set MT5_DEMO_LOGIN env var "
-                "or update config/data_feed.yaml"
-            )
+            logger.error("MT5Backup: login not configured — set MT5_DEMO_LOGIN env var or update config/data_feed.yaml")
             _mt5.shutdown()
             return False
 
@@ -146,9 +142,7 @@ class MT5Backup:
             return True
 
         error = _mt5.last_error()
-        logger.error(
-            "MT5 login failed (login=%s, server=%s): %s", login_int, server, error
-        )
+        logger.error("MT5 login failed (login=%s, server=%s): %s", login_int, server, error)
         _mt5.shutdown()
         return False
 

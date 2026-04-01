@@ -33,6 +33,7 @@ import logging
 import random
 import time
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -108,9 +109,7 @@ _RSS_FEEDS: dict[str, str] = {
 
 
 def _cache_key(ticker: str, interval: str, start: str, end: str) -> Path:
-    tag = hashlib.md5(
-        f"{ticker}{interval}{start}{end}".encode(), usedforsecurity=False
-    ).hexdigest()[:10]
+    tag = hashlib.md5(f"{ticker}{interval}{start}{end}".encode(), usedforsecurity=False).hexdigest()[:10]
     return CACHE_DIR / f"{ticker.replace('/', '_')}_{interval}_{tag}.parquet"
 
 
@@ -122,9 +121,7 @@ def _backoff_download(ticker: str, **kwargs) -> pd.DataFrame:
             if df is not None and not df.empty:
                 return df
         except Exception as exc:
-            logger.warning(
-                "yfinance attempt %d failed for %s: %s", attempt + 1, ticker, exc
-            )
+            logger.warning("yfinance attempt %d failed for %s: %s", attempt + 1, ticker, exc)
         sleep = (2**attempt) + random.uniform(0, 1)  # nosec B311 - exponential backoff jitter, not cryptographic
         time.sleep(sleep)
     return pd.DataFrame()
@@ -157,9 +154,7 @@ def _fill_gaps(df: pd.DataFrame) -> pd.DataFrame:
     Forward-fill price columns, zero-fill volume, flag synthetic bars.
     Drops rows where close is still NaN after ffill (leading NaNs).
     """
-    price_cols = [
-        c for c in ["open", "high", "low", "close", "vwap"] if c in df.columns
-    ]
+    price_cols = [c for c in ["open", "high", "low", "close", "vwap"] if c in df.columns]
     df["is_forward_filled"] = df["close"].isna()
     df[price_cols] = df[price_cols].ffill()
     if "volume" in df.columns:
@@ -424,10 +419,7 @@ def fetch_rss_sentiment(
             for entry in feed.entries[:max_articles]:
                 title = getattr(entry, "title", "")
                 # Filter loosely by ticker mention
-                if (
-                    ticker.upper().replace("=X", "").replace("-USD", "")
-                    not in title.upper()
-                ):
+                if ticker.upper().replace("=X", "").replace("-USD", "") not in title.upper():
                     # Still include general market news with lower weight
                     score = _score_headline(title) * 0.3
                 else:
@@ -481,9 +473,7 @@ def attach_sentiment(
             sentiment_count="count",
         )
     )
-    sent_resampled = sent_resampled.fillna(
-        {"sentiment_mean": 0.0, "sentiment_std": 0.0, "sentiment_count": 0}
-    )
+    sent_resampled = sent_resampled.fillna({"sentiment_mean": 0.0, "sentiment_std": 0.0, "sentiment_count": 0})
 
     merged = price_df.join(sent_resampled, how="left")
     merged[["sentiment_mean", "sentiment_std", "sentiment_count"]] = merged[

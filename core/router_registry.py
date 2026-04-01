@@ -106,9 +106,7 @@ def register_routers(
         app.include_router(two_factor_router)
         logger.info("Two-factor auth router registered (/api/2fa)")
     else:
-        logger.debug(
-            "TWO_FACTOR_AUTH disabled — set FEATURE_TWO_FACTOR_AUTH=true to enable"
-        )
+        logger.debug("TWO_FACTOR_AUTH disabled — set FEATURE_TWO_FACTOR_AUTH=true to enable")
 
     if feature_flags.WATCHLIST:
         from api.watchlist import router as watchlist_router
@@ -124,9 +122,7 @@ def register_routers(
         app.include_router(journal_router)
         logger.info("Trade journal router registered (/api/journal)")
     else:
-        logger.debug(
-            "TRADE_JOURNAL disabled — set FEATURE_TRADE_JOURNAL=true to enable"
-        )
+        logger.debug("TRADE_JOURNAL disabled — set FEATURE_TRADE_JOURNAL=true to enable")
 
     if feature_flags.BILLING_SUBSCRIPTION:
         from api.billing import router as billing_router
@@ -134,9 +130,7 @@ def register_routers(
         app.include_router(billing_router)
         logger.info("Billing router registered (/api/billing)")
     else:
-        logger.debug(
-            "BILLING_SUBSCRIPTION disabled — set FEATURE_BILLING_SUBSCRIPTION=true to enable"
-        )
+        logger.debug("BILLING_SUBSCRIPTION disabled — set FEATURE_BILLING_SUBSCRIPTION=true to enable")
 
     if feature_flags.ADVANCED_TRADING:
         from api.advanced_trading import router as advanced_router
@@ -144,9 +138,7 @@ def register_routers(
         app.include_router(advanced_router)
         logger.info("Advanced trading router registered (/api/advanced)")
     else:
-        logger.debug(
-            "ADVANCED_TRADING disabled — set FEATURE_ADVANCED_TRADING=true to enable"
-        )
+        logger.debug("ADVANCED_TRADING disabled — set FEATURE_ADVANCED_TRADING=true to enable")
 
     if feature_flags.PRICE_ALERTS:
         from api.alerts import router as alerts_router

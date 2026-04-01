@@ -17,6 +17,7 @@ from typing import Any
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 import uuid
 
@@ -197,9 +198,7 @@ class AdvancedCopyTradingEngine:
         logger.info(f"Follower {follower_id} subscribed to {trader_id}")
         return config
 
-    def broadcast_signal(
-        self, signal: SignalMessage, followers: list[FollowerConfig]
-    ) -> dict[str, dict[str, Any]]:
+    def broadcast_signal(self, signal: SignalMessage, followers: list[FollowerConfig]) -> dict[str, dict[str, Any]]:
         """
         Broadcast trading signal to all followers
 
@@ -236,9 +235,7 @@ class AdvancedCopyTradingEngine:
                 lot_size = self._calculate_lot_size(signal, follower)
 
                 # Adjust risk
-                adjusted_signal = self._adjust_signal_for_follower(
-                    signal, follower, lot_size
-                )
+                adjusted_signal = self._adjust_signal_for_follower(signal, follower, lot_size)
 
                 # Place order via broker
                 if self.broker:
@@ -264,16 +261,12 @@ class AdvancedCopyTradingEngine:
                     }
 
             except Exception as e:
-                logger.error(
-                    f"Failed to process signal for {follower.follower_id}: {e}"
-                )
+                logger.error(f"Failed to process signal for {follower.follower_id}: {e}")
                 results[follower.follower_id] = {"status": "error", "error": str(e)}
 
         return results
 
-    def _calculate_lot_size(
-        self, signal: SignalMessage, follower: FollowerConfig
-    ) -> float:
+    def _calculate_lot_size(self, signal: SignalMessage, follower: FollowerConfig) -> float:
         """Calculate appropriate lot size for follower"""
 
         if follower.allocation_strategy == TradeAllocationStrategy.PROPORTIONAL:
@@ -327,9 +320,7 @@ class AdvancedCopyTradingEngine:
 
         return adjusted
 
-    def _check_trade_correlation(
-        self, signal: SignalMessage, follower: FollowerConfig
-    ) -> bool:
+    def _check_trade_correlation(self, signal: SignalMessage, follower: FollowerConfig) -> bool:
         """Check if follower already has correlated trades"""
 
         # Calculate correlation with existing positions
@@ -345,9 +336,7 @@ class AdvancedCopyTradingEngine:
 
         return False
 
-    def close_copy_trade(
-        self, follower_id: str, trader_id: str, signal_id: str
-    ) -> bool:
+    def close_copy_trade(self, follower_id: str, trader_id: str, signal_id: str) -> bool:
         """Close copied trade"""
 
         if signal_id not in self.active_signals:
@@ -359,9 +348,7 @@ class AdvancedCopyTradingEngine:
         logger.info(f"Closed copy trade for follower {follower_id}: {signal.symbol}")
         return True
 
-    def get_follower_performance(
-        self, follower_id: str, days: int = 30
-    ) -> dict[str, Any]:
+    def get_follower_performance(self, follower_id: str, days: int = 30) -> dict[str, Any]:
         """Get performance metrics for follower"""
 
         return {

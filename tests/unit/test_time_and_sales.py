@@ -9,6 +9,7 @@ Tests for Time & Sales Service (data/time_and_sales.py)
 
 import pytest
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 
@@ -96,9 +97,7 @@ class TestTimeAndSalesService:
         from data.time_and_sales import TimeAndSalesService
 
         service = TimeAndSalesService()
-        trade = service.add_trade(
-            "XAUUSD", price=1950.05, size=100.0, side="buy", ask_price=1950.05
-        )
+        trade = service.add_trade("XAUUSD", price=1950.05, size=100.0, side="buy", ask_price=1950.05)
 
         assert trade.is_aggressive_buy is True
         assert trade.is_aggressive_sell is False
@@ -107,9 +106,7 @@ class TestTimeAndSalesService:
         from data.time_and_sales import TimeAndSalesService
 
         service = TimeAndSalesService()
-        trade = service.add_trade(
-            "XAUUSD", price=1950.00, size=100.0, side="sell", bid_price=1950.00
-        )
+        trade = service.add_trade("XAUUSD", price=1950.00, size=100.0, side="sell", bid_price=1950.00)
 
         assert trade.is_aggressive_sell is True
         assert trade.is_aggressive_buy is False
@@ -169,9 +166,7 @@ class TestTimeAndSalesService:
         base = datetime.now(UTC) - timedelta(minutes=30)
 
         # Old trade
-        service.add_trade(
-            "XAUUSD", 1950.0, 100.0, "buy", timestamp=base - timedelta(hours=2)
-        )
+        service.add_trade("XAUUSD", 1950.0, 100.0, "buy", timestamp=base - timedelta(hours=2))
         # Recent trade
         service.add_trade("XAUUSD", 1951.0, 50.0, "sell", timestamp=base)
 
@@ -187,9 +182,7 @@ class TestTimeAndSalesService:
 
         service = TimeAndSalesService(config={"large_trade_threshold": 100})
         now = datetime.now(UTC)
-        service.add_trade(
-            "XAUUSD", 1950.0, 500.0, "buy", timestamp=now - timedelta(minutes=5)
-        )
+        service.add_trade("XAUUSD", 1950.0, 500.0, "buy", timestamp=now - timedelta(minutes=5))
         service.add_trade("XAUUSD", 1950.0, 10.0, "sell", timestamp=now)
 
         large = service.get_large_trades("XAUUSD")
@@ -219,9 +212,7 @@ class TestTimeAndSalesService:
         velocity = service.get_trade_velocity("XAUUSD")
         assert velocity is not None
         assert velocity.trades_per_minute > 0
-        assert velocity.buy_trades_pct + velocity.sell_trades_pct == pytest.approx(
-            100.0, rel=0.01
-        )
+        assert velocity.buy_trades_pct + velocity.sell_trades_pct == pytest.approx(100.0, rel=0.01)
 
     def test_get_aggressor_stats(self):
         from data.time_and_sales import TimeAndSalesService
@@ -229,13 +220,9 @@ class TestTimeAndSalesService:
         service = TimeAndSalesService()
         now = datetime.now(UTC)
         for _ in range(7):
-            service.add_trade(
-                "XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5)
-            )
+            service.add_trade("XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5))
         for _ in range(3):
-            service.add_trade(
-                "XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5)
-            )
+            service.add_trade("XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5))
 
         stats = service.get_aggressor_stats("XAUUSD")
         assert stats is not None

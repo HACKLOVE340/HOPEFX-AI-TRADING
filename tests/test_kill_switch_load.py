@@ -291,9 +291,7 @@ class TestFileFlagPolling:
         from kill_switch import KillSwitch
 
         flag = tmp_path / "ks.flag"
-        ks = KillSwitch(
-            flag_file=flag, poll_interval_sec=0.05, deactivation_token="tok"
-        )
+        ks = KillSwitch(flag_file=flag, poll_interval_sec=0.05, deactivation_token="tok")
 
         await ks.start()
         try:

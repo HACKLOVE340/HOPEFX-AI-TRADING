@@ -26,27 +26,21 @@ class TestOrderValidator:
     def test_valid_order(self):
         """Test that valid orders pass."""
         order = Order(symbol="XAUUSD", side="buy", qty=0.01, stop_loss=1950.0)
-        result = self.validator.validate_order(
-            order, current_price=2000.0, account_balance=10000.0
-        )
+        result = self.validator.validate_order(order, current_price=2000.0, account_balance=10000.0)
         assert result.valid is True
         assert result.risk_pct is not None
 
     def test_invalid_symbol(self):
         """Test rejection of invalid symbol."""
         order = Order(symbol="INVALID", side="buy", qty=0.01)
-        result = self.validator.validate_order(
-            order, current_price=100.0, account_balance=10000.0
-        )
+        result = self.validator.validate_order(order, current_price=100.0, account_balance=10000.0)
         assert result.valid is False
         assert "symbol" in result.reason.lower()
 
     def test_oversized_position(self):
         """Test rejection of oversized positions."""
         order = Order(symbol="XAUUSD", side="buy", qty=1.0)  # Too big for 10k account
-        result = self.validator.validate_order(
-            order, current_price=2000.0, account_balance=10000.0
-        )
+        result = self.validator.validate_order(order, current_price=2000.0, account_balance=10000.0)
         assert result.valid is False
         assert "risk" in result.reason.lower()
 
@@ -54,18 +48,14 @@ class TestOrderValidator:
         """Test stop loss validation for long positions."""
         # Stop above entry for long should fail
         order = Order(symbol="XAUUSD", side="buy", qty=0.01, stop_loss=2100.0)
-        result = self.validator.validate_order(
-            order, current_price=2000.0, account_balance=10000.0
-        )
+        result = self.validator.validate_order(order, current_price=2000.0, account_balance=10000.0)
         assert result.valid is False
         assert "stop loss" in result.reason.lower()
 
     def test_tight_stop_loss(self):
         """Test rejection of too-tight stop loss."""
         order = Order(symbol="XAUUSD", side="buy", qty=0.01, stop_loss=1999.0)
-        result = self.validator.validate_order(
-            order, current_price=2000.0, account_balance=10000.0
-        )
+        result = self.validator.validate_order(order, current_price=2000.0, account_balance=10000.0)
         assert result.valid is False
         assert "tight" in result.reason.lower()
 
@@ -73,16 +63,12 @@ class TestOrderValidator:
         """Test min/max quantity validation."""
         # Too small
         order = Order(symbol="XAUUSD", side="buy", qty=0.001)
-        result = self.validator.validate_order(
-            order, current_price=2000.0, account_balance=10000.0
-        )
+        result = self.validator.validate_order(order, current_price=2000.0, account_balance=10000.0)
         assert result.valid is False
 
         # Too large
         order = Order(symbol="XAUUSD", side="buy", qty=20.0)
-        result = self.validator.validate_order(
-            order, current_price=2000.0, account_balance=10000.0
-        )
+        result = self.validator.validate_order(order, current_price=2000.0, account_balance=10000.0)
         assert result.valid is False
 
     def test_suspicious_price(self):
@@ -99,9 +85,7 @@ class TestOrderValidator:
     def test_daily_risk_tracking(self):
         """Test daily risk counter."""
         order = Order(symbol="XAUUSD", side="buy", qty=0.01)
-        result = self.validator.validate_order(
-            order, current_price=2000.0, account_balance=10000.0
-        )
+        result = self.validator.validate_order(order, current_price=2000.0, account_balance=10000.0)
         assert result.valid is True
 
         initial_risk = self.validator.daily_risk_used

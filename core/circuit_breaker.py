@@ -65,9 +65,7 @@ except Exception as _prom_exc:
     # prometheus_client is optional — circuit breaker works without it
     import logging as _log
 
-    _log.getLogger(__name__).debug(
-        "prometheus_client unavailable — CB metrics disabled: %s", _prom_exc
-    )
+    _log.getLogger(__name__).debug("prometheus_client unavailable — CB metrics disabled: %s", _prom_exc)
 
 
 class CBState(IntEnum):
@@ -174,10 +172,7 @@ class CircuitBreaker:
                     self.name,
                     error,
                 )
-            elif (
-                self._state == CBState.CLOSED
-                and self._failure_count >= self.failure_threshold
-            ):
+            elif self._state == CBState.CLOSED and self._failure_count >= self.failure_threshold:
                 self._transition(CBState.OPEN)
                 logger.error(
                     "Circuit breaker '%s' → OPEN after %d failures. Last: %s",
@@ -224,9 +219,7 @@ class CircuitBreaker:
             try:
                 _CB_STATE_GAUGE.labels(broker=self.name).set(int(new_state))
             except Exception as _gauge_exc:
-                logger.debug(
-                    "CB Prometheus gauge update failed (non-fatal): %s", _gauge_exc
-                )
+                logger.debug("CB Prometheus gauge update failed (non-fatal): %s", _gauge_exc)
 
         logger.debug("CB '%s': %s → %s", self.name, old.name, new_state.name)
 

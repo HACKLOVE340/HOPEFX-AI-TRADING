@@ -94,9 +94,7 @@ class TestStartupValidator:
     def test_placeholder_jwt_secret_rejected(self, monkeypatch):
         """CHANGE_ME placeholder must be rejected even if long enough."""
         monkeypatch.setenv("APP_ENV", "development")
-        monkeypatch.setenv(
-            "SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret"
-        )
+        monkeypatch.setenv("SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret")
 
         from config.startup_validator import (
             validate_environment,
@@ -105,10 +103,7 @@ class TestStartupValidator:
 
         with pytest.raises(StartupValidationError) as exc_info:
             validate_environment(strict=False)
-        assert (
-            "CHANGE_ME" in str(exc_info.value)
-            or "placeholder" in str(exc_info.value).lower()
-        )
+        assert "CHANGE_ME" in str(exc_info.value) or "placeholder" in str(exc_info.value).lower()
 
     def test_jwt_secret_key_alias_accepted(self, monkeypatch):
         """JWT_SECRET_KEY is an accepted alias for SECURITY_JWT_SECRET."""
@@ -132,36 +127,34 @@ class TestRouterPrefixes:
         from auth.router import router
 
         paths = [r.path for r in router.routes if hasattr(r, "path")]
-        assert all(
-            p.startswith("/api/auth/") for p in paths
-        ), f"Auth router has non-/api/auth paths: {[p for p in paths if not p.startswith('/api/auth/')]}"
+        assert all(p.startswith("/api/auth/") for p in paths), (
+            f"Auth router has non-/api/auth paths: {[p for p in paths if not p.startswith('/api/auth/')]}"
+        )
 
     def test_ml_router_prefix(self, monkeypatch):
         _set_jwt(monkeypatch)
         from api.ml import router
 
         paths = [r.path for r in router.routes if hasattr(r, "path")]
-        assert all(
-            p.startswith("/api/ml/") for p in paths
-        ), f"ML router has non-/api/ml paths: {[p for p in paths if not p.startswith('/api/ml/')]}"
+        assert all(p.startswith("/api/ml/") for p in paths), (
+            f"ML router has non-/api/ml paths: {[p for p in paths if not p.startswith('/api/ml/')]}"
+        )
 
     def test_admin_router_prefix(self, monkeypatch):
         _set_jwt(monkeypatch)
         from api.admin import router
 
         paths = [r.path for r in router.routes if hasattr(r, "path")]
-        assert all(
-            p.startswith("/api/admin/") for p in paths
-        ), f"Admin router has non-/api/admin paths: {[p for p in paths if not p.startswith('/api/admin/')]}"
+        assert all(p.startswith("/api/admin/") for p in paths), (
+            f"Admin router has non-/api/admin paths: {[p for p in paths if not p.startswith('/api/admin/')]}"
+        )
 
     def test_social_leaderboard_route_exists(self, monkeypatch):
         _set_jwt(monkeypatch)
         from api.social_feed import leaderboard_router
 
         paths = [r.path for r in leaderboard_router.routes if hasattr(r, "path")]
-        assert (
-            "/api/social/leaderboard" in paths
-        ), f"Leaderboard route missing. Found: {paths}"
+        assert "/api/social/leaderboard" in paths, f"Leaderboard route missing. Found: {paths}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -349,9 +342,7 @@ class TestMLEndpoints:
 
     def test_predict_endpoint_fallback(self, ml_client):
         """POST /api/ml/predict/{symbol} returns PredictResponse even without model."""
-        resp = ml_client.post(
-            "/api/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 100}
-        )
+        resp = ml_client.post("/api/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 100})
         assert resp.status_code == 200  # noqa: PLR2004
         data = resp.json()
         assert data["symbol"] == "XAUUSD"
@@ -361,9 +352,7 @@ class TestMLEndpoints:
 
     def test_predict_normalises_symbol(self, ml_client):
         """Symbol is uppercased and dashes replaced with slashes."""
-        resp = ml_client.post(
-            "/api/ml/predict/xau-usd", json={"timeframe": "H1", "lookback": 50}
-        )
+        resp = ml_client.post("/api/ml/predict/xau-usd", json={"timeframe": "H1", "lookback": 50})
         assert resp.status_code == 200  # noqa: PLR2004
         assert resp.json()["symbol"] == "XAU/USD"
 
@@ -391,9 +380,7 @@ class TestCORSSafety:
 
         raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
         allowed = [o.strip() for o in raw.split(",") if o.strip()]
-        assert (
-            "*" not in allowed
-        ), "Wildcard origin must not be used with allow_credentials=True"
+        assert "*" not in allowed, "Wildcard origin must not be used with allow_credentials=True"
 
         app = FastAPI()
         # This must not raise ValueError
@@ -493,15 +480,11 @@ class TestKillSwitch:
         try:
             _result = ks.deactivate("wrong-token")
             # If it returns without raising, the switch must still be active
-            assert (
-                ks.is_active()
-            ), "Deactivation with wrong token must not clear the kill switch"
+            assert ks.is_active(), "Deactivation with wrong token must not clear the kill switch"
         except PermissionError:
             pass  # expected — wrong token correctly rejected
         except Exception as exc:
-            pytest.fail(
-                f"Unexpected exception type on wrong token: {type(exc).__name__}: {exc}"
-            )
+            pytest.fail(f"Unexpected exception type on wrong token: {type(exc).__name__}: {exc}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -534,9 +517,7 @@ class TestSocialLeaderboard:
         resp = leaderboard_client.get("/api/social/leaderboard")
         data = resp.json()
         if not data:
-            pytest.skip(
-                "No leaderboard entries in test environment — shape check skipped"
-            )
+            pytest.skip("No leaderboard entries in test environment — shape check skipped")
         entry = data[0]
         for field in ("id", "rank", "name", "return_3m", "sharpe", "followers"):
             assert field in entry, f"Missing field: {field}"

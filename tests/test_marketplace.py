@@ -31,15 +31,11 @@ class TestStrategyMarketplace:
         marketplace = StrategyMarketplace(test_config)
 
         # Setup listing
-        listing = StrategyListing(
-            id="strat-2", name="Premium Strategy", price=99.99, creator_id="creator-456"
-        )
+        listing = StrategyListing(id="strat-2", name="Premium Strategy", price=99.99, creator_id="creator-456")
         marketplace.list_strategy(listing)
 
         # Purchase
-        purchase = marketplace.purchase_strategy(
-            strategy_id="strat-2", buyer_id="buyer-789", payment_method="wallet"
-        )
+        purchase = marketplace.purchase_strategy(strategy_id="strat-2", buyer_id="buyer-789", payment_method="wallet")
 
         assert purchase["status"] == "completed"
         assert purchase["license_key"] is not None

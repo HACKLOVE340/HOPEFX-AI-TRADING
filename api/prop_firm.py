@@ -97,9 +97,7 @@ async def prop_firm_status(user: TokenPayload = Depends(get_current_user)):
 
         # AI message
         if ks_active:
-            ai_msg = (
-                "🔴 CHALLENGE PROTECTED — all positions closed (drawdown limit reached)"
-            )
+            ai_msg = "🔴 CHALLENGE PROTECTED — all positions closed (drawdown limit reached)"
         elif paused:
             ai_msg = "🛑 TRADING PAUSED — approaching drawdown limit"
         elif total_dd >= max_limit * 0.95:

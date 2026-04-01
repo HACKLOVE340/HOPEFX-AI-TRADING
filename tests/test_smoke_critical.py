@@ -57,9 +57,7 @@ def test_ml_macro_features_import():
 def test_ml_macro_features_has_fetch():
     from ml import macro_features
 
-    assert hasattr(macro_features, "fetch_macro_history") or hasattr(
-        macro_features, "add_macro_features"
-    )
+    assert hasattr(macro_features, "fetch_macro_history") or hasattr(macro_features, "add_macro_features")
 
 
 # ── 3. ml/regime.py ──────────────────────────────────────────────────────────

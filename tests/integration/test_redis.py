@@ -96,6 +96,7 @@ class TestRedisPackage:
     def test_connection_refused_raises(self) -> None:
         """Connecting to a closed port raises a Redis ConnectionError."""
         from redis.exceptions import ConnectionError as RedisConnectionError
+
         r = redis_lib.Redis(host="localhost", port=19999, socket_connect_timeout=0.2)
         with pytest.raises((RedisConnectionError, ConnectionError, OSError)):
             r.ping()
@@ -151,9 +152,7 @@ class TestRedisLive:
 
     def test_hash_operations(self) -> None:
         key = "hopefx_test:tick"
-        self.r.hset(
-            key, mapping={"bid": "2345.50", "ask": "2345.70", "symbol": "XAUUSD"}
-        )
+        self.r.hset(key, mapping={"bid": "2345.50", "ask": "2345.70", "symbol": "XAUUSD"})
         self.r.expire(key, 30)
         assert self.r.hget(key, "symbol") == "XAUUSD"
         assert float(self.r.hget(key, "bid")) == pytest.approx(2345.50)

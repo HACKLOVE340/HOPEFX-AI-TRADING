@@ -16,6 +16,7 @@ import pytest
 import numpy as np
 import pandas as pd
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 
@@ -217,9 +218,7 @@ class TestChartPatternDetector:
         """Detector accepts and applies custom config."""
         from analysis.patterns.chart_patterns import ChartPatternDetector
 
-        det = ChartPatternDetector(
-            config={"min_bars": 50, "sensitivity": 0.01, "swing_window": 5}
-        )
+        det = ChartPatternDetector(config={"min_bars": 50, "sensitivity": 0.01, "swing_window": 5})
         assert det.min_bars == 50  # noqa: PLR2004
         assert det.sensitivity == 0.01  # noqa: PLR2004
         assert det.swing_window == 5  # noqa: PLR2004
@@ -592,9 +591,7 @@ class TestCandlestickPatternDetector:
         patterns = det.detect_patterns(df, min_confidence=0.0)
 
         for p in patterns:
-            assert (
-                0.0 <= p.confidence <= 1.0
-            ), f"Out-of-range confidence: {p.confidence}"
+            assert 0.0 <= p.confidence <= 1.0, f"Out-of-range confidence: {p.confidence}"
 
     def test_detect_patterns_valid_direction(self):
         """All returned patterns have a valid direction."""
@@ -741,9 +738,7 @@ class TestCandlestickPatternDetector:
         names = [p.pattern_name for p in patterns]
         # Hammer and Hanging Man share the same candle structure; the name
         # depends on the trend context (downtrend → Hammer, otherwise → Hanging Man).
-        assert any(
-            n in ("Hammer", "Hanging Man") for n in names
-        ), f"Expected Hammer or Hanging Man among {names}"
+        assert any(n in ("Hammer", "Hanging Man") for n in names), f"Expected Hammer or Hanging Man among {names}"
 
     def test_to_dict_on_detected_patterns(self):
         """Each detected pattern can be serialised via to_dict()."""
@@ -971,9 +966,7 @@ class TestSupportResistanceDetector:
 
         for key in ("support", "resistance", "pivot"):
             for lvl in result[key]:
-                assert isinstance(
-                    lvl, PriceLevel
-                ), f"Expected PriceLevel, got {type(lvl)}"
+                assert isinstance(lvl, PriceLevel), f"Expected PriceLevel, got {type(lvl)}"
 
     def test_get_swing_levels_returns_list(self):
         """get_swing_levels() returns a list."""
@@ -1031,9 +1024,9 @@ class TestSupportResistanceDetector:
         levels = det.get_fibonacci_levels(df)
 
         for lvl in levels:
-            assert (
-                price_min - 1e-6 <= lvl.price <= price_max + 1e-6
-            ), f"Fib level price {lvl.price} outside [{price_min}, {price_max}]"
+            assert price_min - 1e-6 <= lvl.price <= price_max + 1e-6, (
+                f"Fib level price {lvl.price} outside [{price_min}, {price_max}]"
+            )
 
     def test_get_fibonacci_levels_empty_df(self):
         """get_fibonacci_levels() returns empty list for empty DataFrame."""
@@ -1181,9 +1174,7 @@ class TestSupportResistanceDetector:
 
         for key in ("support", "resistance", "pivot"):
             for lvl in result[key]:
-                assert (
-                    0.0 <= lvl.strength <= 1.0
-                ), f"Level {lvl.price} has out-of-range strength: {lvl.strength}"
+                assert 0.0 <= lvl.strength <= 1.0, f"Level {lvl.price} has out-of-range strength: {lvl.strength}"
 
     def test_detect_levels_to_dict_on_results(self):
         """Each detected level can be serialised via to_dict()."""

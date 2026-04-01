@@ -107,14 +107,10 @@ class IBKRFIXConfig:
     # Path for FIX session store (sequence numbers).
     # Default uses tempfile.gettempdir() instead of hardcoded /tmp (B108).
     store_path: str = field(
-        default_factory=lambda: os.environ.get(
-            "IBKR_FIX_STORE_PATH", "/tmp/ibkr_fix_store"
-        ),
+        default_factory=lambda: os.environ.get("IBKR_FIX_STORE_PATH", "/tmp/ibkr_fix_store"),
     )
     log_path: str = field(
-        default_factory=lambda: os.environ.get(
-            "IBKR_FIX_LOG_PATH", "/tmp/ibkr_fix_logs"
-        ),
+        default_factory=lambda: os.environ.get("IBKR_FIX_LOG_PATH", "/tmp/ibkr_fix_logs"),
     )
 
     @property
@@ -210,9 +206,7 @@ class IBKRFIXBridge:
         and initiates the FIX logon sequence.
         """
         if self._started:
-            logger.warning(
-                "IBKRFIXBridge.start() called while already started — ignored."
-            )
+            logger.warning("IBKRFIXBridge.start() called while already started — ignored.")
             return
 
         cfg_content = self._cfg.generate_quickfix_cfg()
@@ -297,8 +291,7 @@ class IBKRFIXBridge:
         order = self._map_symbol(order)
 
         logger.info(
-            "IBKRFIXBridge: submitting FIX order | symbol=%s side=%s type=%s "
-            "qty=%.4f price=%s cl_ord_id=%s",
+            "IBKRFIXBridge: submitting FIX order | symbol=%s side=%s type=%s qty=%.4f price=%s cl_ord_id=%s",
             order.symbol,
             order.side.name,
             order.ord_type.name,
@@ -310,8 +303,7 @@ class IBKRFIXBridge:
         try:
             report = await self._adapter.send_order(order)
             logger.info(
-                "IBKRFIXBridge: fill report | cl_ord_id=%s exec_type=%s "
-                "filled=%.4f avg_px=%.4f latency=%.2fms",
+                "IBKRFIXBridge: fill report | cl_ord_id=%s exec_type=%s filled=%.4f avg_px=%.4f latency=%.2fms",
                 report.cl_ord_id,
                 report.exec_type.name,
                 report.filled_qty,

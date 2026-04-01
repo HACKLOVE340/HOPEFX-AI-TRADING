@@ -17,9 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault(
-    "SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!"
-)
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -99,9 +97,7 @@ class TestNuclearHopeFXSupervisor:
             )
             with patch("brain.nuclear_supervisor._get_notifications") as mock_notif:
                 mock_notif.return_value = MagicMock(send_critical_alert=AsyncMock())
-                result = await supervisor.on_new_event(
-                    _make_event("geopolitical tension")
-                )
+                result = await supervisor.on_new_event(_make_event("geopolitical tension"))
 
         assert result["action_taken"] == "hedge"
         assert supervisor.nuclear_level == 2  # noqa: PLR2004
@@ -116,13 +112,14 @@ class TestNuclearHopeFXSupervisor:
         mock_ks.activate = MagicMock()
         mock_ks.is_active = MagicMock(return_value=True)
 
-        with patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks), patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro:
+        with (
+            patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks),
+            patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro,
+        ):
             mock_ro.return_value = MagicMock(set_max_risk=AsyncMock())
             with patch("brain.nuclear_supervisor._get_notifications") as mock_notif:
                 mock_notif.return_value = MagicMock(send_critical_alert=AsyncMock())
-                result = await supervisor.on_new_event(
-                    _make_event("nuclear strike alert")
-                )
+                result = await supervisor.on_new_event(_make_event("nuclear strike alert"))
 
         assert result["action_taken"] == "nuclear"
         assert supervisor.nuclear_level == 3  # noqa: PLR2004
@@ -142,7 +139,10 @@ class TestNuclearHopeFXSupervisor:
         mock_ks.is_active = MagicMock(return_value=True)
         mock_ks.deactivate = MagicMock()
 
-        with patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks), patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro:
+        with (
+            patch("brain.nuclear_supervisor._get_kill_switch", return_value=mock_ks),
+            patch("brain.nuclear_supervisor._get_risk_orchestrator") as mock_ro,
+        ):
             mock_ro.return_value = MagicMock(
                 set_max_risk=AsyncMock(),
                 deactivate_hedge_mode=AsyncMock(),
@@ -212,9 +212,7 @@ class TestNuclearHopeFXSupervisor:
         )
 
         mock_ro = MagicMock(set_max_risk=AsyncMock(), activate_hedge_mode=AsyncMock())
-        mock_notif = MagicMock(
-            send_critical_alert=AsyncMock(), send_warning=AsyncMock()
-        )
+        mock_notif = MagicMock(send_critical_alert=AsyncMock(), send_warning=AsyncMock())
 
         original_ro = _ns_mod._risk_orchestrator
         original_notif = _ns_mod._notifications
@@ -223,9 +221,9 @@ class TestNuclearHopeFXSupervisor:
         try:
             # Trigger while in cooldown — severity 7 < 9 → suppressed
             result = await supervisor.on_new_event(_make_event("geopolitical tension"))
-            assert (
-                result["action_taken"] == "hedge_cooldown_suppressed"
-            ), f"Expected cooldown suppression, got {result['action_taken']}"
+            assert result["action_taken"] == "hedge_cooldown_suppressed", (
+                f"Expected cooldown suppression, got {result['action_taken']}"
+            )
             # Orchestrator should NOT have been called (suppressed)
             mock_ro.set_max_risk.assert_not_called()
         finally:
@@ -438,9 +436,7 @@ class TestEngineKillSwitchHooks:
         import os
 
         os.environ["APP_ENV"] = "test"
-        os.environ["SECURITY_JWT_SECRET"] = (
-            "test-only-jwt-secret-key-minimum-32-chars!!"
-        )
+        os.environ["SECURITY_JWT_SECRET"] = "test-only-jwt-secret-key-minimum-32-chars!!"
         from hopefx_engine import validate_startup_environment
 
         # Should not raise even with missing broker credentials

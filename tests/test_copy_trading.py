@@ -220,8 +220,6 @@ class TestCopyTradingEngine:
 
     def test_leaderboard_single_trader(self):
         engine = self._engine()
-        result = engine.calculate_leaderboard(
-            [{"id": "solo", "return": 0.2, "sharpe": 1.5, "followers": 3}]
-        )
+        result = engine.calculate_leaderboard([{"id": "solo", "return": 0.2, "sharpe": 1.5, "followers": 3}])
         assert len(result) == 1
         assert result[0]["rank"] == 1

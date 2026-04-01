@@ -81,11 +81,9 @@ class TestRiskAnalyzer:
         np.random.seed(42)
         returns = list(np.random.randn(100) * 0.02)
 
-        var_95 = analyzer.calculate_var(
-            returns, confidence_level=0.95, method="historical"
-        )
+        var_95 = analyzer.calculate_var(returns, confidence_level=0.95, method="historical")
 
-        assert isinstance(var_95, (float, np.floating))
+        assert isinstance(var_95, float | np.floating)
         assert var_95 < 0  # VaR should be negative for losses
 
     def test_calculate_var_parametric(self):
@@ -95,11 +93,9 @@ class TestRiskAnalyzer:
         np.random.seed(42)
         returns = list(np.random.randn(100) * 0.02)
 
-        var_95 = analyzer.calculate_var(
-            returns, confidence_level=0.95, method="parametric"
-        )
+        var_95 = analyzer.calculate_var(returns, confidence_level=0.95, method="parametric")
 
-        assert isinstance(var_95, (float, np.floating))
+        assert isinstance(var_95, float | np.floating)
 
     def test_calculate_cvar(self):
         """Test CVaR (Expected Shortfall) calculation."""
@@ -109,9 +105,7 @@ class TestRiskAnalyzer:
         returns = list(np.random.randn(100) * 0.02)
 
         cvar = analyzer.calculate_cvar(returns, confidence_level=0.95)
-        var = analyzer.calculate_var(
-            returns, confidence_level=0.95, method="historical"
-        )
+        var = analyzer.calculate_var(returns, confidence_level=0.95, method="historical")
 
         # CVaR should be at least as negative as VaR (worse case)
         assert cvar <= var
@@ -122,9 +116,7 @@ class TestRiskAnalyzer:
 
         weights = np.array([0.4, 0.3, 0.3])
         # Simple covariance matrix
-        cov_matrix = np.array(
-            [[0.04, 0.01, 0.01], [0.01, 0.02, 0.005], [0.01, 0.005, 0.03]]
-        )
+        cov_matrix = np.array([[0.04, 0.01, 0.01], [0.01, 0.02, 0.005], [0.01, 0.005, 0.03]])
 
         result = analyzer.risk_attribution(weights, cov_matrix)
 

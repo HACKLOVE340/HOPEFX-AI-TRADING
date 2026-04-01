@@ -94,17 +94,13 @@ def _compute_daily_regime(daily: pd.DataFrame) -> pd.DataFrame:
     d["d_trend_20"] = np.where(c > sma20, 1, -1)
     d["d_trend_50"] = np.where(c > sma50, 1, -1)
     d["d_trend_200"] = np.where(c > sma200, 1, -1)
-    d["d_ma_align"] = (
-        (d["d_trend_20"] == 1) & (d["d_trend_50"] == 1) & (d["d_trend_200"] == 1)
-    ).astype(int)
+    d["d_ma_align"] = ((d["d_trend_20"] == 1) & (d["d_trend_50"] == 1) & (d["d_trend_200"] == 1)).astype(int)
 
     # Volatility regime
     log_ret = np.log(c / c.shift(1))
     rv20 = log_ret.rolling(20).std() * np.sqrt(252)
     d["d_realvol_20"] = rv20
-    d["d_high_vol"] = (rv20 > rv20.rolling(252, min_periods=60).quantile(0.75)).astype(
-        int
-    )
+    d["d_high_vol"] = (rv20 > rv20.rolling(252, min_periods=60).quantile(0.75)).astype(int)
 
     # RSI
     delta = c.diff()
@@ -153,9 +149,7 @@ def _compute_hourly_regime(hourly: pd.DataFrame) -> pd.DataFrame:
     d["h_trend_20"] = np.where(c > sma20h, 1, -1)
 
     log_ret = np.log(c / c.shift(1))
-    d["h_realvol_20"] = log_ret.rolling(20).std() * np.sqrt(
-        252 * 6.5
-    )  # ~6.5 trading hours/day
+    d["h_realvol_20"] = log_ret.rolling(20).std() * np.sqrt(252 * 6.5)  # ~6.5 trading hours/day
 
     delta = c.diff()
     gain = delta.clip(lower=0).ewm(com=13, adjust=False).mean()
@@ -238,9 +232,7 @@ class MTFFusion:
         """
         # ── Daily regime ──────────────────────────────────────────────────────
         daily_regime = _compute_daily_regime(daily_df)
-        daily_aligned = _align_to_intraday(
-            intraday_df.index, daily_regime, shift_periods=1
-        )
+        daily_aligned = _align_to_intraday(intraday_df.index, daily_regime, shift_periods=1)
 
         # ── Hourly regime ─────────────────────────────────────────────────────
         if hourly_df is None and self.resample_hourly_from_5m:
@@ -248,9 +240,7 @@ class MTFFusion:
 
         if hourly_df is not None:
             hourly_regime = _compute_hourly_regime(hourly_df)
-            hourly_aligned = _align_to_intraday(
-                intraday_df.index, hourly_regime, shift_periods=1
-            )
+            hourly_aligned = _align_to_intraday(intraday_df.index, hourly_regime, shift_periods=1)
         else:
             hourly_aligned = pd.DataFrame(index=intraday_df.index)
 
@@ -397,17 +387,11 @@ class MTFFusionStore:
                 logger.debug("MTFFusionStore: %s CSV not found at %s", label, path)
                 return None
             df = pd.read_csv(path, parse_dates=["time"])
-            df = (
-                df.rename(columns={"time": "timestamp"}) if "time" in df.columns else df
-            )
+            df = df.rename(columns={"time": "timestamp"}) if "time" in df.columns else df
             # Normalise column names to lowercase
             df.columns = [c.lower() for c in df.columns]
             ts_col = next(
-                (
-                    c
-                    for c in ("timestamp", "time", "date", "datetime")
-                    if c in df.columns
-                ),
+                (c for c in ("timestamp", "time", "date", "datetime") if c in df.columns),
                 None,
             )
             if ts_col is None:
@@ -434,9 +418,7 @@ class MTFFusionStore:
             logger.info("MTFFusionStore: falling back to yfinance (%s)", ticker)
 
             if self._h4_df is None:
-                raw = yf.download(
-                    ticker, period="2y", interval="1h", progress=False, auto_adjust=True
-                )
+                raw = yf.download(ticker, period="2y", interval="1h", progress=False, auto_adjust=True)
                 if not raw.empty:
                     raw.columns = [c.lower() for c in raw.columns]
                     raw.index = pd.to_datetime(raw.index, utc=True)
@@ -449,9 +431,7 @@ class MTFFusionStore:
                         "volume": "sum",
                     }
                     available = {k: v for k, v in agg.items() if k in raw.columns}
-                    self._h4_df = (
-                        raw.resample("4h").agg(available).dropna(subset=["close"])
-                    )
+                    self._h4_df = raw.resample("4h").agg(available).dropna(subset=["close"])
 
             if self._d1_df is None:
                 raw = yf.download(
@@ -552,20 +532,14 @@ class MTFFusionStore:
                     idx = idx.tz_localize("UTC")
 
                 # Build daily regime features
-                daily_df = (
-                    self._d1_df
-                    if self._d1_df is not None
-                    else MTFFusion.resample_to_daily(ohlcv_df)
-                )
+                daily_df = self._d1_df if self._d1_df is not None else MTFFusion.resample_to_daily(ohlcv_df)
                 daily_regime = _compute_daily_regime(daily_df)
                 daily_aligned = _align_to_intraday(idx, daily_regime, shift_periods=1)
 
                 # Build hourly regime features from H4 (or skip)
                 if self._h4_df is not None:
                     hourly_regime = _compute_hourly_regime(self._h4_df)
-                    hourly_aligned = _align_to_intraday(
-                        idx, hourly_regime, shift_periods=1
-                    )
+                    hourly_aligned = _align_to_intraday(idx, hourly_regime, shift_periods=1)
                 else:
                     hourly_aligned = pd.DataFrame(index=idx)
 
@@ -581,9 +555,7 @@ class MTFFusionStore:
     @property
     def is_ready(self) -> bool:
         """True when bootstrap has completed and at least one timeframe is loaded."""
-        return self._bootstrapped and (
-            self._d1_df is not None or self._h4_df is not None
-        )
+        return self._bootstrapped and (self._d1_df is not None or self._h4_df is not None)
 
     def status(self) -> dict:
         """Return a health-check dict for monitoring endpoints."""

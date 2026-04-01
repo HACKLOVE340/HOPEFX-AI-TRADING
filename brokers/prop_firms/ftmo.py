@@ -17,6 +17,7 @@ import json
 import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -232,8 +233,7 @@ class FTMOBroker:
 
         if potential_loss > metrics.remaining_daily_loss:
             raise ValueError(
-                f"Order size would exceed daily loss limit. "
-                f"Max allowed loss: {metrics.remaining_daily_loss}",
+                f"Order size would exceed daily loss limit. Max allowed loss: {metrics.remaining_daily_loss}",
             )
 
         endpoint = f"/accounts/{self.account_id}/orders"
@@ -386,9 +386,7 @@ try:
             info = self.get_account_info()
             if info is None:
                 return {"compliant": False, "reason": "not connected"}
-            daily_loss_pct = (
-                (info.balance - info.equity) / info.balance * 100 if info.balance else 0
-            )
+            daily_loss_pct = (info.balance - info.equity) / info.balance * 100 if info.balance else 0
             compliant = daily_loss_pct < 5.0  # noqa: PLR2004
             return {
                 "compliant": compliant,

@@ -328,9 +328,7 @@ class TestInferenceEngine:
         engine = InferenceEngine()
         # Point predictor at non-existent model
         engine._predictor = None
-        with patch(
-            "ml.inference_engine.InferenceEngine._get_predictor", return_value=None
-        ):
+        with patch("ml.inference_engine.InferenceEngine._get_predictor", return_value=None):
             df = _make_ohlcv(150)
             result = engine.predict(df)
         # Should not raise; fallback or neutral
@@ -439,9 +437,7 @@ class TestLiveTradingGate:
 class TestStatusEndpoints:
     @pytest.fixture
     def client(self):
-        os.environ.setdefault(
-            "SECURITY_JWT_SECRET", "test-secret-key-32chars-minimum!!"
-        )
+        os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-32chars-minimum!!")
         os.environ.setdefault("APP_ENV", "development")
         from fastapi.testclient import TestClient
         from api.status import router

@@ -36,6 +36,7 @@ import logging
 import os
 from collections import deque
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -153,9 +154,7 @@ class _MLPredictor:
             from ml.live_inference import get_advanced_predictor
 
             self._predictor = get_advanced_predictor()
-            self._available = (
-                self._predictor is not None and self._predictor.is_available
-            )
+            self._available = self._predictor is not None and self._predictor.is_available
             if self._available:
                 logger.info(
                     "StrategyEngine: AdvancedModelPredictor loaded (version=%s).",
@@ -173,9 +172,7 @@ class _MLPredictor:
             )
             self._available = False
 
-    def predict(
-        self, ohlcv_df: pd.DataFrame, ema_cross: float, symbol: str
-    ) -> tuple[str, float]:
+    def predict(self, ohlcv_df: pd.DataFrame, ema_cross: float, symbol: str) -> tuple[str, float]:
         """
         Return (direction, confidence).
 
@@ -194,6 +191,7 @@ class _MLPredictor:
                 model_df = ohlcv_df
                 try:
                     from ml.daily_aggregator import ensure_daily, needs_resampling
+
                     if needs_resampling(ohlcv_df):
                         resampled = ensure_daily(ohlcv_df, min_bars=MIN_BARS)
                         if resampled is not None:
@@ -205,10 +203,7 @@ class _MLPredictor:
                             )
                         else:
                             # Not enough daily bars yet — use EMA fallback
-                            logger.debug(
-                                "StrategyEngine: insufficient daily bars after "
-                                "resampling — EMA fallback"
-                            )
+                            logger.debug("StrategyEngine: insufficient daily bars after resampling — EMA fallback")
                             model_df = None
                 except Exception as _re:
                     logger.debug("StrategyEngine: resampling skipped: %s", _re)
@@ -231,9 +226,7 @@ class _MLPredictor:
                         return "HOLD", confidence
 
             except Exception as exc:
-                logger.warning(
-                    "StrategyEngine: ML predict error (%s) — EMA fallback.", exc
-                )
+                logger.warning("StrategyEngine: ML predict error (%s) — EMA fallback.", exc)
 
         # EMA-crossover fallback
         if ema_cross > 0:

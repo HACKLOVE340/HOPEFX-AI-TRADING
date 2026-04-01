@@ -116,9 +116,7 @@ class TestBuildAdvancedFeatures:
 
         df = _make_ohlcv()
         _, y = build_advanced_features(df, macro_df=None)
-        assert set(y.unique()).issubset(
-            {0, 1}
-        ), f"Target has non-binary values: {y.unique()}"
+        assert set(y.unique()).issubset({0, 1}), f"Target has non-binary values: {y.unique()}"
 
     def test_no_close_lag_features(self):
         """Raw price lags are non-stationary — must not appear in feature matrix."""
@@ -203,9 +201,7 @@ class TestOosEvalAdvanced:
         try:
             X_cv, y_cv, X_oos, y_oos = cv_oos_split
             oos_eval_advanced(X_cv, y_cv, X_oos, y_oos)
-            assert (
-                tmp_path / "advanced_oos.pkl"
-            ).exists(), "advanced_oos.pkl not saved"
+            assert (tmp_path / "advanced_oos.pkl").exists(), "advanced_oos.pkl not saved"
         finally:
             ta.MODEL_DIR = original
 
@@ -291,9 +287,7 @@ class TestExtractFeatureImportance:
             model, _ = train_final_model(X, y, use_stacking=False)
             imp = extract_feature_importance(model, list(X.columns))
             for k, v in imp.items():
-                assert isinstance(
-                    v, float
-                ), f"Importance for {k} is not float: {type(v)}"
+                assert isinstance(v, float), f"Importance for {k} is not float: {type(v)}"
         finally:
             ta.MODEL_DIR = original
 

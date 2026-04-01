@@ -18,6 +18,7 @@ This strategy implements Smart Money Concepts including:
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -278,28 +279,12 @@ class SMCICTStrategy(BaseStrategy):
             recent_lows = [p["low"] for p in prices[-self.structure_lookback :]]
 
             # Check for higher highs and higher lows (bullish)
-            hh_count = sum(
-                1
-                for i in range(1, len(recent_highs))
-                if recent_highs[i] > recent_highs[i - 1]
-            )
-            hl_count = sum(
-                1
-                for i in range(1, len(recent_lows))
-                if recent_lows[i] > recent_lows[i - 1]
-            )
+            hh_count = sum(1 for i in range(1, len(recent_highs)) if recent_highs[i] > recent_highs[i - 1])
+            hl_count = sum(1 for i in range(1, len(recent_lows)) if recent_lows[i] > recent_lows[i - 1])
 
             # Check for lower highs and lower lows (bearish)
-            lh_count = sum(
-                1
-                for i in range(1, len(recent_highs))
-                if recent_highs[i] < recent_highs[i - 1]
-            )
-            ll_count = sum(
-                1
-                for i in range(1, len(recent_lows))
-                if recent_lows[i] < recent_lows[i - 1]
-            )
+            lh_count = sum(1 for i in range(1, len(recent_highs)) if recent_highs[i] < recent_highs[i - 1])
+            ll_count = sum(1 for i in range(1, len(recent_lows)) if recent_lows[i] < recent_lows[i - 1])
 
             if hh_count > lh_count and hl_count > ll_count:
                 trend = "bullish"
@@ -364,9 +349,7 @@ class SMCICTStrategy(BaseStrategy):
             for i in range(2, len(prices)):
                 # Bullish FVG: Gap between bar[i-2] high and bar[i] low
                 if prices[i]["low"] > prices[i - 2]["high"]:
-                    gap_size = (prices[i]["low"] - prices[i - 2]["high"]) / prices[
-                        i - 2
-                    ]["high"]
+                    gap_size = (prices[i]["low"] - prices[i - 2]["high"]) / prices[i - 2]["high"]
                     if gap_size >= self.fvg_min_gap:
                         bullish_fvgs.append(
                             {
@@ -378,9 +361,7 @@ class SMCICTStrategy(BaseStrategy):
 
                 # Bearish FVG: Gap between bar[i-2] low and bar[i] high
                 if prices[i]["high"] < prices[i - 2]["low"]:
-                    gap_size = (prices[i - 2]["low"] - prices[i]["high"]) / prices[i][
-                        "high"
-                    ]
+                    gap_size = (prices[i - 2]["low"] - prices[i]["high"]) / prices[i]["high"]
                     if gap_size >= self.fvg_min_gap:
                         bearish_fvgs.append(
                             {
@@ -415,12 +396,8 @@ class SMCICTStrategy(BaseStrategy):
             return {
                 "swept_above": swept_above,
                 "swept_below": swept_below,
-                "liquidity_level_high": max(recent_highs[:-1])
-                if len(recent_highs) > 1
-                else current_high,
-                "liquidity_level_low": min(recent_lows[:-1])
-                if len(recent_lows) > 1
-                else current_low,
+                "liquidity_level_high": max(recent_highs[:-1]) if len(recent_highs) > 1 else current_high,
+                "liquidity_level_low": min(recent_lows[:-1]) if len(recent_lows) > 1 else current_low,
             }
 
         except Exception as e:

@@ -221,9 +221,7 @@ class TestAbstainThreshold:
         count_55 = (df_55["signal"] != 0).sum()
 
         rdb.ABSTAIN_THRESHOLD = original
-        assert (
-            count_52 >= count_55
-        ), f"Lower threshold should produce ≥ signals: {count_52} vs {count_55}"
+        assert count_52 >= count_55, f"Lower threshold should produce ≥ signals: {count_52} vs {count_55}"
 
     def test_signals_are_only_1_minus1_or_0(self):
         from real_data_backtest import generate_signals

@@ -157,9 +157,7 @@ class TestWatchlistFlow:
         assert "GBPUSD" not in r2.json()["symbols"]
 
     def test_delete_nonexistent_symbol_returns_404(self, watchlist_client):
-        r = watchlist_client.delete(
-            "/api/watchlist/FAKESYM", headers=_auth(sub="user-wl-404")
-        )
+        r = watchlist_client.delete("/api/watchlist/FAKESYM", headers=_auth(sub="user-wl-404"))
         assert r.status_code == 404  # noqa: PLR2004
 
     def test_prices_endpoint_returns_items_with_bid_ask(self, watchlist_client):

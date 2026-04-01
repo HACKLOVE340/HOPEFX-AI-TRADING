@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -101,9 +102,7 @@ def _fetch_bars(symbol: str, lookback: int = 200):
         df = yf.download(ticker, period="60d", interval="1h", progress=False)
         if df is None or df.empty:
             raise ValueError(f"No data returned for {ticker}")
-        df.columns = [
-            c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns
-        ]
+        df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
         return df.tail(lookback)
     except Exception as exc:
         raise HTTPException(
@@ -132,12 +131,8 @@ class LearnerStatusResponse(BaseModel):
 
 
 class PartialFitRequest(BaseModel):
-    symbol: str = Field(
-        "XAU_USD", description="Symbol to update (e.g. XAU_USD, BTC_USD)"
-    )
-    lookback: int = Field(
-        200, ge=50, le=2000, description="Number of recent OHLCV bars to use"
-    )
+    symbol: str = Field("XAU_USD", description="Symbol to update (e.g. XAU_USD, BTC_USD)")
+    lookback: int = Field(200, ge=50, le=2000, description="Number of recent OHLCV bars to use")
 
 
 class PartialFitResponse(BaseModel):
@@ -239,9 +234,7 @@ async def online_learner_status(
         try:
             raw = learner.status()
         except Exception as exc:
-            logger.warning(
-                "online_learner_status: status() failed for %s: %s", sym, exc
-            )
+            logger.warning("online_learner_status: status() failed for %s: %s", sym, exc)
             raw = {
                 "symbol": sym,
                 "fitted": False,
@@ -320,8 +313,7 @@ async def partial_fit(
         bars_used=len(bars),
         updated_at=updated_at,
         message=(
-            f"partial_fit completed for {req.symbol} — "
-            f"{len(bars)} bars, update #{raw.get('update_count', 0)}"
+            f"partial_fit completed for {req.symbol} — {len(bars)} bars, update #{raw.get('update_count', 0)}"
             if success
             else f"partial_fit returned False for {req.symbol} — check logs"
         ),
@@ -423,9 +415,7 @@ async def reset_online_learner(
         if removed
         else f"No OnlineLearnerStore found for {req.symbol.upper()} — nothing to reset."
     )
-    logger.info(
-        "online_learner reset: symbol=%s removed=%s", req.symbol.upper(), removed
-    )
+    logger.info("online_learner reset: symbol=%s removed=%s", req.symbol.upper(), removed)
     return ResetResponse(
         symbol=req.symbol.upper(),
         reset=removed,

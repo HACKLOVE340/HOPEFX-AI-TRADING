@@ -130,9 +130,7 @@ class MT5LiveFeed:
 
     def start(self) -> None:
         if self._running:
-            logger.warning(
-                "MT5LiveFeed.start() called while already running — ignored."
-            )
+            logger.warning("MT5LiveFeed.start() called while already running — ignored.")
             return
         self._running = True
         self._connect_thread = threading.Thread(
@@ -169,10 +167,7 @@ class MT5LiveFeed:
                     break
                 attempt = self._reconnect_attempts
 
-            if (
-                self._max_reconnect_attempts > 0
-                and attempt >= self._max_reconnect_attempts
-            ):
+            if self._max_reconnect_attempts > 0 and attempt >= self._max_reconnect_attempts:
                 msg = (
                     f"MT5LiveFeed: exceeded max reconnect attempts "
                     f"({self._max_reconnect_attempts}). Marking permanently failed."
@@ -185,16 +180,12 @@ class MT5LiveFeed:
                 break
 
             if not WEBSOCKET_AVAILABLE:
-                logger.warning(
-                    "MT5LiveFeed: websocket-client unavailable — using REST fallback."
-                )
+                logger.warning("MT5LiveFeed: websocket-client unavailable — using REST fallback.")
                 self._rest_fallback_loop()
                 return
 
             try:
-                logger.info(
-                    "MT5LiveFeed connecting (attempt %d) to %s", attempt + 1, self.url
-                )
+                logger.info("MT5LiveFeed connecting (attempt %d) to %s", attempt + 1, self.url)
                 self._connect()
                 with self._lock:
                     if self._connected:
@@ -217,18 +208,14 @@ class MT5LiveFeed:
             with self._lock:
                 self._reconnect_attempts += 1
                 delay = self._reconnect_delay
-                self._reconnect_delay = min(
-                    delay * _RECONNECT_MULTIPLIER, _RECONNECT_MAX_DELAY
-                )
+                self._reconnect_delay = min(delay * _RECONNECT_MULTIPLIER, _RECONNECT_MAX_DELAY)
                 self._connected = False
 
             logger.warning(
                 "MT5LiveFeed disconnected. Retrying in %.1fs (attempt %d/%s)…",
                 delay,
                 attempt + 1,
-                self._max_reconnect_attempts
-                if self._max_reconnect_attempts > 0
-                else "inf",
+                self._max_reconnect_attempts if self._max_reconnect_attempts > 0 else "inf",
             )
             time.sleep(delay)
 
@@ -260,9 +247,7 @@ class MT5LiveFeed:
         try:
             tick_data = json.loads(message)
         except json.JSONDecodeError as exc:
-            logger.error(
-                "MT5LiveFeed: JSON decode error on message %r: %s", message[:200], exc
-            )
+            logger.error("MT5LiveFeed: JSON decode error on message %r: %s", message[:200], exc)
             with self._lock:
                 self._last_error = f"JSONDecodeError: {exc}"
             return
@@ -271,9 +256,7 @@ class MT5LiveFeed:
             self._handle_tick(tick_data)
         except Exception as exc:
             tb = traceback.format_exc()
-            logger.error(
-                "MT5LiveFeed: unhandled error in _handle_tick: %s\n%s", exc, tb
-            )
+            logger.error("MT5LiveFeed: unhandled error in _handle_tick: %s\n%s", exc, tb)
             self._capture_sentry(exc)
             with self._lock:
                 self._last_error = str(exc)
@@ -281,9 +264,7 @@ class MT5LiveFeed:
     def _on_error(self, ws, error) -> None:
         tb = traceback.format_exc()
         logger.error("MT5LiveFeed WebSocket error: %s\n%s", error, tb)
-        self._capture_sentry(
-            error if isinstance(error, Exception) else RuntimeError(str(error))
-        )
+        self._capture_sentry(error if isinstance(error, Exception) else RuntimeError(str(error)))
         with self._lock:
             self._connected = False
             self._last_error = str(error)
@@ -365,10 +346,7 @@ class MT5LiveFeed:
 
     def _rest_fallback_loop(self) -> None:
         if not self.rest_fallback_url:
-            msg = (
-                "MT5LiveFeed: WebSocket unavailable and no REST fallback URL configured. "
-                "Feed is non-functional."
-            )
+            msg = "MT5LiveFeed: WebSocket unavailable and no REST fallback URL configured. Feed is non-functional."
             logger.critical(msg)
             self._capture_sentry(RuntimeError(msg))
             with self._lock:
@@ -381,9 +359,7 @@ class MT5LiveFeed:
 
         parsed = urlparse(self.rest_fallback_url)
         if parsed.scheme not in ("http", "https"):
-            raise ValueError(
-                f"MT5LiveFeed: rest_fallback_url must use http/https scheme, got {parsed.scheme!r}"
-            )
+            raise ValueError(f"MT5LiveFeed: rest_fallback_url must use http/https scheme, got {parsed.scheme!r}")
 
         logger.info("MT5LiveFeed: using REST fallback at %s", self.rest_fallback_url)
         while self._running:
@@ -418,9 +394,7 @@ class MT5LiveFeed:
                 with self._lock:
                     self._connected = False
                     delay = self._reconnect_delay
-                    self._reconnect_delay = min(
-                        delay * _RECONNECT_MULTIPLIER, _RECONNECT_MAX_DELAY
-                    )
+                    self._reconnect_delay = min(delay * _RECONNECT_MULTIPLIER, _RECONNECT_MAX_DELAY)
                     self._last_error = str(exc)
                 time.sleep(delay)
                 continue

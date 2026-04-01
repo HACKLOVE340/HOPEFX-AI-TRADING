@@ -50,7 +50,7 @@ jobs:
           git add assets/cover.png
           # Only commit when the file actually changed
           if git diff --cached --quiet; then
-            echo "cover.png unchanged — nothing to commit."
+            echo "cover.png unchanged - nothing to commit."
           else
             git commit -m "chore: regenerate assets/cover.png [skip ci]"
             git push

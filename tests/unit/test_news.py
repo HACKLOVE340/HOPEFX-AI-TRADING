@@ -15,6 +15,7 @@ Tests for:
 
 import pytest
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from unittest.mock import Mock, patch
 
@@ -230,10 +231,7 @@ class TestEconomicCalendar:
         calendar.add_event(low_impact)
 
         high_impact_events = calendar.get_high_impact_events()
-        assert all(
-            e.importance in [EventImportance.HIGH, EventImportance.CRITICAL]
-            for e in high_impact_events
-        )
+        assert all(e.importance in [EventImportance.HIGH, EventImportance.CRITICAL] for e in high_impact_events)
 
 
 # ============================================================

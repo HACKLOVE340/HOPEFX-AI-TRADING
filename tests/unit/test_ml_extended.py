@@ -225,9 +225,7 @@ class TestRandomForestClassifierExtended:
             "n_estimators": [5, 10],
             "max_depth": [3, 5],
         }
-        result = rf.optimize_hyperparameters(
-            X[:100], y[:100], param_grid=param_grid, cv=2
-        )
+        result = rf.optimize_hyperparameters(X[:100], y[:100], param_grid=param_grid, cv=2)
         assert "best_params" in result
         assert "best_score" in result
         assert rf.is_trained is True
@@ -315,10 +313,7 @@ class TestEnsemblePredictorExtended:
         for _ in range(10):
             ensemble_no_lstm.update_performance("random_forest", 1905.0, 1903.0)
         # Weights should still sum to ~1
-        total_weight = sum(
-            ensemble_no_lstm.model_weights.get(m, 0)
-            for m in ensemble_no_lstm.models
-        )
+        total_weight = sum(ensemble_no_lstm.model_weights.get(m, 0) for m in ensemble_no_lstm.models)
         assert abs(total_weight - 1.0) < 0.01  # noqa: PLR2004
 
     def test_get_model_summary(self, ensemble_no_lstm, prices):

@@ -89,9 +89,7 @@ class TestStochasticInit:
     def test_init_covers_all_attributes(self):
         from strategies.stochastic import StochasticStrategy
 
-        s = make_concrete(
-            StochasticStrategy, k_period=10, d_period=5, oversold=25, overbought=75
-        )
+        s = make_concrete(StochasticStrategy, k_period=10, d_period=5, oversold=25, overbought=75)
         assert s.k_period == 10  # noqa: PLR2004
         assert s.d_period == 5  # noqa: PLR2004
         assert s.oversold == 25  # noqa: PLR2004
@@ -135,16 +133,12 @@ class TestStochasticSignalPaths:
         df = _df(prices, highs, lows)
 
         # Patch calculate_stochastic to return specific values
-        k_vals = [15.0] * (n - 1) + [
-            21.0
-        ]  # prev=15 (< oversold), current=21 (> oversold)
+        k_vals = [15.0] * (n - 1) + [21.0]  # prev=15 (< oversold), current=21 (> oversold)
         d_vals = [10.0] * n
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "BUY"
         assert result["confidence"] == 0.75  # noqa: PLR2004
@@ -161,9 +155,7 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "SELL"
         assert result["confidence"] == 0.85  # noqa: PLR2004
@@ -180,9 +172,7 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "SELL"
         assert result["confidence"] == 0.55  # noqa: PLR2004
@@ -199,9 +189,7 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "BUY"
         assert result["confidence"] == 0.55  # noqa: PLR2004
@@ -219,9 +207,7 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "HOLD"
         assert "neutral" in result["reason"]
@@ -237,9 +223,7 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "HOLD"
         assert "NaN" in result["reason"]
@@ -248,9 +232,7 @@ class TestStochasticSignalPaths:
         """Cover lines 190-192: except block."""
         df = _df([1900.0] * 50)
 
-        with patch.object(
-            strat, "calculate_stochastic", side_effect=RuntimeError("test error")
-        ):
+        with patch.object(strat, "calculate_stochastic", side_effect=RuntimeError("test error")):
             result = strat.generate_signal(df)
         assert result["type"] == "HOLD"
         assert "Error" in result["reason"]
@@ -319,9 +301,7 @@ class TestBreakoutSignalPaths:
         """Cover lines 199-201: except block."""
         df = _df([1900.0] * 50)
 
-        with patch.object(
-            strat, "identify_support_resistance", side_effect=RuntimeError("test error")
-        ):
+        with patch.object(strat, "identify_support_resistance", side_effect=RuntimeError("test error")):
             result = strat.generate_signal(df)
         assert result["type"] == "HOLD"
         assert "Error" in result["reason"]
@@ -371,9 +351,7 @@ class TestBreakoutSignalPaths:
         # Patch to return support above current_low
         support = base - 0.2  # current_low(base-0.5) < support(base-0.2) ✓
         resistance = base + 10.0
-        with patch.object(
-            strat, "identify_support_resistance", return_value=(support, resistance)
-        ):
+        with patch.object(strat, "identify_support_resistance", return_value=(support, resistance)):
             result = strat.generate_signal(df)
         # Should SELL (bearish breakout below support)
         assert result["type"] == "SELL"
@@ -391,9 +369,7 @@ class TestBreakoutSignalPaths:
         volumes = [100] * n
         df = _df(prices, highs_arr, lows_arr, list(prices), volumes)
 
-        with patch.object(
-            strat, "identify_support_resistance", return_value=(support, resistance)
-        ):
+        with patch.object(strat, "identify_support_resistance", return_value=(support, resistance)):
             result = strat.generate_signal(df)
         assert result["type"] == "SELL"
 
