@@ -42,7 +42,6 @@ ignore = [
     "UP035",
     "UP006",
     "UP042",
-    "UP045",
     "UP036",
     # Noisy / low-value rules deferred to separate passes
     "RUF001", "RUF002", "RUF003",
