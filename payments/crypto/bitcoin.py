@@ -358,7 +358,7 @@ _bitcoin_client: BitcoinClient | None = None
 
 
 def _get_bitcoin_client() -> BitcoinClient:
-    global _bitcoin_client  # noqa: PLW0603
+    global _bitcoin_client
     if _bitcoin_client is None:
         _bitcoin_client = BitcoinClient()
     return _bitcoin_client
