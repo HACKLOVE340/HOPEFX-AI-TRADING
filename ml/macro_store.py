@@ -163,26 +163,29 @@ class MacroStore:
         self,
         ohlcv_h1: pd.DataFrame,
         series: list[str] | None = None,
-        fill_method: str = "ffill",
     ) -> pd.DataFrame:
         """
         Align daily macro series to the hourly OHLCV index.
 
         Each daily value is forward-filled to all hourly bars until the next
-        daily observation. This is the correct approach for macro data:
+        daily observation. This is the correct causal approach for macro data:
         a DXY close of 102.34 on Monday applies to all hourly bars on
         Tuesday until Tuesday's close is published.
 
+        bfill is intentionally NOT supported. Back-filling would propagate a
+        future observation into past bars (look-ahead bias), corrupting any
+        backtest or training run that uses this data.
+
         Parameters
         ----------
-        ohlcv_h1    : DataFrame with DatetimeIndex (hourly)
-        series      : List of series names to include (default: all loaded)
-        fill_method : "ffill" (default) or "bfill"
+        ohlcv_h1 : DataFrame with DatetimeIndex (hourly)
+        series   : List of series names to include (default: all loaded)
 
         Returns
         -------
         DataFrame with same index as ohlcv_h1, one column per macro series.
-        Missing values (before first observation) are filled with 0.0.
+        Leading NaNs (before the first observation) are filled with 0.0 —
+        the neutral/unknown value — rather than back-filled from the future.
         """
         if ohlcv_h1.empty:
             return pd.DataFrame(index=ohlcv_h1.index)
@@ -210,10 +213,11 @@ class MacroStore:
             if daily.index.tz is None:
                 daily = daily.tz_localize("UTC")
 
-            # Reindex to hourly, forward-fill, then fill any leading NaN with 0
+            # Reindex to hourly then forward-fill only.
+            # Leading NaNs (before the first daily observation) are filled
+            # with 0.0 — never back-filled — to avoid look-ahead bias.
             combined_idx = idx.union(daily.index)
-            reindexed = daily.reindex(combined_idx)
-            reindexed = reindexed.ffill() if fill_method == "ffill" else reindexed.bfill()
+            reindexed = daily.reindex(combined_idx).ffill()
             aligned = reindexed.reindex(idx).fillna(0.0)
             aligned_cols[name] = aligned
 
