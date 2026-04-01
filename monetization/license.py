@@ -11,7 +11,8 @@ based on user subscriptions and access codes.
 """
 
 import logging
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 
 from .pricing import SubscriptionTier, pricing_manager

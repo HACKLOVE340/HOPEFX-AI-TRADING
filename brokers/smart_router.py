@@ -12,7 +12,8 @@ Intelligent order routing across multiple brokers with best execution
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 
 import numpy as np

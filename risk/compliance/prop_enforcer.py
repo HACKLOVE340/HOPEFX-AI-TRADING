@@ -48,7 +48,8 @@ import logging
 import os
 import threading
 from dataclasses import dataclass
-from datetime import datetime, time as dtime, UTC
+from datetime import datetime, time as dtime, timezone
+UTC = timezone.utc
 from enum import Enum, auto
 from pathlib import Path
 from collections.abc import Callable

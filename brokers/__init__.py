@@ -15,7 +15,8 @@ import random
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC  # noqa: F401
+from datetime import datetime, timezone, timezone  # noqa: F401
+UTC = timezone.utc
 from enum import Enum
 from typing import Any, Dict, List, Optional  # noqa: F401
 

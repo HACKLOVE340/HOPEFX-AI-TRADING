@@ -29,7 +29,8 @@ import websockets
 from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Callable, AsyncIterator
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum, IntEnum, auto
 from collections import deque, defaultdict
 import logging

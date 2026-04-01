@@ -10,7 +10,8 @@ Complete SQLAlchemy models for all entities
 
 import enum
 import logging
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 
 def _utcnow() -> datetime:

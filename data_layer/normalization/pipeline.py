@@ -33,7 +33,8 @@ Single-tick operations are pure Python for minimal latency.
 from __future__ import annotations
 
 import logging
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 
 import numpy as np
 import os

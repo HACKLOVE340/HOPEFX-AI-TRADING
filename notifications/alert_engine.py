@@ -18,7 +18,8 @@ Inspired by: TradingView alerts, MT5 alerts, cTrader alerts
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass, field

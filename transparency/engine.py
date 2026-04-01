@@ -6,7 +6,8 @@
 """transparency/engine.py — ExecutionTransparencyEngine."""
 
 from typing import Any
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 import logging
 import statistics
 

@@ -16,7 +16,8 @@ This module provides:
 """
 
 import logging
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from typing import Any
 from enum import Enum

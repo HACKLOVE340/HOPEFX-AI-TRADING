@@ -10,7 +10,8 @@ Market Data Validation - FIA 3.1 Market Data Reasonability Checks
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from dataclasses import dataclass
 from enum import Enum
 import logging

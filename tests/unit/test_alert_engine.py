@@ -13,7 +13,8 @@ Tests for:
 - Alert management
 """
 
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 
 class TestAlertConditionType:

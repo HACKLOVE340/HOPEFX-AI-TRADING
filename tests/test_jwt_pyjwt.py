@@ -80,20 +80,21 @@ def test_token_with_custom_expiry():
 
 
 def test_expired_token_raises():
-    """A token with exp in the past must be rejected."""
+    """A token with exp in the past must be rejected with the credentials_exception."""
     import jwt as pyjwt
 
     secret = os.environ["JWT_SECRET_KEY"]
     expired_payload = {"sub": "user-exp", "exp": int(time.time()) - 10}
     token = pyjwt.encode(expired_payload, secret, algorithm="HS256")
-    with pytest.raises(HTTPException):
+    # verify_token raises the credentials_exception it was given (_FakeExc here)
+    with pytest.raises(_FakeExc):
         verify_token(token, _CRED_EXC)
 
 
 def test_tampered_token_raises():
     token = create_access_token({"sub": "user-tamper"})
     bad_token = token[:-4] + "XXXX"
-    with pytest.raises(HTTPException):
+    with pytest.raises(_FakeExc):
         verify_token(bad_token, _CRED_EXC)
 
 
@@ -103,7 +104,7 @@ def test_missing_sub_raises():
 
     secret = os.environ["JWT_SECRET_KEY"]
     token = pyjwt.encode({"exp": int(time.time()) + 3600}, secret, algorithm="HS256")
-    with pytest.raises(HTTPException):
+    with pytest.raises(_FakeExc):
         verify_token(token, _CRED_EXC)
 
 

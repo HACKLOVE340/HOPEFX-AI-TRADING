@@ -9,7 +9,8 @@ Unit tests for Risk Manager - FIA 2024 Compliant
 """
 
 import pytest
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 from risk.manager import RiskManager, RiskLevel
 from risk.advanced_analytics import RiskAnalytics

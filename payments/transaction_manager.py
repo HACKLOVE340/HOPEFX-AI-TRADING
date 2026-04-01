@@ -10,7 +10,8 @@ Handles complete transaction lifecycle including recording, validation,
 status tracking, reversal, and reporting.
 """
 
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum
 from typing import Any

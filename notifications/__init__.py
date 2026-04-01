@@ -15,7 +15,8 @@ from typing import Dict, List, Optional  # noqa: F401
 from enum import Enum
 from dataclasses import dataclass
 import json  # noqa: F401
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 

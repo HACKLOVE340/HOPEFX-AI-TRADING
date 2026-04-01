@@ -14,7 +14,8 @@ Comprehensive tests for Phases 17-26 modules:
 """
 
 import pytest
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from unittest.mock import MagicMock
 import numpy as np
 

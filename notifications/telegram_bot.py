@@ -34,7 +34,8 @@ Environment variables:
 import asyncio
 import logging
 import os
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
 

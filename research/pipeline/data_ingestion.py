@@ -32,7 +32,8 @@ import hashlib
 import logging
 import random
 import time
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from pathlib import Path
 
 import feedparser  # pip install feedparser

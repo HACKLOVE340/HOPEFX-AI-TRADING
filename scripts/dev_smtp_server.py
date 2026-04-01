@@ -34,7 +34,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from email import message_from_bytes
 from pathlib import Path
 

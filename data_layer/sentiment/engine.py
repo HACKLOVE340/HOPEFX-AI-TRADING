@@ -40,7 +40,8 @@ import hashlib
 import logging
 import time
 from collections import deque
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any
 
 from data_layer.feeds.news.alpha_vantage import AlphaVantageNewsFeed

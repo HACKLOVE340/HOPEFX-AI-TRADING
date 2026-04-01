@@ -45,7 +45,8 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 

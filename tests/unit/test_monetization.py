@@ -39,7 +39,8 @@ from monetization.enterprise import (
     WhiteLabelStatus,
 )
 from unittest.mock import MagicMock, patch
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 from monetization.stripe_integration import StripeIntegration, StripeWebhookEvent
 

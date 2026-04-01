@@ -99,7 +99,8 @@ import os
 import socket
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 from typing import Any
 from collections.abc import Callable

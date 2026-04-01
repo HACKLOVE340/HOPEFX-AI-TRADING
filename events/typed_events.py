@@ -30,7 +30,8 @@ import asyncio
 import logging
 import uuid
 from collections import defaultdict
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any, Generic, TypeVar
 from collections.abc import Callable
 

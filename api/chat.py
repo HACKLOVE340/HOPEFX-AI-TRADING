@@ -28,7 +28,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 

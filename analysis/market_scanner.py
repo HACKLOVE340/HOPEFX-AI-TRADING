@@ -17,7 +17,8 @@ Inspired by: TradeStation RadarScreen, TradingView Screener, TC2000
 """
 
 import logging
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass, field

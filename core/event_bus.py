@@ -36,7 +36,8 @@ import struct
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 from collections.abc import AsyncIterator, Callable
 

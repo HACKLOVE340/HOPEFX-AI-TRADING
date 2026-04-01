@@ -11,7 +11,8 @@ Coordinates multiple strategies to prevent conflicts and maximize returns
 from collections import defaultdict
 from typing import Any, Optional
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 from core.event_bus import DomainEvent, EventBus
 from strategies.base import BaseStrategy, Signal

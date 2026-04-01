@@ -52,7 +52,8 @@ import os
 import sys
 import time
 import traceback
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
 _GREEN = "\033[92m"

@@ -22,7 +22,8 @@ import asyncio
 import logging
 import os
 from typing import TYPE_CHECKING, Any
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 
 if TYPE_CHECKING:
     pass  # AppState is duck-typed; no circular import needed

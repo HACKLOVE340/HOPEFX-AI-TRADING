@@ -6,7 +6,8 @@
 """explainability/explainer.py — AIExplainer: SHAP-based signal explanation."""
 
 from typing import Any
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 import logging
 
 from explainability.models import (

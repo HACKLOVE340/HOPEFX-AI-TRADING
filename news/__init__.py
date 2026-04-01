@@ -63,7 +63,8 @@ from .geopolitical_risk import (
     create_self_hosted_setup,
     get_custom_layer_config,
 )
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 

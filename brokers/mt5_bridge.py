@@ -37,7 +37,8 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any

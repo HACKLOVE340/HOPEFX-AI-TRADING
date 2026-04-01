@@ -27,7 +27,8 @@ import numpy as np
 import pandas as pd
 from typing import Any
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 from collections import deque, defaultdict
 import logging

@@ -17,7 +17,8 @@ Inspired by: MT5, Bookmap, NinjaTrader DOM features
 """
 
 import logging
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from dataclasses import dataclass, field, asdict
 from collections import deque
 from enum import Enum

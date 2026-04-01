@@ -17,7 +17,8 @@ import json
 from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 try:
     import requests

@@ -15,7 +15,8 @@ Production Mobile API v2.0
 
 import logging
 from typing import Any
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 import uuid
 import asyncio
 

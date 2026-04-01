@@ -71,7 +71,8 @@ import math
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 import numpy as np
 

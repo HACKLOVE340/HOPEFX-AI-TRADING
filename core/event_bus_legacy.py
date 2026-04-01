@@ -15,7 +15,8 @@ import struct
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from collections.abc import Callable
 
 import lz4.frame

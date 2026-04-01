@@ -52,7 +52,8 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 

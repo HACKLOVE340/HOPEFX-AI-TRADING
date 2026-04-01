@@ -23,7 +23,8 @@ import time
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 

@@ -12,7 +12,8 @@ import asyncio
 import json
 import logging
 from typing import Any
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from collections import deque
 
 try:

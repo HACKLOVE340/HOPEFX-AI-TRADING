@@ -10,7 +10,8 @@ Handles payments via Paystack (Nigeria) - Bank transfer, Cards, USSD.
 """
 
 import os
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 import logging
 import hashlib

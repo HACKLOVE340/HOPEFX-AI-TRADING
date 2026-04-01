@@ -17,7 +17,8 @@ Tests for:
 import pytest
 import numpy as np
 import pandas as pd
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from unittest.mock import MagicMock
 
 

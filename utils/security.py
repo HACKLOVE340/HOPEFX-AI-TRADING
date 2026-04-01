@@ -18,7 +18,8 @@ import os
 import re
 import logging
 import secrets
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any
 from re import Pattern
 from dataclasses import dataclass

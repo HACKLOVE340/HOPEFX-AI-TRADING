@@ -13,7 +13,8 @@ Falls back to in-memory storage when no DB session factory is available.
 import hashlib
 import json
 import logging
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 
 logger = logging.getLogger(__name__)

@@ -14,7 +14,8 @@ import json
 import gzip
 from typing import TYPE_CHECKING
 from dataclasses import dataclass, asdict
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 import hashlib
 import aiofiles

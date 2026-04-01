@@ -13,7 +13,8 @@ import uuid
 from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 from collections import defaultdict
 import asyncio

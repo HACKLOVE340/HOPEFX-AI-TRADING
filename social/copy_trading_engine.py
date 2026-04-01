@@ -16,7 +16,8 @@ import logging
 from typing import Any
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 import uuid
 
 from sqlalchemy.ext.declarative import declarative_base

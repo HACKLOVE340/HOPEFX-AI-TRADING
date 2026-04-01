@@ -8,7 +8,8 @@ Chart Template Management
 """
 
 from typing import Any
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 
 class ChartTemplate:
