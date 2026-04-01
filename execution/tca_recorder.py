@@ -385,7 +385,7 @@ class TCARecorder:
         Used by the execution engine to flag broker routing issues.
         """
         window = list(self._broker_slippage.get(broker, []))
-        if len(window) < 10:
+        if len(window) < 10:  # noqa: PLR2004
             return False
         return float(np.mean(window)) > TCA_ALERT_THRESHOLD_BPS
 
@@ -411,7 +411,7 @@ class TCARecorder:
     def _check_alert(self, broker: str, record: TCARecord) -> None:
         """Fire an alert if rolling mean slippage exceeds threshold."""
         window = list(self._broker_slippage[broker])
-        if len(window) < 10:
+        if len(window) < 10:  # noqa: PLR2004
             return
         rolling_mean = float(np.mean(window))
         if rolling_mean > TCA_ALERT_THRESHOLD_BPS:
@@ -497,11 +497,11 @@ class TCARecorder:
     def _get_session(dt: datetime) -> str:
         """Classify a UTC datetime into a trading session."""
         hour = dt.hour
-        if 7 <= hour < 16:
+        if 7 <= hour < 16:  # noqa: PLR2004
             return "london"
-        elif 13 <= hour < 22:
+        elif 13 <= hour < 22:  # noqa: PLR2004
             return "new_york"
-        elif 0 <= hour < 9:
+        elif 0 <= hour < 9:  # noqa: PLR2004
             return "asia"
         return "off_hours"
 

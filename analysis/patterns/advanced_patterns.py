@@ -20,6 +20,47 @@ import numpy as np
 import pandas as pd
 from scipy.ndimage import argrelextrema
 
+
+# ── Module constants ─────────────────────────────────────────────────────────
+_MIN_PATTERN_BARS = 3
+_MIN_SWING_BARS = 2
+_PRICE_TOLERANCE = 0.02        # 2% price similarity threshold
+_TICK_EPSILON = 0.0001         # minimum price movement
+_CONFIDENCE_HIGH = 0.75
+_CONFIDENCE_MED = 0.55
+_HARMONIC_RATIO_1_618 = 1.618  # Fibonacci golden ratio
+_HARMONIC_RATIO_1_272 = 1.272
+_HARMONIC_RATIO_0_618 = 0.618
+_HARMONIC_RATIO_0_786 = 0.786
+_HARMONIC_RATIO_0_382 = 0.382
+_HARMONIC_RATIO_0_886 = 0.886
+_HARMONIC_RATIO_2_618 = 2.618
+_HARMONIC_RATIO_3_618 = 3.618
+_HARMONIC_RATIO_1_13 = 1.13
+_HARMONIC_RATIO_0_113 = 0.113
+_HARMONIC_RATIO_0_5 = 0.5
+_HARMONIC_RATIO_0_707 = 0.707
+_HARMONIC_RATIO_1_41 = 1.41
+_HARMONIC_RATIO_2_0 = 2.0
+_HARMONIC_RATIO_2_24 = 2.24
+_HARMONIC_RATIO_3_14 = 3.14
+_HARMONIC_RATIO_0_447 = 0.447
+_HARMONIC_RATIO_0_276 = 0.276
+_HARMONIC_RATIO_0_854 = 0.854
+_HARMONIC_RATIO_2_1 = 2.1
+_HARMONIC_RATIO_2_4 = 2.4
+_HARMONIC_RATIO_0_35 = 0.35
+_HARMONIC_RATIO_0_42 = 0.42
+_HARMONIC_RATIO_0_45 = 0.45
+_HARMONIC_RATIO_0_82 = 0.82
+_HARMONIC_RATIO_1_5 = 1.5
+_HARMONIC_RATIO_1_75 = 1.75
+_HARMONIC_RATIO_1_2 = 1.2
+_HARMONIC_RATIO_1_8 = 1.8
+_HARMONIC_RATIO_0_6 = 0.6
+_HARMONIC_RATIO_0_8 = 0.8
+_MIN_EXTREMA_ORDER = 10
+
 logger = logging.getLogger(__name__)
 
 
@@ -161,7 +202,7 @@ class AdvancedPatternDetector:
             peaks = argrelextrema(high, np.greater, order=5)[0]
             troughs = argrelextrema(low, np.less, order=5)[0]
 
-            if len(peaks) < 3:
+            if len(peaks) < 3:  # noqa: PLR2004
                 return patterns
 
             # Look for pattern: trough-peak-trough-peak-trough
@@ -174,7 +215,7 @@ class AdvancedPatternDetector:
                 troughs_between = troughs[
                     (troughs > left_peak_idx) & (troughs < right_peak_idx)
                 ]
-                if len(troughs_between) < 2:
+                if len(troughs_between) < 2:  # noqa: PLR2004
                     continue
 
                 left_trough = troughs_between[0]
@@ -243,7 +284,7 @@ class AdvancedPatternDetector:
             peaks = argrelextrema(high, np.greater, order=5)[0]
             troughs = argrelextrema(low, np.less, order=5)[0]
 
-            if len(peaks) < 2:
+            if len(peaks) < 2:  # noqa: PLR2004
                 return patterns
 
             # Double Tops
@@ -254,7 +295,7 @@ class AdvancedPatternDetector:
                 peak2 = high[peak2_idx]
 
                 # Check if peaks are similar in height (within 2%)
-                if abs(peak1 - peak2) / peak1 < 0.02:
+                if abs(peak1 - peak2) / peak1 < 0.02:  # noqa: PLR2004
                     # Find intermediate trough
                     troughs_between = troughs[
                         (troughs > peak1_idx) & (troughs < peak2_idx)
@@ -290,14 +331,14 @@ class AdvancedPatternDetector:
                         patterns.append(pattern)
 
             # Double Bottoms
-            if len(troughs) >= 2:
+            if len(troughs) >= 2:  # noqa: PLR2004
                 for i in range(len(troughs) - 1):
                     trough1_idx = troughs[i]
                     trough2_idx = troughs[i + 1]
                     trough1 = low[trough1_idx]
                     trough2 = low[trough2_idx]
 
-                    if abs(trough1 - trough2) / trough1 < 0.02:
+                    if abs(trough1 - trough2) / trough1 < 0.02:  # noqa: PLR2004
                         # Find intermediate peak
                         peaks_between = peaks[
                             (peaks > trough1_idx) & (peaks < trough2_idx)
@@ -356,7 +397,7 @@ class AdvancedPatternDetector:
                 low_trend = np.polyfit(range(len(window_low)), window_low, 1)[0]
 
                 # Ascending triangle: higher lows, flat highs
-                if abs(high_trend) < 0.0001 and low_trend > 0.0001:
+                if abs(high_trend) < 0.0001 and low_trend > 0.0001:  # noqa: PLR2004
                     entry_price = window_high[-1]
                     target = entry_price + (window_high[-1] - window_low[-1]) * 1.5
                     stop_loss = (
@@ -384,7 +425,7 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
                 # Descending triangle: lower highs, flat lows
-                elif high_trend < -0.0001 and abs(low_trend) < 0.0001:
+                elif high_trend < -0.0001 and abs(low_trend) < 0.0001:  # noqa: PLR2004
                     entry_price = window_low[-1]
                     target = entry_price - (window_high[-1] - window_low[-1]) * 1.5
                     stop_loss = (
@@ -412,7 +453,7 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
                 # Symmetrical triangle: converging highs and lows
-                elif high_trend < -0.0001 and low_trend > 0.0001:
+                elif high_trend < -0.0001 and low_trend > 0.0001:  # noqa: PLR2004
                     range_size = window_high[-1] - window_low[-1]
                     mid_price = (window_high[-1] + window_low[-1]) / 2
 
@@ -458,7 +499,7 @@ class AdvancedPatternDetector:
                 low_trend = np.polyfit(range(len(window_low)), window_low, 1)[0]
 
                 # Rising wedge (bearish): both highs and lows rising, but lows rising faster
-                if high_trend > 0.0001 and low_trend > high_trend * 1.5:
+                if high_trend > 0.0001 and low_trend > high_trend * 1.5:  # noqa: PLR2004
                     entry_price = window_high[-1]
                     target = window_low[-1] - (window_high[-1] - window_low[-1]) * 1.5
                     stop_loss = (
@@ -486,7 +527,7 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
                 # Falling wedge (bullish): both highs and lows falling, but highs falling faster
-                elif high_trend < -0.0001 and high_trend < low_trend * 1.5:
+                elif high_trend < -0.0001 and high_trend < low_trend * 1.5:  # noqa: PLR2004
                     entry_price = window_low[-1]
                     target = window_high[-1] + (window_high[-1] - window_low[-1]) * 1.5
                     stop_loss = (
@@ -534,7 +575,7 @@ class AdvancedPatternDetector:
                 trend_range = close[i - window_size : i]
                 trend_change = (trend_range[-1] - trend_range[0]) / trend_range[0]
 
-                if abs(trend_change) > 0.02:  # At least 2% move
+                if abs(trend_change) > 0.02:  # At least 2% move  # noqa: PLR2004
                     # Check consolidation period
                     consolidation = (
                         high[i : i + consolidation_window]
@@ -544,7 +585,7 @@ class AdvancedPatternDetector:
 
                     # Flag/Pennant detected if consolidation is narrow
                     if avg_consolidation < (high[i] - low[i]) * 0.3:
-                        if trend_change > 0.02:  # Bullish flag
+                        if trend_change > 0.02:  # Bullish flag  # noqa: PLR2004
                             entry_price = high[i + consolidation_window - 1]
                             move = high[i] - low[i - window_size]
                             target = entry_price + move * 1.0
@@ -628,7 +669,7 @@ class AdvancedPatternDetector:
                     # Determine breakout direction based on close position
                     close_ratio = (close[i] - support) / (resistance - support)
 
-                    if close_ratio > 0.6:  # Closer to resistance
+                    if close_ratio > 0.6:  # Closer to resistance  # noqa: PLR2004
                         pattern_direction = PatternDirection.BULLISH
                         entry_price = resistance
                         target = resistance + (resistance - support) * 1.0
@@ -682,7 +723,7 @@ class AdvancedPatternDetector:
             # Find XABCD pattern points
             extrema_points = sorted(list(peaks) + list(troughs))
 
-            if len(extrema_points) < 4:
+            if len(extrema_points) < 4:  # noqa: PLR2004
                 return patterns
 
             for i in range(len(extrema_points) - 3):
@@ -708,7 +749,7 @@ class AdvancedPatternDetector:
                 bc_ratio = bc_move / ab_move
 
                 # Check Gartley pattern (0.618-0.886 AB/XA, 1.272-1.618 BC/AB)
-                if 0.55 < ab_ratio < 0.75 and 1.2 < bc_ratio < 1.8:
+                if 0.55 < ab_ratio < 0.75 and 1.2 < bc_ratio < 1.8:  # noqa: PLR2004
                     cd_target = c_price + bc_move * 1.272
 
                     direction = (
@@ -738,7 +779,7 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
                 # Check Butterfly pattern (0.786 AB/XA, 1.618 BC/AB)
-                elif 0.75 < ab_ratio < 0.82 and 1.5 < bc_ratio < 1.75:
+                elif 0.75 < ab_ratio < 0.82 and 1.5 < bc_ratio < 1.75:  # noqa: PLR2004
                     cd_target = c_price + bc_move * 1.618
 
                     direction = (
@@ -768,7 +809,7 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
                 # Check Crab pattern (0.382 AB/XA, 2.24 BC/AB)
-                elif 0.35 < ab_ratio < 0.42 and 2.1 < bc_ratio < 2.4:
+                elif 0.35 < ab_ratio < 0.42 and 2.1 < bc_ratio < 2.4:  # noqa: PLR2004
                     cd_target = c_price + bc_move * 1.618
 
                     direction = (
@@ -798,7 +839,7 @@ class AdvancedPatternDetector:
                     patterns.append(pattern)
 
                 # Check Bat pattern (0.5 AB/XA, 0.886 BC/AB)
-                elif 0.45 < ab_ratio < 0.55 and 0.8 < bc_ratio < 1.0:
+                elif 0.45 < ab_ratio < 0.55 and 0.8 < bc_ratio < 1.0:  # noqa: PLR2004
                     cd_target = c_price + bc_move * 0.886
 
                     direction = (
@@ -845,9 +886,9 @@ class AdvancedPatternDetector:
             # Group nearby peaks (resistance levels)
             for peak_idx in peaks:
                 high[peak_idx]
-                nearby_peaks = peaks[np.abs(peaks - peak_idx) <= 10]
+                nearby_peaks = peaks[np.abs(peaks - peak_idx) <= 10]  # noqa: PLR2004
 
-                if len(nearby_peaks) >= 2:
+                if len(nearby_peaks) >= 2:  # noqa: PLR2004
                     avg_resistance = np.mean(high[nearby_peaks])
 
                     # Support is below

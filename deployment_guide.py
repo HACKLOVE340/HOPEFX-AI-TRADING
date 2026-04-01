@@ -315,11 +315,11 @@ def check_disk_space() -> None:
         total, used, free = shutil.disk_usage(usage)
         free_gb = free / (1024**3)
         total_gb = total / (1024**3)
-        if free_gb < 5:
+        if free_gb < 5:  # noqa: PLR2004
             _err(
                 f"Only {free_gb:.1f} GB free of {total_gb:.1f} GB — minimum 20 GB recommended"
             )
-        elif free_gb < 20:
+        elif free_gb < 20:  # noqa: PLR2004
             _warn(
                 f"{free_gb:.1f} GB free of {total_gb:.1f} GB — 20 GB recommended for ML training"
             )

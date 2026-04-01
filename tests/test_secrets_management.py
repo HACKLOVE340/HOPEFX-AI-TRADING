@@ -44,12 +44,12 @@ from scripts.manage_secrets import (
 def test_generate_token48_length():
     val = _generate("token48")
     # base64url: 48 bytes → 64 chars
-    assert len(val) >= 60
+    assert len(val) >= 60  # noqa: PLR2004
 
 
 def test_generate_token32_length():
     val = _generate("token32")
-    assert len(val) >= 40
+    assert len(val) >= 40  # noqa: PLR2004
 
 
 def test_is_placeholder_detects_change_me():

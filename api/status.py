@@ -26,6 +26,9 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+_UPTIME_GOOD = 99  # uptime % threshold for green indicator
+_UPTIME_WARN = 90  # uptime % threshold for yellow indicator
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Status"])
@@ -121,7 +124,7 @@ class _UptimeHistoryProxy:
 
     def get(self, key: str, default: float = 100.0) -> float:
         val = _uptime_get(key)
-        return val if val != 100.0 or key in _uptime_cache else default
+        return val if val != 100.0 or key in _uptime_cache else default  # noqa: PLR2004
 
     def __setitem__(self, key: str, value: float) -> None:
         _uptime_set(key, value)
@@ -130,7 +133,7 @@ class _UptimeHistoryProxy:
         return _uptime_get(key)
 
     def __contains__(self, key: object) -> bool:
-        return _uptime_get(str(key)) != 100.0 or str(key) in _uptime_cache
+        return _uptime_get(str(key)) != 100.0 or str(key) in _uptime_cache  # noqa: PLR2004
 
 
 _uptime_history = _UptimeHistoryProxy()
@@ -218,8 +221,8 @@ async def status_incidents(limit: int = 20):
     for i in range(89, -1, -1):
         day = (today - timedelta(days=i)).isoformat()
         pct = _uptime_history.get(day, 100.0)
-        if pct < 100.0:
-            severity = "major" if pct < 90 else "minor"
+        if pct < 100.0:  # noqa: PLR2004
+            severity = "major" if pct < 90 else "minor"  # noqa: PLR2004
             incidents.append(
                 {
                     "date": day,
@@ -414,7 +417,7 @@ async def status_page():
       <div class="uptime-value">99.9%</div>
       <div class="uptime-label">30-day uptime</div>
       <div class="history-bar-row" title="90-day uptime history">
-        {"".join(f'<div class="history-bar" style="height:{max(4, int(32 * _uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0) / 100))}px;background:{"#22c55e" if _uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0) >= 99 else "#f59e0b" if _uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0) >= 90 else "#ef4444"}" title="{(datetime.now(UTC).date() - timedelta(days=i)).isoformat()}: {_uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0):.1f}%"></div>' for i in range(89, -1, -1))}
+        {"".join(f'<div class="history-bar" style="height:{max(4, int(32 * _uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0) / 100))}px;background:{"#22c55e" if _uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0) >= _UPTIME_GOOD else "#f59e0b" if _uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0) >= _UPTIME_WARN else "#ef4444"}" title="{(datetime.now(UTC).date() - timedelta(days=i)).isoformat()}: {_uptime_history.get((datetime.now(UTC).date() - timedelta(days=i)).isoformat(), 100.0):.1f}%"></div>' for i in range(89, -1, -1))}
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#475569;margin-top:6px;">
         <span>90 days ago</span><span>Today</span>

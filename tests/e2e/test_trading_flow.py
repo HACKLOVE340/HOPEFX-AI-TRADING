@@ -291,4 +291,4 @@ def test_explain_rate_limit_enforced():
         with pytest.raises(HTTPException) as exc_info:
             _enforce_rate_limit(request, "3/minute")
 
-    assert exc_info.value.status_code == 429
+    assert exc_info.value.status_code == 429  # noqa: PLR2004

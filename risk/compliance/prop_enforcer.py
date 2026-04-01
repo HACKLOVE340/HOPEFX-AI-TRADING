@@ -354,11 +354,11 @@ class PropEnforcer:
         """True between Friday 21:00 UTC and Monday 00:00 UTC."""
         weekday = now.weekday()  # 0=Mon … 6=Sun
         t = now.time()
-        if weekday == 4 and t >= dtime(21, 0):  # Friday after 21:00
+        if weekday == 4 and t >= dtime(21, 0):  # Friday after 21:00  # noqa: PLR2004
             return True
-        if weekday == 5:  # Saturday
+        if weekday == 5:  # Saturday  # noqa: PLR2004
             return True
-        return weekday == 6 and t < dtime(0, 1)  # Sunday before 00:01
+        return weekday == 6 and t < dtime(0, 1)  # Sunday before 00:01  # noqa: PLR2004
 
     def _is_news_blackout(self, now_ts: float) -> bool:
         """True if now is within news_blackout seconds of any registered event."""

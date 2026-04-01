@@ -57,7 +57,7 @@ class TestDrawing:
 
         d = Drawing(DrawingType.HORIZONTAL_LINE, color="#FF0000", line_width=2)
         assert d.color == "#FF0000"
-        assert d.line_width == 2
+        assert d.line_width == 2  # noqa: PLR2004
 
     def test_drawing_custom_id(self):
         from charting.drawing_tools import Drawing, DrawingType
@@ -80,7 +80,7 @@ class TestDrawing:
         assert result["drawing_id"] == "rect_1"
         assert result["drawing_type"] == DrawingType.RECTANGLE
         assert result["visible"] is True
-        assert result["properties"]["start_price"] == 1900.0
+        assert result["properties"]["start_price"] == 1900.0  # noqa: PLR2004
         assert "created_at" in result
 
     def test_from_dict_roundtrip(self):
@@ -124,8 +124,8 @@ class TestDrawingToolkitTrendline:
         t1 = datetime(2024, 1, 1, 12, 0)
         d = toolkit.draw_trendline(t0, 1900.0, t1, 1920.0)
         assert d.drawing_type == DrawingType.TRENDLINE
-        assert d.properties["start_price"] == 1900.0
-        assert d.properties["end_price"] == 1920.0
+        assert d.properties["start_price"] == 1900.0  # noqa: PLR2004
+        assert d.properties["end_price"] == 1920.0  # noqa: PLR2004
         assert d.properties["extend"] is False
 
     def test_draw_trendline_extended(self, toolkit):
@@ -139,7 +139,7 @@ class TestDrawingToolkitTrendline:
         t1 = datetime(2024, 1, 1, 1, 0)  # 1 hour = 3600s
         d = toolkit.draw_trendline(t0, 1000.0, t1, 1036.0)
         # slope = (1036 - 1000) / 3600
-        assert abs(d.properties["slope"] - 36 / 3600) < 1e-9
+        assert abs(d.properties["slope"] - 36 / 3600) < 1e-9  # noqa: PLR2004
 
     def test_trendline_stored(self, toolkit):
         t0 = datetime(2024, 1, 1, 9, 0)
@@ -163,7 +163,7 @@ class TestDrawingToolkitHorizontalLine:
 
         d = toolkit.draw_horizontal_line(1950.0)
         assert d.drawing_type == DrawingType.HORIZONTAL_LINE
-        assert d.properties["price"] == 1950.0
+        assert d.properties["price"] == 1950.0  # noqa: PLR2004
 
     def test_horizontal_line_custom_label(self, toolkit):
         d = toolkit.draw_horizontal_line(2000.0, label="Resistance")
@@ -219,9 +219,9 @@ class TestDrawingToolkitRectangle:
         t1 = datetime(2024, 1, 5)
         d = toolkit.draw_rectangle(t0, 1900.0, t1, 1950.0)
         assert d.drawing_type == DrawingType.RECTANGLE
-        assert d.properties["start_price"] == 1900.0
-        assert d.properties["end_price"] == 1950.0
-        assert d.properties["fill_opacity"] == 0.1
+        assert d.properties["start_price"] == 1900.0  # noqa: PLR2004
+        assert d.properties["end_price"] == 1950.0  # noqa: PLR2004
+        assert d.properties["fill_opacity"] == 0.1  # noqa: PLR2004
 
     def test_rectangle_fill_opacity_clamped(self, toolkit):
         t0 = datetime(2024, 1, 1)
@@ -248,14 +248,14 @@ class TestDrawingToolkitHorizontalBand:
 
         d = toolkit.draw_horizontal_band(1960.0, 1940.0)
         assert d.drawing_type == DrawingType.HORIZONTAL_BAND
-        assert d.properties["upper_price"] == 1960.0
-        assert d.properties["lower_price"] == 1940.0
+        assert d.properties["upper_price"] == 1960.0  # noqa: PLR2004
+        assert d.properties["lower_price"] == 1940.0  # noqa: PLR2004
 
     def test_horizontal_band_auto_sort(self, toolkit):
         # Passing lower value first should auto-sort
         d = toolkit.draw_horizontal_band(1940.0, 1960.0)
-        assert d.properties["upper_price"] == 1960.0
-        assert d.properties["lower_price"] == 1940.0
+        assert d.properties["upper_price"] == 1960.0  # noqa: PLR2004
+        assert d.properties["lower_price"] == 1940.0  # noqa: PLR2004
 
     def test_horizontal_band_label(self, toolkit):
         d = toolkit.draw_horizontal_band(1960.0, 1940.0, label="Support Zone")
@@ -283,8 +283,8 @@ class TestDrawingToolkitFibonacci:
         t1 = datetime(2024, 1, 10)
         d = toolkit.draw_fibonacci(t0, 1800.0, t1, 2000.0)
         assert d.drawing_type == DrawingType.FIBONACCI_RETRACEMENT
-        assert 0.618 in d.properties["levels"]
-        assert 0.382 in d.properties["levels"]
+        assert 0.618 in d.properties["levels"]  # noqa: PLR2004
+        assert 0.382 in d.properties["levels"]  # noqa: PLR2004
 
     def test_fibonacci_level_prices_calculated(self, toolkit):
         t0 = datetime(2024, 1, 1)
@@ -323,7 +323,7 @@ class TestDrawingToolkitFibonacciExtension:
         d = toolkit.draw_fibonacci_extension(ta, 1800.0, tb, 2000.0, tc, 1900.0)
         assert d.drawing_type == DrawingType.FIBONACCI_EXTENSION
         # Default levels include 1.618
-        assert 1.618 in d.properties["levels"]
+        assert 1.618 in d.properties["levels"]  # noqa: PLR2004
 
     def test_fibonacci_extension_prices(self, toolkit):
         ta = datetime(2024, 1, 1)
@@ -356,7 +356,7 @@ class TestDrawingToolkitPitchfork:
         tl = datetime(2024, 1, 5)
         d = toolkit.draw_pitchfork(tp, 1900.0, th, 1950.0, tl, 1860.0)
         assert d.drawing_type == DrawingType.PITCHFORK
-        assert d.properties["pivot_price"] == 1900.0
+        assert d.properties["pivot_price"] == 1900.0  # noqa: PLR2004
         assert d.properties["midpoint_price"] == pytest.approx((1950.0 + 1860.0) / 2)
 
     def test_pitchfork_midpoint(self, toolkit):
@@ -413,7 +413,7 @@ class TestDrawingToolkitElliottWave:
         ]
         d = toolkit.draw_elliott_wave(points, wave_type="impulse")
         assert d.drawing_type == DrawingType.ELLIOTT_WAVE
-        assert d.properties["wave_count"] == 6
+        assert d.properties["wave_count"] == 6  # noqa: PLR2004
         assert d.properties["wave_type"] == "impulse"
 
     def test_elliott_wave_too_few_points(self, toolkit):
@@ -449,13 +449,13 @@ class TestDrawingToolkitText:
         d = toolkit.draw_text(t, 1950.0, "Key level")
         assert d.drawing_type == DrawingType.TEXT
         assert d.properties["text"] == "Key level"
-        assert d.properties["price"] == 1950.0
-        assert d.properties["font_size"] == 12
+        assert d.properties["price"] == 1950.0  # noqa: PLR2004
+        assert d.properties["font_size"] == 12  # noqa: PLR2004
 
     def test_draw_text_custom_font(self, toolkit):
         t = datetime(2024, 3, 1, 10, 0)
         d = toolkit.draw_text(t, 1950.0, "Big label", font_size=18)
-        assert d.properties["font_size"] == 18
+        assert d.properties["font_size"] == 18  # noqa: PLR2004
 
     def test_draw_text_background(self, toolkit):
         t = datetime(2024, 3, 1, 10, 0)
@@ -520,13 +520,13 @@ class TestDrawingToolkitManagement:
 
     def test_get_drawings_all(self, populated_toolkit):
         drawings = populated_toolkit.get_drawings()
-        assert len(drawings) == 4
+        assert len(drawings) == 4  # noqa: PLR2004
 
     def test_get_drawings_filtered(self, populated_toolkit):
         from charting.drawing_tools import DrawingType
 
         h_lines = populated_toolkit.get_drawings(DrawingType.HORIZONTAL_LINE)
-        assert len(h_lines) == 2
+        assert len(h_lines) == 2  # noqa: PLR2004
 
     def test_get_drawing_by_id(self, populated_toolkit):
         drawings = populated_toolkit.get_drawings()
@@ -543,22 +543,22 @@ class TestDrawingToolkitManagement:
         result = populated_toolkit.remove_drawing(did)
         assert result is True
         assert populated_toolkit.get_drawing(did) is None
-        assert populated_toolkit.get_drawings_count() == 3
+        assert populated_toolkit.get_drawings_count() == 3  # noqa: PLR2004
 
     def test_remove_nonexistent_drawing(self, toolkit):
         assert toolkit.remove_drawing("ghost_id") is False
 
     def test_clear_all_drawings(self, populated_toolkit):
         count = populated_toolkit.clear_drawings()
-        assert count == 4
+        assert count == 4  # noqa: PLR2004
         assert populated_toolkit.get_drawings_count() == 0
 
     def test_clear_drawings_by_type(self, populated_toolkit):
         from charting.drawing_tools import DrawingType
 
         removed = populated_toolkit.clear_drawings(DrawingType.HORIZONTAL_LINE)
-        assert removed == 2
-        assert populated_toolkit.get_drawings_count() == 2
+        assert removed == 2  # noqa: PLR2004
+        assert populated_toolkit.get_drawings_count() == 2  # noqa: PLR2004
 
     def test_show_hide_drawing(self, populated_toolkit):
         drawings = populated_toolkit.get_drawings()
@@ -596,14 +596,14 @@ class TestDrawingToolkitManagement:
     def test_export_import_drawings(self, populated_toolkit):
         exported = populated_toolkit.export_drawings()
         assert isinstance(exported, list)
-        assert len(exported) == 4
+        assert len(exported) == 4  # noqa: PLR2004
 
         from charting.drawing_tools import DrawingToolkit
 
         fresh = DrawingToolkit()
         count = fresh.import_drawings(exported)
-        assert count == 4
-        assert fresh.get_drawings_count() == 4
+        assert count == 4  # noqa: PLR2004
+        assert fresh.get_drawings_count() == 4  # noqa: PLR2004
 
     def test_import_invalid_data_skipped(self, toolkit):
         bad_data = [{"invalid": "no drawing_type key"}]
@@ -612,7 +612,7 @@ class TestDrawingToolkitManagement:
         assert toolkit.get_drawings_count() == 0
 
     def test_get_drawings_count(self, populated_toolkit):
-        assert populated_toolkit.get_drawings_count() == 4
+        assert populated_toolkit.get_drawings_count() == 4  # noqa: PLR2004
 
     def test_empty_toolkit_count(self):
         from charting.drawing_tools import DrawingToolkit
@@ -744,9 +744,9 @@ class TestReseller:
         )
         assert r.reseller_id == "r001"
         assert r.tier == ResellerTier.STANDARD
-        assert r.commission_rate == 0.15
+        assert r.commission_rate == 0.15  # noqa: PLR2004
         assert r.is_active is True
-        assert len(r.referral_code) > 4
+        assert len(r.referral_code) > 4  # noqa: PLR2004
 
     def test_reseller_gold_tier(self):
         from whitelabel import Reseller, ResellerTier
@@ -759,7 +759,7 @@ class TestReseller:
             commission_rate=0.25,
         )
         assert r.tier == ResellerTier.GOLD
-        assert r.commission_rate == 0.25
+        assert r.commission_rate == 0.25  # noqa: PLR2004
 
 
 @pytest.mark.unit
@@ -843,7 +843,7 @@ class TestWhiteLabelManagerTenants:
         manager.create_tenant("A", "a@a.com")
         manager.create_tenant("B", "b@b.com")
         tenants = manager.list_tenants()
-        assert len(tenants) == 2
+        assert len(tenants) == 2  # noqa: PLR2004
 
     def test_list_tenants_filtered_by_status(self, manager):
         from whitelabel import TenantStatus
@@ -1027,13 +1027,13 @@ class TestWhiteLabelManagerResellers:
         assert r is not None
         assert r.company_name == "BrokerCo"
         assert r.tier == ResellerTier.STANDARD
-        assert r.commission_rate == 0.15
+        assert r.commission_rate == 0.15  # noqa: PLR2004
 
     def test_create_reseller_gold_tier(self, manager):
         from whitelabel import ResellerTier
 
         r = manager.create_reseller("VIPBroker", "vip@vip.com", tier=ResellerTier.GOLD)
-        assert r.commission_rate == 0.25
+        assert r.commission_rate == 0.25  # noqa: PLR2004
 
     def test_get_reseller(self, manager):
         r = manager.create_reseller("GetMe", "g@g.com")
@@ -1172,11 +1172,11 @@ class TestWhiteLabelManagerSummary:
 
     def test_get_platform_summary(self, manager):
         summary = manager.get_platform_summary()
-        assert summary["total_tenants"] == 2
+        assert summary["total_tenants"] == 2  # noqa: PLR2004
         assert summary["active_tenants"] == 1
         assert summary["trial_tenants"] == 1
         assert summary["total_resellers"] == 1
-        assert summary["total_users"] == 8
+        assert summary["total_users"] == 8  # noqa: PLR2004
 
 
 @pytest.mark.unit
@@ -1186,24 +1186,24 @@ class TestWhiteLabelConstants:
     def test_tier_commission_rates(self):
         from whitelabel import TIER_COMMISSION_RATES, ResellerTier
 
-        assert TIER_COMMISSION_RATES[ResellerTier.STANDARD] == 0.15
-        assert TIER_COMMISSION_RATES[ResellerTier.SILVER] == 0.20
-        assert TIER_COMMISSION_RATES[ResellerTier.GOLD] == 0.25
-        assert TIER_COMMISSION_RATES[ResellerTier.PLATINUM] == 0.30
+        assert TIER_COMMISSION_RATES[ResellerTier.STANDARD] == 0.15  # noqa: PLR2004
+        assert TIER_COMMISSION_RATES[ResellerTier.SILVER] == 0.20  # noqa: PLR2004
+        assert TIER_COMMISSION_RATES[ResellerTier.GOLD] == 0.25  # noqa: PLR2004
+        assert TIER_COMMISSION_RATES[ResellerTier.PLATINUM] == 0.30  # noqa: PLR2004
 
     def test_tier_tenant_thresholds(self):
         from whitelabel import TIER_TENANT_THRESHOLDS, ResellerTier
 
         assert TIER_TENANT_THRESHOLDS[ResellerTier.STANDARD] == 0
-        assert TIER_TENANT_THRESHOLDS[ResellerTier.SILVER] == 5
-        assert TIER_TENANT_THRESHOLDS[ResellerTier.GOLD] == 15
-        assert TIER_TENANT_THRESHOLDS[ResellerTier.PLATINUM] == 30
+        assert TIER_TENANT_THRESHOLDS[ResellerTier.SILVER] == 5  # noqa: PLR2004
+        assert TIER_TENANT_THRESHOLDS[ResellerTier.GOLD] == 15  # noqa: PLR2004
+        assert TIER_TENANT_THRESHOLDS[ResellerTier.PLATINUM] == 30  # noqa: PLR2004
 
     def test_all_feature_flags_accessible(self):
         from whitelabel import FeatureFlag
 
         flags = list(FeatureFlag)
-        assert len(flags) >= 13  # All defined flags
+        assert len(flags) >= 13  # All defined flags  # noqa: PLR2004
 
     def test_module_singleton_accessible(self):
         from whitelabel import white_label_manager, WhiteLabelManager

@@ -23,9 +23,9 @@ class TestOrderBookLevel:
 
         level = OrderBookLevel(price=1950.00, size=100.0, order_count=5)
 
-        assert level.price == 1950.00
-        assert level.size == 100.0
-        assert level.order_count == 5
+        assert level.price == 1950.00  # noqa: PLR2004
+        assert level.size == 100.0  # noqa: PLR2004
+        assert level.order_count == 5  # noqa: PLR2004
 
     def test_level_to_dict(self):
         """Test level serialization."""
@@ -34,8 +34,8 @@ class TestOrderBookLevel:
         level = OrderBookLevel(price=1950.00, size=100.0)
         result = level.to_dict()
 
-        assert result["price"] == 1950.00
-        assert result["size"] == 100.0
+        assert result["price"] == 1950.00  # noqa: PLR2004
+        assert result["size"] == 100.0  # noqa: PLR2004
         assert "timestamp" in result
 
 
@@ -71,10 +71,10 @@ class TestOrderBook:
 
         ob = OrderBook(symbol="XAUUSD", bids=bids, asks=asks)
 
-        assert ob.best_bid == 1950.00
-        assert ob.best_ask == 1950.50
-        assert ob.spread == 0.5
-        assert ob.mid_price == 1950.25
+        assert ob.best_bid == 1950.00  # noqa: PLR2004
+        assert ob.best_ask == 1950.50  # noqa: PLR2004
+        assert ob.spread == 0.5  # noqa: PLR2004
+        assert ob.mid_price == 1950.25  # noqa: PLR2004
 
     def test_orderbook_imbalance(self):
         """Test order book imbalance calculation."""
@@ -98,7 +98,7 @@ class TestOrderBook:
         ob = OrderBook(symbol="XAUUSD", bids=bids, asks=asks)
 
         # Equal volumes should give simple mid price
-        assert ob.weighted_mid_price == 1950.5
+        assert ob.weighted_mid_price == 1950.5  # noqa: PLR2004
 
     def test_orderbook_total_volume(self):
         """Test total volume calculation."""
@@ -115,8 +115,8 @@ class TestOrderBook:
 
         ob = OrderBook(symbol="XAUUSD", bids=bids, asks=asks)
 
-        assert ob.total_bid_volume == 250
-        assert ob.total_ask_volume == 150
+        assert ob.total_bid_volume == 250  # noqa: PLR2004
+        assert ob.total_ask_volume == 150  # noqa: PLR2004
 
     def test_orderbook_to_dict(self):
         """Test order book serialization."""
@@ -160,8 +160,8 @@ class TestDepthOfMarketService:
 
         ob = service.get_order_book("XAUUSD")
         assert ob is not None
-        assert ob.best_bid == 1950.00
-        assert ob.best_ask == 1950.50
+        assert ob.best_bid == 1950.00  # noqa: PLR2004
+        assert ob.best_ask == 1950.50  # noqa: PLR2004
 
     def test_get_nonexistent_order_book(self):
         """Test getting non-existent order book."""
@@ -245,7 +245,7 @@ class TestDepthOfMarketService:
             )
 
         history = service.get_order_book_history("XAUUSD", limit=3)
-        assert len(history) == 3
+        assert len(history) == 3  # noqa: PLR2004
 
     def test_get_imbalance_history(self):
         """Test imbalance history."""
@@ -260,7 +260,7 @@ class TestDepthOfMarketService:
             )
 
         history = service.get_imbalance_history("XAUUSD", limit=2)
-        assert len(history) == 2
+        assert len(history) == 2  # noqa: PLR2004
         assert all("imbalance" in h for h in history)
 
     def test_get_symbols(self):

@@ -134,7 +134,7 @@ class CorrelationTracker:
         """
         strategies = list(self._returns.keys())
         n = len(strategies)
-        if n < 2:
+        if n < 2:  # noqa: PLR2004
             return pd.DataFrame(
                 np.eye(max(n, 1)),
                 index=strategies,
@@ -167,7 +167,7 @@ class CorrelationTracker:
         """Return the EWMA covariance matrix."""
         strategies = list(self._returns.keys())
         n = len(strategies)
-        if n < 2:
+        if n < 2:  # noqa: PLR2004
             return pd.DataFrame(np.eye(max(n, 1)), index=strategies, columns=strategies)
 
         df = pd.DataFrame({sid: self._returns[sid] for sid in strategies})
@@ -448,7 +448,7 @@ class RebalanceScheduler:
         # Correlation regime change
         if not corr_matrix.empty:
             n = len(corr_matrix)
-            if n >= 2:
+            if n >= 2:  # noqa: PLR2004
                 vals = corr_matrix.values
                 upper = vals[np.triu_indices(n, k=1)]
                 max_corr = float(np.max(np.abs(upper))) if len(upper) > 0 else 0.0
@@ -467,7 +467,7 @@ class RebalanceScheduler:
         self._target_weights = weights.copy()
         if not corr_matrix.empty:
             n = len(corr_matrix)
-            if n >= 2:
+            if n >= 2:  # noqa: PLR2004
                 vals = corr_matrix.values
                 upper = vals[np.triu_indices(n, k=1)]
                 self._last_corr_max = float(np.max(np.abs(upper))) if len(upper) > 0 else 0.0

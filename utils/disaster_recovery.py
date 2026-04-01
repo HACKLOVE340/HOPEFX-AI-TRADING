@@ -133,7 +133,7 @@ class ContinuousBackup:
     async def _cleanup_old_snapshots(self):
         """Keep only last 100 local snapshots"""
         snapshots = sorted(self.backup_path.glob("snapshot_*.json.gz"))
-        if len(snapshots) > 100:
+        if len(snapshots) > 100:  # noqa: PLR2004
             for old in snapshots[:-100]:
                 old.unlink()
 
@@ -252,7 +252,7 @@ class FailoverManager:
 
         try:
             async with self._session.post(url, json=payload) as resp:
-                if resp.status < 300:
+                if resp.status < 300:  # noqa: PLR2004
                     self.last_peer_heartbeat[peer] = datetime.now(UTC)
                 else:
                     print(f"⚠️ Heartbeat to {peer} returned HTTP {resp.status}")

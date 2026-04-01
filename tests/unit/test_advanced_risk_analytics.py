@@ -53,8 +53,8 @@ class TestVaRResult:
             var_value=1000.0, confidence_level=0.95, time_horizon=1, method="historical"
         )
         d = result.to_dict()
-        assert d["var_value"] == 1000.0
-        assert d["confidence_level"] == 0.95
+        assert d["var_value"] == 1000.0  # noqa: PLR2004
+        assert d["confidence_level"] == 0.95  # noqa: PLR2004
         assert d["time_horizon"] == 1
         assert d["method"] == "historical"
         assert "timestamp" in d
@@ -77,9 +77,9 @@ class TestMonteCarloResult:
             num_simulations=1000,
         )
         d = result.to_dict()
-        assert d["expected_return"] == 0.05
-        assert d["var_95"] == 0.02
-        assert d["num_simulations"] == 1000
+        assert d["expected_return"] == 0.05  # noqa: PLR2004
+        assert d["var_95"] == 0.02  # noqa: PLR2004
+        assert d["num_simulations"] == 1000  # noqa: PLR2004
         assert "timestamp" in d
 
 
@@ -113,14 +113,14 @@ class TestAdvancedRiskAnalytics:
         return _make_equity_curve(returns)
 
     def test_initialization_defaults(self, analytics):
-        assert analytics.var_confidence == 0.95
-        assert analytics.mc_simulations == 10000
-        assert analytics.risk_free_rate == 0.05
+        assert analytics.var_confidence == 0.95  # noqa: PLR2004
+        assert analytics.mc_simulations == 10000  # noqa: PLR2004
+        assert analytics.risk_free_rate == 0.05  # noqa: PLR2004
 
     def test_initialization_custom_config(self, analytics_custom):
-        assert analytics_custom.var_confidence == 0.99
-        assert analytics_custom.mc_simulations == 500
-        assert analytics_custom.risk_free_rate == 0.03
+        assert analytics_custom.var_confidence == 0.99  # noqa: PLR2004
+        assert analytics_custom.mc_simulations == 500  # noqa: PLR2004
+        assert analytics_custom.risk_free_rate == 0.03  # noqa: PLR2004
 
     def test_stress_scenarios_initialized(self, analytics):
         scenarios = analytics.stress_scenarios
@@ -140,7 +140,7 @@ class TestAdvancedRiskAnalytics:
         result = analytics.calculate_var_historical(returns)
         assert isinstance(result, VaRResult)
         assert result.var_value > 0
-        assert result.confidence_level == 0.95
+        assert result.confidence_level == 0.95  # noqa: PLR2004
         assert result.time_horizon == 1
         assert result.method == "historical"
 
@@ -237,7 +237,7 @@ class TestAdvancedRiskAnalytics:
             num_simulations=500,
         )
         assert isinstance(result, MonteCarloResult)
-        assert result.num_simulations == 500
+        assert result.num_simulations == 500  # noqa: PLR2004
         assert result.max_gain > result.max_loss
         assert result.var_95 > 0
 
@@ -251,7 +251,7 @@ class TestAdvancedRiskAnalytics:
             return_paths=True,
         )
         assert result.simulated_paths is not None
-        assert result.simulated_paths.shape[0] == 100
+        assert result.simulated_paths.shape[0] == 100  # noqa: PLR2004
 
     def test_run_monte_carlo_without_paths(self, analytics):
         result = analytics.run_monte_carlo_simulation(
@@ -282,7 +282,7 @@ class TestAdvancedRiskAnalytics:
             positions, time_horizon=30, num_simulations=200
         )
         assert "initial_value" in result
-        assert result["initial_value"] == 70000
+        assert result["initial_value"] == 70000  # noqa: PLR2004
         assert "expected_final_value" in result
         assert "var_95" in result
         assert "probability_loss" in result
@@ -416,7 +416,7 @@ class TestAdvancedRiskAnalytics:
         recovery = np.linspace(12000, 22000, 100)
         equity_curve = np.concatenate([up, down, recovery])
         result = analytics.analyze_drawdowns(equity_curve)
-        assert result.max_drawdown < -0.20  # More than 20% drawdown
+        assert result.max_drawdown < -0.20  # More than 20% drawdown  # noqa: PLR2004
         assert result.recovery_rate >= 0.0
 
     def test_identify_drawdown_events(self, analytics):
@@ -451,18 +451,18 @@ class TestAdvancedRiskAnalytics:
             {"recovered": False},
         ]
         rate = analytics._calculate_recovery_rate(events)
-        assert rate == 0.5
+        assert rate == 0.5  # noqa: PLR2004
 
     def test_calculate_underwater_periods(self, analytics):
         drawdown = np.array([0, -0.05, -0.10, 0, 0, -0.03, 0])
         periods = analytics._calculate_underwater_periods(drawdown)
-        assert len(periods) == 2
+        assert len(periods) == 2  # noqa: PLR2004
 
     def test_calculate_underwater_ongoing(self, analytics):
         drawdown = np.array([0, 0, -0.05, -0.10])
         periods = analytics._calculate_underwater_periods(drawdown)
         assert len(periods) == 1
-        assert periods[0]["duration"] == 2
+        assert periods[0]["duration"] == 2  # noqa: PLR2004
 
     # ----- Risk-Adjusted Metrics -----
 

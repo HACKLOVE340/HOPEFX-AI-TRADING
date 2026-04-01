@@ -56,14 +56,14 @@ class MetricsCollector:
             )
             self.metrics.append(metric)
 
-            if len(self.metrics) > 10000:
+            if len(self.metrics) > 10000:  # noqa: PLR2004
                 self.metrics = self.metrics[-5000:]  # Keep last 5000
 
             if metric_type == "counter":
                 self.counters[name] += value
             elif metric_type == "histogram":
                 self.histograms[name].append(value)
-                if len(self.histograms[name]) > 1000:
+                if len(self.histograms[name]) > 1000:  # noqa: PLR2004
                     self.histograms[name] = self.histograms[name][-500:]
 
     def get_prometheus_format(self) -> str:

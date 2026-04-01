@@ -18,7 +18,7 @@ class TestPaperTradingBroker:
 
     def test_broker_initialization(self, paper_broker):
         """Test broker initialization."""
-        assert paper_broker.balance == 100000
+        assert paper_broker.balance == 100000  # noqa: PLR2004
         assert len(paper_broker.positions) == 0
         assert len(paper_broker.orders) == 0
 
@@ -209,7 +209,7 @@ class TestPaperTradingBroker:
         assert hasattr(info, "equity")
         assert hasattr(info, "margin_used")
         assert hasattr(info, "margin_available")
-        assert info.balance == 100000
+        assert info.balance == 100000  # noqa: PLR2004
 
     def test_insufficient_balance(self, paper_broker):
         """Test placing order with very large quantity."""

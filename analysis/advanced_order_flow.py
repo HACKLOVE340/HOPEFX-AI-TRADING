@@ -260,7 +260,7 @@ class AdvancedOrderFlowAnalyzer:
         dominant = "buyers" if score > 0 else ("sellers" if score < 0 else "neutral")
         abs_score = abs(score)
         strength = (
-            "strong" if abs_score > 60 else ("moderate" if abs_score > 30 else "weak")
+            "strong" if abs_score > 60 else ("moderate" if abs_score > 30 else "weak")  # noqa: PLR2004
         )
 
         return AggressionMetrics(
@@ -380,8 +380,8 @@ class AdvancedOrderFlowAnalyzer:
             avg_imb = sum(abs(s["imbalance"]) for s in stack) / len(stack)
             strength = (
                 "strong"
-                if avg_imb > 0.5
-                else ("moderate" if avg_imb > 0.25 else "weak")
+                if avg_imb > 0.5  # noqa: PLR2004
+                else ("moderate" if avg_imb > 0.25 else "weak")  # noqa: PLR2004
             )
             results.append(
                 StackedImbalance(
@@ -445,7 +445,7 @@ class AdvancedOrderFlowAnalyzer:
         cutoff = datetime.now(UTC) - timedelta(minutes=lookback_minutes)
         trades = [t for t in self._trades.get(symbol, []) if t[0] >= cutoff]
 
-        if len(trades) < 10:
+        if len(trades) < 10:  # noqa: PLR2004
             return None
 
         # Split into two halves and compare
@@ -617,15 +617,15 @@ class AdvancedOrderFlowAnalyzer:
             return None
 
         value = round((buy_vol - sell_vol) / total_vol * 100, 2)
-        signal = "bullish" if value > 20 else ("bearish" if value < -20 else "neutral")
+        signal = "bullish" if value > 20 else ("bearish" if value < -20 else "neutral")  # noqa: PLR2004
 
         return OrderFlowOscillator(
             symbol=symbol,
             timestamp=datetime.now(UTC),
             value=value,
             signal=signal,
-            overbought=value > 70,
-            oversold=value < -70,
+            overbought=value > 70,  # noqa: PLR2004
+            oversold=value < -70,  # noqa: PLR2004
         )
 
     # ================================================================

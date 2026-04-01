@@ -122,7 +122,7 @@ def test_compute_cvar_value(rm):
     cvar = rm._compute_cvar(confidence=0.95)
     # Worst 5% of 100 obs = bottom 5 values: -0.100, -0.099, -0.098, -0.097, -0.096
     expected = abs(np.mean([-0.100, -0.099, -0.098, -0.097, -0.096]))
-    assert abs(cvar - expected) < 0.001, f"CVaR={cvar:.4f}, expected≈{expected:.4f}"
+    assert abs(cvar - expected) < 0.001, f"CVaR={cvar:.4f}, expected≈{expected:.4f}"  # noqa: PLR2004
 
 
 # ── Integration: assess_risk also blocks on CVaR ─────────────────────────────

@@ -143,7 +143,7 @@ class EnsembleModel:
     def predict(self, X) -> np.ndarray:
         rf_p = self.rf.predict_proba(X)[:, 1]
         gb_p = self.gb.predict_proba(X)[:, 1]
-        return (((rf_p + gb_p) / 2) >= 0.5).astype(int)
+        return (((rf_p + gb_p) / 2) >= 0.5).astype(int)  # noqa: PLR2004
 
     def predict_proba(self, X) -> np.ndarray:
         rf_p = self.rf.predict_proba(X)

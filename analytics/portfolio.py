@@ -556,7 +556,7 @@ class MultiAssetBacktester:
 
         # Execute trades
         for asset, trade_value in trades.items():
-            if abs(trade_value) > 0.01:  # Minimum trade size
+            if abs(trade_value) > 0.01:  # Minimum trade size  # noqa: PLR2004
                 trade_quantity = trade_value / prices[asset]
                 commission = abs(trade_value) * self.commission_rate
 
@@ -799,9 +799,9 @@ class PortfolioOptimizer:
         import numpy as np
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == 2 else len(assets)
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)  # noqa: PLR2004
 
-        if method == "equal_weight" or returns.shape[0] < 10:
+        if method == "equal_weight" or returns.shape[0] < 10:  # noqa: PLR2004
             w = np.ones(n) / n
         else:
             # Simple mean-variance: maximise Sharpe via random search
@@ -832,7 +832,7 @@ class PortfolioOptimizer:
         import numpy as np
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == 2 else len(assets)
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)  # noqa: PLR2004
         frontier = []
         for _ in range(num_portfolios):
             w = np.random.dirichlet(np.ones(n))

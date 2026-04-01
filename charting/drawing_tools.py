@@ -502,7 +502,7 @@ class DrawingToolkit:
         Raises:
             ValueError: If fewer than 2 points are provided.
         """
-        if len(points) < 2:
+        if len(points) < 2:  # noqa: PLR2004
             raise ValueError("At least 2 points are required for an Elliott Wave.")
         drawing = Drawing(DrawingType.ELLIOTT_WAVE)
         drawing.properties = {

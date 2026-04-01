@@ -288,7 +288,7 @@ class DataLayerRedisStore:
             keys = self._r.keys(pattern)
             for key in keys:
                 count = self._r.zcard(key)
-                if count > 100:
+                if count > 100:  # noqa: PLR2004
                     evict_count = max(1, count // 5)
                     self._r.zremrangebyrank(key, 0, evict_count - 1)
                     logger.debug(

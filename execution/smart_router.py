@@ -488,10 +488,10 @@ class SmartRouter:
             return f"macro_impact_blackout:{impact_score:.3f}"
 
         # OFI strongly against direction — adverse microstructure
-        if direction == "long" and ofi < -0.70:
+        if direction == "long" and ofi < -0.70:  # noqa: PLR2004
             logger.warning("Router: OFI=%.3f strongly against long — rejecting", ofi)
             return f"adverse_ofi:{ofi:.3f}"
-        if direction == "short" and ofi > 0.70:
+        if direction == "short" and ofi > 0.70:  # noqa: PLR2004
             logger.warning("Router: OFI=%.3f strongly against short — rejecting", ofi)
             return f"adverse_ofi:{ofi:.3f}"
 
@@ -614,15 +614,15 @@ class SmartRouter:
         if not state:
             return "only_available"
         reasons = []
-        if state.ema_latency_ms < 50:
+        if state.ema_latency_ms < 50:  # noqa: PLR2004
             reasons.append("low_latency")
-        if state.fill_rate > 0.97:
+        if state.fill_rate > 0.97:  # noqa: PLR2004
             reasons.append("high_fill_rate")
-        if state.avg_slippage_bps < 3:
+        if state.avg_slippage_bps < 3:  # noqa: PLR2004
             reasons.append("low_slippage")
-        if abs(ofi) > 0.3:
+        if abs(ofi) > 0.3:  # noqa: PLR2004
             reasons.append(f"ofi_aligned:{ofi:.2f}")
-        if abs(sentiment) < 0.2:
+        if abs(sentiment) < 0.2:  # noqa: PLR2004
             reasons.append("neutral_sentiment")
         return ",".join(reasons) if reasons else "best_composite_score"
 

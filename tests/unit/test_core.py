@@ -48,7 +48,7 @@ async def test_event_bus(tmp_path):
 
     assert len(received) == 1
     assert received[0]["symbol"] == "XAUUSD"
-    assert received[0]["bid"] == 1800.0
+    assert received[0]["bid"] == 1800.0  # noqa: PLR2004
 
 
 @pytest.mark.asyncio
@@ -97,6 +97,6 @@ def test_exceptions():
     )
 
     assert error.rule == "max_position"
-    assert error.limit == 100.0
-    assert error.actual == 150.0
+    assert error.limit == 100.0  # noqa: PLR2004
+    assert error.actual == 150.0  # noqa: PLR2004
     assert isinstance(error, HopeFXError)

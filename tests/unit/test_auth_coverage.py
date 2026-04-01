@@ -220,11 +220,11 @@ class TestAuthApiEndpoints:
                 "password": "SecurePass123!",  # nosec B105 - test file
             },
         )
-        assert res.status_code == 201
+        assert res.status_code == 201  # noqa: PLR2004
 
     def test_register_missing_fields_returns_422(self, client):
         res = client.post("/api/auth/register", json={"email": "only@email.com"})
-        assert res.status_code == 422
+        assert res.status_code == 422  # noqa: PLR2004
 
     def test_login_success(self, client):
         res = client.post(
@@ -235,7 +235,7 @@ class TestAuthApiEndpoints:
             },
         )
         # 200 or 422 depending on mock wiring — just ensure no 500
-        assert res.status_code != 500
+        assert res.status_code != 500  # noqa: PLR2004
 
     def test_verify_email_endpoint(self, client):
         res = client.get("/api/auth/verify-email?token=verify-token-123")

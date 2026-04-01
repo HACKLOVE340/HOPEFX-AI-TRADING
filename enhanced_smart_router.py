@@ -123,7 +123,7 @@ class Order:
 
     @property
     def is_filled(self) -> bool:
-        return abs(self.filled_size - self.size) < 0.0001
+        return abs(self.filled_size - self.size) < 0.0001  # noqa: PLR2004
 
     @property
     def notional(self) -> float:
@@ -385,7 +385,7 @@ class VWAPStrategy(ExecutionStrategy):
         ]
 
         for i, size in enumerate(slice_sizes):
-            if size < 0.001 or self.is_complete:
+            if size < 0.001 or self.is_complete:  # noqa: PLR2004
                 continue
 
             venue = self._select_venue()

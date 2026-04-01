@@ -104,7 +104,7 @@ class TestNuclearHopeFXSupervisor:
                 )
 
         assert result["action_taken"] == "hedge"
-        assert supervisor.nuclear_level == 2
+        assert supervisor.nuclear_level == 2  # noqa: PLR2004
 
     @pytest.mark.asyncio
     async def test_critical_severity_nuclear_action(self, supervisor):
@@ -125,7 +125,7 @@ class TestNuclearHopeFXSupervisor:
                 )
 
         assert result["action_taken"] == "nuclear"
-        assert supervisor.nuclear_level == 3
+        assert supervisor.nuclear_level == 3  # noqa: PLR2004
         assert supervisor.trading_paused is True
         assert supervisor._monitoring_only is True
         # Kill switch must have been activated
@@ -183,7 +183,7 @@ class TestNuclearHopeFXSupervisor:
         )
         for _ in range(110):
             await supervisor.on_new_event(_make_event("noise"))
-        assert len(supervisor._event_history) <= 100
+        assert len(supervisor._event_history) <= 100  # noqa: PLR2004
 
     def test_normalize_obs_passthrough_without_vecnorm(self, supervisor):
         """_normalize_obs returns raw obs when no VecNormalize is loaded."""
@@ -279,7 +279,7 @@ class TestRiskOrchestrator:
         import json
 
         data = json.loads(state_file.read_text())
-        assert abs(data["max_risk"] - 0.15) < 1e-6
+        assert abs(data["max_risk"] - 0.15) < 1e-6  # noqa: PLR2004
 
     @pytest.mark.asyncio
     async def test_activate_hedge_mode_no_broker(self, orchestrator):
@@ -318,7 +318,7 @@ class TestRiskOrchestrator:
         ro2 = RiskOrchestrator(state_file=sf)
         assert ro2._hedge_active is True
         assert len(ro2._hedge_positions) == 1
-        assert abs(ro2.get_max_risk() - 0.15) < 1e-6
+        assert abs(ro2.get_max_risk() - 0.15) < 1e-6  # noqa: PLR2004
 
     @pytest.mark.asyncio
     async def test_deactivate_clears_state_file(self, orchestrator, tmp_path):
@@ -465,7 +465,7 @@ class TestEngineKillSwitchHooks:
             # Always restore a valid secret regardless of test outcome
             os.environ["SECURITY_JWT_SECRET"] = (
                 original
-                if original and len(original) >= 32
+                if original and len(original) >= 32  # noqa: PLR2004
                 else "test-only-jwt-secret-key-minimum-32-chars!!"
             )
 

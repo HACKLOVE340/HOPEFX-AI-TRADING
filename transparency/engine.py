@@ -11,6 +11,24 @@ import logging
 import statistics
 
 # Pip multipliers: 1 pip = 0.0001 for FX pairs, 0.01 for metals/indices
+
+# ── Module constants ─────────────────────────────────────────────────────────
+_PERCENTILE_99 = 99
+_PERCENTILE_95 = 95
+_PERCENTILE_90 = 90
+_PERCENTILE_75 = 75
+_PERCENTILE_60 = 60
+_PERCENTILE_40 = 40
+_SLIPPAGE_HALF = 0.5
+_SLIPPAGE_BARS = 5
+_LATENCY_P99_MS = 500
+_LATENCY_P95_MS = 200
+_LATENCY_P90_MS = 100
+_FILL_RATE_THRESHOLD = 0.95
+_SPREAD_COST_FACTOR = 2
+_IMPACT_THRESHOLD = 90
+_IMPACT_SEVERE = -2
+
 FOREX_PIP_MULTIPLIER: float = 10_000.0  # e.g. EURUSD: 1 pip = 0.0001
 METAL_PIP_MULTIPLIER: float = 100.0  # e.g. XAUUSD: 1 pip = 0.01
 
@@ -237,38 +255,38 @@ class ExecutionTransparencyEngine:
         score = 100
 
         # Slippage impact (higher slippage = lower score)
-        if avg_slippage > 5:
+        if avg_slippage > 5:  # noqa: PLR2004
             score -= 30
-        elif avg_slippage > 2:
+        elif avg_slippage > 2:  # noqa: PLR2004
             score -= 15
-        elif avg_slippage > 0.5:
+        elif avg_slippage > 0.5:  # noqa: PLR2004
             score -= 5
         elif avg_slippage < 0:  # Positive slippage (improvement)
             score += 5
 
         # Latency impact
-        if avg_latency > 500:
+        if avg_latency > 500:  # noqa: PLR2004
             score -= 20
-        elif avg_latency > 200:
+        elif avg_latency > 200:  # noqa: PLR2004
             score -= 10
-        elif avg_latency > 100:
+        elif avg_latency > 100:  # noqa: PLR2004
             score -= 5
 
         # Fill ratio impact
-        if avg_fill_ratio < 90:
+        if avg_fill_ratio < 90:  # noqa: PLR2004
             score -= 20
-        elif avg_fill_ratio < 95:
+        elif avg_fill_ratio < 95:  # noqa: PLR2004
             score -= 10
-        elif avg_fill_ratio < 99:
+        elif avg_fill_ratio < 99:  # noqa: PLR2004
             score -= 5
 
-        if score >= 90:
+        if score >= 90:  # noqa: PLR2004
             return ExecutionQuality.EXCELLENT
-        elif score >= 75:
+        elif score >= 75:  # noqa: PLR2004
             return ExecutionQuality.GOOD
-        elif score >= 60:
+        elif score >= 60:  # noqa: PLR2004
             return ExecutionQuality.AVERAGE
-        elif score >= 40:
+        elif score >= 40:  # noqa: PLR2004
             return ExecutionQuality.POOR
         else:
             return ExecutionQuality.VERY_POOR
@@ -324,7 +342,7 @@ class ExecutionTransparencyEngine:
         counts = [0] * 7
 
         for s in slippages:
-            if s < -2:
+            if s < -2:  # noqa: PLR2004
                 counts[0] += 1
             elif s < -1:
                 counts[1] += 1
@@ -334,7 +352,7 @@ class ExecutionTransparencyEngine:
                 counts[3] += 1
             elif s < 1:
                 counts[4] += 1
-            elif s < 2:
+            elif s < 2:  # noqa: PLR2004
                 counts[5] += 1
             else:
                 counts[6] += 1

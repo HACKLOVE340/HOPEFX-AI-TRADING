@@ -64,7 +64,7 @@ class TestPricing:
         """Test pricing manager has all tiers"""
         pm = PricingManager()
         tiers = pm.get_all_tiers()
-        assert len(tiers) == 5
+        assert len(tiers) == 5  # noqa: PLR2004
 
     def test_free_tier_pricing(self):
         """Test free tier configuration"""
@@ -118,7 +118,7 @@ class TestPricing:
         assert annual_price < monthly_total
         # Discount should be approximately 16.67%
         discount = (monthly_total - annual_price) / monthly_total
-        assert 0.15 < float(discount) < 0.18
+        assert 0.15 < float(discount) < 0.18  # noqa: PLR2004
 
     def test_upgrade_path(self):
         """Test upgrade path from free tier"""
@@ -324,8 +324,8 @@ class TestMarketplace:
         )
 
         assert review is not None
-        assert review.rating == 5
-        assert strategy.avg_rating == 5.0
+        assert review.rating == 5  # noqa: PLR2004
+        assert strategy.avg_rating == 5.0  # noqa: PLR2004
 
     def test_search_strategies(self):
         """Test searching strategies"""
@@ -344,7 +344,7 @@ class TestMarketplace:
 
         results = mp.search_strategies(category=StrategyCategory.SCALPING, limit=10)
 
-        assert len(results) == 3
+        assert len(results) == 3  # noqa: PLR2004
 
 
 class TestRevenueAnalytics:
@@ -640,7 +640,7 @@ class TestStripeIntegration:
                 tier=SubscriptionTier.STARTER,
             )
             assert intent is not None
-            assert intent.amount == 180000  # cents
+            assert intent.amount == 180000  # cents  # noqa: PLR2004
             assert intent.client_secret is not None
             mock_stripe.PaymentIntent.create.assert_called_once()
 

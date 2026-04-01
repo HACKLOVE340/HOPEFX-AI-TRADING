@@ -219,7 +219,7 @@ class EX5SignalExporter:
                 text = path.read_text(encoding="utf-8")
                 return json.loads(text)
             except json.JSONDecodeError:
-                if attempt < 2:
+                if attempt < 2:  # noqa: PLR2004
                     time.sleep(0.1)
         return {}
 

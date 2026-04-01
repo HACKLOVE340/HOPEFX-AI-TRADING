@@ -79,7 +79,7 @@ async def _send_telegram(token: str, chat_id: str, text: str) -> bool:
         async with aiohttp.ClientSession() as session, session.post(
             url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
         ) as resp:
-            if resp.status == 200:
+            if resp.status == 200:  # noqa: PLR2004
                 return True
             body = await resp.text()
             logger.warning(
@@ -120,7 +120,7 @@ def _build_message(status: dict[str, Any], uptime_seconds: float) -> str:
     mode = status.get("mode", "paper")
 
     pnl_emoji = "🟢" if daily_pnl >= 0 else "🔴"
-    dd_emoji = "⚠️" if drawdown > 5 else ("🟡" if drawdown > 2 else "🟢")
+    dd_emoji = "⚠️" if drawdown > 5 else ("🟡" if drawdown > 2 else "🟢")  # noqa: PLR2004
 
     sig_text = ""
     if last_sig:

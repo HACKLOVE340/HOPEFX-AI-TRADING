@@ -251,7 +251,7 @@ class StrategyAuditor:
         )
 
     def _check_description(self, desc: str) -> AuditCheck:
-        if len(desc.strip()) >= 100:
+        if len(desc.strip()) >= 100:  # noqa: PLR2004
             return AuditCheck("description", True, "Description meets minimum length")
         return AuditCheck(
             "description",

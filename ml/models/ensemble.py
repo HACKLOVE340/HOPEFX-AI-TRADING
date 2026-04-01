@@ -297,10 +297,10 @@ class EnsemblePredictor(BaseMLModel):
                 np.std(window),  # Volatility
                 np.mean(window[-10:]),  # Short-term MA
                 np.mean(window[-20:])
-                if len(window) >= 20
+                if len(window) >= 20  # noqa: PLR2004
                 else np.mean(window),  # Medium MA
-                window[-1] - window[-2] if len(window) >= 2 else 0,  # Momentum 1
-                window[-1] - window[-5] if len(window) >= 5 else 0,  # Momentum 5
+                window[-1] - window[-2] if len(window) >= 2 else 0,  # Momentum 1  # noqa: PLR2004
+                window[-1] - window[-5] if len(window) >= 5 else 0,  # Momentum 5  # noqa: PLR2004
                 np.max(window) - np.min(window),  # Range
                 (window[-1] - np.min(window))
                 / (np.max(window) - np.min(window) + 1e-8),  # %K
@@ -571,11 +571,11 @@ class EnsemblePredictor(BaseMLModel):
             mean_pred = np.mean(all_predictions)
             cv = std_dev / abs(mean_pred) if mean_pred != 0 else 1.0
 
-            if cv < 0.05:
+            if cv < 0.05:  # noqa: PLR2004
                 consensus = "strong"
-            elif cv < 0.15:
+            elif cv < 0.15:  # noqa: PLR2004
                 consensus = "moderate"
-            elif cv < 0.30:
+            elif cv < 0.30:  # noqa: PLR2004
                 consensus = "weak"
             else:
                 consensus = "divergent"

@@ -223,7 +223,7 @@ class SumsubProvider(KYCProvider):
             f"{self.BASE_URL}{path}",
             headers=self._headers("GET", path),
         ) as resp:
-            if resp.status != 200:
+            if resp.status != 200:  # noqa: PLR2004
                 return VerificationStatus.PENDING
             data = await resp.json()
 
@@ -345,7 +345,7 @@ class OnfidoProvider(KYCProvider):
             f"{self.BASE_URL}/checks?applicant_id={applicant_id}",
             headers=self._headers(),
         ) as resp:
-            if resp.status != 200:
+            if resp.status != 200:  # noqa: PLR2004
                 return VerificationStatus.PENDING
             data = await resp.json()
 
@@ -520,9 +520,9 @@ class RefinitivScreener:
             best = max(results, key=lambda r: r.get("matchStrength", 0))
             score = best.get("matchStrength", 0) / 100.0
             lists_hit = [
-                r.get("category", "") for r in results if r.get("matchStrength", 0) > 50
+                r.get("category", "") for r in results if r.get("matchStrength", 0) > 50  # noqa: PLR2004
             ]
-            is_match = score >= 0.7
+            is_match = score >= 0.7  # noqa: PLR2004
 
             return SanctionsResult(
                 screened=True,
@@ -566,7 +566,7 @@ class LocalSDNScreener:
             async with aiohttp.ClientSession() as session, session.get(
                 self.SDN_URL, timeout=aiohttp.ClientTimeout(total=30)
             ) as resp:
-                if resp.status == 200:
+                if resp.status == 200:  # noqa: PLR2004
                     text = await resp.text()
                     # Extract names from XML (simplified parser)
                     import re
@@ -592,7 +592,7 @@ class LocalSDNScreener:
         matched = any(
             any(part in sdn_name for part in parts)
             for sdn_name in self._names
-            if len(sdn_name) > 3
+            if len(sdn_name) > 3  # noqa: PLR2004
         )
         return SanctionsResult(
             screened=self._loaded,

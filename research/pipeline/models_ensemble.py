@@ -387,7 +387,7 @@ class EnsemblePredictor:
 
         if self.calibrate:
             # Isotonic regression calibration; fall back to sigmoid if too few samples
-            method = "isotonic" if len(y) >= 1000 else "sigmoid"
+            method = "isotonic" if len(y) >= 1000 else "sigmoid"  # noqa: PLR2004
             self.stack_ = CalibratedClassifierCV(
                 self.stack_,
                 method=method,
@@ -414,7 +414,7 @@ class EnsemblePredictor:
 
     def evaluate(self, X: pd.DataFrame, y: np.ndarray) -> dict[str, float]:
         prob = self.predict_proba(X)
-        preds = (prob >= 0.5).astype(int)
+        preds = (prob >= 0.5).astype(int)  # noqa: PLR2004
         result: dict[str, float] = {
             "auc": float(roc_auc_score(y, prob)),
             "logloss": float(log_loss(y, prob)),

@@ -220,7 +220,7 @@ def add_macro_features(
         df["macro_vix_level"] = vix
         df["macro_vix_ret"] = vix.pct_change(fill_method=None).fillna(0.0)
         df["macro_vix_z20"] = _zscore(vix, lookback)
-        df["macro_vix_spike"] = (vix > 30).astype(float)
+        df["macro_vix_spike"] = (vix > 30).astype(float)  # noqa: PLR2004
     else:
         df["macro_vix_level"] = df["macro_vix_ret"] = 0.0
         df["macro_vix_z20"] = df["macro_vix_spike"] = 0.0
@@ -290,13 +290,13 @@ def add_macro_features(
     # Bearish: rising 10Y yield (opportunity cost), strong DXY
     # FIX: old code used (yield_spread_chg > 0) as bullish — incorrect.
     bullish = (
-        (df["macro_dxy_z20"] < -0.5).astype(float)
-        + (df["macro_vix_level"] > 20).astype(float)
+        (df["macro_dxy_z20"] < -0.5).astype(float)  # noqa: PLR2004
+        + (df["macro_vix_level"] > 20).astype(float)  # noqa: PLR2004
         + (df["macro_real_rate_proxy"] < 0).astype(float)
-        + (df["macro_spx_ret"] < -0.005).astype(float)
+        + (df["macro_spx_ret"] < -0.005).astype(float)  # noqa: PLR2004
     )
     bearish = (df["macro_yield_10y_chg"] > 0).astype(float) + (
-        df["macro_dxy_z20"] > 0.5
+        df["macro_dxy_z20"] > 0.5  # noqa: PLR2004
     ).astype(float)
     df["macro_gold_tailwind"] = bullish - bearish
     df["macro_gold_headwind"] = bearish
@@ -397,7 +397,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
     """
 
     def _hurst_scalar(x: np.ndarray) -> float:
-        if len(x) < 8:
+        if len(x) < 8:  # noqa: PLR2004
             return 0.5
         try:
             lags = range(2, min(len(x) // 2, 12))
@@ -406,7 +406,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                 chunks = [x[i : i + lag] for i in range(0, len(x) - lag, lag)]
                 rs_chunk = []
                 for chunk in chunks:
-                    if len(chunk) < 2:
+                    if len(chunk) < 2:  # noqa: PLR2004
                         continue
                     dev = np.cumsum(chunk - np.mean(chunk))
                     r = dev.max() - dev.min()
@@ -415,7 +415,7 @@ def _rolling_hurst(series: pd.Series, window: int = 40) -> pd.Series:
                         rs_chunk.append(r / s)
                 if rs_chunk:
                     rs_vals.append(np.mean(rs_chunk))
-            if len(rs_vals) < 2:
+            if len(rs_vals) < 2:  # noqa: PLR2004
                 return 0.5
             log_lags = np.log(list(lags)[: len(rs_vals)])
             log_rs = np.log(rs_vals)

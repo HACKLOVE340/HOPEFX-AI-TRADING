@@ -208,7 +208,7 @@ class NewsCalendarFeed:
                 timeout=aiohttp.ClientTimeout(total=15),
                 headers={"User-Agent": "HOPEFX-AI-TRADING/1.0"},
             ) as resp:
-                if resp.status != 200:
+                if resp.status != 200:  # noqa: PLR2004
                     logger.warning(
                         "NewsCalendarFeed: ForexFactory HTTP %d", resp.status
                     )

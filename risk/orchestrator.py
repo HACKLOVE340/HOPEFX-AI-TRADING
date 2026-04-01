@@ -497,7 +497,7 @@ class RiskOrchestrator:
                 **data,
             }
         )
-        if len(self._history) > 200:
+        if len(self._history) > 200:  # noqa: PLR2004
             self._history.pop(0)
 
 

@@ -1422,7 +1422,7 @@ class RiskManager:
     # ── VaR ───────────────────────────────────────────────────────────────────
 
     def value_at_risk(self) -> float:
-        if len(self._pnl_history) < 10:
+        if len(self._pnl_history) < 10:  # noqa: PLR2004
             return 0.0
         arr = np.array(list(self._pnl_history))
         return float(np.percentile(arr, (1 - _VAR_CONFIDENCE) * 100))
@@ -1717,7 +1717,7 @@ class RiskManager:
 
         current_dd = (
             self._drawdown_from_curve(equity_curve)
-            if equity_curve is not None and len(equity_curve) >= 2
+            if equity_curve is not None and len(equity_curve) >= 2  # noqa: PLR2004
             else self._state.current_drawdown
         )
 
@@ -1850,7 +1850,7 @@ class RiskManager:
         Returns the mean of the worst (1-confidence) fraction of returns as a
         positive number (i.e. the expected loss magnitude).
         """
-        if len(self._returns_history) < 2:
+        if len(self._returns_history) < 2:  # noqa: PLR2004
             return 0.0
         arr = np.array(list(self._returns_history), dtype=float)
         cutoff = np.percentile(arr, (1.0 - confidence) * 100)
@@ -1877,7 +1877,7 @@ class RiskManager:
         if self._cvar_daily_limit <= 0.0:
             return (True, "CVaR gate disabled")
 
-        if len(self._returns_history) < 10:
+        if len(self._returns_history) < 10:  # noqa: PLR2004
             return (
                 True,
                 f"Insufficient history ({len(self._returns_history)} obs) for CVaR",

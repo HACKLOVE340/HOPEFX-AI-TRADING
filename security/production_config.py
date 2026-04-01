@@ -56,7 +56,7 @@ class ProductionConfigManager:
         # Validate key strength
         try:
             key_bytes = bytes.fromhex(key)
-            if len(key_bytes) < 32:
+            if len(key_bytes) < 32:  # noqa: PLR2004
                 raise SecureConfigError(
                     f"Encryption key must be 32+ bytes, got {len(key_bytes)}"
                 )
@@ -75,7 +75,7 @@ class ProductionConfigManager:
 
         try:
             salt_bytes = bytes.fromhex(salt)
-            if len(salt_bytes) < 16:
+            if len(salt_bytes) < 16:  # noqa: PLR2004
                 raise SecureConfigError(
                     f"Salt must be 16+ bytes, got {len(salt_bytes)}"
                 )
@@ -117,7 +117,7 @@ class ProductionConfigManager:
                 "SECURITY_JWT_SECRET is not set. "
                 'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
-        if len(jwt_secret) < 32:
+        if len(jwt_secret) < 32:  # noqa: PLR2004
             raise SecureConfigError(
                 f"SECURITY_JWT_SECRET is too short ({len(jwt_secret)} chars). Must be >=32."
             )

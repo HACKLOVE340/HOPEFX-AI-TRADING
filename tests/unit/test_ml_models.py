@@ -107,8 +107,8 @@ class TestBaseMLModel:
     def test_initialization_with_config(self):
         cfg = {"lr": 0.01, "epochs": 50}
         model = _ConcreteModel(name="cfg_model", config=cfg)
-        assert model.config["lr"] == 0.01
-        assert model.config["epochs"] == 50
+        assert model.config["lr"] == 0.01  # noqa: PLR2004
+        assert model.config["epochs"] == 50  # noqa: PLR2004
 
     def test_str_representation_untrained(self):
         model = _ConcreteModel(name="my_model")
@@ -144,7 +144,7 @@ class TestBaseMLModel:
         model.is_trained = True
         preds = model.predict(X)
         assert isinstance(preds, np.ndarray)
-        assert len(preds) == 10
+        assert len(preds) == 10  # noqa: PLR2004
 
     def test_get_feature_importance_none_without_model(self):
         model = _ConcreteModel(name="fi_test")
@@ -230,11 +230,11 @@ class TestLSTMPricePredictor:
     def test_initialization_defaults(self):
         lstm = LSTMPricePredictor()
         assert lstm.name == "LSTM_Predictor"
-        assert lstm.sequence_length == 60
+        assert lstm.sequence_length == 60  # noqa: PLR2004
         assert lstm.lstm_units == [50, 50]
         assert lstm.dropout == pytest.approx(0.2)
-        assert lstm.epochs == 100
-        assert lstm.batch_size == 32
+        assert lstm.epochs == 100  # noqa: PLR2004
+        assert lstm.batch_size == 32  # noqa: PLR2004
         assert lstm.learning_rate == pytest.approx(0.001)
         assert lstm.scaler_X is None
         assert lstm.scaler_y is None
@@ -249,7 +249,7 @@ class TestLSTMPricePredictor:
             "learning_rate": 0.005,
         }
         lstm = LSTMPricePredictor(name="custom_lstm", config=cfg)
-        assert lstm.sequence_length == 30
+        assert lstm.sequence_length == 30  # noqa: PLR2004
         assert lstm.lstm_units == [64, 32]
         assert lstm.dropout == pytest.approx(0.3)
         assert lstm.learning_rate == pytest.approx(0.005)
@@ -352,18 +352,18 @@ class TestRandomForestTradingClassifier:
     def test_initialization_defaults(self):
         rf = RandomForestTradingClassifier()
         assert rf.name == "RF_Classifier"
-        assert rf.n_estimators == 100
-        assert rf.max_depth == 10
-        assert rf.random_state == 42
+        assert rf.n_estimators == 100  # noqa: PLR2004
+        assert rf.max_depth == 10  # noqa: PLR2004
+        assert rf.random_state == 42  # noqa: PLR2004
         assert rf.feature_names == []
         assert rf.label_encoder is None
 
     def test_initialization_with_config(self):
         cfg = {"n_estimators": 50, "max_depth": 5, "random_state": 7}
         rf = RandomForestTradingClassifier(name="custom_rf", config=cfg)
-        assert rf.n_estimators == 50
-        assert rf.max_depth == 5
-        assert rf.random_state == 7
+        assert rf.n_estimators == 50  # noqa: PLR2004
+        assert rf.max_depth == 5  # noqa: PLR2004
+        assert rf.random_state == 7  # noqa: PLR2004
 
     def test_predict_raises_when_not_trained(self):
         rf = RandomForestTradingClassifier()
@@ -410,7 +410,7 @@ class TestRandomForestTradingClassifier:
         assert "train_accuracy" in metrics
         assert metrics["train_accuracy"] == pytest.approx(1.0)
         assert "n_features" in metrics
-        assert metrics["n_features"] == 5
+        assert metrics["n_features"] == 5  # noqa: PLR2004
 
     def test_train_stores_feature_names(self):
         rf = RandomForestTradingClassifier()
@@ -543,7 +543,7 @@ class TestEnsemblePredictor:
     def test_initialization_defaults(self):
         ep = EnsemblePredictor()
         assert ep.name == "Ensemble_Predictor"
-        assert ep.sequence_length == 60
+        assert ep.sequence_length == 60  # noqa: PLR2004
         assert ep.use_lstm is True
         assert ep.use_rf is True
         assert ep.use_gb is True
@@ -565,7 +565,7 @@ class TestEnsemblePredictor:
         ep = EnsemblePredictor(config=cfg)
         assert ep.use_lstm is False
         assert ep.use_xgb is False
-        assert ep.sequence_length == 30
+        assert ep.sequence_length == 30  # noqa: PLR2004
         assert ep.confidence_threshold == pytest.approx(0.7)
 
     def test_predict_raises_when_not_trained(self):
@@ -645,7 +645,7 @@ class TestEnsemblePredictor:
         perf["recent_errors"] = [0.01] * 20
 
         conf = ep._calculate_model_confidence("random_forest")
-        assert 0.1 <= conf <= 0.95
+        assert 0.1 <= conf <= 0.95  # noqa: PLR2004
 
     def test_update_performance_increments_total(self):
         ep = EnsemblePredictor()
@@ -666,7 +666,7 @@ class TestEnsemblePredictor:
         ep = EnsemblePredictor()
         for i in range(150):
             ep.update_performance("lstm", float(i), float(i + 1))
-        assert len(ep.model_performance["lstm"]["recent_errors"]) <= 100
+        assert len(ep.model_performance["lstm"]["recent_errors"]) <= 100  # noqa: PLR2004
 
     def test_update_performance_unknown_model(self):
         ep = EnsemblePredictor()
@@ -1029,7 +1029,7 @@ class TestTechnicalFeatureEngineerExtended:
         """macd_signal is a smoothed MACD – correlation should be high."""
         result = fe.create_features(ohlcv)
         corr = result["macd"].corr(result["macd_signal"])
-        assert corr > 0.7
+        assert corr > 0.7  # noqa: PLR2004
 
     def test_feature_names_exclude_ohlcv(self, fe, ohlcv):
         fe.create_features(ohlcv)

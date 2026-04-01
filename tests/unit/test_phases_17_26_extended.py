@@ -138,7 +138,7 @@ class TestChartReplayExtended:
             "SELL", 0.5, "LIMIT", price=1960.0, session_id=session.session_id
         )
         assert trade is not None
-        assert trade["price"] == 1960.0
+        assert trade["price"] == 1960.0  # noqa: PLR2004
 
     def test_place_order_invalid_session(self, engine):
         trade = engine.place_practice_order("BUY", 1.0, session_id="bad_id")
@@ -147,7 +147,7 @@ class TestChartReplayExtended:
     def test_place_multiple_orders_tracks_trades(self, engine, session):
         engine.place_practice_order("BUY", 1.0, session_id=session.session_id)
         engine.place_practice_order("BUY", 0.5, session_id=session.session_id)
-        assert len(session.trades) == 2
+        assert len(session.trades) == 2  # noqa: PLR2004
 
     def test_place_opposing_order_closes_position(self, engine, session):
         """Selling closes an existing buy position."""
@@ -325,7 +325,7 @@ class TestNoCodeBuilderExtended:
         strategy = builder.create_strategy("JsonTest", "Test", "XAUUSD", "1H")
         j = strategy.to_json()
         assert isinstance(j, str)
-        assert len(j) > 2  # Not empty JSON
+        assert len(j) > 2  # Not empty JSON  # noqa: PLR2004
 
     # --- _parse_operator ---
 
@@ -501,7 +501,7 @@ class TestAIExplainabilityExtended:
         for _ in range(5):
             explainer.explain_prediction(mock_model, sample_features, 1950.0, "BUY")
         hist = explainer.get_explanation_history(limit=3)
-        assert len(hist) <= 3
+        assert len(hist) <= 3  # noqa: PLR2004
 
 
 # ===========================================================================
@@ -581,7 +581,7 @@ class TestResearchNotebooksExtended:
         engine.add_cell(nb.notebook_id, CellType.CODE, "b = 2")
         results = engine.execute_all(nb.notebook_id)
         assert isinstance(results, list)
-        assert len(results) == 2
+        assert len(results) == 2  # noqa: PLR2004
 
     def test_execute_all_invalid_notebook(self, engine):
         results = engine.execute_all("bad_id")
@@ -835,7 +835,7 @@ class TestExecutionTransparencyExtended:
     def test_audit_trail_limit(self, engine, sample_executions):
         trail = engine.get_execution_audit_trail(limit=3)
         if isinstance(trail, list):
-            assert len(trail) <= 3
+            assert len(trail) <= 3  # noqa: PLR2004
 
 
 # ===========================================================================
@@ -1056,7 +1056,7 @@ class TestTeamsExtended:
         # Returns a dict with the key info
         assert result is not None
         assert "key" in result
-        assert len(result["key"]) > 10
+        assert len(result["key"]) > 10  # noqa: PLR2004
 
     def test_verify_valid_api_key(self, manager, team_with_owner):
         result = manager.generate_api_key(team_with_owner.team_id, "owner1")

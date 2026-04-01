@@ -159,7 +159,7 @@ def _estimate_paper_trading_days() -> int:
     if log_path.exists():
         try:
             lines = log_path.read_text().splitlines()
-            if len(lines) >= 2:
+            if len(lines) >= 2:  # noqa: PLR2004
                 # Parse first and last timestamps
                 ts_pattern = re.compile(r"(\d{4}-\d{2}-\d{2})")
                 first_match = ts_pattern.search(lines[0])
@@ -177,7 +177,7 @@ def _estimate_paper_trading_days() -> int:
         mtime = datetime.fromtimestamp(csv_path.stat().st_mtime)
         age = (datetime.now() - mtime).days
         # If CSV is recent, paper trading may have been running
-        if age < 7:
+        if age < 7:  # noqa: PLR2004
             return 0  # Can't confirm 30 days
     return 0
 
@@ -209,7 +209,7 @@ def _test_oanda_connection(api_key: str, account_id: str, practice: bool) -> boo
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=8,
         )
-        return r.status_code == 200
+        return r.status_code == 200  # noqa: PLR2004
     except Exception:
         return False
 

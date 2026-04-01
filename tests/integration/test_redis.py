@@ -146,7 +146,7 @@ class TestRedisLive:
         self.r.incr("hopefx_test:counter", 5)
         self.r.incr("hopefx_test:counter", 3)
         self.r.decr("hopefx_test:counter", 2)
-        assert int(self.r.get("hopefx_test:counter")) == 6
+        assert int(self.r.get("hopefx_test:counter")) == 6  # noqa: PLR2004
 
     def test_hash_operations(self) -> None:
         key = "hopefx_test:tick"
@@ -165,10 +165,10 @@ class TestRedisLive:
         for i in range(5):
             self.r.rpush(key, f"item_{i}")
         self.r.expire(key, 30)
-        assert int(self.r.llen(key)) == 5
+        assert int(self.r.llen(key)) == 5  # noqa: PLR2004
         first = self.r.lpop(key)
         assert first == "item_0"
-        assert int(self.r.llen(key)) == 4
+        assert int(self.r.llen(key)) == 4  # noqa: PLR2004
 
     def test_publish_subscribe(self) -> None:
         """Verify pub/sub round-trip."""

@@ -674,7 +674,7 @@ class TestAlertEngineExtended:
 
     def test_get_trigger_history_limit(self, engine):
         history = engine.get_trigger_history(limit=5)
-        assert len(history) <= 5
+        assert len(history) <= 5  # noqa: PLR2004
 
     # --- Stats ---
 

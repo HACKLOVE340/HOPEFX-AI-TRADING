@@ -228,7 +228,7 @@ class OnlineLearner:
                 self.train_losses,
                 1,
             )[0]
-            if len(self.train_losses) > 10
+            if len(self.train_losses) > 10  # noqa: PLR2004
             else 0,
             "buffer_size": len(self.replay_buffer),
             "ewc_lambda": self.ewc.lambda_ewc,
@@ -608,7 +608,7 @@ class SklearnOnlineLearner:
                 pred = int(self._model.predict(X_scaled)[0])
                 correct = int(pred == int(y[0]))
                 self._correct_window.append(correct)
-                if len(self._correct_window) >= 10:
+                if len(self._correct_window) >= 10:  # noqa: PLR2004
                     self._rolling_accuracy = float(np.mean(self._correct_window))
             except Exception:  # nosec B110 - accuracy update failure must not interrupt learning loop
                 pass
@@ -890,7 +890,7 @@ class XGBoostOnlineModel:
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Return binary predictions (threshold 0.5)."""
-        return (self.predict_proba(X) >= 0.5).astype(int)
+        return (self.predict_proba(X) >= 0.5).astype(int)  # noqa: PLR2004
 
     def partial_fit(self, X: np.ndarray, y: np.ndarray) -> None:
         """

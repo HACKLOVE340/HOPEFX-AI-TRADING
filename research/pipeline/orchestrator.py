@@ -693,6 +693,6 @@ class PipelineOrchestrator:
             "final_prob": final_prob,
             "anomaly_flag": anomaly_flag,
             "signal": "BUY"
-            if final_prob > 0.6
-            else ("SELL" if final_prob < 0.4 else "HOLD"),
+            if final_prob > 0.6  # noqa: PLR2004
+            else ("SELL" if final_prob < 0.4 else "HOLD"),  # noqa: PLR2004
         }

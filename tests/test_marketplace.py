@@ -71,5 +71,5 @@ def strategy(data):
         purchase = marketplace.purchase_strategy("strat-3", "buyer-1")
 
         # Platform takes 20%, creator gets 80%
-        assert purchase["platform_fee"] == 20.0
-        assert purchase["creator_payout"] == 80.0
+        assert purchase["platform_fee"] == 20.0  # noqa: PLR2004
+        assert purchase["creator_payout"] == 80.0  # noqa: PLR2004

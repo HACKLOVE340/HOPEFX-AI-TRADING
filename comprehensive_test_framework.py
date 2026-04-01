@@ -176,8 +176,8 @@ class UnitTests:
             bid_size=10.0,
             ask_size=15.0,
         )
-        assert tick.mid == 1950.025  # nosec B101
-        assert tick.spread == 0.05  # nosec B101
+        assert tick.mid == 1950.025  # nosec B101  # noqa: PLR2004
+        assert tick.spread == 0.05  # nosec B101  # noqa: PLR2004
 
         # Invalid tick should raise
         try:
@@ -205,7 +205,7 @@ class UnitTests:
             order_size=100000, price=1950.0, volatility=0.001, volume=10000
         )
 
-        assert costs["commission"] == 7.0  # nosec B101
+        assert costs["commission"] == 7.0  # nosec B101  # noqa: PLR2004
         assert costs["spread_cost"] > 0  # nosec B101
         assert costs["total_cost"] > 0  # nosec B101
 
@@ -239,8 +239,8 @@ class UnitTests:
             price=1950.0,
         )
 
-        assert order.remaining_size == 100.0  # nosec B101
-        assert order.notional == 195000.0  # nosec B101
+        assert order.remaining_size == 100.0  # nosec B101  # noqa: PLR2004
+        assert order.notional == 195000.0  # nosec B101  # noqa: PLR2004
 
     async def test_market_impact_model(self):
         """Test Almgren-Chriss impact model"""
@@ -258,7 +258,7 @@ class UnitTests:
         )
 
         assert temp_impact > 0  # nosec B101
-        assert temp_impact < 0.01  # Less than 1%  # nosec B101
+        assert temp_impact < 0.01  # Less than 1%  # nosec B101  # noqa: PLR2004
 
 
 class IntegrationTests:
@@ -322,7 +322,7 @@ class IntegrationTests:
             engine.process_tick(tick)
 
             # Simple MA crossover
-            if i > 20:
+            if i > 20:  # noqa: PLR2004
                 prices = [t.mid for t in ticks[i - 20 : i]]
                 ma_fast = np.mean(prices[-5:])
                 ma_slow = np.mean(prices)
@@ -481,7 +481,7 @@ class PerformanceTests:
         throughput = len(ticks) / duration
         logger.info(f"Backtest throughput: {throughput:.0f} ticks/sec")
 
-        assert throughput > 1000  # Minimum 1000 ticks/sec  # nosec B101
+        assert throughput > 1000  # Minimum 1000 ticks/sec  # nosec B101  # noqa: PLR2004
 
     async def test_prediction_latency(self):
         """Test ML prediction latency"""
@@ -504,7 +504,7 @@ class PerformanceTests:
         avg_latency = np.mean(latencies)
         logger.info(f"Prediction latency: {avg_latency:.2f} ms")
 
-        assert avg_latency < 100  # Sub-100ms  # nosec B101
+        assert avg_latency < 100  # Sub-100ms  # nosec B101  # noqa: PLR2004
 
     async def test_data_ingestion_rate(self):
         """Test realtime data ingestion"""
@@ -534,7 +534,7 @@ class PerformanceTests:
         rate = received / 5
         logger.info(f"Data ingestion rate: {rate:.0f} ticks/sec")
 
-        assert rate > 10  # At least 10 consensus ticks/sec  # nosec B101
+        assert rate > 10  # At least 10 consensus ticks/sec  # nosec B101  # noqa: PLR2004
 
 
 class ChaosTests:

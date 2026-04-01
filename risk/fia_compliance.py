@@ -204,7 +204,7 @@ class FIAComplianceManager:
             if isinstance(tick_time, (int, float)):
                 tick_time = datetime.fromtimestamp(tick_time)
             age = (datetime.now(UTC) - tick_time).total_seconds()
-            checks.append(("staleness", age < 30))  # 30 seconds max
+            checks.append(("staleness", age < 30))  # 30 seconds max  # noqa: PLR2004
 
         # Check price reasonability
         bid = tick_data.get("bid", 0)
@@ -214,7 +214,7 @@ class FIAComplianceManager:
         # Check spread reasonability
         if bid > 0:
             spread_pct = (ask - bid) / bid
-            checks.append(("reasonable_spread", spread_pct < 0.01))  # 1% max
+            checks.append(("reasonable_spread", spread_pct < 0.01))  # 1% max  # noqa: PLR2004
 
         failed = [name for name, passed in checks if not passed]
 

@@ -72,7 +72,7 @@ def test_performance_has_required_keys(perf):
 
 def test_trade_count_sufficient(perf):
     n = int(perf["n_trades"])
-    assert n >= 250, (
+    assert n >= 250, (  # noqa: PLR2004
         f"Only {n} trades — need >= 250 for Sharpe SE <= 0.3. "
         "Re-run with a longer backtest period."
     )
@@ -80,7 +80,7 @@ def test_trade_count_sufficient(perf):
 
 def test_win_rate_plausible(perf):
     wr = float(perf["win_rate_pct"])
-    assert 35.0 <= wr <= 75.0, f"Win rate {wr}% outside plausible range [35, 75]"
+    assert 35.0 <= wr <= 75.0, f"Win rate {wr}% outside plausible range [35, 75]"  # noqa: PLR2004
 
 
 def test_sharpe_finite_and_nonnegative(perf):
@@ -152,7 +152,7 @@ def test_equity_curve_exists():
 
 def test_equity_curve_nonempty():
     size = (RESULTS / "equity_curve.png").stat().st_size
-    assert size > 10_000, f"equity_curve.png is suspiciously small ({size} bytes)"
+    assert size > 10_000, f"equity_curve.png is suspiciously small ({size} bytes)"  # noqa: PLR2004
 
 
 # ── rf_xauusd.pkl ─────────────────────────────────────────────────────────────

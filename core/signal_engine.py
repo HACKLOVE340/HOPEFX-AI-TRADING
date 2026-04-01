@@ -555,10 +555,10 @@ def _predict_basic(
         "low":    data["low"],
         "volume": data.get("volume", 0),
         "ret_1":  closes.pct_change(1).iloc[-1]  if len(closes) > 1  else 0,
-        "ret_5":  closes.pct_change(5).iloc[-1]  if len(closes) > 5  else 0,
-        "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
+        "ret_5":  closes.pct_change(5).iloc[-1]  if len(closes) > 5  else 0,  # noqa: PLR2004
+        "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,  # noqa: PLR2004
         "vol_20": (
-            closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0
+            closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0  # noqa: PLR2004
         ),
     }
     X = pd.DataFrame([feat])
@@ -985,7 +985,7 @@ async def _execute_if_approved(
                     highs = _data.get("highs", [])
                     lows = _data.get("lows", [])
                     closes_list = _data.get("prices", [entry])
-                    if len(highs) >= 14 and len(lows) >= 14:
+                    if len(highs) >= 14 and len(lows) >= 14:  # noqa: PLR2004
                         import numpy as _np
 
                         h = _np.array(highs[-15:], dtype=float)
@@ -1077,7 +1077,7 @@ async def _execute_if_approved(
                 import numpy as _np2
 
                 _prices = (data or {}).get("prices", [entry])
-                if len(_prices) >= 20:
+                if len(_prices) >= 20:  # noqa: PLR2004
                     _rets = _np2.diff(_np2.log(_np2.array(_prices[-21:], dtype=float)))
                     _vol = float(_np2.std(_rets)) * (252**0.5)
                 else:
