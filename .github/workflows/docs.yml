@@ -10,7 +10,7 @@ on:
       - ".github/workflows/static.yml"
   workflow_dispatch:
 
-# Permissions scoped to job level only — workflow level is read-only.
+# Permissions scoped to job level only - workflow level is read-only.
 permissions:
   contents: read
 

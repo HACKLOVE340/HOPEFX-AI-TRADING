@@ -46,10 +46,10 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
       - name: Dependency vulnerability scan
-        # Report CVEs but do not block merges — tracked in security dashboard.
+        # Report CVEs but do not block merges - tracked in security dashboard.
         run: pip-audit --requirement=requirements.txt --desc || true
       - name: Scan with Trivy (supply-chain)
-        # Download pinned release asset directly — avoids executing a remote
+        # Download pinned release asset directly - avoids executing a remote
         # shell script from main and makes failures easier to diagnose.
         run: |
           set -euo pipefail
@@ -84,7 +84,7 @@ jobs:
             ${{ runner.os }}-pip-ci-3.11-
 
       - name: Install dependencies
-        # Use CI requirements — avoids C-extension build failures (quickfix, numba, etc.)
+        # Use CI requirements - avoids C-extension build failures (quickfix, numba, etc.)
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
@@ -94,7 +94,7 @@ jobs:
       # --follow-imports=silent: check only these two files strictly;
       # transitive imports (charting/, core/, etc.) are silenced so their
       # pre-existing type errors don't block this gate.
-      - name: mypy strict — risk/analytics.py + risk/advanced_analytics.py
+      - name: mypy strict - risk/analytics.py + risk/advanced_analytics.py
         run: |
           mypy risk/analytics.py risk/advanced_analytics.py \
             --strict \
@@ -104,16 +104,16 @@ jobs:
             --no-error-summary
 
       # Non-strict gates: surface regressions but don't block CI
-      - name: mypy — api/
+      - name: mypy - api/
         run: mypy api/ --ignore-missing-imports --allow-untyped-decorators --no-error-summary || true
 
-      - name: mypy — risk/
+      - name: mypy - risk/
         run: mypy risk/ --ignore-missing-imports --allow-untyped-decorators --no-error-summary || true
 
-      - name: mypy — ml/
+      - name: mypy - ml/
         run: mypy ml/ --ignore-missing-imports --allow-untyped-decorators --no-error-summary || true
 
-      - name: mypy — auth/ brokers/ config/ core/ execution/ strategies/
+      - name: mypy - auth/ brokers/ config/ core/ execution/ strategies/
         run: |
           mypy auth/ brokers/ config/ core/ execution/ strategies/ \
             --ignore-missing-imports \
@@ -171,7 +171,7 @@ jobs:
             ${{ runner.os }}-pip-ci-${{ matrix.python-version }}-
 
       - name: Install dependencies
-        # Use lightweight CI requirements — no C-extensions, no GPU deps.
+        # Use lightweight CI requirements - no C-extensions, no GPU deps.
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
@@ -212,7 +212,7 @@ jobs:
             --asyncio-mode=auto \
             --timeout=120
 
-      - name: Coverage gate — risk/ (90% required)
+      - name: Coverage gate - risk/ (90% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -226,7 +226,7 @@ jobs:
             --asyncio-mode=auto \
             --timeout=120
 
-      - name: Coverage gate — execution/ (90% required)
+      - name: Coverage gate - execution/ (90% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -240,7 +240,7 @@ jobs:
             --asyncio-mode=auto \
             --timeout=120
 
-      - name: Coverage gate — kill_switch.py (90% required)
+      - name: Coverage gate - kill_switch.py (90% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -254,7 +254,7 @@ jobs:
             --asyncio-mode=auto \
             --timeout=120
 
-      - name: Coverage gate — brokers/ (90% required)
+      - name: Coverage gate - brokers/ (90% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0
@@ -271,7 +271,7 @@ jobs:
             --asyncio-mode=auto \
             --timeout=120
 
-      - name: Coverage gate — compliance/ (90% required)
+      - name: Coverage gate - compliance/ (90% required)
         env:
           DB_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/hopefx
           REDIS_URL: redis://localhost:6379/0

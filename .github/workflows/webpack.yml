@@ -18,10 +18,10 @@ jobs:
       - name: Check for webpack config
         run: |
           if [ ! -f webpack.config.js ] && [ ! -f webpack.config.ts ]; then
-            echo "No webpack config found — webpack build not applicable for this project."
+            echo "No webpack config found - webpack build not applicable for this project."
             echo "Frontend uses Vite (see frontend/ directory and ci.yml frontend job)."
             exit 0
           fi
-          echo "webpack config found — running build."
+          echo "webpack config found - running build."
           npm install
           npx webpack
