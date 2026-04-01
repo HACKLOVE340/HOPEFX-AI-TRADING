@@ -1158,11 +1158,13 @@ async def _execute_if_approved(
             order.id,
         )
 
-        await _handle_post_fill_actions(
-            app_state, order, symbol, direction, quantity, signal_payload, ws
-        )
     except Exception as order_exc:
         logger.error("Auto-trade order failed for %s: %s", symbol, order_exc)
+        return
+
+    await _handle_post_fill_actions(
+        app_state, order, symbol, direction, quantity, signal_payload, ws
+    )
 
 
 
