@@ -181,24 +181,54 @@ class _MLPredictor:
 
         direction : 'BUY' | 'SELL' | 'HOLD'
         confidence: float in [0, 1]
+
+        The ML model (advanced_oos.pkl) was trained on daily bars.  When the
+        buffer contains intraday bars (tick-aggregated), they are resampled to
+        daily before inference so the model's feature windows and calibration
+        thresholds remain valid.  The EMA fallback always uses the raw intraday
+        buffer so it remains responsive to short-term price action.
         """
         if self._available and len(ohlcv_df) >= MIN_BARS:
             try:
-                result = self._predictor.predict_signal(
-                    ohlcv_df,
-                    symbol=symbol.replace("/", ""),
-                    threshold_long=ML_MIN_PROB,
-                    threshold_short=1.0 - ML_MIN_PROB,
-                )
-                raw_dir = result.get("direction", "neutral").lower()
-                confidence = float(result.get("confidence", 0.0))
+                # Resample intraday bars to daily for the ML model
+                model_df = ohlcv_df
+                try:
+                    from ml.daily_aggregator import ensure_daily, needs_resampling
+                    if needs_resampling(ohlcv_df):
+                        resampled = ensure_daily(ohlcv_df, min_bars=MIN_BARS)
+                        if resampled is not None:
+                            model_df = resampled
+                            logger.debug(
+                                "StrategyEngine: resampled %d intraday → %d daily bars",
+                                len(ohlcv_df),
+                                len(model_df),
+                            )
+                        else:
+                            # Not enough daily bars yet — use EMA fallback
+                            logger.debug(
+                                "StrategyEngine: insufficient daily bars after "
+                                "resampling — EMA fallback"
+                            )
+                            model_df = None
+                except Exception as _re:
+                    logger.debug("StrategyEngine: resampling skipped: %s", _re)
 
-                if raw_dir == "long":
-                    return "BUY", confidence
-                elif raw_dir == "short":
-                    return "SELL", confidence
-                else:
-                    return "HOLD", confidence
+                if model_df is not None:
+                    result = self._predictor.predict_signal(
+                        model_df,
+                        symbol=symbol.replace("/", ""),
+                        threshold_long=ML_MIN_PROB,
+                        threshold_short=1.0 - ML_MIN_PROB,
+                    )
+                    raw_dir = result.get("direction", "neutral").lower()
+                    confidence = float(result.get("confidence", 0.0))
+
+                    if raw_dir == "long":
+                        return "BUY", confidence
+                    elif raw_dir == "short":
+                        return "SELL", confidence
+                    else:
+                        return "HOLD", confidence
 
             except Exception as exc:
                 logger.warning(
