@@ -689,7 +689,22 @@ async def ws_live(websocket: WebSocket) -> None:
       Server sends { "type": "heartbeat" } every HEARTBEAT_INTERVAL_SECONDS.
       Client should respond with { "type": "ping" } to reset the miss counter.
       After HEARTBEAT_MISS_LIMIT missed heartbeats the connection is closed (1001).
+
+    Rate limiting:
+      Max WS_MAX_CONNECTIONS_PER_IP concurrent connections per IP (default 10).
+      Max WS_MAX_CONNECTIONS_PER_MINUTE new connections per IP per minute (default 20).
+      Excess connections are rejected with close code 1008 before accept().
     """
+    from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+
+    limiter = get_ws_limiter()
+    client_ip = get_client_ip(websocket)
+
+    allowed, reason = await limiter.check_and_register(websocket, client_ip)
+    if not allowed:
+        await websocket.close(code=1008, reason=reason)
+        return
+
     cid = await _manager.connect(websocket)
 
     await _manager.send(
@@ -848,6 +863,9 @@ async def ws_live(websocket: WebSocket) -> None:
     except Exception as exc:
         logger.error("WS live error [%s]: %s", cid, exc)
         _manager.disconnect(cid)
+    finally:
+        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+        await get_ws_limiter().release(get_client_ip(websocket))
 
 
 # ─── REST helpers ─────────────────────────────────────────────────────────────
