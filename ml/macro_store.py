@@ -73,6 +73,14 @@ _DEFAULT_SERIES: dict[str, str] = {
     "cot_net_spec": "cot_net_spec.csv",
     "vix": "vix_daily.csv",
     "gold_etf_flow": "gold_etf_flow.csv",
+    # WGC gold demand series (quarterly/monthly, forward-filled to hourly)
+    # Populated by WGCFeed.inject_into_macro_store() at startup and daily refresh.
+    # CSV fallback: place manually downloaded WGC exports in data/macro/
+    "wgc_total_demand": "wgc_total_demand.csv",
+    "wgc_investment": "wgc_investment.csv",
+    "wgc_central_bank": "wgc_central_bank.csv",
+    "wgc_jewellery": "wgc_jewellery.csv",
+    "wgc_etf_flow": "wgc_etf_flow.csv",
 }
 
 
