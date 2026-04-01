@@ -46,7 +46,8 @@ import asyncio
 import csv
 import logging
 import os
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from pathlib import Path
 
 logger = logging.getLogger(__name__)

@@ -11,7 +11,8 @@ Web interface for monitoring the Master Control Core
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 import asyncio
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 
 class DashboardServer:

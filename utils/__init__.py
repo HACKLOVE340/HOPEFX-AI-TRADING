@@ -17,7 +17,8 @@ import logging
 import secrets
 import time
 from collections import deque
-from datetime import datetime, timedelta, timezone, UTC  # noqa: F401
+from datetime import datetime, timedelta, timezone, timezone  # noqa: F401
+UTC = timezone.utc
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, Generic, List, Optional, TypeVar  # noqa: F401
 from collections.abc import Callable

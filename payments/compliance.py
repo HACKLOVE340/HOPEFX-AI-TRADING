@@ -9,7 +9,8 @@ Compliance Module
 AML (Anti-Money Laundering) monitoring and regulatory compliance.
 """
 
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum
 from dataclasses import dataclass, field

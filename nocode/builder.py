@@ -6,7 +6,8 @@
 """nocode/builder.py — No-code strategy builder logic."""
 
 from typing import Any
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 import logging
 import re
 

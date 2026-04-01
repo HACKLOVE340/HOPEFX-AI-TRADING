@@ -17,7 +17,8 @@ import queue
 import threading
 import traceback
 from typing import Any, Optional
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 from pathlib import Path

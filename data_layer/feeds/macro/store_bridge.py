@@ -25,7 +25,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 from data_layer.feeds.macro.fred import FREDFeed, FRED_SERIES, fred_feed
 

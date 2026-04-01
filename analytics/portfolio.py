@@ -10,7 +10,8 @@ Multi-asset backtesting, portfolio optimization, correlation analysis, risk metr
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 from pathlib import Path
 import json

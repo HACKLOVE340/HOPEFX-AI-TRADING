@@ -38,7 +38,8 @@ import logging
 import os
 from enum import Enum
 from typing import Any
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 

@@ -18,7 +18,8 @@ import logging
 import time
 from typing import Any
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 from collections import deque
 import copy

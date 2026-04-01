@@ -45,7 +45,8 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
 

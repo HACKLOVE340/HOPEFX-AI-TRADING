@@ -18,7 +18,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
-from datetime import datetime, time, UTC
+from datetime import datetime, time, timezone
+UTC = timezone.utc
 from enum import Enum
 import logging
 

@@ -68,7 +68,8 @@ import signal
 import time
 from typing import Any
 from collections.abc import Callable
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 import contextlib
 
 logger = logging.getLogger(__name__)

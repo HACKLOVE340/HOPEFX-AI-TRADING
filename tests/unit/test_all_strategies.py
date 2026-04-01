@@ -11,7 +11,8 @@ This file aims to increase test coverage to 80%+.
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 from strategies.base import StrategyConfig
 

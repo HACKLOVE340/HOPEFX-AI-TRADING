@@ -15,7 +15,10 @@ import os
 try:
     from typing import Self  # Python 3.11+
 except ImportError:
-    from typing import Self  # Python 3.10 backport
+    try:
+        from typing_extensions import Self  # pip install typing_extensions
+    except ImportError:
+        from typing import Any as Self  # type: ignore[assignment]  # fallback
 
 import keyring
 from cryptography.fernet import Fernet, InvalidToken

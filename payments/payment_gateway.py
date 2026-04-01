@@ -11,7 +11,8 @@ Multi-Gateway Payment Processor
 """
 
 import os
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum
 import logging

@@ -9,7 +9,8 @@ USDT Payment Integration
 Handles USDT deposits and withdrawals on TRC20 (TRON) and ERC20 (Ethereum) networks.
 """
 
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum
 import logging

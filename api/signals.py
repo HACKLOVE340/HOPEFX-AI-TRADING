@@ -20,7 +20,8 @@ import threading
 import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from enum import Enum
 from typing import Any, Optional
 from collections.abc import Callable

@@ -10,7 +10,8 @@ Production-grade backtesting with transaction cost modeling
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Callable

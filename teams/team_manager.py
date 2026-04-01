@@ -12,7 +12,8 @@ Multi-User Team Management
 
 from dataclasses import dataclass
 from enum import Enum
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 import logging
 import uuid
 

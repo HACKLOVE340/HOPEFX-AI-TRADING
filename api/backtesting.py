@@ -19,7 +19,8 @@ from __future__ import annotations
 import io
 import logging
 import uuid
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 import pandas as pd

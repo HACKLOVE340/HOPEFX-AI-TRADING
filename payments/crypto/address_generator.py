@@ -30,8 +30,21 @@ import logging
 import os
 
 from hdwallet import HDWallet
-from hdwallet.symbols import BTC, ETH, TRX
-from hdwallet.utils import generate_mnemonic
+try:
+    from hdwallet.symbols import BTC, ETH, TRX
+except ImportError:
+    BTC = ETH = TRX = None  # type: ignore[assignment]
+
+try:
+    from hdwallet.utils import generate_mnemonic
+except ImportError:
+    # hdwallet v3+: use BIP39Mnemonic.from_entropy
+    import os as _os
+    from hdwallet.mnemonics import BIP39Mnemonic as _BIP39Mnemonic
+
+    def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
+        entropy_bytes = _os.urandom(strength // 8)
+        return _BIP39Mnemonic.from_entropy(entropy=entropy_bytes.hex(), language=language)
 
 logger = logging.getLogger(__name__)
 

@@ -29,7 +29,8 @@ import logging
 import threading
 import time
 from collections import deque
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 import os
 

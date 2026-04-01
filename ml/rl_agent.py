@@ -52,7 +52,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 

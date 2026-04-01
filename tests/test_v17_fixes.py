@@ -18,7 +18,8 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 
 # ---------------------------------------------------------------------------
 # Ensure test env vars are set before any app module is imported

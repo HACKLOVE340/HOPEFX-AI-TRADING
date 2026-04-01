@@ -8,7 +8,8 @@ Tests for Time & Sales Service (data/time_and_sales.py)
 """
 
 import pytest
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 
 class TestExecutedTrade:

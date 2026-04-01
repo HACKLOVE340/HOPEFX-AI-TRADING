@@ -13,7 +13,8 @@ Note: This wallet ONLY handles subscription fees and commission payments.
 Trading capital is managed directly by brokers/prop firms.
 """
 
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 import logging
 

@@ -28,7 +28,8 @@ import logging
 import lzma
 import os
 import struct
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from pathlib import Path
 
 import aiohttp

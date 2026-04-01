@@ -18,7 +18,8 @@ import logging
 import threading
 import time
 from collections import defaultdict, deque
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum

@@ -20,7 +20,8 @@ GET  /api/calendar/auto-pause       — get current auto-pause config
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any
 
 from fastapi import APIRouter, Query

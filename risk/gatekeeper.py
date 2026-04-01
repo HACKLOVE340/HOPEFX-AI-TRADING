@@ -41,7 +41,8 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 from core.event_bus import bus, CH_SIGNAL, CH_BREACH
 

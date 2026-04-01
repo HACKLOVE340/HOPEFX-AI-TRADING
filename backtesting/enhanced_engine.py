@@ -43,7 +43,8 @@ from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Callable
 from enum import Enum, IntEnum, auto
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from collections import deque, defaultdict
 import logging
 import json

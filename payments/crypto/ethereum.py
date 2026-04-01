@@ -9,7 +9,8 @@ Ethereum Payment Integration
 Handles Ethereum (ETH) deposits and withdrawals.
 """
 
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 import logging
 import hashlib

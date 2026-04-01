@@ -13,7 +13,8 @@ import asyncio
 import json
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from collections.abc import Callable
 
 try:

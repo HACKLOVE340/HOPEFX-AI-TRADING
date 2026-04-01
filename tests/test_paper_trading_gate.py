@@ -28,7 +28,8 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from pathlib import Path
 
 import pytest

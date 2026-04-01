@@ -35,7 +35,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 

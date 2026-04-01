@@ -68,7 +68,8 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 from queue import Empty, Queue
 from collections.abc import Callable

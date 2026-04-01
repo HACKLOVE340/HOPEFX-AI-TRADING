@@ -20,7 +20,8 @@ Author: HOPEFX Development Team
 import abc
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any
 
 import requests

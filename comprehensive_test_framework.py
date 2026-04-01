@@ -14,7 +14,8 @@ import pytest
 import numpy as np
 import pandas as pd
 from typing import Any
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from dataclasses import dataclass
 from enum import Enum
 import logging

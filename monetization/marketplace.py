@@ -10,7 +10,8 @@ Strategy listings, pricing engine, subscription management, license validation
 
 import json
 import secrets
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any
 from pathlib import Path
 from dataclasses import dataclass, field

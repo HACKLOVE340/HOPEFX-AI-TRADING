@@ -13,7 +13,8 @@ import contextlib
 import numpy as np
 from typing import Optional
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 
 

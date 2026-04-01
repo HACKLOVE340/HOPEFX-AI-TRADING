@@ -30,7 +30,8 @@ import threading
 import time
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
 

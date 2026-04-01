@@ -28,7 +28,8 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum
 from collections.abc import Callable

@@ -10,7 +10,8 @@ LSTM, XGBoost, Random Forest with model saving/loading, hyperparameter tuning, e
 
 import json
 import warnings
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
