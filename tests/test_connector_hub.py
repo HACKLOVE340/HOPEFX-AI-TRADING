@@ -107,7 +107,7 @@ class TestEventBus:
         bus._degraded = False
 
         received: list = []
-        bus.subscribe_local(CH_SIGNAL, lambda m: received.append(m))
+        bus.subscribe_local(CH_SIGNAL, received.append)
 
         # Patch sleep to avoid waiting during retries
         with patch("core.event_bus.asyncio.sleep", new_callable=AsyncMock):

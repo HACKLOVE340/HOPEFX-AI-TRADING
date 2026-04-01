@@ -30,7 +30,7 @@ test.describe('Performance page', () => {
     await page.goto('/performance');
     await page.waitForLoadState('networkidle');
 
-    if (page.url().includes('/login')) return; // auth-gated, acceptable
+    if (page.url().includes('/login')) return; // auth-gated in unauthenticated CI — content assertion intentionally skipped
 
     // Should show either metrics or a loading/error state — not a blank page
     const content = page.locator(

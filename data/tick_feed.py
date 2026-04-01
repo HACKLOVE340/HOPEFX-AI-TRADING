@@ -54,7 +54,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 import contextlib
 
 logger = logging.getLogger(__name__)
@@ -154,8 +154,8 @@ class TickSource(ABC):
         self.symbol = symbol
         self._running = False
         self._fail_count = 0
-        self._circuit_open_at: Optional[float] = None
-        self._on_tick: Optional[Callable] = None
+        self._circuit_open_at: float | None = None
+        self._on_tick: Callable | None = None
 
     def set_callback(self, callback: Callable) -> None:
         self._on_tick = callback
@@ -456,8 +456,8 @@ class TickAggregator:
         self.symbol = symbol
         self.timeframe_s = timeframe_s
         self._bar_callbacks: List[Callable] = []
-        self._current_bar: Optional[Dict[str, Any]] = None
-        self._bar_start: Optional[float] = None
+        self._current_bar: Dict[str, Any] | None = None
+        self._bar_start: float | None = None
 
     def add_bar_callback(self, cb: Callable) -> None:
         self._bar_callbacks.append(cb)
@@ -524,7 +524,7 @@ class TickBus:
         self._dedup_window_ms = dedup_window_ms
         self._recent: deque = deque(maxlen=20)  # (timestamp_ms, mid)
         self._tick_count = 0
-        self._last_tick: Optional[Tick] = None
+        self._last_tick: Tick | None = None
 
     def subscribe(self, component: Any) -> None:
         """Register a subscriber with an async on_tick(tick) method."""
@@ -568,7 +568,7 @@ class TickBus:
         return self._tick_count
 
     @property
-    def last_tick(self) -> Optional[Tick]:
+    def last_tick(self) -> Tick | None:
         return self._last_tick
 
     def status(self) -> Dict[str, Any]:
@@ -677,13 +677,13 @@ class TickFeedManager:
         return self._bus
 
     @property
-    def last_tick(self) -> Optional[Tick]:
+    def last_tick(self) -> Tick | None:
         return self._bus.last_tick
 
 
 # ── module-level singleton ────────────────────────────────────────────────────
 
-_manager: Optional[TickFeedManager] = None
+_manager: TickFeedManager | None = None
 
 
 def get_tick_feed(symbol: str = "XAU_USD", bar_timeframe_s: int = 60) -> TickFeedManager:

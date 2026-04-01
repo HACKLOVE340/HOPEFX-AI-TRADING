@@ -11,7 +11,6 @@ Real-time P&L, exposure, and portfolio optimization
 
 import contextlib
 import numpy as np
-from typing import Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -228,7 +227,7 @@ class PortfolioManager:
         self._rebalancer.update_drawdown("portfolio", float(self.max_drawdown))
         return self._rebalancer
 
-    def run_rebalance(self, force: bool = False) -> Optional[dict]:
+    def run_rebalance(self, force: bool = False) -> dict | None:
         """
         Run the rebalancer and return target weights (or None if no rebalance needed).
 

@@ -94,7 +94,7 @@ class WebSocketConnectionLimiter:
         self._connected = False
         # In-process fallback state
         self._open_conns: dict[str, int] = defaultdict(int)
-        self._rate_window: dict[str, deque] = defaultdict(lambda: deque())
+        self._rate_window: dict[str, deque] = defaultdict(deque)
         self._lock = asyncio.Lock()
 
     # ── Redis connection ──────────────────────────────────────────────────────

@@ -111,7 +111,7 @@ class TestPropEnforcer:
     def test_kill_switch_callback_fired_on_breach(self):
         fired = []
         e = self._make(daily_dd=0.05)
-        e._kill_switch_fn = lambda reason: fired.append(reason)
+        e._kill_switch_fn = fired.append
         e.update_balance(100_000, start_of_day_equity=100_000)
         e.update_balance(94_000)
         e.before_execute("XAUUSD")

@@ -96,7 +96,7 @@ test.describe('Leaderboard', () => {
     await page.goto('/leaderboard');
     await page.waitForLoadState('networkidle');
 
-    if (page.url().includes('/login')) return; // auth-gated, acceptable
+    if (page.url().includes('/login')) return; // auth-gated in unauthenticated CI — content assertion intentionally skipped
 
     // Either real data or fallback data — both show % returns
     const returnCell = page.locator('text=/%/').first();

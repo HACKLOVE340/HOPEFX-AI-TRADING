@@ -430,7 +430,7 @@ class TestMarketScanner:
         scanner.add_criteria(ScanCriteriaType.MOMENTUM)
 
         callbacks = []
-        scanner.on_opportunity(lambda opp: callbacks.append(opp))
+        scanner.on_opportunity(callbacks.append)
 
         market_data = {
             "XAUUSD": {

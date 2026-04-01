@@ -197,7 +197,7 @@ def test_kill_switch_persists_across_instances(tmp_path):
 
 def test_kill_switch_callback_fires_on_activation(ks):
     fired = []
-    ks.register_callback(lambda reason: fired.append(reason))
+    ks.register_callback(fired.append)
     ks.activate("callback test")
     assert len(fired) == 1
     assert "callback test" in fired[0]
