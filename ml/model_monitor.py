@@ -163,14 +163,11 @@ class ModelMonitor:
             return 0.0
 
         bins = self._ref_feature_bins[feature_name]
-        ref_counts = np.histogram(
-            list(self._live_features.get(feature_name, [])),
-            bins=bins,
-        )[0]
 
-        # We need the training distribution too — use bins as proxy
-        # In real usage, set_reference stores histogram counts
-        # For PSI we compare current live to bins (uniform reference)
+        # Use a uniform reference distribution over the stored bins.
+        # In production, set_reference should store true reference histogram
+        # counts and compute_psi should use those instead.
+        ref_counts = np.ones(len(bins) - 1, dtype=float)
         live_counts = np.histogram(live_vals, bins=bins)[0]
 
         n_ref = max(ref_counts.sum(), 1)
