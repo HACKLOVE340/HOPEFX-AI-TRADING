@@ -290,7 +290,7 @@ class StripeIntegration:
 
     def create_payment_intent(
         self,
-        customer_id: str,
+        customer_id: str | None,
         amount: Decimal,
         currency: str = "usd",
         tier: SubscriptionTier | None = None,
@@ -306,13 +306,15 @@ class StripeIntegration:
                 "billing_cycle": billing_cycle.value,
                 **(metadata or {}),
             }
-            intent = _stripe.PaymentIntent.create(
-                amount=amount_cents,
-                currency=currency.lower(),
-                customer=customer_id,
-                metadata=intent_metadata,
-                automatic_payment_methods={"enabled": True},
-            )
+            create_kwargs: dict[str, Any] = {
+                "amount": amount_cents,
+                "currency": currency.lower(),
+                "metadata": intent_metadata,
+                "automatic_payment_methods": {"enabled": True},
+            }
+            if customer_id:
+                create_kwargs["customer"] = customer_id
+            intent = _stripe.PaymentIntent.create(**create_kwargs)
             pi = StripePaymentIntent(
                 intent_id=intent.id,
                 customer_id=customer_id,
