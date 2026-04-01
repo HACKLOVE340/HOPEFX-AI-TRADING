@@ -170,15 +170,51 @@ def _load_strategy(name: str, params: dict | None = None):
         raise ValueError(f"Failed to load strategy '{name}': {exc}") from exc
 
 
+import re as _re
+
+# Symbols must be alphanumeric with optional separators — no path components.
+_SYMBOL_RE = _re.compile(r"^[A-Za-z0-9_\-/\.]{1,30}$")
+# CSV stem names derived from symbols must stay inside the data/ directory.
+_STEM_RE = _re.compile(r"^[A-Za-z0-9_]{1,40}$")
+
+
+def _sanitize_symbol(symbol: str) -> str:
+    """Validate *symbol* and return it, or raise HTTPException(400)."""
+    if not _SYMBOL_RE.match(symbol):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Symbol '{symbol}' contains invalid characters",
+        )
+    return symbol
+
+
+def _safe_csv_path(data_dir: "pathlib.Path", stem: str) -> "pathlib.Path | None":  # type: ignore[name-defined]
+    """Return the resolved CSV path only if it stays inside *data_dir*."""
+    import pathlib
+
+    if not _STEM_RE.match(stem):
+        return None
+    candidate = (data_dir / f"{stem}.csv").resolve()
+    try:
+        candidate.relative_to(data_dir.resolve())
+    except ValueError:
+        return None
+    return candidate
+
+
 def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
-    """
-    Fetch OHLCV data for backtesting.
+    """Fetch OHLCV data for backtesting.
 
     Priority:
     1. yfinance live download (requires internet + valid ticker)
     2. Local CSV files in data/ directory (always available for XAUUSD)
+
+    The symbol is validated before use and any derived filesystem paths are
+    confined to the data/ directory to prevent path traversal.
     """
     import pathlib
+
+    _sanitize_symbol(symbol)
 
     # 1. Try yfinance
     try:
@@ -196,7 +232,8 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
         logger.debug("yfinance failed (%s), trying local CSV: %s", symbol, exc)
 
     # 2. Local CSV fallback
-    sym_upper = symbol.upper().replace("-", "_").replace("/", "_")
+    # Normalise the symbol to a safe stem: only alphanumeric + underscore.
+    sym_upper = _re.sub(r"[^A-Za-z0-9]", "_", symbol.upper())
     if "_" not in sym_upper and len(sym_upper) == 6:  # noqa: PLR2004
         sym_upper = sym_upper[:3] + "_" + sym_upper[3:]
 
@@ -213,12 +250,12 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
     data_dir = pathlib.Path(__file__).parent.parent / "data"
     candidates = freq_file_map.get(freq, freq_file_map["1d"])
 
-    # Also try generic symbol-based names
+    # Also try generic symbol-based names (sym_upper is already sanitised above)
     candidates = candidates + [sym_upper + "_H1", sym_upper + "_D", sym_upper]
 
     for stem in candidates:
-        csv_path = data_dir / f"{stem}.csv"
-        if not csv_path.exists():
+        csv_path = _safe_csv_path(data_dir, stem)
+        if csv_path is None or not csv_path.exists():
             continue
         try:
             df = pd.read_csv(csv_path, parse_dates=["timestamp"])
