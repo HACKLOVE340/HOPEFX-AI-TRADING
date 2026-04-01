@@ -401,7 +401,8 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
     for rel_path, content in FILES.items():
         target = base / rel_path
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(textwrap.dedent(content))  # nosec B108 - writing Helm template strings, not real secrets
+        # nosec B108 — writing Helm YAML template strings, not real secrets or credentials
+        target.write_text(textwrap.dedent(content), encoding="utf-8")
         written.append(str(target))
         print(f"  wrote {target}")
 

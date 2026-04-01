@@ -137,6 +137,8 @@ def main():
         # Write the generated password to a restricted file so it survives
         # terminal scroll, then print a single line pointing to that file.
         pw_file = ROOT / "admin_password.txt"
+        # nosec B106 — intentional: password written to a chmod-600 local file so it
+        # survives terminal scroll. User is instructed to delete it immediately.
         pw_file.write_text(
             f"Admin password (generated {__import__('datetime').datetime.now().isoformat()}):\n"
             f"{args.password}\n"
@@ -145,7 +147,7 @@ def main():
         )
         try:
             pw_file.chmod(stat.S_IRUSR | stat.S_IWUSR)
-        except Exception:
+        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             pass  # chmod may fail on Windows; non-fatal
         print(f"[INFO] Auto-generated password written to: {pw_file}")
         print("[INFO] Delete that file after saving the password to a password manager.")
