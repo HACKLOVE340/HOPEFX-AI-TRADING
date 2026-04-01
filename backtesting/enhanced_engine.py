@@ -1998,7 +1998,11 @@ class EnhancedBacktestEngine:
         def _sortino(rets: Any, target: float = 0.0) -> float:
             downside = [r for r in rets if r < target]
             if not downside:
+        def _sortino(rets: Any, target: float = 0.0) -> float:
+            downside = [r for r in rets if r < target]
+            if not downside:
                 return 0.0
+            return (np.mean(rets) - target) / np.std(downside) if np.std(downside) > 0 else 0.0
             return (np.mean(returns) - target) / np.std(downside) if np.std(downside) > 0 else 0.0
 
         def _calmar(rets: Any, mdd: float) -> float:
