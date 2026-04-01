@@ -194,9 +194,29 @@ async def check_yahoo() -> None:
     except Exception as exc:
         record(WARN, "Yahoo macro", f"Error: {exc}")
 
-# ── 8. Redis ──────────────────────────────────────────────────────────────────
+# ── 8. FIX protocol backend ───────────────────────────────────────────────────
 
-print("\n=== 8. Redis ===")
+print("\n=== 8. FIX protocol backend ===")
+
+def check_fix() -> None:
+    try:
+        from execution.fix_adapter import _FIX_BACKEND
+        if _FIX_BACKEND == "quickfix":
+            record(PASS, "FIX backend", "quickfix (C-extension) — production ready")
+        elif _FIX_BACKEND == "pyfixmsg":
+            record(WARN, "FIX backend", "pyfixmsg (pure Python) — functional but higher latency than quickfix")
+        elif _FIX_BACKEND == "simplefix":
+            record(WARN, "FIX backend", "simplefix (message encoding only) — install quickfix for full FIX sessions")
+        else:
+            record(FAIL, "FIX backend", "no FIX library — install: sudo apt-get install libquickfix-dev && pip install quickfix==1.15.1")
+    except Exception as exc:
+        record(FAIL, "FIX backend", f"import error: {exc}")
+
+check_fix()
+
+# ── 9. Redis ──────────────────────────────────────────────────────────────────
+
+print("\n=== 9. Redis ===")
 
 def check_redis() -> None:
     try:
