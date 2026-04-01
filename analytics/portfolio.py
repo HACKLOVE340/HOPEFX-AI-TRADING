@@ -586,7 +586,7 @@ class MultiAssetBacktester:
 
         # Execute trades
         for asset, trade_value in trades.items():
-            if abs(trade_value) > self.MIN_TRADE_SIZE:  # Minimum trade size
+            if abs(trade_value) > PortfolioAnalytics.MIN_TRADE_SIZE:  # Minimum trade size
                 trade_quantity = trade_value / prices[asset]
                 commission = abs(trade_value) * self.commission_rate
 
