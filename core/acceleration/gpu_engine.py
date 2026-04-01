@@ -266,7 +266,7 @@ class RealTimeRiskMonitor:
 
     def _trigger_kill_switch(self, violations: list[str]):
         """Emergency position reduction"""
-        print(f"🚨 RISK LIMIT BREACH: {', '.join(violations)}")
+        _gpu_logger.critical("RISK LIMIT BREACH: %s", ", ".join(violations))
         self.kill_switch_triggered = True
         # Signal to close all positions
 

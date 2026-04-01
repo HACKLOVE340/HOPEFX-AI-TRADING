@@ -8,15 +8,17 @@ HOPEFX Portfolio Analytics Module
 Multi-asset backtesting, portfolio optimization, correlation analysis, risk metrics
 """
 
-import pandas as pd
-import numpy as np
+import json
+import logging
+import warnings
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 UTC = timezone.utc
-from typing import Any
-from pathlib import Path
-import json
-import warnings
 
 warnings.filterwarnings("ignore")
 
@@ -40,6 +42,9 @@ except ImportError:
     SCIPY_AVAILABLE = False
 
 
+logger = logging.getLogger(__name__)
+
+
 class PortfolioAnalytics:
     """
     Comprehensive portfolio analytics for multi-asset strategies
@@ -55,7 +60,7 @@ class PortfolioAnalytics:
         """Load historical returns data for analysis"""
         self.returns_data = returns_df.dropna()
         self.assets = list(returns_df.columns)
-        print(f"Loaded returns data: {len(self.returns_data)} periods, {len(self.assets)} assets")
+        logger.info(f"Loaded returns data: {len(self.returns_data)} periods, {len(self.assets)} assets")
 
     def calculate_correlation_matrix(self, save_path: str | None = None) -> pd.DataFrame:
         """Calculate and visualize correlation matrix"""
@@ -88,7 +93,7 @@ class PortfolioAnalytics:
         if save_path:
             Path(save_path).parent.mkdir(parents=True, exist_ok=True)
             plt.savefig(save_path, dpi=300, bbox_inches="tight")
-            print(f"Correlation matrix saved: {save_path}")
+            logger.info(f"Correlation matrix saved: {save_path}")
 
         plt.show()
         return corr_matrix
@@ -317,7 +322,7 @@ class PortfolioAnalytics:
         if save_path:
             Path(save_path).parent.mkdir(parents=True, exist_ok=True)
             plt.savefig(save_path, dpi=300, bbox_inches="tight")
-            print(f"Efficient frontier saved: {save_path}")
+            logger.info(f"Efficient frontier saved: {save_path}")
 
         plt.show()
         return df
@@ -443,7 +448,7 @@ class PortfolioAnalytics:
         weights_path = Path(output_dir) / f"portfolio_weights_{timestamp}.csv"
         weights_df.to_csv(weights_path, index=False)
 
-        print(f"Portfolio report saved to {output_dir}/")
+        logger.info(f"Portfolio report saved to {output_dir}/")
         return str(report_path)
 
 
@@ -475,9 +480,9 @@ class MultiAssetBacktester:
             weights_df: DataFrame with target weights over time
             rebalance_freq: Rebalancing frequency
         """
-        print(f"Starting multi-asset backtest: ${self.initial_capital:,.2f}")
-        print(f"Assets: {list(prices_df.columns)}")
-        print(f"Rebalancing: {rebalance_freq}")
+        logger.info(f"Starting multi-asset backtest: ${self.initial_capital:,.2f}")
+        logger.info(f"Assets: {list(prices_df.columns)}")
+        logger.info(f"Rebalancing: {rebalance_freq}")
 
         # Initialize positions
         for asset in prices_df.columns:
@@ -522,10 +527,10 @@ class MultiAssetBacktester:
         # Calculate performance metrics
         returns = equity_df["equity"].pct_change(fill_method=None).dropna()
 
-        print("\nBacktest complete:")
-        print(f"  Final equity: ${equity_df['equity'].iloc[-1]:,.2f}")
-        print(f"  Total return: {(equity_df['equity'].iloc[-1] / self.initial_capital - 1):.2%}")
-        print(f"  Sharpe ratio: {(returns.mean() * 252) / (returns.std() * np.sqrt(252)):.2f}")
+        logger.info("\nBacktest complete:")
+        logger.info(f"  Final equity: ${equity_df['equity'].iloc[-1]:,.2f}")
+        logger.info(f"  Total return: {(equity_df['equity'].iloc[-1] / self.initial_capital - 1):.2%}")
+        logger.info(f"  Sharpe ratio: {(returns.mean() * 252) / (returns.std() * np.sqrt(252)):.2f}")
 
         return equity_df
 
@@ -589,7 +594,7 @@ class MultiAssetBacktester:
         trades_path = Path(output_dir) / f"multi_asset_trades_{timestamp}.csv"
         trades_df.to_csv(trades_path, index=False)
 
-        print(f"Backtest results saved to {output_dir}/")
+        logger.info(f"Backtest results saved to {output_dir}/")
 
 
 class RiskAnalyzer:
@@ -710,7 +715,7 @@ def create_portfolio_report(
     if weights is None:
         opt_result = analytics.optimize_portfolio(max_sharpe=True)
         weights = np.array(list(opt_result["weights"].values()))
-        print(f"Optimized portfolio - Sharpe: {opt_result['sharpe_ratio']:.2f}")
+        logger.info(f"Optimized portfolio - Sharpe: {opt_result['sharpe_ratio']:.2f}")
 
     # Generate correlation matrix
     corr_path = Path(output_dir) / "correlation_matrix.png"
@@ -731,12 +736,11 @@ def create_portfolio_report(
     dd_path = Path(output_dir) / "drawdown_analysis.png"
     risk_analyzer.plot_drawdowns(save_path=str(dd_path))
 
-    print(f"\nPortfolio report complete: {report_path}")
-    print("Key metrics:")
-    print(f"  Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
-    print(f"  Sortino Ratio: {metrics['sortino_ratio']:.2f}")
-    print(f"  Max Drawdown: {metrics['max_drawdown']:.2%}")
-    print(f"  Calmar Ratio: {metrics['calmar_ratio']:.2f}")
+    logger.info(
+        "Portfolio report complete: %s | Sharpe: %.2f | Sortino: %.2f | MaxDD: %.2%% | Calmar: %.2f",
+        report_path, metrics["sharpe_ratio"], metrics["sortino_ratio"],
+        metrics["max_drawdown"], metrics["calmar_ratio"],
+    )
 
     return report_path
 

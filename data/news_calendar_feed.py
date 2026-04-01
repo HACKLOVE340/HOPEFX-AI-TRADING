@@ -279,9 +279,9 @@ async def _main() -> None:
     feed = NewsCalendarFeed()
     count = await feed.refresh_once()
     events = await feed.list_events()
-    print(f"\nStored {count} events in Redis '{REDIS_KEY}':")
+    logger.info("Stored %d events in Redis '%s':", count, REDIS_KEY)
     for e in events:
-        print(f"  {e}")
+        logger.info("  %s", e)
 
 
 if __name__ == "__main__":
