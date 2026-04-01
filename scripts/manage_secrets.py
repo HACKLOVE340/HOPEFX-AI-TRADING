@@ -272,8 +272,8 @@ def cmd_rotate(args: argparse.Namespace) -> int:
     _write_env(ENV_FILE, env)
 
     print(f"Rotated {key}")
-    print(f"  Old: {'(not set)' if not old_val else old_val[:8] + '...'}")
-    print(f"  New: {new_val[:8]}...")
+    print(f"  Old: {'(not set)' if not old_val else '(redacted)'}")
+    print(f"  New: (redacted — see {ENV_FILE})")
     print("\nRestart the application to pick up the new value.")
     if key in ("SECURITY_JWT_SECRET",):
         print("WARNING: Rotating JWT_SECRET invalidates all active user sessions.")
