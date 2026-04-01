@@ -211,6 +211,7 @@ class SecretsManager:
             self._refresh_count += 1
 
             if changed:
+                # nosec B105 - sorted(changed) is a list of env var *names*, not values
                 logger.info(
                     "SecretsManager: refreshed %d secrets (%d changed): %s",
                     len(new_secrets),

@@ -181,7 +181,7 @@ class OANDABroker:
             logger.debug("OANDABroker: using injected api object — skipping HTTP connect")
             return True
         if not self._account_id or not self._token:
-            logger.error("OANDABroker: missing OANDA_ACCOUNT_ID or OANDA_API_TOKEN")
+            logger.error("OANDABroker: missing OANDA_ACCOUNT_ID or OANDA_API_TOKEN")  # nosec B105 - logs absence, not value
             return False
         headers = {
             "Authorization": f"Bearer {self._token}",

@@ -34,7 +34,7 @@ def _get_session():
             return None
         return mgr.get_session()
     except Exception as exc:
-        logger.debug("db_store: could not obtain DB session: %s", exc)
+        logger.debug("db_store: could not obtain DB session: %s", exc)  # nosec B105 - logs exception type, no secrets
         return None
 
 
