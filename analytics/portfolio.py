@@ -812,6 +812,13 @@ class PortfolioOptimizer:
     Accepts (assets, returns_matrix) calling convention.
     """
 
+    # ── Portfolio thresholds (mirror PortfolioAnalytics) ──────────────────────
+    MIN_TRADE_SIZE = PortfolioAnalytics.MIN_TRADE_SIZE
+    MIN_OBSERVATIONS_OPTIMISE = PortfolioAnalytics.MIN_OBSERVATIONS_OPTIMISE
+    MIN_OBSERVATIONS_FRONTIER = PortfolioAnalytics.MIN_OBSERVATIONS_FRONTIER
+    MIN_ASSETS_FOR_OPTIMISATION = PortfolioAnalytics.MIN_ASSETS_FOR_OPTIMISATION
+    TRADING_DAYS_PER_YEAR = PortfolioAnalytics.TRADING_DAYS_PER_YEAR
+
     def __init__(self, risk_free_rate: float = 0.02):
         self.risk_free_rate = risk_free_rate
         self._analytics = PortfolioAnalytics(risk_free_rate=risk_free_rate)
