@@ -547,7 +547,7 @@ class IBKRConnector(BrokerConnector):
                         if ticker and ticker.marketPrice()
                         else 0.0
                     )
-                except Exception:
+                except Exception:  # nosec B110 — fallback to zero on ticker error
                     current_price = 0.0
 
                 avg_cost = pos.avgCost

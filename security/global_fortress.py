@@ -712,7 +712,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
         raw = await redis.lrange("alerts:critical", -50, -1)
         try:
             return [json.loads(r) for r in raw]
-        except Exception:
+        except (ValueError, TypeError):
             return []
 
     @router.get("/lockdown")

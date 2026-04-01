@@ -66,7 +66,7 @@ class FMPFeed(NewsFeedBase):
                 pub_str = item.get("publishedDate", "")
                 try:
                     published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
-                except Exception:
+                except (ValueError, TypeError):
                     published = datetime.now(UTC)
 
                 articles.append(

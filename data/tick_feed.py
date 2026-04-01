@@ -283,7 +283,7 @@ class OandaTickSource(TickSource):
                     ts_str = msg.get("time", "")
                     try:
                         ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                    except Exception:
+                    except (ValueError, TypeError):
                         ts = datetime.now(UTC)
 
                     tick = Tick(

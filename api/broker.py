@@ -373,7 +373,7 @@ async def broker_status():
             if price_engine is not None and hasattr(price_engine, "get_status"):
                 try:
                     rest_status = price_engine.get_status()
-                except Exception:
+                except Exception:  # nosec B110 — fallback to empty status
                     rest_status = {}
             data_feed: dict = {
                 "active": ns_status.get("is_running", False),

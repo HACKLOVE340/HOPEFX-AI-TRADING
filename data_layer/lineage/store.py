@@ -607,7 +607,7 @@ class DataLineageStore:
                     "SELECT COUNT(*) FROM lineage_records"
                 ).fetchone()
             return row[0] if row else 0
-        except Exception:
+        except Exception:  # nosec B110 — graceful count fallback
             return 0
 
     def stats(self) -> dict[str, Any]:

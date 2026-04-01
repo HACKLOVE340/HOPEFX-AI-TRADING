@@ -108,7 +108,7 @@ try:
     )
     _prom_dlq_size = Gauge("hopefx_regulatory_dlq_size", "Dead-letter queue depth")
     _PROM_OK = True
-except Exception:
+except Exception:  # nosec B110 — Prometheus metrics optional
     _PROM_OK = False
 
 

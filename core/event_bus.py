@@ -472,7 +472,7 @@ class EventBus:
                     self._redis = _make_redis()
                     await self._redis.ping()
                     logger.info("EventBus reconnected to Redis.")
-                except Exception:
+                except Exception:  # nosec B110 — Redis reconnect resilience
                     self._degraded = True
                     logger.error(
                         "EventBus: Redis reconnect failed — switching to local fallback."

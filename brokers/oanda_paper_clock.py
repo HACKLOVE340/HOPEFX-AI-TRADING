@@ -106,7 +106,7 @@ class OandaPaperClock:
         if self._stamp_path.exists():
             try:
                 existing = json.loads(self._stamp_path.read_text())
-            except Exception:
+            except (ValueError, KeyError):
                 existing = {}
 
             # If a real account is already stamped, preserve the clock.
@@ -134,7 +134,7 @@ class OandaPaperClock:
             started_dt = datetime.fromisoformat(started_utc_str.replace("Z", "+00:00"))
             if started_dt.tzinfo is None:
                 started_dt = started_dt.replace(tzinfo=UTC)
-        except Exception:
+        except (ValueError, TypeError):
             started_dt = now
 
         from datetime import timedelta

@@ -488,7 +488,7 @@ class MarketDataCache:
                 # expected typed fields.
                 try:
                     result = [OHLCVData.from_dict(item) for item in raw]
-                except Exception:
+                except (KeyError, TypeError, ValueError):
                     result = raw  # fall back to plain dicts
 
                 if limit is not None:
@@ -563,7 +563,7 @@ class MarketDataCache:
                 raw = data["data"]
                 try:
                     return TickData.from_dict(raw)
-                except Exception:
+                except (KeyError, TypeError, ValueError):
                     return raw  # plain dict fallback
 
             return None

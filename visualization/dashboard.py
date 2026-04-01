@@ -51,7 +51,7 @@ class DashboardServer:
                         }
                     )
                     await asyncio.sleep(1)
-            except Exception:
+            except Exception:  # nosec B110 — remove disconnected WebSocket client
                 self.clients.remove(websocket)
 
     def _html(self):

@@ -73,7 +73,7 @@ class CircuitBreaker:
             self._on_success()
             return result
 
-        except Exception:
+        except Exception:  # nosec B110 — record failure before re-raise
             self._on_failure()
             raise
 

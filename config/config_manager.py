@@ -306,7 +306,7 @@ class ConfigManager:
         if self._enc and value:
             try:
                 return self._enc.decrypt(value)
-            except Exception:
+            except Exception:  # nosec B110 — return raw value on decrypt failure
                 return value
         return value
 

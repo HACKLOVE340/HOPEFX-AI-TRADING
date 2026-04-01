@@ -64,7 +64,7 @@ class NewsDataFeed(NewsFeedBase):
                 pub_str = item.get("pubDate", "")
                 try:
                     published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
-                except Exception:
+                except (ValueError, TypeError):
                     published = datetime.now(UTC)
 
                 keywords = item.get("keywords") or []

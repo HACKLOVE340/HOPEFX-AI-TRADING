@@ -393,7 +393,7 @@ class RegimeRouter:
     def load(cls, path: str | Path) -> RegimeRouter:
         try:
             obj = joblib.load(path)
-        except Exception:
+        except Exception:  # nosec B110 — joblib fallback to pickle
             with open(path, "rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         logger.info("RegimeRouter loaded ← %s", path)
