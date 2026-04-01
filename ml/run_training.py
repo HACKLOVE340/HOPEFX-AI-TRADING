@@ -172,7 +172,7 @@ def run_pipeline(
             "metrics": {
                 k: v
                 for k, v in (info.get("metrics") or {}).items()
-                if isinstance(v, (int, float))  # noqa: UP038
+                if isinstance(v, (int, float))
             },
         }
 

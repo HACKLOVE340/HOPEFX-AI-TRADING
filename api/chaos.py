@@ -24,7 +24,7 @@ import logging
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -302,7 +302,7 @@ async def run_mutation_tests(
     )
 
 
-@router.get("/mutation/results", response_model=Optional[MutationResultOut])
+@router.get("/mutation/results", response_model=MutationResultOut | None)
 async def get_mutation_results() -> MutationResultOut | None:
     """Return the last mutation test report, or null if none has run."""
     if _last_mutation_report is None:

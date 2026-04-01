@@ -9,7 +9,7 @@ Coordinates multiple strategies to prevent conflicts and maximize returns
 """
 
 from collections import defaultdict
-from typing import Any, Optional
+from typing import Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -42,7 +42,7 @@ class StrategyOrchestra:
         self.active_strategies: list[str] = []
         self.current_regime: str = "unknown"
         self.signal_buffer: dict[str, list[Signal]] = defaultdict(list)
-        self._rebalancer: Optional[Any] = None
+        self._rebalancer: Any | None = None
         self._returns_buffer: dict[str, list[float]] = defaultdict(list)
 
         self.event_bus.subscribe("POSITION_CLOSED", self._on_position_closed)
@@ -82,7 +82,7 @@ class StrategyOrchestra:
             print(f"⚠️  DynamicRebalancer attach failed: {exc}")
             return None
 
-    def run_rebalance(self, force: bool = False) -> Optional[dict]:
+    def run_rebalance(self, force: bool = False) -> dict | None:
         """
         Trigger a rebalance check and apply resulting weights to allocations.
 
