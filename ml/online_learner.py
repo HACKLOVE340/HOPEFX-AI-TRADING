@@ -682,49 +682,102 @@ class SklearnOnlineLearner:
         import pathlib as _pl
 
         path = _pl.Path(self.persist_path)
+        _assert_safe_model_path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         _jl.dump(self, path, compress=3)
 
     @classmethod
     def load(cls, path: str) -> SklearnOnlineLearner:
-        import joblib as _jl
+        """Load a persisted learner from *path*.
 
-        return _jl.load(path)
+        The path must resolve inside the project's ``ml/saved_models`` directory
+        to prevent loading arbitrary pickles from attacker-controlled locations.
+        """
+        import joblib as _jl
+        import pathlib as _pl
+
+        p = _pl.Path(path)
+        _assert_safe_model_path(p)
+        return _jl.load(p)  # nosec B301 - path is confined to ml/saved_models
+
+
+# ── Path-confinement helper ───────────────────────────────────────────────────
+
+# Canonical root for all persisted model files.  Any load/save outside this
+# directory is rejected to prevent path-traversal / arbitrary-pickle attacks.
+_MODEL_ROOT = (
+    __import__("pathlib").Path(__file__).resolve().parent / "saved_models"
+)
+
+
+def _assert_safe_model_path(path: "__import__('pathlib').Path") -> None:  # type: ignore[name-defined]
+    """Raise ValueError if *path* escapes the allowed model directory."""
+    import pathlib as _pl
+
+    resolved = _pl.Path(path).resolve()
+    try:
+        resolved.relative_to(_MODEL_ROOT)
+    except ValueError:
+        raise ValueError(
+            f"Model path '{resolved}' is outside the permitted directory "
+            f"'{_MODEL_ROOT}'. Refusing to load/save."
+        )
 
 
 # ── Module-level singleton registry ──────────────────────────────────────────
 
 _learner_registry: dict[str, SklearnOnlineLearner] = {}
 
+# Characters allowed in a symbol name used to build a model filename.
+# Restricts to alphanumeric, underscore, and hyphen — no path separators.
+import re as _re
+_SYMBOL_RE = _re.compile(r"^[A-Za-z0-9_\-]{1,32}$")
+
+
+def _validate_symbol(symbol: str) -> str:
+    """Return *symbol* if it is safe to embed in a filename, else raise."""
+    if not _SYMBOL_RE.match(symbol):
+        raise ValueError(
+            f"Symbol '{symbol}' contains characters not permitted in a model "
+            "filename. Use only letters, digits, underscores, and hyphens."
+        )
+    return symbol
+
 
 def get_online_learner(
     symbol: str = "XAU_USD",
     persist_path: str | None = None,
 ) -> SklearnOnlineLearner:
-    """
-    Return the SklearnOnlineLearner singleton for ``symbol``.
+    """Return the SklearnOnlineLearner singleton for ``symbol``.
 
     Creates and registers a new instance on first call.  If ``persist_path``
     is provided and the file exists, the persisted learner is loaded instead
     of creating a fresh one.
+
+    The symbol is validated against a strict allowlist of characters before
+    being used to construct a filesystem path.  An explicit ``persist_path``
+    is resolved and confined to ``ml/saved_models`` before any I/O.
 
     Called by HourlyTrainer._online_update() on every hourly cycle.
     """
     global _learner_registry  # noqa: PLW0602
 
     if symbol not in _learner_registry:
-        if persist_path is None:
-            persist_path = f"ml/saved_models/online_learner_{symbol}.pkl"
+        _validate_symbol(symbol)
 
         import pathlib as _pl
 
-        p = _pl.Path(persist_path)
+        if persist_path is None:
+            # Build path from validated symbol — no user-controlled segments.
+            p = _MODEL_ROOT / f"online_learner_{symbol}.pkl"
+        else:
+            p = _pl.Path(persist_path)
+            _assert_safe_model_path(p)
+
         if p.exists():
             try:
                 learner = SklearnOnlineLearner.load(str(p))
-                import logging as _log
-
-                _log.getLogger(__name__).info("Loaded persisted OnlineLearner for %s from %s", symbol, p)
+                logger.info("Loaded persisted OnlineLearner for %s from %s", symbol, p)
             except Exception:
                 learner = SklearnOnlineLearner(symbol=symbol, persist_path=str(p))
         else:
