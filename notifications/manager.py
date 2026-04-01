@@ -784,8 +784,11 @@ class NotificationManager:
         if not webhook_url:
             logger.debug("Discord webhook not configured; skipping")
             return
-        if not webhook_url.startswith("https://"):
-            logger.warning(f"Rejecting non-HTTPS Discord webhook: {webhook_url}")
+        from urllib.parse import urlparse as _urlparse
+        _p = _urlparse(webhook_url)
+        _host = (_p.hostname or "").lower()
+        if _p.scheme != "https" or _host not in ("discord.com", "discordapp.com"):
+            logger.warning("Rejecting Discord webhook: must be HTTPS discord.com URL")
             return
         embed: dict[str, Any] = {"description": message}
         if metadata:

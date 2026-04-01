@@ -283,9 +283,22 @@ class DiscordSignalBot:
             return False
         return False
 
+    @staticmethod
+    def _is_valid_discord_url(url: str) -> bool:
+        from urllib.parse import urlparse
+        try:
+            p = urlparse(url)
+            host = (p.hostname or "").lower()
+            return p.scheme == "https" and host in ("discord.com", "discordapp.com")
+        except Exception:
+            return False
+
     def _post_sync(self, webhook_url: str, payload: dict[str, Any]) -> bool:
         """Synchronous fallback using requests."""
         if not webhook_url:
+            return False
+        if not self._is_valid_discord_url(webhook_url):
+            logger.warning("Discord webhook URL is not a valid HTTPS discord.com URL — skipping")
             return False
         try:
             import requests
