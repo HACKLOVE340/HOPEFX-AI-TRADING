@@ -7,10 +7,23 @@
  * - Strategy cards show name, price, metrics
  * - Subscribe button is present
  * - No console errors
+ * - Leaderboard shows trader names / returns (with auth)
  */
 
 import { test, expect } from '@playwright/test';
-import { captureConsoleErrors } from './helpers';
+import { loginAs, captureConsoleErrors } from './helpers';
+
+/**
+ * Try to log in; returns false (and skips the test) if backend unavailable.
+ */
+async function tryLogin(page: Parameters<typeof loginAs>[0]): Promise<boolean> {
+  try {
+    await loginAs(page);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 test.describe('Marketplace', () => {
   test.beforeEach(async ({ page }) => {
@@ -92,11 +105,12 @@ test.describe('Leaderboard', () => {
     }
   });
 
-  test('shows trader names and returns', async ({ page }) => {
+  test('shows trader names and returns after login', async ({ page }) => {
+    const loggedIn = await tryLogin(page);
+    if (!loggedIn) test.skip();
+
     await page.goto('/leaderboard');
     await page.waitForLoadState('networkidle');
-
-    if (page.url().includes('/login')) return; // auth-gated in unauthenticated CI — content assertion intentionally skipped
 
     // Either real data or fallback data — both show % returns
     const returnCell = page.locator('text=/%/').first();

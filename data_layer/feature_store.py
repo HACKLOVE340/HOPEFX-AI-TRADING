@@ -159,8 +159,12 @@ class OnlineStore:
                     return result
             except Exception as exc:
                 logger.warning("OnlineStore.read error: %s", exc)
-                return dict(self._memory.get(entity_id, {}))
-        return dict(self._memory.get(entity_id, {}))
+                # Fall through to in-memory fallback below
+        # ── in-memory fallback ──────────────────────────────────────────────
+        all_features = dict(self._memory.get(entity_id, {}))
+        if feature_names is not None:
+            return {k: v for k, v in all_features.items() if k in feature_names}
+        return all_features
 
 
 class OfflineStore:
