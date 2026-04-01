@@ -10,20 +10,22 @@ on:
       - ".github/workflows/static.yml"
   workflow_dispatch:
 
-# Permissions scoped to job level only - workflow level is read-only.
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write   # required to push to gh-pages branch
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0   # full history for git-revision-date plugin
-          persist-credentials: false
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
@@ -35,5 +37,16 @@ jobs:
       - name: Build docs
         run: mkdocs build --no-strict
 
-      - name: Deploy to GitHub Pages
-        run: mkdocs gh-deploy --force --clean --no-strict
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
