@@ -354,10 +354,13 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests
+        # playwright.config.ts builds the app and starts vite preview when CI=true.
+        # PLAYWRIGHT_BASE_URL avoids IPv6/localhost resolution quirks.
         run: npx playwright test
         env:
-          VITE_API_URL: http://localhost:8000/api
           CI: "true"
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
+          VITE_API_URL: http://localhost:8000/api
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
