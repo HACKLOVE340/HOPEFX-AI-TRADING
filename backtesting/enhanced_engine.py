@@ -2000,34 +2000,21 @@ class EnhancedBacktestEngine:
 
         return trade
 
-    def get_performance_report(self) -> dict[str, Any]:
-        """Generate comprehensive institutional-grade performance report"""
-        if not self.closed_trades:
-            return {"error": "No completed trades"}
+    # ── Performance report helpers ────────────────────────────────────────────
 
-        trades = self.closed_trades
-        pnls = [t.net_pnl for t in trades]
-        returns = [t.return_pct for t in trades]
+    def _compute_drawdown_periods(
+        self,
+    ) -> tuple[float, list[dict]]:
+        """
+        Walk the equity curve and return (max_drawdown_fraction, dd_periods).
 
-        # Basic statistics
-        wins = [p for p in pnls if p > 0]
-        losses = [p for p in pnls if p < 0]
-
-        # Time analysis
-        durations = [t.duration_seconds for t in trades]
-
-        # Equity curve analysis
-        equity_values = [e[1] for e in self.equity_curve]
-        [e[0] for e in self.equity_curve]
-
-        # Calculate returns
-        equity_returns = np.diff(equity_values) / equity_values[:-1] if len(equity_values) > 1 else np.array([])
-
-        # Drawdown calculation
+        max_drawdown_fraction is in [0, 1]. dd_periods is a list of dicts
+        with keys start, end, max_dd for each completed drawdown episode.
+        """
         peak = self.initial_capital
         max_dd = 0.0
         dd_start = None
-        dd_periods = []
+        dd_periods: list[dict] = []
 
         for ts, eq in self.equity_curve:
             if eq > peak:
@@ -2057,22 +2044,95 @@ class EnhancedBacktestEngine:
                             else datetime.now(UTC)
                         )
 
-        # Advanced metrics
-        def calculate_sortino(returns, target=0):
-            downside = [r for r in returns if r < target]
+        return max_dd, dd_periods
+
+    def _build_risk_metrics_section(
+        self,
+        equity_returns: Any,
+        returns: list[float],
+        max_dd: float,
+    ) -> dict[str, Any]:
+        """
+        Build the risk_metrics sub-dict for ``get_performance_report``.
+
+        Parameters
+        ----------
+        equity_returns : np.ndarray — point-to-point equity returns.
+        returns        : list[float] — per-trade return percentages.
+        max_dd         : float — max drawdown fraction (0–1).
+        """
+
+        def _sortino(rets: Any, target: float = 0.0) -> float:
+            downside = [r for r in rets if r < target]
             if not downside:
                 return 0.0
             return (
-                (np.mean(returns) - target) / np.std(downside)
+                (np.mean(rets) - target) / np.std(downside)
                 if np.std(downside) > 0
                 else 0.0
             )
 
-        def calculate_calmar(returns, max_dd):
-            if max_dd <= 0:
+        def _calmar(rets: Any, mdd: float) -> float:
+            if mdd <= 0:
                 return 0.0
-            annual_return = np.mean(returns) * 252 * 390  # Assuming minute bars
-            return annual_return / max_dd
+            annual_return = np.mean(rets) * 252 * 390
+            return annual_return / mdd
+
+        current_dd = (
+            (self.risk_manager.peak_capital - self.capital)
+            / self.risk_manager.peak_capital
+            * 100
+            if self.risk_manager.peak_capital > 0
+            else 0
+        )
+
+        return {
+            "max_drawdown_pct": max_dd * 100,
+            "current_drawdown_pct": current_dd,
+            "volatility_annual": np.std(equity_returns) * np.sqrt(252 * 390)
+            if len(equity_returns) > 1
+            else 0,
+            "sharpe_ratio": np.mean(equity_returns)
+            / np.std(equity_returns)
+            * np.sqrt(252 * 390)
+            if len(equity_returns) > 1 and np.std(equity_returns) > 0
+            else 0,
+            "sortino_ratio": _sortino(equity_returns),
+            "calmar_ratio": _calmar(equity_returns, max_dd),
+            "var_95": np.percentile(returns, 5) if len(returns) > 10 else 0,  # noqa: PLR2004
+            "cvar_95": np.mean([r for r in returns if r <= np.percentile(returns, 5)])
+            if len(returns) > 10  # noqa: PLR2004
+            else 0,
+            "skewness": stats.skew(returns)
+            if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
+            else 0,
+            "kurtosis": stats.kurtosis(returns)
+            if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
+            else 0,
+        }
+
+    def get_performance_report(self) -> dict[str, Any]:
+        """Generate comprehensive institutional-grade performance report."""
+        if not self.closed_trades:
+            return {"error": "No completed trades"}
+
+        trades = self.closed_trades
+        pnls = [t.net_pnl for t in trades]
+        returns = [t.return_pct for t in trades]
+        wins = [p for p in pnls if p > 0]
+        losses = [p for p in pnls if p < 0]
+        durations = [t.duration_seconds for t in trades]
+
+        equity_values = [e[1] for e in self.equity_curve]
+        equity_returns = (
+            np.diff(equity_values) / equity_values[:-1]
+            if len(equity_values) > 1
+            else np.array([])
+        )
+
+        max_dd, dd_periods = self._compute_drawdown_periods()
+        risk_metrics = self._build_risk_metrics_section(equity_returns, returns, max_dd)
+        risk_metrics["max_drawdown_periods"] = dd_periods
 
         report = {
             "metadata": {
@@ -2110,37 +2170,7 @@ class EnhancedBacktestEngine:
                 "max_duration_sec": max(durations) if durations else 0,
                 "min_duration_sec": min(durations) if durations else 0,
             },
-            "risk_metrics": {
-                "max_drawdown_pct": max_dd * 100,
-                "max_drawdown_periods": dd_periods,
-                "current_drawdown_pct": (self.risk_manager.peak_capital - self.capital)
-                / self.risk_manager.peak_capital
-                * 100
-                if self.risk_manager.peak_capital > 0
-                else 0,
-                "volatility_annual": np.std(equity_returns) * np.sqrt(252 * 390)
-                if len(equity_returns) > 1
-                else 0,
-                "sharpe_ratio": np.mean(equity_returns)
-                / np.std(equity_returns)
-                * np.sqrt(252 * 390)
-                if len(equity_returns) > 1 and np.std(equity_returns) > 0
-                else 0,
-                "sortino_ratio": calculate_sortino(equity_returns),
-                "calmar_ratio": calculate_calmar(equity_returns, max_dd),
-                "var_95": np.percentile(returns, 5) if len(returns) > 10 else 0,  # noqa: PLR2004
-                "cvar_95": np.mean(
-                    [r for r in returns if r <= np.percentile(returns, 5)]
-                )
-                if len(returns) > 10  # noqa: PLR2004
-                else 0,
-                "skewness": stats.skew(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
-                else 0,
-                "kurtosis": stats.kurtosis(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
-                else 0,
-            },
+            "risk_metrics": risk_metrics,
             "execution_quality": {
                 "avg_slippage_bps": np.mean(
                     [e.get("slippage_bps", 0) for e in self.execution_log]
@@ -2169,7 +2199,6 @@ class EnhancedBacktestEngine:
                 * 100
                 if self.initial_capital > 0
                 else 0,
-                # Overnight financing totals across all positions (open + closed)
                 "total_financing_paid": sum(
                     p.total_financing_paid for p in self.positions.values()
                 ),
@@ -2201,7 +2230,7 @@ class EnhancedBacktestEngine:
             "monthly_returns": self._calculate_monthly_returns(),
             "equity_curve_sample": [
                 {"timestamp": float(ts), "equity": eq}
-                for ts, eq in self.equity_curve[-100:]  # Last 100 points
+                for ts, eq in self.equity_curve[-100:]
             ],
         }
 
@@ -2453,30 +2482,16 @@ def _load_real_ticks(
         return None
 
 
-def run_comprehensive_backtest(use_real_data: bool = True):
+def _load_backtest_ticks(
+    use_real_data: bool, is_production: bool
+) -> tuple[list, str]:
     """
-    Run full backtest with all engine features.
+    Load tick data for a comprehensive backtest run.
 
-    Args:
-        use_real_data: When True (default), fetch real XAUUSD 1h bars from
-                       Binance via real_data_backtest.py.  Raises RuntimeError
-                       if real data is unavailable in APP_ENV=production.
-                       Pass False only in APP_ENV=development/test (smoke-test).
-
-    WARNING: Results on synthetic data are NOT valid for strategy evaluation.
-    The synthetic GBM path exists only for engine smoke-tests in non-production.
+    Returns (ticks, data_source_label).
+    Raises RuntimeError in production if real data is unavailable.
     """
-    import os as _os
-
-    _app_env = _os.getenv("APP_ENV", "production").lower()
-    _is_production = _app_env == "production"
-
-    print("=" * 80)
-    print("HOPEFX ENHANCED BACKTEST ENGINE v4.0 - COMPREHENSIVE TEST")
-    print("=" * 80)
-
-    # ── Data loading ──────────────────────────────────────────────────────────
-    ticks: list[TickData] | None = None
+    ticks = None
     data_source = "real/binance"
 
     if use_real_data:
@@ -2489,19 +2504,20 @@ def run_comprehensive_backtest(use_real_data: bool = True):
                 f"to {ticks[-1].timestamp.to_datetime()}"
             )
         else:
-            if _is_production:
+            if is_production:
                 raise RuntimeError(
                     "run_comprehensive_backtest(): real XAUUSD data unavailable. "
                     "Install ccxt and ensure network access to Binance. "
                     "Do not use synthetic data for production backtests."
                 )
             print(
-                "    Real data unavailable — falling back to SYNTHETIC data (non-production only)."
+                "    Real data unavailable — falling back to SYNTHETIC data "
+                "(non-production only)."
             )
             print("    *** WARNING: Results are NOT valid for strategy evaluation. ***")
 
     if ticks is None:
-        if _is_production:
+        if is_production:
             raise RuntimeError(
                 "run_comprehensive_backtest(): cannot use synthetic data in production "
                 "(APP_ENV=production). Provide real XAUUSD tick data."
@@ -2524,9 +2540,11 @@ def run_comprehensive_backtest(use_real_data: bool = True):
         )
 
     print(f"    Data source: {data_source}")
+    return ticks, data_source
 
-    # Initialize engine with institutional settings
-    print("\n[2] Initializing backtest engine...")
+
+def _build_default_backtest_engine() -> "EnhancedBacktestEngine":
+    """Construct an EnhancedBacktestEngine with institutional default settings."""
     cost_model = TransactionCostModel(
         commission_per_lot=7.0,
         spread_markup_bps=0.8,
@@ -2534,7 +2552,6 @@ def run_comprehensive_backtest(use_real_data: bool = True):
         temporary_impact_coefficient=0.142,
         permanent_impact_coefficient=0.314,
     )
-
     risk_manager = InstitutionalRiskManager(
         initial_capital=1_000_000.0,
         max_position_pct=0.05,
@@ -2542,107 +2559,89 @@ def run_comprehensive_backtest(use_real_data: bool = True):
         max_drawdown_pct=0.10,
         kelly_fraction=0.3,
     )
-
-    engine = EnhancedBacktestEngine(
+    return EnhancedBacktestEngine(
         initial_capital=1_000_000.0,
         cost_model=cost_model,
         risk_manager=risk_manager,
         execution_quality=ExecutionQuality.LOW_LATENCY,
     )
 
-    # Define strategy: Adaptive MA Crossover with Regime Filter
-    class AdaptiveMACrossover:
-        def __init__(self, fast=10, slow=30):
+
+def _run_ma_crossover_loop(
+    engine: "EnhancedBacktestEngine",
+    ticks: list,
+    position_size: float = 10.0,
+) -> None:
+    """
+    Execute the Adaptive MA-Crossover strategy against the tick stream.
+
+    Modifies engine in-place (fills orders, updates equity).
+    """
+
+    class _AdaptiveMACrossover:
+        def __init__(self, fast: int = 20, slow: int = 50) -> None:
             self.fast = fast
             self.slow = slow
-            self.prices = deque(maxlen=slow + 10)
+            self.prices: deque = deque(maxlen=slow + 10)
 
         def generate_signal(
-            self, tick: TickData, regime: MarketRegime
-        ) -> tuple[OrderSide, float] | None:
+            self, tick: "TickData", regime: "MarketRegime"
+        ) -> "tuple[OrderSide, float] | None":
             self.prices.append(tick.mid)
-
             if len(self.prices) < self.slow:
                 return None
-
             fast_ma = np.mean(list(self.prices)[-self.fast :])
             slow_ma = np.mean(self.prices)
-
-            # Regime filter: only trade in trending or ranging (not high vol)
-            if regime in [
-                MarketRegime.HIGH_VOLATILITY_BREAKOUT,
-                MarketRegime.NEWS_EVENT,
-            ]:
+            if regime in (MarketRegime.HIGH_VOLATILITY_BREAKOUT, MarketRegime.NEWS_EVENT):
                 return None
-
-            threshold = 0.0002  # 2 pips
-
+            threshold = 0.0002
             if fast_ma > slow_ma * (1 + threshold):
-                return (OrderSide.BUY, 0.8)  # 80% confidence
-            elif fast_ma < slow_ma * (1 - threshold):
+                return (OrderSide.BUY, 0.8)
+            if fast_ma < slow_ma * (1 - threshold):
                 return (OrderSide.SELL, 0.8)
-
             return None
 
-    strategy = AdaptiveMACrossover(fast=20, slow=50)
-
-    # Run backtest
-    print("\n[3] Running backtest...")
+    strategy = _AdaptiveMACrossover(fast=20, slow=50)
     position = 0.0
-    position_size = 10.0  # Standard lots
 
-    for i, tick in enumerate(ticks[100:], 100):  # Skip first 100 for indicators
-        # Process tick
+    for i, tick in enumerate(ticks[100:], 100):
         result = engine.process_tick(tick)
-
-        # Generate signal
         signal = strategy.generate_signal(tick, result["regime"])
 
         if signal and result["can_trade"]:
             side, confidence = signal
-
-            # Risk-based position sizing
             if confidence > 0.7:  # noqa: PLR2004
                 size = position_size * confidence
-
-                # Check if we need to reverse
+                # Reverse if needed
                 if (side == OrderSide.BUY and position < 0) or (
                     side == OrderSide.SELL and position > 0
                 ):
-                    # Close existing position
                     close_side = OrderSide.SELL if position > 0 else OrderSide.BUY
-                    success, order_id = engine.submit_order(
-                        "XAUUSD",
-                        close_side,
-                        abs(position),
-                        "market",
+                    ok, oid = engine.submit_order(
+                        "XAUUSD", close_side, abs(position), "market",
                         strategy_id="ma_crossover",
                     )
-                    if success:
-                        engine.execute_order(order_id, tick)
+                    if ok:
+                        engine.execute_order(oid, tick)
                     position = 0
-
                 # Open new position
                 if position == 0:
-                    success, order_id = engine.submit_order(
+                    ok, oid = engine.submit_order(
                         "XAUUSD", side, size, "market", strategy_id="ma_crossover"
                     )
-                    if success:
-                        fill_result = engine.execute_order(order_id, tick)
-                        if fill_result[0]:
+                    if ok:
+                        fill = engine.execute_order(oid, tick)
+                        if fill[0]:
                             position = size if side == OrderSide.BUY else -size
 
-        # Progress update
         if i % 1000 == 0:
             print(
                 f"    Processed {i}/{len(ticks)} ticks | Equity: ${engine.capital:,.2f}"
             )
 
-    # Generate report
-    print("\n[4] Generating performance report...")
-    report = engine.get_performance_report()
 
-    # Display results
+def _print_backtest_report(report: dict) -> None:
+    """Print a formatted backtest report to stdout."""
     print("\n" + "=" * 80)
     print("BACKTEST RESULTS")
     print("=" * 80)
@@ -2673,14 +2672,13 @@ def run_comprehensive_backtest(use_real_data: bool = True):
     print(f"VaR (95%): {risk['var_95']:.4f}")
     print(f"CVaR (95%): {risk['cvar_95']:.4f}")
 
-    exec_quality = report["execution_quality"]
+    eq = report["execution_quality"]
     print("\n--- Execution Quality ---")
-    print(f"Avg Slippage: {exec_quality['avg_slippage_bps']:.2f} bps")
-    print(f"Avg Latency: {exec_quality['avg_latency_ms']:.2f} ms")
-    print(f"Total Commission: ${exec_quality['total_commission']:,.2f}")
-    print(f"Cost Drag: {exec_quality['cost_drag_pct']:.3f}%")
+    print(f"Avg Slippage: {eq['avg_slippage_bps']:.2f} bps")
+    print(f"Avg Latency: {eq['avg_latency_ms']:.2f} ms")
+    print(f"Total Commission: ${eq['total_commission']:,.2f}")
+    print(f"Cost Drag: {eq['cost_drag_pct']:.3f}%")
 
-    # Regime performance
     print("\n--- Performance by Regime ---")
     for regime, perf in report["regime_performance"].items():
         print(
@@ -2689,16 +2687,53 @@ def run_comprehensive_backtest(use_real_data: bool = True):
             f"Win Rate: {perf['win_rate']:.1%}"
         )
 
-    # Save state
+    rr = report["risk_manager_report"]
+    print("\n--- Risk Manager Status ---")
+    print(f"Kill Switch Active: {rr['risk_metrics']['kill_switch']}")
+    print(f"Circuit Breaker Level: {rr['risk_metrics']['circuit_breaker']}")
+    print(f"Current VaR: ${rr['risk_metrics']['var_95']:,.2f}")
+
+
+def run_comprehensive_backtest(use_real_data: bool = True):
+    """
+    Run full backtest with all engine features.
+
+    Args:
+        use_real_data: When True (default), fetch real XAUUSD 1h bars from
+                       Binance via real_data_backtest.py.  Raises RuntimeError
+                       if real data is unavailable in APP_ENV=production.
+                       Pass False only in APP_ENV=development/test (smoke-test).
+
+    WARNING: Results on synthetic data are NOT valid for strategy evaluation.
+    The synthetic GBM path exists only for engine smoke-tests in non-production.
+    """
+    import os as _os
+
+    _is_production = _os.getenv("APP_ENV", "production").lower() == "production"
+
+    print("=" * 80)
+    print("HOPEFX ENHANCED BACKTEST ENGINE v4.0 - COMPREHENSIVE TEST")
+    print("=" * 80)
+
+    # ── Step 1: Load data ─────────────────────────────────────────────────────
+    ticks, _ = _load_backtest_ticks(use_real_data, _is_production)
+
+    # ── Step 2: Initialise engine ─────────────────────────────────────────────
+    print("\n[2] Initializing backtest engine...")
+    engine = _build_default_backtest_engine()
+
+    # ── Step 3: Run strategy loop ─────────────────────────────────────────────
+    print("\n[3] Running backtest...")
+    _run_ma_crossover_loop(engine, ticks)
+
+    # ── Step 4: Generate and print report ─────────────────────────────────────
+    print("\n[4] Generating performance report...")
+    report = engine.get_performance_report()
+    _print_backtest_report(report)
+
+    # ── Step 5: Save state ────────────────────────────────────────────────────
     print("\n[5] Saving state...")
     engine.save_state("backtest_state.json.gz")
-
-    # Risk manager report
-    print("\n--- Risk Manager Status ---")
-    risk_report = report["risk_manager_report"]
-    print(f"Kill Switch Active: {risk_report['risk_metrics']['kill_switch']}")
-    print(f"Circuit Breaker Level: {risk_report['risk_metrics']['circuit_breaker']}")
-    print(f"Current VaR: ${risk_report['risk_metrics']['var_95']:,.2f}")
 
     print("\n" + "=" * 80)
     print("✅ BACKTEST COMPLETED SUCCESSFULLY")

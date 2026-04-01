@@ -1138,11 +1138,152 @@ import uuid as _uuid
 _strategy_store: dict[str, dict] = {}
 
 
+# ── Strategy-router helper functions ─────────────────────────────────────────
+
+def _resolve_strategy_key(strategy_id: str) -> str | None:
+    """Return _strategy_store key by id or by name. Returns None if missing."""
+    if strategy_id in _strategy_store:
+        return strategy_id
+    for k, v in _strategy_store.items():
+        if v.get("name") == strategy_id:
+            return k
+    return None
+
+
+def _compute_position_size(req: "PositionSizeRequest") -> "PositionSizeResponse":
+    """
+    Calculate position size with optional FOMC regime multiplier.
+
+    Risk per unit defaults to 1 % of entry price when no stop-loss is given.
+    """
+    if req.stop_loss_price and req.stop_loss_price < req.entry_price:
+        risk_per_unit = req.entry_price - req.stop_loss_price
+    else:
+        risk_per_unit = req.entry_price * 0.01  # default 1 %
+    risk_amount = req.account_equity * req.risk_pct * req.confidence
+
+    # Apply FOMC regime multiplier (hawkish → 0.8×, dovish → 1.2×, neutral → 1.0×)
+    fomc_multiplier = 1.0
+    try:
+        from api.calendar import _fomc_regime_override
+
+        if _fomc_regime_override.get("active"):
+            fomc_multiplier = _fomc_regime_override.get("position_size_multiplier", 1.0)
+    except Exception as exc:
+        logger.debug("FOMC regime multiplier unavailable, using 1.0: %s", exc)
+
+    size = (risk_amount / risk_per_unit if risk_per_unit > 0 else 0.0) * fomc_multiplier
+    tp = req.entry_price + risk_per_unit * 2 if req.stop_loss_price else None
+    return PositionSizeResponse(
+        size=round(size, 4),
+        risk_amount=round(risk_amount * fomc_multiplier, 2),
+        stop_loss_price=req.stop_loss_price,
+        take_profit_price=tp,
+    )
+
+
+def _fetch_live_risk_metrics(broker: "Any") -> dict:
+    """
+    Compute live risk metrics from broker account + position data.
+
+    Returns a dict with daily_pnl, max_drawdown, open_positions,
+    margin_used, risk_score.
+    """
+    account = broker.get_account_info()
+    positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+
+    daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
+    margin_used = float(getattr(account, "margin_used", 0.0) or 0.0)
+
+    max_dd = 0.0
+    if hasattr(broker, "get_equity_history"):
+        history = broker.get_equity_history()
+        if history:
+            values = [v for _, v in history]
+            peak = values[0]
+            for v in values:
+                peak = max(peak, v)
+                dd = (peak - v) / peak if peak > 0 else 0.0
+                max_dd = max(max_dd, dd)
+
+    open_count = len(positions)
+    risk_score = min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1))
+    return {
+        "daily_pnl": round(daily_pnl, 2),
+        "max_drawdown": round(max_dd * 100, 3),
+        "open_positions": open_count,
+        "margin_used": round(margin_used, 2),
+        "risk_score": risk_score,
+    }
+
+
+def _compute_performance_summary(broker: "Any") -> dict:
+    """
+    Build a performance summary dict from broker equity history.
+
+    Returns total_return, sharpe_ratio, max_drawdown, win_rate,
+    total_trades, period_days, total_strategies.
+    """
+    import math as _math
+
+    equity_history = []
+    if broker and hasattr(broker, "get_equity_history"):
+        equity_history = broker.get_equity_history()
+    if not equity_history:
+        raise ValueError("no history")
+
+    values = [v for _, v in equity_history]
+    initial, final = values[0], values[-1]
+    total_return = ((final - initial) / initial * 100) if initial > 0 else 0.0
+
+    peak, max_dd = initial, 0.0
+    for v in values:
+        peak = max(peak, v)
+        dd = (peak - v) / peak if peak > 0 else 0.0
+        max_dd = max(max_dd, dd)
+
+    returns = [
+        (values[i] - values[i - 1]) / values[i - 1]
+        for i in range(1, len(values))
+        if values[i - 1] > 0
+    ]
+    sharpe = 0.0
+    if len(returns) >= 2:  # noqa: PLR2004
+        mean_r = sum(returns) / len(returns)
+        var = sum((r - mean_r) ** 2 for r in returns) / len(returns)
+        std_r = _math.sqrt(var) if var > 0 else 0.0
+        if std_r > 0:
+            sharpe = round((mean_r / std_r) * _math.sqrt(252), 3)
+
+    win_rate = sum(1 for r in returns if r > 0) / len(returns) if returns else 0.0
+    ts_list = [t for t, _ in equity_history]
+    period_days = (
+        max(1, round((ts_list[-1] - ts_list[0]) / 86400))
+        if len(ts_list) >= 2  # noqa: PLR2004
+        else 1
+    )
+    return {
+        "total_return": round(total_return, 4),
+        "sharpe_ratio": sharpe,
+        "max_drawdown": round(max_dd * 100, 3),
+        "win_rate": round(win_rate * 100, 2),
+        "total_trades": len(returns),
+        "period_days": period_days,
+        "total_strategies": len(_strategy_store),
+    }
+
+
 def _make_strategy_router():
     """Return a sub-router with the strategy CRUD + position-size endpoints."""
-    from fastapi import APIRouter
+    from fastapi import APIRouter, HTTPException
 
     _r = APIRouter()  # no prefix — parent router already has /api/trading
+
+    _KNOWN_STRATEGY_TYPES = {
+        "ma_crossover", "rsi", "macd", "bollinger_bands",
+        "ema_crossover", "breakout", "stochastic",
+        "mean_reversion", "smc_ict", "strategy_brain",
+    }
 
     @_r.get("/strategies")
     def list_strategies():
@@ -1150,21 +1291,7 @@ def _make_strategy_router():
 
     @_r.post("/strategies", status_code=201)
     def create_strategy(req: StrategyCreateRequest):
-        _KNOWN = {
-            "ma_crossover",
-            "rsi",
-            "macd",
-            "bollinger_bands",
-            "ema_crossover",
-            "breakout",
-            "stochastic",
-            "mean_reversion",
-            "smc_ict",
-            "strategy_brain",
-        }
-        if req.strategy_type not in _KNOWN:
-            from fastapi import HTTPException
-
+        if req.strategy_type not in _KNOWN_STRATEGY_TYPES:
             raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}")
         sid = str(_uuid.uuid4())[:8]
         record = {
@@ -1181,29 +1308,16 @@ def _make_strategy_router():
         _strategy_store[sid] = record
         return record
 
-    def _resolve(strategy_id: str) -> str | None:
-        """Return store key by id or name."""
-        if strategy_id in _strategy_store:
-            return strategy_id
-        for k, v in _strategy_store.items():
-            if v.get("name") == strategy_id:
-                return k
-        return None
-
     @_r.get("/strategies/{strategy_id}")
     def get_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
-        key = _resolve(strategy_id)
+        key = _resolve_strategy_key(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
         return _strategy_store[key]
 
     @_r.delete("/strategies/{strategy_id}")
     def delete_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
-        key = _resolve(strategy_id)
+        key = _resolve_strategy_key(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
         del _strategy_store[key]
@@ -1211,35 +1325,7 @@ def _make_strategy_router():
 
     @_r.post("/position-size")
     def calculate_position_size(req: PositionSizeRequest):
-        if req.stop_loss_price and req.stop_loss_price < req.entry_price:
-            risk_per_unit = req.entry_price - req.stop_loss_price
-        else:
-            risk_per_unit = req.entry_price * 0.01  # default 1%
-        risk_amount = req.account_equity * req.risk_pct * req.confidence
-
-        # Apply FOMC regime multiplier (hawkish → 0.8×, dovish → 1.2×, neutral → 1.0×)
-        fomc_multiplier = 1.0
-        try:
-            from api.calendar import _fomc_regime_override
-
-            if _fomc_regime_override.get("active"):
-                fomc_multiplier = _fomc_regime_override.get(
-                    "position_size_multiplier",
-                    1.0,
-                )
-        except Exception as exc:
-            logger.debug("FOMC regime multiplier unavailable, using 1.0: %s", exc)
-
-        size = (
-            risk_amount / risk_per_unit if risk_per_unit > 0 else 0.0
-        ) * fomc_multiplier
-        tp = req.entry_price + risk_per_unit * 2 if req.stop_loss_price else None
-        return PositionSizeResponse(
-            size=round(size, 4),
-            risk_amount=round(risk_amount * fomc_multiplier, 2),
-            stop_loss_price=req.stop_loss_price,
-            take_profit_price=tp,
-        )
+        return _compute_position_size(req)
 
     @_r.get("/risk-metrics")
     def get_risk_metrics():
@@ -1248,145 +1334,36 @@ def _make_strategy_router():
             broker = getattr(app_state, "broker", None)
             if broker is None:
                 raise AttributeError("no broker")
-
-            account = broker.get_account_info()
-            positions = (
-                broker.get_positions() if hasattr(broker, "get_positions") else []
-            )
-
-            # Daily PnL: sum unrealised PnL across open positions
-            daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
-
-            # Margin used from account info
-            margin_used = float(getattr(account, "margin_used", 0.0) or 0.0)
-
-            # Max drawdown from equity history
-            max_dd = 0.0
-            if hasattr(broker, "get_equity_history"):
-                history = broker.get_equity_history()
-                if history:
-                    values = [v for _, v in history]
-                    peak = values[0]
-                    for v in values:
-                        peak = max(peak, v)
-                        dd = (peak - v) / peak if peak > 0 else 0.0
-                        max_dd = max(max_dd, dd)
-
-            # Risk score: 0–100 based on drawdown + open positions
-            open_count = len(positions)
-            risk_score = min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1))
-
-            return {
-                "daily_pnl": round(daily_pnl, 2),
-                "max_drawdown": round(max_dd * 100, 3),
-                "open_positions": open_count,
-                "margin_used": round(margin_used, 2),
-                "risk_score": risk_score,
-            }
+            return _fetch_live_risk_metrics(broker)
         except Exception as exc:
             logger.debug("risk-metrics fallback: %s", exc)
-            return {
-                "daily_pnl": 0.0,
-                "max_drawdown": 0.0,
-                "open_positions": 0,
-                "margin_used": 0.0,
-                "risk_score": 0.0,
-            }
+            return {"daily_pnl": 0.0, "max_drawdown": 0.0, "open_positions": 0,
+                    "margin_used": 0.0, "risk_score": 0.0}
 
     @_r.get("/performance/summary")
     def get_performance_summary():
         """Performance summary from equity history and closed trades."""
-        import math as _math
-
         try:
             broker = getattr(app_state, "broker", None)
-            equity_history = []
-            if broker and hasattr(broker, "get_equity_history"):
-                equity_history = broker.get_equity_history()
-
-            if not equity_history:
-                raise ValueError("no history")
-
-            values = [v for _, v in equity_history]
-            initial = values[0]
-            final = values[-1]
-            total_return = ((final - initial) / initial * 100) if initial > 0 else 0.0
-
-            # Max drawdown
-            peak, max_dd = initial, 0.0
-            for v in values:
-                peak = max(peak, v)
-                dd = (peak - v) / peak if peak > 0 else 0.0
-                max_dd = max(max_dd, dd)
-
-            # Sharpe from point-to-point returns
-            returns = [
-                (values[i] - values[i - 1]) / values[i - 1]
-                for i in range(1, len(values))
-                if values[i - 1] > 0
-            ]
-            sharpe = 0.0
-            if len(returns) >= 2:  # noqa: PLR2004
-                mean_r = sum(returns) / len(returns)
-                var = sum((r - mean_r) ** 2 for r in returns) / len(returns)
-                std_r = _math.sqrt(var) if var > 0 else 0.0
-                if std_r > 0:
-                    sharpe = round((mean_r / std_r) * _math.sqrt(252), 3)
-
-            win_rate = (
-                sum(1 for r in returns if r > 0) / len(returns) if returns else 0.0
-            )
-
-            # Period in days
-            ts_list = [t for t, _ in equity_history]
-            period_days = (
-                max(1, round((ts_list[-1] - ts_list[0]) / 86400))
-                if len(ts_list) >= 2  # noqa: PLR2004
-                else 1
-            )
-
-            return {
-                "total_return": round(total_return, 4),
-                "sharpe_ratio": sharpe,
-                "max_drawdown": round(max_dd * 100, 3),
-                "win_rate": round(win_rate * 100, 2),
-                "total_trades": len(returns),
-                "period_days": period_days,
-                "total_strategies": len(_strategy_store),
-            }
+            return _compute_performance_summary(broker)
         except Exception as exc:
             logger.debug("performance/summary fallback: %s", exc)
-            return {
-                "total_return": 0.0,
-                "sharpe_ratio": 0.0,
-                "max_drawdown": 0.0,
-                "win_rate": 0.0,
-                "total_trades": 0,
-                "period_days": 30,
-                "total_strategies": len(_strategy_store),
-            }
+            return {"total_return": 0.0, "sharpe_ratio": 0.0, "max_drawdown": 0.0,
+                    "win_rate": 0.0, "total_trades": 0, "period_days": 30,
+                    "total_strategies": len(_strategy_store)}
 
     @_r.get("/performance/{strategy_id}")
     def get_strategy_performance(strategy_id: str):
-        from fastapi import HTTPException
-
-        key = _resolve(strategy_id)
+        key = _resolve_strategy_key(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
-        return {
-            "strategy_id": strategy_id,
-            "total_return": 0.0,
-            "sharpe_ratio": 0.0,
-            "max_drawdown": 0.0,
-            "win_rate": 0.0,
-            "total_trades": 0,
-        }
+        return {"strategy_id": strategy_id, "total_return": 0.0,
+                "sharpe_ratio": 0.0, "max_drawdown": 0.0,
+                "win_rate": 0.0, "total_trades": 0}
 
     @_r.post("/strategies/{strategy_id}/start")
     def start_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
-        key = _resolve(strategy_id)
+        key = _resolve_strategy_key(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
         _strategy_store[key]["enabled"] = True
@@ -1394,9 +1371,7 @@ def _make_strategy_router():
 
     @_r.post("/strategies/{strategy_id}/stop")
     def stop_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
-        key = _resolve(strategy_id)
+        key = _resolve_strategy_key(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
         _strategy_store[key]["enabled"] = False

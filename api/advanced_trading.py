@@ -309,67 +309,65 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     )
 
 
-def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
+# ── Indicator formula AST helpers ────────────────────────────────────────────
+
+_INDICATOR_ALLOWED_NAMES = frozenset(
+    {"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"}
+)
+
+_INDICATOR_ALLOWED_NODES = (
+    __import__("ast").Module,
+    __import__("ast").Expr,
+    __import__("ast").Expression,
+    __import__("ast").Constant,
+    __import__("ast").BinOp,
+    __import__("ast").UnaryOp,
+    __import__("ast").Add,
+    __import__("ast").Sub,
+    __import__("ast").Mult,
+    __import__("ast").Div,
+    __import__("ast").Pow,
+    __import__("ast").FloorDiv,
+    __import__("ast").Mod,
+    __import__("ast").UAdd,
+    __import__("ast").USub,
+    __import__("ast").Name,
+    __import__("ast").Load,
+    __import__("ast").Call,
+    __import__("ast").arguments,
+)
+
+
+def _validate_indicator_formula(formula_stripped: str) -> None:
     """
-    Safe formula evaluator using AST-based parsing — no eval() or exec().
+    Validate *formula_stripped* against the indicator AST whitelist.
+
+    Raises ValueError for any disallowed construct (attribute access,
+    subscripts, imports, lambdas, comprehensions, etc.) before any
+    computation is attempted.
 
     Allowed syntax
     --------------
     - Numeric literals (int, float)
     - Names: close, open, high, low, volume, EMA, SMA, RSI
-    - Arithmetic operators: +, -, *, /, ** (unary -, unary +)
+    - Arithmetic operators: +, -, *, /, **, //, %  (unary -, unary +)
     - Function calls to EMA, SMA, RSI only
     - Parentheses for grouping
-
-    Any other construct (attribute access, subscript, import, lambda,
-    comprehension, comparison, boolean op, etc.) raises ValueError before
-    any computation occurs.
     """
     import ast
 
-    # ── AST whitelist ─────────────────────────────────────────────────────────
-    _ALLOWED_NAMES = frozenset(
-        {"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"}
-    )
-    _ALLOWED_NODES = (
-        ast.Module,
-        ast.Expr,
-        ast.Expression,
-        # Literals
-        ast.Constant,
-        # Arithmetic
-        ast.BinOp,
-        ast.UnaryOp,
-        ast.Add,
-        ast.Sub,
-        ast.Mult,
-        ast.Div,
-        ast.Pow,
-        ast.FloorDiv,
-        ast.Mod,
-        ast.UAdd,
-        ast.USub,
-        # Names and calls (validated separately)
-        ast.Name,
-        ast.Load,
-        ast.Call,
-        # Needed for multi-arg calls
-        ast.arguments,
-    )
-
     def _check_node(node: ast.AST) -> None:
-        if not isinstance(node, _ALLOWED_NODES):
+        if not isinstance(node, _INDICATOR_ALLOWED_NODES):
             raise ValueError(
                 f"Disallowed expression type '{type(node).__name__}' in formula. "
                 "Only arithmetic and EMA/SMA/RSI calls are permitted."
             )
-        if isinstance(node, ast.Name) and node.id not in _ALLOWED_NAMES:
+        if isinstance(node, ast.Name) and node.id not in _INDICATOR_ALLOWED_NAMES:
             raise ValueError(
                 f"Unknown name '{node.id}'. "
-                f"Allowed: {', '.join(sorted(_ALLOWED_NAMES))}"
+                f"Allowed: {', '.join(sorted(_INDICATOR_ALLOWED_NAMES))}"
             )
         if isinstance(node, ast.Call):
-            # Function must be a bare Name, not an attribute or subscript
             if not isinstance(node.func, ast.Name):
                 raise ValueError(
                     "Only direct function calls are allowed (e.g. EMA(...))"
@@ -378,10 +376,8 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
                 raise ValueError(
                     f"Unknown function '{node.func.id}'. Allowed: EMA, SMA, RSI"
                 )
-            if (
-                node.keywords or node.starargs
-                if hasattr(node, "starargs")
-                else node.keywords
+            if node.keywords or (
+                hasattr(node, "starargs") and node.starargs  # type: ignore[attr-defined]
             ):
                 raise ValueError(
                     "Keyword arguments are not allowed in indicator formulas"
@@ -389,24 +385,98 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
         for child in ast.iter_child_nodes(node):
             _check_node(child)
 
-    # ── Parse and validate ────────────────────────────────────────────────────
-    formula_stripped = formula.strip()
     if len(formula_stripped) > 200:  # noqa: PLR2004
         raise ValueError("Formula too long (max 200 characters)")
-
     try:
         tree = ast.parse(formula_stripped, mode="eval")
     except SyntaxError as exc:
         raise ValueError(f"Formula syntax error: {exc}") from exc
-
     _check_node(tree)
+
+
+def _interp_formula_tree(tree: "ast.Expression", name_map: dict, fn_map: dict):  # type: ignore[name-defined]
+    """
+    Walk an already-validated AST expression tree and return the computed value.
+
+    *name_map* maps allowed names to their data lists (or the function objects).
+    *fn_map* maps function names to callables (EMA, SMA, RSI).
+    Returns a scalar or a list of floats (with None for missing values).
+    """
+    import ast
+
+    def _interp(node: ast.expr):  # type: ignore[name-defined]
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.Name):
+            return name_map[node.id]
+        if isinstance(node, ast.UnaryOp):
+            operand = _interp(node.operand)
+            if isinstance(node.op, ast.USub):
+                return (
+                    [-v if v is not None else None for v in operand]
+                    if isinstance(operand, list)
+                    else -operand
+                )
+            return operand
+        if isinstance(node, ast.BinOp):
+            left = _interp(node.left)
+            right = _interp(node.right)
+            op = node.op
+
+            def _apply(a, b):
+                if isinstance(op, ast.Add):
+                    return a + b
+                if isinstance(op, ast.Sub):
+                    return a - b
+                if isinstance(op, ast.Mult):
+                    return a * b
+                if isinstance(op, ast.Div):
+                    return a / b if b != 0 else None
+                if isinstance(op, ast.Pow):
+                    return a ** b
+                if isinstance(op, ast.FloorDiv):
+                    return a // b
+                if isinstance(op, ast.Mod):
+                    return a % b
+                raise ValueError(f"Unsupported operator {type(op).__name__}")
+
+            if isinstance(left, list) and isinstance(right, list):
+                return [
+                    _apply(a, b) if a is not None and b is not None else None
+                    for a, b in zip(left, right, strict=False)
+                ]
+            if isinstance(left, list):
+                return [_apply(a, right) if a is not None else None for a in left]
+            if isinstance(right, list):
+                return [_apply(left, b) if b is not None else None for b in right]
+            return _apply(left, right)
+        if isinstance(node, ast.Call):
+            fn = fn_map[node.func.id]  # type: ignore[attr-defined]
+            args = [_interp(a) for a in node.args]
+            return fn(*args)
+        raise ValueError(f"Unexpected node {type(node).__name__}")
+
+    return _interp(tree.body)
+
+
+def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
+    """
+    Safe formula evaluator using AST-based parsing — no eval() or exec().
+
+    Delegates validation to ``_validate_indicator_formula`` and
+    evaluation to ``_interp_formula_tree``.
+    """
+    import ast
+
+    formula_stripped = formula.strip()
+    _validate_indicator_formula(formula_stripped)
 
     # ── Build data namespace ──────────────────────────────────────────────────
     ohlcv = _load_ohlcv_for_indicator(symbol, periods)
     closes = ohlcv["close"]
-    opens = ohlcv["open"]
-    highs = ohlcv["high"]
-    lows = ohlcv["low"]
+    opens  = ohlcv["open"]
+    highs  = ohlcv["high"]
+    lows   = ohlcv["low"]
     volumes = ohlcv["volume"]
 
     def sma(data: list[float], n: int) -> list[float]:
@@ -439,72 +509,15 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
             result.append(100 - 100 / (1 + rs))
         return result
 
-    # ── AST interpreter (no eval/exec) ────────────────────────────────────────
-    _fn_map = {"EMA": ema, "SMA": sma, "RSI": rsi}
-    _name_map = {
-        "close": closes,
-        "open": opens,
-        "high": highs,
-        "low": lows,
-        "volume": volumes,
-        **_fn_map,
+    fn_map   = {"EMA": ema, "SMA": sma, "RSI": rsi}
+    name_map = {
+        "close": closes, "open": opens, "high": highs,
+        "low": lows, "volume": volumes, **fn_map,
     }
 
-    def _interp(node: ast.expr):  # type: ignore[name-defined]
-        if isinstance(node, ast.Constant):
-            return node.value
-        if isinstance(node, ast.Name):
-            return _name_map[node.id]
-        if isinstance(node, ast.UnaryOp):
-            operand = _interp(node.operand)
-            if isinstance(node.op, ast.USub):
-                return (
-                    [-v if v is not None else None for v in operand]
-                    if isinstance(operand, list)
-                    else -operand
-                )
-            return operand
-        if isinstance(node, ast.BinOp):
-            left = _interp(node.left)
-            right = _interp(node.right)
-            op = node.op
-
-            # Scalar × list or list × scalar
-            def _apply(a, b):
-                if isinstance(op, ast.Add):
-                    return a + b
-                if isinstance(op, ast.Sub):
-                    return a - b
-                if isinstance(op, ast.Mult):
-                    return a * b
-                if isinstance(op, ast.Div):
-                    return a / b if b != 0 else None
-                if isinstance(op, ast.Pow):
-                    return a**b
-                if isinstance(op, ast.FloorDiv):
-                    return a // b
-                if isinstance(op, ast.Mod):
-                    return a % b
-                raise ValueError(f"Unsupported operator {type(op).__name__}")
-
-            if isinstance(left, list) and isinstance(right, list):
-                return [
-                    _apply(a, b) if a is not None and b is not None else None
-                    for a, b in zip(left, right, strict=False)
-                ]
-            if isinstance(left, list):
-                return [_apply(a, right) if a is not None else None for a in left]
-            if isinstance(right, list):
-                return [_apply(left, b) if b is not None else None for b in right]
-            return _apply(left, right)
-        if isinstance(node, ast.Call):
-            fn = _fn_map[node.func.id]  # type: ignore[attr-defined]
-            args = [_interp(a) for a in node.args]
-            return fn(*args)
-        raise ValueError(f"Unexpected node {type(node).__name__}")
-
     try:
-        result = _interp(tree.body)
+        tree = ast.parse(formula_stripped, mode="eval")
+        result = _interp_formula_tree(tree, name_map, fn_map)
     except Exception as exc:
         raise ValueError(f"Formula evaluation error: {exc}") from exc
 
@@ -578,45 +591,34 @@ async def delete_indicator(ind_id: str, user: TokenPayload = Depends(get_current
 
 
 @router.get("/api/correlation")
-async def get_correlation(
-    symbols: str = "XAU/USD,EUR/USD,DXY,SPX,US10Y,VIX",
-    window: int = 30,
-    user: TokenPayload = Depends(get_current_user),
-):
+async def _collect_return_series(
+    sym_list: list[str],
+    window: int,
+    price_engine: Any,
+) -> dict[str, list[float]]:
     """
-    Return rolling correlation matrix for the given symbols.
+    Collect log-return series for *sym_list* from price engine then CSV fallback.
 
-    Uses real OHLCV from:
-    1. price_engine.get_ohlcv() — live broker history
-    2. CSV files in data/ directory
-
-    Returns HTTP 503 when fewer than 2 symbols have sufficient real data
-    to compute a meaningful correlation matrix.
+    Returns a dict {symbol: returns_list} for every symbol that has
+    at least 5 data points.
     """
     import pathlib
 
-    sym_list = [s.strip() for s in symbols.split(",")]
-
-    # ── Collect real return series ────────────────────────────────────────────
     series: dict[str, list[float]] = {}
 
     # 1. Price engine
-    pe = getattr(app_state, "price_engine", None) if app_state else None
-    if pe is not None:
+    if price_engine is not None:
         for sym in sym_list:
             try:
                 import asyncio
 
-                ohlcv = pe.get_ohlcv(sym, "1d", window + 5)
+                ohlcv = price_engine.get_ohlcv(sym, "1d", window + 5)
                 if asyncio.iscoroutine(ohlcv):
                     ohlcv = await ohlcv
                 if ohlcv and len(ohlcv) >= 5:  # noqa: PLR2004
                     closes = [
                         float(
-                            bar.get(
-                                "close",
-                                bar[-2] if isinstance(bar, (list, tuple)) else 0,
-                            )
+                            bar.get("close", bar[-2] if isinstance(bar, (list, tuple)) else 0)
                         )
                         for bar in ohlcv
                     ]
@@ -659,7 +661,66 @@ async def get_correlation(
                 except Exception as exc:
                     logger.debug("correlation CSV miss for %s: %s", sym, exc)
 
-    # Require at least 2 symbols with real data
+    return series
+
+
+def _compute_correlation_matrix(
+    series: dict[str, list[float]],
+) -> tuple[dict, list[str]]:
+    """
+    Compute pairwise Pearson correlation matrix and generate human-readable insights.
+
+    Returns (matrix_dict, insights_list).
+    """
+
+    def _corr(a: list[float], b: list[float]) -> float:
+        n = len(a)
+        ma, mb = sum(a) / n, sum(b) / n
+        num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
+        da = math.sqrt(sum((x - ma) ** 2 for x in a))
+        db = math.sqrt(sum((x - mb) ** 2 for x in b))
+        return round(num / (da * db), 3) if da * db > 0 else 0.0
+
+    available = list(series.keys())
+    matrix: dict[str, dict] = {}
+    for s1 in available:
+        matrix[s1] = {}
+        for s2 in available:
+            matrix[s1][s2] = 1.0 if s1 == s2 else _corr(series[s1], series[s2])
+
+    insights: list[str] = []
+    for s1 in available:
+        for s2 in available:
+            if s1 >= s2:
+                continue
+            c = matrix[s1][s2]
+            if abs(c) >= 0.6:  # noqa: PLR2004
+                direction = "positively" if c > 0 else "negatively"
+                insights.append(f"{s1} and {s2} are {direction} correlated ({c:+.2f})")
+
+    return matrix, insights
+
+
+async def get_correlation(
+    symbols: str = "XAU/USD,EUR/USD,DXY,SPX,US10Y,VIX",
+    window: int = 30,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return rolling correlation matrix for the given symbols.
+
+    Uses real OHLCV from:
+    1. price_engine.get_ohlcv() — live broker history
+    2. CSV files in data/ directory
+
+    Returns HTTP 503 when fewer than 2 symbols have sufficient real data
+    to compute a meaningful correlation matrix.
+    """
+    sym_list = [s.strip() for s in symbols.split(",")]
+
+    pe = getattr(app_state, "price_engine", None) if app_state else None
+    series = await _collect_return_series(sym_list, window, pe)
+
     if len(series) < 2:  # noqa: PLR2004
         raise HTTPException(
             status_code=503,
@@ -675,41 +736,15 @@ async def get_correlation(
             },
         )
 
-    # Align all series to the same length (shortest available)
+    # Align to shortest available window
     min_len = min(len(v) for v in series.values())
     for sym in series:
         series[sym] = series[sym][-min_len:]
 
-    # ── Compute correlation matrix ────────────────────────────────────────────
-    def corr(a: list[float], b: list[float]) -> float:
-        n = len(a)
-        ma, mb = sum(a) / n, sum(b) / n
-        num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
-        da = math.sqrt(sum((x - ma) ** 2 for x in a))
-        db = math.sqrt(sum((x - mb) ** 2 for x in b))
-        return round(num / (da * db), 3) if da * db > 0 else 0.0
-
-    # Only include symbols that have data
-    available = list(series.keys())
-    matrix = {}
-    for s1 in available:
-        matrix[s1] = {}
-        for s2 in available:
-            matrix[s1][s2] = 1.0 if s1 == s2 else corr(series[s1], series[s2])
-
-    insights = []
-    for s1 in available:
-        for s2 in available:
-            if s1 >= s2:
-                continue
-            c = matrix[s1][s2]
-            if abs(c) >= 0.6:  # noqa: PLR2004
-                direction = "positively" if c > 0 else "negatively"
-                insights.append(f"{s1} and {s2} are {direction} correlated ({c:+.2f})")
-
+    matrix, insights = _compute_correlation_matrix(series)
     missing = [s for s in sym_list if s not in series]
     return {
-        "symbols": available,
+        "symbols": list(series.keys()),
         "symbols_missing_data": missing,
         "window": min_len,
         "matrix": matrix,
