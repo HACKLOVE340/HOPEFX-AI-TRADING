@@ -1366,3 +1366,87 @@ async def _tick(app_state: Any) -> None:
 
         await _publish_and_broadcast(app_state, symbol, signal_payload)
         await _execute_if_approved(app_state, symbol, signal_payload, data=data)
+
+
+# ── SignalEngine public class ─────────────────────────────────────────────────
+
+class SignalEngine:
+    """
+    Signal engine orchestrator class.
+
+    Wraps the module-level ``run_signal_engine`` loop, status reporting,
+    and fill notification so callers have a consistent OOP interface.
+    Instances are stateless flyweights — they delegate to module-level
+    state variables (_SYMBOLS, _INTERVAL_SECONDS, etc.) rather than
+    duplicating them.
+
+    Usage::
+
+        from core.signal_engine import signal_engine
+
+        # Start as a long-running asyncio task
+        asyncio.create_task(signal_engine.start(app_state))
+
+        # Health check (sync)
+        info = signal_engine.status()
+
+        # Notify fill for online learning
+        signal_engine.on_fill(symbol, direction, pnl_pct, bars_held)
+    """
+
+    # ── Public entry points ───────────────────────────────────────────────────
+
+    async def start(self, app_state: Any) -> None:
+        """Start the signal engine loop (delegates to ``run_signal_engine``)."""
+        await run_signal_engine(app_state)
+
+    def status(self) -> dict[str, Any]:
+        """Return engine status dict (delegates to ``get_signal_engine_status``)."""
+        return get_signal_engine_status()
+
+    def on_fill(
+        self,
+        symbol: str,
+        direction: str,
+        pnl_pct: float,
+        bars_held: int = 1,
+    ) -> None:
+        """
+        Notify the online-learning store about a confirmed fill.
+
+        Delegates to module-level ``notify_fill`` and accepts the same
+        signature.
+        """
+        notify_fill(symbol, direction, pnl_pct, bars_held)
+
+    # ── Read-only properties ──────────────────────────────────────────────────
+
+    @property
+    def symbols(self) -> list[str]:
+        """Active symbols the engine watches."""
+        return list(_SYMBOLS)
+
+    @property
+    def interval_seconds(self) -> int:
+        """Tick interval in seconds."""
+        return _INTERVAL_SECONDS
+
+    @property
+    def auto_trade(self) -> bool:
+        """Whether auto-trade is enabled."""
+        return _AUTO_TRADE
+
+    @property
+    def ml_available(self) -> bool:
+        """Whether the ML subsystem loaded successfully."""
+        return _ML_AVAILABLE
+
+    def __repr__(self) -> str:
+        return (
+            f"SignalEngine(symbols={self.symbols!r}, "
+            f"interval={self.interval_seconds}s, auto_trade={self.auto_trade})"
+        )
+
+
+# ── Module-level singleton ────────────────────────────────────────────────────
+signal_engine = SignalEngine()
