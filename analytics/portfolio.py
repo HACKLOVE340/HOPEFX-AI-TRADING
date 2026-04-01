@@ -239,11 +239,33 @@ class PortfolioAnalytics:
 
         n_assets = len(self.assets)
 
+        # Build the true efficient frontier via SLSQP:
+        # sweep target returns from min to max and solve min-variance at each.
+        cov = self.returns_data.cov().values * 252
+        mu = self.returns_data.mean().values * 252
+        mu_min, mu_max = float(mu.min()), float(mu.max())
+        target_returns = np.linspace(mu_min, mu_max, n_portfolios)
+
         results = []
-        for _ in range(n_portfolios):
-            # Random weights
-            weights = np.random.random(n_assets)
-            weights /= np.sum(weights)
+        for target_ret in target_returns:
+            constraints = [
+                {"type": "eq", "fun": lambda w: np.sum(w) - 1.0},
+                {"type": "eq", "fun": lambda w, tr=target_ret: float(np.dot(w, mu)) - tr},
+            ]
+            bounds = [(0.0, 1.0)] * n_assets
+            w0 = np.full(n_assets, 1.0 / n_assets)
+            res = minimize(
+                lambda w: float(w @ cov @ w),
+                w0,
+                method="SLSQP",
+                bounds=bounds,
+                constraints=constraints,
+                options={"ftol": 1e-9, "maxiter": 500},
+            )
+            weights = res.x if res.success else w0
+            weights = np.maximum(weights, 0.0)
+            s = weights.sum()
+            weights = weights / s if s > 0 else w0
 
             ret, vol, sharpe = self.portfolio_performance(weights)
 
@@ -556,7 +578,7 @@ class MultiAssetBacktester:
 
         # Execute trades
         for asset, trade_value in trades.items():
-            if abs(trade_value) > 0.01:  # Minimum trade size  # noqa: PLR2004
+            if abs(trade_value) > 0.01:  # Minimum trade size
                 trade_quantity = trade_value / prices[asset]
                 commission = abs(trade_value) * self.commission_rate
 
@@ -799,21 +821,36 @@ class PortfolioOptimizer:
         import numpy as np
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == 2 else len(assets)  # noqa: PLR2004
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)
 
-        if method == "equal_weight" or returns.shape[0] < 10:  # noqa: PLR2004
+        if method == "equal_weight" or returns.shape[0] < 10:
             w = np.ones(n) / n
         else:
-            # Simple mean-variance: maximise Sharpe via random search
-            best_sharpe, best_w = -1e9, np.ones(n) / n
-            for _ in range(500):
-                raw = np.random.dirichlet(np.ones(n))
-                port_ret = float(np.mean(returns @ raw) * 252)
-                port_vol = float(np.std(returns @ raw) * (252**0.5))
-                sharpe = (port_ret - self.risk_free_rate) / (port_vol + 1e-9)
-                if sharpe > best_sharpe:
-                    best_sharpe, best_w = sharpe, raw
-            w = best_w
+            # Maximise Sharpe via SLSQP (deterministic, no random search)
+            mu = np.mean(returns, axis=0) * 252
+            cov = np.cov(returns.T) * 252 if n > 1 else np.array([[np.var(returns) * 252]])
+            rfr_daily = self.risk_free_rate / 252
+
+            def neg_sharpe(weights: np.ndarray) -> float:
+                port_ret = float(np.dot(weights, mu))
+                port_var = float(weights @ cov @ weights)
+                port_vol = np.sqrt(max(port_var, 1e-12))
+                return -(port_ret - self.risk_free_rate) / port_vol
+
+            constraints = [{"type": "eq", "fun": lambda ww: np.sum(ww) - 1.0}]
+            bounds = [(0.0, 1.0)] * n
+            w0 = np.full(n, 1.0 / n)
+            from scipy.optimize import minimize as _minimize
+            res = _minimize(
+                neg_sharpe, w0, method="SLSQP",
+                bounds=bounds, constraints=constraints,
+                options={"ftol": 1e-9, "maxiter": 1000},
+            )
+            if res.success:
+                w = np.maximum(res.x, 0.0)
+                w = w / w.sum() if w.sum() > 0 else w0
+            else:
+                w = w0
 
         port_ret = float(np.mean(returns @ w) * 252)
         port_vol = float(np.std(returns @ w) * (252**0.5))
@@ -828,23 +865,55 @@ class PortfolioOptimizer:
         }
 
     def efficient_frontier(self, assets, returns, num_portfolios: int = 50) -> list:
-        """Return a list of dicts with 'risk' and 'return' for the frontier."""
+        """
+        Return a list of dicts with 'risk' and 'return' for the true efficient frontier.
+
+        Sweeps target returns from min to max and solves min-variance at each
+        target via SLSQP — deterministic, no random sampling.
+        """
         import numpy as np
+        from scipy.optimize import minimize as _minimize
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == 2 else len(assets)  # noqa: PLR2004
-        frontier = []
-        for _ in range(num_portfolios):
-            w = np.random.dirichlet(np.ones(n))
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)
+        if returns.shape[0] < 5 or n < 2:
+            # Insufficient data — return equal-weight single point
+            w = np.full(n, 1.0 / n)
             port_ret = float(np.mean(returns @ w) * 252)
-            port_vol = float(np.std(returns @ w) * (252**0.5))
-            frontier.append(
-                {
-                    "risk": port_vol,
-                    "return": port_ret,
-                    "weights": {a: float(w[i]) for i, a in enumerate(assets)},
-                }
+            port_vol = float(np.std(returns @ w) * (252 ** 0.5))
+            return [{"risk": port_vol, "return": port_ret,
+                     "weights": {a: float(w[i]) for i, a in enumerate(assets)}}]
+
+        mu = np.mean(returns, axis=0) * 252
+        cov = np.cov(returns.T) * 252
+        mu_min, mu_max = float(mu.min()), float(mu.max())
+        target_returns = np.linspace(mu_min, mu_max, num_portfolios)
+
+        frontier = []
+        w0 = np.full(n, 1.0 / n)
+        for target_ret in target_returns:
+            constraints = [
+                {"type": "eq", "fun": lambda w: np.sum(w) - 1.0},
+                {"type": "eq", "fun": lambda w, tr=target_ret: float(np.dot(w, mu)) - tr},
+            ]
+            bounds = [(0.0, 1.0)] * n
+            res = _minimize(
+                lambda w: float(w @ cov @ w),
+                w0, method="SLSQP",
+                bounds=bounds, constraints=constraints,
+                options={"ftol": 1e-9, "maxiter": 500},
             )
+            w = res.x if res.success else w0
+            w = np.maximum(w, 0.0)
+            s = w.sum()
+            w = w / s if s > 0 else w0
+            port_ret = float(np.mean(returns @ w) * 252)
+            port_vol = float(np.std(returns @ w) * (252 ** 0.5))
+            frontier.append({
+                "risk": port_vol,
+                "return": port_ret,
+                "weights": {a: float(w[i]) for i, a in enumerate(assets)},
+            })
         return frontier
 
 
@@ -871,23 +940,57 @@ def _pa_optimize(
     risk_free_rate=0.02,
     **kwargs,
 ):
-    """Optimize portfolio weights (random-search max-Sharpe)."""
+    """
+    Optimize portfolio weights via SLSQP (deterministic, no random search).
+
+    Supports max_sharpe (default), min_variance, and equal_weight methods.
+    """
+    from scipy.optimize import minimize as _minimize
+
     n = len(assets)
-    best = {"sharpe": -float("inf"), "weights": dict.fromkeys(assets, 1 / n)}
-    rng = np.random.default_rng(42)
-    for _ in range(2000):
-        w = rng.dirichlet(np.ones(n))
-        ret = float(np.dot(w, expected_returns))
-        vol = float(np.sqrt(w @ np.asarray(cov_matrix) @ w))
-        sharpe = (ret - risk_free_rate) / vol if vol > 0 else 0
-        if sharpe > best["sharpe"]:
-            best = {
-                "sharpe": sharpe,
-                "weights": {a: float(w[i]) for i, a in enumerate(assets)},
-                "expected_return": ret,
-                "risk": vol,
-            }
-    return best
+    mu = np.asarray(expected_returns, dtype=float)
+    C = np.asarray(cov_matrix, dtype=float)
+    w0 = np.full(n, 1.0 / n)
+    constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
+    bounds = [(0.0, 1.0)] * n
+
+    if method == "equal_weight" or n < 2:
+        w = w0
+    elif method == "min_variance":
+        res = _minimize(
+            lambda w: float(w @ C @ w),
+            w0, method="SLSQP",
+            bounds=bounds, constraints=constraints,
+            options={"ftol": 1e-10, "maxiter": 1000},
+        )
+        w = np.maximum(res.x, 0.0) if res.success else w0
+        s = w.sum()
+        w = w / s if s > 0 else w0
+    else:  # max_sharpe
+        def neg_sharpe(ww: np.ndarray) -> float:
+            port_ret = float(np.dot(ww, mu))
+            port_var = float(ww @ C @ ww)
+            port_vol = np.sqrt(max(port_var, 1e-12))
+            return -(port_ret - risk_free_rate) / port_vol
+
+        res = _minimize(
+            neg_sharpe, w0, method="SLSQP",
+            bounds=bounds, constraints=constraints,
+            options={"ftol": 1e-10, "maxiter": 1000},
+        )
+        w = np.maximum(res.x, 0.0) if res.success else w0
+        s = w.sum()
+        w = w / s if s > 0 else w0
+
+    ret = float(np.dot(w, mu))
+    vol = float(np.sqrt(max(float(w @ C @ w), 0.0)))
+    sharpe = (ret - risk_free_rate) / vol if vol > 0 else 0.0
+    return {
+        "sharpe": sharpe,
+        "weights": {a: float(w[i]) for i, a in enumerate(assets)},
+        "expected_return": ret,
+        "risk": vol,
+    }
 
 
 def _pa_calculate_risk_contribution(self, weights, cov_matrix):
