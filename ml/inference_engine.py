@@ -313,7 +313,7 @@ class InferenceEngine:
         try:
             import joblib
 
-            self._calibrator = joblib.load(cal_path)
+            self._calibrator = joblib.load(cal_path)  # nosec B301 - cal_path derived from saved_models
             logger.debug("InferenceEngine: isotonic calibrator loaded")
             return self._calibrator
         except Exception as exc:

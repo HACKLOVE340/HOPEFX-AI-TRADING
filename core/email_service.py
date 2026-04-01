@@ -168,7 +168,9 @@ def send_verification_email(to_email: str, username: str, token: str) -> bool:
         f"</body></html>"
     )
     if APP_ENV != "production":
-        logger.info("VERIFY TOKEN (dev): %s", token)
+        # Log only the token length in dev — never the value — so logs are
+        # useful for debugging without leaking the credential.
+        logger.info("VERIFY TOKEN (dev): issued %d-char token for %s", len(token), to_email)
     return _send(to_email, subject, html, text)
 
 
@@ -197,7 +199,7 @@ def send_password_reset_email(to_email: str, username: str, token: str) -> bool:
         f"</body></html>"
     )
     if APP_ENV != "production":
-        logger.info("RESET TOKEN (dev): %s", token)
+        logger.info("RESET TOKEN (dev): issued %d-char token for %s", len(token), to_email)
     return _send(to_email, subject, html, text)
 
 

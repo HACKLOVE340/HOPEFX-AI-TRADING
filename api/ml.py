@@ -118,7 +118,7 @@ def _get_predictor():
 
         path = pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
         if path.exists():
-            return joblib.load(str(path))
+            return joblib.load(str(path))  # nosec B301 - path is hardcoded to ml/saved_models
     except Exception as exc:
         logger.warning("Saved ML model load failed: %s", exc)
     return None
@@ -670,7 +670,7 @@ async def get_feature_importances(user: TokenPayload = Depends(require_role("adm
         return {"features": [], "note": "Model not trained yet"}
 
     try:
-        model = joblib.load(str(model_path))
+        model = joblib.load(str(model_path))  # nosec B301 - path is hardcoded to ml/saved_models
         if hasattr(model, "feature_importances_"):
             importances = model.feature_importances_.tolist()
             # Try to get feature names

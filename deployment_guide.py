@@ -135,7 +135,7 @@ def check_ml_model() -> None:
         try:
             import joblib
 
-            model = joblib.load(model_path)
+            model = joblib.load(model_path)  # nosec B301 - model_path is hardcoded to ml/saved_models
         except Exception:
             import pickle  # nosec B403
 
