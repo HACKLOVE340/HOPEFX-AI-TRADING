@@ -383,7 +383,7 @@ class InferenceEngine:
         try:
             calibrated = cal.predict([[raw_prob]])[0]
             return float(np.clip(calibrated, 0.0, 1.0))
-        except Exception:
+        except (ValueError, IndexError):
             return raw_prob
 
     # ── Online learner update ─────────────────────────────────────────────────
@@ -689,7 +689,7 @@ class InferenceEngine:
             total = (sent_nudge + ofi_nudge + pressure_nudge) * impact_dampen
             return float(max(-0.022, min(0.022, total)))
 
-        except Exception:
+        except (ValueError, TypeError, KeyError):
             return 0.0
 
     def get_data_layer_tick(self):

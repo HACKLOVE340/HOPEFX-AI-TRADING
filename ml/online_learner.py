@@ -463,7 +463,7 @@ class SklearnOnlineLearner:
         try:
             closes = bars["close"].values
             return np.array([1 if closes[-1] > closes[0] else 0])
-        except Exception:
+        except (KeyError, IndexError, ValueError):
             return None
 
     def _update_ewc_anchor(self) -> None:
@@ -739,7 +739,7 @@ def get_online_learner(
                 _log.getLogger(__name__).info(
                     "Loaded persisted OnlineLearner for %s from %s", symbol, p
                 )
-            except Exception:
+            except (OSError, ValueError, KeyError):
                 learner = SklearnOnlineLearner(symbol=symbol, persist_path=str(p))
         else:
             learner = SklearnOnlineLearner(symbol=symbol, persist_path=str(p))

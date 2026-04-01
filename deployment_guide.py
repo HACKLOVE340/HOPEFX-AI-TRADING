@@ -137,7 +137,7 @@ def check_ml_model() -> None:
             import joblib
 
             model = joblib.load(model_path)
-        except Exception:
+        except (ValueError, OSError, ModuleNotFoundError):
             import pickle  # nosec B403
 
             with open(model_path, "rb") as fh:
@@ -216,7 +216,7 @@ def check_docker() -> None:
                 cmd, stderr=subprocess.DEVNULL, text=True
             ).strip()
             _good(out[:60])
-        except Exception:
+        except (OSError, subprocess.SubprocessError):
             _warn(f"{' '.join(cmd)} not available")
 
 

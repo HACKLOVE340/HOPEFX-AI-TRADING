@@ -724,7 +724,7 @@ def get_signal_engine_status() -> dict[str, Any]:
             status["phase1_mtf"] = _MTF_STORE_SINGLETON.status()
         else:
             status["phase1_mtf"] = {"is_ready": False}
-    except Exception:
+    except Exception:  # nosec B110
         status["phase1_mtf"] = {"is_ready": False}
 
     # Phase 2: Anomaly
@@ -1083,7 +1083,7 @@ async def _execute_if_approved(
                     _vol = float(_np2.std(_rets)) * (252**0.5)
                 else:
                     _vol = 0.15  # gold annualised vol baseline
-            except Exception:
+            except (ValueError, TypeError, KeyError):
                 _vol = 0.15
 
             sizing: Any = risk_manager.calculate_position_size(

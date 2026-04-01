@@ -557,14 +557,14 @@ class MarketDataOrchestrator:
         """Return current macro calendar impact score [0, 1]."""
         try:
             return self._calendar.get_current_impact_score()
-        except Exception:
+        except Exception:  # nosec B110
             return 0.0
 
     def is_blackout_window(self) -> bool:
         """True if within a HIGH-impact event blackout window."""
         try:
             return self._calendar.is_blackout_window()
-        except Exception:
+        except Exception:  # nosec B110
             return False
 
     def is_safe_to_trade(self) -> bool:

@@ -436,7 +436,7 @@ class EnsemblePredictor:
             raise FileNotFoundError(f"EnsemblePredictor not found: {path}")
         try:
             obj = joblib.load(path)
-        except Exception:
+        except (ValueError, OSError, ModuleNotFoundError):
             with open(path, "rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
@@ -572,7 +572,7 @@ class DeepEnsembleStore:
                 try:
                     try:
                         self._scaler = joblib.load(self.scaler_path)
-                    except Exception:
+                    except (ValueError, OSError, ModuleNotFoundError):
                         with open(self.scaler_path, "rb") as f:
                             self._scaler = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
                     logger.debug(
@@ -736,7 +736,7 @@ class DeepEnsembleStore:
             feat = np.column_stack([log_ret, hl_range, vol_z, atr14, sma20_d, rsi])
             feat = np.nan_to_num(feat, nan=0.0, posinf=0.0, neginf=0.0)
             return feat.astype(np.float32)
-        except Exception:
+        except (ValueError, IndexError, KeyError):
             return None
 
     # ── Properties ────────────────────────────────────────────────────────────

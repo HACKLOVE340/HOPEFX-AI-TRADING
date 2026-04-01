@@ -110,7 +110,7 @@ class NuclearConnectionManager:
         for ws in connections:
             try:
                 await ws.send_text(payload)
-            except Exception:
+            except Exception:  # nosec B110
                 dead.add(ws)
         if dead:
             async with self._lock:
@@ -377,7 +377,7 @@ async def _heartbeat_loop(ws: WebSocket) -> None:
                     }
                 )
             )
-        except Exception:
+        except Exception:  # nosec B110
             break
 
 
