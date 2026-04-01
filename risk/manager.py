@@ -2233,7 +2233,7 @@ def _make_risk_manager() -> RiskManager:
         from data_layer.orchestrator import orchestrator
 
         return RiskManager(orchestrator=orchestrator)
-    except Exception:
+    except ImportError:
         return RiskManager()  # no orchestrator in test/minimal environments
 
 

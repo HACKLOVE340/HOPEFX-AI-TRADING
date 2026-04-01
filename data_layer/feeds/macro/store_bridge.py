@@ -251,7 +251,7 @@ class MacroStoreBridge:
             from ml.macro_store import macro_store
 
             raw_snap = macro_store.snapshot()
-        except Exception:
+        except ImportError:
             raw_snap = {}
 
         series_detail: dict[str, object] = {}
@@ -301,7 +301,7 @@ class MacroStoreBridge:
             from ml.macro_store import macro_store
 
             snap = macro_store.snapshot()
-        except Exception:
+        except ImportError:
             snap = {}
         return {
             "loaded": self._loaded,

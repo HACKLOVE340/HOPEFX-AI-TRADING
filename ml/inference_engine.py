@@ -703,7 +703,7 @@ class InferenceEngine:
             from data_layer.orchestrator import orchestrator
 
             return orchestrator.get_latest_tick()
-        except Exception:
+        except ImportError:
             return None
 
     def get_data_layer_features(self) -> dict[str, float]:
@@ -717,7 +717,7 @@ class InferenceEngine:
             from data_layer.orchestrator import orchestrator
 
             return orchestrator.get_ml_features()
-        except Exception:
+        except ImportError:
             return {}
 
     def is_safe_to_trade(self) -> bool:
@@ -733,7 +733,7 @@ class InferenceEngine:
             from data_layer.orchestrator import orchestrator
 
             return orchestrator.is_safe_to_trade()
-        except Exception:
+        except ImportError:
             return True  # fail-open: don't block trading on orchestrator error
 
     def _record_signal_lineage(

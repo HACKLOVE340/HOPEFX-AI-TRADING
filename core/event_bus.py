@@ -125,7 +125,7 @@ class DomainEvent:
             import msgpack
 
             return msgpack.unpackb(lz4.frame.decompress(self.payload), raw=False)
-        except Exception:
+        except ImportError:
             return json.loads(self.payload.decode())
 
 
