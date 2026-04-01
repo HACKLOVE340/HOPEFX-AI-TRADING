@@ -271,6 +271,16 @@ class OrderFlowAnalyzer:
     # TRADE MANAGEMENT
     # ================================================================
 
+    def _record_trade(self, symbol: str, trade: Trade) -> None:
+        """Append a Trade record and maintain cumulative delta and size cap."""
+        self._trades[symbol].append(trade)
+        delta = trade.size if trade.is_buy else -trade.size
+        self._cumulative_delta[symbol] += delta
+        if len(self._trades[symbol]) > self._max_trades:
+            removed = self._trades[symbol].pop(0)
+            adj = removed.size if removed.is_buy else -removed.size
+            self._cumulative_delta[symbol] -= adj
+
     def add_trade(
         self,
         symbol: str,
@@ -278,7 +288,6 @@ class OrderFlowAnalyzer:
         size: float,
         side: str,
         timestamp: datetime | None = None,
-        trade_id: str | None = None,
     ):
         """
         Add a trade for analysis.
@@ -288,41 +297,27 @@ class OrderFlowAnalyzer:
             price: Trade price
             size: Trade size
             side: 'buy' or 'sell'
-            timestamp: Trade timestamp
-            trade_id: Optional trade ID
+            timestamp: Trade timestamp (defaults to now)
         """
         trade = Trade(
             timestamp=timestamp or datetime.now(UTC),
             price=price,
             size=size,
             side=side.lower(),
-            trade_id=trade_id,
         )
-
-        self._trades[symbol].append(trade)
-
-        # Update cumulative delta
-        delta = size if trade.is_buy else -size
-        self._cumulative_delta[symbol] += delta
-
-        # Trim if needed
-        if len(self._trades[symbol]) > self._max_trades:
-            removed = self._trades[symbol].pop(0)
-            # Adjust cumulative delta
-            adj = removed.size if removed.is_buy else -removed.size
-            self._cumulative_delta[symbol] -= adj
+        self._record_trade(symbol, trade)
 
     def add_trades(self, symbol: str, trades: list[dict]):
-        """Add multiple trades."""
+        """Add multiple trades from a list of dicts."""
         for t in trades:
-            self.add_trade(
-                symbol=symbol,
+            trade = Trade(
+                timestamp=t.get("timestamp") or datetime.now(UTC),
                 price=t["price"],
                 size=t["size"],
-                side=t["side"],
-                timestamp=t.get("timestamp"),
+                side=t["side"].lower(),
                 trade_id=t.get("trade_id"),
             )
+            self._record_trade(symbol, trade)
 
     def get_trades(
         self,
@@ -507,6 +502,50 @@ class OrderFlowAnalyzer:
     # ORDER FLOW ANALYSIS
     # ================================================================
 
+    @staticmethod
+    def _classify_imbalance(imbalance_ratio: float, threshold: float) -> tuple[str, str]:
+        """Return (dominant_side, imbalance_strength) for a given ratio."""
+        if imbalance_ratio > threshold:
+            dominant_side = "buyers"
+        elif imbalance_ratio < -threshold:
+            dominant_side = "sellers"
+        else:
+            dominant_side = "neutral"
+
+        abs_imbalance = abs(imbalance_ratio)
+        if abs_imbalance > 0.5:  # noqa: PLR2004
+            imbalance_strength = "strong"
+        elif abs_imbalance > 0.25:  # noqa: PLR2004
+            imbalance_strength = "moderate"
+        else:
+            imbalance_strength = "weak"
+
+        return dominant_side, imbalance_strength
+
+    @staticmethod
+    def _classify_signal(imbalance_ratio: float) -> str:
+        """Return order flow signal direction."""
+        if imbalance_ratio > 0.3:  # noqa: PLR2004
+            return "bullish"
+        if imbalance_ratio < -0.3:  # noqa: PLR2004
+            return "bearish"
+        return "neutral"
+
+    @staticmethod
+    def _extract_volume_nodes(profile: Any) -> tuple[list[dict], list[dict]]:
+        """Extract high- and low-volume nodes from a volume profile."""
+        high_volume_nodes: list[dict] = []
+        low_volume_nodes: list[dict] = []
+        if not profile:
+            return high_volume_nodes, low_volume_nodes
+        avg_volume = profile.total_volume / len(profile.levels) if profile.levels else 0
+        for level in profile.levels:
+            if level.total_volume > avg_volume * 1.5:  # noqa: PLR2004
+                high_volume_nodes.append({"price": level.price, "volume": level.total_volume, "type": "HVN"})
+            elif level.total_volume < avg_volume * 0.5:
+                low_volume_nodes.append({"price": level.price, "volume": level.total_volume, "type": "LVN"})
+        return high_volume_nodes, low_volume_nodes
+
     def analyze(
         self, symbol: str, lookback_minutes: int = 60
     ) -> OrderFlowAnalysis | None:
@@ -526,76 +565,22 @@ class OrderFlowAnalyzer:
         if not trades:
             return None
 
-        # Calculate volumes
         buy_volume = sum(t.size for t in trades if t.is_buy)
         sell_volume = sum(t.size for t in trades if t.is_sell)
         total_volume = buy_volume + sell_volume
         delta = buy_volume - sell_volume
-
-        # Imbalance
         imbalance_ratio = delta / total_volume if total_volume > 0 else 0
 
-        if imbalance_ratio > self._imbalance_threshold:
-            dominant_side = "buyers"
-        elif imbalance_ratio < -self._imbalance_threshold:
-            dominant_side = "sellers"
-        else:
-            dominant_side = "neutral"
-
-        abs_imbalance = abs(imbalance_ratio)
-        if abs_imbalance > 0.5:  # noqa: PLR2004
-            imbalance_strength = "strong"
-        elif abs_imbalance > 0.25:  # noqa: PLR2004
-            imbalance_strength = "moderate"
-        else:
-            imbalance_strength = "weak"
-
-        # Get volume profile for key levels
-        profile = self.get_volume_profile(
-            symbol, price_buckets=20, start_time=start_time
+        dominant_side, imbalance_strength = self._classify_imbalance(
+            imbalance_ratio, self._imbalance_threshold
         )
 
-        # High volume nodes
-        high_volume_nodes = []
-        low_volume_nodes = []
-        if profile:
-            avg_volume = (
-                profile.total_volume / len(profile.levels) if profile.levels else 0
-            )
-            for level in profile.levels:
-                if level.total_volume > avg_volume * 1.5:
-                    high_volume_nodes.append(
-                        {
-                            "price": level.price,
-                            "volume": level.total_volume,
-                            "type": "HVN",
-                        }
-                    )
-                elif level.total_volume < avg_volume * 0.5:
-                    low_volume_nodes.append(
-                        {
-                            "price": level.price,
-                            "volume": level.total_volume,
-                            "type": "LVN",
-                        }
-                    )
+        profile = self.get_volume_profile(symbol, price_buckets=20, start_time=start_time)
+        high_volume_nodes, low_volume_nodes = self._extract_volume_nodes(profile)
 
-        # Detect absorption
         absorption_levels = self._detect_absorption(trades)
-
-        # Calculate pressures
         buying_pressure = (buy_volume / total_volume * 100) if total_volume > 0 else 50
-        selling_pressure = (
-            (sell_volume / total_volume * 100) if total_volume > 0 else 50
-        )
-
-        # Signal
-        if imbalance_ratio > 0.3:  # noqa: PLR2004
-            signal = "bullish"
-        elif imbalance_ratio < -0.3:  # noqa: PLR2004
-            signal = "bearish"
-        else:
-            signal = "neutral"
+        selling_pressure = (sell_volume / total_volume * 100) if total_volume > 0 else 50
 
         return OrderFlowAnalysis(
             symbol=symbol,
@@ -613,7 +598,7 @@ class OrderFlowAnalyzer:
             absorption_levels=absorption_levels[:3],
             buying_pressure=round(buying_pressure, 2),
             selling_pressure=round(selling_pressure, 2),
-            order_flow_signal=signal,
+            order_flow_signal=self._classify_signal(imbalance_ratio),
         )
 
     def _detect_absorption(self, trades: list[Trade]) -> list[dict]:

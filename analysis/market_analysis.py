@@ -356,41 +356,34 @@ class MarketRegimeDetector:
         self, adx: float, volatility_pct: float, trend: dict, prices: pd.DataFrame
     ) -> tuple[MarketRegime, float]:
         """Classify market regime based on indicators."""
-
         close = prices["close"]
-        close.pct_change().dropna()
-
-        # Calculate range metrics
         recent_high = prices["high"].tail(20).max()
         recent_low = prices["low"].tail(20).min()
         range_pct = (recent_high - recent_low) / recent_low
 
-        # Classify based on ADX and volatility
-        if adx > 25 and trend["direction"] == "up":  # noqa: PLR2004
-            return MarketRegime.TRENDING_UP, min(adx / 50, 1.0)
+        regime, confidence = self._regime_from_indicators(
+            adx, volatility_pct, trend, range_pct
+        )
+        if regime is not None:
+            return regime, confidence
 
-        elif adx > 25 and trend["direction"] == "down":  # noqa: PLR2004
-            return MarketRegime.TRENDING_DOWN, min(adx / 50, 1.0)
+        # Breakout check when no other regime matched
+        current_price = close.iloc[-1]
+        if current_price > recent_high * 0.99 or current_price < recent_low * 1.01:  # noqa: PLR2004
+            return MarketRegime.BREAKOUT, 0.7
+        return MarketRegime.RANGING, 0.5
 
-        elif volatility_pct > 80:  # noqa: PLR2004
-            return MarketRegime.VOLATILE, volatility_pct / 100
+    _REGIME_RULES: list = []  # populated after class definition
 
-        elif adx < 20 and range_pct < 0.02:  # noqa: PLR2004
-            return MarketRegime.CONSOLIDATION, (20 - adx) / 20
-
-        elif adx < 20 and range_pct > 0.03:  # noqa: PLR2004
-            return MarketRegime.RANGING, 0.6
-
-        elif volatility_pct > 60 and adx < 25:  # noqa: PLR2004
-            return MarketRegime.CHOPPY, 0.5
-
-        else:
-            # Check for breakout
-            current_price = close.iloc[-1]
-            if current_price > recent_high * 0.99 or current_price < recent_low * 1.01:
-                return MarketRegime.BREAKOUT, 0.7
-
-            return MarketRegime.RANGING, 0.5
+    def _regime_from_indicators(
+        self, adx: float, volatility_pct: float, trend: dict, range_pct: float
+    ) -> tuple["MarketRegime | None", float]:
+        """Map indicator values to a regime. Returns (None, 0) when no rule matches."""
+        direction = trend["direction"]
+        for condition, regime, confidence_fn in self._REGIME_RULES:
+            if condition(adx, volatility_pct, direction, range_pct):
+                return regime, confidence_fn(adx, volatility_pct)
+        return None, 0.0
 
     def _calculate_regime_duration(self, current_regime: MarketRegime) -> int:
         """Calculate how long current regime has lasted."""
@@ -439,6 +432,42 @@ class MarketRegimeDetector:
             regime_duration=0,
             transition_probability={},
         )
+
+
+# Populate regime rules after MarketRegimeDetector is defined.
+# Each entry: (condition_fn, regime, confidence_fn)
+MarketRegimeDetector._REGIME_RULES = [
+    (
+        lambda adx, vol, direction, rng: adx > 25 and direction == "up",  # noqa: PLR2004
+        MarketRegime.TRENDING_UP,
+        lambda adx, vol: min(adx / 50, 1.0),
+    ),
+    (
+        lambda adx, vol, direction, rng: adx > 25 and direction == "down",  # noqa: PLR2004
+        MarketRegime.TRENDING_DOWN,
+        lambda adx, vol: min(adx / 50, 1.0),
+    ),
+    (
+        lambda adx, vol, direction, rng: vol > 80,  # noqa: PLR2004
+        MarketRegime.VOLATILE,
+        lambda adx, vol: vol / 100,
+    ),
+    (
+        lambda adx, vol, direction, rng: adx < 20 and rng < 0.02,  # noqa: PLR2004
+        MarketRegime.CONSOLIDATION,
+        lambda adx, vol: (20 - adx) / 20,
+    ),
+    (
+        lambda adx, vol, direction, rng: adx < 20 and rng > 0.03,  # noqa: PLR2004
+        MarketRegime.RANGING,
+        lambda adx, vol: 0.6,
+    ),
+    (
+        lambda adx, vol, direction, rng: vol > 60 and adx < 25,  # noqa: PLR2004
+        MarketRegime.CHOPPY,
+        lambda adx, vol: 0.5,
+    ),
+]
 
 
 class MultiTimeframeAnalyzer:
