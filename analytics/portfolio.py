@@ -813,6 +813,7 @@ class PortfolioOptimizer:
     """
 
     # ── Portfolio thresholds (mirror PortfolioAnalytics) ──────────────────────
+    _NDIM_2D = 2
     MIN_TRADE_SIZE = PortfolioAnalytics.MIN_TRADE_SIZE
     MIN_OBSERVATIONS_OPTIMISE = PortfolioAnalytics.MIN_OBSERVATIONS_OPTIMISE
     MIN_OBSERVATIONS_FRONTIER = PortfolioAnalytics.MIN_OBSERVATIONS_FRONTIER
@@ -836,7 +837,7 @@ class PortfolioOptimizer:
         import numpy as np
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == 2 else len(assets)
+        n = returns.shape[1] if returns.ndim == self._NDIM_2D else len(assets)
 
         if method == "equal_weight" or returns.shape[0] < self.MIN_OBSERVATIONS_OPTIMISE:
             w = np.ones(n) / n
