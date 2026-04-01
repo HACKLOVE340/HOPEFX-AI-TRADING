@@ -169,7 +169,7 @@ def _is_placeholder(val: str) -> bool:
 # ── commands ──────────────────────────────────────────────────────────────────
 
 
-def cmd_generate(args: argparse.Namespace) -> int:
+def cmd_generate(_args: argparse.Namespace) -> int:
     """Generate required secrets and write to .env (safe — never overwrites real values)."""
     env = _load_env(ENV_FILE)
     generated: list[str] = []
@@ -197,7 +197,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_validate(args: argparse.Namespace) -> int:
+def cmd_validate(_args: argparse.Namespace) -> int:
     """Validate that all required secrets are set and non-placeholder."""
     env = _load_env(ENV_FILE)
     # Also check process environment (Docker / Kubernetes secrets)
@@ -280,7 +280,7 @@ def cmd_rotate(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_audit(args: argparse.Namespace) -> int:
+def cmd_audit(_args: argparse.Namespace) -> int:
     """Scan source files for hardcoded secrets."""
     compiled = [(re.compile(p, re.IGNORECASE), label) for p, label in AUDIT_PATTERNS]
     findings: list[tuple[str, int, str, str]] = []
@@ -319,7 +319,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 1
 
 
-def cmd_check_env(args: argparse.Namespace) -> int:
+def cmd_check_env(_args: argparse.Namespace) -> int:
     """Diff .env against .env.example to find missing keys."""
     example = _load_env(ENV_EXAMPLE)
     current = _load_env(ENV_FILE)

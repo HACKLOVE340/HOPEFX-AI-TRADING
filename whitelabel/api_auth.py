@@ -97,7 +97,7 @@ try:
     _redis_client.ping()
     _REDIS_AVAILABLE = True
     logger.info("whitelabel rate limiter: Redis backend at %s", _REDIS_URL)
-except Exception:
+except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
     _redis_client = None
     _REDIS_AVAILABLE = False
     logger.warning(
@@ -125,7 +125,7 @@ _KEY_HASH_SECRET: bytes = _load_key_hash_secret()
 
 def _reload_key_hash_secret() -> None:
     """Re-read the hashing secret from the environment (call after rotation)."""
-    global _KEY_HASH_SECRET  # noqa: PLW0603
+    global _KEY_HASH_SECRET  # noqa: PLW0603  # pylint: disable=global-statement
     _KEY_HASH_SECRET = _load_key_hash_secret()
 
 
@@ -357,7 +357,7 @@ def require_feature(feature: str) -> Callable:
 
 def _suggest_upgrade(feature: str) -> str:
     """Return the minimum tier that includes the given feature."""
-    from whitelabel.config import TIER_CONFIGS, TierName
+    from whitelabel.config import TIER_CONFIGS  # noqa: PLC0415
 
     for tier in (TierName.STARTER, TierName.GROWTH, TierName.ENTERPRISE):
         if feature in TIER_CONFIGS[tier].allowed_features:
