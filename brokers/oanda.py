@@ -503,7 +503,8 @@ class OANDABroker:
             ) as resp:
                 await resp.read()
             return (time.monotonic() - t0) * 1000
-        except Exception:
+        except Exception as exc:
+            logger.warning("OANDABroker.ping() failed: %s", exc)
             return 9999.0
 
     # ── FORBIDDEN: market data methods ───────────────────────────────────────

@@ -501,7 +501,8 @@ class BrokerManager:
             return False
         try:
             return broker.is_connected()
-        except Exception:
+        except Exception as exc:
+            logger.warning("BrokerManager.is_connected() failed: %s", exc)
             return False
 
     # ------------------------------------------------------------------
