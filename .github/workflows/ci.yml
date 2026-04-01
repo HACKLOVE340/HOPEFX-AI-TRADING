@@ -204,7 +204,8 @@ jobs:
         run: |
           pytest tests/ \
             -m "not slow" \
-            --cov=. \
+            --cov \
+            --cov-config=.coveragerc \
             --cov-report=xml \
             --cov-report=term-missing \
             --cov-fail-under=70 \
