@@ -14,7 +14,7 @@ Handles both environments:
 What it does
 ------------
 1. Detects DATABASE_URL from .env
-2. For PostgreSQL: creates the database and user if they don't exist
+2. Uses the existing database specified by DATABASE_URL (PostgreSQL or SQLite)
 3. Runs all Alembic migrations to bring schema to HEAD
 4. Verifies all expected tables exist
 5. Pings Redis and reports status
