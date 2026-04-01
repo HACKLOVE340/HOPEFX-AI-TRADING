@@ -302,22 +302,41 @@ def backtest_symbol(
     # Align OOS prices for PnL calculation
     oos_close = ohlcv["close"].reindex(X_oos.index)
 
+    # Transaction cost model — applied to every trade
+    from backtest.transaction_costs import get_tc_model
+    tc = get_tc_model()
+
     # Simulate trades: enter on signal, exit next bar
+    # Net PnL = raw close-to-close return − round-trip spread − commission
     trades = []
     for i in range(len(X_oos) - 1):
         if proba[i] >= 0.58:  # long signal  # noqa: PLR2004
             entry = float(oos_close.iloc[i])
             exit_ = float(oos_close.iloc[i + 1])
-            pnl_pct = (exit_ - entry) / entry
+            raw_pnl_pct = (exit_ - entry) / entry
+            net_pnl_pct = tc.apply(raw_pnl_pct, entry_price=entry, ticker=ticker)
             trades.append(
-                {"direction": "long", "pnl_pct": pnl_pct, "prob": float(proba[i])}
+                {
+                    "direction": "long",
+                    "pnl_pct": net_pnl_pct,
+                    "raw_pnl_pct": raw_pnl_pct,
+                    "tc_pct": round(raw_pnl_pct - net_pnl_pct, 6),
+                    "prob": float(proba[i]),
+                }
             )
         elif proba[i] <= 0.42:  # short signal  # noqa: PLR2004
             entry = float(oos_close.iloc[i])
             exit_ = float(oos_close.iloc[i + 1])
-            pnl_pct = (entry - exit_) / entry
+            raw_pnl_pct = (entry - exit_) / entry
+            net_pnl_pct = tc.apply(raw_pnl_pct, entry_price=entry, ticker=ticker)
             trades.append(
-                {"direction": "short", "pnl_pct": pnl_pct, "prob": float(proba[i])}
+                {
+                    "direction": "short",
+                    "pnl_pct": net_pnl_pct,
+                    "raw_pnl_pct": raw_pnl_pct,
+                    "tc_pct": round(raw_pnl_pct - net_pnl_pct, 6),
+                    "prob": float(proba[i]),
+                }
             )
 
     n_trades = len(trades)
@@ -325,12 +344,18 @@ def backtest_symbol(
         return {"symbol": display_name, "n_trades": 0, "sharpe": 0.0, "accuracy": 0.5}
 
     pnls = np.array([t["pnl_pct"] for t in trades])
+    raw_pnls = np.array([t.get("raw_pnl_pct", t["pnl_pct"]) for t in trades])
+    tc_costs = np.array([t.get("tc_pct", 0.0) for t in trades])
     wins = (pnls > 0).sum()
     win_rate = wins / n_trades
     mean_pnl = pnls.mean()
     std_pnl = pnls.std(ddof=1) if n_trades > 1 else 1e-6
     sharpe = float(mean_pnl / std_pnl * np.sqrt(252)) if std_pnl > 0 else 0.0
     max_dd = _max_drawdown(pnls)
+
+    # Transaction cost summary for this symbol
+    mean_tc = float(tc_costs.mean()) if len(tc_costs) > 0 else 0.0
+    raw_sharpe = float(raw_pnls.mean() / (raw_pnls.std(ddof=1) or 1e-6) * np.sqrt(252))
 
     # Classification metrics
     acc = accuracy_score(y_oos, (proba >= 0.5).astype(int))  # noqa: PLR2004
@@ -341,13 +366,30 @@ def backtest_symbol(
         auc = 0.5
 
     logger.info(
-        "%s: N=%d trades | Sharpe=%.2f | WinRate=%.1f%% | Acc=%.3f | MaxDD=%.1f%%",
+        "%s: N=%d trades | Sharpe=%.2f (raw=%.2f) | WinRate=%.1f%% | "
+        "Acc=%.3f | MaxDD=%.1f%% | AvgTC=%.4f%%",
         display_name,
         n_trades,
         sharpe,
+        raw_sharpe,
         win_rate * 100,
         acc,
         max_dd * 100,
+        mean_tc * 100,
+    )
+
+    # Log TC summary at INFO so operators can see the cost drag
+    from backtest.transaction_costs import get_tc_model as _get_tc
+    _tc_summary = _get_tc().cost_summary(
+        entry_price=float(oos_close.dropna().iloc[-1]) if len(oos_close.dropna()) > 0 else 1.0,
+        ticker=ticker,
+    )
+    logger.info(
+        "%s: TC breakdown — spread=$%.2f RT, commission=$%.2f RT, total=%.4f%%",
+        display_name,
+        _tc_summary["round_trip_spread_usd"],
+        _tc_summary["commission_usd"],
+        _tc_summary["total_cost_pct"],
     )
 
     return {
@@ -358,6 +400,8 @@ def backtest_symbol(
         "mean_pnl_pct": round(float(mean_pnl), 6),
         "std_pnl_pct": round(float(std_pnl), 6),
         "sharpe": round(sharpe, 4),
+        "sharpe_gross": round(raw_sharpe, 4),  # before transaction costs
+        "mean_tc_pct": round(mean_tc, 6),       # average cost per trade
         "max_drawdown": round(float(max_dd), 4),
         "accuracy": round(acc, 4),
         "f1": round(f1, 4),
@@ -365,6 +409,7 @@ def backtest_symbol(
         "oos_bars": len(X_oos),
         "train_bars": len(X_train),
         "feature_count": X.shape[1],
+        "transaction_costs": _tc_summary,
         "trades": trades[:100],  # store first 100 for inspection
     }
 
