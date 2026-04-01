@@ -9,6 +9,7 @@ Connects all components with sub-microsecond latency
 """
 
 import asyncio
+import logging
 import mmap
 import os
 import struct
@@ -18,6 +19,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 UTC = timezone.utc
 from collections.abc import Callable
+
+logger = logging.getLogger(__name__)
 
 import lz4.frame
 import msgpack
@@ -204,7 +207,8 @@ class EventBus:
                     try:
                         handler(event)
                         self._metrics["delivered"] += 1
-                    except Exception:
+                    except Exception as exc:
+                        logger.warning("Event handler failed for %s: %s", event.event_type, exc)
                         self._metrics["dropped"] += 1
             except TimeoutError:
                 continue

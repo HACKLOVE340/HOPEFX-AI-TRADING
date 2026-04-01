@@ -253,10 +253,8 @@ def _get_redis():
         client = _redis.from_url(url, decode_responses=True, socket_timeout=2)
         client.ping()
         return client
-    except Exception:
+    except Exception:  # nosec B110 - Redis may be unavailable at startup
         return None
-
-
 async def _publish_in_process(channel: str, payload: str) -> None:
     """Fallback: publish via the async Redis event bus."""
     try:
