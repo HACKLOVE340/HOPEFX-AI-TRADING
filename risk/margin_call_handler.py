@@ -109,11 +109,16 @@ class MarginCallHandler:
         event : MarginCallEvent
             The incoming margin call.
         open_positions : list of dicts, optional
-            Each dict: {symbol, notional_usd, pnl_usd, leverage}.
+            Each dict: {symbol, notional_usd, pnl_usd, leverage, qty}.
+            ``qty`` is the position size in native units and is forwarded
+            to ``broker_close_fn`` as the second argument.
             Used to select which positions to close.
         broker_close_fn : callable, optional
-            Function(symbol, quantity) -> bool.
-            Called to close positions. If None, closure is logged only.
+            Function(symbol, qty) -> bool, where qty is the position size
+            in native units (from the ``qty`` field of each open_position
+            dict). If the position dict has no ``qty`` key the call is
+            still made with ``qty=0.0`` so callers always receive two
+            arguments. If None, closure is logged only.
 
         Returns
         -------
@@ -155,13 +160,14 @@ class MarginCallHandler:
                 if remaining_deficit <= 0:
                     break
                 symbol = str(pos.get("symbol", "UNKNOWN"))
+                qty = float(pos.get("qty", 0.0))
                 notional = float(pos.get("notional_usd", 0.0))
                 margin_released = notional * float(pos.get("margin_pct", 0.02))
 
                 success = True
                 if broker_close_fn is not None:
                     try:
-                        success = broker_close_fn(symbol, notional)
+                        success = broker_close_fn(symbol, qty)
                     except Exception as exc:
                         logger.error("Failed to close %s: %s", symbol, exc)
                         success = False

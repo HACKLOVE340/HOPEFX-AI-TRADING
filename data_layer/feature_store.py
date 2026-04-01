@@ -112,21 +112,18 @@ class OnlineStore:
             )
             self._client = None
 
-    def _key(self, entity_id: str, feature_name: str) -> str:
-        return f"{_FEATURE_STORE_PREFIX}{entity_id}:{feature_name}"
+    def _entity_key(self, entity_id: str) -> str:
+        """Return the Redis hash key for all features of *entity_id*."""
+        return f"{_FEATURE_STORE_PREFIX}{entity_id}"
 
     def write(self, entity_id: str, features: dict[str, Any]) -> None:
         """Write feature values for entity_id."""
         if self._client is not None:
             try:
-                pipe = self._client.pipeline()
-                for name, val in features.items():
-                    pipe.setex(
-                        self._key(entity_id, name),
-                        self._ttl,
-                        json.dumps(val),
-                    )
-                pipe.execute()
+                hkey = self._entity_key(entity_id)
+                mapping = {name: json.dumps(val) for name, val in features.items()}
+                self._client.hset(hkey, mapping=mapping)
+                self._client.expire(hkey, self._ttl)
             except Exception as exc:
                 logger.warning("OnlineStore.write error: %s", exc)
                 self._memory.setdefault(entity_id, {}).update(features)
@@ -137,27 +134,32 @@ class OnlineStore:
         """Read latest feature values for entity_id."""
         if self._client is not None:
             try:
-                # Get registered keys for entity
-                pattern = f"{_FEATURE_STORE_PREFIX}{entity_id}:*"
-                keys = list(self._client.scan_iter(pattern, count=500))
+                hkey = self._entity_key(entity_id)
                 if feature_names:
-                    allowed = {self._key(entity_id, n) for n in feature_names}
-                    keys = [k for k in keys if k in allowed or k.decode() in allowed]
-                if not keys:
-                    return {}
-                vals = self._client.mget(keys)
-                result: dict[str, Any] = {}
-                for key, val in zip(keys, vals):
-                    if val is None:
-                        continue
-                    feat_name = (
-                        key.decode() if isinstance(key, bytes) else key
-                    ).split(":")[-1]
-                    try:
-                        result[feat_name] = json.loads(val)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-                return result
+                    raw_vals = self._client.hmget(hkey, feature_names)
+                    result: dict[str, Any] = {}
+                    for name, val in zip(feature_names, raw_vals):
+                        if val is None:
+                            continue
+                        try:
+                            result[name] = json.loads(val)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    return result
+                else:
+                    raw = self._client.hgetall(hkey)
+                    if not raw:
+                        return {}
+                    result = {}
+                    for key, val in raw.items():
+                        if val is None:
+                            continue
+                        feat_name = key.decode() if isinstance(key, bytes) else key
+                        try:
+                            result[feat_name] = json.loads(val)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    return result
             except Exception as exc:
                 logger.warning("OnlineStore.read error: %s", exc)
                 return dict(self._memory.get(entity_id, {}))
