@@ -3,7 +3,9 @@ repos:
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^frontend/package-lock\.json$
       - id: end-of-file-fixer
+        exclude: ^frontend/package-lock\.json$
       - id: check-yaml
         # Helm templates use Go {{ }} syntax — not valid YAML.
         # config/ultimate_config.yaml and deployment/k8s_config.yaml have
@@ -23,10 +25,10 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        # Jupyter notebooks cannot carry inline # noqa comments
-        exclude: \.ipynb$
+        # Jupyter notebooks and lock files must not be modified by ruff
+        exclude: (\.ipynb$|package-lock\.json$)
       - id: ruff-format
-        exclude: \.ipynb$
+        exclude: (\.ipynb$|package-lock\.json$)
 
 # mypy is run in CI (ci.yml) with --ignore-missing-imports on the canonical
 # packages. It is intentionally excluded from pre-commit because the codebase
