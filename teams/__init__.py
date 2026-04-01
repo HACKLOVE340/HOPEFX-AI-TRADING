@@ -12,7 +12,7 @@ for collaborative trading environments.
 
 from typing import Dict, List, Optional, Any, Set  # noqa: F401
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone, timezone  # noqa: F401
+from datetime import datetime, timedelta, timezone
 UTC = timezone.utc
 from enum import Enum
 import logging

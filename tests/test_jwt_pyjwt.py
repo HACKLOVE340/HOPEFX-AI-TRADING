@@ -18,8 +18,6 @@ import pathlib
 import time
 
 import pytest
-from fastapi import HTTPException
-
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-that-is-long-enough-for-hs256")
 
 # Load auth/jwt.py directly to avoid auth/__init__.py pulling in EmailStr
