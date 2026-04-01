@@ -31,6 +31,7 @@ import time
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
@@ -107,12 +108,8 @@ class IBKRConfig:
 
     host: str = field(default_factory=lambda: os.environ.get("IBKR_HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: int(os.environ.get("IBKR_PORT", "7497")))
-    client_id: int = field(
-        default_factory=lambda: int(os.environ.get("IBKR_CLIENT_ID", "1"))
-    )
-    account: str | None = field(
-        default_factory=lambda: os.environ.get("IBKR_ACCOUNT")
-    )
+    client_id: int = field(default_factory=lambda: int(os.environ.get("IBKR_CLIENT_ID", "1")))
+    account: str | None = field(default_factory=lambda: os.environ.get("IBKR_ACCOUNT"))
     readonly: bool = False
     timeout_sec: float = 20.0
 
@@ -335,9 +332,7 @@ class IBKRConnector(BrokerConnector):
                 break
             try:
                 if self._ib and not self._ib.isConnected():
-                    logger.warning(
-                        "IBKRConnector: heartbeat detected disconnection. Reconnecting…"
-                    )
+                    logger.warning("IBKRConnector: heartbeat detected disconnection. Reconnecting…")
                     self.reconnect()
             except Exception as exc:
                 logger.error("IBKRConnector heartbeat error: %s", exc)
@@ -413,16 +408,12 @@ class IBKRConnector(BrokerConnector):
             ValueError: if order parameters are invalid.
         """
         if not self.connected or not self._ib:
-            raise RuntimeError(
-                "IBKRConnector.place_order: not connected to TWS/Gateway."
-            )
+            raise RuntimeError("IBKRConnector.place_order: not connected to TWS/Gateway.")
 
         # Kill-switch check — hard block
         if self._kill_switch and self._kill_switch.is_active():
             reason = getattr(self._kill_switch, "_reason", "kill switch active")
-            raise RuntimeError(
-                f"IBKRConnector.place_order blocked by kill switch: {reason}"
-            )
+            raise RuntimeError(f"IBKRConnector.place_order blocked by kill switch: {reason}")
 
         if order_type == OrderType.LIMIT and price is None:
             raise ValueError("price is required for LIMIT orders.")
@@ -455,9 +446,7 @@ class IBKRConnector(BrokerConnector):
                 if trade.orderStatus.status not in ("PreSubmitted", ""):
                     break
 
-            order = self._trade_to_order(
-                trade, symbol, side, order_type, quantity, price
-            )
+            order = self._trade_to_order(trade, symbol, side, order_type, quantity, price)
 
             logger.info(
                 "IBKRConnector order placed | symbol=%s side=%s type=%s qty=%.4f "
@@ -514,9 +503,7 @@ class IBKRConnector(BrokerConnector):
                     return self._trade_to_order(
                         trade,
                         symbol=trade.contract.symbol,
-                        side=OrderSide.BUY
-                        if trade.order.action == "BUY"
-                        else OrderSide.SELL,
+                        side=OrderSide.BUY if trade.order.action == "BUY" else OrderSide.SELL,
                         order_type=OrderType.MARKET,
                         quantity=trade.order.totalQuantity,
                     )
@@ -542,22 +529,14 @@ class IBKRConnector(BrokerConnector):
                     continue
                 try:
                     ticker = self._ib.reqTicker(pos.contract)
-                    current_price = (
-                        float(ticker.marketPrice())
-                        if ticker and ticker.marketPrice()
-                        else 0.0
-                    )
+                    current_price = float(ticker.marketPrice()) if ticker and ticker.marketPrice() else 0.0
                 except Exception:  # nosec B110 — fallback to zero on ticker error
                     current_price = 0.0
 
                 avg_cost = pos.avgCost
                 qty = abs(pos.position)
                 entry_price = avg_cost / qty if qty > 0 else 0.0
-                unrealized_pnl = (
-                    (current_price - entry_price)
-                    * qty
-                    * (1 if pos.position > 0 else -1)
-                )
+                unrealized_pnl = (current_price - entry_price) * qty * (1 if pos.position > 0 else -1)
 
                 result.append(
                     Position(
@@ -586,9 +565,7 @@ class IBKRConnector(BrokerConnector):
         try:
             positions = [p for p in self.get_positions() if p.symbol == symbol]
             if not positions:
-                logger.warning(
-                    "IBKRConnector.close_position: no position for %s.", symbol
-                )
+                logger.warning("IBKRConnector.close_position: no position for %s.", symbol)
                 return False
             for pos in positions:
                 close_side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY

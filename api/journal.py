@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -260,9 +261,7 @@ async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalSt
             TagStats(
                 tag=em,
                 count=len(em_entries),
-                win_rate=round(len(em_wins) / len(em_entries) * 100, 1)
-                if em_entries
-                else 0,
+                win_rate=round(len(em_wins) / len(em_entries) * 100, 1) if em_entries else 0,
                 avg_pnl=round(sum(em_pnls) / len(em_pnls), 2) if em_pnls else 0,
             ),
         )
@@ -275,9 +274,7 @@ async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalSt
         worst_trade_pnl=min(pnls),
         by_tag=sorted(tag_stats, key=lambda x: x.count, reverse=True),
         by_emotion=sorted(emotion_stats, key=lambda x: x.count, reverse=True),
-        rule_deviation_count=sum(
-            1 for e in entries if not e.get("followed_rules", True)
-        ),
+        rule_deviation_count=sum(1 for e in entries if not e.get("followed_rules", True)),
     )
 
 

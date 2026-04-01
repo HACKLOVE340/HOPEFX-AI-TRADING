@@ -114,9 +114,7 @@ def _save_risk_settings(settings: dict[str, Any], changed_by: str = "system") ->
         if ok:
             return True
         # config_store returned False (e.g. DB unavailable) — fall through to file
-        logger.warning(
-            "_save_risk_settings: config_store.set returned False, falling back to file"
-        )
+        logger.warning("_save_risk_settings: config_store.set returned False, falling back to file")
     except Exception as exc:
         logger.warning(
             "_save_risk_settings: config_store unavailable (%s), falling back to file",
@@ -146,10 +144,7 @@ def apply_persisted_risk_settings() -> None:
     try:
         from core.config_store import config_store
 
-        if (
-            _RISK_SETTINGS_FILE.exists()
-            and config_store.get(_RISK_SETTINGS_KEY) is None
-        ):
+        if _RISK_SETTINGS_FILE.exists() and config_store.get(_RISK_SETTINGS_KEY) is None:
             try:
                 legacy = json.loads(_RISK_SETTINGS_FILE.read_text())
                 if legacy:
@@ -160,9 +155,7 @@ def apply_persisted_risk_settings() -> None:
                         _RISK_SETTINGS_FILE,
                     )
             except Exception as mig_exc:
-                logger.warning(
-                    "Risk settings migration failed (non-fatal): %s", mig_exc
-                )
+                logger.warning("Risk settings migration failed (non-fatal): %s", mig_exc)
     except Exception as exc:
         logger.debug(
             "apply_persisted_risk_settings: config_store unavailable, skipping migration: %s",
@@ -194,9 +187,7 @@ def apply_persisted_risk_settings() -> None:
                             value,
                         )
     except Exception as exc:
-        logger.warning(
-            "apply_persisted_risk_settings: RiskManager update failed: %s", exc
-        )
+        logger.warning("apply_persisted_risk_settings: RiskManager update failed: %s", exc)
 
 
 class AdminStatusResponse(BaseModel):
@@ -246,9 +237,7 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
 
     # Brain / strategy brain
     try:
-        brain = getattr(app_state, "strategy_brain", None) or getattr(
-            app_state, "brain", None
-        )
+        brain = getattr(app_state, "strategy_brain", None) or getattr(app_state, "brain", None)
         components["brain"] = brain is not None
     except Exception as exc:  # nosec B110 — health-check resilience
         logger.debug("Health check: brain probe failed: %s", exc)
@@ -288,12 +277,9 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
         if nuclear is not None:
             components["data_feed"] = nuclear.status().get("is_running", False)
         else:
-            df_engine = getattr(app_state, "price_engine", None) or getattr(
-                app_state, "data_engine", None
-            )
+            df_engine = getattr(app_state, "price_engine", None) or getattr(app_state, "data_engine", None)
             components["data_feed"] = df_engine is not None and (
-                getattr(df_engine, "active", False)
-                or getattr(df_engine, "is_running", False)
+                getattr(df_engine, "active", False) or getattr(df_engine, "is_running", False)
             )
     except Exception as exc:  # nosec B110 — health-check resilience
         logger.debug("Health check: data_feed probe failed: %s", exc)
@@ -391,11 +377,7 @@ async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
         with _state.db_session_factory() as session:
-            pending = (
-                session.query(User)
-                .filter(User.kyc_status.in_(["pending", "submitted", "under_review"]))
-                .all()
-            )
+            pending = session.query(User).filter(User.kyc_status.in_(["pending", "submitted", "under_review"])).all()
             return {
                 "count": len(pending),
                 "users": [

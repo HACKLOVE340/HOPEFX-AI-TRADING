@@ -134,7 +134,7 @@ def _log_to_mlflow(symbol: str, model_name: str, metrics: dict, params: dict) ->
         ):
             mlflow.log_params(params)
             for k, v in metrics.items():
-                if isinstance(v, (int, float)):
+                if isinstance(v, int | float):
                     mlflow.log_metric(k, v)
         logger.info("MLflow: logged %s/%s to %s", symbol, model_name, uri)
     except Exception as exc:
@@ -208,7 +208,7 @@ def retrain(
         _log_to_mlflow(
             symbol,
             name,
-            {k: v for k, v in m.items() if isinstance(v, (int, float))},
+            {k: v for k, v in m.items() if isinstance(v, int | float)},
             {"symbol": symbol, "model": name, "bars": len(df), "years": years},
         )
 

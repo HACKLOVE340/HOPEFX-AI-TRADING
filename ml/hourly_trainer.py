@@ -42,6 +42,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -53,9 +54,7 @@ logger = logging.getLogger(__name__)
 _ENABLED = os.getenv("ML_HOURLY_ENABLED", "false").lower() in ("true", "1", "yes")
 _INTERVAL_SECS = int(os.getenv("ML_HOURLY_INTERVAL_SECONDS", "3600"))
 _FULL_RETRAIN_HRS = int(os.getenv("ML_FULL_RETRAIN_HOURS", "24"))
-_SYMBOLS = [
-    s.strip() for s in os.getenv("ML_SYMBOLS", "XAU_USD").split(",") if s.strip()
-]
+_SYMBOLS = [s.strip() for s in os.getenv("ML_SYMBOLS", "XAU_USD").split(",") if s.strip()]
 _MODEL_DIR = os.getenv("ML_MODEL_DIR", "ml/models")
 
 
@@ -129,8 +128,7 @@ class HourlyTrainer:
             "online_update_count": self._online_update_count,
             "full_retrain_count": self._full_retrain_count,
             "last_full_retrain": {
-                sym: datetime.fromtimestamp(ts, tz=UTC).isoformat()
-                for sym, ts in self._last_full_retrain.items()
+                sym: datetime.fromtimestamp(ts, tz=UTC).isoformat() for sym, ts in self._last_full_retrain.items()
             },
         }
 
@@ -199,13 +197,9 @@ class HourlyTrainer:
                 return
 
             learner.partial_fit(bars)
-            logger.debug(
-                "OnlineUpdate %s: fed %d bars to OnlineLearner", symbol, len(bars)
-            )
+            logger.debug("OnlineUpdate %s: fed %d bars to OnlineLearner", symbol, len(bars))
         except ImportError:
-            logger.debug(
-                "OnlineLearner not available — skipping online update for %s", symbol
-            )
+            logger.debug("OnlineLearner not available — skipping online update for %s", symbol)
         except Exception as exc:
             logger.warning("OnlineUpdate %s failed: %s", symbol, exc)
 
@@ -320,9 +314,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HOPEFX hourly ML trainer")
     parser.add_argument("--once", action="store_true", help="Run one cycle then exit")
     parser.add_argument("--symbol", default=None, help="Override ML_SYMBOLS")
-    parser.add_argument(
-        "--full-retrain", action="store_true", help="Force a full retrain now"
-    )
+    parser.add_argument("--full-retrain", action="store_true", help="Force a full retrain now")
     args = parser.parse_args()
 
     symbols = [args.symbol] if args.symbol else _SYMBOLS

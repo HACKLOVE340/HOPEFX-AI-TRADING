@@ -34,6 +34,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
@@ -51,12 +52,8 @@ _MIN_SLICE_LOTS = float(os.getenv("MIN_SLICE_LOTS", "0.001"))
 try:
     from prometheus_client import Counter, Gauge
 
-    _prom_child_orders = Counter(
-        "hopefx_exec_child_orders_total", "Child orders sent", ["algo"]
-    )
-    _prom_partial_fills = Counter(
-        "hopefx_exec_partial_fills_total", "Partial fills received"
-    )
+    _prom_child_orders = Counter("hopefx_exec_child_orders_total", "Child orders sent", ["algo"])
+    _prom_partial_fills = Counter("hopefx_exec_partial_fills_total", "Partial fills received")
     _prom_fill_rate = Gauge("hopefx_exec_fill_rate", "Rolling fill rate (0-1)")
     _prom_avg_slip = Gauge("hopefx_exec_avg_slippage_bps", "Rolling avg slippage bps")
     _PROM_OK = True
@@ -132,11 +129,7 @@ class PartialFillState:
     def add_fill(self, lots: float, price: float) -> None:
         self.fills.append((lots, price))
         total_lots = self.filled_lots + lots
-        self.avg_price = (
-            (self.avg_price * self.filled_lots + price * lots) / total_lots
-            if total_lots > 0
-            else price
-        )
+        self.avg_price = (self.avg_price * self.filled_lots + price * lots) / total_lots if total_lots > 0 else price
         self.filled_lots = total_lots
 
     @property
@@ -175,9 +168,7 @@ class PartialFillAggregator:
         self._states: dict[str, PartialFillState] = {}
         self._callbacks: list[Callable[[PartialFillState], None]] = []
 
-    def register(
-        self, parent_id: str, symbol: str, side: str, target_lots: float
-    ) -> None:
+    def register(self, parent_id: str, symbol: str, side: str, target_lots: float) -> None:
         self._states[parent_id] = PartialFillState(
             parent_id=parent_id,
             symbol=symbol,
@@ -185,9 +176,7 @@ class PartialFillAggregator:
             target_lots=target_lots,
         )
 
-    def record_fill(
-        self, parent_id: str, lots: float, price: float
-    ) -> PartialFillState | None:
+    def record_fill(self, parent_id: str, lots: float, price: float) -> PartialFillState | None:
         state = self._states.get(parent_id)
         if state is None:
             logger.warning("PartialFillAggregator: unknown parent_id=%s", parent_id)
@@ -333,9 +322,7 @@ class TWAPExecutor:
                         total_cost += fp * slice_lots
                     else:
                         failed_slices += 1
-                        logger.warning(
-                            "TWAP slice %d/%d failed: %s", i + 1, slices, result
-                        )
+                        logger.warning("TWAP slice %d/%d failed: %s", i + 1, slices, result)
                 except Exception as exc:
                     failed_slices += 1
                     child.status = "failed"

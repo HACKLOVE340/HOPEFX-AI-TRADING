@@ -21,8 +21,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sys
 from typing import TYPE_CHECKING, Any
 from datetime import timezone
+
 UTC = timezone.utc
 
 if TYPE_CHECKING:
@@ -67,12 +69,11 @@ async def init_env(s: Any) -> bool:
             logger.critical(
                 "STARTUP ABORTED: SECURITY_JWT_SECRET is missing or uses the "
                 "dev placeholder in production. "
-                "Generate a secret: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+                'Generate a secret: python3 -c "import secrets; print(secrets.token_hex(32))"'
             )
             sys.exit(1)
         logger.warning(
-            "SECURITY_JWT_SECRET not set — using dev default. "
-            "Set a real secret before deploying to production."
+            "SECURITY_JWT_SECRET not set — using dev default. Set a real secret before deploying to production."
         )
         os.environ["SECURITY_JWT_SECRET"] = _DEV_JWT_SECRET  # nosec B105
 
@@ -83,12 +84,11 @@ async def init_env(s: Any) -> bool:
             logger.critical(
                 "STARTUP ABORTED: CONFIG_ENCRYPTION_KEY is missing or uses the "
                 "dev placeholder in production. "
-                "Generate a key: python3 -c \"import secrets; print(secrets.token_urlsafe(48))\""
+                'Generate a key: python3 -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
             sys.exit(1)
         logger.warning(
-            "CONFIG_ENCRYPTION_KEY not set — using dev default. "
-            "Set a real key before deploying to production."
+            "CONFIG_ENCRYPTION_KEY not set — using dev default. Set a real key before deploying to production."
         )
         os.environ["CONFIG_ENCRYPTION_KEY"] = _DEV_ENCRYPTION_KEY
 
@@ -129,10 +129,7 @@ async def init_model_registry(s: Any) -> bool:
 
         # Bootstrap from existing artifacts if registry is empty
         if not manifest["versions"]:
-            logger.info(
-                "ModelRegistry: registry.json empty — bootstrapping from "
-                "advanced_oos_meta.json …"
-            )
+            logger.info("ModelRegistry: registry.json empty — bootstrapping from advanced_oos_meta.json …")
             entry = reg.bootstrap_from_meta(name="advanced_oos_v1", promote=False)
             if entry:
                 logger.info(
@@ -142,17 +139,14 @@ async def init_model_registry(s: Any) -> bool:
                     entry["state"],
                 )
             else:
-                logger.warning(
-                    "ModelRegistry: bootstrap skipped — advanced_oos.pkl not found"
-                )
+                logger.warning("ModelRegistry: bootstrap skipped — advanced_oos.pkl not found")
             return True
 
         # Verify active production model
         active = manifest.get("active_version")
         if not active:
             logger.info(
-                "ModelRegistry: no active production model — all versions staging. "
-                "Registered: %s",
+                "ModelRegistry: no active production model — all versions staging. Registered: %s",
                 list(manifest["versions"].keys()),
             )
             return True
@@ -164,15 +158,11 @@ async def init_model_registry(s: Any) -> bool:
             logger.critical("ModelRegistry: INTEGRITY FAILURE — %s", msg)
             if is_production:
                 sys.exit(1)
-            logger.warning(
-                "ModelRegistry: integrity failure ignored in development mode"
-            )
+            logger.warning("ModelRegistry: integrity failure ignored in development mode")
 
     except Exception as exc:
         if is_production:
-            logger.critical(
-                "ModelRegistry: startup check failed in production: %s — aborting.", exc
-            )
+            logger.critical("ModelRegistry: startup check failed in production: %s — aborting.", exc)
             sys.exit(1)
         logger.warning("ModelRegistry: startup check skipped: %s", exc)
 
@@ -224,12 +214,8 @@ async def init_database(s: Any) -> Any:
     is_sqlite = conn_str.startswith("sqlite")
     engine_kwargs: dict = {}
     if not is_sqlite:
-        engine_kwargs["pool_size"] = int(
-            os.getenv("DB_POOL_SIZE", str(s.config.database.connection_pool_size))
-        )
-        engine_kwargs["max_overflow"] = int(
-            os.getenv("DB_POOL_MAX_OVERFLOW", str(s.config.database.max_overflow))
-        )
+        engine_kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE", str(s.config.database.connection_pool_size)))
+        engine_kwargs["max_overflow"] = int(os.getenv("DB_POOL_MAX_OVERFLOW", str(s.config.database.max_overflow)))
         # Raise after 30 s waiting for a connection rather than blocking forever.
         engine_kwargs["pool_timeout"] = float(os.getenv("DB_POOL_TIMEOUT", "30"))
         # Recycle connections after 1 hour to avoid stale TCP connections.
@@ -456,12 +442,8 @@ async def init_broker(s: Any) -> Any:
 
     broker_type = os.getenv("BROKER_TYPE", "paper").lower()
     oanda_token = os.getenv("BROKER_OANDA_TOKEN", "") or os.getenv("OANDA_API_KEY", "")
-    oanda_account = os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv(
-        "OANDA_ACCOUNT_ID", ""
-    )
-    oanda_env = os.getenv(
-        "OANDA_ENVIRONMENT", os.getenv("BROKER_OANDA_ENVIRONMENT", "practice")
-    )
+    oanda_account = os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", "")
+    oanda_env = os.getenv("OANDA_ENVIRONMENT", os.getenv("BROKER_OANDA_ENVIRONMENT", "practice"))
     oanda_practice = oanda_env != "live"
 
     # ── OANDA path ────────────────────────────────────────────────────────────
@@ -477,9 +459,7 @@ async def init_broker(s: Any) -> Any:
             connected = await b.connect()
             if connected:
                 env_label = "practice" if oanda_practice else "LIVE"
-                log_activity(
-                    f"OANDA {env_label} broker connected (account={oanda_account[:8]}…)"
-                )
+                log_activity(f"OANDA {env_label} broker connected (account={oanda_account[:8]}…)")
                 logger.info(
                     "OANDA %s broker connected — account=%s…",
                     env_label,
@@ -496,9 +476,7 @@ async def init_broker(s: Any) -> Any:
                         environment="practice" if oanda_practice else "live",
                     )
                 except Exception as _clk_exc:
-                    logger.warning(
-                        "OandaPaperClock.maybe_start failed (non-fatal): %s", _clk_exc
-                    )
+                    logger.warning("OandaPaperClock.maybe_start failed (non-fatal): %s", _clk_exc)
                     _stamp_oanda_paper_start(oanda_account, oanda_practice)
                 return b
             else:
@@ -515,9 +493,7 @@ async def init_broker(s: Any) -> Any:
     # ── Paper broker fallback ─────────────────────────────────────────────────
     from brokers.paper_trading import PaperTradingBroker
 
-    bal = float(
-        os.getenv("PAPER_TRADING_BALANCE", os.getenv("INITIAL_BALANCE", "100000"))
-    )
+    bal = float(os.getenv("PAPER_TRADING_BALANCE", os.getenv("INITIAL_BALANCE", "100000")))
     b = PaperTradingBroker(initial_balance=bal, session_factory=s.db_session_factory)
     await b.connect()
 
@@ -642,9 +618,7 @@ async def init_price_engine(s: Any) -> Any:
     from data.real_time_price_engine import RealTimePriceEngine
 
     syms = [
-        x.strip().upper()
-        for x in os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD,EURUSD,GBPUSD").split(",")
-        if x.strip()
+        x.strip().upper() for x in os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD,EURUSD,GBPUSD").split(",") if x.strip()
     ]
 
     # ── Primary: NuclearStreamer WebSocket feed ────────────────────────────────
@@ -671,9 +645,7 @@ async def init_price_engine(s: Any) -> Any:
 
             class _PriceEngineBridge:
                 async def on_new_price(self, price: float) -> None:
-                    if broker_ref is not None and hasattr(
-                        broker_ref, "update_market_price"
-                    ):
+                    if broker_ref is not None and hasattr(broker_ref, "update_market_price"):
                         try:
                             broker_ref.update_market_price(primary_symbol, price)
                         except Exception as _exc:
@@ -685,8 +657,7 @@ async def init_price_engine(s: Any) -> Any:
             s.nuclear_streamer = streamer
             asyncio.create_task(streamer.run(), name="nuclear_streamer")
             logger.info(
-                "init_price_engine: NuclearStreamer started — symbol=%s "
-                "finnhub=%s twelvedata=%s polygon=%s",
+                "init_price_engine: NuclearStreamer started — symbol=%s finnhub=%s twelvedata=%s polygon=%s",
                 primary_symbol,
                 bool(os.getenv("FINNHUB_API_KEY")),
                 bool(os.getenv("TWELVE_API_KEY")),
@@ -737,6 +708,7 @@ async def init_prop_enforcer(s: Any) -> Any:
     try:
         ks = getattr(s, "kill_switch", None)
         if ks is not None:
+
             def kill_fn(reason: str) -> None:
                 ks.activate(reason)
     except Exception as _exc:
@@ -807,15 +779,12 @@ async def init_secrets_manager(s: Any) -> Any:
         if "database_url" not in changed_keys and "db_password" not in changed_keys:
             return
         logger.warning(
-            "SecretsManager: DB credentials rotated — "
-            "existing connections will be recycled on next checkout"
+            "SecretsManager: DB credentials rotated — existing connections will be recycled on next checkout"
         )
         try:
             if s.db_engine:
                 s.db_engine.dispose()
-                logger.info(
-                    "SecretsManager: DB engine disposed for credential rotation"
-                )
+                logger.info("SecretsManager: DB engine disposed for credential rotation")
         except Exception as exc:
             logger.warning("SecretsManager: DB engine dispose failed: %s", exc)
 
@@ -983,9 +952,7 @@ async def init_macro_store(s: Any) -> Any:
         try:
             from ml.macro_bootstrap import bootstrap, load_into_store
 
-            n_written = await asyncio.get_event_loop().run_in_executor(
-                None, bootstrap, False
-            )
+            n_written = await asyncio.get_event_loop().run_in_executor(None, bootstrap, False)
             n_loaded = load_into_store(macro_store)
             logger.info(
                 "MacroStore CSV fallback: %d series written, %d loaded",
@@ -1110,9 +1077,7 @@ async def init_anomaly_store(s: Any) -> Any:
         from config.feature_flags import flags
 
         if not getattr(flags, "ANOMALY_WEIGHTING", False):
-            logger.info(
-                "AnomalyWeightStore: disabled by FEATURE_ANOMALY_WEIGHTING=false"
-            )
+            logger.info("AnomalyWeightStore: disabled by FEATURE_ANOMALY_WEIGHTING=false")
             return None
     except (ImportError, AttributeError):
         return None
@@ -1189,8 +1154,7 @@ async def init_online_learner_store(s: Any) -> Any:
             online_weight=online_w,
             min_fills=int(os.getenv("ONLINE_MIN_FILLS", "20")),
             buffer_size=int(os.getenv("ONLINE_BUFFER_SIZE", "500")),
-            adaptive_weights=os.getenv("ONLINE_ADAPTIVE_WEIGHTS", "true").lower()
-            == "true",
+            adaptive_weights=os.getenv("ONLINE_ADAPTIVE_WEIGHTS", "true").lower() == "true",
             use_adwin=os.getenv("ONLINE_USE_ADWIN", "true").lower() == "true",
             persist_path=persist_path,
         )
@@ -1241,15 +1205,9 @@ async def init_deep_ensemble_store(s: Any) -> Any:
     try:
         from research.pipeline.models_ensemble import DeepEnsembleStore
 
-        model_path = os.getenv(
-            "DEEP_ENSEMBLE_MODEL_PATH", DeepEnsembleStore.DEFAULT_MODEL_PATH
-        )
-        meta_path = os.getenv(
-            "DEEP_ENSEMBLE_META_PATH", DeepEnsembleStore.DEFAULT_META_PATH
-        )
-        scaler_path = os.getenv(
-            "DEEP_ENSEMBLE_SCALER_PATH", DeepEnsembleStore.DEFAULT_SCALER_PATH
-        )
+        model_path = os.getenv("DEEP_ENSEMBLE_MODEL_PATH", DeepEnsembleStore.DEFAULT_MODEL_PATH)
+        meta_path = os.getenv("DEEP_ENSEMBLE_META_PATH", DeepEnsembleStore.DEFAULT_META_PATH)
+        scaler_path = os.getenv("DEEP_ENSEMBLE_SCALER_PATH", DeepEnsembleStore.DEFAULT_SCALER_PATH)
 
         store = DeepEnsembleStore(
             model_path=model_path,
@@ -1482,11 +1440,7 @@ async def init_daily_online_learner(s: Any) -> Any:
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
 
-    symbols = [
-        sym.strip()
-        for sym in os.getenv("ML_SYMBOLS", "XAU_USD").split(",")
-        if sym.strip()
-    ]
+    symbols = [sym.strip() for sym in os.getenv("ML_SYMBOLS", "XAU_USD").split(",") if sym.strip()]
     persist = os.getenv("ONLINE_LEARNER_PERSIST", "true").lower() in ("true", "1")
     learner_dir = os.getenv("ONLINE_LEARNER_DIR", "ml/saved_models")
 
@@ -1499,8 +1453,7 @@ async def init_daily_online_learner(s: Any) -> Any:
         learner = get_online_learner(symbol=sym, persist_path=persist_path)
         loaded.append(sym)
         logger.debug(
-            "DailyOnlineLearner: pre-loaded SklearnOnlineLearner for %s "
-            "(fitted=%s updates=%d)",
+            "DailyOnlineLearner: pre-loaded SklearnOnlineLearner for %s (fitted=%s updates=%d)",
             sym,
             learner._fitted,
             learner._update_count,
@@ -1558,9 +1511,7 @@ async def init_daily_online_learner(s: Any) -> Any:
                 except asyncio.CancelledError:
                     return
                 except Exception as exc:
-                    logger.warning(
-                        "DailyOnlineLearner[%s] EWC tick failed: %s", sym, exc
-                    )
+                    logger.warning("DailyOnlineLearner[%s] EWC tick failed: %s", sym, exc)
 
     async def _detect_regime(symbol: str) -> str | None:
         """
@@ -1640,21 +1591,13 @@ def build_component_registry(app, feature_flags):
         .register("database", F.init_database, required=True, deps=["config"])
         .register("cache", F.init_cache, required=False, deps=["config"])
         .register("hot_standby", F.init_hot_standby, required=False, deps=["cache"])
-        .register(
-            "chaos_controller", F.init_chaos_controller, required=False, deps=["config"]
-        )
+        .register("chaos_controller", F.init_chaos_controller, required=False, deps=["config"])
         # ── Background services ───────────────────────────────────────────────
-        .register(
-            "data_scheduler", F.init_data_scheduler, required=False, deps=["config"]
-        )
+        .register("data_scheduler", F.init_data_scheduler, required=False, deps=["config"])
         .register("websocket", _app(F.init_websocket), required=False, deps=["config"])
-        .register(
-            "alert_engine", _app(F.init_alert_engine), required=False, deps=["config"]
-        )
+        .register("alert_engine", _app(F.init_alert_engine), required=False, deps=["config"])
         # ── Analysis / data routers ───────────────────────────────────────────
-        .register(
-            "order_flow", _app(F.init_order_flow), required=False, deps=["config"]
-        )
+        .register("order_flow", _app(F.init_order_flow), required=False, deps=["config"])
         .register(
             "time_and_sales",
             _app(F.init_time_and_sales),
@@ -1674,17 +1617,13 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["config"],
         )
-        .register(
-            "news_router", _app(F.init_news_router), required=False, deps=["config"]
-        )
+        .register("news_router", _app(F.init_news_router), required=False, deps=["config"])
         # ── Auth / risk / trading ─────────────────────────────────────────────
         .register("auth_service", F.init_auth, required=False, deps=["database"])
         .register("risk_manager", F.init_risk_manager, required=False, deps=["config"])
         .register("broker", F.init_broker, required=False, deps=["database"])
         .register("price_engine", F.init_price_engine, required=False, deps=["broker"])
-        .register(
-            "compliance_manager", F.init_compliance, required=False, deps=["database"]
-        )
+        .register("compliance_manager", F.init_compliance, required=False, deps=["database"])
         .register(
             "prop_enforcer",
             F.init_prop_enforcer,
@@ -1692,13 +1631,9 @@ def build_component_registry(app, feature_flags):
             deps=["compliance_manager"],
         )
         .register("aml", F.init_aml, required=False, deps=["database"])
-        .register(
-            "strategy_brain", F.init_strategy_brain, required=False, deps=["config"]
-        )
+        .register("strategy_brain", F.init_strategy_brain, required=False, deps=["config"])
         .register("event_store", F.init_event_store, required=False, deps=["config"])
-        .register(
-            "position_tracker", F.init_position_tracker, required=False, deps=["config"]
-        )
+        .register("position_tracker", F.init_position_tracker, required=False, deps=["config"])
         .register(
             "trade_executor",
             F.init_trade_executor,
@@ -1730,9 +1665,7 @@ def build_component_registry(app, feature_flags):
         )
         # ── Macro / MTF / ML pipeline ─────────────────────────────────────────
         .register("macro_store", F.init_macro_store, required=False, deps=["config"])
-        .register(
-            "mtf_store", F.init_mtf_store, required=False, deps=["data_scheduler"]
-        )
+        .register("mtf_store", F.init_mtf_store, required=False, deps=["data_scheduler"])
         # model_registry must run before inference_engine and signal_engine so
         # SHA-256 integrity is verified before any model artifact is loaded.
         .register(
@@ -1771,21 +1704,15 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["hourly_trainer"],
         )
-        .register(
-            "outbox_relay", F.init_outbox_relay, required=False, deps=["database"]
-        )
+        .register("outbox_relay", F.init_outbox_relay, required=False, deps=["database"])
         .register(
             "ml_performance_monitor",
             F.init_performance_monitor,
             required=False,
             deps=["hourly_trainer"],
         )
-        .register(
-            "reconciler", F.init_reconciler, required=False, deps=["database", "broker"]
-        )
-        .register(
-            "telegram_bot", F.init_telegram_bot, required=False, deps=["alert_engine"]
-        )
+        .register("reconciler", F.init_reconciler, required=False, deps=["database", "broker"])
+        .register("telegram_bot", F.init_telegram_bot, required=False, deps=["alert_engine"])
         .register("mobile", _app(F.init_mobile), required=False, deps=["config"])
         .register("hyperopt", _app(F.init_hyperopt), required=False, deps=["config"])
         # ── Feature-flagged ───────────────────────────────────────────────────
@@ -1807,15 +1734,9 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["config"],
         )
-        .register(
-            "teams_manager", _app_flags(F.init_teams), required=False, deps=["config"]
-        )
-        .register(
-            "nocode_builder", _app_flags(F.init_nocode), required=False, deps=["config"]
-        )
-        .register(
-            "replay_engine", _app_flags(F.init_replay), required=False, deps=["config"]
-        )
+        .register("teams_manager", _app_flags(F.init_teams), required=False, deps=["config"])
+        .register("nocode_builder", _app_flags(F.init_nocode), required=False, deps=["config"])
+        .register("replay_engine", _app_flags(F.init_replay), required=False, deps=["config"])
         .register(
             "ml_feature_engineer",
             _app_flags(F.init_ml_predictions),
@@ -1877,10 +1798,7 @@ async def init_hot_standby(s: Any) -> Any | None:
 
         redis_client = getattr(s, "cache", None)
         if redis_client is None:
-            logger.warning(
-                "init_hot_standby: no Redis client available — "
-                "hot-standby replication disabled"
-            )
+            logger.warning("init_hot_standby: no Redis client available — hot-standby replication disabled")
             return None
 
         async def _on_promote(snapshot) -> None:
@@ -1939,6 +1857,7 @@ async def init_tick_feed(s: Any) -> Any:
     try:
         from api.admin import log_activity
     except ImportError:
+
         def log_activity(msg: str) -> None:
             logger.info(msg)
 
@@ -1963,9 +1882,7 @@ async def init_tick_feed(s: Any) -> Any:
                     except Exception as _exc:
                         logger.debug("tick_feed broker bridge error: %s", _exc)
                 # Update execution engine last-tick cache
-                if execution_engine_ref is not None and hasattr(
-                    execution_engine_ref, "update_last_tick"
-                ):
+                if execution_engine_ref is not None and hasattr(execution_engine_ref, "update_last_tick"):
                     try:
                         execution_engine_ref.update_last_tick(tick.symbol, tick)
                     except Exception as _exc:
@@ -1981,10 +1898,7 @@ async def init_tick_feed(s: Any) -> Any:
         await manager.start()
         s.tick_feed = manager
 
-        log_activity(
-            f"TickFeedManager started — symbol={symbol} "
-            f"sources=OANDA+Finnhub+Polygon bar_tf={bar_tf}s"
-        )
+        log_activity(f"TickFeedManager started — symbol={symbol} sources=OANDA+Finnhub+Polygon bar_tf={bar_tf}s")
         return manager
 
     except Exception as exc:
@@ -2007,6 +1921,7 @@ async def init_factor_engine(s: Any) -> Any:
     try:
         from api.admin import log_activity
     except ImportError:
+
         def log_activity(msg: str) -> None:
             logger.info(msg)
 
@@ -2045,6 +1960,7 @@ async def init_portfolio_rebalancer(s: Any) -> Any:
     try:
         from api.admin import log_activity
     except ImportError:
+
         def log_activity(msg: str) -> None:
             logger.info(msg)
 

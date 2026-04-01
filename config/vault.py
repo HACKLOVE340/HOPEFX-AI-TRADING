@@ -81,9 +81,7 @@ class SecureVault:
             # structlog) can surface the root error alongside the VaultError.
             import logging as _logging
 
-            _logging.getLogger(__name__).error(
-                "Vault initialization failed: %s", e, exc_info=True
-            )
+            _logging.getLogger(__name__).error("Vault initialization failed: %s", e, exc_info=True)
             raise VaultError(f"Vault initialization failed: {e}") from e
 
     def _derive_key(self, password: str) -> bytes:
@@ -152,9 +150,7 @@ class SecureVault:
                 "SecureVault.secure_delete: keyring wipe failed: %s",
                 e,
             )
-            raise VaultError(
-                f"Keyring wipe failed — key may still be stored: {e}"
-            ) from e
+            raise VaultError(f"Keyring wipe failed — key may still be stored: {e}") from e
         finally:
             # Always zero the in-memory key regardless of keyring outcome
             self._fernet = None

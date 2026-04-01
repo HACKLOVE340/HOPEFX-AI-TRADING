@@ -63,6 +63,7 @@ WS_RATE_WINDOW_SECONDS         — sliding window for rate cap (default: 60)
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import time
@@ -93,7 +94,7 @@ class WebSocketConnectionLimiter:
         self._connected = False
         # In-process fallback state
         self._open_conns: dict[str, int] = defaultdict(int)
-        self._rate_window: dict[str, deque] = defaultdict(lambda: deque())
+        self._rate_window: dict[str, deque] = defaultdict(deque)
         self._lock = asyncio.Lock()
 
     # ── Redis connection ──────────────────────────────────────────────────────
@@ -294,10 +295,8 @@ def get_client_ip(websocket) -> str:
     if direct_ip in trusted:
         # Connection is from a trusted proxy — honour X-Forwarded-For
         forwarded = ""
-        try:
+        with contextlib.suppress(Exception):
             forwarded = websocket.headers.get("x-forwarded-for", "")
-        except Exception:
-            pass
         if forwarded:
             return forwarded.split(",")[0].strip()
 

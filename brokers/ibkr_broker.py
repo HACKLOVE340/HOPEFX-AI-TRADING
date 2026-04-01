@@ -53,10 +53,7 @@ try:
 except ImportError:
     IB = None  # type: ignore
     _IB_AVAILABLE = False
-    logger.warning(
-        "ib_insync not installed — IBKRBroker will be unavailable. "
-        "Install with: pip install ib_insync"
-    )
+    logger.warning("ib_insync not installed — IBKRBroker will be unavailable. Install with: pip install ib_insync")
 
 # TWS / IB Gateway default ports.
 _PORT_PAPER = 7497
@@ -279,13 +276,9 @@ class IBKRBroker:
         if order_type == "MKT":
             ib_order = MarketOrder(action=action, totalQuantity=quantity)
         elif order_type == "LMT":
-            ib_order = LimitOrder(
-                action=action, totalQuantity=quantity, lmtPrice=limit_price
-            )
+            ib_order = LimitOrder(action=action, totalQuantity=quantity, lmtPrice=limit_price)
         elif order_type == "STP":
-            ib_order = StopOrder(
-                action=action, totalQuantity=quantity, stopPrice=aux_price
-            )
+            ib_order = StopOrder(action=action, totalQuantity=quantity, stopPrice=aux_price)
         else:
             return {
                 "success": False,

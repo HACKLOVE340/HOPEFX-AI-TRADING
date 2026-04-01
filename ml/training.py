@@ -11,6 +11,7 @@ LSTM, XGBoost, Random Forest with model saving/loading, hyperparameter tuning, e
 import json
 import warnings
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -150,14 +151,10 @@ class FeatureEngineer:
             # MA distances (normalised by ATR — stationary)
             for window in [5, 10, 20, 50, 200]:
                 ma = data[target_col].rolling(window=window).mean()
-                data[f"dist_ma_{window}"] = (
-                    (data[target_col] - ma) / atr14.replace(0, np.nan)
-                ).fillna(0.0)
+                data[f"dist_ma_{window}"] = ((data[target_col] - ma) / atr14.replace(0, np.nan)).fillna(0.0)
                 # EMA distance
                 ema = data[target_col].ewm(span=window, adjust=False).mean()
-                data[f"dist_ema_{window}"] = (
-                    (data[target_col] - ema) / atr14.replace(0, np.nan)
-                ).fillna(0.0)
+                data[f"dist_ema_{window}"] = ((data[target_col] - ema) / atr14.replace(0, np.nan)).fillna(0.0)
 
             # RSI (already bounded 0–100, stationary)
             data["rsi_14"] = self._calculate_rsi(data[target_col], 14)
@@ -171,9 +168,7 @@ class FeatureEngineer:
                 0.0,
             )
             macd_sig = macd_raw.ewm(span=9, adjust=False).mean()
-            data["macd_hist_norm"] = (
-                (macd_raw - macd_sig) / data[target_col].replace(0, np.nan)
-            ).fillna(0.0)
+            data["macd_hist_norm"] = ((macd_raw - macd_sig) / data[target_col].replace(0, np.nan)).fillna(0.0)
 
             # Bollinger Band position (already 0–1, stationary)
             sma_20 = data[target_col].rolling(window=20).mean()
@@ -182,38 +177,29 @@ class FeatureEngineer:
             bb_lower = sma_20 - std_20 * 2
             bb_width = (bb_upper - bb_lower).replace(0, np.nan)
             data["bb_position"] = ((data[target_col] - bb_lower) / bb_width).fillna(0.5)
-            data["bb_width_pct"] = (
-                bb_width / data[target_col].replace(0, np.nan)
-            ).fillna(0.0)
+            data["bb_width_pct"] = (bb_width / data[target_col].replace(0, np.nan)).fillna(0.0)
 
             # Stochastic %K/%D
             lo14 = data["low"].rolling(14).min()
             hi14 = data["high"].rolling(14).max()
-            stoch_k = (
-                100 * (data[target_col] - lo14) / (hi14 - lo14).replace(0, np.nan)
-            ).fillna(50.0)
+            stoch_k = (100 * (data[target_col] - lo14) / (hi14 - lo14).replace(0, np.nan)).fillna(50.0)
             data["stoch_k"] = stoch_k
             data["stoch_d"] = stoch_k.rolling(3).mean().fillna(50.0)
 
             # Williams %R
-            data["williams_r"] = (
-                -100 * (hi14 - data[target_col]) / (hi14 - lo14).replace(0, np.nan)
-            ).fillna(-50.0)
+            data["williams_r"] = (-100 * (hi14 - data[target_col]) / (hi14 - lo14).replace(0, np.nan)).fillna(-50.0)
 
             # CCI
             tp = (data["high"] + data["low"] + data[target_col]) / 3
-            data["cci_20"] = (
-                (tp - tp.rolling(20).mean())
-                / (0.015 * tp.rolling(20).std().replace(0, np.nan))
-            ).fillna(0.0)
+            data["cci_20"] = ((tp - tp.rolling(20).mean()) / (0.015 * tp.rolling(20).std().replace(0, np.nan))).fillna(
+                0.0
+            )
 
             # Volume features (stationary: ratio and z-score, not raw OBV level)
             if "volume" in data.columns and data["volume"].sum() > 0:
                 vol_ma20 = data["volume"].rolling(window=20).mean()
                 vol_std20 = data["volume"].rolling(window=20).std().replace(0, np.nan)
-                data["volume_ratio"] = (
-                    data["volume"] / vol_ma20.replace(0, np.nan)
-                ).fillna(1.0)
+                data["volume_ratio"] = (data["volume"] / vol_ma20.replace(0, np.nan)).fillna(1.0)
                 data["volume_z20"] = ((data["volume"] - vol_ma20) / vol_std20).fillna(
                     0.0,
                 )
@@ -250,9 +236,7 @@ class FeatureEngineer:
                 )
 
         # Target variable - future returns
-        future_returns = (
-            data[target_col].pct_change(prediction_horizon).shift(-prediction_horizon)
-        )
+        future_returns = data[target_col].pct_change(prediction_horizon).shift(-prediction_horizon)
 
         # Classification target: 1 if price goes up, 0 if down
         data["target_class"] = (future_returns > 0).astype(int)
@@ -668,9 +652,7 @@ class XGBoostModel:
             if hasattr(X_train, "columns"):
                 feat_names = list(X_train.columns)
             else:
-                feat_names = [
-                    f"f{i}" for i in range(len(self.model.feature_importances_))
-                ]
+                feat_names = [f"f{i}" for i in range(len(self.model.feature_importances_))]
             self.feature_importance = pd.DataFrame(
                 {"feature": feat_names, "importance": self.model.feature_importances_},
             ).sort_values("importance", ascending=False)
@@ -679,9 +661,7 @@ class XGBoostModel:
             "best_iteration": self.model.best_iteration
             if hasattr(self.model, "best_iteration")
             else self.params["n_estimators"],
-            "best_score": self.model.best_score
-            if hasattr(self.model, "best_score")
-            else None,
+            "best_score": self.model.best_score if hasattr(self.model, "best_score") else None,
         }
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -838,9 +818,7 @@ class RandomForestModel:
             if hasattr(X_train, "columns"):
                 feat_names = list(X_train.columns)
             else:
-                feat_names = [
-                    f"f{i}" for i in range(len(self.model.feature_importances_))
-                ]
+                feat_names = [f"f{i}" for i in range(len(self.model.feature_importances_))]
             self.feature_importance = pd.DataFrame(
                 {"feature": feat_names, "importance": self.model.feature_importances_},
             ).sort_values("importance", ascending=False)
@@ -852,7 +830,8 @@ class RandomForestModel:
             named_imp = dict(
                 zip(
                     self.feature_importance["feature"],
-                    self.feature_importance["importance"], strict=False,
+                    self.feature_importance["importance"],
+                    strict=False,
                 ),
             )
         return {
@@ -1167,9 +1146,7 @@ class MLEvaluationReport:
 
         # Save feature importance
         if feature_importance is not None:
-            importance_path = (
-                self.output_dir / f"{model_name}_feature_importance_{report_time}.csv"
-            )
+            importance_path = self.output_dir / f"{model_name}_feature_importance_{report_time}.csv"
             feature_importance.to_csv(importance_path, index=False)
 
         # Save predictions
@@ -1302,10 +1279,7 @@ def train_ml_pipeline(
             # Determine date range from the full df (train + test)
             _idx = df.index if hasattr(df.index, "min") else pd.RangeIndex(len(df))
             if hasattr(_idx, "min") and hasattr(_idx[0], "year"):
-
-                _start = (
-                    pd.Timestamp(_idx.min()).to_pydatetime().replace(tzinfo=UTC)
-                )
+                _start = pd.Timestamp(_idx.min()).to_pydatetime().replace(tzinfo=UTC)
                 _end = pd.Timestamp(_idx.max()).to_pydatetime().replace(tzinfo=UTC)
             else:
                 from datetime import datetime as _dt
@@ -1333,8 +1307,7 @@ def train_ml_pipeline(
                     prediction_horizon=prediction_horizon,
                 )
                 print(
-                    f"Historical macro features merged: {macro_hist.shape[1]} series, "
-                    f"{len(macro_hist)} bars",
+                    f"Historical macro features merged: {macro_hist.shape[1]} series, {len(macro_hist)} bars",
                 )
             else:
                 _macro_logger.warning(
@@ -1361,8 +1334,7 @@ def train_ml_pipeline(
                     X_train[col] = float(val) if val is not None else 0.0
                     X_test[col] = float(val) if val is not None else 0.0
                 print(
-                    f"Point-in-time macro features merged (look-ahead bias warning): "
-                    f"{list(macro_features.keys())}",
+                    f"Point-in-time macro features merged (look-ahead bias warning): {list(macro_features.keys())}",
                 )
         except Exception as _macro_exc:
             print(
@@ -1373,8 +1345,7 @@ def train_ml_pipeline(
     X_train_scaled, X_test_scaled = fe.scale_features(X_train, X_test)
 
     print(
-        f"Train: {len(X_train)} bars | Test: {len(X_test)} bars | "
-        f"Features: {X_train.shape[1]}",
+        f"Train: {len(X_train)} bars | Test: {len(X_test)} bars | Features: {X_train.shape[1]}",
     )
 
     evaluator = MLEvaluationReport()
@@ -1604,16 +1575,8 @@ def walk_forward_validate(
         metrics["fold"] = fold
         metrics["train_bars"] = len(X_train)
         metrics["test_bars"] = len(X_test)
-        metrics["train_end_date"] = (
-            str(df.index[train_end - 1])
-            if hasattr(df.index, "__getitem__")
-            else train_end
-        )
-        metrics["test_start_date"] = (
-            str(df.index[test_start])
-            if hasattr(df.index, "__getitem__")
-            else test_start
-        )
+        metrics["train_end_date"] = str(df.index[train_end - 1]) if hasattr(df.index, "__getitem__") else train_end
+        metrics["test_start_date"] = str(df.index[test_start]) if hasattr(df.index, "__getitem__") else test_start
         fold_results.append(metrics)
 
         print(

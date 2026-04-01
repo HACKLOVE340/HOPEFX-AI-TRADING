@@ -12,6 +12,7 @@ from collections import defaultdict
 from typing import Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from core.event_bus import DomainEvent, EventBus
@@ -65,6 +66,7 @@ class StrategyOrchestra:
         """
         try:
             from portfolio.rebalancer import DynamicRebalancer
+
             self._rebalancer = DynamicRebalancer(
                 method=method,
                 max_weight=max_weight,
@@ -264,6 +266,7 @@ class StrategyOrchestra:
             # Feed into rebalancer when we have enough history
             if self._rebalancer is not None and len(self._returns_buffer[sid]) >= 5:  # noqa: PLR2004
                 import pandas as pd
+
                 returns_series = pd.Series(self._returns_buffer[sid])
                 self._rebalancer.update_strategy_returns(sid, returns_series)
                 self._rebalancer.update_drawdown(sid, perf.current_drawdown)

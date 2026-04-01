@@ -85,7 +85,7 @@ class TestKillSwitch:
     def test_callback_called_on_activate(self, tmp_path):
         ks = self._make_ks(tmp_path)
         called = []
-        ks.register_callback(lambda r: called.append(r))  # noqa: PLW0108
+        ks.register_callback(lambda r: called.append(r))
         ks.activate("cb-test")
         assert called == ["cb-test"]
 

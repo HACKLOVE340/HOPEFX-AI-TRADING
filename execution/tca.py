@@ -34,6 +34,7 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum
@@ -80,9 +81,7 @@ class MarketImpactModel:
 
         Returns: (temporary_impact_bps, permanent_impact_bps)
         """
-        participation_rate = (
-            float(order_size / avg_daily_volume) if avg_daily_volume > 0 else 0.0
-        )
+        participation_rate = float(order_size / avg_daily_volume) if avg_daily_volume > 0 else 0.0
 
         # Temporary impact (decays over time)
         temp_bps = 0.5 * spread_bps * math.sqrt(participation_rate * 100)
@@ -142,10 +141,7 @@ class TCAMetrics:
         """Total transaction cost in bps."""
         if self.avg_fill_price <= 0:
             return self.implementation_shortfall_bps
-        return (
-            self.implementation_shortfall_bps
-            + self.total_fees * Decimal("10000") / self.avg_fill_price
-        )
+        return self.implementation_shortfall_bps + self.total_fees * Decimal("10000") / self.avg_fill_price
 
     @property
     def alpha_extraction_bps(self) -> Decimal:
@@ -239,16 +235,12 @@ class MarketContextProvider:
             try:
                 bars = cache.get_bars(symbol, "1d", n=_ADV_LOOKBACK_BARS)
                 if bars and len(bars) >= 5:  # noqa: PLR2004
-                    volumes = [
-                        float(b.get("volume", 0)) for b in bars if b.get("volume")
-                    ]
+                    volumes = [float(b.get("volume", 0)) for b in bars if b.get("volume")]
                     if volumes and sum(volumes) > 0:
                         adv = sum(volumes) / len(volumes)
                         return adv, "redis_ohlcv"
             except Exception as exc:
-                logger.debug(
-                    "TCA: Redis OHLCV ADV lookup failed for %s: %s", symbol, exc
-                )
+                logger.debug("TCA: Redis OHLCV ADV lookup failed for %s: %s", symbol, exc)
 
         # 3. In-memory tick accumulator
         ticks = self._tick_volumes.get(symbol, [])
@@ -256,10 +248,10 @@ class MarketContextProvider:
             total_vol = sum(v for _, v in ticks)
             if total_vol > 0 and len(ticks) >= 2:  # noqa: PLR2004
                 # Estimate daily volume from accumulated ticks
-                    span_hours = (ticks[-1][0] - ticks[0][0]).total_seconds() / 3600
-                    if span_hours > 0:
-                        daily_vol = total_vol * (24.0 / span_hours)
-                        return daily_vol, "tick_accumulator"
+                span_hours = (ticks[-1][0] - ticks[0][0]).total_seconds() / 3600
+                if span_hours > 0:
+                    daily_vol = total_vol * (24.0 / span_hours)
+                    return daily_vol, "tick_accumulator"
 
         # 4. Global fallback
         return _DEFAULT_ADV, "default"
@@ -296,9 +288,7 @@ class MarketContextProvider:
                             vol = float(np.std(log_returns))
                             return vol, "redis_ohlcv"
             except Exception as exc:
-                logger.debug(
-                    "TCA: Redis OHLCV vol lookup failed for %s: %s", symbol, exc
-                )
+                logger.debug("TCA: Redis OHLCV vol lookup failed for %s: %s", symbol, exc)
 
         # 3. Global fallback
         return _DEFAULT_VOL, "default"
@@ -370,9 +360,7 @@ class TCAEngine:
         now = datetime.now(UTC)
         if not order.get("first_fill_time"):
             order["first_fill_time"] = now
-            order["time_to_first_fill_ms"] = (
-                now - order["arrival_time"]
-            ).total_seconds() * 1000
+            order["time_to_first_fill_ms"] = (now - order["arrival_time"]).total_seconds() * 1000
 
         # Update VWAP cache from fill
         symbol = order["symbol"]
@@ -401,30 +389,18 @@ class TCAEngine:
 
         # Execution stats
         total_qty = sum(f.quantity for f in fills)
-        avg_price = (
-            sum(f.price * f.quantity for f in fills) / total_qty
-            if total_qty > 0
-            else Decimal("0")
-        )
+        avg_price = sum(f.price * f.quantity for f in fills) / total_qty if total_qty > 0 else Decimal("0")
         total_commission = sum(f.commission for f in fills)
-        total_slippage = sum(
-            getattr(f, "slippage", None) or Decimal("0") for f in fills
-        )
+        total_slippage = sum(getattr(f, "slippage", None) or Decimal("0") for f in fills)
 
         last_fill = fills[-1]
-        exec_time_ms = (
-            last_fill.timestamp - order["arrival_time"]
-        ).total_seconds() * 1000
+        exec_time_ms = (last_fill.timestamp - order["arrival_time"]).total_seconds() * 1000
 
         # Implementation shortfall vs arrival price
         if order["side"] == Side.BUY:
-            isf_bps = (
-                (avg_price - order["arrival_price"]) / order["arrival_price"]
-            ) * Decimal("10000")
+            isf_bps = ((avg_price - order["arrival_price"]) / order["arrival_price"]) * Decimal("10000")
         else:
-            isf_bps = (
-                (order["arrival_price"] - avg_price) / order["arrival_price"]
-            ) * Decimal("10000")
+            isf_bps = ((order["arrival_price"] - avg_price) / order["arrival_price"]) * Decimal("10000")
 
         # Resolve real ADV and volatility from market data
         symbol = order["symbol"]
@@ -449,14 +425,10 @@ class TCAEngine:
         )
 
         # Opportunity cost (unfilled portion)
-        fill_rate = (
-            float(total_qty / order["quantity"]) if order["quantity"] > 0 else 0.0
-        )
+        fill_rate = float(total_qty / order["quantity"]) if order["quantity"] > 0 else 0.0
         opp_cost = Decimal("0")
         if fill_rate < 1.0:
-            opp_cost = (
-                (Decimal("1") - Decimal(str(fill_rate))) * isf_bps * Decimal("0.5")
-            )
+            opp_cost = (Decimal("1") - Decimal(str(fill_rate))) * isf_bps * Decimal("0.5")
 
         metrics = TCAMetrics(
             order_id=order_id,
@@ -507,8 +479,7 @@ class TCAEngine:
         expected = Decimal(str(order["expected_alpha_bps"]))
         if expected > 0 and metrics.total_cost_bps > expected:
             logger.error(
-                "TCA: costs exceed expected alpha order_id=%s "
-                "cost=%.2fbps expected=%.2fbps",
+                "TCA: costs exceed expected alpha order_id=%s cost=%.2fbps expected=%.2fbps",
                 order_id,
                 float(metrics.total_cost_bps),
                 float(expected),
@@ -543,9 +514,7 @@ class TCAEngine:
 
         return Decimal("0")
 
-    def _create_cancelled_metrics(
-        self, order: dict[str, Any], order_id: str
-    ) -> TCAMetrics:
+    def _create_cancelled_metrics(self, order: dict[str, Any], order_id: str) -> TCAMetrics:
         """Create metrics for a cancelled/rejected order."""
         return TCAMetrics(
             order_id=order_id,
@@ -608,13 +577,7 @@ class TCAEngine:
             "mean_isf_bps": float(sum(isf) / len(isf)),
             "mean_fill_rate": sum(fill_rates) / len(fill_rates),
             "win_rate": len([c for c in costs if c < Decimal("10")]) / len(costs),
-            "alpha_positive": (
-                len([m for m in recent if m.alpha_extraction_bps > 0]) / len(recent)
-            ),
-            "adv_source_breakdown": {
-                src: adv_sources.count(src) for src in set(adv_sources)
-            },
-            "vol_source_breakdown": {
-                src: vol_sources.count(src) for src in set(vol_sources)
-            },
+            "alpha_positive": (len([m for m in recent if m.alpha_extraction_bps > 0]) / len(recent)),
+            "adv_source_breakdown": {src: adv_sources.count(src) for src in set(adv_sources)},
+            "vol_source_breakdown": {src: vol_sources.count(src) for src in set(vol_sources)},
         }

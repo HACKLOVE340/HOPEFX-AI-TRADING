@@ -95,7 +95,7 @@ class SimulationEngine:
             bounds = []
             for k in param_keys:
                 v = parameters[k]
-                if isinstance(v, (int, float)):
+                if isinstance(v, int | float):
                     bounds.append((v * 0.5, v * 2.0))
                 else:
                     bounds.append((0.0, 1.0))
@@ -127,7 +127,7 @@ class SimulationEngine:
             rng = np.random.default_rng(42)
             for _ in range(population_size * generations):
                 candidate = {
-                    k: v * rng.uniform(0.5, 2.0) if isinstance(v, (int, float)) else v
+                    k: v * rng.uniform(0.5, 2.0) if isinstance(v, int | float) else v
                     for k, v in parameters.items()
                 }
                 fitness = fitness_function(candidate)

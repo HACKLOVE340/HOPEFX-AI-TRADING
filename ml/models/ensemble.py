@@ -22,6 +22,7 @@ Features:
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -303,8 +304,7 @@ class EnsemblePredictor(BaseMLModel):
                 window[-1] - window[-2] if len(window) >= 2 else 0,  # Momentum 1  # noqa: PLR2004
                 window[-1] - window[-5] if len(window) >= 5 else 0,  # Momentum 5  # noqa: PLR2004
                 np.max(window) - np.min(window),  # Range
-                (window[-1] - np.min(window))
-                / (np.max(window) - np.min(window) + 1e-8),  # %K
+                (window[-1] - np.min(window)) / (np.max(window) - np.min(window) + 1e-8),  # %K
                 np.mean(np.diff(window)),  # Trend
             ]
 
@@ -516,9 +516,7 @@ class EnsemblePredictor(BaseMLModel):
                 # Get XGBoost prediction
                 if "xgboost" in self.models:
                     xgb_pred_scaled = self.models["xgboost"].predict([X_features[i]])[0]
-                    xgb_pred = self.scaler_y.inverse_transform([[xgb_pred_scaled]])[0][
-                        0
-                    ]
+                    xgb_pred = self.scaler_y.inverse_transform([[xgb_pred_scaled]])[0][0]
                     model_predictions["xgboost"] = ModelPrediction(
                         model_name="xgboost",
                         prediction=xgb_pred,
@@ -599,11 +597,7 @@ class EnsemblePredictor(BaseMLModel):
         # This would be compared to current price in practice
 
         # Volatility factor
-        volatility_factor = (
-            np.std(all_predictions) / abs(np.mean(all_predictions))
-            if all_predictions
-            else 0.0
-        )
+        volatility_factor = np.std(all_predictions) / abs(np.mean(all_predictions)) if all_predictions else 0.0
 
         return EnsemblePrediction(
             prediction=final_prediction,
@@ -670,9 +664,7 @@ class EnsemblePredictor(BaseMLModel):
 
         if total_confidence > 0:
             for model_name in self.models:
-                self.model_weights[model_name] = (
-                    confidences[model_name] / total_confidence
-                )
+                self.model_weights[model_name] = confidences[model_name] / total_confidence
 
     def get_model_summary(self) -> dict[str, Any]:
         """Get summary of all models in ensemble."""
@@ -681,13 +673,9 @@ class EnsemblePredictor(BaseMLModel):
             "weights": self.model_weights.copy(),
             "performance": {
                 name: {
-                    "accuracy": perf["correct"] / perf["total"]
-                    if perf["total"] > 0
-                    else 0,
+                    "accuracy": perf["correct"] / perf["total"] if perf["total"] > 0 else 0,
                     "total_predictions": perf["total"],
-                    "recent_mse": np.mean([e**2 for e in perf["recent_errors"][-20:]])
-                    if perf["recent_errors"]
-                    else 0,
+                    "recent_mse": np.mean([e**2 for e in perf["recent_errors"][-20:]]) if perf["recent_errors"] else 0,
                 }
                 for name, perf in self.model_performance.items()
                 if name in self.models

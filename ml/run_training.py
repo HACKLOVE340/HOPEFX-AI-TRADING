@@ -30,6 +30,7 @@ import logging
 import os
 import sys
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -168,11 +169,7 @@ def run_pipeline(
     for name, info in results.items():
         manifest["models"][name] = {
             "path": info.get("model_path", ""),
-            "metrics": {
-                k: v
-                for k, v in (info.get("metrics") or {}).items()
-                if isinstance(v, (int, float))
-            },
+            "metrics": {k: v for k, v in (info.get("metrics") or {}).items() if isinstance(v, int | float)},
         }
 
     manifest_path = os.path.join(out_dir, "manifest.json")

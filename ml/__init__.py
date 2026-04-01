@@ -93,9 +93,7 @@ def _verify_checksum(path: _Path) -> bool:
     try:
         stored = _json.loads(_CHECKSUM_FILE.read_text())
     except Exception as exc:
-        _ml_logger.warning(
-            "Could not read model checksums: %s — skipping verification", exc
-        )
+        _ml_logger.warning("Could not read model checksums: %s — skipping verification", exc)
         return True
 
     name = path.name
@@ -150,9 +148,7 @@ def _try_load(path: _Path) -> _Any | None:
 
         return _joblib.load(path)
     except Exception as _jl_exc:
-        _ml_logger.debug(
-            "joblib.load failed for %s (%s) — trying pickle", path.name, _jl_exc
-        )
+        _ml_logger.debug("joblib.load failed for %s (%s) — trying pickle", path.name, _jl_exc)
         try:
             import pickle as _pickle  # nosec B403
 
@@ -227,8 +223,7 @@ def _load_models() -> None:
                 _n_features = _meta.get("feature_count", "?")
                 _trained_at = _meta.get("trained_at", "?")
                 _ml_logger.info(
-                    "Active ML model: advanced_oos.pkl — "
-                    "OOS acc=%.3f±%.3f  p=%.4f  period=%s  features=%s  trained=%s",
+                    "Active ML model: advanced_oos.pkl — OOS acc=%.3f±%.3f  p=%.4f  period=%s  features=%s  trained=%s",
                     _oos_acc,
                     _oos_se,
                     _oos_p,
@@ -373,9 +368,7 @@ except Exception as _live_inf_exc:
 
 
 __author__ = "HOPEFX Development Team"
-__description__ = (
-    "Machine learning models for price prediction and signal classification"
-)
+__description__ = "Machine learning models for price prediction and signal classification"
 
 
 def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
@@ -420,10 +413,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                 "random_forest": "requires training",
                 "ensemble": "requires training",
             },
-            "note": (
-                "Set FEATURE_ML_PREDICTIONS=true and provide labelled data "
-                "to enable live predictions."
-            ),
+            "note": ("Set FEATURE_ML_PREDICTIONS=true and provide labelled data to enable live predictions."),
         }
 
     @router.get("/features/groups")
@@ -467,9 +457,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         import json as _json
         from pathlib import Path as _Path
 
-        report_path = (
-            _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
-        )
+        report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
         if report_path.exists():
             try:
                 with open(report_path) as f:
@@ -527,9 +515,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         from pathlib import Path as _Path
 
         # Try to load a cached prediction from the report
-        report_path = (
-            _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
-        )
+        report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
         if report_path.exists():
             try:
                 with open(report_path) as f:

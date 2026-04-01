@@ -1025,7 +1025,7 @@ class TestTeamsExtended:
 
     def test_get_user_permissions(self, manager, team_with_owner):
         perms = manager.get_user_permissions(team_with_owner.team_id, "owner1")
-        assert isinstance(perms, (list, set))
+        assert isinstance(perms, list | set)
         assert len(perms) > 0
 
     def test_get_user_permissions_nonexistent(self, manager, team_with_owner):

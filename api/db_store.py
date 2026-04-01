@@ -114,11 +114,7 @@ def db_keys_prefix(prefix: str) -> list[str]:
         session = _get_session()
         if not session:
             return []
-        records = (
-            session.query(Configuration.config_key)
-            .filter(Configuration.config_key.like(f"{prefix}%"))
-            .all()
-        )
+        records = session.query(Configuration.config_key).filter(Configuration.config_key.like(f"{prefix}%")).all()
         return [r[0] for r in records]
     except Exception as exc:
         logger.debug("db_keys_prefix(%s) failed: %s", prefix, exc)

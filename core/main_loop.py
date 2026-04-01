@@ -41,6 +41,7 @@ import pathlib
 import signal
 import sys
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from dotenv import load_dotenv
@@ -140,9 +141,7 @@ class MainLoop:
         # Wait for all tasks to finish (ignore CancelledError)
         results = await asyncio.gather(*self._tasks, return_exceptions=True)
         for task, result in zip(self._tasks, results, strict=False):
-            if isinstance(result, Exception) and not isinstance(
-                result, asyncio.CancelledError
-            ):
+            if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
                 logger.error("MainLoop: task %s raised: %s", task.get_name(), result)
 
         # Stop sub-systems explicitly (some may need clean teardown)
@@ -174,9 +173,7 @@ class MainLoop:
         async for msg in bus.subscribe(CH_BREACH):
             reason = msg.get("reason", "")
             if reason in ("kill_switch", "kill_event", "kill_switch_active"):
-                logger.critical(
-                    "MainLoop: kill event received (reason=%s) — shutting down.", reason
-                )
+                logger.critical("MainLoop: kill event received (reason=%s) — shutting down.", reason)
                 self._shutdown_event.set()
                 return
 
@@ -184,11 +181,7 @@ class MainLoop:
 
     async def _checkpoint(self) -> None:
         """Write final state snapshot to disk."""
-        uptime_s = (
-            (datetime.now(UTC) - self._start_time).total_seconds()
-            if self._start_time
-            else 0
-        )
+        uptime_s = (datetime.now(UTC) - self._start_time).total_seconds() if self._start_time else 0
         state = {
             "timestamp": datetime.now(UTC).isoformat(),
             "uptime_s": round(uptime_s, 1),
@@ -296,10 +289,7 @@ def _verify_model_registry() -> None:
         # Bootstrap registry.json from existing artifacts if it doesn't exist
         manifest = reg._load()
         if not manifest["versions"]:
-            logger.info(
-                "ModelRegistry: registry.json is empty — bootstrapping from "
-                "advanced_oos_meta.json …"
-            )
+            logger.info("ModelRegistry: registry.json is empty — bootstrapping from advanced_oos_meta.json …")
             entry = reg.bootstrap_from_meta(name="advanced_oos_v1", promote=False)
             if entry:
                 logger.info(
@@ -309,8 +299,7 @@ def _verify_model_registry() -> None:
                 )
             else:
                 logger.warning(
-                    "ModelRegistry: bootstrap failed — advanced_oos.pkl not found. "
-                    "Train a model before deploying."
+                    "ModelRegistry: bootstrap failed — advanced_oos.pkl not found. Train a model before deploying."
                 )
             return
 

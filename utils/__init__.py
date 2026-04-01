@@ -234,7 +234,7 @@ def parse_timestamp(timestamp: Any) -> datetime:
     """Parse various timestamp formats"""
     if isinstance(timestamp, datetime):
         return timestamp
-    if isinstance(timestamp, (int, float)):
+    if isinstance(timestamp, int | float):
         # Assume milliseconds if large number
         if timestamp > 1e10:  # noqa: PLR2004
             timestamp = timestamp / 1000

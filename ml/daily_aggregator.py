@@ -76,7 +76,8 @@ def needs_resampling(ohlcv: pd.DataFrame) -> bool:
     if not isinstance(ohlcv.index, pd.DatetimeIndex):
         return False  # can't determine frequency without a DatetimeIndex
 
-    if len(ohlcv) < 2:
+    _MIN_OHLCV_ROWS = 2
+    if len(ohlcv) < _MIN_OHLCV_ROWS:
         return False
 
     try:
@@ -140,25 +141,19 @@ def to_daily(
             return ohlcv if len(ohlcv) >= min_bars else None
 
         agg: dict[str, str] = {
-            "open":  "first",
-            "high":  "max",
-            "low":   "min",
+            "open": "first",
+            "high": "max",
+            "low": "min",
             "close": "last",
         }
         if "volume" in ohlcv.columns:
             agg["volume"] = "sum"
 
-        daily = (
-            ohlcv[list(agg.keys())]
-            .resample("1D")
-            .agg(agg)
-            .dropna(subset=["close"])
-        )
+        daily = ohlcv[list(agg.keys())].resample("1D").agg(agg).dropna(subset=["close"])
 
         if len(daily) < min_bars:
             logger.debug(
-                "to_daily: only %d daily bars after resampling (need %d) — "
-                "returning None so caller can abstain",
+                "to_daily: only %d daily bars after resampling (need %d) — returning None so caller can abstain",
                 len(daily),
                 min_bars,
             )

@@ -192,7 +192,7 @@ class _InMemoryStore:
         with self._lock:
             return {
                 "used_memory": sum(
-                    len(v) for v in self._data.values() if isinstance(v, (str, bytes))
+                    len(v) for v in self._data.values() if isinstance(v, str | bytes)
                 )
             }
 

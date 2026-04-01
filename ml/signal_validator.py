@@ -50,6 +50,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 
@@ -106,18 +107,12 @@ class ValidationReport:
             f"Signal Distribution Validation — {self.status.value.upper()}",
             f"  OOS samples: {self.oos_sample_size}  Live samples: {self.live_sample_size}",
             f"  PSI: {self.psi:.4f}" if self.psi is not None else "  PSI: —",
-            f"  KS p-value: {self.ks_p_value:.4f}"
-            if self.ks_p_value is not None
-            else "  KS p-value: —",
-            f"  Mean drift: {self.mean_drift_sigma:.2f}σ"
-            if self.mean_drift_sigma is not None
-            else "  Mean drift: —",
+            f"  KS p-value: {self.ks_p_value:.4f}" if self.ks_p_value is not None else "  KS p-value: —",
+            f"  Mean drift: {self.mean_drift_sigma:.2f}σ" if self.mean_drift_sigma is not None else "  Mean drift: —",
         ]
         for c in self.checks:
             icon = (
-                "✓"
-                if c.status == ValidationStatus.PASSED
-                else ("⚠" if c.status == ValidationStatus.WARNING else "✗")
+                "✓" if c.status == ValidationStatus.PASSED else ("⚠" if c.status == ValidationStatus.WARNING else "✗")
             )
             lines.append(f"  {icon} {c.name}: {c.message}")
         return "\n".join(lines)
@@ -238,10 +233,7 @@ class SignalDistributionValidator:
                     status=ValidationStatus.INSUFFICIENT_DATA,
                     value=min(len(oos), len(live)),
                     threshold=self.min_samples,
-                    message=(
-                        f"Insufficient samples: OOS={len(oos)}, live={len(live)}, "
-                        f"minimum={self.min_samples}"
-                    ),
+                    message=(f"Insufficient samples: OOS={len(oos)}, live={len(live)}, minimum={self.min_samples}"),
                 )
             )
             return report
@@ -257,11 +249,7 @@ class SignalDistributionValidator:
         ks_stat, ks_p = _stats.ks_2samp(oos_scores, live_scores)
         report.ks_statistic = float(ks_stat)
         report.ks_p_value = float(ks_p)
-        ks_status = (
-            ValidationStatus.PASSED
-            if ks_p >= self.ks_p_threshold
-            else ValidationStatus.WARNING
-        )
+        ks_status = ValidationStatus.PASSED if ks_p >= self.ks_p_threshold else ValidationStatus.WARNING
         checks.append(
             CheckResult(
                 name="ks_test",
@@ -307,21 +295,14 @@ class SignalDistributionValidator:
         live_mean = float(np.mean(live_scores))
         drift_sigma = abs(live_mean - oos_mean) / max(oos_std, 1e-10)
         report.mean_drift_sigma = float(drift_sigma)
-        mean_status = (
-            ValidationStatus.PASSED
-            if drift_sigma <= self.mean_drift_sigma
-            else ValidationStatus.WARNING
-        )
+        mean_status = ValidationStatus.PASSED if drift_sigma <= self.mean_drift_sigma else ValidationStatus.WARNING
         checks.append(
             CheckResult(
                 name="mean_drift",
                 status=mean_status,
                 value=float(drift_sigma),
                 threshold=self.mean_drift_sigma,
-                message=(
-                    f"Mean drift {drift_sigma:.2f}σ "
-                    f"(OOS μ={oos_mean:.4f}, live μ={live_mean:.4f})"
-                ),
+                message=(f"Mean drift {drift_sigma:.2f}σ (OOS μ={oos_mean:.4f}, live μ={live_mean:.4f})"),
             )
         )
 
@@ -339,10 +320,7 @@ class SignalDistributionValidator:
                 status=bias_status,
                 value=float(bias_drift),
                 threshold=0.15,
-                message=(
-                    f"BUY rate: OOS={oos_buy_rate:.2%}, live={live_buy_rate:.2%}, "
-                    f"drift={bias_drift:.2%}"
-                ),
+                message=(f"BUY rate: OOS={oos_buy_rate:.2%}, live={live_buy_rate:.2%}, drift={bias_drift:.2%}"),
             )
         )
 
@@ -360,10 +338,7 @@ class SignalDistributionValidator:
                 status=conf_status,
                 value=float(conf_drift),
                 threshold=0.10,
-                message=(
-                    f"Confidence: OOS μ={oos_conf_mean:.3f}, live μ={live_conf_mean:.3f}, "
-                    f"drift={conf_drift:.3f}"
-                ),
+                message=(f"Confidence: OOS μ={oos_conf_mean:.3f}, live μ={live_conf_mean:.3f}, drift={conf_drift:.3f}"),
             )
         )
 

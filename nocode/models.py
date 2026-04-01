@@ -95,7 +95,7 @@ class Condition:
         """Evaluate the condition against current data."""
         left_value = self._get_value(self.left_indicator, data)
 
-        if isinstance(self.right_indicator, (int, float)):
+        if isinstance(self.right_indicator, int | float):
             right_value = self.right_indicator
         else:
             right_value = self._get_value(self.right_indicator, data)
@@ -220,7 +220,7 @@ class NoCodeStrategy:
                             },
                             "operator": c.operator.value,
                             "right": c.right_indicator
-                            if isinstance(c.right_indicator, (int, float))
+                            if isinstance(c.right_indicator, int | float)
                             else {
                                 "type": c.right_indicator.indicator_type.value,
                                 "period": c.right_indicator.period,

@@ -51,6 +51,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,7 @@ _OOS_MIN_ACC = float(os.getenv("LIVE_GATE_OOS_MIN_ACC", "0.60"))
 _OOS_MAX_PVAL = float(os.getenv("LIVE_GATE_OOS_MAX_PVAL", "0.05"))
 _MIN_TRADES = int(os.getenv("LIVE_GATE_MIN_TRADES", "600"))
 _PAPER_DAYS = int(os.getenv("LIVE_GATE_PAPER_DAYS", "30"))
+_MAX_SHARPE_SE = float(os.getenv("LIVE_GATE_MAX_SHARPE_SE", "0.10"))
 
 
 @dataclass
@@ -75,9 +77,7 @@ class GateResult:
     allowed: bool
     checks: dict[str, dict[str, Any]] = field(default_factory=dict)
     reason: str = ""
-    checked_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    checked_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -134,8 +134,7 @@ class LiveTradingGate:
                 except Exception as _exc:
                     logger.debug("Suppressed exception: %s", _exc)
                 return False, (
-                    f"Paper clock incomplete: {elapsed:.1f}/{_PAPER_DAYS} days elapsed. "
-                    f"{remaining:.1f} days remaining."
+                    f"Paper clock incomplete: {elapsed:.1f}/{_PAPER_DAYS} days elapsed. {remaining:.1f} days remaining."
                 )
             return True, f"Paper clock complete: {elapsed:.1f} days elapsed"
         except Exception as exc:
@@ -177,9 +176,7 @@ class LiveTradingGate:
                 logger.debug("OOS meta read failed for %s: %s", path, exc)
                 continue
 
-        return False, (
-            "OOS metadata not found. Run: python ml/train_advanced.py --years 50 --oos-years 3"
-        )
+        return False, ("OOS metadata not found. Run: python ml/train_advanced.py --years 50 --oos-years 3")
 
     def _check_sharpe_gate(self) -> tuple[bool, str]:
         """Check 4: N >= 600 pooled trades with SE <= 0.10 (Sharpe SE gate).
@@ -207,6 +204,7 @@ class LiveTradingGate:
                     )
                     try:
                         from monitoring.sentry_config import capture_sharpe_gate_alert
+
                         capture_sharpe_gate_alert(n_trades=0, sharpe=0.0, se=999.0)
                     except Exception as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
@@ -222,6 +220,7 @@ class LiveTradingGate:
                 if not gate_passed:
                     try:
                         from monitoring.sentry_config import capture_sharpe_gate_alert
+
                         capture_sharpe_gate_alert(n_trades=n_total, sharpe=sharpe, se=se)
                     except Exception as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
@@ -257,14 +256,9 @@ class LiveTradingGate:
                     gate_passed = bool(mse.get("sharpe_gate_passed", False))
                     n = int(mse.get("pooled_n_trades", 0))
                     se = float(mse.get("pooled_sharpe_se", 999.0))
-                    if gate_passed and se <= 0.10:
-                        return True, (
-                            f"Sharpe gate passed (extended backtest): N={n}, SE={se:.3f}"
-                        )
-                    return False, (
-                        f"Sharpe gate BLOCKED (extended backtest): N={n}, SE={se:.3f}. "
-                        f"Need SE<=0.10."
-                    )
+                    if gate_passed and se <= _MAX_SHARPE_SE:
+                        return True, (f"Sharpe gate passed (extended backtest): N={n}, SE={se:.3f}")
+                    return False, (f"Sharpe gate BLOCKED (extended backtest): N={n}, SE={se:.3f}. Need SE<=0.10.")
 
                 # 4. OOS bar count from primary sharpe_gate block
                 sg = meta.get("sharpe_gate", {})
@@ -281,8 +275,7 @@ class LiveTradingGate:
                 logger.debug("OOS meta sharpe gate read failed: %s", exc)
 
         return False, (
-            "Sharpe gate: no backtest report found. "
-            "Run: python backtest/multi_symbol_backtest.py --years 10"
+            "Sharpe gate: no backtest report found. Run: python backtest/multi_symbol_backtest.py --years 10"
         )
 
     def _check_feature_flag(self) -> tuple[bool, str]:
@@ -291,8 +284,7 @@ class LiveTradingGate:
         enabled = os.getenv("FEATURE_LIVE_TRADING", "false").lower() == "true"
         if not enabled:
             return False, (
-                "FEATURE_LIVE_TRADING is not set to 'true'. "
-                "Set this env var only after all other gates pass."
+                "FEATURE_LIVE_TRADING is not set to 'true'. Set this env var only after all other gates pass."
             )
         return True, "FEATURE_LIVE_TRADING=true"
 

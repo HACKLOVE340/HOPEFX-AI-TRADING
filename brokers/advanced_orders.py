@@ -19,6 +19,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from threading import Lock
@@ -217,9 +218,7 @@ class ConditionalOrder:
             "condition_logic": self.condition_logic,
             "status": self.status.value,
             "evaluation_count": self.evaluation_count,
-            "last_evaluated": self.last_evaluated.isoformat()
-            if self.last_evaluated
-            else None,
+            "last_evaluated": self.last_evaluated.isoformat() if self.last_evaluated else None,
             "created_at": self.created_at.isoformat(),
         }
 
@@ -604,9 +603,7 @@ class AdvancedOrderManager:
             ScaledOrder
         """
         # Calculate price levels
-        price_step = (
-            (end_price - start_price) / (num_levels - 1) if num_levels > 1 else 0
-        )
+        price_step = (end_price - start_price) / (num_levels - 1) if num_levels > 1 else 0
         prices = [start_price + (i * price_step) for i in range(num_levels)]
 
         # Calculate quantities based on distribution
@@ -685,15 +682,9 @@ class AdvancedOrderManager:
 
             # Check activation
             if order.activation_price:
-                if (
-                    order.side == OrderSide.SELL
-                    and current_price < order.activation_price
-                ):
+                if order.side == OrderSide.SELL and current_price < order.activation_price:
                     return None  # Not yet activated
-                if (
-                    order.side == OrderSide.BUY
-                    and current_price > order.activation_price
-                ):
+                if order.side == OrderSide.BUY and current_price > order.activation_price:
                     return None
 
             # Update highest/lowest price
@@ -885,11 +876,7 @@ class AdvancedOrderManager:
     def get_open_orders(self, symbol: str = None) -> list[Order]:
         """Get all open orders, optionally filtered by symbol."""
         with self._lock:
-            open_orders = [
-                o
-                for o in self.orders.values()
-                if o.status in [OrderStatus.PENDING, OrderStatus.OPEN]
-            ]
+            open_orders = [o for o in self.orders.values() if o.status in [OrderStatus.PENDING, OrderStatus.OPEN]]
             if symbol:
                 open_orders = [o for o in open_orders if o.symbol == symbol]
             return open_orders
@@ -900,25 +887,13 @@ class AdvancedOrderManager:
             return {
                 **self.stats,
                 "active_orders": len(
-                    [
-                        o
-                        for o in self.orders.values()
-                        if o.status in [OrderStatus.PENDING, OrderStatus.OPEN]
-                    ],
+                    [o for o in self.orders.values() if o.status in [OrderStatus.PENDING, OrderStatus.OPEN]],
                 ),
                 "active_oco": len(
-                    [
-                        o
-                        for o in self.oco_orders.values()
-                        if o.status == OrderStatus.PENDING
-                    ],
+                    [o for o in self.oco_orders.values() if o.status == OrderStatus.PENDING],
                 ),
                 "active_brackets": len(
-                    [
-                        b
-                        for b in self.bracket_orders.values()
-                        if b.status in [OrderStatus.PENDING, OrderStatus.OPEN]
-                    ],
+                    [b for b in self.bracket_orders.values() if b.status in [OrderStatus.PENDING, OrderStatus.OPEN]],
                 ),
                 "trailing_stops": len(self.trailing_stops),
                 "conditional_orders": len(self.conditional_orders),

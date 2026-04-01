@@ -210,9 +210,7 @@ class BaseStrategy(ABC):
         metrics = self.performance_metrics.copy()
 
         if metrics["total_signals"] > 0:
-            metrics["win_rate"] = (
-                metrics["winning_signals"] / metrics["total_signals"] * 100
-            )
+            metrics["win_rate"] = metrics["winning_signals"] / metrics["total_signals"] * 100
         else:
             metrics["win_rate"] = 0.0
 
@@ -265,9 +263,7 @@ class BaseStrategy(ABC):
 
         total = self.performance_metrics["total_signals"]
         wins = self.performance_metrics["winning_trades"]
-        self.performance_metrics["win_rate"] = (
-            (wins / total * 100.0) if total > 0 else 0.0
-        )
+        self.performance_metrics["win_rate"] = (wins / total * 100.0) if total > 0 else 0.0
 
     def __repr__(self) -> str:
         return (

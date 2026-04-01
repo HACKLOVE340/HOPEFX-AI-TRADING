@@ -190,7 +190,7 @@ class StrategyAuditor:
 
         found = []
         for node in ast.walk(tree):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
+            if isinstance(node, ast.Import | ast.ImportFrom):
                 names = (
                     [a.name for a in node.names]
                     if isinstance(node, ast.Import)

@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -93,16 +94,12 @@ async def _get_redis() -> Any | None:
 
 class ApproveFixRequest(BaseModel):
     endpoint: str = Field(..., description="API endpoint path of the fix to approve")
-    approved_by: str = Field(
-        default="dashboard", description="Identifier of the approver"
-    )
+    approved_by: str = Field(default="dashboard", description="Identifier of the approver")
 
 
 class DeclineFixRequest(BaseModel):
     endpoint: str = Field(..., description="API endpoint path of the fix to decline")
-    declined_by: str = Field(
-        default="dashboard", description="Identifier of the decliner"
-    )
+    declined_by: str = Field(default="dashboard", description="Identifier of the decliner")
     reason: str | None = Field(default=None, description="Optional decline reason")
 
 

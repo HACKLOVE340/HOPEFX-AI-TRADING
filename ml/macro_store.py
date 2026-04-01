@@ -110,9 +110,7 @@ class MacroStore:
         """
         p = Path(path)
         if not p.exists():
-            logger.debug(
-                "MacroStore.load_csv: %s not found — skipping %s", p, series_name
-            )
+            logger.debug("MacroStore.load_csv: %s not found — skipping %s", p, series_name)
             return 0
         try:
             df = pd.read_csv(p, parse_dates=[date_col])
@@ -121,9 +119,7 @@ class MacroStore:
             df["date"] = pd.to_datetime(df["date"], utc=True)
             series = df.set_index("date")["value"].sort_index()
             self._series[series_name] = series
-            logger.info(
-                "MacroStore: loaded %d rows for %s from %s", len(series), series_name, p
-            )
+            logger.info("MacroStore: loaded %d rows for %s from %s", len(series), series_name, p)
             return len(series)
         except Exception as exc:
             logger.warning("MacroStore.load_csv failed for %s: %s", series_name, exc)
@@ -194,9 +190,7 @@ class MacroStore:
 
         names = series or list(self._series.keys())
         if not names:
-            logger.debug(
-                "MacroStore.align_to_hourly: no series loaded — returning empty"
-            )
+            logger.debug("MacroStore.align_to_hourly: no series loaded — returning empty")
             return pd.DataFrame(index=ohlcv_h1.index)
 
         aligned_cols: dict[str, pd.Series] = {}

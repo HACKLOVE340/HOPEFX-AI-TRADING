@@ -40,6 +40,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -255,6 +256,8 @@ def _get_redis():
         return client
     except Exception:  # nosec B110 - Redis may be unavailable at startup
         return None
+
+
 async def _publish_in_process(channel: str, payload: str) -> None:
     """Fallback: publish via the async Redis event bus."""
     try:

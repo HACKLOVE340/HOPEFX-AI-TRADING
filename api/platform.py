@@ -51,6 +51,7 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -77,9 +78,7 @@ _flag_overrides: dict[str, dict[str, bool]] = {}  # flag_name → {user_id: bool
 
 # ── Admin role guard ──────────────────────────────────────────────────────────
 
-_ADMIN_USERS: set = set(
-    u.strip() for u in os.getenv("ADMIN_USER_IDS", "admin").split(",") if u.strip()
-)
+_ADMIN_USERS: set = set(u.strip() for u in os.getenv("ADMIN_USER_IDS", "admin").split(",") if u.strip())
 
 
 def _require_admin(user: TokenPayload) -> TokenPayload:
@@ -147,11 +146,7 @@ def _log_audit(user_id: str, event_type: str, detail: str, ip: str = ""):
 @router.get("/api/auth/sessions")
 async def list_sessions(user: TokenPayload = Depends(get_current_user)):
     """List all active sessions for the current user."""
-    user_sessions = [
-        s
-        for s in _sessions.values()
-        if s["user_id"] == user.sub and not s.get("revoked")
-    ]
+    user_sessions = [s for s in _sessions.values() if s["user_id"] == user.sub and not s.get("revoked")]
     return {"sessions": user_sessions, "total": len(user_sessions)}
 
 
@@ -220,19 +215,11 @@ def _get_users_from_subscriptions() -> dict[str, dict]:
                 _users_admin[uid] = {
                     "user_id": uid,
                     "email": getattr(sub, "email", f"{uid}@unknown"),
-                    "status": sub.status.value
-                    if hasattr(sub.status, "value")
-                    else str(sub.status),
-                    "tier": sub.tier.value
-                    if hasattr(sub.tier, "value")
-                    else str(sub.tier),
+                    "status": sub.status.value if hasattr(sub.status, "value") else str(sub.status),
+                    "tier": sub.tier.value if hasattr(sub.tier, "value") else str(sub.tier),
                     "subscription_id": sub.subscription_id,
-                    "created_at": sub.created_at.isoformat()
-                    if hasattr(sub, "created_at")
-                    else "",
-                    "expires_at": sub.end_date.isoformat()
-                    if hasattr(sub, "end_date") and sub.end_date
-                    else None,
+                    "created_at": sub.created_at.isoformat() if hasattr(sub, "created_at") else "",
+                    "expires_at": sub.end_date.isoformat() if hasattr(sub, "end_date") and sub.end_date else None,
                 }
     except Exception as exc:
         logger.debug("_get_users_from_subscriptions fallback: %s", exc)
@@ -312,9 +299,7 @@ async def reset_password(user_id: str, admin: TokenPayload = Depends(get_current
             )
     except Exception as exc:
         logger.warning("reset_password.email_failed: %s", exc)
-    _log_audit(
-        admin.sub, "user.password_reset", f"Password reset triggered for {user_id}"
-    )
+    _log_audit(admin.sub, "user.password_reset", f"Password reset triggered for {user_id}")
     return {"reset_triggered": True, "user_id": user_id}
 
 
@@ -332,13 +317,7 @@ async def get_user_trades(
 
         # Query real trades if DB is available
         db = next(get_db())
-        rows = (
-            db.query(Trade)
-            .filter(Trade.user_id == user_id)
-            .order_by(Trade.created_at.desc())
-            .limit(100)
-            .all()
-        )
+        rows = db.query(Trade).filter(Trade.user_id == user_id).order_by(Trade.created_at.desc()).limit(100).all()
         trades = [
             {
                 "trade_id": str(r.id),
@@ -347,9 +326,7 @@ async def get_user_trades(
                 "lots": float(r.quantity),
                 "pnl": float(r.pnl) if r.pnl is not None else None,
                 "opened_at": r.created_at.isoformat() if r.created_at else None,
-                "closed_at": r.closed_at.isoformat()
-                if hasattr(r, "closed_at") and r.closed_at
-                else None,
+                "closed_at": r.closed_at.isoformat() if hasattr(r, "closed_at") and r.closed_at else None,
             }
             for r in rows
         ]
@@ -371,9 +348,7 @@ async def impersonate_user(
     Admin only. Token expires in 5 minutes.
     """
     _require_admin(admin)
-    _log_audit(
-        admin.sub, "user.impersonated", f"Admin {admin.sub} impersonating {user_id}"
-    )
+    _log_audit(admin.sub, "user.impersonated", f"Admin {admin.sub} impersonating {user_id}")
 
     try:
         import time
@@ -398,9 +373,7 @@ async def impersonate_user(
         }
     except Exception as exc:
         logger.error("impersonate_user.jwt_failed: %s", exc)
-        raise HTTPException(
-            status_code=500, detail="Could not generate impersonation token"
-        ) from exc
+        raise HTTPException(status_code=500, detail="Could not generate impersonation token") from exc
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -472,11 +445,7 @@ class CreateApiKeyBody(BaseModel):
 @router.get("/api/settings/api-keys")
 async def list_api_keys(user: TokenPayload = Depends(get_current_user)):
     """List all API keys for the current user (never returns raw key)."""
-    keys = [
-        k
-        for k in _api_keys.values()
-        if k["user_id"] == user.sub and not k.get("revoked")
-    ]
+    keys = [k for k in _api_keys.values() if k["user_id"] == user.sub and not k.get("revoked")]
     return {"api_keys": keys}
 
 

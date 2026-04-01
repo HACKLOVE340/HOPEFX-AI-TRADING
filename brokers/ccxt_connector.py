@@ -27,6 +27,7 @@ Usage:
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -189,11 +190,7 @@ class CCXTConnector(BrokerConnector):
         try:
             if self._exchange.has.get("fetchPositions"):
                 raws = self._exchange.fetch_positions()
-                return [
-                    self._parse_position(p)
-                    for p in raws
-                    if float(p.get("contracts") or p.get("size") or 0) != 0
-                ]
+                return [self._parse_position(p) for p in raws if float(p.get("contracts") or p.get("size") or 0) != 0]
             # Spot fallback: derive from balance
             balance = self._exchange.fetch_balance()
             positions = []
@@ -341,11 +338,7 @@ class CCXTConnector(BrokerConnector):
         )
 
     def _parse_position(self, raw: dict) -> Position:
-        side = (
-            "LONG"
-            if float(raw.get("contracts") or raw.get("size") or 0) > 0
-            else "SHORT"
-        )
+        side = "LONG" if float(raw.get("contracts") or raw.get("size") or 0) > 0 else "SHORT"
         return Position(
             symbol=raw.get("symbol", ""),
             side=side,
