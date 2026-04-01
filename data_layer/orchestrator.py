@@ -77,6 +77,7 @@ from data_layer.calendar.engine import MacroCalendarEngine, macro_calendar_engin
 from data_layer.feeds.gold.manager import GoldFeedManager
 from data_layer.feeds.macro.store_bridge import MacroStoreBridge, macro_store_bridge
 from data_layer.feeds.macro.cftc_cot import CFTCCOTFeed, cot_feed
+from data_layer.feeds.macro.imf_gold import IMFGoldFeed, imf_gold_feed
 from data_layer.lineage.store import DataLineageStore, lineage_store
 from data_layer.microstructure.engine import MicrostructureEngine, microstructure_engine
 from data_layer.normalization.pipeline import (
@@ -118,6 +119,7 @@ class MarketDataOrchestrator:
         self._calendar: MacroCalendarEngine = macro_calendar_engine
         self._macro_bridge: MacroStoreBridge = macro_store_bridge
         self._cot_feed: CFTCCOTFeed = cot_feed
+        self._imf_feed: IMFGoldFeed = imf_gold_feed
         self._lineage: DataLineageStore = lineage_store
         self._norm: NormalizationPipeline = normalization_pipeline
         self._replay: MarketReplayEngine = market_replay_engine
@@ -248,7 +250,14 @@ class MarketDataOrchestrator:
         except Exception as exc:
             logger.warning("MarketDataOrchestrator: COT feed error: %s", exc)
 
-        # 8. Ensure macro CSV fallback is loaded so features are never zero
+        # 8. IMF central bank gold reserves (free, monthly)
+        try:
+            await self._imf_feed.start()
+            logger.info("MarketDataOrchestrator: IMFGoldFeed started")
+        except Exception as exc:
+            logger.warning("MarketDataOrchestrator: IMF feed error: %s", exc)
+
+        # 9. Ensure macro CSV fallback is loaded so features are never zero
         #    at startup even without a FRED key or network access.
         try:
             from ml.macro_store import macro_store as _ms
@@ -288,6 +297,12 @@ class MarketDataOrchestrator:
             await self._cot_feed.stop()
         except Exception as exc:
             logger.debug("CFTCCOTFeed stop error: %s", exc)
+
+        # 1b. IMF feed
+        try:
+            await self._imf_feed.stop()
+        except Exception as exc:
+            logger.debug("IMFGoldFeed stop error: %s", exc)
 
         # 2. Macro bridge (FRED sessions)
         try:
