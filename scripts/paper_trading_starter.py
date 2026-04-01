@@ -325,21 +325,57 @@ class PaperTradingRunner:
             }
         )
 
-    # ── signal generation (momentum) ─────────────────────────────────────────
+    # ── signal generation (ML engine) ────────────────────────────────────────
 
     def _generate_signal(self, instrument: str, price: float) -> str | None:
         """
-        Simple 20-bar SMA momentum signal.
-        Returns "BUY", "SELL", or None.
-        Replace with hopefx_engine.generate_signal() for production.
+        Generate a trading signal using the production ML model.
+
+        Calls core.signal_engine.SignalEngine if available, otherwise falls
+        back to the 20-bar SMA momentum rule for smoke testing.
+
+        Returns "BUY", "SELL", or None (abstain).
         """
+        # Accumulate price history for both ML features and SMA fallback
         history = self._price_history[instrument]
         history.append(price)
-        if len(history) > 20:  # noqa: PLR2004
+        if len(history) > 200:
             history.pop(0)
-        if len(history) < 20:  # noqa: PLR2004
+
+        # Try ML signal engine first
+        try:
+            from core.signal_engine import _compute_ml_probability
+            import numpy as np
+
+            if len(history) >= 50:
+                # Build minimal OHLCV dict from price history for ML features
+                closes = history[-100:] if len(history) >= 100 else history
+                ohlcv_data = {
+                    "close": closes,
+                    "open": closes,
+                    "high": [p * 1.001 for p in closes],
+                    "low": [p * 0.999 for p in closes],
+                    "volume": [10000.0] * len(closes),
+                }
+                prob = _compute_ml_probability(
+                    ohlcv_data,
+                    symbol=instrument.replace("_", ""),
+                )
+                threshold_long = float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.60"))
+                threshold_short = float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.40"))
+                logger.debug("ML prob: %s %.4f", instrument, prob)
+                if prob >= threshold_long:
+                    return "BUY"
+                if prob <= threshold_short:
+                    return "SELL"
+                return None  # abstain
+        except Exception as exc:
+            logger.debug("ML engine unavailable (%s) — using SMA fallback", exc)
+
+        # SMA fallback (used when ML engine not yet bootstrapped)
+        if len(history) < 20:
             return None
-        sma = sum(history) / len(history)
+        sma = sum(history[-20:]) / 20
         if price > sma * 1.001:
             return "BUY"
         if price < sma * 0.999:
