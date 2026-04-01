@@ -338,7 +338,7 @@ _INDICATOR_ALLOWED_NODES = (
 )
 
 
-def _validate_indicator_formula(formula_stripped: str) -> None:
+def _validate_indicator_formula(formula_stripped: str) -> "ast.Expression":  # type: ignore[name-defined]
     """
     Validate *formula_stripped* against the indicator AST whitelist.
 
@@ -353,6 +353,9 @@ def _validate_indicator_formula(formula_stripped: str) -> None:
     - Arithmetic operators: +, -, *, /, **, //, %  (unary -, unary +)
     - Function calls to EMA, SMA, RSI only
     - Parentheses for grouping
+
+    Returns the parsed ``ast.Expression`` so callers can reuse it without
+    a second ``ast.parse`` call.
     """
     import ast
 
@@ -392,6 +395,7 @@ def _validate_indicator_formula(formula_stripped: str) -> None:
     except SyntaxError as exc:
         raise ValueError(f"Formula syntax error: {exc}") from exc
     _check_node(tree)
+    return tree
 
 
 def _interp_formula_tree(tree: "ast.Expression", name_map: dict, fn_map: dict):  # type: ignore[name-defined]
@@ -466,10 +470,8 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     Delegates validation to ``_validate_indicator_formula`` and
     evaluation to ``_interp_formula_tree``.
     """
-    import ast
-
     formula_stripped = formula.strip()
-    _validate_indicator_formula(formula_stripped)
+    validated_tree = _validate_indicator_formula(formula_stripped)
 
     # ── Build data namespace ──────────────────────────────────────────────────
     ohlcv = _load_ohlcv_for_indicator(symbol, periods)
@@ -516,8 +518,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     }
 
     try:
-        tree = ast.parse(formula_stripped, mode="eval")
-        result = _interp_formula_tree(tree, name_map, fn_map)
+        result = _interp_formula_tree(validated_tree, name_map, fn_map)
     except Exception as exc:
         raise ValueError(f"Formula evaluation error: {exc}") from exc
 
@@ -590,7 +591,6 @@ async def delete_indicator(ind_id: str, user: TokenPayload = Depends(get_current
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.get("/api/correlation")
 async def _collect_return_series(
     sym_list: list[str],
     window: int,
@@ -704,6 +704,7 @@ def _compute_correlation_matrix(
     return matrix, insights
 
 
+@router.get("/api/correlation")
 async def get_correlation(
     symbols: str = "XAU/USD,EUR/USD,DXY,SPX,US10Y,VIX",
     window: int = 30,
