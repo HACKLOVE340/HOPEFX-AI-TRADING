@@ -294,7 +294,6 @@ class OrderFlowDashboard:
         volume: float,
         side: str,
         timestamp: datetime | None = None,
-        trade_id: str | None = None,
     ) -> None:
         """
         Add a trade tick to the dashboard components.
@@ -305,33 +304,76 @@ class OrderFlowDashboard:
             volume: Trade volume/size
             side: 'buy' or 'sell'
             timestamp: Trade timestamp (defaults to now)
-            trade_id: Optional unique trade identifier
         """
         if self._ts is not None:
             try:
-                self._ts.add_trade(
-                    symbol,
-                    price,
-                    volume,
-                    side,
-                    timestamp=timestamp,
-                    trade_id=trade_id,
-                )
+                self._ts.add_trade(symbol, price, volume, side, timestamp)
             except Exception as exc:
                 logger.warning("Time & Sales add_trade error for %s: %s", symbol, exc)
 
         if self._ofa is not None:
             try:
-                self._ofa.add_trade(
-                    symbol,
-                    price,
-                    volume,
-                    side,
-                    timestamp=timestamp,
-                    trade_id=trade_id,
-                )
+                self._ofa.add_trade(symbol, price, volume, side, timestamp)
             except Exception as exc:
                 logger.warning("Order flow add_trade error for %s: %s", symbol, exc)
+
+    # ----------------------------------------------------------------
+    # Summary helpers
+    # ----------------------------------------------------------------
+
+    def _summary_dom(self, symbol: str, result: dict) -> None:
+        """Populate DOM fields in *result* in-place."""
+        if self._dom is None:
+            return
+        try:
+            dom_analysis = self._dom.get_order_book_analysis(symbol)
+            if dom_analysis:
+                dom_dict = dom_analysis.to_dict() if hasattr(dom_analysis, "to_dict") else {}
+                result["dom_imbalance"] = dom_dict.get("imbalance_ratio")
+                result["spread"] = dom_dict.get("spread")
+        except Exception as exc:
+            logger.warning("DOM summary error for %s: %s", symbol, exc)
+
+    def _summary_order_flow(self, symbol: str, lookback_minutes: int, result: dict) -> None:
+        """Populate order-flow fields in *result* in-place."""
+        if self._ofa is None:
+            return
+        try:
+            of_analysis = self._ofa.analyze(symbol, lookback_minutes=lookback_minutes)
+            if of_analysis:
+                of_dict = of_analysis.to_dict() if hasattr(of_analysis, "to_dict") else {}
+                result["cumulative_delta"] = of_dict.get("cumulative_delta")
+                result["buy_pressure"] = of_dict.get("buy_volume")
+                result["sell_pressure"] = of_dict.get("sell_volume")
+        except Exception as exc:
+            logger.warning("Order flow summary error for %s: %s", symbol, exc)
+
+    def _summary_institutional(self, symbol: str, lookback_minutes: int, result: dict) -> None:
+        """Populate smart-money field in *result* in-place."""
+        if self._inst is None:
+            return
+        try:
+            smart = self._inst.get_smart_money_direction(symbol, lookback_minutes=lookback_minutes)
+            if smart is not None:
+                if hasattr(smart, "to_dict"):
+                    direction = smart.to_dict().get("direction")
+                elif hasattr(smart, "direction"):
+                    direction = smart.direction
+                else:
+                    direction = smart
+                result["smart_money_direction"] = direction
+        except Exception as exc:
+            logger.warning("Institutional summary error for %s: %s", symbol, exc)
+
+    def _summary_advanced(self, symbol: str, lookback_minutes: int, result: dict) -> None:
+        """Populate large-order-count field in *result* in-place."""
+        if self._adv is None:
+            return
+        try:
+            stacked = self._adv.get_stacked_imbalances(symbol, lookback_minutes=lookback_minutes)
+            result["large_order_count"] = len(stacked) if stacked else 0
+        except Exception as exc:
+            logger.warning("Advanced summary error for %s: %s", symbol, exc)
 
     def get_summary(self, symbol: str, lookback_minutes: int = 60) -> dict:
         """
@@ -358,132 +400,87 @@ class OrderFlowDashboard:
             "signals": [],
         }
 
-        # DOM data
-        if self._dom is not None:
-            try:
-                dom_analysis = self._dom.get_order_book_analysis(symbol)
-                if dom_analysis:
-                    dom_dict = (
-                        dom_analysis.to_dict()
-                        if hasattr(dom_analysis, "to_dict")
-                        else {}
-                    )
-                    result["dom_imbalance"] = dom_dict.get("imbalance_ratio")
-                    result["spread"] = dom_dict.get("spread")
-            except Exception as exc:
-                logger.warning("DOM summary error for %s: %s", symbol, exc)
-
-        # Order flow data
-        if self._ofa is not None:
-            try:
-                of_analysis = self._ofa.analyze(
-                    symbol, lookback_minutes=lookback_minutes
-                )
-                if of_analysis:
-                    of_dict = (
-                        of_analysis.to_dict() if hasattr(of_analysis, "to_dict") else {}
-                    )
-                    result["cumulative_delta"] = of_dict.get("cumulative_delta")
-                    result["buy_pressure"] = of_dict.get("buy_volume")
-                    result["sell_pressure"] = of_dict.get("sell_volume")
-            except Exception as exc:
-                logger.warning("Order flow summary error for %s: %s", symbol, exc)
-
-        # Institutional data
-        if self._inst is not None:
-            try:
-                smart = self._inst.get_smart_money_direction(
-                    symbol, lookback_minutes=lookback_minutes
-                )
-                if smart is not None:
-                    if hasattr(smart, "to_dict"):
-                        direction = smart.to_dict().get("direction")
-                    elif hasattr(smart, "direction"):
-                        direction = smart.direction
-                    else:
-                        direction = smart
-                    result["smart_money_direction"] = direction
-            except Exception as exc:
-                logger.warning("Institutional summary error for %s: %s", symbol, exc)
-
-        # Advanced data
-        if self._adv is not None:
-            try:
-                stacked = self._adv.get_stacked_imbalances(
-                    symbol, lookback_minutes=lookback_minutes
-                )
-                result["large_order_count"] = len(stacked) if stacked else 0
-            except Exception as exc:
-                logger.warning("Advanced summary error for %s: %s", symbol, exc)
-
+        self._summary_dom(symbol, result)
+        self._summary_order_flow(symbol, lookback_minutes, result)
+        self._summary_institutional(symbol, lookback_minutes, result)
+        self._summary_advanced(symbol, lookback_minutes, result)
         result["bias"] = self.get_bias(symbol)
         return result
 
+    # ----------------------------------------------------------------
+    # Bias helpers
+    # ----------------------------------------------------------------
+
+    def _bias_vote_dom(self, symbol: str) -> str | None:
+        """Return DOM bias vote or None."""
+        if self._dom is None:
+            return None
+        try:
+            analysis = self._dom.get_order_book_analysis(symbol)
+            if analysis and analysis.market_bias in ("bullish", "bearish"):
+                return analysis.market_bias
+        except Exception as exc:
+            logger.warning("DOM get_bias error for %s: %s", symbol, exc)
+        return None
+
+    def _bias_vote_order_flow(self, symbol: str) -> str | None:
+        """Return order-flow bias vote or None."""
+        if self._ofa is None:
+            return None
+        try:
+            analysis = self._ofa.analyze(symbol)
+            if analysis and analysis.order_flow_signal in ("bullish", "bearish"):
+                return analysis.order_flow_signal
+        except Exception as exc:
+            logger.warning("Order flow get_bias error for %s: %s", symbol, exc)
+        return None
+
+    def _bias_vote_advanced(self, symbol: str) -> str | None:
+        """Return advanced-flow bias vote or None."""
+        if self._adv is None:
+            return None
+        try:
+            analysis = self._adv.analyze(symbol)
+            if analysis and analysis.overall_bias in ("bullish", "bearish"):
+                return analysis.overall_bias
+        except Exception as exc:
+            logger.warning("Advanced get_bias error for %s: %s", symbol, exc)
+        return None
+
+    def _bias_vote_institutional(self, symbol: str) -> str | None:
+        """Return institutional bias vote or None."""
+        if self._inst is None:
+            return None
+        try:
+            direction = self._inst.get_smart_money_direction(symbol)
+            if direction is not None:
+                dir_str = direction.direction if hasattr(direction, "direction") else direction
+                if dir_str in ("bullish", "bearish"):
+                    return dir_str
+        except Exception as exc:
+            logger.warning("Institutional get_bias error for %s: %s", symbol, exc)
+        return None
+
     def get_bias(self, symbol: str) -> str:
         """
-        Get aggregated directional bias for a symbol.
+        Get aggregated directional bias for a symbol via majority vote.
 
-        Collects bias votes from DOM, order flow, advanced, and institutional
-        components. Returns 'bullish', 'bearish', or 'neutral' via majority vote.
-
-        Args:
-            symbol: Trading symbol
-
-        Returns:
-            'bullish', 'bearish', or 'neutral'
+        Returns 'bullish', 'bearish', or 'neutral'.
         """
-        votes: list[str] = []
-
-        if self._dom is not None:
-            try:
-                analysis = self._dom.get_order_book_analysis(symbol)
-                if analysis:
-                    bias = analysis.market_bias
-                    if bias in ("bullish", "bearish"):
-                        votes.append(bias)
-            except Exception as exc:
-                logger.warning("DOM get_bias error for %s: %s", symbol, exc)
-
-        if self._ofa is not None:
-            try:
-                analysis = self._ofa.analyze(symbol)
-                if analysis:
-                    signal = analysis.order_flow_signal
-                    if signal in ("bullish", "bearish"):
-                        votes.append(signal)
-            except Exception as exc:
-                logger.warning("Order flow get_bias error for %s: %s", symbol, exc)
-
-        if self._adv is not None:
-            try:
-                analysis = self._adv.analyze(symbol)
-                if analysis:
-                    bias = analysis.overall_bias
-                    if bias in ("bullish", "bearish"):
-                        votes.append(bias)
-            except Exception as exc:
-                logger.warning("Advanced get_bias error for %s: %s", symbol, exc)
-
-        if self._inst is not None:
-            try:
-                direction = self._inst.get_smart_money_direction(symbol)
-                if direction is not None:
-                    dir_str = (
-                        direction.direction
-                        if hasattr(direction, "direction")
-                        else direction
-                    )
-                    if dir_str in ("bullish", "bearish"):
-                        votes.append(dir_str)
-            except Exception as exc:
-                logger.warning("Institutional get_bias error for %s: %s", symbol, exc)
+        votes = [
+            v for v in (
+                self._bias_vote_dom(symbol),
+                self._bias_vote_order_flow(symbol),
+                self._bias_vote_advanced(symbol),
+                self._bias_vote_institutional(symbol),
+            )
+            if v is not None
+        ]
 
         if not votes:
             return "neutral"
-
         bull = votes.count("bullish")
         bear = votes.count("bearish")
-
         if bull > bear:
             return "bullish"
         if bear > bull:
