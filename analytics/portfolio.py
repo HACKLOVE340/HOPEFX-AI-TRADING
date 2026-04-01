@@ -44,6 +44,13 @@ class PortfolioAnalytics:
     Comprehensive portfolio analytics for multi-asset strategies
     """
 
+    # ── Portfolio thresholds ──────────────────────────────────────────────────
+    MIN_TRADE_SIZE = 0.01
+    MIN_OBSERVATIONS_OPTIMISE = 10
+    MIN_OBSERVATIONS_FRONTIER = 5
+    MIN_ASSETS_FOR_OPTIMISATION = 2
+    TRADING_DAYS_PER_YEAR = 252
+
     def __init__(self, risk_free_rate: float = 0.02):
         self.risk_free_rate = risk_free_rate
         self.returns_data: pd.DataFrame | None = None
@@ -579,7 +586,7 @@ class MultiAssetBacktester:
 
         # Execute trades
         for asset, trade_value in trades.items():
-            if abs(trade_value) > 0.01:  # Minimum trade size
+            if abs(trade_value) > self.MIN_TRADE_SIZE:  # Minimum trade size
                 trade_quantity = trade_value / prices[asset]
                 commission = abs(trade_value) * self.commission_rate
 
@@ -822,15 +829,14 @@ class PortfolioOptimizer:
         import numpy as np
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == 2 else len(assets)
+        n = returns.shape[1] if returns.ndim == self.MIN_ASSETS_FOR_OPTIMISATION else len(assets)
 
-        if method == "equal_weight" or returns.shape[0] < 10:
+        if method == "equal_weight" or returns.shape[0] < self.MIN_OBSERVATIONS_OPTIMISE:
             w = np.ones(n) / n
         else:
             # Maximise Sharpe via SLSQP (deterministic, no random search)
-            mu = np.mean(returns, axis=0) * 252
-            cov = np.cov(returns.T) * 252 if n > 1 else np.array([[np.var(returns) * 252]])
-            rfr_daily = self.risk_free_rate / 252
+            mu = np.mean(returns, axis=0) * self.TRADING_DAYS_PER_YEAR
+            cov = np.cov(returns.T) * self.TRADING_DAYS_PER_YEAR if n > 1 else np.array([[np.var(returns) * self.TRADING_DAYS_PER_YEAR]])
 
             def neg_sharpe(weights: np.ndarray) -> float:
                 port_ret = float(np.dot(weights, mu))
@@ -853,8 +859,8 @@ class PortfolioOptimizer:
             else:
                 w = w0
 
-        port_ret = float(np.mean(returns @ w) * 252)
-        port_vol = float(np.std(returns @ w) * (252**0.5))
+        port_ret = float(np.mean(returns @ w) * self.TRADING_DAYS_PER_YEAR)
+        port_vol = float(np.std(returns @ w) * (self.TRADING_DAYS_PER_YEAR**0.5))
         sharpe = (port_ret - self.risk_free_rate) / (port_vol + 1e-9)
 
         return {
@@ -876,17 +882,17 @@ class PortfolioOptimizer:
         from scipy.optimize import minimize as _minimize
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == 2 else len(assets)
-        if returns.shape[0] < 5 or n < 2:
+        n = returns.shape[1] if returns.ndim == self.MIN_ASSETS_FOR_OPTIMISATION else len(assets)
+        if returns.shape[0] < self.MIN_OBSERVATIONS_FRONTIER or n < self.MIN_ASSETS_FOR_OPTIMISATION:
             # Insufficient data — return equal-weight single point
             w = np.full(n, 1.0 / n)
-            port_ret = float(np.mean(returns @ w) * 252)
-            port_vol = float(np.std(returns @ w) * (252 ** 0.5))
+            port_ret = float(np.mean(returns @ w) * self.TRADING_DAYS_PER_YEAR)
+            port_vol = float(np.std(returns @ w) * (self.TRADING_DAYS_PER_YEAR ** 0.5))
             return [{"risk": port_vol, "return": port_ret,
                      "weights": {a: float(w[i]) for i, a in enumerate(assets)}}]
 
-        mu = np.mean(returns, axis=0) * 252
-        cov = np.cov(returns.T) * 252
+        mu = np.mean(returns, axis=0) * self.TRADING_DAYS_PER_YEAR
+        cov = np.cov(returns.T) * self.TRADING_DAYS_PER_YEAR
         mu_min, mu_max = float(mu.min()), float(mu.max())
         target_returns = np.linspace(mu_min, mu_max, num_portfolios)
 
@@ -908,8 +914,8 @@ class PortfolioOptimizer:
             w = np.maximum(w, 0.0)
             s = w.sum()
             w = w / s if s > 0 else w0
-            port_ret = float(np.mean(returns @ w) * 252)
-            port_vol = float(np.std(returns @ w) * (252 ** 0.5))
+            port_ret = float(np.mean(returns @ w) * self.TRADING_DAYS_PER_YEAR)
+            port_vol = float(np.std(returns @ w) * (self.TRADING_DAYS_PER_YEAR ** 0.5))
             frontier.append({
                 "risk": port_vol,
                 "return": port_ret,
@@ -955,7 +961,7 @@ def _pa_optimize(
     constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
     bounds = [(0.0, 1.0)] * n
 
-    if method == "equal_weight" or n < 2:
+    if method == "equal_weight" or n < PortfolioAnalytics.MIN_ASSETS_FOR_OPTIMISATION:
         w = w0
     elif method == "min_variance":
         res = _minimize(

@@ -12,7 +12,7 @@ strategy development, and data analysis.
 
 from typing import Dict, List, Optional, Any  # noqa: F401
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timezone  # noqa: F401
+from datetime import datetime, timezone
 UTC = timezone.utc
 from enum import Enum
 import logging

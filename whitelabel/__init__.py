@@ -21,7 +21,7 @@ Key components:
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone, timezone  # noqa: F401
+from datetime import datetime, timedelta, timezone
 UTC = timezone.utc
 from enum import Enum
 from typing import Any, Dict, List, Optional  # noqa: F401
