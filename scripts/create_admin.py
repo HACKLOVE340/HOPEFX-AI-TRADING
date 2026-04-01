@@ -103,7 +103,9 @@ def create_or_update_admin(email: str, username: str, password: str, reset: bool
         print("─" * 50)
         print(f"  Email    : {email}")
         print(f"  Username : {username}")
-        print(f"  Password : {password}")
+        # Do not echo the password here — it was either supplied by the caller
+        # (who already knows it) or printed once by main() before this call.
+        print("  Password : (set — use the value shown above or your supplied value)")
         print("  Role     : admin")
         print("  Status   : active (email pre-verified)")
         print("─" * 50)
@@ -126,11 +128,27 @@ def main():
 
     if args.password is None:
         import secrets
+        import stat
         import string
 
         alphabet = string.ascii_letters + string.digits + "!@#$%"
         args.password = "".join(secrets.choice(alphabet) for _ in range(16))
-        print(f"[INFO] Auto-generated password: {args.password}")
+
+        # Write the generated password to a restricted file so it survives
+        # terminal scroll, then print a single line pointing to that file.
+        pw_file = ROOT / "admin_password.txt"
+        pw_file.write_text(
+            f"Admin password (generated {__import__('datetime').datetime.now().isoformat()}):\n"
+            f"{args.password}\n"
+            "Delete this file after saving the password to a password manager.\n",
+            encoding="utf-8",
+        )
+        try:
+            pw_file.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        except Exception:
+            pass  # chmod may fail on Windows; non-fatal
+        print(f"[INFO] Auto-generated password written to: {pw_file}")
+        print("[INFO] Delete that file after saving the password to a password manager.")
 
     create_or_update_admin(args.email, args.username, args.password, args.reset)
 
