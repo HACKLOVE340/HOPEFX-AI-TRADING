@@ -40,7 +40,7 @@ MANIFEST
 # Node
 node_modules/
 dashboard/node_modules/
-package-lock.json
+/package-lock.json
 dashboard/package-lock.json
 
 # Virtual environments

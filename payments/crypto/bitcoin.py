@@ -39,11 +39,24 @@ try:
         )
 
     BTC = "BTC"
+    _HDWALLET_AVAILABLE = True
 except ImportError:
-    # hdwallet v2 fallback
-    from hdwallet import HDWallet  # type: ignore[assignment]
-    from hdwallet.symbols import BTC  # type: ignore[assignment]
-    from hdwallet.utils import generate_mnemonic  # type: ignore[assignment]
+    try:
+        # hdwallet v2 fallback
+        from hdwallet import HDWallet  # type: ignore[assignment]
+        from hdwallet.symbols import BTC  # type: ignore[assignment]
+        from hdwallet.utils import generate_mnemonic  # type: ignore[assignment]
+
+        _HDWALLET_AVAILABLE = True
+    except ImportError:
+        # hdwallet not installed at all — module remains importable but
+        # BitcoinClient will raise at construction time.
+        HDWallet = None  # type: ignore[assignment,misc]
+        BTC = "BTC"
+        _HDWALLET_AVAILABLE = False
+
+        def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
+            raise RuntimeError("hdwallet package is not installed — run: pip install hdwallet")
 
 logger = logging.getLogger(__name__)
 
@@ -339,5 +352,23 @@ class BitcoinClient:
         return txs
 
 
-# Module-level singleton — initialised once at import time.
-bitcoin_client = BitcoinClient()
+# Module-level singleton — lazy-initialised to avoid import-time errors
+# when hdwallet is not installed (e.g. CI environments).
+_bitcoin_client: BitcoinClient | None = None
+
+
+def _get_bitcoin_client() -> BitcoinClient:
+    global _bitcoin_client  # noqa: PLW0603
+    if _bitcoin_client is None:
+        _bitcoin_client = BitcoinClient()
+    return _bitcoin_client
+
+
+class _LazyBitcoinClient:
+    """Proxy that defers BitcoinClient construction until first attribute access."""
+
+    def __getattr__(self, name: str):
+        return getattr(_get_bitcoin_client(), name)
+
+
+bitcoin_client: BitcoinClient = _LazyBitcoinClient()  # type: ignore[assignment]

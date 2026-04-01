@@ -531,7 +531,7 @@ class TestFeatureFlagIntegration:
             if mod not in sys.modules
         }
         with patch.dict(sys.modules, stubs):
-            from app import AppState
+            from core.app_state import AppState
 
             state = AppState()
             for attr in (
