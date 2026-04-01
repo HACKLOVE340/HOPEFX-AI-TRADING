@@ -39,8 +39,8 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from auth.dependencies import get_current_user, require_role
-from auth.schemas import TokenPayload
+from api.auth import get_current_user, require_role
+from api.auth import TokenPayload
 
 logger = logging.getLogger(__name__)
 

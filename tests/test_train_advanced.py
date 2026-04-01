@@ -9,7 +9,7 @@ tests/test_train_advanced.py
 Unit tests for ml/train_advanced.py.
 
 Covers:
-- Feature matrix shape (100 without macro, 122 with macro)
+- Feature matrix shape (100 without macro, 129 with macro)
 - No NaN / Inf in feature matrix
 - walk_forward_eval returns valid metrics
 - oos_eval_advanced returns valid metrics + saves advanced_oos.pkl
@@ -95,7 +95,7 @@ class TestBuildAdvancedFeatures:
         df = _make_ohlcv()
         macro = _make_macro(df.index)
         X, y = build_advanced_features(df, macro_df=macro)
-        assert X.shape[1] == 122, f"Expected 122 features with macro, got {X.shape[1]}"  # noqa: PLR2004
+        assert X.shape[1] == 129, f"Expected 129 features with macro, got {X.shape[1]}"  # noqa: PLR2004
 
     def test_no_nan_in_features(self):
         from ml.advanced_features import build_advanced_features
