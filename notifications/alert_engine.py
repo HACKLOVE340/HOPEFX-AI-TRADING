@@ -220,6 +220,26 @@ class AlertTrigger:
         }
 
 
+@dataclass
+class AlertConfig:
+    """Parameters for :meth:`AlertEngine.create_alert`."""
+
+    name: str
+    symbol: str
+    condition_type: AlertConditionType
+    threshold: float
+    threshold_2: float | None = None
+    indicator: str | None = None
+    period: int | None = None
+    priority: AlertPriority = AlertPriority.MEDIUM
+    notify_channels: list[str] | None = None
+    message_template: str | None = None
+    expires_in_hours: int | None = None
+    cooldown_minutes: int = 5
+    max_triggers: int = 0
+    user_id: str | None = None
+    tags: list[str] | None = None
+
 class AlertEngine:
     """
     Server-side alert engine for persistent alert monitoring.

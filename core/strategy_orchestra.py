@@ -9,6 +9,7 @@ Coordinates multiple strategies to prevent conflicts and maximize returns
 """
 
 from collections import defaultdict
+from typing import Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 
@@ -260,7 +261,7 @@ class StrategyOrchestra:
             ret = pnl / entry_price if entry_price > 0 else 0.0
             self._returns_buffer[sid].append(ret)
             # Feed into rebalancer when we have enough history
-            if self._rebalancer is not None and len(self._returns_buffer[sid]) >= 5:
+            if self._rebalancer is not None and len(self._returns_buffer[sid]) >= 5:  # noqa: PLR2004
                 import pandas as pd
                 returns_series = pd.Series(self._returns_buffer[sid])
                 self._rebalancer.update_strategy_returns(sid, returns_series)

@@ -105,6 +105,23 @@ class HyperoptResult:
 # ── Core engine ──────────────────────────────────────────────────────────────
 
 
+@dataclass
+class HyperoptConfig:
+    """Configuration for :class:`HyperoptEngine`."""
+
+    n_trials: int = 100
+    metric: str = "sharpe_ratio"
+    direction: Literal["maximize", "minimize"] = "maximize"
+    initial_capital: float = 100_000.0
+    commission: float = 0.001
+    slippage: float = 0.0005
+    timeout_seconds: float | None = None
+    n_jobs: int = 1
+    custom_objective: Callable | None = None
+    study_name: str = "hopefx_hyperopt"
+    seed: int = 42
+
+
 class HyperoptEngine:
     """
     Bayesian hyperparameter optimizer for HOPEFX strategies.
