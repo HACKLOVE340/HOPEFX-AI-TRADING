@@ -13,6 +13,7 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -152,17 +153,11 @@ class PositionTracker:
             return {
                 "long": sum(p.quantity for p in positions if p.side == "long"),
                 "short": sum(p.quantity for p in positions if p.side == "short"),
-                "net": sum(
-                    p.quantity if p.side == "long" else -p.quantity for p in positions
-                ),
+                "net": sum(p.quantity if p.side == "long" else -p.quantity for p in positions),
             }
         else:
-            total_long = sum(
-                p.quantity for p in self.positions.values() if p.side == "long"
-            )
-            total_short = sum(
-                p.quantity for p in self.positions.values() if p.side == "short"
-            )
+            total_long = sum(p.quantity for p in self.positions.values() if p.side == "long")
+            total_short = sum(p.quantity for p in self.positions.values() if p.side == "short")
             return {
                 "long": total_long,
                 "short": total_short,

@@ -43,6 +43,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any, Dict, List, Optional
 
@@ -75,9 +76,9 @@ class FactorExposure:
     """Beta loadings of one asset to each systematic factor."""
 
     symbol: str
-    betas: Dict[str, float]          # factor_name -> beta
-    r_squared: float                 # fraction of variance explained by factors
-    residual_vol: float              # annualised idiosyncratic vol
+    betas: Dict[str, float]  # factor_name -> beta
+    r_squared: float  # fraction of variance explained by factors
+    residual_vol: float  # annualised idiosyncratic vol
     fitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -95,9 +96,9 @@ class FactorAttribution:
     """P&L decomposition for a portfolio snapshot."""
 
     total_pnl: float
-    factor_pnl: Dict[str, float]     # factor_name -> attributed P&L
-    residual_pnl: float              # idiosyncratic / alpha
-    factor_pct: Dict[str, float]     # factor_name -> % of total variance
+    factor_pnl: Dict[str, float]  # factor_name -> attributed P&L
+    residual_pnl: float  # idiosyncratic / alpha
+    factor_pct: Dict[str, float]  # factor_name -> % of total variance
     computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -167,8 +168,11 @@ class FactorLibrary:
 
         # ── XAUUSD price series (for vol + momentum factors) ──────────────────
         xau = yf.download(
-            "GC=F", start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"),
-            progress=False, auto_adjust=True,
+            "GC=F",
+            start=start.strftime("%Y-%m-%d"),
+            end=end.strftime("%Y-%m-%d"),
+            progress=False,
+            auto_adjust=True,
         )
         if xau.empty:
             raise RuntimeError("yfinance returned empty data for GC=F")
@@ -207,9 +211,7 @@ class FactorLibrary:
         if "dxy" in fred_data:
             macro_inputs["dxy_chg"] = fred_data["dxy"].pct_change().dropna()
         if "yield_10y" in fred_data and "yield_2y" in fred_data:
-            macro_inputs["spread"] = (
-                fred_data["yield_10y"] - fred_data["yield_2y"]
-            ).diff().dropna()
+            macro_inputs["spread"] = (fred_data["yield_10y"] - fred_data["yield_2y"]).diff().dropna()
         if "cpi" in fred_data:
             macro_inputs["cpi_chg"] = fred_data["cpi"].pct_change().dropna()
 
@@ -220,9 +222,7 @@ class FactorLibrary:
                 scaled = scaler.fit_transform(macro_df.values)
                 pca = PCA(n_components=1)
                 pc1 = pca.fit_transform(scaled).squeeze()
-                factors["macro_factor"] = pd.Series(
-                    pc1, index=macro_df.index, name="macro_factor"
-                )
+                factors["macro_factor"] = pd.Series(pc1, index=macro_df.index, name="macro_factor")
 
         # ── Align all factors to a common date index ──────────────────────────
         factor_df = pd.DataFrame(factors)
@@ -242,7 +242,8 @@ class FactorLibrary:
         self._last_refresh = datetime.now(UTC)
         logger.info(
             "FactorLibrary refreshed: %d rows, %d factors",
-            len(self._factor_df), len(FACTOR_NAMES),
+            len(self._factor_df),
+            len(FACTOR_NAMES),
         )
 
     def _fetch_fred_series(self) -> Dict[str, pd.Series]:
@@ -300,8 +301,8 @@ class FactorModel:
     """
 
     def __init__(self, alpha: float = 0.01, min_obs: int = 60):
-        self.alpha = alpha          # Ridge regularisation
-        self.min_obs = min_obs      # minimum observations to fit
+        self.alpha = alpha  # Ridge regularisation
+        self.min_obs = min_obs  # minimum observations to fit
         self._exposures: Dict[str, FactorExposure] = {}
         self._library = FactorLibrary()
 
@@ -330,9 +331,7 @@ class FactorModel:
 
         return self._exposures.copy()
 
-    async def fit_async(
-        self, asset_returns: Dict[str, pd.Series]
-    ) -> Dict[str, FactorExposure]:
+    async def fit_async(self, asset_returns: Dict[str, pd.Series]) -> Dict[str, FactorExposure]:
         """Async wrapper for fit()."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.fit, asset_returns)
@@ -355,9 +354,7 @@ class FactorModel:
         # Align on common dates
         aligned = pd.concat([ret_series.rename("asset"), factor_df], axis=1).dropna()
         if len(aligned) < self.min_obs:
-            raise ValueError(
-                f"Insufficient data for {symbol}: {len(aligned)} < {self.min_obs}"
-            )
+            raise ValueError(f"Insufficient data for {symbol}: {len(aligned)} < {self.min_obs}")
 
         y = aligned["asset"].values
         X = aligned[FACTOR_NAMES].values
@@ -402,7 +399,7 @@ class FactorAttributionEngine:
 
     def attribute(
         self,
-        positions: Dict[str, float],   # symbol -> dollar value (signed)
+        positions: Dict[str, float],  # symbol -> dollar value (signed)
         total_pnl: float,
     ) -> FactorAttribution:
         """
@@ -448,10 +445,7 @@ class FactorAttributionEngine:
 
         # Factor % of total variance (|factor_pnl| / sum(|all|))
         total_abs = sum(abs(v) for v in factor_pnl.values()) + abs(residual_pnl)
-        factor_pct = {
-            k: abs(v) / total_abs if total_abs > 0 else 0.0
-            for k, v in factor_pnl.items()
-        }
+        factor_pct = {k: abs(v) / total_abs if total_abs > 0 else 0.0 for k, v in factor_pnl.items()}
 
         return FactorAttribution(
             total_pnl=total_pnl,

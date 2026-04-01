@@ -126,8 +126,7 @@ def test_variable_slippage_higher_on_wide_bars():
     narrow_slip = b._calculate_slippage(price, bar_high=2001.0, bar_low=1999.0)
 
     assert wide_slip > narrow_slip, (
-        f"Wide bar slippage ({wide_slip:.6f}) should exceed "
-        f"narrow bar slippage ({narrow_slip:.6f})"
+        f"Wide bar slippage ({wide_slip:.6f}) should exceed narrow bar slippage ({narrow_slip:.6f})"
     )
 
 
@@ -154,10 +153,7 @@ def test_sortino_gte_sharpe_positive_skew():
     downside_std = float(np.std(downside)) if len(downside) > 0 else 1e-9
     sortino = float(np.mean(returns) / downside_std * ann)
 
-    assert sortino >= sharpe, (
-        f"Sortino ({sortino:.3f}) should be >= Sharpe ({sharpe:.3f}) "
-        "for positive-skew returns"
-    )
+    assert sortino >= sharpe, f"Sortino ({sortino:.3f}) should be >= Sharpe ({sharpe:.3f}) for positive-skew returns"
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +176,7 @@ def test_significance_test_with_clear_edge():
     trade_pnls = rng.normal(50.0, 100.0, 200)
     t_stat, p_val = stats.ttest_1samp(trade_pnls, popmean=0.0)
 
-    assert p_val < 0.05, f"Expected p < 0.05 for clear edge, got p={p_val:.4f}"  # noqa: PLR2004
+    assert p_val < 0.05, f"Expected p < 0.05 for clear edge, got p={p_val:.4f}"
     assert t_stat > 0, "t-statistic should be positive for positive-mean returns"
 
 
@@ -202,9 +198,9 @@ def test_monte_carlo_ruin_zero_for_profitable():
     trade_returns = np.full(100, 0.01)
     mc = engine.run_monte_carlo_simulation(trade_returns, n_simulations=500)
 
-    assert mc["mc_ruin_probability"] == pytest.approx(
-        0.0
-    ), "A consistently profitable strategy should have zero ruin probability"
+    assert mc["mc_ruin_probability"] == pytest.approx(0.0), (
+        "A consistently profitable strategy should have zero ruin probability"
+    )
     assert mc["mc_median_final"] > 1.0
 
 
@@ -335,5 +331,5 @@ def test_max_consecutive_counts_correctly():
         {"net_pnl": -5},  # loss  ← streak of 2
     ]
 
-    assert engine._max_consecutive(trades, "win") == 3  # noqa: PLR2004
-    assert engine._max_consecutive(trades, "loss") == 2  # noqa: PLR2004
+    assert engine._max_consecutive(trades, "win") == 3
+    assert engine._max_consecutive(trades, "loss") == 2

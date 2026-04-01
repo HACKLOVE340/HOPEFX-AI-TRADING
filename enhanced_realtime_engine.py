@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Callable, AsyncIterator
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum, IntEnum, auto
 from collections import deque, defaultdict
@@ -64,9 +65,7 @@ try:
 except ImportError:
     UVLOOP_AVAILABLE = False
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s | %(name)s | %(levelname)s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(name)s | %(levelname)s | %(message)s")
 logger = logging.getLogger("HOPEFX.Realtime")
 
 
@@ -113,9 +112,7 @@ class NanosecondTimestamp:
         return cls(now // 1_000_000_000, now % 1_000_000_000)
 
     def to_datetime(self) -> datetime:
-        return datetime.fromtimestamp(
-            self.seconds + self.nanoseconds / 1e9, tz=UTC
-        )
+        return datetime.fromtimestamp(self.seconds + self.nanoseconds / 1e9, tz=UTC)
 
     def __float__(self) -> float:
         return self.seconds + self.nanoseconds / 1e9
@@ -164,10 +161,7 @@ class MarketTick:
     @property
     def latency_ns(self) -> int:
         """Calculate tick-to-system latency"""
-        recv_ns = (
-            self.receive_timestamp.seconds * 1_000_000_000
-            + self.receive_timestamp.nanoseconds
-        )
+        recv_ns = self.receive_timestamp.seconds * 1_000_000_000 + self.receive_timestamp.nanoseconds
         tick_ns = self.timestamp.seconds * 1_000_000_000 + self.timestamp.nanoseconds
         return recv_ns - tick_ns
 
@@ -225,9 +219,7 @@ class VenueMetrics:
         self.latency_history.append(latency)
         self.min_latency_ns = min(self.min_latency_ns, latency)
         self.max_latency_ns = max(self.max_latency_ns, latency)
-        self.avg_latency_ns = (
-            np.mean(list(self.latency_history)) if self.latency_history else latency
-        )
+        self.avg_latency_ns = np.mean(list(self.latency_history)) if self.latency_history else latency
 
         # Quality classification
         if tick.quality >= DataQuality.GOOD:
@@ -351,13 +343,9 @@ class DataProvider(ABC):
 
             if self._running:
                 self.metrics.state = ConnectionState.RECONNECTING
-                logger.info(
-                    f"{self.name} reconnecting in {self.current_reconnect_delay}s..."
-                )
+                logger.info(f"{self.name} reconnecting in {self.current_reconnect_delay}s...")
                 await asyncio.sleep(self.current_reconnect_delay)
-                self.current_reconnect_delay = min(
-                    self.current_reconnect_delay * 1.5, self.max_reconnect_delay
-                )
+                self.current_reconnect_delay = min(self.current_reconnect_delay * 1.5, self.max_reconnect_delay)
                 self.metrics.record_reconnection()
 
     def stop(self):
@@ -481,9 +469,7 @@ class OandaProvider(DataProvider):
         self.account_id = account_id
         self.api_token = api_token
         self.environment = environment
-        self.base_url = (
-            f"https://stream-fx{'' if environment == 'live' else 'practice'}.oanda.com"
-        )
+        self.base_url = f"https://stream-fx{'' if environment == 'live' else 'practice'}.oanda.com"
         self.session: aiohttp.ClientSession | None = None
 
     async def connect(self) -> bool:
@@ -509,18 +495,14 @@ class OandaProvider(DataProvider):
                     data = json.loads(line)
 
                     if data.get("type") == "PRICE":
-                        tick_time = datetime.fromisoformat(
-                            data["time"].replace("Z", "+00:00")
-                        )
+                        tick_time = datetime.fromisoformat(data["time"].replace("Z", "+00:00"))
                         receive_time = datetime.now(UTC)
 
                         # Calculate latency
                         (receive_time - tick_time).total_seconds()
 
                         tick = MarketTick(
-                            timestamp=NanosecondTimestamp(
-                                int(tick_time.timestamp()), tick_time.microsecond * 1000
-                            ),
+                            timestamp=NanosecondTimestamp(int(tick_time.timestamp()), tick_time.microsecond * 1000),
                             receive_timestamp=NanosecondTimestamp.now(),
                             symbol=data["instrument"].replace("_", "/"),
                             bid=float(data["bids"][0]["price"]),
@@ -751,9 +733,7 @@ class ConsensusAggregator:
         # Initialize venue score
         self.venue_scores[provider.name] = 1.0
 
-        logger.info(
-            f"Added provider: {provider.name} (priority={provider.priority}, weight={provider.weight})"
-        )
+        logger.info(f"Added provider: {provider.name} (priority={provider.priority}, weight={provider.weight})")
 
     async def _process_tick(self, tick: MarketTick):
         """Process incoming tick from any provider"""
@@ -793,8 +773,7 @@ class ConsensusAggregator:
         fresh_ticks = [
             t
             for t in ticks
-            if (now - (t.timestamp.seconds * 1_000_000_000 + t.timestamp.nanoseconds))
-            < 1_000_000_000  # noqa: PLR2004
+            if (now - (t.timestamp.seconds * 1_000_000_000 + t.timestamp.nanoseconds)) < 1_000_000_000  # noqa: PLR2004
         ]
 
         # Check if we have enough fresh data
@@ -837,9 +816,7 @@ class ConsensusAggregator:
             upper_bound = q3 + 1.5 * iqr
 
             # Filter outliers
-            filtered = [
-                (s, t) for s, t in scored_ticks if lower_bound <= t.mid <= upper_bound
-            ]
+            filtered = [(s, t) for s, t in scored_ticks if lower_bound <= t.mid <= upper_bound]
 
             if len(filtered) < len(scored_ticks):
                 self.stats["outliers_rejected"] += len(scored_ticks) - len(filtered)
@@ -867,16 +844,14 @@ class ConsensusAggregator:
         best_ask = min(t.ask for _, t in scored_ticks)
 
         # Check for significant disagreement (Byzantine fault detection)
-        price_range = max(t.mid for _, t in scored_ticks) - min(
-            t.mid for _, t in scored_ticks
-        )
+        price_range = max(t.mid for _, t in scored_ticks) - min(t.mid for _, t in scored_ticks)
         consensus_price = median_tick.mid
 
         if price_range > consensus_price * self.outlier_threshold:
             self.stats["disagreements"] += 1
             logger.warning(
                 f"Price disagreement for {symbol}: "
-                f"range={price_range:.5f} ({price_range/consensus_price*10000:.1f} bps), "
+                f"range={price_range:.5f} ({price_range / consensus_price * 10000:.1f} bps), "
                 f"sources={[t.source for _, t in scored_ticks]}"
             )
 
@@ -931,10 +906,7 @@ class ConsensusAggregator:
 
     async def start(self):
         """Start all providers"""
-        tasks = [
-            asyncio.create_task(provider.start())
-            for provider in self.providers.values()
-        ]
+        tasks = [asyncio.create_task(provider.start()) for provider in self.providers.values()]
 
         await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -950,10 +922,7 @@ class ConsensusAggregator:
                 name: {
                     "state": provider.metrics.state.name,
                     "health_score": provider.metrics.health_score,
-                    "latency_p50_ms": np.percentile(
-                        list(provider.metrics.latency_history), 50
-                    )
-                    / 1_000_000
+                    "latency_p50_ms": np.percentile(list(provider.metrics.latency_history), 50) / 1_000_000
                     if provider.metrics.latency_history
                     else 0,
                     "ticks_received": provider.metrics.ticks_received,
@@ -1004,20 +973,14 @@ async def run_realtime_test():
 
     # Create aggregator
     print("\n[1] Initializing consensus aggregator...")
-    aggregator = ConsensusAggregator(
-        consensus_threshold=0.5, max_sources=5, outlier_threshold=0.001
-    )
+    aggregator = ConsensusAggregator(consensus_threshold=0.5, max_sources=5, outlier_threshold=0.001)
 
     # Add synthetic providers for smoke-testing only.
     # In production, replace with PolygonProvider, OandaProvider, or BinanceProvider.
     print("[2] Adding synthetic test providers (MockProvider)...")
-    aggregator.add_provider(
-        MockProvider(volatility=0.0002, drift=0.00001, tick_interval_ms=100)
-    )
+    aggregator.add_provider(MockProvider(volatility=0.0002, drift=0.00001, tick_interval_ms=100))
 
-    aggregator.add_provider(
-        MockProvider(volatility=0.0003, drift=-0.00001, tick_interval_ms=150)
-    )
+    aggregator.add_provider(MockProvider(volatility=0.0003, drift=-0.00001, tick_interval_ms=150))
 
     # Production providers — configure via env vars:
     # aggregator.add_provider(PolygonProvider(os.getenv("POLYGON_API_KEY")))
@@ -1036,8 +999,7 @@ async def run_realtime_test():
 
         if len(consensus_ticks) % 100 == 0:
             print(
-                f"    Received {len(consensus_ticks)} consensus ticks "
-                f"(avg latency: {np.mean(latencies[-100:]):.2f} ms)"
+                f"    Received {len(consensus_ticks)} consensus ticks (avg latency: {np.mean(latencies[-100:]):.2f} ms)"
             )
 
     aggregator.on_consensus(on_consensus)
@@ -1065,7 +1027,7 @@ async def run_realtime_test():
 
     print(f"\nDuration: {elapsed:.2f} seconds")
     print(f"Consensus ticks received: {len(consensus_ticks)}")
-    print(f"Rate: {len(consensus_ticks)/elapsed:.1f} ticks/second")
+    print(f"Rate: {len(consensus_ticks) / elapsed:.1f} ticks/second")
 
     if latencies:
         print("\n--- Latency Statistics ---")
@@ -1095,10 +1057,7 @@ async def run_realtime_test():
     if consensus_ticks:
         print("\n--- Sample Prices (last 5) ---")
         for tick in consensus_ticks[-5:]:
-            print(
-                f"{tick.symbol}: Bid={tick.bid:.5f} Ask={tick.ask:.5f} "
-                f"Spread={tick.spread_bps:.2f} bps"
-            )
+            print(f"{tick.symbol}: Bid={tick.bid:.5f} Ask={tick.ask:.5f} Spread={tick.spread_bps:.2f} bps")
 
     print("\n" + "=" * 80)
     print("✅ REAL-TIME ENGINE TEST COMPLETED")

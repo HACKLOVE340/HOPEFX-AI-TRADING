@@ -1,7 +1,7 @@
 # Deployment Guide
 
 > Current version: **v1.17** — Python 3.10, 3.11, or 3.12 required. API server listens on port **8000**.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ## Prerequisites
 
@@ -831,4 +831,4 @@ For deployment issues:
 
 ---
 
-*Last updated: 2026-07-14 (v1.17)*
+*Last updated: 2026-04-01 (v1.17)*

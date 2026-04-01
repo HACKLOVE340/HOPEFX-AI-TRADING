@@ -35,6 +35,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
@@ -73,11 +74,7 @@ class TelegramBot:
         if allowed_chat_ids:
             self.allowed_ids: list[int] = allowed_chat_ids
         else:
-            self.allowed_ids = [
-                int(x.strip())
-                for x in raw_ids.split(",")
-                if x.strip().lstrip("-").isdigit()
-            ]
+            self.allowed_ids = [int(x.strip()) for x in raw_ids.split(",") if x.strip().lstrip("-").isdigit()]
         self.app_state = app_state
         self._app = None  # telegram.ext.Application
         self._paused = False
@@ -123,15 +120,11 @@ class TelegramBot:
         targets = [chat_id] if chat_id else self.allowed_ids
         for cid in targets:
             try:
-                await self._app.bot.send_message(
-                    chat_id=cid, text=text, parse_mode="Markdown"
-                )
+                await self._app.bot.send_message(chat_id=cid, text=text, parse_mode="Markdown")
             except Exception as exc:
                 logger.warning("Telegram send to %s failed: %s", cid, exc)
 
-    async def notify_signal(
-        self, symbol: str, direction: str, confidence: float, price: float
-    ):
+    async def notify_signal(self, symbol: str, direction: str, confidence: float, price: float):
         """Broadcast a trading signal to all allowed chats."""
         emoji = "🟢" if direction.upper() == "BUY" else "🔴"
         msg = (
@@ -143,9 +136,7 @@ class TelegramBot:
         )
         await self.send_message(msg)
 
-    async def notify_trade(
-        self, symbol: str, side: str, quantity: float, price: float, order_id: str = ""
-    ):
+    async def notify_trade(self, symbol: str, side: str, quantity: float, price: float, order_id: str = ""):
         """Broadcast a trade execution."""
         emoji = "✅" if side.upper() == "BUY" else "🔻"
         msg = (
@@ -195,14 +186,10 @@ class TelegramBot:
         return wrapper
 
     async def _cmd_start(self, update, context):
-        await update.message.reply_text(
-            f"👋 *HOPEFX AI Trading Bot*\n\n{_COMMANDS}", parse_mode="Markdown"
-        )
+        await update.message.reply_text(f"👋 *HOPEFX AI Trading Bot*\n\n{_COMMANDS}", parse_mode="Markdown")
 
     async def _cmd_help(self, update, context):
-        await update.message.reply_text(
-            f"*Commands:*\n{_COMMANDS}", parse_mode="Markdown"
-        )
+        await update.message.reply_text(f"*Commands:*\n{_COMMANDS}", parse_mode="Markdown")
 
     async def _cmd_status(self, update, context):
         lines = ["*📊 Status*"]
@@ -242,8 +229,7 @@ class TelegramBot:
             for p in positions:
                 pnl_sign = "+" if p.unrealized_pnl >= 0 else ""
                 lines.append(
-                    f"`{p.symbol}` {p.side} {p.quantity} "
-                    f"@ {p.entry_price:.5f} | PnL: {pnl_sign}{p.unrealized_pnl:.2f}"
+                    f"`{p.symbol}` {p.side} {p.quantity} @ {p.entry_price:.5f} | PnL: {pnl_sign}{p.unrealized_pnl:.2f}"
                 )
             await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
         except Exception as exc:
@@ -280,10 +266,7 @@ class TelegramBot:
             return
         lines = ["*🧠 Recent Signals*"]
         for sig in list(history)[-5:]:
-            lines.append(
-                f"`{sig.get('symbol','?')}` {sig.get('direction','?')} "
-                f"conf={sig.get('confidence', 0):.0%}"
-            )
+            lines.append(f"`{sig.get('symbol', '?')}` {sig.get('direction', '?')} conf={sig.get('confidence', 0):.0%}")
         await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
     async def _cmd_health(self, update, context):
@@ -302,16 +285,12 @@ class TelegramBot:
     async def _cmd_pause(self, update, context):
         self._paused = True
         os.environ["SIGNAL_ENGINE_AUTO_TRADE"] = "false"
-        await update.message.reply_text(
-            "⏸ Auto-trading *paused*.", parse_mode="Markdown"
-        )
+        await update.message.reply_text("⏸ Auto-trading *paused*.", parse_mode="Markdown")
 
     async def _cmd_resume(self, update, context):
         self._paused = False
         os.environ["SIGNAL_ENGINE_AUTO_TRADE"] = "true"
-        await update.message.reply_text(
-            "▶️ Auto-trading *resumed*.", parse_mode="Markdown"
-        )
+        await update.message.reply_text("▶️ Auto-trading *resumed*.", parse_mode="Markdown")
 
     async def _cmd_stop(self, update, context):
         self._paused = True

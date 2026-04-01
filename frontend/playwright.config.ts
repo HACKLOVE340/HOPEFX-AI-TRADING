@@ -3,14 +3,14 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Playwright E2E configuration.
  *
- * In CI (CI=true) the frontend dev server is NOT started automatically —
- * the CI job starts it separately. Locally, Playwright starts it via webServer.
+ * In CI: Playwright builds and starts `vite preview` (stable, no HMR overhead).
+ * Locally: Playwright starts `vite dev` and reuses an existing server if running.
  *
  * Run locally:  npx playwright test
- * Run in CI:    npx playwright test  (CI=true, server already running on 5173)
+ * Run in CI:    npx playwright test  (CI=true)
  */
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:5173';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:5173';
 const IS_CI    = !!process.env.CI;
 
 export default defineConfig({
@@ -29,9 +29,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    // Consistent viewport
     viewport: { width: 1280, height: 800 },
-    // Ignore HTTPS errors in dev/CI
     ignoreHTTPSErrors: true,
   },
 
@@ -45,13 +43,16 @@ export default defineConfig({
     // { name: 'webkit',  use: { ...devices['Desktop Safari']  } },
   ],
 
-  // Start the Vite dev server locally (skipped in CI where it's pre-started)
-  webServer: IS_CI
-    ? undefined
-    : {
-        command: 'npm run dev',
-        url: BASE_URL,
-        reuseExistingServer: true,
-        timeout: 60_000,
-      },
+  // CI: build then serve via `vite preview` (no HMR, deterministic).
+  // Local: use `vite dev` and reuse an already-running server.
+  webServer: {
+    command: IS_CI
+      ? 'npm run build && npm run preview -- --host 127.0.0.1 --port 5173'
+      : 'npm run dev -- --host 127.0.0.1 --port 5173',
+    url: BASE_URL,
+    reuseExistingServer: !IS_CI,
+    timeout: 120_000,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  },
 });

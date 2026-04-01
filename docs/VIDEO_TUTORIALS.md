@@ -3,7 +3,7 @@
 > Complete production guide to the HOPEFX video tutorial series.
 > Each episode includes: script outline, chapter markers, screen recording spec,
 > thumbnail description, YouTube description template, and subscription gating note.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 
@@ -1204,4 +1204,4 @@ curl -s http://localhost:8000/api/trading/account \
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-04-01*

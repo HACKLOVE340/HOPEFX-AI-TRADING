@@ -10,6 +10,7 @@ Handles Ethereum (ETH) deposits and withdrawals.
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 import logging
@@ -53,20 +54,14 @@ class EthereumClient:
             logger.error(f"Error generating Ethereum address: {e}")
             raise
 
-    def process_deposit(
-        self, user_id: str, amount: Decimal, tx_hash: str, confirmations: int = 0
-    ) -> dict | None:
+    def process_deposit(self, user_id: str, amount: Decimal, tx_hash: str, confirmations: int = 0) -> dict | None:
         """Process Ethereum deposit"""
         try:
             if amount < self.MIN_DEPOSIT:
                 logger.warning(f"ETH deposit below minimum: {amount}")
                 return None
 
-            status = (
-                "confirmed"
-                if confirmations >= self.REQUIRED_CONFIRMATIONS
-                else "pending"
-            )
+            status = "confirmed" if confirmations >= self.REQUIRED_CONFIRMATIONS else "pending"
 
             transaction = {
                 "tx_hash": tx_hash,
@@ -85,9 +80,7 @@ class EthereumClient:
             logger.error(f"Error processing ETH deposit: {e}")
             return None
 
-    def process_withdrawal(
-        self, user_id: str, amount: Decimal, destination: str
-    ) -> dict:
+    def process_withdrawal(self, user_id: str, amount: Decimal, destination: str) -> dict:
         """Process Ethereum withdrawal"""
         try:
             total_fee = self.NETWORK_FEE
@@ -96,9 +89,7 @@ class EthereumClient:
             if net_amount <= 0:
                 raise ValueError("Amount too small after fees")
 
-            tx_hash = hashlib.sha256(
-                f"ETH{user_id}{amount}{destination}".encode()
-            ).hexdigest()
+            tx_hash = hashlib.sha256(f"ETH{user_id}{amount}{destination}".encode()).hexdigest()
 
             return {
                 "tx_hash": tx_hash,

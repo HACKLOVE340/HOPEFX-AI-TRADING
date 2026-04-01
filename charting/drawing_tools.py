@@ -12,6 +12,7 @@ channels, arc/circle annotations, pitchforks, and Elliott Wave labels.
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -62,11 +63,7 @@ class Drawing:
         line_width: int = 1,
     ) -> None:
         self.drawing_type = drawing_type
-        self.drawing_id = (
-            drawing_id
-            if drawing_id is not None
-            else f"{drawing_type}_{datetime.now(UTC).timestamp()}"
-        )
+        self.drawing_id = drawing_id if drawing_id is not None else f"{drawing_type}_{datetime.now(UTC).timestamp()}"
         self.color = color
         self.line_width = line_width
         self.visible: bool = True
@@ -379,9 +376,7 @@ class DrawingToolkit:
         if levels is None:
             levels = list(DEFAULT_FIB_EXTENSIONS)
         swing = price_b - price_a
-        level_prices: dict[str, float] = {
-            str(lvl): price_c + lvl * swing for lvl in levels
-        }
+        level_prices: dict[str, float] = {str(lvl): price_c + lvl * swing for lvl in levels}
         drawing = Drawing(DrawingType.FIBONACCI_EXTENSION)
         drawing.properties = {
             "time_a": time_a,
@@ -583,9 +578,7 @@ class DrawingToolkit:
             ValueError: If direction is not 'up' or 'down'.
         """
         if direction not in _VALID_ARROW_DIRECTIONS:
-            raise ValueError(
-                f"Invalid direction {direction!r}; must be one of {_VALID_ARROW_DIRECTIONS}."
-            )
+            raise ValueError(f"Invalid direction {direction!r}; must be one of {_VALID_ARROW_DIRECTIONS}.")
         drawing = Drawing(DrawingType.ARROW)
         drawing.properties = {
             "time": time,
@@ -660,9 +653,7 @@ class DrawingToolkit:
             count = len(self.drawings)
             self.drawings.clear()
             return count
-        to_remove = [
-            k for k, d in self.drawings.items() if d.drawing_type == drawing_type
-        ]
+        to_remove = [k for k, d in self.drawings.items() if d.drawing_type == drawing_type]
         for key in to_remove:
             del self.drawings[key]
         return len(to_remove)

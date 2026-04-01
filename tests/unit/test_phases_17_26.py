@@ -95,7 +95,7 @@ class TestChartReplayEngine:
 
         assert session is not None
         assert session.symbol == "XAUUSD"
-        assert session.initial_balance == 100000  # noqa: PLR2004
+        assert session.initial_balance == 100000
 
     def test_set_speed(self, replay_engine):
         """Test setting replay speed."""
@@ -168,9 +168,7 @@ class TestNoCodeStrategyBuilder:
         rule = strategy_builder.add_rule(
             strategy.strategy_id,
             name="Buy Rule",
-            conditions=[
-                {"left": {"type": "RSI", "period": 14}, "operator": "<", "right": 30}
-            ],
+            conditions=[{"left": {"type": "RSI", "period": 14}, "operator": "<", "right": 30}],
             action={"type": "BUY", "position_size": 1.0},
         )
 
@@ -271,13 +269,9 @@ class TestResearchNotebookEngine:
         """Test adding cells to notebook."""
         from research import CellType
 
-        notebook = notebook_engine.create_notebook(
-            title="Test", description="Test", author="test"
-        )
+        notebook = notebook_engine.create_notebook(title="Test", description="Test", author="test")
 
-        cell = notebook_engine.add_cell(
-            notebook.notebook_id, CellType.CODE, "print('Hello World')"
-        )
+        cell = notebook_engine.add_cell(notebook.notebook_id, CellType.CODE, "print('Hello World')")
 
         assert cell is not None
         assert cell.cell_type == CellType.CODE
@@ -347,7 +341,7 @@ class TestExecutionTransparencyEngine:
 
         report = transparency_engine.generate_report()
         assert report is not None
-        assert report.total_executions == 5  # noqa: PLR2004
+        assert report.total_executions == 5
 
     def test_get_slippage_distribution(self, transparency_engine):
         """Test getting slippage distribution."""
@@ -390,9 +384,7 @@ class TestTeamManager:
 
     def test_create_team(self, team_manager):
         """Test creating a team."""
-        team = team_manager.create_team(
-            name="Test Team", owner_email="owner@test.com", owner_name="Test Owner"
-        )
+        team = team_manager.create_team(name="Test Team", owner_email="owner@test.com", owner_name="Test Owner")
 
         assert team is not None
         assert team.name == "Test Team"
@@ -402,9 +394,7 @@ class TestTeamManager:
         """Test inviting a team member."""
         from teams import UserRole
 
-        team = team_manager.create_team(
-            name="Test Team", owner_email="owner@test.com", owner_name="Test Owner"
-        )
+        team = team_manager.create_team(name="Test Team", owner_email="owner@test.com", owner_name="Test Owner")
 
         invitation = team_manager.invite_member(
             team_id=team.team_id,
@@ -420,20 +410,14 @@ class TestTeamManager:
         """Test permission checking."""
         from teams import Permission
 
-        team = team_manager.create_team(
-            name="Test Team", owner_email="owner@test.com", owner_name="Test Owner"
-        )
+        team = team_manager.create_team(name="Test Team", owner_email="owner@test.com", owner_name="Test Owner")
 
         # Owner should have all permissions
-        assert team_manager.has_permission(
-            team.team_id, team.owner_id, Permission.TRADE_EXECUTE
-        )
+        assert team_manager.has_permission(team.team_id, team.owner_id, Permission.TRADE_EXECUTE)
 
     def test_get_team_summary(self, team_manager):
         """Test getting team summary."""
-        team = team_manager.create_team(
-            name="Test Team", owner_email="owner@test.com", owner_name="Test Owner"
-        )
+        team = team_manager.create_team(name="Test Team", owner_email="owner@test.com", owner_name="Test Owner")
 
         summary = team_manager.get_team_summary(team.team_id)
         assert summary is not None

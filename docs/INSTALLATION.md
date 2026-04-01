@@ -1,7 +1,7 @@
 # Installation
 
 > Full installation guide for Linux, macOS, and Windows.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 

@@ -13,6 +13,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 
@@ -164,10 +165,7 @@ class ArbitrageDetector:
                 size = Decimal("0.1")  # Conservative
 
                 gross_profit = (best_bid["price"] - best_ask["price"]) * size
-                fee_cost = (
-                    best_ask["price"] * size * buy_ex.taker_fee
-                    + best_bid["price"] * size * sell_ex.taker_fee
-                )
+                fee_cost = best_ask["price"] * size * buy_ex.taker_fee + best_bid["price"] * size * sell_ex.taker_fee
                 net_profit = gross_profit - fee_cost
 
                 if net_profit > 0:
@@ -250,12 +248,7 @@ class ArbitrageExecutor:
         sell_result = await sell_task if sell_task in done else None
 
         # Check results
-        if (
-            buy_result
-            and sell_result
-            and buy_result["filled"]
-            and sell_result["filled"]
-        ):
+        if buy_result and sell_result and buy_result["filled"] and sell_result["filled"]:
             print(f"   ✅ Both legs filled. Profit: {opportunity.net_profit:.2f}")
             return True
 

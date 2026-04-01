@@ -18,6 +18,7 @@ Inspired by: TradeStation RadarScreen, TradingView Screener, TC2000
 
 import logging
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
@@ -399,17 +400,13 @@ class MarketScanner:
 
         return results
 
-    def _scan_parallel(
-        self, market_data: dict[str, dict[str, Any]], criteria: list[ScanCriteria]
-    ) -> list[ScanResult]:
+    def _scan_parallel(self, market_data: dict[str, dict[str, Any]], criteria: list[ScanCriteria]) -> list[ScanResult]:
         """Scan symbols in parallel."""
         results = []
 
         with ThreadPoolExecutor(max_workers=self._max_workers) as executor:
             futures = {
-                executor.submit(
-                    self._scan_symbol, symbol, market_data.get(symbol, {}), criteria
-                ): symbol
+                executor.submit(self._scan_symbol, symbol, market_data.get(symbol, {}), criteria): symbol
                 for symbol in self._symbols
                 if symbol in market_data
             }
@@ -425,9 +422,7 @@ class MarketScanner:
 
         return results
 
-    def _scan_symbol(
-        self, symbol: str, data: dict[str, Any], criteria: list[ScanCriteria]
-    ) -> ScanResult | None:
+    def _scan_symbol(self, symbol: str, data: dict[str, Any], criteria: list[ScanCriteria]) -> ScanResult | None:
         """Scan a single symbol against criteria."""
         if not data:
             return None
@@ -582,9 +577,7 @@ class MarketScanner:
         elif ctype == ScanCriteriaType.MOMENTUM:
             # Price change and RSI combination
             change_pct = params.get("min_change_pct", 1.0)
-            price_change = (
-                ((price - open_price) / open_price) * 100 if open_price > 0 else 0
-            )
+            price_change = ((price - open_price) / open_price) * 100 if open_price > 0 else 0
 
             if abs(price_change) >= change_pct:
                 direction = "bullish" if price_change > 0 else "bearish"
@@ -894,9 +887,7 @@ def create_scanner_router(scanner: MarketScanner):
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e)) from e
 
-        results = scanner.scan(
-            request.market_data, criteria=criteria, min_strength=request.min_strength
-        )
+        results = scanner.scan(request.market_data, criteria=criteria, min_strength=request.min_strength)
         return [r.to_dict() for r in results]
 
     @router.get("/opportunities")
@@ -943,9 +934,7 @@ def create_scanner_router(scanner: MarketScanner):
                 detail=f"Invalid criteria type: {request.criteria_type}",
             ) from None
 
-        scanner.add_criteria(
-            criteria_type, request.parameters, request.weight, request.required
-        )
+        scanner.add_criteria(criteria_type, request.parameters, request.weight, request.required)
         return {"status": "added"}
 
     @router.delete("/criteria")
@@ -957,10 +946,7 @@ def create_scanner_router(scanner: MarketScanner):
     @router.get("/results")
     async def get_results():
         """Get last scan results."""
-        return {
-            symbol: result.to_dict()
-            for symbol, result in scanner.get_all_results().items()
-        }
+        return {symbol: result.to_dict() for symbol, result in scanner.get_all_results().items()}
 
     @router.get("/results/{symbol}")
     async def get_symbol_result(symbol: str):

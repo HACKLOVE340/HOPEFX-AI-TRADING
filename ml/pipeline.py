@@ -25,6 +25,7 @@ import os
 import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -222,9 +223,7 @@ class FeatureEngineer:
         feats["vol_zscore"] = (v - vol_mean) / (vol_std + 1e-10)
 
         # Price position in range
-        feats["range_pos"] = (c - lo.rolling(20).min()) / (
-            h.rolling(20).max() - lo.rolling(20).min() + 1e-10
-        )
+        feats["range_pos"] = (c - lo.rolling(20).min()) / (h.rolling(20).max() - lo.rolling(20).min() + 1e-10)
 
         # Momentum
         feats["mom_10"] = c / c.shift(10) - 1
@@ -379,8 +378,7 @@ class WalkForwardValidator:
         remaining = n - min_train
         if remaining < self._n_folds:
             raise ValueError(
-                f"Insufficient data for {self._n_folds} folds: "
-                f"n={n}, min_train={min_train}, remaining={remaining}",
+                f"Insufficient data for {self._n_folds} folds: n={n}, min_train={min_train}, remaining={remaining}",
             )
 
         fold_size = remaining // self._n_folds
@@ -609,8 +607,7 @@ class MLPipeline:
         self._validation_report = report
 
         logger.info(
-            "MLPipeline: OOS accuracy=%.4f (target=%.2f) p=%.6f (target=%.4f) "
-            "AUC=%.4f folds=%d",
+            "MLPipeline: OOS accuracy=%.4f (target=%.2f) p=%.6f (target=%.4f) AUC=%.4f folds=%d",
             report.oos_accuracy,
             self.OOS_ACCURACY_TARGET,
             report.p_value,
@@ -634,9 +631,7 @@ class MLPipeline:
 
         # ── 4. Final model training (full dataset) ────────────────────────────
         if report.passes_accuracy_gate and report.passes_pvalue_gate:
-            logger.info(
-                "MLPipeline: gates passed — training final model on full dataset."
-            )
+            logger.info("MLPipeline: gates passed — training final model on full dataset.")
             self._predictor.fit(X, y)
             model_path = str(self._model_dir / "xgb_xauusd.pkl")
             self._predictor.save(model_path)

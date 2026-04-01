@@ -1,6 +1,6 @@
 # Security Guide
 
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 This document covers all security-relevant configuration, known fixes applied,
 and the responsible disclosure process.

@@ -31,6 +31,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -355,8 +356,7 @@ class FTMOBroker(BasePropFirmBroker):
             potential_loss = quantity * abs(price - stop_loss) if price else 0
             if potential_loss > metrics.remaining_daily_loss:
                 raise ValueError(
-                    f"Order size exceeds daily loss limit. "
-                    f"Max allowed: {metrics.remaining_daily_loss}",
+                    f"Order size exceeds daily loss limit. Max allowed: {metrics.remaining_daily_loss}",
                 )
 
         endpoint = f"/accounts/{self.account_id}/orders"
@@ -479,9 +479,7 @@ class FTMOBroker(BasePropFirmBroker):
                         pnl=float(t.get("pnl", 0)),
                         pnl_percentage=float(t.get("pnlPercentage", 0)),
                         entry_time=datetime.fromisoformat(t["entryTime"]),
-                        exit_time=datetime.fromisoformat(t["exitTime"])
-                        if t.get("exitTime")
-                        else None,
+                        exit_time=datetime.fromisoformat(t["exitTime"]) if t.get("exitTime") else None,
                         status="closed",
                     )
                     trades.append(trade)
@@ -714,9 +712,7 @@ class The5ersBroker(BasePropFirmBroker):
                         quantity=float(t["volume"]),
                         pnl=float(t.get("pnl", 0)),
                         entry_time=datetime.fromisoformat(t["openTime"]),
-                        exit_time=datetime.fromisoformat(t["closeTime"])
-                        if t.get("closeTime")
-                        else None,
+                        exit_time=datetime.fromisoformat(t["closeTime"]) if t.get("closeTime") else None,
                         status="closed",
                     )
                     trades.append(trade)
@@ -946,9 +942,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
                         pnl=float(t.get("profit", 0)),
                         pnl_percentage=float(t.get("profitPercent", 0)),
                         entry_time=datetime.fromisoformat(t["openTime"]),
-                        exit_time=datetime.fromisoformat(t["closeTime"])
-                        if t.get("closeTime")
-                        else None,
+                        exit_time=datetime.fromisoformat(t["closeTime"]) if t.get("closeTime") else None,
                         status="closed",
                     )
                     trades.append(trade)
@@ -1181,9 +1175,7 @@ class TopStepBroker(BasePropFirmBroker):
                         pnl=float(t.get("profit", 0)),
                         pnl_percentage=float(t.get("profitPercent", 0)),
                         entry_time=datetime.fromisoformat(t["openTime"]),
-                        exit_time=datetime.fromisoformat(t["closeTime"])
-                        if t.get("closeTime")
-                        else None,
+                        exit_time=datetime.fromisoformat(t["closeTime"]) if t.get("closeTime") else None,
                         status="closed",
                     )
                     trades.append(trade)

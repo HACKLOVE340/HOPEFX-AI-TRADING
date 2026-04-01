@@ -37,9 +37,7 @@ except Exception as _router_import_err:  # pragma: no cover
     from fastapi import APIRouter as _APIRouter
 
     router = _APIRouter(prefix="/api/auth", tags=["Authentication"])
-    logger.warning(
-        "auth.router unavailable, using empty fallback router: %s", _router_import_err
-    )
+    logger.warning("auth.router unavailable, using empty fallback router: %s", _router_import_err)
 
 # Role hierarchy: higher index = more privileged
 _ROLE_RANK: dict = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
@@ -234,11 +232,10 @@ def require_kyc(
         if request.app is not _main_app:
             return user  # not the main app — skip KYC (test / embedded app)
         if app_state.compliance_manager is not None and not app_state.compliance_manager.is_kyc_approved(user.sub):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="KYC verification required before trading. "
-                    "Please complete identity verification.",
-                )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="KYC verification required before trading. Please complete identity verification.",
+            )
     except ImportError:
         pass  # app not fully initialised (e.g. during tests)
     return user

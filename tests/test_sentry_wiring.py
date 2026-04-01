@@ -107,24 +107,16 @@ class TestInitSentryWithDSN:
             {
                 "sentry_sdk": sdk_mock,
                 "sentry_sdk.integrations": MagicMock(),
-                "sentry_sdk.integrations.logging": MagicMock(
-                    LoggingIntegration=MagicMock(return_value=MagicMock())
-                ),
-                "sentry_sdk.integrations.fastapi": MagicMock(
-                    FastApiIntegration=MagicMock(return_value=MagicMock())
-                ),
+                "sentry_sdk.integrations.logging": MagicMock(LoggingIntegration=MagicMock(return_value=MagicMock())),
+                "sentry_sdk.integrations.fastapi": MagicMock(FastApiIntegration=MagicMock(return_value=MagicMock())),
                 "sentry_sdk.integrations.starlette": MagicMock(
                     StarletteIntegration=MagicMock(return_value=MagicMock())
                 ),
                 "sentry_sdk.integrations.sqlalchemy": MagicMock(
                     SqlalchemyIntegration=MagicMock(return_value=MagicMock())
                 ),
-                "sentry_sdk.integrations.redis": MagicMock(
-                    RedisIntegration=MagicMock(return_value=MagicMock())
-                ),
-                "sentry_sdk.integrations.aiohttp": MagicMock(
-                    AioHttpIntegration=MagicMock(return_value=MagicMock())
-                ),
+                "sentry_sdk.integrations.redis": MagicMock(RedisIntegration=MagicMock(return_value=MagicMock())),
+                "sentry_sdk.integrations.aiohttp": MagicMock(AioHttpIntegration=MagicMock(return_value=MagicMock())),
             },
         ):
             import importlib
@@ -143,24 +135,12 @@ class TestInitSentryWithDSN:
         sdk_mock = _make_sentry_mock()
         integration_mocks = {
             "sentry_sdk": sdk_mock,
-            "sentry_sdk.integrations.logging": MagicMock(
-                LoggingIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.fastapi": MagicMock(
-                FastApiIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.starlette": MagicMock(
-                StarletteIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.sqlalchemy": MagicMock(
-                SqlalchemyIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.redis": MagicMock(
-                RedisIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.aiohttp": MagicMock(
-                AioHttpIntegration=MagicMock(return_value=MagicMock())
-            ),
+            "sentry_sdk.integrations.logging": MagicMock(LoggingIntegration=MagicMock(return_value=MagicMock())),
+            "sentry_sdk.integrations.fastapi": MagicMock(FastApiIntegration=MagicMock(return_value=MagicMock())),
+            "sentry_sdk.integrations.starlette": MagicMock(StarletteIntegration=MagicMock(return_value=MagicMock())),
+            "sentry_sdk.integrations.sqlalchemy": MagicMock(SqlalchemyIntegration=MagicMock(return_value=MagicMock())),
+            "sentry_sdk.integrations.redis": MagicMock(RedisIntegration=MagicMock(return_value=MagicMock())),
+            "sentry_sdk.integrations.aiohttp": MagicMock(AioHttpIntegration=MagicMock(return_value=MagicMock())),
         }
         with patch.dict(sys.modules, integration_mocks):
             import importlib
@@ -186,24 +166,16 @@ class TestInitSentryWithDSN:
             sys.modules,
             {
                 "sentry_sdk": sdk_mock,
-                "sentry_sdk.integrations.logging": MagicMock(
-                    LoggingIntegration=MagicMock(return_value=MagicMock())
-                ),
-                "sentry_sdk.integrations.fastapi": MagicMock(
-                    FastApiIntegration=MagicMock(return_value=MagicMock())
-                ),
+                "sentry_sdk.integrations.logging": MagicMock(LoggingIntegration=MagicMock(return_value=MagicMock())),
+                "sentry_sdk.integrations.fastapi": MagicMock(FastApiIntegration=MagicMock(return_value=MagicMock())),
                 "sentry_sdk.integrations.starlette": MagicMock(
                     StarletteIntegration=MagicMock(return_value=MagicMock())
                 ),
                 "sentry_sdk.integrations.sqlalchemy": MagicMock(
                     SqlalchemyIntegration=MagicMock(return_value=MagicMock())
                 ),
-                "sentry_sdk.integrations.redis": MagicMock(
-                    RedisIntegration=MagicMock(return_value=MagicMock())
-                ),
-                "sentry_sdk.integrations.aiohttp": MagicMock(
-                    AioHttpIntegration=MagicMock(return_value=MagicMock())
-                ),
+                "sentry_sdk.integrations.redis": MagicMock(RedisIntegration=MagicMock(return_value=MagicMock())),
+                "sentry_sdk.integrations.aiohttp": MagicMock(AioHttpIntegration=MagicMock(return_value=MagicMock())),
             },
         ):
             import importlib
@@ -213,7 +185,7 @@ class TestInitSentryWithDSN:
             sc.init_sentry()
 
         call_kwargs = sdk_mock.init.call_args[1]
-        assert call_kwargs["traces_sample_rate"] == 0.05  # noqa: PLR2004
+        assert call_kwargs["traces_sample_rate"] == 0.05
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +215,7 @@ class TestScrubDict:
         # user_id is in _SCRUB_FIELDS (account IDs are PII); use a safe field instead
         result = self.scrub({"token": "Bearer xyz", "request_id": 42})
         assert result["token"] == "[Filtered]"
-        assert result["request_id"] == 42  # noqa: PLR2004
+        assert result["request_id"] == 42
 
     def test_scrubs_nested_dict(self):
         result = self.scrub({"outer": {"api_key": "secret", "safe": "value"}})
@@ -269,7 +241,7 @@ class TestScrubDict:
         import monitoring.sentry_config as sc
 
         assert sc._scrub_dict("string") == "string"
-        assert sc._scrub_dict(42) == 42  # noqa: PLR2004
+        assert sc._scrub_dict(42) == 42
 
 
 # ---------------------------------------------------------------------------

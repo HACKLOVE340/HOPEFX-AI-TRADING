@@ -60,9 +60,7 @@ def main():
     python_files = list(project_root.rglob("*.py"))
 
     # Exclude venv, .git, etc
-    python_files = [
-        f for f in python_files if ".git" not in str(f) and "venv" not in str(f)
-    ]
+    python_files = [f for f in python_files if ".git" not in str(f) and "venv" not in str(f)]
 
     total_files = len(python_files)
     print(f"Found {total_files} Python files to process")

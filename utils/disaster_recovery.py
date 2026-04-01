@@ -15,6 +15,7 @@ import gzip
 from typing import TYPE_CHECKING
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 import hashlib
@@ -42,9 +43,7 @@ class ContinuousBackup:
     Continuous incremental backup with point-in-time recovery.
     """
 
-    def __init__(
-        self, backup_path: str = "backups/", snapshot_interval_minutes: int = 5
-    ):
+    def __init__(self, backup_path: str = "backups/", snapshot_interval_minutes: int = 5):
         self.backup_path = Path(backup_path)
         self.snapshot_interval = snapshot_interval_minutes
         self.backup_path.mkdir(parents=True, exist_ok=True)
@@ -75,22 +74,16 @@ class ContinuousBackup:
 
         state = SystemState(
             timestamp=datetime.now(UTC).isoformat(),
-            event_store_position=event_store._sequence
-            if hasattr(event_store, "_sequence")
-            else 0,
+            event_store_position=event_store._sequence if hasattr(event_store, "_sequence") else 0,
             strategy_states={
                 sid: {
                     "is_active": strat.is_active,
-                    "performance": strat.performance
-                    if hasattr(strat, "performance")
-                    else {},
+                    "performance": strat.performance if hasattr(strat, "performance") else {},
                 }
                 for sid, strat in orchestra.strategies.items()
             },
             open_positions=[],  # Query from database
-            risk_metrics=asdict(risk_engine.current_risk)
-            if risk_engine.current_risk
-            else {},
+            risk_metrics=asdict(risk_engine.current_risk) if risk_engine.current_risk else {},
             performance_cache={},
             checksum="",  # Calculated below
         )
@@ -150,9 +143,7 @@ class ContinuousBackup:
         # Verify checksum
         state_copy = state_dict.copy()
         stored_checksum = state_copy.pop("checksum")
-        calculated = hashlib.sha256(
-            json.dumps(state_copy, sort_keys=True).encode()
-        ).hexdigest()
+        calculated = hashlib.sha256(json.dumps(state_copy, sort_keys=True).encode()).hexdigest()
 
         if stored_checksum != calculated:
             raise ValueError("Snapshot checksum verification failed!")
@@ -210,14 +201,8 @@ class FailoverManager:
                 primary = max([self.node_id] + self.peers)  # Assume highest is primary
                 if primary != self.node_id:
                     last_seen = self.last_peer_heartbeat.get(primary)
-                    if (
-                        last_seen
-                        and (datetime.now(UTC) - last_seen).seconds
-                        > self.failover_timeout
-                    ):
-                        print(
-                            f"⚠️ Primary {primary} appears down! Triggering failover..."
-                        )
+                    if last_seen and (datetime.now(UTC) - last_seen).seconds > self.failover_timeout:
+                        print(f"⚠️ Primary {primary} appears down! Triggering failover...")
                         await self._trigger_failover()
 
             await asyncio.sleep(self.heartbeat_interval)
@@ -247,9 +232,7 @@ class FailoverManager:
 
         # Lazily create a shared session
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=3.0)
-            )
+            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3.0))
 
         try:
             async with self._session.post(url, json=payload) as resp:

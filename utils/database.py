@@ -28,9 +28,7 @@ _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 def _validate_identifier(name: str, label: str = "identifier") -> str:
     """Raise ValueError if *name* is not a safe SQL identifier."""
     if not _IDENTIFIER_RE.match(name):
-        raise ValueError(
-            f"Unsafe SQL {label} {name!r}: only [A-Za-z0-9_] characters are allowed"
-        )
+        raise ValueError(f"Unsafe SQL {label} {name!r}: only [A-Za-z0-9_] characters are allowed")
     return name
 
 

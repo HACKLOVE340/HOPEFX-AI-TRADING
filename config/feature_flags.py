@@ -39,6 +39,7 @@ import os
 from enum import Enum
 from typing import Any
 from datetime import timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -719,10 +720,7 @@ def check_phase2_gate() -> tuple[bool, str]:
 
     start_str = os.getenv("OANDA_PAPER_RUN_START_UTC", "")
     if not start_str:
-        return False, (
-            "OANDA_PAPER_RUN_START_UTC not set. "
-            "Set to ISO-8601 UTC timestamp when the paper run started."
-        )
+        return False, ("OANDA_PAPER_RUN_START_UTC not set. Set to ISO-8601 UTC timestamp when the paper run started.")
     try:
         start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
         if start.tzinfo is None:
@@ -731,10 +729,7 @@ def check_phase2_gate() -> tuple[bool, str]:
         required = timedelta(days=30)
         if elapsed < required:
             remaining = required - elapsed
-            return False, (
-                f"Phase 2 gate: {elapsed.days} days elapsed, "
-                f"{remaining.days} days remaining (need 30)."
-            )
+            return False, (f"Phase 2 gate: {elapsed.days} days elapsed, {remaining.days} days remaining (need 30).")
         return True, f"Phase 2 gate passed: {elapsed.days} days elapsed."
     except ValueError as exc:
         return False, f"OANDA_PAPER_RUN_START_UTC parse error: {exc}"
@@ -771,10 +766,7 @@ def check_phase3_gate() -> tuple[bool, str]:
     # Check elapsed days
     start_str = os.getenv("OANDA_PAPER_RUN_START_UTC", "")
     if not start_str:
-        return False, (
-            "OANDA_PAPER_RUN_START_UTC not set. "
-            "Set to ISO-8601 UTC timestamp when the paper run started."
-        )
+        return False, ("OANDA_PAPER_RUN_START_UTC not set. Set to ISO-8601 UTC timestamp when the paper run started.")
     try:
         start = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
         if start.tzinfo is None:
@@ -783,13 +775,8 @@ def check_phase3_gate() -> tuple[bool, str]:
         required = timedelta(days=90)
         if elapsed < required:
             remaining = required - elapsed
-            return False, (
-                f"Phase 3 gate: {elapsed.days} days elapsed, "
-                f"{remaining.days} days remaining (need 90)."
-            )
-        return True, (
-            f"Phase 3 gate passed: {elapsed.days} days elapsed, {fill_count} fills."
-        )
+            return False, (f"Phase 3 gate: {elapsed.days} days elapsed, {remaining.days} days remaining (need 90).")
+        return True, (f"Phase 3 gate passed: {elapsed.days} days elapsed, {fill_count} fills.")
     except ValueError as exc:
         return False, f"OANDA_PAPER_RUN_START_UTC parse error: {exc}"
 
@@ -860,10 +847,7 @@ def check_sharpe_gate(
             f"({sharpe_before:.3f} → {sharpe_after:.3f}), "
             f"max allowed drop = {max_drop:.3f}."
         )
-    return True, (
-        f"Sharpe gate passed: drop={drop:.3f} "
-        f"({sharpe_before:.3f} → {sharpe_after:.3f})."
-    )
+    return True, (f"Sharpe gate passed: drop={drop:.3f} ({sharpe_before:.3f} → {sharpe_after:.3f}).")
 
 
 # ---------------------------------------------------------------------------

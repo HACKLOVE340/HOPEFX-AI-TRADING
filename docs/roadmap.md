@@ -1,6 +1,6 @@
 # HOPEFX — Roadmap
 
-> Last updated: 2026-07-14 (v1.17)
+> Last updated: 2026-04-01 (v1.17)
 
 ---
 

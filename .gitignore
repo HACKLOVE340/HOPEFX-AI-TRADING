@@ -40,8 +40,11 @@ MANIFEST
 # Node
 node_modules/
 dashboard/node_modules/
-package-lock.json
+# Ignore root-level lockfile (Python project root) but track frontend lockfile for CI caching
+/package-lock.json
 dashboard/package-lock.json
+# Explicitly track frontend lockfile
+!frontend/package-lock.json
 
 # Virtual environments
 venv/

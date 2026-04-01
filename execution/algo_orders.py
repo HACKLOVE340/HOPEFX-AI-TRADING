@@ -85,6 +85,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -200,9 +201,7 @@ class AlgoOrder(ABC):
         )
 
     def get_report(self) -> AlgoFillReport:
-        duration = (self._completed_at or time.monotonic()) - (
-            self._started_at or time.monotonic()
-        )
+        duration = (self._completed_at or time.monotonic()) - (self._started_at or time.monotonic())
         return AlgoFillReport(
             algo_id=self.algo_id,
             symbol=self.symbol,
@@ -242,9 +241,7 @@ class AlgoOrder(ABC):
         self.child_orders.append(child)
 
         if self._broker_submit is None:
-            logger.warning(
-                "AlgoOrder %s: no broker_submit_fn — child order not sent", self.algo_id
-            )
+            logger.warning("AlgoOrder %s: no broker_submit_fn — child order not sent", self.algo_id)
             return child
 
         try:
@@ -275,9 +272,7 @@ class AlgoOrder(ABC):
                 )
             else:
                 child.status = "rejected"
-                logger.warning(
-                    "AlgoOrder %s: child order rejected: %s", self.algo_id, result
-                )
+                logger.warning("AlgoOrder %s: child order rejected: %s", self.algo_id, result)
         except Exception as exc:
             child.status = "error"
             logger.error("AlgoOrder %s: child submit error: %s", self.algo_id, exc)
@@ -340,9 +335,7 @@ class TWAPOrder(AlgoOrder):
 
                 if i < self.num_slices - 1:
                     # Add jitter to avoid predictable timing
-                    jitter = (
-                        self._interval * ALGO_TWAP_JITTER * (np.random.random() - 0.5)
-                    )
+                    jitter = self._interval * ALGO_TWAP_JITTER * (np.random.random() - 0.5)
                     sleep_time = max(0.1, self._interval + jitter)
                     await asyncio.sleep(sleep_time)
 
@@ -494,9 +487,7 @@ class VWAPOrder(AlgoOrder):
                     await self._submit_child(qty)
 
                 if i < len(slice_quantities) - 1:
-                    jitter = (
-                        self._interval * ALGO_TWAP_JITTER * (np.random.random() - 0.5)
-                    )
+                    jitter = self._interval * ALGO_TWAP_JITTER * (np.random.random() - 0.5)
                     await asyncio.sleep(max(0.1, self._interval + jitter))
 
             self.status = AlgoStatus.COMPLETED
@@ -611,9 +602,7 @@ class AlgoOrderManager:
     """
 
     # Thresholds for automatic algo selection (env-overridable)
-    LARGE_ORDER_THRESHOLD: float = float(
-        os.getenv("ALGO_LARGE_ORDER_THRESHOLD", "10.0")
-    )
+    LARGE_ORDER_THRESHOLD: float = float(os.getenv("ALGO_LARGE_ORDER_THRESHOLD", "10.0"))
     ICEBERG_THRESHOLD: float = float(os.getenv("ALGO_ICEBERG_THRESHOLD", "50.0"))
     DEFAULT_TWAP_DURATION: float = float(os.getenv("ALGO_DEFAULT_TWAP_DURATION", "300"))
     DEFAULT_TWAP_SLICES: int = int(os.getenv("ALGO_DEFAULT_TWAP_SLICES", "10"))

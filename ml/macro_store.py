@@ -72,14 +72,14 @@ _DEFAULT_SERIES: dict[str, str] = {
     "cpi_surprise": "cpi_surprise.csv",
     "vix": "vix_daily.csv",
     "gold_etf_flow": "gold_etf_flow.csv",
-    # CFTC COT series (populated by CFTCCOTFeed, persisted to data/macro/)
-    "cot_net_spec": "cot_net_spec.csv",
-    "cot_net_spec_pct": "cot_net_spec_pct.csv",
-    "cot_comm_net": "cot_comm_net.csv",
-    "cot_open_interest": "cot_open_interest.csv",
-    # IMF central bank gold reserves (populated by IMFGoldFeed)
-    "imf_cb_gold_tonnes": "imf_cb_gold_tonnes.csv",
-    "imf_cb_gold_chg_qoq": "imf_cb_gold_chg_qoq.csv",
+    # WGC gold demand series (quarterly/monthly, forward-filled to hourly)
+    # Populated by WGCFeed.inject_into_macro_store() at startup and daily refresh.
+    # CSV fallback: place manually downloaded WGC exports in data/macro/
+    "wgc_total_demand": "wgc_total_demand.csv",
+    "wgc_investment": "wgc_investment.csv",
+    "wgc_central_bank": "wgc_central_bank.csv",
+    "wgc_jewellery": "wgc_jewellery.csv",
+    "wgc_etf_flow": "wgc_etf_flow.csv",
 }
 
 
@@ -117,9 +117,7 @@ class MacroStore:
         """
         p = Path(path)
         if not p.exists():
-            logger.debug(
-                "MacroStore.load_csv: %s not found — skipping %s", p, series_name
-            )
+            logger.debug("MacroStore.load_csv: %s not found — skipping %s", p, series_name)
             return 0
         try:
             df = pd.read_csv(p, parse_dates=[date_col])
@@ -128,9 +126,7 @@ class MacroStore:
             df["date"] = pd.to_datetime(df["date"], utc=True)
             series = df.set_index("date")["value"].sort_index()
             self._series[series_name] = series
-            logger.info(
-                "MacroStore: loaded %d rows for %s from %s", len(series), series_name, p
-            )
+            logger.info("MacroStore: loaded %d rows for %s from %s", len(series), series_name, p)
             return len(series)
         except Exception as exc:
             logger.warning("MacroStore.load_csv failed for %s: %s", series_name, exc)
@@ -170,26 +166,29 @@ class MacroStore:
         self,
         ohlcv_h1: pd.DataFrame,
         series: list[str] | None = None,
-        fill_method: str = "ffill",
     ) -> pd.DataFrame:
         """
         Align daily macro series to the hourly OHLCV index.
 
         Each daily value is forward-filled to all hourly bars until the next
-        daily observation. This is the correct approach for macro data:
+        daily observation. This is the correct causal approach for macro data:
         a DXY close of 102.34 on Monday applies to all hourly bars on
         Tuesday until Tuesday's close is published.
 
+        bfill is intentionally NOT supported. Back-filling would propagate a
+        future observation into past bars (look-ahead bias), corrupting any
+        backtest or training run that uses this data.
+
         Parameters
         ----------
-        ohlcv_h1    : DataFrame with DatetimeIndex (hourly)
-        series      : List of series names to include (default: all loaded)
-        fill_method : "ffill" (default) or "bfill"
+        ohlcv_h1 : DataFrame with DatetimeIndex (hourly)
+        series   : List of series names to include (default: all loaded)
 
         Returns
         -------
         DataFrame with same index as ohlcv_h1, one column per macro series.
-        Missing values (before first observation) are filled with 0.0.
+        Leading NaNs (before the first observation) are filled with 0.0 —
+        the neutral/unknown value — rather than back-filled from the future.
         """
         if ohlcv_h1.empty:
             return pd.DataFrame(index=ohlcv_h1.index)
@@ -201,9 +200,7 @@ class MacroStore:
 
         names = series or list(self._series.keys())
         if not names:
-            logger.debug(
-                "MacroStore.align_to_hourly: no series loaded — returning empty"
-            )
+            logger.debug("MacroStore.align_to_hourly: no series loaded — returning empty")
             return pd.DataFrame(index=ohlcv_h1.index)
 
         aligned_cols: dict[str, pd.Series] = {}
@@ -217,10 +214,11 @@ class MacroStore:
             if daily.index.tz is None:
                 daily = daily.tz_localize("UTC")
 
-            # Reindex to hourly, forward-fill, then fill any leading NaN with 0
+            # Reindex to hourly then forward-fill only.
+            # Leading NaNs (before the first daily observation) are filled
+            # with 0.0 — never back-filled — to avoid look-ahead bias.
             combined_idx = idx.union(daily.index)
-            reindexed = daily.reindex(combined_idx)
-            reindexed = reindexed.ffill() if fill_method == "ffill" else reindexed.bfill()
+            reindexed = daily.reindex(combined_idx).ffill()
             aligned = reindexed.reindex(idx).fillna(0.0)
             aligned_cols[name] = aligned
 

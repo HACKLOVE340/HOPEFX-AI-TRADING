@@ -233,9 +233,7 @@ class LSTMPricePredictor(BaseMLModel):
                     "timestamp": pd.Timestamp.now().isoformat(),
                     "epochs": len(history.history["loss"]),
                     "final_loss": float(history.history["loss"][-1]),
-                    "final_val_loss": float(history.history["val_loss"][-1])
-                    if validation_data
-                    else None,
+                    "final_val_loss": float(history.history["val_loss"][-1]) if validation_data else None,
                 },
             )
 

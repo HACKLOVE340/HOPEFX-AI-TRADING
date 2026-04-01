@@ -15,6 +15,7 @@ Tests for:
 
 import pytest
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from unittest.mock import Mock, patch
 
@@ -47,8 +48,8 @@ class TestEconomicEvent:
         assert event.event_type == EventType.INTEREST_RATE
         assert event.importance == EventImportance.CRITICAL
         assert event.country == "US"
-        assert event.actual == 5.5  # noqa: PLR2004
-        assert event.forecast == 5.25  # noqa: PLR2004
+        assert event.actual == 5.5
+        assert event.forecast == 5.25
 
     def test_event_to_dict(self):
         """Test event serialization to dict."""
@@ -230,10 +231,7 @@ class TestEconomicCalendar:
         calendar.add_event(low_impact)
 
         high_impact_events = calendar.get_high_impact_events()
-        assert all(
-            e.importance in [EventImportance.HIGH, EventImportance.CRITICAL]
-            for e in high_impact_events
-        )
+        assert all(e.importance in [EventImportance.HIGH, EventImportance.CRITICAL] for e in high_impact_events)
 
 
 # ============================================================
@@ -256,9 +254,9 @@ class TestSentimentScore:
             compound_score=0.75,
         )
 
-        assert score.polarity == 0.7  # noqa: PLR2004
-        assert score.subjectivity == 0.5  # noqa: PLR2004
-        assert score.confidence == 0.85  # noqa: PLR2004
+        assert score.polarity == 0.7
+        assert score.subjectivity == 0.5
+        assert score.confidence == 0.85
         assert score.label == SentimentLabel.POSITIVE
 
     def test_score_to_dict(self):
@@ -273,7 +271,7 @@ class TestSentimentScore:
         )
 
         result = score.to_dict()
-        assert result["polarity"] == 0.3  # noqa: PLR2004
+        assert result["polarity"] == 0.3
         assert result["label"] == "positive"
 
     def test_is_bullish(self):
@@ -722,7 +720,7 @@ class TestNewsAggregator:
         ]
 
         unique = aggregator._deduplicate(articles)
-        assert len(unique) == 2  # noqa: PLR2004
+        assert len(unique) == 2
 
 
 # ============================================================

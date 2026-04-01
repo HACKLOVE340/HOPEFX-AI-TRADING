@@ -10,6 +10,7 @@ Pydantic v2 domain models with strict validation.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 from typing import Any

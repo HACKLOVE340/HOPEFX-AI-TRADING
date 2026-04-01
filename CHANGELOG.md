@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [1.17.0] — 2026-04-01
 
 ### Fixed (2026-03-29 — Diagnostic Report Resolution)
 - **Kill switch**: stale-flag guard added — flags >24h old no longer auto-restore

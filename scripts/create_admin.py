@@ -56,9 +56,7 @@ def _get_engine():
     return create_engine(db_url, connect_args=connect_args)
 
 
-def create_or_update_admin(
-    email: str, username: str, password: str, reset: bool
-) -> None:
+def create_or_update_admin(email: str, username: str, password: str, reset: bool) -> None:
     engine = _get_engine()
     Base.metadata.create_all(engine)
 
@@ -68,11 +66,7 @@ def create_or_update_admin(
     session = Session()
 
     try:
-        existing = (
-            session.query(User)
-            .filter((User.email == email.lower()) | (User.username == username))
-            .first()
-        )
+        existing = session.query(User).filter((User.email == email.lower()) | (User.username == username)).first()
 
         if existing and not reset:
             print(f"\n[INFO] User '{existing.username}' already exists.")
@@ -126,12 +120,8 @@ def main():
     parser = argparse.ArgumentParser(description="Create or reset HOPEFX admin user")
     parser.add_argument("--email", default="admin@hopefx.io", help="Admin email")
     parser.add_argument("--username", default="admin", help="Admin username")
-    parser.add_argument(
-        "--password", default=None, help="Password (auto-generated if omitted)"
-    )
-    parser.add_argument(
-        "--reset", action="store_true", help="Reset password if user exists"
-    )
+    parser.add_argument("--password", default=None, help="Password (auto-generated if omitted)")
+    parser.add_argument("--reset", action="store_true", help="Reset password if user exists")
     args = parser.parse_args()
 
     if args.password is None:

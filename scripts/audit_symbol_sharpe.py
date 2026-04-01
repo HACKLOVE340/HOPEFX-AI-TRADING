@@ -45,6 +45,7 @@ import logging
 import math
 import sys
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -336,9 +337,7 @@ def audit_symbol(
     result["ref_std"] = round(float(np.std(reference_dist)), 4)
     result["cmp_mean"] = round(float(np.mean(comparison_dist)), 4)
     result["cmp_std"] = round(float(np.std(comparison_dist)), 4)
-    result["mean_drift_sigma"] = round(
-        abs(result["cmp_mean"] - result["ref_mean"]) / max(result["ref_std"], 1e-10), 3
-    )
+    result["mean_drift_sigma"] = round(abs(result["cmp_mean"] - result["ref_mean"]) / max(result["ref_std"], 1e-10), 3)
 
     # Look-ahead bias detection (on comparison returns)
     # Convert probabilities to signed returns: r = sign(p - 0.5) * 2 * |p - 0.5|
@@ -351,12 +350,8 @@ def audit_symbol(
     # Sharpe plausibility
     sharpe_bound = sharpe_upper_bound(n_trades, win_rate)
     result["sharpe_upper_bound"] = sharpe_bound
-    result["sharpe_plausible"] = (
-        known_sharpe is None or known_sharpe <= SHARPE_PLAUSIBILITY_THRESHOLD
-    )
-    result["sharpe_exceeds_bound"] = (
-        known_sharpe is not None and known_sharpe > sharpe_bound
-    )
+    result["sharpe_plausible"] = known_sharpe is None or known_sharpe <= SHARPE_PLAUSIBILITY_THRESHOLD
+    result["sharpe_exceeds_bound"] = known_sharpe is not None and known_sharpe > sharpe_bound
 
     # Overall verdict
     flags = []
@@ -458,14 +453,9 @@ def main(argv: list[str] | None = None) -> int:
         cmp_dist = _load_predictions_csv(csv_dir, symbol)
         if cmp_dist is None:
             implied_wr = _implied_win_rate_from_sharpe(symbol)
-            wr_note = (
-                f" (implied win-rate from known Sharpe: {implied_wr:.1%})"
-                if implied_wr is not None
-                else ""
-            )
+            wr_note = f" (implied win-rate from known Sharpe: {implied_wr:.1%})" if implied_wr is not None else ""
             logger.warning(
-                "%s: no predictions CSV found in %s%s — skipping. "
-                "Run the ML pipeline to generate evaluation CSVs.",
+                "%s: no predictions CSV found in %s%s — skipping. Run the ML pipeline to generate evaluation CSVs.",
                 symbol,
                 csv_dir,
                 wr_note,
@@ -491,9 +481,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  Known Sharpe:          {known_sharpe}")
         print(f"  Sharpe upper bound:    {result['sharpe_upper_bound']}")
         print(f"  PSI:                   {result['psi']} ({result['psi_verdict']})")
-        print(
-            f"  KS p-value:            {result['ks_p_value']} ({result['ks_verdict']})"
-        )
+        print(f"  KS p-value:            {result['ks_p_value']} ({result['ks_verdict']})")
         print(f"  Mean drift (sigma):    {result['mean_drift_sigma']}")
         la = result.get("lookahead_checks", {})
         if isinstance(la, dict):
@@ -528,10 +516,8 @@ def main(argv: list[str] | None = None) -> int:
     report_path = output_dir / f"sharpe_audit_{date_str}.json"
     report_path.write_text(json.dumps(report, indent=2, default=str))
 
-    print(f"\n{'='*60}")
-    print(
-        f"Audit complete: {report['summary']['passed']}/{report['summary']['total']} passed"
-    )
+    print(f"\n{'=' * 60}")
+    print(f"Audit complete: {report['summary']['passed']}/{report['summary']['total']} passed")
     print(f"Report saved:   {report_path}")
 
     if any_failed:
@@ -539,9 +525,7 @@ def main(argv: list[str] | None = None) -> int:
         print("  1. Re-examined for look-ahead bias in feature construction")
         print("  2. Re-backtested with walk-forward validation")
         print("  3. Excluded from live trading until Sharpe is confirmed OOS")
-        print(
-            "\nRun signal_validator.py against live fills to confirm distribution match."
-        )
+        print("\nRun signal_validator.py against live fills to confirm distribution match.")
 
     return 1 if (args.strict and any_failed) else 0
 

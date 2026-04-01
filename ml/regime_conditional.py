@@ -216,9 +216,7 @@ def add_regime_features(
     X = X.copy()
 
     if "close" not in X.columns:
-        logger.warning(
-            "add_regime_features: 'close' column missing — regime features set to 0.5"
-        )
+        logger.warning("add_regime_features: 'close' column missing — regime features set to 0.5")
         X["regime_hurst"] = 0.5
         X["regime_trend_str"] = 0.25
         return X
@@ -277,9 +275,7 @@ def add_regime_features(
             coef = np.polyfit(np.arange(len(x)), x, 1)[0]
             return float(np.clip(abs(coef) / (np.std(x) + 1e-9), 0.0, 1.0))
 
-        X["regime_trend_str"] = (
-            close.rolling(adx_window).apply(_slope, raw=True).shift(1)
-        )
+        X["regime_trend_str"] = close.rolling(adx_window).apply(_slope, raw=True).shift(1)
 
     # Fill NaN from rolling windows with neutral values
     X["regime_hurst"] = X["regime_hurst"].fillna(0.5)
@@ -620,10 +616,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
             # Minimal feature set from OHLCV
             X = (
                 ohlcv[["open", "high", "low", "close", "volume"]].copy()
-                if all(
-                    c in ohlcv.columns
-                    for c in ["open", "high", "low", "close", "volume"]
-                )
+                if all(c in ohlcv.columns for c in ["open", "high", "low", "close", "volume"])
                 else ohlcv.copy()
             )
 
@@ -699,9 +692,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         regime_name = REGIME_NAMES.get(regime_id, "unknown")
 
         model = self._regime_models.get(regime_id, self._global_model)
-        model_used = (
-            "regime_specific" if regime_id in self._regime_models else "global_fallback"
-        )
+        model_used = "regime_specific" if regime_id in self._regime_models else "global_fallback"
 
         try:
             proba = model.predict_proba(last_row)
@@ -784,9 +775,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         for regime_id, regime_name in REGIME_NAMES.items():
             frac = float((labels == regime_id).sum()) / total
             _PROM.regime_distribution.labels(regime=regime_name).set(frac)
-            _PROM.predict_total.labels(symbol=symbol, regime=regime_name).inc(
-                amount=int((labels == regime_id).sum())
-            )
+            _PROM.predict_total.labels(symbol=symbol, regime=regime_name).inc(amount=int((labels == regime_id).sum()))
 
         return proba
 

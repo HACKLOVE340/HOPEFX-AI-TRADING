@@ -15,6 +15,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum, auto
 from typing import Any
@@ -304,7 +305,7 @@ class AsyncExecutionEngine:
         """Get current positions with caching"""
         # Return cached if recent
         if hasattr(self, "_position_cache_time") and time.time() - self._position_cache_time < 1.0:  # 1 second cache
-                return list(self.position_cache.values())
+            return list(self.position_cache.values())
 
         # Fetch fresh
         positions = []
@@ -355,8 +356,7 @@ class AsyncExecutionEngine:
         """Fill simulation for paper trading only — never called in live mode."""
         if not self.paper_mode:
             raise RuntimeError(
-                "_simulate_fill called in live mode. "
-                "Live orders must be routed through the real broker API."
+                "_simulate_fill called in live mode. Live orders must be routed through the real broker API."
             )
         await asyncio.sleep(0.01)  # 10ms simulated latency
 
@@ -423,8 +423,7 @@ class AsyncExecutionEngine:
         """Delayed fill simulation for paper trading only — never called in live mode."""
         if not self.paper_mode:
             raise RuntimeError(
-                "_delayed_fill_simulation called in live mode. "
-                "Live orders must be routed through the real broker API."
+                "_delayed_fill_simulation called in live mode. Live orders must be routed through the real broker API."
             )
         await asyncio.sleep(self._rng.exponential(5))  # Mean 5s delay
 
@@ -460,8 +459,7 @@ class AsyncExecutionEngine:
         async with self.order_locks[order.id]:
             order.filled_qty += fill.quantity
             order.avg_fill_price = (
-                order.avg_fill_price * (order.filled_qty - fill.quantity)
-                + fill.price * fill.quantity
+                order.avg_fill_price * (order.filled_qty - fill.quantity) + fill.price * fill.quantity
             ) / order.filled_qty
 
             if order.filled_qty >= order.quantity * 0.99:
@@ -562,20 +560,18 @@ class AsyncExecutionEngine:
                                 "bid": new_mid - spread / 2,
                                 "ask": new_mid + spread / 2,
                                 "mid": new_mid,
-                                "volatility": abs(move) * 0.5
-                                + self.price_cache[symbol]["volatility"] * 0.5,
+                                "volatility": abs(move) * 0.5 + self.price_cache[symbol]["volatility"] * 0.5,
                                 "timestamp": time.time(),
                             }
                 else:
                     # Real price feed — poll the broker's pricing endpoint
                     broker_cfg = self.brokers[venue]
-                    price_url = (
-                        broker_cfg.get("price_url")
-                        or f"{broker_cfg.get('url', '')}/prices"
-                    )
-                    symbols = broker_cfg.get(
-                        "symbols", list(self.price_cache.keys())
-                    ) or ["EUR/USD", "GBP/USD", "XAU/USD"]
+                    price_url = broker_cfg.get("price_url") or f"{broker_cfg.get('url', '')}/prices"
+                    symbols = broker_cfg.get("symbols", list(self.price_cache.keys())) or [
+                        "EUR/USD",
+                        "GBP/USD",
+                        "XAU/USD",
+                    ]
                     session = self.sessions.get(venue)
                     if session and price_url:
                         try:
@@ -584,47 +580,28 @@ class AsyncExecutionEngine:
                                 if resp.status == 200:  # noqa: PLR2004
                                     data = await resp.json()
                                     # Normalise: support both OANDA-style and generic dicts
-                                    prices_list = (
-                                        data.get("prices") or data.get("ticks") or []
-                                    )
+                                    prices_list = data.get("prices") or data.get("ticks") or []
                                     async with self.price_lock:
                                         for tick in prices_list:
-                                            sym = tick.get("instrument") or tick.get(
-                                                "symbol", ""
-                                            )
-                                            bid = float(
-                                                tick.get("bids", [{}])[0].get("price")
-                                                or tick.get("bid", 0)
-                                            )
-                                            ask = float(
-                                                tick.get("asks", [{}])[0].get("price")
-                                                or tick.get("ask", 0)
-                                            )
+                                            sym = tick.get("instrument") or tick.get("symbol", "")
+                                            bid = float(tick.get("bids", [{}])[0].get("price") or tick.get("bid", 0))
+                                            ask = float(tick.get("asks", [{}])[0].get("price") or tick.get("ask", 0))
                                             if bid and ask:
                                                 mid = (bid + ask) / 2.0
                                                 prev = self.price_cache.get(sym, {})
                                                 prev_mid = prev.get("mid", mid)
-                                                vol = (
-                                                    abs(mid - prev_mid) / prev_mid
-                                                    if prev_mid
-                                                    else 0.0
-                                                )
+                                                vol = abs(mid - prev_mid) / prev_mid if prev_mid else 0.0
                                                 self.price_cache[sym] = {
                                                     "bid": bid,
                                                     "ask": ask,
                                                     "mid": mid,
-                                                    "volatility": vol * 0.3
-                                                    + prev.get("volatility", 0.0) * 0.7,
+                                                    "volatility": vol * 0.3 + prev.get("volatility", 0.0) * 0.7,
                                                     "timestamp": time.time(),
                                                 }
                                 else:
-                                    logger.warning(
-                                        "Price feed HTTP %s from %s", resp.status, venue
-                                    )
+                                    logger.warning("Price feed HTTP %s from %s", resp.status, venue)
                         except aiohttp.ClientError as exc:
-                            logger.warning(
-                                "Price feed request error (%s): %s", venue, exc
-                            )
+                            logger.warning("Price feed request error (%s): %s", venue, exc)
 
                 await asyncio.sleep(0.1)  # 10Hz update
 
@@ -688,8 +665,7 @@ class AsyncExecutionEngine:
         # Position limit check
         current = self.position_cache.get(order.symbol, {}).get("quantity", 0)
         if (
-            abs(current + (order.quantity if order.side == "buy" else -order.quantity))
-            > 100  # noqa: PLR2004
+            abs(current + (order.quantity if order.side == "buy" else -order.quantity)) > 100  # noqa: PLR2004
         ):
             return False, "position_limit_exceeded"
 

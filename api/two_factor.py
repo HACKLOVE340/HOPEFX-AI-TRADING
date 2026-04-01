@@ -138,10 +138,7 @@ def _verify_backup_code(user_id: str, code: str) -> bool:
 
 
 def _otpauth_uri(secret: str, user_id: str, issuer: str = "HOPEFX") -> str:
-    return (
-        f"otpauth://totp/{issuer}:{user_id}"
-        f"?secret={secret}&issuer={issuer}&algorithm=SHA1&digits=6&period=30"
-    )
+    return f"otpauth://totp/{issuer}:{user_id}?secret={secret}&issuer={issuer}&algorithm=SHA1&digits=6&period=30"
 
 
 # ── Models ────────────────────────────────────────────────────────────────────

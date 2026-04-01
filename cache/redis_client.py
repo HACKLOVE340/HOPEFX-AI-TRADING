@@ -96,9 +96,7 @@ async def _try_cluster(
         logger.info("Redis Cluster connected (%d startup nodes)", len(startup_nodes))
         return client
     except ImportError:
-        logger.warning(
-            "redis-py cluster support not available — install redis[hiredis]>=4.6"
-        )
+        logger.warning("redis-py cluster support not available — install redis[hiredis]>=4.6")
         return None
     except Exception as exc:
         logger.error("Redis Cluster connection failed: %s", exc)
@@ -137,9 +135,7 @@ async def _try_sentinel(
         logger.info("Redis Sentinel connected (master=%s)", master_name)
         return client, sentinel
     except Exception as exc:
-        logger.error(
-            "Redis Sentinel connection failed: %s — falling back to direct URL", exc
-        )
+        logger.error("Redis Sentinel connection failed: %s — falling back to direct URL", exc)
         return None, None
 
 
@@ -205,9 +201,7 @@ async def get_redis(
 
     # ── 2. Sentinel mode ──────────────────────────────────────────────────────
     if sentinel_hosts:
-        client, sentinel = await _try_sentinel(
-            sentinel_hosts, master_name, password, decode_responses, db
-        )
+        client, sentinel = await _try_sentinel(sentinel_hosts, master_name, password, decode_responses, db)
         if client is not None:
             _redis_instance = client
             _sentinel_instance = sentinel
@@ -237,9 +231,7 @@ async def _ping_or_reset() -> None:
     try:
         await _redis_instance.ping()
     except Exception as exc:
-        logger.warning(
-            "Redis health check failed (%s) — will reconnect on next call", exc
-        )
+        logger.warning("Redis health check failed (%s) — will reconnect on next call", exc)
         _redis_instance = None
         _sentinel_instance = None
         _connection_mode = "none"

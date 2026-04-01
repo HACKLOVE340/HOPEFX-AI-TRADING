@@ -1,7 +1,7 @@
 # FAQ
 
 > Frequently asked questions about HOPEFX AI Trading.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 
@@ -597,4 +597,4 @@ Self-hosting without a subscription key disables all trading endpoints. The appl
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-04-01*

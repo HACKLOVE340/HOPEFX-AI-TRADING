@@ -36,6 +36,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -77,8 +78,7 @@ class OandaPaperClock:
             )
         except Exception as exc:
             logger.warning(
-                "OandaPaperClock: SharpeProgressTracker unavailable (%s); "
-                "fill recording disabled",
+                "OandaPaperClock: SharpeProgressTracker unavailable (%s); fill recording disabled",
                 exc,
             )
             return None
@@ -214,8 +214,7 @@ class OandaPaperClock:
 
         # ── Structured log ────────────────────────────────────────────────────
         logger.info(
-            "OandaPaperClock fill: symbol=%s return=%.4f n=%d sharpe=%.3f "
-            "se=%.3f gate=%s pct=%.1f%%",
+            "OandaPaperClock fill: symbol=%s return=%.4f n=%d sharpe=%.3f se=%.3f gate=%s pct=%.1f%%",
             symbol,
             trade_return,
             status["n_trades"],
@@ -265,9 +264,7 @@ class OandaPaperClock:
         Compatible with the /api/status/paper-trading response schema.
         """
         if not self._stamp_path.exists():
-            oanda_key = os.getenv("OANDA_API_KEY", "") or os.getenv(
-                "BROKER_OANDA_TOKEN", ""
-            )
+            oanda_key = os.getenv("OANDA_API_KEY", "") or os.getenv("BROKER_OANDA_TOKEN", "")
             if oanda_key:
                 note = (
                     "OANDA credentials detected but broker has not connected yet. "
@@ -275,8 +272,7 @@ class OandaPaperClock:
                 )
             else:
                 note = (
-                    "Clock not started. Set OANDA_API_KEY (or BROKER_OANDA_TOKEN) "
-                    "and restart with BROKER_TYPE=oanda."
+                    "Clock not started. Set OANDA_API_KEY (or BROKER_OANDA_TOKEN) and restart with BROKER_TYPE=oanda."
                 )
             return {
                 "started": False,
@@ -426,12 +422,8 @@ def validate_oanda_account_at_startup() -> dict[str, Any]:
     account_id = status.get("account_id") or "PENDING"
     pending = status.get("pending_real_account", False) or account_id == "PENDING"
     broker_type = os.getenv("BROKER_TYPE", "paper").lower()
-    has_token = bool(
-        os.getenv("BROKER_OANDA_TOKEN", "") or os.getenv("OANDA_API_KEY", "")
-    )
-    has_account = bool(
-        os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", "")
-    )
+    has_token = bool(os.getenv("BROKER_OANDA_TOKEN", "") or os.getenv("OANDA_API_KEY", ""))
+    has_account = bool(os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", ""))
 
     if pending:
         elapsed = status.get("elapsed_days", 0.0)
@@ -443,21 +435,16 @@ def validate_oanda_account_at_startup() -> dict[str, Any]:
             f"then restart to connect a real practice account."
         )
         logger.warning(
-            "⚠ OANDA account PENDING — %s days elapsed, %s days remain. "
-            "No real fills until credentials are set.",
+            "⚠ OANDA account PENDING — %s days elapsed, %s days remain. No real fills until credentials are set.",
             round(elapsed, 1),
             round(remaining, 1),
         )
 
     if broker_type == "oanda" and not has_token:
         warnings.append(
-            "BROKER_TYPE=oanda but BROKER_OANDA_TOKEN is not set. "
-            "The broker will fall back to paper simulation."
+            "BROKER_TYPE=oanda but BROKER_OANDA_TOKEN is not set. The broker will fall back to paper simulation."
         )
-        logger.warning(
-            "⚠ BROKER_TYPE=oanda but BROKER_OANDA_TOKEN not set — "
-            "falling back to paper simulation."
-        )
+        logger.warning("⚠ BROKER_TYPE=oanda but BROKER_OANDA_TOKEN not set — falling back to paper simulation.")
 
     if broker_type == "oanda" and has_token and not has_account:
         warnings.append(
@@ -468,8 +455,7 @@ def validate_oanda_account_at_startup() -> dict[str, Any]:
 
     if not status.get("started", False):
         warnings.append(
-            "OANDA paper trading clock has not started. "
-            "Connect OANDA credentials to begin the 30-day paper run."
+            "OANDA paper trading clock has not started. Connect OANDA credentials to begin the 30-day paper run."
         )
 
     result = {

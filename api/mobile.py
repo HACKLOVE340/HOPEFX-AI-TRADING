@@ -84,9 +84,7 @@ async def test_push(user: TokenPayload = Depends(get_current_user)):
         "sent": sent,
         "fcm_enabled": push_manager.fcm_enabled,
         "devices": len(tokens),
-        "note": "Notification logged (no FCM key)"
-        if not push_manager.fcm_enabled
-        else "Sent via FCM",
+        "note": "Notification logged (no FCM key)" if not push_manager.fcm_enabled else "Sent via FCM",
     }
 
 
@@ -105,9 +103,7 @@ async def push_status(user: TokenPayload = Depends(get_current_user)):
 
 
 class ExpoPushTokenBody(BaseModel):
-    token: str = Field(
-        ..., min_length=10, description="Expo push token (ExponentPushToken[...])"
-    )
+    token: str = Field(..., min_length=10, description="Expo push token (ExponentPushToken[...])")
     platform: str = Field("android", description="'ios' or 'android'")
     device_id: str = Field("unknown", description="Device model ID")
 

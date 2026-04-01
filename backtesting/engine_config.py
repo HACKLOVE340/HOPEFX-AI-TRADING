@@ -126,9 +126,7 @@ class HistoricalDataLoader:
         self.data_source = data_source
         self._cache: dict[str, pd.DataFrame] = {}
 
-    async def load_data(
-        self, symbol: str, timeframe: str, start: datetime, end: datetime
-    ) -> pd.DataFrame | None:
+    async def load_data(self, symbol: str, timeframe: str, start: datetime, end: datetime) -> pd.DataFrame | None:
         """Load historical OHLCV data"""
         cache_key = f"{symbol}_{timeframe}_{start}_{end}"
 
@@ -226,9 +224,7 @@ class SimulatedBroker:
 
     def get_equity(self) -> float:
         """Calculate total equity"""
-        positions_value = sum(
-            pos["quantity"] * pos["current_price"] for pos in self.positions.values()
-        )
+        positions_value = sum(pos["quantity"] * pos["current_price"] for pos in self.positions.values())
         return self.cash + positions_value
 
     def place_market_order(
@@ -262,9 +258,7 @@ class SimulatedBroker:
                 # Add to existing position
                 pos = self.positions[symbol]
                 total_qty = pos["quantity"] + quantity
-                avg_price = (
-                    pos["avg_price"] * pos["quantity"] + fill_price * quantity
-                ) / total_qty
+                avg_price = (pos["avg_price"] * pos["quantity"] + fill_price * quantity) / total_qty
                 pos["quantity"] = total_qty
                 pos["avg_price"] = avg_price
             else:
@@ -363,18 +357,14 @@ class SimulatedBroker:
 
                 impact = model.estimate(
                     order_size=quantity,
-                    adv=adv
-                    if adv > 0
-                    else bar_volume * 24,  # estimate ADV from bar vol
+                    adv=adv if adv > 0 else bar_volume * 24,  # estimate ADV from bar vol
                     volatility_daily=vol_daily,
                     spread_bps=spread_bps,
                     price=price,
                 )
                 return impact.total_impact_bps / 10_000
             except ImportError:
-                logger.warning(
-                    "execution.market_impact not available — falling back to variable model"
-                )
+                logger.warning("execution.market_impact not available — falling back to variable model")
                 # Fall through to variable model
 
         if self.config.slippage_model == "fixed":
@@ -415,9 +405,7 @@ class SimulatedBroker:
         """Record completed trade"""
         self.trades.append(
             {
-                "timestamp": self.current_time.isoformat()
-                if self.current_time
-                else None,
+                "timestamp": self.current_time.isoformat() if self.current_time else None,
                 "symbol": symbol,
                 "action": action,
                 "quantity": quantity,
@@ -468,16 +456,12 @@ class BacktestEngine:
         Args:
             progress_callback: Called with (current_step, total_steps, current_time)
         """
-        logger.info(
-            f"Starting backtest: {self.config.start_date} to {self.config.end_date}"
-        )
+        logger.info(f"Starting backtest: {self.config.start_date} to {self.config.end_date}")
 
         # Load data for all symbols
         all_data: dict[str, pd.DataFrame] = {}
         for symbol in self.config.symbols:
-            df = await self.data_loader.load_data(
-                symbol, "1h", self.config.start_date, self.config.end_date
-            )
+            df = await self.data_loader.load_data(symbol, "1h", self.config.start_date, self.config.end_date)
             if df is not None:
                 all_data[symbol] = df
                 logger.info(f"Loaded {len(df)} bars for {symbol}")
@@ -486,9 +470,7 @@ class BacktestEngine:
             raise ValueError("No data loaded for backtest")
 
         # Combine timestamps
-        all_timestamps = sorted(
-            set(ts for df in all_data.values() for ts in df["timestamp"])
-        )
+        all_timestamps = sorted(set(ts for df in all_data.values() for ts in df["timestamp"]))
 
         total_steps = len(all_timestamps)
 
@@ -517,14 +499,10 @@ class BacktestEngine:
             # Generate signals from strategies
             for strategy in self.strategies:
                 try:
-                    signals = strategy.generate_signals(
-                        timestamp=timestamp, prices=current_prices, data=all_data
-                    )
+                    signals = strategy.generate_signals(timestamp=timestamp, prices=current_prices, data=all_data)
 
                     for signal in signals:
-                        self._process_signal(
-                            signal, timestamp, current_prices, current_bars
-                        )
+                        self._process_signal(signal, timestamp, current_prices, current_bars)
 
                 except Exception as e:
                     logger.error(f"Strategy error at {timestamp}: {e}")
@@ -833,9 +811,7 @@ class BacktestEngine:
         total_pnl = sum(t["net_pnl"] for t in trades)
         gross_profit = sum(t["net_pnl"] for t in trades if t["net_pnl"] > 0)
         gross_loss = sum(t["net_pnl"] for t in trades if t["net_pnl"] < 0)
-        profit_factor = (
-            abs(gross_profit / gross_loss) if gross_loss != 0 else float("inf")
-        )
+        profit_factor = abs(gross_profit / gross_loss) if gross_loss != 0 else float("inf")
 
         initial_equity = self.config.initial_capital
         final_equity = self.broker.get_equity()
@@ -875,9 +851,7 @@ class BacktestEngine:
             avg_hold_bars = n_bars / max(total_trades, 1)
             avg_hold_days = avg_hold_bars / self.config.bars_per_day
             trade_ann_factor = np.sqrt(252.0 / max(avg_hold_days, 0.04))
-            sharpe = float(
-                np.mean(trade_pnls) / np.std(trade_pnls, ddof=1) * trade_ann_factor
-            )
+            sharpe = float(np.mean(trade_pnls) / np.std(trade_pnls, ddof=1) * trade_ann_factor)
             # Sharpe standard error: 1/sqrt(2*(N-1)) for iid returns
             sharpe_se = float(1.0 / np.sqrt(2.0 * (len(trade_pnls) - 1)))
 
@@ -897,11 +871,7 @@ class BacktestEngine:
         threshold = 0.0
         gains = bar_returns[bar_returns > threshold] - threshold
         losses = threshold - bar_returns[bar_returns <= threshold]
-        omega = (
-            float(np.sum(gains) / np.sum(losses))
-            if np.sum(losses) > 0
-            else float("inf")
-        )
+        omega = float(np.sum(gains) / np.sum(losses)) if np.sum(losses) > 0 else float("inf")
 
         # ── Tail ratio ────────────────────────────────────────────────
         tail_ratio = 0.0
@@ -985,16 +955,12 @@ class BacktestEngine:
             mc = self.run_monte_carlo_simulation(trade_return_fracs)
 
         # ── Regime breakdown ──────────────────────────────────────────
-        regime_breakdown = self._compute_regime_breakdown(
-            trades, self.broker.equity_curve
-        )
+        regime_breakdown = self._compute_regime_breakdown(trades, self.broker.equity_curve)
 
         # ── Aggregate metrics dict ────────────────────────────────────
         metrics: dict[str, Any] = {
             "avg_trade_pnl": total_pnl / total_trades,
-            "avg_winning_trade": gross_profit / winning_trades
-            if winning_trades > 0
-            else 0,
+            "avg_winning_trade": gross_profit / winning_trades if winning_trades > 0 else 0,
             "avg_losing_trade": gross_loss / losing_trades if losing_trades > 0 else 0,
             "max_consecutive_wins": self._max_consecutive(trades, "win"),
             "max_consecutive_losses": self._max_consecutive(trades, "loss"),
@@ -1066,9 +1032,7 @@ class BacktestEngine:
         for trade in trades:
             is_win = trade["net_pnl"] > 0
 
-            if (trade_type == "win" and is_win) or (
-                trade_type == "loss" and not is_win
-            ):
+            if (trade_type == "win" and is_win) or (trade_type == "loss" and not is_win):
                 current_streak += 1
                 max_streak = max(max_streak, current_streak)
             else:
@@ -1093,34 +1057,34 @@ class BacktestEngine:
 ╔════════════════════════════════════════════════════════════════╗
 ║                    HOPEFX BACKTEST REPORT                       ║
 ╠════════════════════════════════════════════════════════════════╣
-║ Period:     {self.config.start_date.strftime('%Y-%m-%d')} to {self.config.end_date.strftime('%Y-%m-%d')}          ║
-║ Symbols:    {', '.join(self.config.symbols)}                          ║
+║ Period:     {self.config.start_date.strftime("%Y-%m-%d")} to {self.config.end_date.strftime("%Y-%m-%d")}          ║
+║ Symbols:    {", ".join(self.config.symbols)}                          ║
 ║ Initial:    ${self.config.initial_capital:,.2f}                                  ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ PERFORMANCE                                                    ║
-║   Total Return:      {r.total_return*100:>10.2f}%                            ║
-║   Final Equity:      ${r.equity_curve[-1]['equity'] if r.equity_curve else 0:>10,.2f}                          ║
+║   Total Return:      {r.total_return * 100:>10.2f}%                            ║
+║   Final Equity:      ${r.equity_curve[-1]["equity"] if r.equity_curve else 0:>10,.2f}                          ║
 ║   Sharpe (trade):    {r.sharpe_ratio:>10.2f}  SE {se_str:<8}                   ║
 ║   Sharpe robust:     {robust_str:<40}║
-║   Max Drawdown:      {r.max_drawdown*100:>10.2f}%                            ║
+║   Max Drawdown:      {r.max_drawdown * 100:>10.2f}%                            ║
 ║   Sortino:           {r.sortino_ratio:>10.2f}                            ║
 ║   Calmar:            {r.calmar_ratio:>10.2f}                            ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ TRADE STATISTICS                                               ║
 ║   Total Trades:      {r.total_trades:>10}                             ║
-║   Win Rate:          {r.win_rate*100:>10.1f}%                            ║
+║   Win Rate:          {r.win_rate * 100:>10.1f}%                            ║
 ║   Profit Factor:     {r.profit_factor:>10.2f}                            ║
-║   Avg Trade P&L:     ${r.metrics.get('avg_trade_pnl', 0):>10.2f}                          ║
-║   Avg Win:           ${r.metrics.get('avg_winning_trade', 0):>10.2f}                          ║
-║   Avg Loss:          ${r.metrics.get('avg_losing_trade', 0):>10.2f}                          ║
+║   Avg Trade P&L:     ${r.metrics.get("avg_trade_pnl", 0):>10.2f}                          ║
+║   Avg Win:           ${r.metrics.get("avg_winning_trade", 0):>10.2f}                          ║
+║   Avg Loss:          ${r.metrics.get("avg_losing_trade", 0):>10.2f}                          ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ ADVANCED METRICS                                               ║
-║   Recovery Factor:   {r.metrics.get('recovery_factor', 0):>10.2f}                            ║
-║   Max Consec Wins:   {r.metrics.get('max_consecutive_wins', 0):>10}                             ║
-║   Max Consec Losses: {r.metrics.get('max_consecutive_losses', 0):>10}                             ║
+║   Recovery Factor:   {r.metrics.get("recovery_factor", 0):>10.2f}                            ║
+║   Max Consec Wins:   {r.metrics.get("max_consecutive_wins", 0):>10}                             ║
+║   Max Consec Losses: {r.metrics.get("max_consecutive_losses", 0):>10}                             ║
 ║   MC Median Final:   {r.mc_median_final:>10.3f}x                           ║
 ║   MC P5 Final:       {r.mc_p5_final:>10.3f}x                           ║
-║   MC Ruin Prob:      {r.mc_ruin_probability*100:>10.1f}%                            ║
+║   MC Ruin Prob:      {r.mc_ruin_probability * 100:>10.1f}%                            ║
 ╚════════════════════════════════════════════════════════════════╝
 NOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is inflated
       by flat no-trade days and is NOT reported here.

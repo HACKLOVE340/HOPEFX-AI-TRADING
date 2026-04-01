@@ -10,6 +10,7 @@ This strategy identifies and trades breakouts from consolidation periods.
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -47,8 +48,7 @@ class BreakoutStrategy(BaseStrategy):
         self.lookback_period = lookback_period
         self.breakout_threshold = breakout_threshold
         self.logger.info(
-            f"Breakout Strategy initialized: lookback={lookback_period}, "
-            f"threshold={breakout_threshold}",
+            f"Breakout Strategy initialized: lookback={lookback_period}, threshold={breakout_threshold}",
         )
 
     def identify_support_resistance(self, market_data: pd.DataFrame) -> tuple:
@@ -120,16 +120,10 @@ class BreakoutStrategy(BaseStrategy):
             current_price = market_data["close"].iloc[-1]
             current_high = market_data["high"].iloc[-1]
             current_low = market_data["low"].iloc[-1]
-            current_volume = (
-                market_data["volume"].iloc[-1] if "volume" in market_data else 0
-            )
+            current_volume = market_data["volume"].iloc[-1] if "volume" in market_data else 0
 
             # Average volume for confirmation
-            avg_volume = (
-                market_data["volume"].tail(self.lookback_period).mean()
-                if "volume" in market_data
-                else 0
-            )
+            avg_volume = market_data["volume"].tail(self.lookback_period).mean() if "volume" in market_data else 0
             high_volume = current_volume > avg_volume * 1.2 if avg_volume > 0 else False
 
             # Calculate ATR for volatility
@@ -185,9 +179,7 @@ class BreakoutStrategy(BaseStrategy):
             elif current_price > resistance * 0.995 and current_price < resistance:
                 signal_type = "BUY"
                 confidence = 0.50
-                reason = (
-                    f"Approaching resistance: {current_price:.5f} near {resistance:.5f}"
-                )
+                reason = f"Approaching resistance: {current_price:.5f} near {resistance:.5f}"
 
             # Approaching support
             elif current_price < support * 1.005 and current_price > support:

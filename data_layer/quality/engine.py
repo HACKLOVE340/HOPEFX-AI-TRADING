@@ -30,6 +30,7 @@ import threading
 import time
 from collections import deque
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 import os
@@ -107,9 +108,7 @@ class _SourceState:
             self.confidence = max(MIN_CONFIDENCE, min(1.0, self.confidence + delta))
 
     def is_stale(self) -> bool:
-        return (
-            time.time() - self.last_tick_ts
-        ) > STALE_THRESHOLD_S and self.last_tick_ts > 0
+        return (time.time() - self.last_tick_ts) > STALE_THRESHOLD_S and self.last_tick_ts > 0
 
 
 class DataQualityEngine:
@@ -121,9 +120,7 @@ class DataQualityEngine:
     """
 
     def __init__(self) -> None:
-        self._sources: dict[FeedSource, _SourceState] = {
-            src: _SourceState(src) for src in FeedSource
-        }
+        self._sources: dict[FeedSource, _SourceState] = {src: _SourceState(src) for src in FeedSource}
         self._global_seq = 0
         self._seq_lock = threading.Lock()
         self._report_window: deque = deque(maxlen=1000)
@@ -191,9 +188,7 @@ class DataQualityEngine:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def validate_tick(
-        self, tick: GoldTick, received_at: float | None = None
-    ) -> GoldTick:
+    def validate_tick(self, tick: GoldTick, received_at: float | None = None) -> GoldTick:
         """
         Validate a raw tick from any gold feed.
 
@@ -241,9 +236,7 @@ class DataQualityEngine:
                 )
                 if self._prom_rejected:
                     try:
-                        self._prom_rejected.labels(
-                            source=tick.source.value, reason="price_jump"
-                        ).inc()
+                        self._prom_rejected.labels(source=tick.source.value, reason="price_jump").inc()
                     except Exception as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
                 return self._reject(tick, state, "price_jump", seq)
@@ -299,9 +292,7 @@ class DataQualityEngine:
                         mahal,
                     )
             except Exception as _exc:
-                logger.debug(
-                    "Suppressed exception: %s", _exc
-                )  # singular matrix or other numerical issue — skip
+                logger.debug("Suppressed exception: %s", _exc)  # singular matrix or other numerical issue — skip
 
         # ── 8. Latency tracking ────────────────────────────────────────────
         tick_epoch = tick.timestamp.timestamp()
@@ -310,9 +301,7 @@ class DataQualityEngine:
             state.record_latency(latency_ms)
             if self._prom_latency:
                 try:
-                    self._prom_latency.labels(source=tick.source.value).observe(
-                        latency_ms
-                    )
+                    self._prom_latency.labels(source=tick.source.value).observe(latency_ms)
                 except Exception as _exc:
                     logger.debug("Suppressed exception: %s", _exc)
             if latency_ms > LATENCY_WARN_MS:
@@ -335,9 +324,7 @@ class DataQualityEngine:
                 logger.debug("Suppressed exception: %s", _exc)
         if self._prom_confidence:
             try:
-                self._prom_confidence.labels(source=tick.source.value).set(
-                    state.confidence
-                )
+                self._prom_confidence.labels(source=tick.source.value).set(state.confidence)
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
 
@@ -357,9 +344,7 @@ class DataQualityEngine:
         self._report_window.append(("accept", tick.source, tick.mid))
         return validated
 
-    def cross_source_consensus(
-        self, ticks: dict[FeedSource, GoldTick]
-    ) -> tuple[float, float, dict[FeedSource, float]]:
+    def cross_source_consensus(self, ticks: dict[FeedSource, GoldTick]) -> tuple[float, float, dict[FeedSource, float]]:
         """
         Compute weighted consensus mid price from multiple live feeds.
 
@@ -379,11 +364,7 @@ class DataQualityEngine:
         if not ticks:
             return 0.0, 0.0, {}
 
-        valid = {
-            src: t
-            for src, t in ticks.items()
-            if t.is_valid() and t.quality != TickQuality.REJECTED
-        }
+        valid = {src: t for src, t in ticks.items() if t.is_valid() and t.quality != TickQuality.REJECTED}
         if not valid:
             return 0.0, 0.0, {}
 
@@ -408,8 +389,7 @@ class DataQualityEngine:
             if diff_pct > CROSS_SOURCE_MAX_DIFF:
                 self._sources[src].update_confidence(-0.02)
                 logger.warning(
-                    "DQE cross-source outlier EXCLUDED source=%s "
-                    "mid=%.4f consensus_p1=%.4f diff_pct=%.4f",
+                    "DQE cross-source outlier EXCLUDED source=%s mid=%.4f consensus_p1=%.4f diff_pct=%.4f",
                     src.value,
                     t.mid,
                     consensus_p1,
@@ -417,9 +397,7 @@ class DataQualityEngine:
                 )
                 if self._prom_rejected:
                     with contextlib.suppress(Exception):
-                        self._prom_rejected.labels(
-                        source=src.value, reason="cross_source_outlier"
-                        ).inc()
+                        self._prom_rejected.labels(source=src.value, reason="cross_source_outlier").inc()
             else:
                 inliers[src] = t
 
@@ -469,9 +447,7 @@ class DataQualityEngine:
     def best_source(self) -> FeedSource | None:
         """Return the highest-confidence non-stale source."""
         candidates = [
-            (src, state)
-            for src, state in self._sources.items()
-            if not state.is_stale() and state.accept_count > 0
+            (src, state) for src, state in self._sources.items() if not state.is_stale() and state.accept_count > 0
         ]
         if not candidates:
             return None
@@ -531,11 +507,7 @@ class DataQualityEngine:
         recent = list(self._report_window)
         accepted = sum(1 for r in recent if r[0] == "accept")
         rejected = sum(1 for r in recent if r[0] == "reject")
-        active = [
-            s.value
-            for s, st in self._sources.items()
-            if not st.is_stale() and st.accept_count > 0
-        ]
+        active = [s.value for s, st in self._sources.items() if not st.is_stale() and st.accept_count > 0]
         best = self.best_source()
         mids = [r[2] for r in recent if r[0] == "accept" and r[2] > 0]
         spread_across = (max(mids) - min(mids)) if len(mids) > 1 else 0.0
@@ -573,9 +545,7 @@ class DataQualityEngine:
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
-    def _reject(
-        self, tick: GoldTick, state: _SourceState, reason: str, seq: int
-    ) -> GoldTick:
+    def _reject(self, tick: GoldTick, state: _SourceState, reason: str, seq: int) -> GoldTick:
         state.reject_count += 1
         state.update_confidence(-0.01)
         self._report_window.append(("reject", tick.source, tick.mid))
@@ -588,9 +558,7 @@ class DataQualityEngine:
         )
         if self._prom_rejected:
             try:
-                self._prom_rejected.labels(
-                    source=tick.source.value, reason=reason
-                ).inc()
+                self._prom_rejected.labels(source=tick.source.value, reason=reason).inc()
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
         return GoldTick(

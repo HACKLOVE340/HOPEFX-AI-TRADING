@@ -16,6 +16,7 @@ from enum import Enum
 from dataclasses import dataclass
 import json  # noqa: F401
 from datetime import timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -75,9 +76,7 @@ class NotificationManager:
 
     async def send_alert(self, level: str, message: str, data: dict = None):
         """Quick send method"""
-        notification = Notification(
-            level=NotificationLevel(level.lower()), message=message, data=data
-        )
+        notification = Notification(level=NotificationLevel(level.lower()), message=message, data=data)
         await self.send(notification)
 
     async def _process_queue(self):
@@ -128,9 +127,7 @@ class NotificationManager:
 
         if notification.data:
             for key, value in notification.data.items():
-                embed["fields"].append(
-                    {"name": key, "value": str(value)[:1000], "inline": True}
-                )
+                embed["fields"].append({"name": key, "value": str(value)[:1000], "inline": True})
 
         payload = {"embeds": [embed]}
 
@@ -227,9 +224,7 @@ class NotificationManager:
 # Simple alert function for compatibility
 async def send_alert(level: str, message: str, **kwargs):
     """Global alert function"""
-    logger.log(
-        getattr(logging, level.upper(), logging.INFO), f"ALERT [{level}]: {message}"
-    )
+    logger.log(getattr(logging, level.upper(), logging.INFO), f"ALERT [{level}]: {message}")
 
 
 # Compatibility alias

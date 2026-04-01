@@ -14,6 +14,7 @@ Tests for:
 """
 
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 
@@ -74,20 +75,16 @@ class TestAlertCondition:
         """Test creating an alert condition."""
         from notifications.alert_engine import AlertCondition, AlertConditionType
 
-        condition = AlertCondition(
-            type=AlertConditionType.PRICE_ABOVE, threshold=2000.00
-        )
+        condition = AlertCondition(type=AlertConditionType.PRICE_ABOVE, threshold=2000.00)
 
         assert condition.type == AlertConditionType.PRICE_ABOVE
-        assert condition.threshold == 2000.00  # noqa: PLR2004
+        assert condition.threshold == 2000.00
 
     def test_condition_with_indicator(self):
         """Test condition with indicator."""
         from notifications.alert_engine import AlertCondition, AlertConditionType
 
-        condition = AlertCondition(
-            type=AlertConditionType.INDICATOR_ABOVE, threshold=70.0, indicator="rsi_14"
-        )
+        condition = AlertCondition(type=AlertConditionType.INDICATOR_ABOVE, threshold=70.0, indicator="rsi_14")
 
         assert condition.indicator == "rsi_14"
 
@@ -95,13 +92,11 @@ class TestAlertCondition:
         """Test condition serialization."""
         from notifications.alert_engine import AlertCondition, AlertConditionType
 
-        condition = AlertCondition(
-            type=AlertConditionType.PRICE_BELOW, threshold=1900.00
-        )
+        condition = AlertCondition(type=AlertConditionType.PRICE_BELOW, threshold=1900.00)
 
         result = condition.to_dict()
         assert result["type"] == "price_below"
-        assert result["threshold"] == 1900.00  # noqa: PLR2004
+        assert result["threshold"] == 1900.00
 
 
 class TestAlert:
@@ -116,9 +111,7 @@ class TestAlert:
             AlertPriority,
         )
 
-        condition = AlertCondition(
-            type=AlertConditionType.PRICE_ABOVE, threshold=2000.00
-        )
+        condition = AlertCondition(type=AlertConditionType.PRICE_ABOVE, threshold=2000.00)
 
         alert = Alert(
             id="ALERT-001",
@@ -172,8 +165,7 @@ class TestAlert:
             name="Test",
             symbol="XAUUSD",
             conditions=[condition],
-            expires_at=datetime.now(UTC)
-            - timedelta(hours=1),  # Expired 1 hour ago
+            expires_at=datetime.now(UTC) - timedelta(hours=1),  # Expired 1 hour ago
         )
         assert alert.is_active() is False
 
@@ -189,8 +181,7 @@ class TestAlert:
             symbol="XAUUSD",
             conditions=[condition],
             cooldown_minutes=5,
-            last_triggered_at=datetime.now(UTC)
-            - timedelta(minutes=2),  # 2 min ago
+            last_triggered_at=datetime.now(UTC) - timedelta(minutes=2),  # 2 min ago
         )
 
         assert alert.is_in_cooldown() is True
@@ -201,9 +192,7 @@ class TestAlert:
 
         condition = AlertCondition(type=AlertConditionType.PRICE_ABOVE, threshold=2000)
 
-        alert = Alert(
-            id="ALERT-001", name="Test", symbol="XAUUSD", conditions=[condition]
-        )
+        alert = Alert(id="ALERT-001", name="Test", symbol="XAUUSD", conditions=[condition])
 
         result = alert.to_dict()
         assert result["id"] == "ALERT-001"
@@ -261,8 +250,8 @@ class TestAlertEngine:
         )
 
         assert alert.priority == AlertPriority.HIGH
-        assert alert.cooldown_minutes == 10  # noqa: PLR2004
-        assert alert.max_triggers == 5  # noqa: PLR2004
+        assert alert.cooldown_minutes == 10
+        assert alert.max_triggers == 5
 
     def test_get_alert(self):
         """Test getting an alert by ID."""
@@ -341,11 +330,11 @@ class TestAlertEngine:
 
         # Get all
         all_alerts = engine.get_alerts()
-        assert len(all_alerts) >= 3  # noqa: PLR2004
+        assert len(all_alerts) >= 3
 
         # Filter by symbol
         xauusd_alerts = engine.get_alerts(symbol="XAUUSD")
-        assert len(xauusd_alerts) >= 2  # noqa: PLR2004
+        assert len(xauusd_alerts) >= 2
 
     def test_get_active_alerts(self):
         """Test getting active alerts only."""
@@ -354,9 +343,7 @@ class TestAlertEngine:
         engine = AlertEngine()
 
         engine.create_alert("Active", "XAUUSD", AlertConditionType.PRICE_ABOVE, 2000)
-        alert2 = engine.create_alert(
-            "Paused", "EURUSD", AlertConditionType.PRICE_BELOW, 1.10
-        )
+        alert2 = engine.create_alert("Paused", "EURUSD", AlertConditionType.PRICE_BELOW, 1.10)
 
         engine.pause_alert(alert2.id)
 
@@ -431,9 +418,7 @@ class TestAlertEngine:
         )
 
         # RSI oversold - should trigger (using rsi_14 or rsi key)
-        market_data = {
-            "XAUUSD": {"price": 1950, "indicators": {"rsi": 25, "rsi_14": 25}}
-        }
+        market_data = {"XAUUSD": {"price": 1950, "indicators": {"rsi": 25, "rsi_14": 25}}}
         triggered = engine.check_alerts(market_data)
 
         assert len(triggered) >= 1

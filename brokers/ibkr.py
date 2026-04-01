@@ -48,6 +48,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
@@ -74,9 +75,7 @@ try:
 except ImportError:
     _IB_AVAILABLE = False
     IB = None
-    logger.warning(
-        "ib_insync not installed — IBKRBroker unavailable. pip install ib_insync==0.9.86"
-    )
+    logger.warning("ib_insync not installed — IBKRBroker unavailable. pip install ib_insync==0.9.86")
 
 # ── env config ────────────────────────────────────────────────────────────────
 _HOST = os.getenv("IBKR_HOST", "127.0.0.1")
@@ -230,9 +229,7 @@ class IBKRBroker:
             vals = {v.tag: v.value for v in self._ib.accountValues()}
             currency = vals.get("Currency", "USD")
             return AccountInfo(
-                account_id=self._ib.managedAccounts()[0]
-                if self._ib.managedAccounts()
-                else "",
+                account_id=self._ib.managedAccounts()[0] if self._ib.managedAccounts() else "",
                 currency=currency,
                 balance=float(vals.get("CashBalance", 0)),
                 nav=float(vals.get("NetLiquidation", 0)),
@@ -300,9 +297,7 @@ class IBKRBroker:
         c = Future(symbol="GC", exchange="NYMEX", currency="USD") if use_futures else Commodity(clean, "SMART", "USD")
         return c
 
-    def _build_ib_order(
-        self, action: str, quantity: float, order_type: str, req: dict
-    ) -> Any:
+    def _build_ib_order(self, action: str, quantity: float, order_type: str, req: dict) -> Any:
         if not _IB_AVAILABLE:
             raise RuntimeError("ib_insync not available")
         qty = float(quantity)
@@ -428,9 +423,7 @@ class IBKRBroker:
             except Exception as exc:
                 logger.error("IBKRBroker fill callback error: %s", exc)
 
-    def _on_error(
-        self, req_id: int, error_code: int, error_string: str, contract: Any
-    ) -> None:
+    def _on_error(self, req_id: int, error_code: int, error_string: str, contract: Any) -> None:
         if error_code in (2104, 2106, 2158):
             return  # informational only
         logger.error(

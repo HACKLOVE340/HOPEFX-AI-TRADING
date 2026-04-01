@@ -11,6 +11,7 @@ Implements real stock trading with Alpaca REST API (commission-free US stocks).
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -191,17 +192,11 @@ class AlpacaConnector(BrokerConnector):
                 side=OrderSide.BUY if result["side"] == "buy" else OrderSide.SELL,
                 type=self._parse_order_type(result["type"]),
                 quantity=float(result["qty"]),
-                price=float(result.get("limit_price", 0))
-                if result.get("limit_price")
-                else None,
-                stop_price=float(result.get("stop_price", 0))
-                if result.get("stop_price")
-                else None,
+                price=float(result.get("limit_price", 0)) if result.get("limit_price") else None,
+                stop_price=float(result.get("stop_price", 0)) if result.get("stop_price") else None,
                 status=self._parse_order_status(result["status"]),
                 filled_quantity=float(result.get("filled_qty", 0)),
-                average_price=float(result.get("filled_avg_price", 0))
-                if result.get("filled_avg_price")
-                else None,
+                average_price=float(result.get("filled_avg_price", 0)) if result.get("filled_avg_price") else None,
                 timestamp=datetime.fromisoformat(
                     result["created_at"].replace("Z", "+00:00"),
                 ),
@@ -267,17 +262,11 @@ class AlpacaConnector(BrokerConnector):
                 side=OrderSide.BUY if result["side"] == "buy" else OrderSide.SELL,
                 type=self._parse_order_type(result["type"]),
                 quantity=float(result["qty"]),
-                price=float(result.get("limit_price", 0))
-                if result.get("limit_price")
-                else None,
-                stop_price=float(result.get("stop_price", 0))
-                if result.get("stop_price")
-                else None,
+                price=float(result.get("limit_price", 0)) if result.get("limit_price") else None,
+                stop_price=float(result.get("stop_price", 0)) if result.get("stop_price") else None,
                 status=self._parse_order_status(result["status"]),
                 filled_quantity=float(result.get("filled_qty", 0)),
-                average_price=float(result.get("filled_avg_price", 0))
-                if result.get("filled_avg_price")
-                else None,
+                average_price=float(result.get("filled_avg_price", 0)) if result.get("filled_avg_price") else None,
                 timestamp=datetime.fromisoformat(
                     result["created_at"].replace("Z", "+00:00"),
                 ),
@@ -348,9 +337,7 @@ class AlpacaConnector(BrokerConnector):
                 positions = self.get_positions()
                 for pos in positions:
                     if pos.symbol == symbol.upper():
-                        opposite_side = (
-                            OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
-                        )
+                        opposite_side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
                         order = self.place_order(
                             symbol=symbol,
                             side=opposite_side,

@@ -21,6 +21,7 @@ import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any, Optional
@@ -169,9 +170,7 @@ class SignalAnalytics:
         # Update averages
         n = self.signals_generated
         self.avg_confidence = ((self.avg_confidence * (n - 1)) + signal.confidence) / n
-        self.avg_rr_ratio = (
-            (self.avg_rr_ratio * (n - 1)) + signal.risk_reward_ratio
-        ) / n
+        self.avg_rr_ratio = ((self.avg_rr_ratio * (n - 1)) + signal.risk_reward_ratio) / n
 
     def record_outcome(self, outcome: str):
         """Record signal outcome (tp, sl, expired)."""
@@ -186,12 +185,8 @@ class SignalAnalytics:
             "signals_by_strength": self.signals_by_strength,
             "signals_by_symbol": self.signals_by_symbol,
             "hit_rate": self.hit_rate,
-            "tp_rate": self.hit_rate["tp"] / total_outcomes
-            if total_outcomes > 0
-            else 0,
-            "sl_rate": self.hit_rate["sl"] / total_outcomes
-            if total_outcomes > 0
-            else 0,
+            "tp_rate": self.hit_rate["tp"] / total_outcomes if total_outcomes > 0 else 0,
+            "sl_rate": self.hit_rate["sl"] / total_outcomes if total_outcomes > 0 else 0,
             "avg_confidence": self.avg_confidence,
             "avg_rr_ratio": self.avg_rr_ratio,
             "hourly_distribution": self.hourly_distribution,
@@ -330,8 +325,7 @@ class RealTimeSignalService:
             total_strategies=total_strategies,
             regime=regime,
             session=session,
-            expiry=datetime.now(UTC)
-            + timedelta(minutes=self.signal_expiry_minutes),
+            expiry=datetime.now(UTC) + timedelta(minutes=self.signal_expiry_minutes),
             metadata=metadata or {},
         )
 
@@ -462,9 +456,7 @@ class RealTimeSignalService:
             if min_strength:
                 strength_order = list(SignalStrength)
                 min_idx = strength_order.index(min_strength)
-                signals = [
-                    s for s in signals if strength_order.index(s.strength) <= min_idx
-                ]
+                signals = [s for s in signals if strength_order.index(s.strength) <= min_idx]
 
             return sorted(signals, key=lambda s: -s.confidence)
 
@@ -640,19 +632,10 @@ class RealTimeSignalService:
             return {
                 "active_signals": len(self.active_signals),
                 "signals_last_hour": len(
-                    [
-                        s
-                        for s in self.signal_history
-                        if s.timestamp > datetime.now(UTC) - timedelta(hours=1)
-                    ],
+                    [s for s in self.signal_history if s.timestamp > datetime.now(UTC) - timedelta(hours=1)],
                 ),
                 "signals_last_24h": len(
-                    [
-                        s
-                        for s in self.signal_history
-                        if s.timestamp
-                        > datetime.now(UTC) - timedelta(hours=24)
-                    ],
+                    [s for s in self.signal_history if s.timestamp > datetime.now(UTC) - timedelta(hours=24)],
                 ),
                 "active_alerts": len([a for a in self.alerts.values() if a.active]),
                 "symbols_with_signals": list(
@@ -660,23 +643,14 @@ class RealTimeSignalService:
                 ),
                 "direction_distribution": {
                     "buy": len(
-                        [
-                            s
-                            for s in self.active_signals.values()
-                            if s.direction == SignalDirection.BUY
-                        ],
+                        [s for s in self.active_signals.values() if s.direction == SignalDirection.BUY],
                     ),
                     "sell": len(
-                        [
-                            s
-                            for s in self.active_signals.values()
-                            if s.direction == SignalDirection.SELL
-                        ],
+                        [s for s in self.active_signals.values() if s.direction == SignalDirection.SELL],
                     ),
                 },
                 "avg_active_confidence": (
-                    sum(s.confidence for s in self.active_signals.values())
-                    / len(self.active_signals)
+                    sum(s.confidence for s in self.active_signals.values()) / len(self.active_signals)
                     if self.active_signals
                     else 0
                 ),
@@ -704,9 +678,7 @@ class RealTimeSignalService:
         channels.append("alerts")
         return channels
 
-    def ingest_engine_signal(
-        self, payload: dict[str, Any]
-    ) -> Optional["TradingSignal"]:
+    def ingest_engine_signal(self, payload: dict[str, Any]) -> Optional["TradingSignal"]:
         """
         Ingest a signal dict produced by core/signal_engine.py and store it in
         the ring buffer so /api/signals/latest reflects engine-generated signals.
@@ -733,17 +705,9 @@ class RealTimeSignalService:
 
             # Derive SL/TP from entry if not provided (0.5% conservative default)
             if sl is None:
-                sl = (
-                    round(entry * 0.995, 5)
-                    if direction == SignalDirection.BUY
-                    else round(entry * 1.005, 5)
-                )
+                sl = round(entry * 0.995, 5) if direction == SignalDirection.BUY else round(entry * 1.005, 5)
             if tp is None:
-                tp = (
-                    round(entry * 1.015, 5)
-                    if direction == SignalDirection.BUY
-                    else round(entry * 0.985, 5)
-                )
+                tp = round(entry * 1.015, 5) if direction == SignalDirection.BUY else round(entry * 0.985, 5)
 
             rr = abs(float(tp) - entry) / max(abs(entry - float(sl)), 1e-9)
 
@@ -775,9 +739,7 @@ class RealTimeSignalService:
                 session="live",
                 expiry=datetime.now(UTC)
                 .replace(second=0, microsecond=0)
-                .__class__.fromtimestamp(
-                    datetime.now(UTC).timestamp() + 1800, tz=UTC
-                ),
+                .__class__.fromtimestamp(datetime.now(UTC).timestamp() + 1800, tz=UTC),
                 metadata={
                     "probability": payload.get("probability"),
                     "model_version": payload.get("model_version"),
@@ -903,27 +865,11 @@ def create_signals_router():
             entry = req.entry_price if req.entry_price is not None else req.price
             # Default SL/TP: 0.5% away (conservative if not provided)
             if direction == SignalDirection.BUY:
-                sl = (
-                    req.stop_loss
-                    if req.stop_loss is not None
-                    else round(entry * 0.995, 5)
-                )
-                tp = (
-                    req.take_profit
-                    if req.take_profit is not None
-                    else round(entry * 1.015, 5)
-                )
+                sl = req.stop_loss if req.stop_loss is not None else round(entry * 0.995, 5)
+                tp = req.take_profit if req.take_profit is not None else round(entry * 1.015, 5)
             else:
-                sl = (
-                    req.stop_loss
-                    if req.stop_loss is not None
-                    else round(entry * 1.005, 5)
-                )
-                tp = (
-                    req.take_profit
-                    if req.take_profit is not None
-                    else round(entry * 0.985, 5)
-                )
+                sl = req.stop_loss if req.stop_loss is not None else round(entry * 1.005, 5)
+                tp = req.take_profit if req.take_profit is not None else round(entry * 0.985, 5)
 
             # Ensure at least one strategy name is present so min_strategies
             # check passes for direct API calls (e.g. from the frontend or tests).
@@ -1031,9 +977,7 @@ def create_signals_router():
         # Pull the last 10 engine-generated signals from the ring buffer
         svc = _get_signal_service()
         recent = svc.get_signal_history(hours=1)
-        engine_signals = [
-            s.to_dict() for s in recent if s.metadata.get("source") == "signal_engine"
-        ][:10]
+        engine_signals = [s.to_dict() for s in recent if s.metadata.get("source") == "signal_engine"][:10]
 
         return {
             "engine": engine_status,

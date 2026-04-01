@@ -19,6 +19,7 @@ import logging
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -38,9 +39,7 @@ class PriceLevel:
     description: str = ""
 
     def to_dict(self) -> dict:
-        last_touch_str = (
-            self.last_touch.isoformat() if self.last_touch is not None else None
-        )
+        last_touch_str = self.last_touch.isoformat() if self.last_touch is not None else None
         return {
             "price": self.price,
             "level_type": self.level_type,
@@ -399,8 +398,7 @@ class SupportResistanceDetector:
         round_number_increment = float(cfg.get("round_number_increment", 50.0))
         if round_number_increment <= 0:
             raise ValueError(
-                "round_number_increment must be greater than 0 to compute "
-                "round-number support/resistance levels."
+                "round_number_increment must be greater than 0 to compute round-number support/resistance levels."
             )
         self.round_number_increment: float = round_number_increment
         # Legacy attributes kept for backward compatibility

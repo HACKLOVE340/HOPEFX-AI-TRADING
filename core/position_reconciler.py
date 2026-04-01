@@ -23,6 +23,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -132,9 +133,7 @@ class PositionReconciler:
             if broker_positions:
                 if pos.symbol not in broker_positions:
                     self._mismatches += 1
-                    self._consecutive_mismatches[pos.symbol] = (
-                        self._consecutive_mismatches.get(pos.symbol, 0) + 1
-                    )
+                    self._consecutive_mismatches[pos.symbol] = self._consecutive_mismatches.get(pos.symbol, 0) + 1
                     count = self._consecutive_mismatches[pos.symbol]
                     if count >= _MISMATCH_ALERT_THRESHOLD:
                         logger.error(

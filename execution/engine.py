@@ -30,6 +30,7 @@ import traceback
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -83,9 +84,7 @@ class ExecutionRequest:
         if self.quantity <= 0:
             raise ValueError(f"quantity must be > 0, got {self.quantity}")
         if self.order_type not in ("MARKET", "LIMIT", "STOP"):
-            raise ValueError(
-                f"order_type must be MARKET/LIMIT/STOP, got {self.order_type!r}"
-            )
+            raise ValueError(f"order_type must be MARKET/LIMIT/STOP, got {self.order_type!r}")
         if self.order_type == "LIMIT" and self.price is None:
             raise ValueError("price required for LIMIT orders")
         if self.order_type == "STOP" and self.stop_price is None:
@@ -374,9 +373,7 @@ class ExecutionEngine:
                         },
                     )
         except Exception as _exc:
-            logger.debug(
-                "Suppressed exception: %s", _exc
-            )  # data layer unavailable — proceed without enrichment
+            logger.debug("Suppressed exception: %s", _exc)  # data layer unavailable — proceed without enrichment
 
         # ── 0b. TickFeed price enrichment ─────────────────────────────────────
         # If the data layer did not supply a price, fall back to the TickFeed
@@ -401,13 +398,13 @@ class ExecutionEngine:
                         **request.metadata,
                         "tf_mid": mid,
                         "tf_source": getattr(tf_tick, "source", "tick_feed"),
-                        "tf_ts": tf_tick.timestamp.isoformat()
-                        if hasattr(tf_tick, "timestamp") else "",
+                        "tf_ts": tf_tick.timestamp.isoformat() if hasattr(tf_tick, "timestamp") else "",
                     },
                 )
                 logger.debug(
                     "ExecutionEngine: price enriched from TickFeed — %s mid=%.5f",
-                    request.symbol, mid,
+                    request.symbol,
+                    mid,
                 )
 
         # ── 1. Kill switch ────────────────────────────────────────────────────
@@ -473,9 +470,7 @@ class ExecutionEngine:
                         side=kwargs["side"],
                         quantity=kwargs["quantity"],
                         order_type=kwargs.get("order_type", "MARKET"),
-                        strategy_id=kwargs.get("metadata", {}).get(
-                            "strategy_id", "algo"
-                        ),
+                        strategy_id=kwargs.get("metadata", {}).get("strategy_id", "algo"),
                         metadata=kwargs.get("metadata", {}),
                     )
                     _rep = await self._submit_to_broker(_req, time.monotonic())
@@ -517,8 +512,7 @@ class ExecutionEngine:
                     self._total_blocks += 1
                     return self._blocked_report(
                         request,
-                        f"[SHARPE_CIRCUIT_OPEN] Model '{model_version}' gated — "
-                        "rolling Sharpe below threshold",
+                        f"[SHARPE_CIRCUIT_OPEN] Model '{model_version}' gated — rolling Sharpe below threshold",
                         t0,
                     )
             except Exception as _scb_exc:
@@ -588,8 +582,7 @@ class ExecutionEngine:
 
             if report.latency_ms > self._max_latency_ms:
                 logger.warning(
-                    "ExecutionEngine: latency %.2fms exceeds target %.0fms | "
-                    "symbol=%s request_id=%s",
+                    "ExecutionEngine: latency %.2fms exceeds target %.0fms | symbol=%s request_id=%s",
                     report.latency_ms,
                     self._max_latency_ms,
                     request.symbol,
@@ -643,8 +636,7 @@ class ExecutionEngine:
             return f"[{exc.reason_code}] {exc.detail}"
         except RiskManagerError as exc:
             logger.critical(
-                "ExecutionEngine: risk manager error — blocking trade | "
-                "request_id=%s error=%s",
+                "ExecutionEngine: risk manager error — blocking trade | request_id=%s error=%s",
                 request.request_id,
                 exc,
             )
@@ -672,8 +664,7 @@ class ExecutionEngine:
         order_type = order_type_map[request.order_type]
 
         logger.info(
-            "ExecutionEngine: submitting | request_id=%s symbol=%s side=%s "
-            "type=%s qty=%.4f price=%s",
+            "ExecutionEngine: submitting | request_id=%s symbol=%s side=%s type=%s qty=%.4f price=%s",
             request.request_id,
             request.symbol,
             request.side,
@@ -728,8 +719,7 @@ class ExecutionEngine:
         )
 
         logger.info(
-            "ExecutionEngine: fill report | request_id=%s order_id=%s "
-            "status=%s filled=%.4f avg_px=%.4f latency=%.2fms",
+            "ExecutionEngine: fill report | request_id=%s order_id=%s status=%s filled=%.4f avg_px=%.4f latency=%.2fms",
             request.request_id,
             order.id,
             exec_status.value,
@@ -795,11 +785,7 @@ class ExecutionEngine:
         try:
             from execution.tca_recorder import get_tca_recorder
 
-            broker = (
-                report.metadata.get("broker", "unknown")
-                if report.metadata
-                else "unknown"
-            )
+            broker = report.metadata.get("broker", "unknown") if report.metadata else "unknown"
             get_tca_recorder().record_fill(
                 request_id=request.request_id,
                 fill_price=report.average_price,
@@ -850,8 +836,7 @@ class ExecutionEngine:
     ) -> ExecutionReport:
         latency_ms = (time.monotonic() - t0) * 1000.0
         logger.warning(
-            "ExecutionEngine: ORDER BLOCKED | request_id=%s symbol=%s "
-            "side=%s qty=%.4f reason=%s",
+            "ExecutionEngine: ORDER BLOCKED | request_id=%s symbol=%s side=%s qty=%.4f reason=%s",
             request.request_id,
             request.symbol,
             request.side,
@@ -872,11 +857,7 @@ class ExecutionEngine:
 
     def get_metrics(self) -> dict[str, Any]:
         """Return execution metrics snapshot."""
-        avg_latency = (
-            sum(self._latencies_ms) / len(self._latencies_ms)
-            if self._latencies_ms
-            else 0.0
-        )
+        avg_latency = sum(self._latencies_ms) / len(self._latencies_ms) if self._latencies_ms else 0.0
         p99_latency = (
             sorted(self._latencies_ms)[int(len(self._latencies_ms) * 0.99)]
             if len(self._latencies_ms) >= 100  # noqa: PLR2004

@@ -25,6 +25,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any, Optional
 
@@ -269,11 +270,7 @@ def _compute_signal(
     if signal is None:
         return None
 
-    direction: str = (
-        signal.signal_type.value
-        if hasattr(signal.signal_type, "value")
-        else str(signal.signal_type)
-    )
+    direction: str = signal.signal_type.value if hasattr(signal.signal_type, "value") else str(signal.signal_type)
     return {
         "direction": direction,
         "base_confidence": getattr(signal, "confidence", 0.0),
@@ -338,8 +335,7 @@ def _fetch_macro_df(
     _store = _get_macro_store()
     if _store is None or len(_store) == 0:
         logger.debug(
-            "MacroStore empty for %s — advanced model on OHLCV features only "
-            "(accuracy may be lower than 68%%)",
+            "MacroStore empty for %s — advanced model on OHLCV features only (accuracy may be lower than 68%%)",
             symbol,
         )
         return None
@@ -359,8 +355,7 @@ def _fetch_macro_df(
         macro_df = _store.align_to_hourly(ohlcv_indexed)
         if macro_df.empty or macro_df.shape[1] == 0:
             logger.debug(
-                "MacroStore returned empty alignment for %s — "
-                "running advanced model without macro features",
+                "MacroStore returned empty alignment for %s — running advanced model without macro features",
                 symbol,
             )
             return None
@@ -401,8 +396,7 @@ def _fetch_macro_df(
 
     except Exception as exc:
         logger.warning(
-            "MacroStore alignment failed for %s: %s — "
-            "running advanced model without macro features",
+            "MacroStore alignment failed for %s: %s — running advanced model without macro features",
             symbol,
             exc,
         )
@@ -462,9 +456,7 @@ def _apply_anomaly_weighting(prob: float, ohlcv_df: Any, symbol: str) -> float:
         weight = store.update_and_score(ohlcv_df)
         if weight < 1.0:
             adjusted = 0.5 + (prob - 0.5) * weight
-            logger.debug(
-                "Phase2 anomaly: weight=%.2f %s %.4f→%.4f", weight, symbol, prob, adjusted
-            )
+            logger.debug("Phase2 anomaly: weight=%.2f %s %.4f→%.4f", weight, symbol, prob, adjusted)
             return adjusted
     except Exception as exc:
         logger.debug("Anomaly weighting failed (non-fatal): %s", exc)
@@ -529,10 +521,12 @@ def _predict_advanced(
     model_df = ohlcv_df
     try:
         from ml.daily_aggregator import ensure_daily, needs_resampling
+
         if needs_resampling(ohlcv_df):
             # Assign a proper DatetimeIndex so the resampler can work
             if not isinstance(ohlcv_df.index, _pd.DatetimeIndex):
                 from datetime import datetime, timezone as _tz
+
                 idx = _pd.date_range(
                     end=datetime.now(_tz.utc),
                     periods=len(ohlcv_df),
@@ -562,10 +556,13 @@ def _predict_advanced(
         logger.debug("_predict_advanced: resampling skipped: %s", _re)
 
     macro_df = _fetch_macro_df(model_df, symbol)
-    mtf_df   = _fetch_mtf_df(model_df, app_state=app_state)
+    mtf_df = _fetch_mtf_df(model_df, app_state=app_state)
 
     prob = adv_predictor.predict_proba(
-        model_df, macro_df=macro_df, symbol=symbol, mtf_df=mtf_df,
+        model_df,
+        macro_df=macro_df,
+        symbol=symbol,
+        mtf_df=mtf_df,
     )
     prob = _apply_anomaly_weighting(prob, model_df, symbol)
     prob = _apply_online_blend(prob, model_df, symbol)
@@ -573,7 +570,9 @@ def _predict_advanced(
 
     logger.debug(
         "ML chain (%s) %s: final=%.4f [macro=%s mtf=%s daily_bars=%d]",
-        adv_predictor.version, symbol, prob,
+        adv_predictor.version,
+        symbol,
+        prob,
         "yes" if macro_df is not None else "no",
         "yes" if mtf_df is not None else "no",
         len(model_df),
@@ -598,13 +597,13 @@ def _predict_basic(
     prices = data.get("prices", [data["close"]])
     closes = pd.Series(prices)
     feat = {
-        "close":  data["close"],
-        "open":   data["open"],
-        "high":   data["high"],
-        "low":    data["low"],
+        "close": data["close"],
+        "open": data["open"],
+        "high": data["high"],
+        "low": data["low"],
         "volume": data.get("volume", 0),
-        "ret_1":  closes.pct_change(1).iloc[-1]  if len(closes) > 1  else 0,
-        "ret_5":  closes.pct_change(5).iloc[-1]  if len(closes) > 5  else 0,  # noqa: PLR2004
+        "ret_1": closes.pct_change(1).iloc[-1] if len(closes) > 1 else 0,
+        "ret_5": closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,  # noqa: PLR2004
         "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,  # noqa: PLR2004
         "vol_20": (
             closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0  # noqa: PLR2004
@@ -614,7 +613,7 @@ def _predict_basic(
 
     if hasattr(active_model, "predict_proba"):
         proba = active_model.predict_proba(X)
-        prob  = float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
+        prob = float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
     elif hasattr(active_model, "predict"):
         prob = float(active_model.predict(X)[0])
     else:
@@ -648,7 +647,7 @@ def _compute_ml_probability(
             return _predict_advanced(adv_predictor, data, symbol, app_state)
 
         active_model = get_active_model()
-        model_ver    = get_model_version()
+        model_ver = get_model_version()
         if active_model is not None:
             return _predict_basic(active_model, model_ver, data, symbol, base_confidence)
 
@@ -703,6 +702,7 @@ def _get_factor_engine(app_state: Any = None) -> Any | None:
             return engine
     try:
         from portfolio.factor_model import get_live_factor_engine
+
         return get_live_factor_engine()
     except Exception:
         return None
@@ -728,10 +728,7 @@ def _enrich_signal_with_factors(
 
     try:
         attribution = engine.attribute(positions, total_pnl)
-        exposures = {
-            sym: exp.to_dict()
-            for sym, exp in engine.exposures.items()
-        }
+        exposures = {sym: exp.to_dict() for sym, exp in engine.exposures.items()}
         signal_payload["factor_attribution"] = attribution.to_dict()
         signal_payload["factor_exposures"] = exposures
         logger.debug(
@@ -924,8 +921,7 @@ async def _execute_if_approved(
     # trade safely, so we block it entirely.
     if risk_manager is None:
         logger.error(
-            "Auto-trade blocked for %s: risk_manager is not initialised. "
-            "Cannot size position without risk controls.",
+            "Auto-trade blocked for %s: risk_manager is not initialised. Cannot size position without risk controls.",
             symbol,
         )
         return
@@ -1064,15 +1060,9 @@ async def _execute_if_approved(
                         tp_price,
                     )
                 except Exception as _atr_exc:
-                    logger.debug(
-                        "ATR SL/TP calc failed, using pct fallback: %s", _atr_exc
-                    )
-                    sl_price = sl_price or (
-                        entry * 0.985 if direction.upper() == "BUY" else entry * 1.015
-                    )
-                    tp_price = tp_price or (
-                        entry * 1.03 if direction.upper() == "BUY" else entry * 0.97
-                    )
+                    logger.debug("ATR SL/TP calc failed, using pct fallback: %s", _atr_exc)
+                    sl_price = sl_price or (entry * 0.985 if direction.upper() == "BUY" else entry * 1.015)
+                    tp_price = tp_price or (entry * 1.03 if direction.upper() == "BUY" else entry * 0.97)
 
             # ── Dynamic position sizing (volatility-scaled Kelly) ─────────────
             # PositionSizer computes a volatility-adaptive lot size using:
@@ -1235,10 +1225,10 @@ async def _execute_if_approved(
 
 _SL_ATR_MULT_DEFAULT = 1.5
 _TP_ATR_MULT_DEFAULT = 3.0
-_ATR_FALLBACK_FRAC   = 0.008   # fraction of entry price when ATR unavailable
-_SL_FALLBACK_FRAC    = 0.015   # 1.5% fixed fallback stop distance
-_TP_FALLBACK_FRAC    = 0.030   # 3.0% fixed fallback take-profit distance
-_ATR_MIN_BARS        = 14      # minimum bars required for ATR calculation
+_ATR_FALLBACK_FRAC = 0.008  # fraction of entry price when ATR unavailable
+_SL_FALLBACK_FRAC = 0.015  # 1.5% fixed fallback stop distance
+_TP_FALLBACK_FRAC = 0.030  # 3.0% fixed fallback take-profit distance
+_ATR_MIN_BARS = 14  # minimum bars required for ATR calculation
 
 
 def _compute_atr(highs: list, lows: list, closes: list, entry_price: float) -> float:
@@ -1253,9 +1243,9 @@ def _compute_atr(highs: list, lows: list, closes: list, entry_price: float) -> f
     if len(highs) < _ATR_MIN_BARS or len(lows) < _ATR_MIN_BARS:
         return entry_price * _ATR_FALLBACK_FRAC
 
-    h  = np.array(highs[-(_ATR_MIN_BARS + 1):], dtype=float)
-    lo = np.array(lows[-(_ATR_MIN_BARS + 1):], dtype=float)
-    c  = np.array(closes[-(_ATR_MIN_BARS + 1):], dtype=float)
+    h = np.array(highs[-(_ATR_MIN_BARS + 1) :], dtype=float)
+    lo = np.array(lows[-(_ATR_MIN_BARS + 1) :], dtype=float)
+    c = np.array(closes[-(_ATR_MIN_BARS + 1) :], dtype=float)
     tr = np.maximum(
         h[1:] - lo[1:],
         np.maximum(np.abs(h[1:] - c[:-1]), np.abs(lo[1:] - c[:-1])),
@@ -1285,9 +1275,9 @@ def _resolve_sl_tp(
     if sl_raw is not None and tp_raw is not None:
         return sl_raw, tp_raw
 
-    is_long   = direction.upper() == "BUY"
-    sl_mult   = float(os.getenv("SL_ATR_MULT", str(_SL_ATR_MULT_DEFAULT)))
-    tp_mult   = float(os.getenv("TP_ATR_MULT", str(_TP_ATR_MULT_DEFAULT)))
+    is_long = direction.upper() == "BUY"
+    sl_mult = float(os.getenv("SL_ATR_MULT", str(_SL_ATR_MULT_DEFAULT)))
+    tp_mult = float(os.getenv("TP_ATR_MULT", str(_TP_ATR_MULT_DEFAULT)))
 
     try:
         atr = _compute_atr(
@@ -1296,24 +1286,14 @@ def _resolve_sl_tp(
             data.get("prices", [entry_price]),
             entry_price,
         )
-        sl = sl_raw if sl_raw is not None else (
-            entry_price - atr * sl_mult if is_long else entry_price + atr * sl_mult
-        )
-        tp = tp_raw if tp_raw is not None else (
-            entry_price + atr * tp_mult if is_long else entry_price - atr * tp_mult
-        )
+        sl = sl_raw if sl_raw is not None else (entry_price - atr * sl_mult if is_long else entry_price + atr * sl_mult)
+        tp = tp_raw if tp_raw is not None else (entry_price + atr * tp_mult if is_long else entry_price - atr * tp_mult)
         return sl, tp
 
     except Exception as exc:
         logger.debug("ATR SL/TP computation failed (using fixed fallback): %s", exc)
-        sl = sl_raw or (
-            entry_price * (1 - _SL_FALLBACK_FRAC) if is_long
-            else entry_price * (1 + _SL_FALLBACK_FRAC)
-        )
-        tp = tp_raw or (
-            entry_price * (1 + _TP_FALLBACK_FRAC) if is_long
-            else entry_price * (1 - _TP_FALLBACK_FRAC)
-        )
+        sl = sl_raw or (entry_price * (1 - _SL_FALLBACK_FRAC) if is_long else entry_price * (1 + _SL_FALLBACK_FRAC))
+        tp = tp_raw or (entry_price * (1 + _TP_FALLBACK_FRAC) if is_long else entry_price * (1 - _TP_FALLBACK_FRAC))
         return sl, tp
 
 
@@ -1342,28 +1322,31 @@ async def _tick(app_state: Any) -> None:
         if sig_info is None:
             continue
 
-        direction       = sig_info["direction"]
+        direction = sig_info["direction"]
         base_confidence = sig_info["base_confidence"]
-        signal          = sig_info["signal"]
+        signal = sig_info["signal"]
 
         ml_probability, model_ver = _compute_ml_probability(
-            data, symbol, base_confidence, app_state=app_state,
+            data,
+            symbol,
+            base_confidence,
+            app_state=app_state,
         )
 
-        entry_price      = getattr(signal, "entry_price", data["close"])
-        sl_raw, tp_raw   = _resolve_sl_tp(signal, data, direction, entry_price)
+        entry_price = getattr(signal, "entry_price", data["close"])
+        sl_raw, tp_raw = _resolve_sl_tp(signal, data, direction, entry_price)
 
         signal_payload: dict[str, Any] = {
-            "symbol":        symbol,
-            "direction":     direction,
-            "confidence":    base_confidence,
-            "probability":   ml_probability,
+            "symbol": symbol,
+            "direction": direction,
+            "confidence": base_confidence,
+            "probability": ml_probability,
             "model_version": model_ver,
-            "entry_price":   entry_price,
-            "stop_loss":     round(sl_raw, 5) if sl_raw is not None else None,
-            "take_profit":   round(tp_raw, 5) if tp_raw is not None else None,
-            "timestamp":     datetime.now(UTC).isoformat(),
-            "source":        "strategy_brain",
+            "entry_price": entry_price,
+            "stop_loss": round(sl_raw, 5) if sl_raw is not None else None,
+            "take_profit": round(tp_raw, 5) if tp_raw is not None else None,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "source": "strategy_brain",
         }
 
         await _publish_and_broadcast(app_state, symbol, signal_payload)

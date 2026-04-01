@@ -38,7 +38,7 @@ class TestBrokerFailureModes:
         broker = PaperTradingBroker(initial_balance=10_000.0)
         await broker.connect()
         price = broker.get_market_price("UNKNOWN_PAIR")
-        assert isinstance(price, (int, float))
+        assert isinstance(price, int | float)
         await broker.disconnect()
 
     @pytest.mark.asyncio
@@ -108,7 +108,7 @@ class TestRiskManagerFailureModes:
         risk = self._risk()
         result = risk.check_risk_limits()
         assert isinstance(result, tuple)
-        assert len(result) == 2  # noqa: PLR2004
+        assert len(result) == 2
 
 
 class TestKillSwitchFailureModes:

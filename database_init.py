@@ -81,7 +81,5 @@ def recover_database(file_path):
 
 
 if __name__ == "__main__":
-    db_url = os.getenv(
-        "DATABASE_URL", "sqlite:///trading.db"
-    )  # Use env variable for DB URL
+    db_url = os.getenv("DATABASE_URL", "sqlite:///trading.db")  # Use env variable for DB URL
     initialize_database(db_url)

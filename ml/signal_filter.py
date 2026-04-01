@@ -324,9 +324,7 @@ class SignalFilter:
         Call this from the execution path after a trade closes.
         Updates Prometheus accuracy gauge immediately.
         """
-        outcome = _TradeOutcome(
-            pnl_pct=pnl_pct, direction=direction, confidence=confidence
-        )
+        outcome = _TradeOutcome(pnl_pct=pnl_pct, direction=direction, confidence=confidence)
         if symbol not in self._outcomes:
             self._outcomes[symbol] = deque(maxlen=_EV_WINDOW)
         self._outcomes[symbol].append(outcome)
@@ -343,9 +341,7 @@ class SignalFilter:
 
     def ev_stats(self, symbol: str | None = None) -> dict[str, Any]:
         """Return EV statistics for monitoring/API exposure."""
-        outcomes = list(self._outcomes.get(symbol or "", [])) or list(
-            self._global_outcomes
-        )
+        outcomes = list(self._outcomes.get(symbol or "", [])) or list(self._global_outcomes)
         if not outcomes:
             return {
                 "n": 0,
@@ -410,9 +406,7 @@ class SignalFilter:
 
     # ── Gate implementations ──────────────────────────────────────────────────
 
-    def _gate_circuit_breaker(
-        self, symbol: str, direction: str, confidence: float
-    ) -> FilterResult:
+    def _gate_circuit_breaker(self, symbol: str, direction: str, confidence: float) -> FilterResult:
         """
         Gate 0: Circuit-breaker — halt all signals when rolling accuracy is too low.
 
@@ -440,8 +434,7 @@ class SignalFilter:
                 self._cb_trip_count += 1
                 _PROM.circuit_breaker_trips.labels(symbol=symbol).inc()
                 logger.warning(
-                    "SignalFilter: circuit breaker TRIPPED for %s "
-                    "(win_rate=%.3f < %.3f, n=%d)",
+                    "SignalFilter: circuit breaker TRIPPED for %s (win_rate=%.3f < %.3f, n=%d)",
                     symbol,
                     win_rate,
                     _CB_MIN_ACCURACY,
@@ -535,9 +528,7 @@ class SignalFilter:
 
         return "unknown"
 
-    def _gate_confidence(
-        self, direction: str, confidence: float, regime: str = "unknown"
-    ) -> FilterResult:
+    def _gate_confidence(self, direction: str, confidence: float, regime: str = "unknown") -> FilterResult:
         """
         Gate 2: confidence must exceed the direction-specific threshold.
 
@@ -595,22 +586,20 @@ class SignalFilter:
                     regime=regime,
                 )
         elif dir_upper in ("SELL", "SHORT") and confidence > threshold_short:
-                return FilterResult(
-                    passed=False,
-                    gate="confidence",
-                    reason=(
-                        f"SELL confidence {confidence:.3f} > threshold {threshold_short:.3f}"
-                        + (f" (regime={regime})" if tighten else "")
-                    ),
-                    confidence=confidence,
-                    regime=regime,
-                )
+            return FilterResult(
+                passed=False,
+                gate="confidence",
+                reason=(
+                    f"SELL confidence {confidence:.3f} > threshold {threshold_short:.3f}"
+                    + (f" (regime={regime})" if tighten else "")
+                ),
+                confidence=confidence,
+                regime=regime,
+            )
 
         return FilterResult(passed=True, confidence=confidence, regime=regime)
 
-    def _gate_expected_value(
-        self, symbol: str, confidence: float, direction: str
-    ) -> FilterResult:
+    def _gate_expected_value(self, symbol: str, confidence: float, direction: str) -> FilterResult:
         """
         Gate 2: Expected value must be positive.
 
@@ -667,16 +656,12 @@ class SignalFilter:
         try:
             closes = np.array(ohlcv["close"].values[-100:], dtype=float)
             if len(closes) < 20:  # noqa: PLR2004
-                return FilterResult(
-                    passed=True, confidence=confidence, regime="unknown"
-                )
+                return FilterResult(passed=True, confidence=confidence, regime="unknown")
 
             # Realised vol: 14-bar rolling std of log returns
             log_ret = np.diff(np.log(closes))
             if len(log_ret) < 14:  # noqa: PLR2004
-                return FilterResult(
-                    passed=True, confidence=confidence, regime="unknown"
-                )
+                return FilterResult(passed=True, confidence=confidence, regime="unknown")
 
             rv_14 = float(np.std(log_ret[-14:]))
             rv_90 = float(np.std(log_ret[-90:])) if len(log_ret) >= 90 else rv_14  # noqa: PLR2004
@@ -715,9 +700,7 @@ class SignalFilter:
             logger.debug("Regime gate error (pass-through): %s", exc)
             return FilterResult(passed=True, confidence=confidence, regime="unknown")
 
-    def _gate_mtf_confluence(
-        self, symbol: str, direction: str, confidence: float
-    ) -> FilterResult:
+    def _gate_mtf_confluence(self, symbol: str, direction: str, confidence: float) -> FilterResult:
         """
         Gate 4: Multi-timeframe confluence.
 
@@ -729,15 +712,11 @@ class SignalFilter:
 
             store = get_mtf_store()
             if store is None:
-                return FilterResult(
-                    passed=True, confidence=confidence, mtf_aligned=None
-                )
+                return FilterResult(passed=True, confidence=confidence, mtf_aligned=None)
 
             features = store.get(symbol, {})
             if not features:
-                return FilterResult(
-                    passed=True, confidence=confidence, mtf_aligned=None
-                )
+                return FilterResult(passed=True, confidence=confidence, mtf_aligned=None)
 
             # MTF features: h4_trend_up, d1_trend_up (1=up, 0=down/neutral)
             h4_up = features.get("h4_trend_up", 0.5)
@@ -755,10 +734,7 @@ class SignalFilter:
                 return FilterResult(
                     passed=False,
                     gate="mtf_confluence",
-                    reason=(
-                        f"MTF not aligned: direction={direction} "
-                        f"h4_trend_up={h4_up:.2f} d1_trend_up={d1_up:.2f}"
-                    ),
+                    reason=(f"MTF not aligned: direction={direction} h4_trend_up={h4_up:.2f} d1_trend_up={d1_up:.2f}"),
                     confidence=confidence,
                     mtf_aligned=False,
                 )

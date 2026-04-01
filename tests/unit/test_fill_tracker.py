@@ -94,9 +94,9 @@ def test_sync_fills_adds_new_fills():
     ledger = ft._load_ledger()
     added = ft.sync_fills(client, ledger)
 
-    assert added == 2  # noqa: PLR2004
-    assert ledger["fill_count"] == 2  # noqa: PLR2004
-    assert ledger["last_transaction_id"] == 2  # noqa: PLR2004
+    assert added == 2
+    assert ledger["fill_count"] == 2
+    assert ledger["last_transaction_id"] == 2
 
 
 def test_sync_fills_deduplicates():
@@ -116,7 +116,7 @@ def test_sync_fills_deduplicates():
     added = ft.sync_fills(client, ledger)
 
     assert added == 1  # only fill 3 is new
-    assert ledger["fill_count"] == 3  # noqa: PLR2004
+    assert ledger["fill_count"] == 3
 
 
 def test_sync_fills_empty_response():
@@ -169,9 +169,9 @@ def test_gate_file_not_passed_below_target():
     ft._update_gate_file(ledger)
 
     gate = json.loads(ft.GATE_FILE.read_text())
-    assert gate["fill_count"] == 100  # noqa: PLR2004
+    assert gate["fill_count"] == 100
     assert gate["fill_gate_passed"] is False
-    assert gate["fill_gate_pct"] == 20.0  # noqa: PLR2004
+    assert gate["fill_gate_pct"] == 20.0
     assert gate["phase3_enabled_at"] is None
 
 
@@ -185,7 +185,7 @@ def test_gate_file_passed_at_target():
 
     gate = json.loads(ft.GATE_FILE.read_text())
     assert gate["fill_gate_passed"] is True
-    assert gate["fill_gate_pct"] == 100.0  # noqa: PLR2004
+    assert gate["fill_gate_pct"] == 100.0
     assert gate["phase3_enabled_at"] is not None
 
 
@@ -265,6 +265,9 @@ def test_main_reset_clears_ledger(tmp_path):
 
 def test_main_missing_credentials_exits_2(capsys):
     """Missing OANDA_API_KEY exits 2."""
-    with patch.dict("os.environ", {"OANDA_API_KEY": "", "OANDA_ACCOUNT_ID": ""}), patch("sys.argv", ["fill_tracker.py"]):
+    with (
+        patch.dict("os.environ", {"OANDA_API_KEY": "", "OANDA_ACCOUNT_ID": ""}),
+        patch("sys.argv", ["fill_tracker.py"]),
+    ):
         code = ft.main()
-    assert code == 2  # noqa: PLR2004
+    assert code == 2

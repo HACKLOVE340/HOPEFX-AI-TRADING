@@ -35,9 +35,7 @@ import pytest
 import contextlib
 
 os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault(
-    "SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!"
-)
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -83,7 +81,7 @@ class TestProcessTick:
         await streamer.process_tick(2000.0, time.time(), "finnhub")
 
         assert collector.prices == [2000.0]
-        assert streamer._last_price == 2000.0  # noqa: PLR2004
+        assert streamer._last_price == 2000.0
 
     @pytest.mark.asyncio
     async def test_price_below_minimum_rejected(self):
@@ -128,7 +126,7 @@ class TestProcessTick:
         await streamer.process_tick(2200.0, time.time(), "finnhub")
 
         assert collector.prices == [2000.0]
-        assert streamer._last_price == 2000.0  # unchanged  # noqa: PLR2004
+        assert streamer._last_price == 2000.0  # unchanged
 
     @pytest.mark.asyncio
     async def test_anomaly_counter_incremented(self):
@@ -146,9 +144,7 @@ class TestProcessTick:
         streamer.subscribe(collector)
 
         await streamer.process_tick(2000.0, time.time(), "finnhub")
-        await streamer.process_tick(
-            2200.0, time.time(), "finnhub"
-        )  # anomaly — discarded
+        await streamer.process_tick(2200.0, time.time(), "finnhub")  # anomaly — discarded
         await streamer.process_tick(2010.0, time.time(), "finnhub")  # 0.5% — accepted
 
         assert collector.prices == [2000.0, 2010.0]
@@ -171,7 +167,7 @@ class TestProcessTick:
         event_ts = time.time() - 0.05  # 50 ms ago
         await streamer.process_tick(2000.0, event_ts, "polygon")
         # No assertion on exact value — just verify no exception and tick accepted
-        assert streamer._last_price == 2000.0  # noqa: PLR2004
+        assert streamer._last_price == 2000.0
 
     @pytest.mark.asyncio
     async def test_multiple_sources_independent(self):
@@ -200,7 +196,7 @@ class TestProcessTick:
         payload = json.loads(call_args[0][1])
         assert queue_name == "price_queue"
         assert payload["symbol"] == "XAUUSD"
-        assert payload["price"] == 2000.0  # noqa: PLR2004
+        assert payload["price"] == 2000.0
         assert payload["source"] == "finnhub"
         assert "latency_ms" in payload
 
@@ -316,9 +312,7 @@ class TestCircuitBreaker:
         assert streamer._is_circuit_open("finnhub") is False
 
     def test_circuit_resets_after_cooldown(self):
-        streamer = _make_streamer(
-            circuit_breaker_threshold=1, circuit_breaker_cooldown=0.01
-        )
+        streamer = _make_streamer(circuit_breaker_threshold=1, circuit_breaker_cooldown=0.01)
         streamer._record_failure("finnhub")
         assert streamer._is_circuit_open("finnhub") is True
 
@@ -391,14 +385,14 @@ class TestRunWithBackoff:
         async def _coro():
             nonlocal call_count
             call_count += 1
-            if call_count < 3:  # noqa: PLR2004
+            if call_count < 3:
                 raise ConnectionError("simulated disconnect")
             streamer._running = False
 
         with patch("asyncio.sleep", new_callable=AsyncMock):
             await streamer._run_with_backoff("finnhub", _coro)
 
-        assert call_count == 3  # noqa: PLR2004
+        assert call_count == 3
 
     @pytest.mark.asyncio
     async def test_skips_when_circuit_open(self):
@@ -452,7 +446,7 @@ class TestStatus:
         await streamer.process_tick(2000.0, time.time(), "finnhub")
 
         s = streamer.status()
-        assert s["last_price"] == 2000.0  # noqa: PLR2004
+        assert s["last_price"] == 2000.0
         assert s["subscriber_count"] == 1
 
     def test_status_circuit_breaker_open(self):
@@ -631,7 +625,10 @@ class TestRunNoKeys:
             t.cancel()  # cancel immediately so run() exits
             return t
 
-        with patch("asyncio.create_task", side_effect=_spy_create_task), contextlib.suppress((TimeoutError, asyncio.CancelledError)):
+        with (
+            patch("asyncio.create_task", side_effect=_spy_create_task),
+            contextlib.suppress((TimeoutError, asyncio.CancelledError)),
+        ):
             await asyncio.wait_for(streamer.run(), timeout=1.0)
 
         assert len(tasks_created) >= 1

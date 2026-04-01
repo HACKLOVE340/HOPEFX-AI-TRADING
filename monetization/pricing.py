@@ -236,9 +236,7 @@ class PricingManager:
         pricing_tier = self.get_tier(tier)
         return pricing_tier.commission_rate if pricing_tier else Decimal("0.00")
 
-    def calculate_commission(
-        self, tier: SubscriptionTier, trade_amount: Decimal
-    ) -> Decimal:
+    def calculate_commission(self, tier: SubscriptionTier, trade_amount: Decimal) -> Decimal:
         """Calculate commission for a trade"""
         rate = self.get_commission_rate(tier)
         return trade_amount * rate
@@ -265,9 +263,7 @@ class PricingManager:
             "commission_difference": float(t1.commission_rate - t2.commission_rate),
         }
 
-    def get_upgrade_path(
-        self, current_tier: SubscriptionTier
-    ) -> list[SubscriptionTier]:
+    def get_upgrade_path(self, current_tier: SubscriptionTier) -> list[SubscriptionTier]:
         """Get available upgrade options"""
         tier_order = [
             SubscriptionTier.FREE,
@@ -283,9 +279,7 @@ class PricingManager:
         except (ValueError, IndexError):
             return []
 
-    def get_downgrade_path(
-        self, current_tier: SubscriptionTier
-    ) -> list[SubscriptionTier]:
+    def get_downgrade_path(self, current_tier: SubscriptionTier) -> list[SubscriptionTier]:
         """Get available downgrade options"""
         tier_order = [
             SubscriptionTier.FREE,

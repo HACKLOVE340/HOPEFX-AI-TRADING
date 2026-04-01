@@ -103,11 +103,7 @@ async def price_stream_loop(ws_manager: Any) -> None:
     """
     from app import app_state
 
-    _STREAM_SYMBOLS = [
-        s.strip().upper()
-        for s in os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",")
-        if s.strip()
-    ]
+    _STREAM_SYMBOLS = [s.strip().upper() for s in os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",") if s.strip()]
     _POLL_INTERVAL = float(os.getenv("PRICE_STREAM_INTERVAL", "1.0"))
 
     logger.info(
