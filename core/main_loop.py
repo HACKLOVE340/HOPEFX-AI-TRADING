@@ -232,10 +232,11 @@ async def run() -> None:
 
 def _validate_startup_env() -> None:
     """
-    Check that all connector hub secrets are present.
+    Check that all connector hub secrets are present and the active model
+    artifact passes SHA-256 integrity verification.
 
     Logs a WARNING for each missing optional var and exits with a clear
-    error message if any hard-required var is absent.
+    error message if any hard-required var is absent or the model is corrupt.
     """
     hard_required = [
         ("OANDA_API_KEY", "OANDA v20 API key — get from https://www.oanda.com/"),
@@ -268,6 +269,82 @@ def _validate_startup_env() -> None:
         )
         logger.critical(msg)
         sys.exit(1)
+
+    # ── Model registry integrity check ────────────────────────────────────────
+    _verify_model_registry()
+
+
+def _verify_model_registry() -> None:
+    """
+    Verify the active production model's SHA-256 integrity via ModelRegistry.
+
+    Behaviour
+    ---------
+    - If registry.json does not exist: bootstrap it from advanced_oos_meta.json
+      and log a WARNING (non-fatal — model is staging, not production).
+    - If an active production model is registered: verify its SHA-256 digest.
+      A mismatch is fatal (sys.exit(1)) — a corrupted model must not serve.
+    - If no active production model is registered (all staging): log INFO.
+      This is the expected state until the Sharpe gate passes and a model
+      is promoted via ModelRegistry.promote().
+    """
+    try:
+        from ml.model_registry import ModelRegistry
+
+        reg = ModelRegistry()
+
+        # Bootstrap registry.json from existing artifacts if it doesn't exist
+        manifest = reg._load()
+        if not manifest["versions"]:
+            logger.info(
+                "ModelRegistry: registry.json is empty — bootstrapping from "
+                "advanced_oos_meta.json …"
+            )
+            entry = reg.bootstrap_from_meta(name="advanced_oos_v1", promote=False)
+            if entry:
+                logger.info(
+                    "ModelRegistry: bootstrapped '%s'  sha256=%s…",
+                    entry["name"],
+                    entry["sha256"][:16],
+                )
+            else:
+                logger.warning(
+                    "ModelRegistry: bootstrap failed — advanced_oos.pkl not found. "
+                    "Train a model before deploying."
+                )
+            return
+
+        # Verify active production model if one is registered
+        active = manifest.get("active_version")
+        if not active:
+            logger.info(
+                "ModelRegistry: no active production model (all versions are staging). "
+                "Promote a model via ModelRegistry.promote() after the Sharpe gate passes."
+            )
+            return
+
+        ok, msg = reg.verify_active()
+        if ok:
+            logger.info("ModelRegistry: %s", msg)
+        else:
+            logger.critical(
+                "ModelRegistry: INTEGRITY FAILURE — %s. "
+                "The model artifact may be corrupted or tampered with. "
+                "Re-train and re-register before starting.",
+                msg,
+            )
+            sys.exit(1)
+
+    except Exception as exc:
+        # Registry check failure is non-fatal in development; fatal in production
+        app_env = os.getenv("APP_ENV", "development").lower()
+        if app_env == "production":
+            logger.critical(
+                "ModelRegistry: startup check failed in production: %s — aborting.",
+                exc,
+            )
+            sys.exit(1)
+        logger.warning("ModelRegistry: startup check skipped: %s", exc)
 
 
 if __name__ == "__main__":

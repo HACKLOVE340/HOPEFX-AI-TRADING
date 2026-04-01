@@ -192,6 +192,16 @@ RECOMMENDED_VARS: list[EnvVar] = [
 ]
 
 
+# ── Known dev-only placeholder values — always rejected in production ─────────
+_DEV_PLACEHOLDERS: dict[str, str] = {
+    "SECURITY_JWT_SECRET": "dev-jwt-secret-minimum-32-characters-long!!",
+    "CONFIG_ENCRYPTION_KEY": "dev-key-minimum-32-characters-long-for-testing",
+    "HOPEFX_KILL_SWITCH_TOKEN": "CHANGE_ME_generate_64_char_hex_token",
+    "POSTGRES_PASSWORD": "CHANGE_ME_db_password",
+    "REDIS_PASSWORD": "CHANGE_ME_redis_password",
+}
+
+
 @dataclass
 class ValidationResult:
     errors: list[str] = field(default_factory=list)
@@ -208,11 +218,14 @@ def validate_environment(strict: bool = False) -> ValidationResult:
 
     Args:
         strict: If True, treat missing recommended vars as errors.
+                Always True in production (APP_ENV=production).
 
     Returns:
         ValidationResult with errors and warnings lists.
     """
     result = ValidationResult()
+    app_env = os.getenv("APP_ENV", "development").lower()
+    is_production = app_env == "production"
 
     for var in REQUIRED_VARS:
         val = os.getenv(var.name)
@@ -224,6 +237,24 @@ def validate_environment(strict: bool = False) -> ValidationResult:
             result.errors.append(
                 f"{var.name} is too short ({len(val)} chars, need ≥{var.min_length}) — {var.description}",
             )
+        elif is_production and var.name in _DEV_PLACEHOLDERS:
+            if val == _DEV_PLACEHOLDERS[var.name]:
+                result.errors.append(
+                    f"{var.name} is set to the dev placeholder value in production. "
+                    f"Generate a real secret before deploying."
+                )
+
+    # Check all known placeholders even if not in REQUIRED_VARS
+    if is_production:
+        for name, placeholder in _DEV_PLACEHOLDERS.items():
+            if name in {v.name for v in REQUIRED_VARS}:
+                continue  # already checked above
+            val = os.getenv(name)
+            if val and val == placeholder:
+                result.errors.append(
+                    f"{name} is set to the dev placeholder value in production. "
+                    f"Generate a real value before deploying."
+                )
 
     for var in RECOMMENDED_VARS:
         val = os.getenv(var.name)

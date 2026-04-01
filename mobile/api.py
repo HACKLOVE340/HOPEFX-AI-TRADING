@@ -680,10 +680,20 @@ class MobileAPIServer:
             token: str = Query(...),
         ):
             """Real-time quote stream. Requires a valid access JWT as ?token=."""
+            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+
+            limiter = get_ws_limiter()
+            client_ip = get_client_ip(websocket)
+            allowed, reason = await limiter.check_and_register(websocket, client_ip)
+            if not allowed:
+                await websocket.close(code=1008, reason=reason)
+                return
+
             try:
                 await self._verify_ws_token(token)
             except HTTPException:
                 await websocket.close(code=4001)
+                await limiter.release(client_ip)
                 return
 
             await websocket.accept()
@@ -713,6 +723,8 @@ class MobileAPIServer:
             except Exception as exc:
                 logger.error("WebSocket quotes error: %s", exc, exc_info=True)
                 await websocket.close()
+            finally:
+                await limiter.release(client_ip)
 
         @self.app.websocket("/api/v2/ws/trades")
         async def websocket_trades(
@@ -722,10 +734,20 @@ class MobileAPIServer:
             """Real-time trade update stream. Requires a valid access JWT as ?token=.
             user_id is extracted from the verified token — never trusted from query string.
             """
+            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+
+            limiter = get_ws_limiter()
+            client_ip = get_client_ip(websocket)
+            allowed, reason = await limiter.check_and_register(websocket, client_ip)
+            if not allowed:
+                await websocket.close(code=1008, reason=reason)
+                return
+
             try:
                 user_id = await self._verify_ws_token(token)
             except HTTPException:
                 await websocket.close(code=4001)
+                await limiter.release(client_ip)
                 return
 
             await websocket.accept()
@@ -746,6 +768,7 @@ class MobileAPIServer:
                 conns = self.active_connections.get(user_id, [])
                 if websocket in conns:
                     conns.remove(websocket)
+                await limiter.release(client_ip)
 
     def run(self, reload: bool = False) -> None:
         import uvicorn

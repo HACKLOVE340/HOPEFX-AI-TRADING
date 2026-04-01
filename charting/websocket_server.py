@@ -198,6 +198,16 @@ def mount_nuclear_routes(
 
     @app.websocket("/ws/nuclear")
     async def nuclear_ws_endpoint(ws: WebSocket):
+        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+
+        limiter = get_ws_limiter()
+        client_ip = get_client_ip(ws)
+
+        allowed, reason = await limiter.check_and_register(ws, client_ip)
+        if not allowed:
+            await ws.close(code=1008, reason=reason)
+            return
+
         await _manager.connect(ws)
         # Send immediate snapshot on connect
         snapshot = chart_engine.get_snapshot()
@@ -224,6 +234,7 @@ def mount_nuclear_routes(
         finally:
             heartbeat_task.cancel()
             await _manager.disconnect(ws)
+            await limiter.release(client_ip)
 
     # ── HTTP endpoints ────────────────────────────────────────────────────────
 
