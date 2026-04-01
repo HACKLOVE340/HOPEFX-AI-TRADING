@@ -30,6 +30,9 @@ UTC = timezone.utc
 
 from data_layer.feeds.macro.fred import FREDFeed, FRED_SERIES, fred_feed
 from data_layer.feeds.macro.wgc import WGCFeed, wgc_feed
+from data_layer.feeds.macro.cot import COTFeed, cot_feed
+from data_layer.feeds.macro.etf_aum import ETFAUMFeed, etf_aum_feed
+from data_layer.feeds.macro.baltic_dry import BalticDryFeed, baltic_dry_feed
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +60,15 @@ class MacroStoreBridge:
         self,
         fred: FREDFeed | None = None,
         wgc: WGCFeed | None = None,
+        cot: COTFeed | None = None,
+        etf_aum: ETFAUMFeed | None = None,
+        baltic_dry: BalticDryFeed | None = None,
     ) -> None:
         self._fred = fred or fred_feed
         self._wgc = wgc or wgc_feed
+        self._cot = cot or cot_feed
+        self._etf_aum = etf_aum or etf_aum_feed
+        self._baltic_dry = baltic_dry or baltic_dry_feed
         self._loaded = False
         self._running = False
         self._last_refresh: datetime | None = None
@@ -130,6 +139,14 @@ class MacroStoreBridge:
 
         # Load WGC demand data (non-blocking — failure is non-fatal)
         await self._load_wgc_into_store()
+
+        # Load COT, ETF AUM, Baltic Dry concurrently (non-blocking)
+        await asyncio.gather(
+            self._load_cot_into_store(),
+            self._load_etf_aum_into_store(),
+            self._load_baltic_dry_into_store(),
+            return_exceptions=True,
+        )
 
         asyncio.create_task(
             self._daily_refresh_loop(), name="macro_store_bridge_refresh"
@@ -272,8 +289,38 @@ class MacroStoreBridge:
             await asyncio.gather(
                 self._load_fred_into_store(),
                 self._load_wgc_into_store(),
+                self._load_cot_into_store(),
+                self._load_etf_aum_into_store(),
+                self._load_baltic_dry_into_store(),
                 return_exceptions=True,
             )
+
+    async def _load_cot_into_store(self) -> None:
+        """Fetch CFTC COT series and inject into MacroStore."""
+        try:
+            count = await self._cot.inject_into_macro_store()
+            if count:
+                logger.info("MacroStoreBridge: COT injected %d series", count)
+        except Exception as exc:
+            logger.warning("MacroStoreBridge._load_cot_into_store error: %s", exc)
+
+    async def _load_etf_aum_into_store(self) -> None:
+        """Fetch ETF AUM series and inject into MacroStore."""
+        try:
+            count = await self._etf_aum.inject_into_macro_store()
+            if count:
+                logger.info("MacroStoreBridge: ETF AUM injected %d series", count)
+        except Exception as exc:
+            logger.warning("MacroStoreBridge._load_etf_aum_into_store error: %s", exc)
+
+    async def _load_baltic_dry_into_store(self) -> None:
+        """Fetch Baltic Dry Index and inject into MacroStore."""
+        try:
+            count = await self._baltic_dry.inject_into_macro_store()
+            if count:
+                logger.info("MacroStoreBridge: Baltic Dry injected %d series", count)
+        except Exception as exc:
+            logger.warning("MacroStoreBridge._load_baltic_dry_into_store error: %s", exc)
 
     def get_ml_features(self) -> dict[str, float]:
         """
