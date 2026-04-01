@@ -149,7 +149,8 @@ def _get_fernet():
         key_bytes = hashlib.sha256(raw_key.encode()).digest()
         fernet_key = base64.urlsafe_b64encode(key_bytes)
         return Fernet(fernet_key)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Fernet initialization failed: %s", exc)
         return None
 
 
@@ -167,8 +168,9 @@ def decrypt_totp_secret(stored: str) -> str:
     if f:
         try:
             return f.decrypt(stored.encode()).decode()
-        except Exception:
+        except Exception as exc:
             # May already be plain (migration case)
+            logger.info("TOTP secret decryption failed (likely plaintext fallback): %s", exc)
             return stored
     return stored
 
@@ -523,9 +525,9 @@ class AuthService:
                 if jti:
                     ttl = max(0, exp - int(_now().timestamp()))
                     revoke_access_token(jti, ttl + 60)  # +60s buffer
-            except Exception as _exc:
+            except jwt.InvalidTokenError as _exc:
                 logger.debug(
-                    "Suppressed exception: %s", _exc
+                    "Access token blacklist skipped (invalid/expired): %s", _exc
                 )  # expired or invalid — no need to blacklist
 
         return True, "Logged out successfully"
