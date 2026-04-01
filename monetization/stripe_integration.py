@@ -221,7 +221,9 @@ class StripeIntegration:
             logger.warning("STRIPE_SECRET_KEY not set — Stripe operations will raise until configured.")
         else:
             _stripe.api_key = self.api_key
-            logger.info("Stripe SDK configured (key prefix: %s...)", self.api_key[:8])
+            # Log key type (test vs live) without exposing any key material.
+            key_type = "test" if self.api_key.startswith("sk_test_") else "live"
+            logger.info("Stripe SDK configured (mode: %s)", key_type)
 
     def _require_stripe(self) -> None:
         """Raise RuntimeError if the Stripe SDK or API key is missing."""
