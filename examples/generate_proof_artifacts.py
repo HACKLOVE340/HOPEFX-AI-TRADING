@@ -234,7 +234,7 @@ def _rolling_hurst(series, window=40):
                 return 0.5
             h = np.polyfit(np.log(list(lags)[: len(rs_vals)]), np.log(rs_vals), 1)[0]
             return float(np.clip(h, 0.0, 1.0))
-        except Exception:
+        except Exception:  # nosec B110 — numerical fallback for Hurst exponent
             return 0.5
 
     return series.rolling(window).apply(_h, raw=True).fillna(0.5)

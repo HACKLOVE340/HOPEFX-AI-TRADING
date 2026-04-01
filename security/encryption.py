@@ -131,7 +131,7 @@ class SecureVault:
             # Base64 decode
             try:
                 return base64.b64decode(credential.ciphertext.encode()).decode()
-            except Exception:
+            except (ValueError, UnicodeDecodeError):
                 return credential.ciphertext
 
         # Fernet decrypt

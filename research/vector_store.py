@@ -186,7 +186,7 @@ def _regime_label(df) -> str:
         if rsi < 30:  # noqa: PLR2004
             return "oversold"
         return "ranging"
-    except Exception:
+    except (ValueError, TypeError):
         return "unknown"
 
 

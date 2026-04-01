@@ -67,7 +67,7 @@ class _TokenBlacklist:
             )
             self._redis.ping()
             logger.info("Token blacklist: Redis connected at %s:%s", host, port)
-        except Exception:
+        except Exception:  # nosec B110 — Redis optional, in-memory fallback
             logger.warning(
                 "Token blacklist: Redis unavailable — using in-memory fallback (not suitable for multi-process)",
             )

@@ -182,7 +182,7 @@ class NormalizationPipeline:
                 # Last resort: try converting the existing index
                 try:
                     d.index = pd.to_datetime(d.index, utc=True)
-                except Exception:
+                except (ValueError, TypeError):
                     logger.warning(
                         "NormalizationPipeline: cannot parse timestamp index"
                     )

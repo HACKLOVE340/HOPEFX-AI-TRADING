@@ -711,7 +711,7 @@ class DeepPredictor:
         }
         try:
             result["auc"] = float(roc_auc_score(y, proba))
-        except Exception:
+        except (ValueError, TypeError):
             result["auc"] = 0.5
         return result
 

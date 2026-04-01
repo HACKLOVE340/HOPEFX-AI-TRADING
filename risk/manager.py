@@ -467,7 +467,7 @@ class RiskManager:
                 max_total_dd_pct=self._config.max_drawdown_pct,
                 max_daily_dd_pct=self._config.max_daily_loss_pct,
             )
-        except Exception:
+        except Exception:  # nosec B110 — graceful degradation without drawdown tracker
             self._dd_tracker = None
 
         # Restore persisted halt state so a restart after a halt does not

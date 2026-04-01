@@ -56,7 +56,7 @@ def _get_redis():
         client = _redis.from_url(url, socket_connect_timeout=1, socket_timeout=1)
         client.ping()
         return client
-    except Exception:
+    except Exception:  # nosec B110 — Redis optional
         return None
 
 

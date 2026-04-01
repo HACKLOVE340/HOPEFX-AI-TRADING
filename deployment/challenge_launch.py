@@ -370,7 +370,7 @@ async def status_cmd(interaction: discord.Interaction):
 
     try:
         s = json.loads(STATUS_FILE.read_text())
-    except Exception:
+    except (ValueError, OSError):
         await interaction.response.send_message(
             "Status file unreadable.", ephemeral=True
         )

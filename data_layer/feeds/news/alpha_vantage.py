@@ -69,7 +69,7 @@ class AlphaVantageNewsFeed(NewsFeedBase):
                     published = datetime.strptime(time_str, "%Y%m%dT%H%M%S").replace(
                         tzinfo=UTC
                     )
-                except Exception:
+                except (ValueError, TypeError):
                     published = datetime.now(UTC)
 
                 # Native sentiment score: -1 to +1

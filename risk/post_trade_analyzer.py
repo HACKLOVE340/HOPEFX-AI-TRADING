@@ -75,7 +75,7 @@ try:
         "hopefx_post_trade_adverse_selection_total", "Adverse selection events"
     )
     _PROM_OK = True
-except Exception:
+except Exception:  # nosec B110 — Prometheus metrics optional
     _PROM_OK = False
 
 

@@ -432,7 +432,7 @@ class PreTradeGate:
         ):
             try:
                 return rm._compute_cvar()
-            except Exception:
+            except Exception:  # nosec B110 — optional CVaR computation
                 return None
         return None
 

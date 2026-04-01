@@ -578,7 +578,7 @@ class LiveInferenceLoop:
             # We need an OHLCV index to align to; use a minimal placeholder
             # The predictor will re-align internally using its own OHLCV index
             return None  # macro alignment happens inside AdvancedModelPredictor
-        except Exception:
+        except Exception:  # nosec B110 — optional macro features
             return None
 
     def _apply_signal_filter(
