@@ -558,7 +558,7 @@ class PerformanceAnalytics:
         elif period == MetricPeriod.YEAR:
             return now - timedelta(days=365)
         else:  # ALL_TIME
-            return datetime.min
+            return datetime.min.replace(tzinfo=UTC)
 
     def _get_period_returns(self, start_date: datetime) -> list[float]:
         """Get daily returns for a period."""
