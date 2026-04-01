@@ -69,12 +69,12 @@ class TestTradingModels:
             risk_per_trade=2.5,
             parameters={"fast_period": 10, "slow_period": 50},
         )
-        assert req.risk_per_trade == 2.5  # noqa: PLR2004
+        assert req.risk_per_trade == 2.5
         assert req.parameters == {"fast_period": 10, "slow_period": 50}
 
     def test_position_size_request_defaults(self):
         req = PositionSizeRequest(entry_price=1900.0)
-        assert req.entry_price == 1900.0  # noqa: PLR2004
+        assert req.entry_price == 1900.0
         assert req.stop_loss_price is None
         assert req.confidence == 1.0
 
@@ -84,8 +84,8 @@ class TestTradingModels:
             stop_loss_price=1930.0,
             confidence=0.8,
         )
-        assert req.stop_loss_price == 1930.0  # noqa: PLR2004
-        assert req.confidence == 0.8  # noqa: PLR2004
+        assert req.stop_loss_price == 1930.0
+        assert req.confidence == 0.8
 
     def test_position_size_response(self):
         resp = PositionSizeResponse(
@@ -95,8 +95,8 @@ class TestTradingModels:
             take_profit_price=1950.0,
             notes="Auto-calculated",
         )
-        assert resp.size == 100.0  # noqa: PLR2004
-        assert resp.risk_amount == 50.0  # noqa: PLR2004
+        assert resp.size == 100.0
+        assert resp.risk_amount == 50.0
         assert resp.notes == "Auto-calculated"
 
     def test_position_size_response_optional_fields_none(self):
@@ -115,7 +115,7 @@ class TestTradingEndpoints:
 
     def test_list_strategies_empty(self):
         resp = self.client.get("/api/trading/strategies")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
     def test_create_strategy_success(self):
@@ -128,7 +128,7 @@ class TestTradingEndpoints:
                 "strategy_type": "ma_crossover",
             },
         )
-        assert resp.status_code == 201  # noqa: PLR2004
+        assert resp.status_code == 201
         body = resp.json()
         assert body["name"] == "test_ma"
         assert body["type"] == "ma_crossover"
@@ -146,7 +146,7 @@ class TestTradingEndpoints:
 
     def test_get_strategy_not_found(self):
         resp = self.client.get("/api/trading/strategies/does_not_exist")
-        assert resp.status_code == 404  # noqa: PLR2004
+        assert resp.status_code == 404
 
     def test_calculate_position_size(self):
         resp = self.client.post(
@@ -157,7 +157,7 @@ class TestTradingEndpoints:
                 "confidence": 1.0,
             },
         )
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "size" in body
         assert "risk_amount" in body
@@ -167,24 +167,24 @@ class TestTradingEndpoints:
             "/api/trading/position-size",
             json={"entry_price": 1900.0},
         )
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "size" in body
 
     def test_get_risk_metrics(self):
         resp = self.client.get("/api/trading/risk-metrics")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         assert isinstance(resp.json(), dict)
 
     def test_get_performance_summary(self):
         resp = self.client.get("/api/trading/performance/summary")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "total_strategies" in body
 
     def test_get_strategy_performance_not_found(self):
         resp = self.client.get("/api/trading/performance/missing_strategy")
-        assert resp.status_code == 404  # noqa: PLR2004
+        assert resp.status_code == 404
 
     def test_start_stop_delete_strategy(self):
         # Create first
@@ -194,13 +194,13 @@ class TestTradingEndpoints:
         )
         # Start
         resp = self.client.post("/api/trading/strategies/lifecycle_test/start")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         # Stop
         resp = self.client.post("/api/trading/strategies/lifecycle_test/stop")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         # Delete
         resp = self.client.delete("/api/trading/strategies/lifecycle_test")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
 
 
 # ============================================================
@@ -288,7 +288,7 @@ class TestAdminHelpers:
         _activity_log.clear()
         for i in range(55):
             log_activity(f"event {i}")
-        assert len(_activity_log) <= 50  # noqa: PLR2004
+        assert len(_activity_log) <= 50
 
     def test_load_persisted_risk_settings_no_file(self):
         with patch("api.admin._RISK_SETTINGS_FILE") as mock_path:
@@ -303,7 +303,7 @@ class TestAdminHelpers:
             tmp_path = Path(f.name)
         with patch("api.admin._RISK_SETTINGS_FILE", tmp_path):
             result = _load_persisted_risk_settings()
-        assert result["max_risk_per_trade"] == 1.5  # noqa: PLR2004
+        assert result["max_risk_per_trade"] == 1.5
         tmp_path.unlink(missing_ok=True)
 
     def test_load_persisted_risk_settings_invalid_json(self):
@@ -332,7 +332,7 @@ class TestAdminEndpoints:
 
     def test_get_system_info(self):
         resp = self.client.get("/api/admin/system-info")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert body["version"] == "1.0.0"
         assert body["status"] == "running"
@@ -340,7 +340,7 @@ class TestAdminEndpoints:
 
     def test_get_settings(self):
         resp = self.client.get("/api/admin/settings")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "max_risk_per_trade" in body
         assert "max_open_positions" in body
@@ -349,7 +349,7 @@ class TestAdminEndpoints:
     def test_get_activity_empty(self):
         _activity_log.clear()
         resp = self.client.get("/api/admin/activity")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "events" in body
         assert isinstance(body["events"], list)
@@ -358,14 +358,14 @@ class TestAdminEndpoints:
         _activity_log.clear()
         log_activity("unit test event")
         resp = self.client.get("/api/admin/activity")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         events = resp.json()["events"]
         assert len(events) >= 1
         assert events[0]["message"] == "unit test event"
 
     def test_get_dashboard_data(self):
         resp = self.client.get("/api/admin/dashboard-data")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "system_health" in body
         assert "trading_stats" in body
@@ -377,14 +377,14 @@ class TestAdminEndpoints:
             "/api/admin/settings",
             json={"max_risk_per_trade": 1.0, "max_open_positions": 5},
         )
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "ok"
         assert "saved" in body
 
     def test_get_system_metrics(self):
         resp = self.client.get("/api/admin/system-metrics")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "uptime" in body
         assert "uptime_seconds" in body
@@ -536,8 +536,8 @@ class TestRealTimeSignalService:
     def test_initialization(self):
         assert self.svc.active_signals == {}
         assert len(self.svc.signal_history) == 0
-        assert self.svc.min_confidence == 0.3  # noqa: PLR2004
-        assert self.svc.min_strategies == 2  # noqa: PLR2004
+        assert self.svc.min_confidence == 0.3
+        assert self.svc.min_strategies == 2
 
     def test_generate_signal_success(self):
         sig = _make_signal(self.svc)
@@ -833,7 +833,7 @@ class TestMonetizationModels:
             features={"max_strategies": 5},
         )
         assert r.tier == "starter"
-        assert r.monthly_price == 1800.0  # noqa: PLR2004
+        assert r.monthly_price == 1800.0
 
     def test_subscribe_request_defaults(self):
         r = SubscribeRequest(user_id="u1", tier="starter")
@@ -893,7 +893,7 @@ class TestMonetizationModels:
             status="active",
         )
         assert r.level == "bronze"
-        assert r.commission_rate == 0.10  # noqa: PLR2004
+        assert r.commission_rate == 0.10
 
     def test_referral_request(self):
         r = ReferralRequest(affiliate_code="CODE123", referred_user_id="newuser")
@@ -923,7 +923,7 @@ class TestMonetizationModels:
             title="Excellent",
             content="Works great!",
         )
-        assert r.rating == 5  # noqa: PLR2004
+        assert r.rating == 5
 
     def test_review_request_invalid_rating(self):
         from pydantic import ValidationError
@@ -971,25 +971,25 @@ class TestMonetizationEndpoints:
 
     def test_get_pricing(self):
         resp = self.client.get("/api/monetization/pricing")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert isinstance(body, list)
         assert len(body) > 0
 
     def test_get_tier_pricing_valid(self):
         resp = self.client.get("/api/monetization/pricing/free")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
 
     def test_get_tier_pricing_invalid(self):
         resp = self.client.get("/api/monetization/pricing/invalid_tier_xyz")
-        assert resp.status_code == 400  # noqa: PLR2004
+        assert resp.status_code == 400
 
     def test_subscribe_free_tier(self):
         resp = self.client.post(
             "/api/monetization/subscribe",
             json={"user_id": "test_user_free", "tier": "free"},
         )
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "active"
         assert body["tier"] == "free"
@@ -999,67 +999,67 @@ class TestMonetizationEndpoints:
             "/api/monetization/subscribe",
             json={"user_id": "u1", "tier": "diamond"},
         )
-        assert resp.status_code == 400  # noqa: PLR2004
+        assert resp.status_code == 400
 
     def test_get_subscription_no_sub(self):
         resp = self.client.get("/api/monetization/subscription/user_no_sub_xyz")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert body["has_subscription"] is False
 
     def test_get_user_limits(self):
         resp = self.client.get("/api/monetization/subscription/someuser/limits")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
 
     def test_get_analytics_dashboard(self):
         resp = self.client.get("/api/monetization/analytics/dashboard")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
 
     def test_get_revenue_breakdown(self):
         resp = self.client.get("/api/monetization/analytics/revenue")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "by_source" in body
         assert "by_tier" in body
 
     def test_get_growth_metrics(self):
         resp = self.client.get("/api/monetization/analytics/growth")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "mrr" in body
         assert "arr" in body
 
     def test_marketplace_search(self):
         resp = self.client.get("/api/monetization/marketplace/strategies")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "strategies" in body
 
     def test_marketplace_featured(self):
         resp = self.client.get("/api/monetization/marketplace/featured")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
 
     def test_marketplace_stats(self):
         resp = self.client.get("/api/monetization/marketplace/stats")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
 
     def test_enterprise_stats(self):
         resp = self.client.get("/api/monetization/enterprise/stats")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
 
     def test_affiliate_leaderboard(self):
         resp = self.client.get("/api/monetization/affiliate/leaderboard")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
 
     def test_validate_code_nonexistent(self):
         resp = self.client.get("/api/monetization/validate-code/NOTREAL123")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert body["valid"] is False
 
     def test_analytics_report(self):
         resp = self.client.get("/api/monetization/analytics/report?period=monthly")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
 
 
 # ============================================================
@@ -1098,7 +1098,7 @@ class TestWebSocketMessage:
         parsed = json.loads(msg.to_json())
         assert parsed["event"] == "update"
         assert parsed["channel"] == "prices:XAUUSD"
-        assert parsed["data"]["price"] == 1900.0  # noqa: PLR2004
+        assert parsed["data"]["price"] == 1900.0
 
     def test_timestamp_auto_set(self):
         msg = WebSocketMessage(event="test", channel="ch", data={})
@@ -1466,7 +1466,7 @@ class TestCreateWebSocketRouter:
         app.include_router(router)
         client = TestClient(app)
         resp = client.get("/ws/stats")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "active_connections" in body
 
@@ -1477,6 +1477,6 @@ class TestCreateWebSocketRouter:
         app.include_router(router)
         client = TestClient(app)
         resp = client.get("/ws/channels")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         body = resp.json()
         assert "channels" in body

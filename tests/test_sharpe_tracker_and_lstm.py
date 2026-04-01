@@ -62,9 +62,9 @@ class TestSharpeProgressTrackerInit:
 
     def test_custom_params(self):
         t = SharpeProgressTracker(target_n=300, target_sharpe=1.0, annualise=8736)
-        assert t._target_n == 300  # noqa: PLR2004
+        assert t._target_n == 300
         assert t._target_sharpe == 1.0
-        assert t._annualise == 8736  # noqa: PLR2004
+        assert t._annualise == 8736
 
     def test_invalid_target_n(self):
         with pytest.raises(ValueError, match="target_n"):
@@ -87,7 +87,7 @@ class TestSharpeProgressTrackerUpdate:
         t = SharpeProgressTracker()
         t.update(0.01)
         s = t.update(-0.005)
-        assert s["n_trades"] == 2  # noqa: PLR2004
+        assert s["n_trades"] == 2
         assert isinstance(s["sharpe"], float)
         assert not math.isinf(s["sharpe_se"])
 
@@ -96,7 +96,7 @@ class TestSharpeProgressTrackerUpdate:
         for r in _make_returns(100, mean=0.005):
             t.update(r)
         s = t.status()
-        assert s["n_trades"] == 100  # noqa: PLR2004
+        assert s["n_trades"] == 100
         assert s["gate_passed"] is False
         assert s["pct_to_gate"] == pytest.approx(100 / 600 * 100, abs=0.1)
 
@@ -106,7 +106,7 @@ class TestSharpeProgressTrackerUpdate:
         for r in _make_returns(10, mean=0.05, std=0.001):
             t.update(r)
         s = t.status()
-        assert s["n_trades"] == 10  # noqa: PLR2004
+        assert s["n_trades"] == 10
         assert s["gate_passed"] is True
 
     def test_gate_blocked_when_sharpe_too_low(self):
@@ -121,7 +121,7 @@ class TestSharpeProgressTrackerUpdate:
         t = SharpeProgressTracker(target_n=5)
         for r in _make_returns(10):
             t.update(r)
-        assert t.status()["pct_to_gate"] == 100.0  # noqa: PLR2004
+        assert t.status()["pct_to_gate"] == 100.0
 
     def test_annualised_return_and_vol_positive(self):
         t = SharpeProgressTracker()
@@ -145,7 +145,7 @@ class TestSharpeProgressTrackerReset:
         t = SharpeProgressTracker()
         for r in _make_returns(20):
             t.update(r)
-        assert t.n_trades == 20  # noqa: PLR2004
+        assert t.n_trades == 20
         t.reset()
         assert t.n_trades == 0
         s = t.status()
@@ -195,8 +195,8 @@ class TestSharpeGateCheck:
     def test_blocked_below_target_n(self):
         result = sharpe_gate_check(n_trades=48, sharpe=1.52, target_n=600)
         assert result["gate_passed"] is False
-        assert result["n_trades"] == 48  # noqa: PLR2004
-        assert result["se"] > 0.10  # noqa: PLR2004
+        assert result["n_trades"] == 48
+        assert result["se"] > 0.10
 
     def test_passed_at_target_n(self):
         result = sharpe_gate_check(n_trades=600, sharpe=1.52, target_n=600)
@@ -252,7 +252,7 @@ class TestLSTMSignalLayerNoModel:
         result = self.layer.predict(ohlcv, symbol="XAUUSD")
         assert result["direction"] == "neutral"
         assert result["abstain"] is True
-        assert result["probability"] == 0.5  # noqa: PLR2004
+        assert result["probability"] == 0.5
 
     def test_predict_returns_neutral_insufficient_bars(self):
         ohlcv = _make_ohlcv(5)  # fewer than min_bars=20
@@ -298,8 +298,8 @@ class TestLSTMSignalLayerNoModel:
         ohlcv = _make_ohlcv(50)
         self.layer.predict(ohlcv)
         self.layer.predict(ohlcv)
-        assert self.layer.stats["predict_count"] == 2  # noqa: PLR2004
-        assert self.layer.stats["abstain_count"] >= 2  # noqa: PLR2004
+        assert self.layer.stats["predict_count"] == 2
+        assert self.layer.stats["abstain_count"] >= 2
 
     def test_load_attempted_only_once(self):
         """Model load should not be retried on every predict call."""

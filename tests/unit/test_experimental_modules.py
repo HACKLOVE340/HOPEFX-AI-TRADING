@@ -49,7 +49,7 @@ class TestResearchModule:
         paths = _route_paths(router)
         assert any("notebooks" in p for p in paths)
         assert any("templates" in p for p in paths)
-        assert len(paths) >= 5  # noqa: PLR2004
+        assert len(paths) >= 5
 
     def test_engine_create_notebook(self):
         from research import ResearchNotebookEngine
@@ -96,7 +96,7 @@ class TestExplainabilityModule:
         paths = _route_paths(router)
         assert any("explain" in p for p in paths)
         assert any("history" in p for p in paths)
-        assert len(paths) >= 4  # noqa: PLR2004
+        assert len(paths) >= 4
 
     def test_engine_explain_prediction(self):
         from explainability import AIExplainer
@@ -147,7 +147,7 @@ class TestTransparencyModule:
         paths = _route_paths(router)
         assert any("executions" in p for p in paths)
         assert any("report" in p for p in paths)
-        assert len(paths) >= 4  # noqa: PLR2004
+        assert len(paths) >= 4
 
     def test_engine_record_execution(self):
         from transparency import ExecutionTransparencyEngine, FOREX_PIP_MULTIPLIER
@@ -212,7 +212,7 @@ class TestTeamsModule:
         paths = _route_paths(router)
         assert any("invite" in p for p in paths)
         assert any("permissions" in p or "members" in p for p in paths)
-        assert len(paths) >= 6  # noqa: PLR2004
+        assert len(paths) >= 6
 
     def test_engine_create_team(self):
         from teams import TeamManager
@@ -275,7 +275,7 @@ class TestNoCodeModule:
         paths = _route_paths(router)
         assert any("strategies" in p for p in paths)
         assert any("indicators" in p for p in paths)
-        assert len(paths) >= 5  # noqa: PLR2004
+        assert len(paths) >= 5
 
     def test_engine_create_strategy(self):
         from nocode import NoCodeStrategyBuilder
@@ -297,7 +297,7 @@ class TestNoCodeModule:
         builder = NoCodeStrategyBuilder()
         indicators = builder.get_available_indicators()
         assert isinstance(indicators, list)
-        assert len(indicators) > 5  # noqa: PLR2004
+        assert len(indicators) > 5
 
     def test_engine_get_templates(self):
         from nocode import NoCodeStrategyBuilder
@@ -343,7 +343,7 @@ class TestReplayModule:
         assert any("sessions" in p for p in paths)
         assert any("play" in p for p in paths)
         assert any("pause" in p for p in paths)
-        assert len(paths) >= 5  # noqa: PLR2004
+        assert len(paths) >= 5
 
     def test_engine_create_session(self):
         from datetime import datetime
@@ -359,7 +359,7 @@ class TestReplayModule:
         )
         assert session.session_id
         assert session.symbol == "XAUUSD"
-        assert session.initial_balance == 50000.0  # noqa: PLR2004
+        assert session.initial_balance == 50000.0
 
     def test_engine_play_pause_stop(self):
         from datetime import datetime
@@ -413,7 +413,7 @@ class TestMLModule:
         paths = _route_paths(router)
         assert any("status" in p for p in paths)
         assert any("features" in p for p in paths)
-        assert len(paths) >= 2  # noqa: PLR2004
+        assert len(paths) >= 2
 
     def test_feature_engineer_create_features(self):
         import pandas as pd
@@ -435,7 +435,7 @@ class TestMLModule:
         )
         features_df = engineer.create_features(df)
         assert len(features_df) > 0
-        assert len(engineer.feature_names) > 10  # noqa: PLR2004
+        assert len(engineer.feature_names) > 10
 
     def test_feature_engineer_get_feature_groups(self):
         from ml import TechnicalFeatureEngineer

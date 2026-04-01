@@ -48,9 +48,7 @@ def test_app_imports_with_only_jwt_secret(monkeypatch):
     import app as _app
 
     importlib.reload(_app)  # re-run module-level code with patched env
-    assert (
-        len(_app.app.routes) > 100  # noqa: PLR2004
-    ), f"Expected >100 routes, got {len(_app.app.routes)}"
+    assert len(_app.app.routes) > 100, f"Expected >100 routes, got {len(_app.app.routes)}"
 
 
 # ── 2-3. SQLite vs PostgreSQL engine kwargs ───────────────────────────────────

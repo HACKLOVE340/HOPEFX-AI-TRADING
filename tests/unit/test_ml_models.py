@@ -115,8 +115,8 @@ class TestBaseMLModel:
     def test_initialization_with_config(self):
         cfg = {"lr": 0.01, "epochs": 50}
         model = _ConcreteModel(name="cfg_model", config=cfg)
-        assert model.config["lr"] == 0.01  # noqa: PLR2004
-        assert model.config["epochs"] == 50  # noqa: PLR2004
+        assert model.config["lr"] == 0.01
+        assert model.config["epochs"] == 50
 
     def test_str_representation_untrained(self):
         model = _ConcreteModel(name="my_model")
@@ -152,7 +152,7 @@ class TestBaseMLModel:
         model.is_trained = True
         preds = model.predict(X)
         assert isinstance(preds, np.ndarray)
-        assert len(preds) == 10  # noqa: PLR2004
+        assert len(preds) == 10
 
     def test_get_feature_importance_none_without_model(self):
         model = _ConcreteModel(name="fi_test")
@@ -172,8 +172,8 @@ class TestBaseMLModel:
         model.model = rf
         fi = model.get_feature_importance()
         assert fi is not None
-        assert len(fi) == 3  # noqa: PLR2004
-        assert abs(sum(fi.values()) - 1.0) < 1e-6  # importances sum to 1  # noqa: PLR2004
+        assert len(fi) == 3
+        assert abs(sum(fi.values()) - 1.0) < 1e-6  # importances sum to 1
 
     def test_get_feature_importance_with_coef_(self):
         """coef_ path — use a real trained LogisticRegression."""
@@ -244,11 +244,11 @@ class TestLSTMPricePredictor:
     def test_initialization_defaults(self):
         lstm = LSTMPricePredictor()
         assert lstm.name == "LSTM_Predictor"
-        assert lstm.sequence_length == 60  # noqa: PLR2004
+        assert lstm.sequence_length == 60
         assert lstm.lstm_units == [50, 50]
         assert lstm.dropout == pytest.approx(0.2)
-        assert lstm.epochs == 100  # noqa: PLR2004
-        assert lstm.batch_size == 32  # noqa: PLR2004
+        assert lstm.epochs == 100
+        assert lstm.batch_size == 32
         assert lstm.learning_rate == pytest.approx(0.001)
         assert lstm.scaler_X is None
         assert lstm.scaler_y is None
@@ -263,7 +263,7 @@ class TestLSTMPricePredictor:
             "learning_rate": 0.005,
         }
         lstm = LSTMPricePredictor(name="custom_lstm", config=cfg)
-        assert lstm.sequence_length == 30  # noqa: PLR2004
+        assert lstm.sequence_length == 30
         assert lstm.lstm_units == [64, 32]
         assert lstm.dropout == pytest.approx(0.3)
         assert lstm.learning_rate == pytest.approx(0.005)
@@ -389,18 +389,18 @@ class TestRandomForestTradingClassifier:
     def test_initialization_defaults(self):
         rf = RandomForestTradingClassifier()
         assert rf.name == "RF_Classifier"
-        assert rf.n_estimators == 100  # noqa: PLR2004
-        assert rf.max_depth == 10  # noqa: PLR2004
-        assert rf.random_state == 42  # noqa: PLR2004
+        assert rf.n_estimators == 100
+        assert rf.max_depth == 10
+        assert rf.random_state == 42
         assert rf.feature_names == []
         assert rf.label_encoder is None
 
     def test_initialization_with_config(self):
         cfg = {"n_estimators": 50, "max_depth": 5, "random_state": 7}
         rf = RandomForestTradingClassifier(name="custom_rf", config=cfg)
-        assert rf.n_estimators == 50  # noqa: PLR2004
-        assert rf.max_depth == 5  # noqa: PLR2004
-        assert rf.random_state == 7  # noqa: PLR2004
+        assert rf.n_estimators == 50
+        assert rf.max_depth == 5
+        assert rf.random_state == 7
 
     def test_predict_raises_when_not_trained(self):
         rf = RandomForestTradingClassifier()
@@ -455,7 +455,7 @@ class TestRandomForestTradingClassifier:
 
         assert rf.is_trained is True
         assert "train_accuracy" in rf.training_history[-1]["metrics"]
-        assert rf.training_history[-1]["metrics"]["n_features"] == 5  # noqa: PLR2004
+        assert rf.training_history[-1]["metrics"]["n_features"] == 5
 
     def test_train_stores_feature_names(self):
         """train() stores the provided feature names."""
@@ -484,7 +484,7 @@ class TestRandomForestTradingClassifier:
         """predict_proba() returns (n_samples, n_classes) probabilities."""
         rf, X, y = self._make_trained_rf(n_samples=40, n_features=5, n_classes=3)
         proba = rf.predict_proba(X[:2])
-        assert proba.shape[0] == 2  # noqa: PLR2004
+        assert proba.shape[0] == 2
         # Each row must sum to ~1.0
         np.testing.assert_allclose(proba.sum(axis=1), 1.0, atol=1e-6)
 
@@ -492,8 +492,8 @@ class TestRandomForestTradingClassifier:
         """predict_with_confidence() returns (preds, confidences) arrays."""
         rf, X, y = self._make_trained_rf(n_samples=40, n_features=5, n_classes=3)
         preds, confidences = rf.predict_with_confidence(X[:4])
-        assert len(preds) == 4  # noqa: PLR2004
-        assert len(confidences) == 4  # noqa: PLR2004
+        assert len(preds) == 4
+        assert len(confidences) == 4
         # Confidence is the max class probability — must be in [0, 1]
         assert all(0.0 <= c <= 1.0 for c in confidences)
 
@@ -504,20 +504,20 @@ class TestRandomForestTradingClassifier:
         assert set(fi.keys()) == {"a", "b", "c"}
         # Importances are non-negative and sum to ~1
         assert all(v >= 0 for v in fi.values())
-        assert abs(sum(fi.values()) - 1.0) < 1e-6  # noqa: PLR2004
+        assert abs(sum(fi.values()) - 1.0) < 1e-6
 
     def test_get_feature_importance_dict_without_names(self):
         """get_feature_importance_dict() uses integer keys when no names set."""
         rf, X, y = self._make_trained_rf(n_features=2)
         rf.feature_names = []  # clear names to test fallback
         fi = rf.get_feature_importance_dict()
-        assert len(fi) == 2  # noqa: PLR2004
+        assert len(fi) == 2
 
     def test_get_top_features(self):
         """get_top_features(n) returns the n highest-importance features in order."""
         rf, X, y = self._make_trained_rf(n_features=4, feature_names=["a", "b", "c", "d"])
         top2 = rf.get_top_features(n=2)
-        assert len(top2) == 2  # noqa: PLR2004
+        assert len(top2) == 2
         # First entry must have higher importance than second
         assert top2[0][1] >= top2[1][1]
 
@@ -540,7 +540,7 @@ class TestEnsemblePredictor:
     def test_initialization_defaults(self):
         ep = EnsemblePredictor()
         assert ep.name == "Ensemble_Predictor"
-        assert ep.sequence_length == 60  # noqa: PLR2004
+        assert ep.sequence_length == 60
         assert ep.use_lstm is True
         assert ep.use_rf is True
         assert ep.use_gb is True
@@ -562,7 +562,7 @@ class TestEnsemblePredictor:
         ep = EnsemblePredictor(config=cfg)
         assert ep.use_lstm is False
         assert ep.use_xgb is False
-        assert ep.sequence_length == 30  # noqa: PLR2004
+        assert ep.sequence_length == 30
         assert ep.confidence_threshold == pytest.approx(0.7)
 
     def test_predict_raises_when_not_trained(self):
@@ -642,7 +642,7 @@ class TestEnsemblePredictor:
         perf["recent_errors"] = [0.01] * 20
 
         conf = ep._calculate_model_confidence("random_forest")
-        assert 0.1 <= conf <= 0.95  # noqa: PLR2004
+        assert 0.1 <= conf <= 0.95
 
     def test_update_performance_increments_total(self):
         ep = EnsemblePredictor()
@@ -663,7 +663,7 @@ class TestEnsemblePredictor:
         ep = EnsemblePredictor()
         for i in range(150):
             ep.update_performance("lstm", float(i), float(i + 1))
-        assert len(ep.model_performance["lstm"]["recent_errors"]) <= 100  # noqa: PLR2004
+        assert len(ep.model_performance["lstm"]["recent_errors"]) <= 100
 
     def test_update_performance_unknown_model(self):
         ep = EnsemblePredictor()
@@ -1027,7 +1027,7 @@ class TestTechnicalFeatureEngineerExtended:
         """macd_signal is a smoothed MACD – correlation should be high."""
         result = fe.create_features(ohlcv)
         corr = result["macd"].corr(result["macd_signal"])
-        assert corr > 0.7  # noqa: PLR2004
+        assert corr > 0.7
 
     def test_feature_names_exclude_ohlcv(self, fe, ohlcv):
         fe.create_features(ohlcv)

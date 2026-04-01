@@ -95,7 +95,7 @@ class TestChartReplayEngine:
 
         assert session is not None
         assert session.symbol == "XAUUSD"
-        assert session.initial_balance == 100000  # noqa: PLR2004
+        assert session.initial_balance == 100000
 
     def test_set_speed(self, replay_engine):
         """Test setting replay speed."""
@@ -341,7 +341,7 @@ class TestExecutionTransparencyEngine:
 
         report = transparency_engine.generate_report()
         assert report is not None
-        assert report.total_executions == 5  # noqa: PLR2004
+        assert report.total_executions == 5
 
     def test_get_slippage_distribution(self, transparency_engine):
         """Test getting slippage distribution."""

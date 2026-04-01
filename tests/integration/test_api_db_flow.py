@@ -120,7 +120,7 @@ class TestWatchlistFlow:
 
     def test_get_watchlist_returns_defaults_for_new_user(self, watchlist_client):
         r = watchlist_client.get("/api/watchlist", headers=_auth(sub="new-user-999"))
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         body = r.json()
         assert "symbols" in body
         assert "items" in body
@@ -131,26 +131,26 @@ class TestWatchlistFlow:
         sub = "user-wl-add-001"
         # Add a symbol
         r = watchlist_client.post("/api/watchlist/USDJPY", headers=_auth(sub=sub))
-        assert r.status_code == 201, r.text  # noqa: PLR2004
+        assert r.status_code == 201, r.text
         assert r.json()["added"] is True
 
         # Verify it appears in GET
         r2 = watchlist_client.get("/api/watchlist", headers=_auth(sub=sub))
-        assert r2.status_code == 200  # noqa: PLR2004
+        assert r2.status_code == 200
         assert "USDJPY" in r2.json()["symbols"]
 
     def test_add_duplicate_symbol_returns_409(self, watchlist_client):
         sub = "user-wl-dup-001"
         watchlist_client.post("/api/watchlist/EURUSD", headers=_auth(sub=sub))
         r = watchlist_client.post("/api/watchlist/EURUSD", headers=_auth(sub=sub))
-        assert r.status_code == 409  # noqa: PLR2004
+        assert r.status_code == 409
 
     def test_delete_symbol_removes_from_watchlist(self, watchlist_client):
         sub = "user-wl-del-001"
         watchlist_client.post("/api/watchlist/GBPUSD", headers=_auth(sub=sub))
 
         r = watchlist_client.delete("/api/watchlist/GBPUSD", headers=_auth(sub=sub))
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         assert r.json()["removed"] is True
 
         r2 = watchlist_client.get("/api/watchlist", headers=_auth(sub=sub))
@@ -158,11 +158,11 @@ class TestWatchlistFlow:
 
     def test_delete_nonexistent_symbol_returns_404(self, watchlist_client):
         r = watchlist_client.delete("/api/watchlist/FAKESYM", headers=_auth(sub="user-wl-404"))
-        assert r.status_code == 404  # noqa: PLR2004
+        assert r.status_code == 404
 
     def test_prices_endpoint_returns_items_with_bid_ask(self, watchlist_client):
         r = watchlist_client.get("/api/watchlist/prices", headers=_auth())
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         items = r.json()
         assert isinstance(items, list)
         assert len(items) > 0
@@ -190,7 +190,7 @@ class TestTradingFlow:
 
     def test_list_strategies_returns_list(self, trading_client):
         r = trading_client.get("/api/trading/strategies")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         assert isinstance(r.json(), list)
 
     def test_create_strategy_returns_id(self, trading_client):
@@ -202,7 +202,7 @@ class TestTradingFlow:
 
     def test_get_nonexistent_strategy_returns_404(self, trading_client):
         r = trading_client.get("/api/trading/strategies/does-not-exist-xyz")
-        assert r.status_code == 404  # noqa: PLR2004
+        assert r.status_code == 404
 
     def test_position_size_calculation(self, trading_client):
         payload = {
@@ -211,17 +211,17 @@ class TestTradingFlow:
             "confidence": 0.8,
         }
         r = trading_client.post("/api/trading/position-size", json=payload)
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         body = r.json()
         assert "recommended_size" in body or "size" in body or "position_size" in body
 
     def test_risk_metrics_endpoint_responds(self, trading_client):
         r = trading_client.get("/api/trading/risk-metrics")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
 
     def test_performance_summary_endpoint_responds(self, trading_client):
         r = trading_client.get("/api/trading/performance/summary")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
 
 
 # ── Signals: read-only public endpoints ──────────────────────────────────────
@@ -232,11 +232,11 @@ class TestSignalsFlow:
 
     def test_get_signals_summary_responds(self, signals_client):
         r = signals_client.get("/api/signals/summary")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
 
     def test_get_active_signals_returns_signals_key(self, signals_client):
         r = signals_client.get("/api/signals/active")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         body = r.json()
         # Response is {"signals": [...], "count": N}
         assert "signals" in body
@@ -244,11 +244,11 @@ class TestSignalsFlow:
 
     def test_get_signal_history_returns_signals_key(self, signals_client):
         r = signals_client.get("/api/signals/history")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200
         body = r.json()
         assert "signals" in body
         assert isinstance(body["signals"], list)
 
     def test_get_signal_analytics_responds(self, signals_client):
         r = signals_client.get("/api/signals/analytics")
-        assert r.status_code == 200  # noqa: PLR2004
+        assert r.status_code == 200

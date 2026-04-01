@@ -94,9 +94,9 @@ class TestMarketRegimeDetector:
         from analysis.market_analysis import MarketRegimeDetector
 
         detector = MarketRegimeDetector()
-        assert detector.lookback_period == 100  # noqa: PLR2004
-        assert detector.atr_period == 14  # noqa: PLR2004
-        assert detector.trend_period == 20  # noqa: PLR2004
+        assert detector.lookback_period == 100
+        assert detector.atr_period == 14
+        assert detector.trend_period == 20
         assert detector.regime_history == []
 
     def test_initialization_custom_config(self):
@@ -104,8 +104,8 @@ class TestMarketRegimeDetector:
 
         cfg = {"lookback_period": 50, "atr_period": 7, "trend_period": 10}
         detector = MarketRegimeDetector(config=cfg)
-        assert detector.lookback_period == 50  # noqa: PLR2004
-        assert detector.atr_period == 7  # noqa: PLR2004
+        assert detector.lookback_period == 50
+        assert detector.atr_period == 7
 
     def test_detect_regime_returns_regime_analysis(self):
         from analysis.market_analysis import MarketRegimeDetector, RegimeAnalysis
@@ -122,7 +122,7 @@ class TestMarketRegimeDetector:
         df = _make_ohlcv(n=50)  # less than lookback
         result = detector.detect_regime(df)
         assert result.current_regime == MarketRegime.RANGING
-        assert result.regime_strength == 0.5  # noqa: PLR2004
+        assert result.regime_strength == 0.5
         assert result.trend_direction == "neutral"
 
     def test_regime_analysis_to_dict(self):
@@ -184,7 +184,7 @@ class TestMarketRegimeDetector:
         detector.detect_regime(df)
         assert len(detector.regime_history) == 1
         detector.detect_regime(df)
-        assert len(detector.regime_history) == 2  # noqa: PLR2004
+        assert len(detector.regime_history) == 2
 
     @pytest.mark.slow
     def test_regime_history_capped_at_1000(self):
@@ -194,7 +194,7 @@ class TestMarketRegimeDetector:
         df = _make_ohlcv(n=200)
         for _ in range(1005):
             detector.detect_regime(df)
-        assert len(detector.regime_history) <= 1000  # noqa: PLR2004
+        assert len(detector.regime_history) <= 1000
 
     def test_volume_state_high(self):
         from analysis.market_analysis import MarketRegimeDetector
@@ -231,7 +231,7 @@ class TestMarketRegimeDetector:
         result = detector.detect_regime(df)
         # Less than 10 history entries → default uniform probabilities
         for v in result.transition_probability.values():
-            assert abs(v - 0.14) < 0.01  # noqa: PLR2004
+            assert abs(v - 0.14) < 0.01
 
     def test_transition_probability_with_history(self):
         from analysis.market_analysis import MarketRegimeDetector
@@ -244,7 +244,7 @@ class TestMarketRegimeDetector:
         # Probabilities should sum to ~1 when transitions exist
         tp = result.transition_probability
         if tp:
-            assert abs(sum(tp.values()) - 1.0) < 0.01  # noqa: PLR2004
+            assert abs(sum(tp.values()) - 1.0) < 0.01
 
     def test_all_regime_enum_values(self):
         from analysis.market_analysis import MarketRegime
@@ -283,7 +283,7 @@ class TestMarketRegimeDetector:
 
         detector = MarketRegimeDetector()
         result = detector.detect_regime(_make_ohlcv(n=200))
-        assert 0.0 <= result.volatility_percentile <= 100.0  # noqa: PLR2004
+        assert 0.0 <= result.volatility_percentile <= 100.0
 
 
 # ---------------------------------------------------------------------------

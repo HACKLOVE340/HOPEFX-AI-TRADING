@@ -106,7 +106,7 @@ class TestCryptoPaymentModel:
         retrieved = db_session.query(CryptoPayment).filter(CryptoPayment.payment_id == "PAY_create_001").first()
         assert retrieved is not None
         assert retrieved.currency == "BTC"
-        assert retrieved.amount_usd == 99.0  # noqa: PLR2004
+        assert retrieved.amount_usd == 99.0
         assert retrieved.status == "pending"
 
     def test_payment_id_is_unique(self, db_session):
@@ -136,7 +136,7 @@ class TestCryptoPaymentModel:
         assert d["currency"] == "BTC"
         assert d["status"] == "pending"
         assert d["confirmations"] == 0
-        assert d["confirmations_required"] == 3  # noqa: PLR2004
+        assert d["confirmations_required"] == 3
         assert "expires_at" in d
 
     def test_update_payment_status(self, db_session):
@@ -155,7 +155,7 @@ class TestCryptoPaymentModel:
 
         updated = db_session.query(CryptoPayment).filter(CryptoPayment.payment_id == "PAY_update_001").first()
         assert updated.status == "complete"
-        assert updated.confirmations == 3  # noqa: PLR2004
+        assert updated.confirmations == 3
         assert updated.confirmed_at is not None
 
     def test_webhook_payload_stored_as_json(self, db_session):
@@ -269,7 +269,7 @@ class TestConfigStoreModel:
         retrieved = db_session.query(ConfigStore).filter(ConfigStore.key == "risk_settings").first()
         assert retrieved is not None
         value = json.loads(retrieved.value_json)
-        assert value["max_risk_per_trade"] == 2.0  # noqa: PLR2004
+        assert value["max_risk_per_trade"] == 2.0
 
     def test_config_key_is_unique(self, db_session):
         """Duplicate config key raises IntegrityError."""
@@ -300,7 +300,7 @@ class TestConfigStoreModel:
         updated = db_session.query(ConfigStore).filter(ConfigStore.key == "auto_pause_config").first()
         value = json.loads(updated.value_json)
         assert value["enabled"] is True
-        assert value["minutes_before"] == 15  # noqa: PLR2004
+        assert value["minutes_before"] == 15
 
 
 # ── Rate feed integration test ────────────────────────────────────────────────
@@ -342,4 +342,4 @@ class TestRateFeedIntegration:
 
             rates = await get_rates(force_refresh=True)
 
-        assert abs(rates.get("USDT", 0) - 1.0) < 0.01  # noqa: PLR2004
+        assert abs(rates.get("USDT", 0) - 1.0) < 0.01

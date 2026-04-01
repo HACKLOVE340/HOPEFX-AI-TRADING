@@ -146,7 +146,7 @@ class TestRiskAnalytics:
         var_95 = analytics.calculate_var(returns, confidence=0.95)
         # VaR should be negative (loss)
         assert var_95 < 0
-        assert -0.03 < var_95 < -0.01  # Reasonable range  # noqa: PLR2004
+        assert -0.03 < var_95 < -0.01  # Reasonable range
 
     def test_expected_shortfall(self, analytics):
         """Test Conditional VaR (Expected Shortfall)"""

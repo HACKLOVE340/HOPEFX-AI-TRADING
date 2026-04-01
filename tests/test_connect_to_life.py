@@ -149,7 +149,7 @@ class TestReadStatus:
         sup = self._make_supervisor()
         sup._engine = None
         status = sup._read_status()
-        assert status["equity"] == 50_000.0  # noqa: PLR2004
+        assert status["equity"] == 50_000.0
         assert status["drawdown_pct"] == 0.0
         assert status["fill_count"] == 0
 
@@ -159,7 +159,7 @@ class TestReadStatus:
         mock_engine._get_status.side_effect = RuntimeError("engine not ready")
         sup._engine = mock_engine
         status = sup._read_status()
-        assert status["equity"] == 50_000.0  # noqa: PLR2004
+        assert status["equity"] == 50_000.0
 
     def test_merges_fill_count_from_trade_logger(self):
         sup = self._make_supervisor()
@@ -178,8 +178,8 @@ class TestReadStatus:
         sup._engine = mock_engine
 
         status = sup._read_status()
-        assert status["equity"] == 102_000.0  # noqa: PLR2004
-        assert status["fill_count"] == 7  # noqa: PLR2004
+        assert status["equity"] == 102_000.0
+        assert status["fill_count"] == 7
 
     def test_returns_engine_status_when_healthy(self):
         sup = self._make_supervisor()
@@ -196,7 +196,7 @@ class TestReadStatus:
         sup._engine = mock_engine
 
         status = sup._read_status()
-        assert status["drawdown_pct"] == 2.0  # noqa: PLR2004
+        assert status["drawdown_pct"] == 2.0
         assert status["broker"] == "paper"
 
 
