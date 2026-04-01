@@ -104,10 +104,33 @@ class NotificationManager:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
+    @staticmethod
+    def _validate_discord_url(url: str) -> bool:
+        """Return True only if *url* is an HTTPS discord.com webhook."""
+        from urllib.parse import urlparse
+        try:
+            p = urlparse(url)
+            host = (p.hostname or "").lower()
+            return p.scheme == "https" and host in ("discord.com", "discordapp.com")
+        except Exception:
+            return False
+
+    @staticmethod
+    def _validate_https_url(url: str) -> bool:
+        """Return True only if *url* uses HTTPS."""
+        from urllib.parse import urlparse
+        try:
+            return urlparse(url).scheme == "https"
+        except Exception:
+            return False
+
     async def _send_discord(self, notification: Notification):
         """Send to Discord webhook"""
         webhook_url = self.config.get("discord_webhook")
         if not webhook_url:
+            return
+        if not self._validate_discord_url(webhook_url):
+            logger.warning("Discord webhook URL is not a valid HTTPS discord.com URL — skipping")
             return
 
         color_map = {
@@ -199,6 +222,9 @@ class NotificationManager:
         """Send to custom webhook"""
         webhook_url = self.config.get("webhook_url")
         if not webhook_url:
+            return
+        if not self._validate_https_url(webhook_url):
+            logger.warning("Custom webhook URL must use HTTPS — skipping")
             return
 
         payload = {
