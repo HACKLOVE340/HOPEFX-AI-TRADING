@@ -295,9 +295,7 @@ async def main() -> None:
     if improved or args.force:
         action = "improved" if improved else "forced"
         logger.info("Saving new model (%s: %.4f → %.4f)", action, existing_acc, new_acc)
-        results["tick_features_used"] = [c for c in X.columns if c.startswith("dl_")]
-        results["tick_days_used"] = tick_days
-        results["previous_accuracy"] = existing_acc
+        logger.info("Saving new model (%s: %.4f → %.4f)", action, existing_acc, new_acc)
     else:
         logger.warning(
             "New accuracy (%.4f) did not improve over existing (%.4f) — "
