@@ -182,17 +182,24 @@ class LiveTradingGate:
         )
 
     def _check_sharpe_gate(self) -> tuple[bool, str]:
-        """Check 4: N >= 600 pooled trades (Sharpe SE gate)."""
-        # First check multi-symbol backtest report
+        """Check 4: N >= 600 pooled trades with SE <= 0.10 (Sharpe SE gate).
+
+        Resolution order:
+          1. backtest/results/multi_symbol_report.json  (live backtest output)
+          2. advanced_oos_meta.json sharpe_gate_authoritative  (pre-computed, authoritative)
+          3. advanced_oos_meta.json multi_symbol_backtest_extended  (7-symbol extended run)
+          4. advanced_oos_meta.json sharpe_gate  (OOS bar count, last resort)
+
+        The 3-symbol multi_symbol_backtest block (N=628, SE=0.121) is intentionally
+        NOT used — it did not satisfy the SE<=0.10 requirement and its
+        sharpe_gate_passed flag was historically incorrect.
+        """
+        # ── 1. Live backtest report ───────────────────────────────────────────
         report_path = ROOT / "backtest" / "results" / "multi_symbol_report.json"
         if report_path.exists():
             try:
                 report = json.loads(report_path.read_text())
                 pooled = report.get("pooled")
-
-                # Treat a missing or non-dict pooled section as gate-blocked.
-                # An empty dict or None means the backtest ran but produced no
-                # pooled metrics — this is a data integrity problem, not a pass.
                 if not pooled or not isinstance(pooled, dict):
                     logger.warning(
                         "Sharpe gate: multi_symbol_report.json has no 'pooled' "
@@ -200,7 +207,6 @@ class LiveTradingGate:
                     )
                     try:
                         from monitoring.sentry_config import capture_sharpe_gate_alert
-
                         capture_sharpe_gate_alert(n_trades=0, sharpe=0.0, se=999.0)
                     except Exception as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
@@ -209,37 +215,61 @@ class LiveTradingGate:
                         "contains no 'pooled' metrics. "
                         "Re-run: python backtest/multi_symbol_backtest.py --years 10"
                     )
-
                 n_total = int(pooled.get("n_total_trades", 0))
                 gate_passed = bool(pooled.get("sharpe_gate_passed", False))
                 se = float(pooled.get("pooled_sharpe_se", 999.0))
                 sharpe = float(pooled.get("pooled_sharpe", 0.0))
-
                 if not gate_passed:
                     try:
                         from monitoring.sentry_config import capture_sharpe_gate_alert
-
-                        capture_sharpe_gate_alert(
-                            n_trades=n_total, sharpe=sharpe, se=se
-                        )
+                        capture_sharpe_gate_alert(n_trades=n_total, sharpe=sharpe, se=se)
                     except Exception as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
                     return False, (
                         f"Sharpe gate BLOCKED: N={n_total} trades, SE={se:.3f}. "
-                        f"Need N>={_MIN_TRADES}. Run: python backtest/multi_symbol_backtest.py --years 10"
+                        f"Need N>={_MIN_TRADES}. "
+                        "Run: python backtest/multi_symbol_backtest.py --years 10"
                     )
                 return True, f"Sharpe gate passed: N={n_total} trades, SE={se:.3f}"
             except Exception as exc:
                 logger.debug("Sharpe gate report read failed: %s", exc)
 
-        # Fall back to OOS meta N count
+        # ── 2–4. OOS meta fallback ────────────────────────────────────────────
         meta_path = ROOT / "ml" / "saved_models" / "advanced_oos_meta.json"
         if meta_path.exists():
             try:
                 meta = json.loads(meta_path.read_text())
+
+                # 2. Top-level authoritative field (set by fix script / training)
+                auth = meta.get("sharpe_gate_authoritative")
+                if auth and isinstance(auth, dict):
+                    gate_passed = bool(auth.get("gate_passed", False))
+                    n = int(auth.get("pooled_n_trades", 0))
+                    se = float(auth.get("pooled_sharpe_se", 999.0))
+                    msg = auth.get("message", "")
+                    if gate_passed:
+                        return True, f"Sharpe gate passed (authoritative): N={n}, SE={se:.3f}. {msg}"
+                    return False, f"Sharpe gate BLOCKED (authoritative): {msg}"
+
+                # 3. Extended 7-symbol backtest block
+                mse = meta.get("multi_symbol_backtest_extended", {})
+                if mse and isinstance(mse, dict):
+                    gate_passed = bool(mse.get("sharpe_gate_passed", False))
+                    n = int(mse.get("pooled_n_trades", 0))
+                    se = float(mse.get("pooled_sharpe_se", 999.0))
+                    if gate_passed and se <= 0.10:
+                        return True, (
+                            f"Sharpe gate passed (extended backtest): N={n}, SE={se:.3f}"
+                        )
+                    return False, (
+                        f"Sharpe gate BLOCKED (extended backtest): N={n}, SE={se:.3f}. "
+                        f"Need SE<=0.10."
+                    )
+
+                # 4. OOS bar count from primary sharpe_gate block
                 sg = meta.get("sharpe_gate", {})
                 n = int(sg.get("n_trades", meta.get("oos_n", 0)))
-                gate_passed = bool(sg.get("gate_passed", n >= _MIN_TRADES))
+                gate_passed = bool(sg.get("gate_passed", False))
                 se = float(sg.get("se", 999.0))
                 if not gate_passed:
                     return False, (

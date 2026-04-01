@@ -512,23 +512,71 @@ def _predict_advanced(
     Phase 2: anomaly weighting — down-weight on anomalous bars.
     Phase 3: online learning blend — incremental XGBoost.
     Phase 4: deep ensemble blend — LSTM/Transformer/TCN stacking.
+
+    Timeframe alignment
+    -------------------
+    The model was trained on daily bars (GC=F, interval="1d").  The broker
+    feed provides H1 bars (timeframe="1h").  Before calling the model, H1
+    bars are resampled to daily so the model's rolling-window features and
+    calibration thresholds remain valid.  Anomaly weighting, online blend,
+    and deep ensemble blend all receive the same daily-resampled DataFrame.
     """
+    import pandas as _pd
+
     ohlcv_df = _build_ohlcv_df(data)
-    macro_df = _fetch_macro_df(ohlcv_df, symbol)
-    mtf_df   = _fetch_mtf_df(ohlcv_df, app_state=app_state)
+
+    # ── Timeframe alignment: resample H1 → daily before model inference ───────
+    model_df = ohlcv_df
+    try:
+        from ml.daily_aggregator import ensure_daily, needs_resampling
+        if needs_resampling(ohlcv_df):
+            # Assign a proper DatetimeIndex so the resampler can work
+            if not isinstance(ohlcv_df.index, _pd.DatetimeIndex):
+                from datetime import datetime, timezone as _tz
+                idx = _pd.date_range(
+                    end=datetime.now(_tz.utc),
+                    periods=len(ohlcv_df),
+                    freq="1h",
+                    tz="UTC",
+                )
+                ohlcv_df = ohlcv_df.copy()
+                ohlcv_df.index = idx
+            resampled = ensure_daily(ohlcv_df, min_bars=100)
+            if resampled is not None:
+                model_df = resampled
+                logger.debug(
+                    "_predict_advanced: resampled %d H1 → %d daily bars for %s",
+                    len(ohlcv_df),
+                    len(model_df),
+                    symbol,
+                )
+            else:
+                logger.debug(
+                    "_predict_advanced: insufficient daily bars after resampling "
+                    "(%d H1 bars) — returning neutral 0.5 for %s",
+                    len(ohlcv_df),
+                    symbol,
+                )
+                return 0.5, adv_predictor.version
+    except Exception as _re:
+        logger.debug("_predict_advanced: resampling skipped: %s", _re)
+
+    macro_df = _fetch_macro_df(model_df, symbol)
+    mtf_df   = _fetch_mtf_df(model_df, app_state=app_state)
 
     prob = adv_predictor.predict_proba(
-        ohlcv_df, macro_df=macro_df, symbol=symbol, mtf_df=mtf_df,
+        model_df, macro_df=macro_df, symbol=symbol, mtf_df=mtf_df,
     )
-    prob = _apply_anomaly_weighting(prob, ohlcv_df, symbol)
-    prob = _apply_online_blend(prob, ohlcv_df, symbol)
-    prob = _apply_deep_ensemble_blend(prob, ohlcv_df, symbol)
+    prob = _apply_anomaly_weighting(prob, model_df, symbol)
+    prob = _apply_online_blend(prob, model_df, symbol)
+    prob = _apply_deep_ensemble_blend(prob, model_df, symbol)
 
     logger.debug(
-        "ML chain (%s) %s: final=%.4f [macro=%s mtf=%s]",
+        "ML chain (%s) %s: final=%.4f [macro=%s mtf=%s daily_bars=%d]",
         adv_predictor.version, symbol, prob,
         "yes" if macro_df is not None else "no",
         "yes" if mtf_df is not None else "no",
+        len(model_df),
     )
     return float(prob), adv_predictor.version
 

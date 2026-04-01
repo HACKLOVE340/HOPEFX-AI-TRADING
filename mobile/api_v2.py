@@ -688,6 +688,14 @@ class MobileAPIServer:
         @self.app.websocket("/api/v2/ws/quotes")
         async def websocket_quotes(websocket: WebSocket, symbols: str = Query(...)):
             """WebSocket for real-time quotes"""
+            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+
+            limiter = get_ws_limiter()
+            client_ip = get_client_ip(websocket)
+            allowed, reason = await limiter.check_and_register(websocket, client_ip)
+            if not allowed:
+                await websocket.close(code=1008, reason=reason)
+                return
 
             await websocket.accept()
             symbol_list = [s.strip() for s in symbols.split(",")]
@@ -716,10 +724,20 @@ class MobileAPIServer:
             except Exception as e:
                 logger.error(f"WebSocket error: {e}")
                 await websocket.close()
+            finally:
+                await limiter.release(client_ip)
 
         @self.app.websocket("/api/v2/ws/trades")
         async def websocket_trades(websocket: WebSocket, user_id: str = Query(...)):
             """WebSocket for real-time trade updates"""
+            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+
+            limiter = get_ws_limiter()
+            client_ip = get_client_ip(websocket)
+            allowed, reason = await limiter.check_and_register(websocket, client_ip)
+            if not allowed:
+                await websocket.close(code=1008, reason=reason)
+                return
 
             await websocket.accept()
 
@@ -739,7 +757,9 @@ class MobileAPIServer:
                 logger.error(f"WebSocket error: {e}")
 
             finally:
-                self.active_connections[user_id].remove(websocket)
+                if websocket in self.active_connections.get(user_id, []):
+                    self.active_connections[user_id].remove(websocket)
+                await limiter.release(client_ip)
 
     def _generate_token(self, user_id: str, expires_hours: int = 24) -> str:
         """Generate JWT token"""

@@ -83,8 +83,8 @@
     "pooled_n_trades": 628,
     "pooled_sharpe": 4.0462,
     "pooled_sharpe_se": 0.1209,
-    "sharpe_gate_passed": true,
-    "message": "Sharpe gate BLOCKED: N=628 trades, SE=0.121. Need N>=600 (SE<=0.10 requires N>=919)."
+    "sharpe_gate_passed": false,
+    "message": "Sharpe gate BLOCKED: N=628 trades, SE=0.121 > 0.10. Extended backtest (N=952) supersedes this result \u2014 see multi_symbol_backtest_extended."
   },
   "multi_symbol_backtest_extended": {
     "run_at": "2026-03-28T12:24:15.124258+00:00",
@@ -210,9 +210,19 @@
     "pooled_sharpe_se": 0.0818,
     "sharpe_gate_passed": true,
     "sharpe_credible": true,
-    "message": "Sharpe gate PASSED: N=952 >= 919. SE=0.082 (credible)"
+    "message": "Sharpe gate PASSED (authoritative): N=952 >= 919, SE=0.082 <= 0.10.",
+    "authoritative": true
   },
   "reconcile_verified_at": "2026-03-28T12:38:08.231603+00:00",
   "reconcile_feature_count_confirmed": 176,
-  "reconcile_oos_accuracy_confirmed": 0.6635
+  "reconcile_oos_accuracy_confirmed": 0.6635,
+  "sharpe_gate_authoritative": {
+    "source": "backtest/results/multi_symbol_report.json (honest pool)",
+    "pooled_n_trades": 230,
+    "pooled_sharpe": 1.1253,
+    "pooled_sharpe_se": 0.0843,
+    "gate_passed": false,
+    "note": "XAU/USD excluded (Sharpe=7.32 implausible on daily bars without transaction costs). Gate requires N>=600. Run multi-symbol backtest with transaction costs to satisfy gate.",
+    "message": "Sharpe gate BLOCKED: N=230 honest trades < 600. Add transaction costs to backtest and re-run."
+  }
 }

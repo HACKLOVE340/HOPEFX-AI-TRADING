@@ -327,13 +327,23 @@ class APIGateway:
         # WebSocket for real-time data
         @self.app.websocket("/ws/v1/stream")
         async def websocket_stream(websocket: WebSocket):
-            await websocket.accept()
+            from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
 
-            # Authenticate
+            limiter = get_ws_limiter()
+            client_ip = get_client_ip(websocket)
+            allowed, reason = await limiter.check_and_register(websocket, client_ip)
+            if not allowed:
+                await websocket.close(code=1008, reason=reason)
+                return
+
+            # Authenticate before accepting
             token = websocket.query_params.get("token")
             if not token or not self._verify_token(token, raise_exception=False):
                 await websocket.close(code=4001, reason="Unauthorized")
+                await limiter.release(client_ip)
                 return
+
+            await websocket.accept()
 
             try:
                 while True:
@@ -348,6 +358,8 @@ class APIGateway:
 
             except Exception as e:
                 print(f"WebSocket error: {e}")
+            finally:
+                await limiter.release(client_ip)
 
     def _verify_token(
         self,
