@@ -106,6 +106,79 @@ async def init_env(s: Any) -> bool:
     return True
 
 
+# ── Model registry ────────────────────────────────────────────────────────────
+
+
+async def init_model_registry(s: Any) -> bool:
+    """
+    Bootstrap and verify the model registry on FastAPI startup.
+
+    - Creates registry.json from existing artifacts if absent.
+    - Verifies SHA-256 integrity of the active production model.
+    - Fatal (sys.exit(1)) in production if integrity check fails.
+    - Non-fatal in development — logs a warning and continues.
+    """
+    app_env = os.getenv("APP_ENV", "development").lower()
+    is_production = app_env == "production"
+
+    try:
+        from ml.model_registry import ModelRegistry
+
+        reg = ModelRegistry()
+        manifest = reg._load()
+
+        # Bootstrap from existing artifacts if registry is empty
+        if not manifest["versions"]:
+            logger.info(
+                "ModelRegistry: registry.json empty — bootstrapping from "
+                "advanced_oos_meta.json …"
+            )
+            entry = reg.bootstrap_from_meta(name="advanced_oos_v1", promote=False)
+            if entry:
+                logger.info(
+                    "ModelRegistry: bootstrapped '%s'  sha256=%s…  state=%s",
+                    entry["name"],
+                    entry["sha256"][:16],
+                    entry["state"],
+                )
+            else:
+                logger.warning(
+                    "ModelRegistry: bootstrap skipped — advanced_oos.pkl not found"
+                )
+            return True
+
+        # Verify active production model
+        active = manifest.get("active_version")
+        if not active:
+            logger.info(
+                "ModelRegistry: no active production model — all versions staging. "
+                "Registered: %s",
+                list(manifest["versions"].keys()),
+            )
+            return True
+
+        ok, msg = reg.verify_active()
+        if ok:
+            logger.info("ModelRegistry: %s", msg)
+        else:
+            logger.critical("ModelRegistry: INTEGRITY FAILURE — %s", msg)
+            if is_production:
+                sys.exit(1)
+            logger.warning(
+                "ModelRegistry: integrity failure ignored in development mode"
+            )
+
+    except Exception as exc:
+        if is_production:
+            logger.critical(
+                "ModelRegistry: startup check failed in production: %s — aborting.", exc
+            )
+            sys.exit(1)
+        logger.warning("ModelRegistry: startup check skipped: %s", exc)
+
+    return True
+
+
 async def init_config(s: Any) -> Any:
     import os as _os
 
@@ -1658,11 +1731,19 @@ def build_component_registry(app, feature_flags):
         .register(
             "mtf_store", F.init_mtf_store, required=False, deps=["data_scheduler"]
         )
+        # model_registry must run before inference_engine and signal_engine so
+        # SHA-256 integrity is verified before any model artifact is loaded.
+        .register(
+            "model_registry",
+            F.init_model_registry,
+            required=False,
+            deps=["config"],
+        )
         .register(
             "inference_engine",
             F.init_inference_engine,
             required=False,
-            deps=["macro_store", "mtf_store"],
+            deps=["macro_store", "mtf_store", "model_registry"],
         )
         .register(
             "signal_engine",
