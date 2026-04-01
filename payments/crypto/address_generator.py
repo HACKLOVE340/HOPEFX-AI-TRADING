@@ -29,22 +29,51 @@ with a loud warning.
 import logging
 import os
 
-from hdwallet import HDWallet
 try:
-    from hdwallet.symbols import BTC, ETH, TRX
-except ImportError:
-    BTC = ETH = TRX = None  # type: ignore[assignment]
+    from hdwallet import HDWallet as _HDWallet
 
-try:
-    from hdwallet.utils import generate_mnemonic
+    try:
+        from hdwallet.symbols import BTC, ETH, TRX
+    except ImportError:
+        BTC = ETH = TRX = None  # type: ignore[assignment]
+
+    try:
+        from hdwallet.utils import generate_mnemonic as _gen_mnemonic
+
+        def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
+            return _gen_mnemonic(language=language, strength=strength)
+
+    except ImportError:
+        # hdwallet v3+: use BIP39Mnemonic.from_entropy
+        import os as _os
+        from hdwallet.mnemonics import BIP39Mnemonic as _BIP39Mnemonic
+
+        def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
+            entropy_bytes = _os.urandom(strength // 8)
+            return _BIP39Mnemonic.from_entropy(entropy=entropy_bytes.hex(), language=language)
+
+    _HDWALLET_AVAILABLE = True
+
 except ImportError:
-    # hdwallet v3+: use BIP39Mnemonic.from_entropy
-    import os as _os
-    from hdwallet.mnemonics import BIP39Mnemonic as _BIP39Mnemonic
+    _HDWallet = None  # type: ignore[assignment,misc]
+    BTC = ETH = TRX = None  # type: ignore[assignment]
+    _HDWALLET_AVAILABLE = False
 
     def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
-        entropy_bytes = _os.urandom(strength // 8)
-        return _BIP39Mnemonic.from_entropy(entropy=entropy_bytes.hex(), language=language)
+        raise RuntimeError(
+            "Address generation requires the 'hdwallet' package. "
+            "Install it with: pip install hdwallet"
+        )
+
+
+def HDWallet(*args, **kwargs):  # type: ignore[misc]
+    """Thin wrapper that raises a clear error when hdwallet is not installed."""
+    if not _HDWALLET_AVAILABLE:
+        raise RuntimeError(
+            "Address generation requires the 'hdwallet' package. "
+            "Install it with: pip install hdwallet"
+        )
+    return _HDWallet(*args, **kwargs)  # type: ignore[misc]
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +140,9 @@ class AddressGenerator:
     Each (user_id, currency) pair gets a fresh address per call, advancing the
     derivation index.  The same mnemonic + index always produces the same
     address, so addresses are recoverable as long as the mnemonic is stable.
+
+    Requires the optional 'hdwallet' package.  Raises RuntimeError on first
+    use (not at import time) when the package is absent.
     """
 
     def __init__(self) -> None:
@@ -142,8 +174,14 @@ class AddressGenerator:
             Blockchain address string
 
         Raises:
+            RuntimeError: if hdwallet is not installed
             ValueError: if *currency* is not supported
         """
+        if not _HDWALLET_AVAILABLE:
+            raise RuntimeError(
+                "Address generation requires the 'hdwallet' package. "
+                "Install it with: pip install hdwallet"
+            )
         if currency not in _PATHS:
             raise ValueError(
                 f"Unsupported currency: {currency!r}. "
@@ -188,5 +226,6 @@ class AddressGenerator:
         return address
 
 
-# Module-level singleton
+# Module-level singleton — instantiation is safe even without hdwallet;
+# RuntimeError is raised only when generate_address() is actually called.
 address_generator = AddressGenerator()
