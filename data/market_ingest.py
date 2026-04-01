@@ -46,6 +46,13 @@ from core.event_bus import bus
 
 logger = logging.getLogger(__name__)
 
+# ── singleton guard ───────────────────────────────────────────────────────────
+# Prevents two MarketIngest instances from running in the same process.
+# The orchestrator's GoldFeedManager is a separate pipeline (different APIs),
+# but two MarketIngest instances would open duplicate OANDA WebSocket connections
+# and publish duplicate ticks to hopefx:tick, corrupting downstream consumers.
+_INGEST_RUNNING: bool = False
+
 # ── config ────────────────────────────────────────────────────────────────────
 SYMBOL: str = os.environ.get("INGEST_SYMBOL", "XAU/USD")
 EXCHANGE_ID: str = os.environ.get("INGEST_EXCHANGE", "oanda")
@@ -157,7 +164,28 @@ class MarketIngest:
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
-        """Connect to EventBus and begin streaming ticks."""
+        """Connect to EventBus and begin streaming ticks.
+
+        Raises RuntimeError if another MarketIngest instance is already running
+        in this process.  Two instances would open duplicate OANDA WebSocket
+        connections and publish duplicate ticks to hopefx:tick.
+
+        Note: MarketIngest (ccxt.pro → OANDA/bitfinex) and the orchestrator's
+        GoldFeedManager (REST gold price APIs) are separate pipelines that fetch
+        from different sources.  Running both simultaneously is intentional and
+        correct — they do NOT double-write lineage because MarketIngest only
+        publishes to the EventBus; lineage writes happen exclusively inside the
+        orchestrator's _on_tick() path.
+        """
+        global _INGEST_RUNNING
+        if _INGEST_RUNNING:
+            raise RuntimeError(
+                "MarketIngest is already running in this process. "
+                "Only one instance may run at a time to avoid duplicate "
+                "OANDA WebSocket connections and duplicate tick events."
+            )
+        _INGEST_RUNNING = True
+
         await bus.connect()
         self._running = True
         logger.info(
@@ -167,11 +195,14 @@ class MarketIngest:
         # Run staleness checker in background
         asyncio.create_task(self._staleness_loop())
 
-        if CCXT_PRO_AVAILABLE:
-            await self._ws_loop()
-        else:
-            logger.warning("ccxt.pro not available — falling back to REST polling.")
-            await self._rest_loop()
+        try:
+            if CCXT_PRO_AVAILABLE:
+                await self._ws_loop()
+            else:
+                logger.warning("ccxt.pro not available — falling back to REST polling.")
+                await self._rest_loop()
+        finally:
+            _INGEST_RUNNING = False
 
     async def stop(self) -> None:
         """Graceful shutdown."""
