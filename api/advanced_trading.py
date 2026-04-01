@@ -38,6 +38,7 @@ import logging
 import math
 import random
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 UTC = timezone.utc
 
@@ -309,213 +310,167 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     )
 
 
+import ast as _ast
+
+# ── AST whitelist constants ───────────────────────────────────────────────────
+_FORMULA_ALLOWED_NAMES = frozenset(
+    {"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"}
+)
+_FORMULA_ALLOWED_NODES = (
+    _ast.Module, _ast.Expr, _ast.Expression,
+    _ast.Constant,
+    _ast.BinOp, _ast.UnaryOp,
+    _ast.Add, _ast.Sub, _ast.Mult, _ast.Div, _ast.Pow, _ast.FloorDiv, _ast.Mod,
+    _ast.UAdd, _ast.USub,
+    _ast.Name, _ast.Load, _ast.Call, _ast.arguments,
+)
+
+
+def _formula_check_node(node: _ast.AST) -> None:
+    """Recursively validate an AST node against the formula whitelist."""
+    if not isinstance(node, _FORMULA_ALLOWED_NODES):
+        raise ValueError(
+            f"Disallowed expression type '{type(node).__name__}' in formula. "
+            "Only arithmetic and EMA/SMA/RSI calls are permitted."
+        )
+    if isinstance(node, _ast.Name) and node.id not in _FORMULA_ALLOWED_NAMES:
+        raise ValueError(
+            f"Unknown name '{node.id}'. Allowed: {', '.join(sorted(_FORMULA_ALLOWED_NAMES))}"
+        )
+    if isinstance(node, _ast.Call):
+        if not isinstance(node.func, _ast.Name):
+            raise ValueError("Only direct function calls are allowed (e.g. EMA(...))")
+        if node.func.id not in {"EMA", "SMA", "RSI"}:
+            raise ValueError(f"Unknown function '{node.func.id}'. Allowed: EMA, SMA, RSI")
+        if node.keywords:
+            raise ValueError("Keyword arguments are not allowed in indicator formulas")
+    for child in _ast.iter_child_nodes(node):
+        _formula_check_node(child)
+
+
+def _indicator_sma(data: list[float], n: int) -> list:
+    result: list = [None] * (n - 1)
+    for i in range(n - 1, len(data)):
+        result.append(sum(data[i - n + 1 : i + 1]) / n)
+    return result
+
+
+def _indicator_ema(data: list[float], n: int) -> list:
+    k = 2 / (n + 1)
+    result: list = [None] * (n - 1)
+    ema_val = sum(data[:n]) / n
+    result.append(ema_val)
+    for price in data[n:]:
+        ema_val = price * k + ema_val * (1 - k)
+        result.append(ema_val)
+    return result
+
+
+def _indicator_rsi(data: list[float], n: int = 14) -> list:
+    result: list = [None] * n
+    gains, losses = [], []
+    for i in range(1, len(data)):
+        diff = data[i] - data[i - 1]
+        gains.append(max(diff, 0))
+        losses.append(max(-diff, 0))
+    for i in range(n - 1, len(gains)):
+        avg_gain = sum(gains[i - n + 1 : i + 1]) / n
+        avg_loss = sum(losses[i - n + 1 : i + 1]) / n
+        rs = avg_gain / avg_loss if avg_loss > 0 else 100
+        result.append(100 - 100 / (1 + rs))
+    return result
+
+
+def _apply_binop(op: _ast.operator, a, b):
+    """Apply a binary AST operator to two scalar values."""
+    _ops = {
+        _ast.Add: lambda x, y: x + y,
+        _ast.Sub: lambda x, y: x - y,
+        _ast.Mult: lambda x, y: x * y,
+        _ast.Div: lambda x, y: x / y if y != 0 else None,
+        _ast.Pow: lambda x, y: x**y,
+        _ast.FloorDiv: lambda x, y: x // y,
+        _ast.Mod: lambda x, y: x % y,
+    }
+    fn = _ops.get(type(op))
+    if fn is None:
+        raise ValueError(f"Unsupported operator {type(op).__name__}")
+    return fn(a, b)
+
+
+def _interp_binop(node: _ast.BinOp, name_map: dict, fn_map: dict):
+    """Evaluate a BinOp node, broadcasting over lists."""
+    left = _interp_node(node.left, name_map, fn_map)
+    right = _interp_node(node.right, name_map, fn_map)
+    op = node.op
+    if isinstance(left, list) and isinstance(right, list):
+        return [_apply_binop(op, a, b) if a is not None and b is not None else None for a, b in zip(left, right, strict=False)]
+    if isinstance(left, list):
+        return [_apply_binop(op, a, right) if a is not None else None for a in left]
+    if isinstance(right, list):
+        return [_apply_binop(op, left, b) if b is not None else None for b in right]
+    return _apply_binop(op, left, right)
+
+
+def _interp_node(node: _ast.expr, name_map: dict, fn_map: dict):  # type: ignore[name-defined]
+    """Recursively evaluate a whitelisted AST expression node."""
+    if isinstance(node, _ast.Constant):
+        return node.value
+    if isinstance(node, _ast.Name):
+        return name_map[node.id]
+    if isinstance(node, _ast.UnaryOp):
+        operand = _interp_node(node.operand, name_map, fn_map)
+        if isinstance(node.op, _ast.USub):
+            return [-v if v is not None else None for v in operand] if isinstance(operand, list) else -operand
+        return operand
+    if isinstance(node, _ast.BinOp):
+        return _interp_binop(node, name_map, fn_map)
+    if isinstance(node, _ast.Call):
+        fn = fn_map[node.func.id]  # type: ignore[attr-defined]
+        return fn(*[_interp_node(a, name_map, fn_map) for a in node.args])
+    raise ValueError(f"Unexpected node {type(node).__name__}")
+
+
 def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     """
     Safe formula evaluator using AST-based parsing — no eval() or exec().
 
-    Allowed syntax
-    --------------
-    - Numeric literals (int, float)
-    - Names: close, open, high, low, volume, EMA, SMA, RSI
-    - Arithmetic operators: +, -, *, /, ** (unary -, unary +)
-    - Function calls to EMA, SMA, RSI only
-    - Parentheses for grouping
-
-    Any other construct (attribute access, subscript, import, lambda,
-    comprehension, comparison, boolean op, etc.) raises ValueError before
-    any computation occurs.
+    Allowed syntax: numeric literals, close/open/high/low/volume names,
+    arithmetic operators (+,-,*,/,**), and EMA/SMA/RSI function calls.
     """
-    import ast
-
-    # ── AST whitelist ─────────────────────────────────────────────────────────
-    _ALLOWED_NAMES = frozenset(
-        {"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"}
-    )
-    _ALLOWED_NODES = (
-        ast.Module,
-        ast.Expr,
-        ast.Expression,
-        # Literals
-        ast.Constant,
-        # Arithmetic
-        ast.BinOp,
-        ast.UnaryOp,
-        ast.Add,
-        ast.Sub,
-        ast.Mult,
-        ast.Div,
-        ast.Pow,
-        ast.FloorDiv,
-        ast.Mod,
-        ast.UAdd,
-        ast.USub,
-        # Names and calls (validated separately)
-        ast.Name,
-        ast.Load,
-        ast.Call,
-        # Needed for multi-arg calls
-        ast.arguments,
-    )
-
-    def _check_node(node: ast.AST) -> None:
-        if not isinstance(node, _ALLOWED_NODES):
-            raise ValueError(
-                f"Disallowed expression type '{type(node).__name__}' in formula. "
-                "Only arithmetic and EMA/SMA/RSI calls are permitted."
-            )
-        if isinstance(node, ast.Name) and node.id not in _ALLOWED_NAMES:
-            raise ValueError(
-                f"Unknown name '{node.id}'. "
-                f"Allowed: {', '.join(sorted(_ALLOWED_NAMES))}"
-            )
-        if isinstance(node, ast.Call):
-            # Function must be a bare Name, not an attribute or subscript
-            if not isinstance(node.func, ast.Name):
-                raise ValueError(
-                    "Only direct function calls are allowed (e.g. EMA(...))"
-                )
-            if node.func.id not in {"EMA", "SMA", "RSI"}:
-                raise ValueError(
-                    f"Unknown function '{node.func.id}'. Allowed: EMA, SMA, RSI"
-                )
-            if (
-                node.keywords or node.starargs
-                if hasattr(node, "starargs")
-                else node.keywords
-            ):
-                raise ValueError(
-                    "Keyword arguments are not allowed in indicator formulas"
-                )
-        for child in ast.iter_child_nodes(node):
-            _check_node(child)
-
-    # ── Parse and validate ────────────────────────────────────────────────────
     formula_stripped = formula.strip()
     if len(formula_stripped) > 200:  # noqa: PLR2004
         raise ValueError("Formula too long (max 200 characters)")
 
     try:
-        tree = ast.parse(formula_stripped, mode="eval")
+        tree = _ast.parse(formula_stripped, mode="eval")
     except SyntaxError as exc:
         raise ValueError(f"Formula syntax error: {exc}") from exc
 
-    _check_node(tree)
+    _formula_check_node(tree)
 
-    # ── Build data namespace ──────────────────────────────────────────────────
     ohlcv = _load_ohlcv_for_indicator(symbol, periods)
-    closes = ohlcv["close"]
-    opens = ohlcv["open"]
-    highs = ohlcv["high"]
-    lows = ohlcv["low"]
-    volumes = ohlcv["volume"]
-
-    def sma(data: list[float], n: int) -> list[float]:
-        result: list = [None] * (n - 1)
-        for i in range(n - 1, len(data)):
-            result.append(sum(data[i - n + 1 : i + 1]) / n)
-        return result
-
-    def ema(data: list[float], n: int) -> list[float]:
-        k = 2 / (n + 1)
-        result: list = [None] * (n - 1)
-        ema_val = sum(data[:n]) / n
-        result.append(ema_val)
-        for price in data[n:]:
-            ema_val = price * k + ema_val * (1 - k)
-            result.append(ema_val)
-        return result
-
-    def rsi(data: list[float], n: int = 14) -> list[float]:
-        result: list = [None] * n
-        gains, losses = [], []
-        for i in range(1, len(data)):
-            diff = data[i] - data[i - 1]
-            gains.append(max(diff, 0))
-            losses.append(max(-diff, 0))
-        for i in range(n - 1, len(gains)):
-            avg_gain = sum(gains[i - n + 1 : i + 1]) / n
-            avg_loss = sum(losses[i - n + 1 : i + 1]) / n
-            rs = avg_gain / avg_loss if avg_loss > 0 else 100
-            result.append(100 - 100 / (1 + rs))
-        return result
-
-    # ── AST interpreter (no eval/exec) ────────────────────────────────────────
-    _fn_map = {"EMA": ema, "SMA": sma, "RSI": rsi}
-    _name_map = {
-        "close": closes,
-        "open": opens,
-        "high": highs,
-        "low": lows,
-        "volume": volumes,
-        **_fn_map,
+    fn_map = {"EMA": _indicator_ema, "SMA": _indicator_sma, "RSI": _indicator_rsi}
+    name_map = {
+        "close": ohlcv["close"], "open": ohlcv["open"],
+        "high": ohlcv["high"], "low": ohlcv["low"], "volume": ohlcv["volume"],
+        **fn_map,
     }
 
-    def _interp(node: ast.expr):  # type: ignore[name-defined]
-        if isinstance(node, ast.Constant):
-            return node.value
-        if isinstance(node, ast.Name):
-            return _name_map[node.id]
-        if isinstance(node, ast.UnaryOp):
-            operand = _interp(node.operand)
-            if isinstance(node.op, ast.USub):
-                return (
-                    [-v if v is not None else None for v in operand]
-                    if isinstance(operand, list)
-                    else -operand
-                )
-            return operand
-        if isinstance(node, ast.BinOp):
-            left = _interp(node.left)
-            right = _interp(node.right)
-            op = node.op
-
-            # Scalar × list or list × scalar
-            def _apply(a, b):
-                if isinstance(op, ast.Add):
-                    return a + b
-                if isinstance(op, ast.Sub):
-                    return a - b
-                if isinstance(op, ast.Mult):
-                    return a * b
-                if isinstance(op, ast.Div):
-                    return a / b if b != 0 else None
-                if isinstance(op, ast.Pow):
-                    return a**b
-                if isinstance(op, ast.FloorDiv):
-                    return a // b
-                if isinstance(op, ast.Mod):
-                    return a % b
-                raise ValueError(f"Unsupported operator {type(op).__name__}")
-
-            if isinstance(left, list) and isinstance(right, list):
-                return [
-                    _apply(a, b) if a is not None and b is not None else None
-                    for a, b in zip(left, right, strict=False)
-                ]
-            if isinstance(left, list):
-                return [_apply(a, right) if a is not None else None for a in left]
-            if isinstance(right, list):
-                return [_apply(left, b) if b is not None else None for b in right]
-            return _apply(left, right)
-        if isinstance(node, ast.Call):
-            fn = _fn_map[node.func.id]  # type: ignore[attr-defined]
-            args = [_interp(a) for a in node.args]
-            return fn(*args)
-        raise ValueError(f"Unexpected node {type(node).__name__}")
-
     try:
-        result = _interp(tree.body)
+        result = _interp_node(tree.body, name_map, fn_map)
     except Exception as exc:
         raise ValueError(f"Formula evaluation error: {exc}") from exc
 
+    closes = ohlcv["close"]
     if isinstance(result, (int, float)):
         result = [result] * len(closes)
 
-    output = []
-    for i, val in enumerate(result[-periods:]):
-        if val is not None:
-            output.append({"index": i, "value": round(float(val), 5)})
-    return output
+    return [
+        {"index": i, "value": round(float(val), 5)}
+        for i, val in enumerate(result[-periods:])
+        if val is not None
+    ]
 
 
 @router.post("/api/indicators/preview")
@@ -577,61 +532,58 @@ async def delete_indicator(ind_id: str, user: TokenPayload = Depends(get_current
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.get("/api/correlation")
-async def get_correlation(
-    symbols: str = "XAU/USD,EUR/USD,DXY,SPX,US10Y,VIX",
-    window: int = 30,
-    user: TokenPayload = Depends(get_current_user),
-):
-    """
-    Return rolling correlation matrix for the given symbols.
+def _pearson_corr(a: list[float], b: list[float]) -> float:
+    """Pearson correlation coefficient between two equal-length series."""
+    n = len(a)
+    ma, mb = sum(a) / n, sum(b) / n
+    num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
+    da = math.sqrt(sum((x - ma) ** 2 for x in a))
+    db = math.sqrt(sum((x - mb) ** 2 for x in b))
+    return round(num / (da * db), 3) if da * db > 0 else 0.0
 
-    Uses real OHLCV from:
-    1. price_engine.get_ohlcv() — live broker history
-    2. CSV files in data/ directory
 
-    Returns HTTP 503 when fewer than 2 symbols have sufficient real data
-    to compute a meaningful correlation matrix.
-    """
-    import pathlib
+def _returns_from_closes(closes: list[float]) -> list[float]:
+    return [
+        (closes[i] - closes[i - 1]) / closes[i - 1]
+        for i in range(1, len(closes))
+        if closes[i - 1] > 0
+    ]
 
-    sym_list = [s.strip() for s in symbols.split(",")]
 
-    # ── Collect real return series ────────────────────────────────────────────
+async def _collect_series_from_engine(
+    pe: Any, sym_list: list[str], window: int
+) -> dict[str, list[float]]:
+    """Fetch return series from the price engine for each symbol."""
+    import asyncio
+
     series: dict[str, list[float]] = {}
+    for sym in sym_list:
+        try:
+            ohlcv = pe.get_ohlcv(sym, "1d", window + 5)
+            if asyncio.iscoroutine(ohlcv):
+                ohlcv = await ohlcv
+            if ohlcv and len(ohlcv) >= 5:  # noqa: PLR2004
+                closes = [
+                    float(bar.get("close", bar[-2] if isinstance(bar, (list, tuple)) else 0))
+                    for bar in ohlcv
+                ]
+                returns = _returns_from_closes(closes)
+                if returns:
+                    series[sym] = returns
+        except Exception as exc:
+            logger.debug("correlation: price_engine miss for %s: %s", sym, exc)
+    return series
 
-    # 1. Price engine
-    pe = getattr(app_state, "price_engine", None) if app_state else None
-    if pe is not None:
-        for sym in sym_list:
-            try:
-                import asyncio
 
-                ohlcv = pe.get_ohlcv(sym, "1d", window + 5)
-                if asyncio.iscoroutine(ohlcv):
-                    ohlcv = await ohlcv
-                if ohlcv and len(ohlcv) >= 5:  # noqa: PLR2004
-                    closes = [
-                        float(
-                            bar.get(
-                                "close",
-                                bar[-2] if isinstance(bar, (list, tuple)) else 0,
-                            )
-                        )
-                        for bar in ohlcv
-                    ]
-                    returns = [
-                        (closes[i] - closes[i - 1]) / closes[i - 1]
-                        for i in range(1, len(closes))
-                        if closes[i - 1] > 0
-                    ]
-                    if returns:
-                        series[sym] = returns
-            except Exception as exc:
-                logger.debug("correlation: price_engine miss for %s: %s", sym, exc)
+def _collect_series_from_csv(
+    sym_list: list[str], window: int, existing: dict[str, list[float]]
+) -> dict[str, list[float]]:
+    """Fill missing symbols from CSV files in data/."""
+    import pathlib
+    import pandas as _pd
 
-    # 2. CSV fallback for symbols still missing
     data_dir = pathlib.Path(__file__).parent.parent / "data"
+    series = dict(existing)
     for sym in sym_list:
         if sym in series:
             continue
@@ -642,24 +594,51 @@ async def get_correlation(
             data_dir / f"{sym_key.replace('_', '')}_H1.csv",
         ]
         for csv_path in candidates:
-            if csv_path.exists():
-                try:
-                    import pandas as _pd
+            if not csv_path.exists():
+                continue
+            try:
+                df = _pd.read_csv(csv_path, usecols=["close"]).tail(window + 5)
+                closes = df["close"].tolist()
+                returns = _returns_from_closes(closes)
+                if len(returns) >= 5:  # noqa: PLR2004
+                    series[sym] = returns
+                    break
+            except Exception as exc:
+                logger.debug("correlation CSV miss for %s: %s", sym, exc)
+    return series
 
-                    df = _pd.read_csv(csv_path, usecols=["close"]).tail(window + 5)
-                    closes = df["close"].tolist()
-                    returns = [
-                        (closes[i] - closes[i - 1]) / closes[i - 1]
-                        for i in range(1, len(closes))
-                        if closes[i - 1] > 0
-                    ]
-                    if len(returns) >= 5:  # noqa: PLR2004
-                        series[sym] = returns
-                        break
-                except Exception as exc:
-                    logger.debug("correlation CSV miss for %s: %s", sym, exc)
 
-    # Require at least 2 symbols with real data
+def _build_correlation_matrix(series: dict[str, list[float]]) -> dict[str, dict[str, float]]:
+    """Compute pairwise Pearson correlation matrix."""
+    available = list(series.keys())
+    matrix: dict[str, dict[str, float]] = {}
+    for s1 in available:
+        matrix[s1] = {}
+        for s2 in available:
+            matrix[s1][s2] = 1.0 if s1 == s2 else _pearson_corr(series[s1], series[s2])
+    return matrix
+
+
+@router.get("/api/correlation")
+async def get_correlation(
+    symbols: str = "XAU/USD,EUR/USD,DXY,SPX,US10Y,VIX",
+    window: int = 30,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return rolling correlation matrix for the given symbols.
+
+    Uses real OHLCV from price_engine then CSV fallback.
+    Returns HTTP 503 when fewer than 2 symbols have sufficient data.
+    """
+    sym_list = [s.strip() for s in symbols.split(",")]
+
+    pe = getattr(app_state, "price_engine", None) if app_state else None
+    series: dict[str, list[float]] = {}
+    if pe is not None:
+        series = await _collect_series_from_engine(pe, sym_list, window)
+    series = _collect_series_from_csv(sym_list, window, series)
+
     if len(series) < 2:  # noqa: PLR2004
         raise HTTPException(
             status_code=503,
@@ -675,42 +654,21 @@ async def get_correlation(
             },
         )
 
-    # Align all series to the same length (shortest available)
     min_len = min(len(v) for v in series.values())
     for sym in series:
         series[sym] = series[sym][-min_len:]
 
-    # ── Compute correlation matrix ────────────────────────────────────────────
-    def corr(a: list[float], b: list[float]) -> float:
-        n = len(a)
-        ma, mb = sum(a) / n, sum(b) / n
-        num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
-        da = math.sqrt(sum((x - ma) ** 2 for x in a))
-        db = math.sqrt(sum((x - mb) ** 2 for x in b))
-        return round(num / (da * db), 3) if da * db > 0 else 0.0
-
-    # Only include symbols that have data
+    matrix = _build_correlation_matrix(series)
     available = list(series.keys())
-    matrix = {}
-    for s1 in available:
-        matrix[s1] = {}
-        for s2 in available:
-            matrix[s1][s2] = 1.0 if s1 == s2 else corr(series[s1], series[s2])
+    insights = [
+        f"{s1} and {s2} are {'positively' if matrix[s1][s2] > 0 else 'negatively'} correlated ({matrix[s1][s2]:+.2f})"
+        for s1 in available for s2 in available
+        if s1 < s2 and abs(matrix[s1][s2]) >= 0.6  # noqa: PLR2004
+    ]
 
-    insights = []
-    for s1 in available:
-        for s2 in available:
-            if s1 >= s2:
-                continue
-            c = matrix[s1][s2]
-            if abs(c) >= 0.6:  # noqa: PLR2004
-                direction = "positively" if c > 0 else "negatively"
-                insights.append(f"{s1} and {s2} are {direction} correlated ({c:+.2f})")
-
-    missing = [s for s in sym_list if s not in series]
     return {
         "symbols": available,
-        "symbols_missing_data": missing,
+        "symbols_missing_data": [s for s in sym_list if s not in series],
         "window": min_len,
         "matrix": matrix,
         "insights": insights[:5],
@@ -779,14 +737,24 @@ class MonteCarloRequest(BaseModel):
     initial_capital: float = 10000.0
 
 
-def _run_monte_carlo(
-    win_rate: float,
-    avg_win: float,
-    avg_loss: float,
-    total_trades: int,
-    initial_capital: float,
-    simulations: int,
-) -> dict:
+@dataclass
+class _MonteCarloParams:
+    win_rate: float
+    avg_win: float
+    avg_loss: float
+    total_trades: int
+    initial_capital: float = 10000.0
+    simulations: int = 1000
+
+
+def _run_monte_carlo(params: _MonteCarloParams) -> dict:
+    win_rate = params.win_rate
+    avg_win = params.avg_win
+    avg_loss = params.avg_loss
+    total_trades = params.total_trades
+    initial_capital = params.initial_capital
+    simulations = params.simulations
+
     # Use OS entropy so each run produces independent results
     rng = random.Random()  # nosec B311 - Monte Carlo simulation, not cryptographic use
     final_equities = []
@@ -874,9 +842,10 @@ async def run_monte_carlo(
             ),
         )
 
-    mc = _run_monte_carlo(
-        win_rate, avg_win, avg_loss, n_trades, capital, req.simulations
-    )
+    mc = _run_monte_carlo(_MonteCarloParams(
+        win_rate=win_rate, avg_win=avg_win, avg_loss=avg_loss,
+        total_trades=n_trades, initial_capital=capital, simulations=req.simulations,
+    ))
     mc["run_id"] = run_id
     mc["computed_at"] = datetime.now(UTC).isoformat()
     _mc_cache[run_id] = mc

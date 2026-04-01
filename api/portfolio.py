@@ -403,19 +403,19 @@ async def tick_feed_execution_status(
 async def factor_risk_report(
     _user: TokenPayload = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """
-    Return a combined factor risk report for the current portfolio.
-
-    Includes:
-    - Factor attribution of today's P&L
-    - Factor-level VaR contributions
-    - Per-symbol beta loadings
-    - Rebalancer current weights
-    - Tick feed status
-    """
+    """Return a combined factor risk report for the current portfolio."""
     s = _get_app_state()
+    positions, total_pnl = await _fetch_portfolio_positions(s)
+    factor_section = _build_factor_section(positions, total_pnl)
+    rb = _get_rebalancer()
+    rebalancer_section: Dict[str, Any] = {"available": True, **rb.status()} if rb is not None else {"available": False}
+    tf = _get_tick_feed()
+    tick_section: Dict[str, Any] = {"available": True, **tf.status()} if tf is not None else {"available": False}
+    return {"positions": positions, "total_pnl": total_pnl, "factor": factor_section, "rebalancer": rebalancer_section, "tick_feed": tick_section}
 
-    # Gather positions from portfolio manager or broker
+
+async def _fetch_portfolio_positions(s: Any) -> tuple[Dict[str, float], float]:
+    """Return (positions, total_pnl) from portfolio manager or broker."""
     positions: Dict[str, float] = {}
     total_pnl = 0.0
     try:
@@ -428,47 +428,23 @@ async def factor_risk_report(
         elif s is not None:
             broker = getattr(s, "broker", None)
             if broker is not None and hasattr(broker, "get_positions"):
-                raw_positions = await broker.get_positions()
-                for p in raw_positions:
+                for p in await broker.get_positions():
                     sym = getattr(p, "symbol", "")
-                    mv = getattr(p, "market_value", 0.0)
                     if sym:
-                        positions[sym] = float(mv)
+                        positions[sym] = float(getattr(p, "market_value", 0.0))
     except Exception as exc:
         logger.debug("factor_risk_report: position fetch failed: %s", exc)
+    return positions, total_pnl
 
-    # Factor attribution
-    factor_section: Dict[str, Any] = {"available": False}
+
+def _build_factor_section(positions: Dict[str, float], total_pnl: float) -> Dict[str, Any]:
+    """Return factor attribution section dict."""
     engine = _get_factor_engine()
-    if engine is not None:
-        try:
-            attribution = engine.attribute(positions, total_pnl)
-            factor_var = engine.factor_var(positions)
-            factor_section = {
-                "available": True,
-                "attribution": attribution.to_dict(),
-                "factor_var": {k: round(v, 2) for k, v in factor_var.items()},
-                "engine_status": engine.status(),
-            }
-        except Exception as exc:
-            factor_section = {"available": False, "error": str(exc)}
-
-    # Rebalancer weights
-    rebalancer_section: Dict[str, Any] = {"available": False}
-    rb = _get_rebalancer()
-    if rb is not None:
-        rebalancer_section = {"available": True, **rb.status()}
-
-    # Tick feed
-    tick_section: Dict[str, Any] = {"available": False}
-    tf = _get_tick_feed()
-    if tf is not None:
-        tick_section = {"available": True, **tf.status()}
-
-    return {
-        "positions": positions,
-        "total_pnl": total_pnl,
-        "factor": factor_section,
-        "rebalancer": rebalancer_section,
-        "tick_feed": tick_section,
-    }
+    if engine is None:
+        return {"available": False}
+    try:
+        attribution = engine.attribute(positions, total_pnl)
+        factor_var = engine.factor_var(positions)
+        return {"available": True, "attribution": attribution.to_dict(), "factor_var": {k: round(v, 2) for k, v in factor_var.items()}, "engine_status": engine.status()}
+    except Exception as exc:
+        return {"available": False, "error": str(exc)}

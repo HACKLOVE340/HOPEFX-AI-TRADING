@@ -79,124 +79,52 @@ async def test_broker_connection(req: BrokerTestRequest) -> BrokerTestResponse:
     )
 
 
+def _oanda_response_from_status(
+    status_code: int, account_id: str, data: dict, latency: int
+) -> BrokerTestResponse:
+    """Map an OANDA HTTP status code to a BrokerTestResponse."""
+    if status_code == 401:  # noqa: PLR2004
+        return BrokerTestResponse(ok=False, broker="oanda", error="401 Unauthorized — check your API token", latency_ms=latency)
+    if status_code == 404:  # noqa: PLR2004
+        return BrokerTestResponse(ok=False, broker="oanda", error=f"Account {account_id!r} not found", latency_ms=latency)
+    if status_code != 200:  # noqa: PLR2004
+        return BrokerTestResponse(ok=False, broker="oanda", error=f"HTTP {status_code}", latency_ms=latency)
+    account = data.get("account", {})
+    return BrokerTestResponse(ok=True, broker="oanda", latency_ms=latency, balance=account.get("balance", "?"), currency=account.get("currency", ""))
+
+
 async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestResponse:
     """Test OANDA practice or live API connectivity."""
     if not req.apiKey:
         return BrokerTestResponse(ok=False, broker="oanda", error="API key is required")
     if not req.accountId:
-        return BrokerTestResponse(
-            ok=False,
-            broker="oanda",
-            error="Account ID is required",
-        )
+        return BrokerTestResponse(ok=False, broker="oanda", error="Account ID is required")
 
-    base = (
-        "https://api-fxpractice.oanda.com"
-        if req.practice
-        else "https://api-fxtrade.oanda.com"
-    )
+    base = "https://api-fxpractice.oanda.com" if req.practice else "https://api-fxtrade.oanda.com"
     url = f"{base}/v3/accounts/{req.accountId}/summary"
-    headers = {
-        "Authorization": f"Bearer {req.apiKey}",
-        "Content-Type": "application/json",
-    }
+    headers = {"Authorization": f"Bearer {req.apiKey}", "Content-Type": "application/json"}
 
     try:
         import httpx
-
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=headers)
+        latency = int((time.monotonic() - start) * 1000)
+        return _oanda_response_from_status(resp.status_code, req.accountId, resp.json(), latency)
     except ImportError:
-        # Fallback to requests in executor
-        import asyncio
-
-        import requests as _req
-
-        loop = asyncio.get_event_loop()
-        try:
-            resp_sync = await loop.run_in_executor(
-                None,
-                lambda: _req.get(url, headers=headers, timeout=10),
-            )
-            latency = int((time.monotonic() - start) * 1000)
-            if resp_sync.status_code == 401:  # noqa: PLR2004
-                return BrokerTestResponse(
-                    ok=False,
-                    broker="oanda",
-                    error="401 Unauthorized — check your API token",
-                    latency_ms=latency,
-                )
-            if resp_sync.status_code == 404:  # noqa: PLR2004
-                return BrokerTestResponse(
-                    ok=False,
-                    broker="oanda",
-                    error=f"Account {req.accountId!r} not found",
-                    latency_ms=latency,
-                )
-            if resp_sync.status_code != 200:  # noqa: PLR2004
-                return BrokerTestResponse(
-                    ok=False,
-                    broker="oanda",
-                    error=f"HTTP {resp_sync.status_code}",
-                    latency_ms=latency,
-                )
-            data = resp_sync.json()
-            account = data.get("account", {})
-            return BrokerTestResponse(
-                ok=True,
-                broker="oanda",
-                latency_ms=latency,
-                balance=account.get("balance", "?"),
-                currency=account.get("currency", ""),
-            )
-        except Exception as exc:
-            return BrokerTestResponse(
-                ok=False,
-                broker="oanda",
-                error=f"Connection error: {exc}",
-                latency_ms=int((time.monotonic() - start) * 1000),
-            )
+        pass
     except Exception as exc:
-        return BrokerTestResponse(
-            ok=False,
-            broker="oanda",
-            error=f"Connection error: {exc}",
-            latency_ms=int((time.monotonic() - start) * 1000),
-        )
+        return BrokerTestResponse(ok=False, broker="oanda", error=f"Connection error: {exc}", latency_ms=int((time.monotonic() - start) * 1000))
 
-    latency = int((time.monotonic() - start) * 1000)
-
-    if resp.status_code == 401:  # noqa: PLR2004
-        return BrokerTestResponse(
-            ok=False,
-            broker="oanda",
-            error="401 Unauthorized — check your API token",
-            latency_ms=latency,
-        )
-    if resp.status_code == 404:  # noqa: PLR2004
-        return BrokerTestResponse(
-            ok=False,
-            broker="oanda",
-            error=f"Account {req.accountId!r} not found",
-            latency_ms=latency,
-        )
-    if resp.status_code != 200:  # noqa: PLR2004
-        return BrokerTestResponse(
-            ok=False,
-            broker="oanda",
-            error=f"HTTP {resp.status_code}",
-            latency_ms=latency,
-        )
-
-    data = resp.json()
-    account = data.get("account", {})
-    return BrokerTestResponse(
-        ok=True,
-        broker="oanda",
-        latency_ms=latency,
-        balance=account.get("balance", "?"),
-        currency=account.get("currency", ""),
-    )
+    # Fallback: synchronous requests in executor
+    import asyncio
+    import requests as _req
+    loop = asyncio.get_event_loop()
+    try:
+        resp_sync = await loop.run_in_executor(None, lambda: _req.get(url, headers=headers, timeout=10))
+        latency = int((time.monotonic() - start) * 1000)
+        return _oanda_response_from_status(resp_sync.status_code, req.accountId, resp_sync.json(), latency)
+    except Exception as exc:
+        return BrokerTestResponse(ok=False, broker="oanda", error=f"Connection error: {exc}", latency_ms=int((time.monotonic() - start) * 1000))
 
 
 async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestResponse:
@@ -259,18 +187,107 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
 @router.get(
     "/status", summary="Current broker connection status, balance, and data feed"
 )
+async def _fetch_account_balance(broker: Any) -> tuple[Any, str, str | None]:
+    """Return (balance, currency, error_str) from broker account info."""
+    try:
+        if hasattr(broker, "get_account_info"):
+            import inspect as _inspect
+            info = await broker.get_account_info() if _inspect.iscoroutinefunction(broker.get_account_info) else broker.get_account_info()
+            if hasattr(info, "__dict__"):
+                info = info.__dict__
+            if isinstance(info, dict):
+                return info.get("balance") or info.get("equity") or info.get("nav"), info.get("currency", "USD"), None
+            return getattr(info, "balance", None) or getattr(info, "equity", None), getattr(info, "currency", "USD"), None
+        if hasattr(broker, "get_account_balance"):
+            return broker.get_account_balance(), "USD", None
+        if hasattr(broker, "balance"):
+            return broker.balance, "USD", None
+    except Exception as exc:
+        logger.warning("broker_status: account info error: %s", exc)
+        return None, "USD", str(exc)
+    return None, "USD", None
+
+
+async def _broker_section(broker: Any) -> dict:
+    """Build the broker sub-section of the status response."""
+    if broker is None:
+        return {"connected": False, "broker_type": "none", "balance": None, "currency": None, "open_positions": 0, "error": "Broker not initialised"}
+
+    _raw_type = getattr(broker, "broker_type", None) or (
+        type(broker).__name__.lower()
+        .replace("tradingbroker", "").replace("broker", "").replace("trading", "").strip("_") or "unknown"
+    )
+    balance, currency, broker_error = await _fetch_account_balance(broker)
+
+    open_positions = 0
+    try:
+        if hasattr(broker, "get_positions"):
+            positions = await broker.get_positions()
+            open_positions = len(positions) if positions else 0
+    except Exception as _exc:
+        logger.debug("Suppressed exception: %s", _exc)
+
+    section: dict = {"connected": True, "broker_type": _raw_type, "balance": balance, "currency": currency, "open_positions": open_positions}
+    if broker_error:
+        section["error"] = broker_error
+    return section
+
+
+def _data_feed_section(app_state: Any, broker: Any) -> dict:
+    """Build the data_feed sub-section of the status response."""
+    nuclear = getattr(app_state, "nuclear_streamer", None)
+    price_engine = getattr(app_state, "price_engine", None)
+
+    if nuclear is not None:
+        ns_status = nuclear.status()
+        rest_status: dict = {}
+        if price_engine is not None and hasattr(price_engine, "get_status"):
+            try:
+                rest_status = price_engine.get_status()
+            except Exception:
+                rest_status = {}
+        return {
+            "active": ns_status.get("is_running", False),
+            "source": "NuclearStreamer",
+            "symbol": ns_status.get("symbol"),
+            "last_price": ns_status.get("last_price"),
+            "subscriber_count": ns_status.get("subscriber_count", 0),
+            "anomaly_counts": ns_status.get("anomaly_counts", {}),
+            "circuit_breakers": ns_status.get("circuit_breakers", {}),
+            "rest_fallback": {"active": rest_status.get("active", False), "primary_active": rest_status.get("primary_active", False), "fallback_active": rest_status.get("fallback_active", False)} if rest_status else {"active": False},
+        }
+
+    if price_engine is not None and hasattr(price_engine, "get_status"):
+        try:
+            feed_raw = price_engine.get_status()
+            return {"active": feed_raw.get("active", False), "source": "RealTimePriceEngine", "primary_active": feed_raw.get("primary_active", False), "fallback_active": feed_raw.get("fallback_active", False), "websocket_connected": feed_raw.get("websocket_connected", False), "rest_available": feed_raw.get("rest_available", False), "symbols": feed_raw.get("symbols", []), "note": "NuclearStreamer not active — no streaming API keys set"}
+        except Exception as exc:
+            return {"active": False, "error": str(exc), "source": "RealTimePriceEngine"}
+
+    if price_engine is not None:
+        return {"active": getattr(price_engine, "active", False), "source": type(price_engine).__name__, "symbols": getattr(price_engine, "symbols", [])}
+
+    has_feed = hasattr(broker, "market_prices") if broker else False
+    return {"active": has_feed, "source": "broker_internal" if has_feed else "none", "note": "No streaming keys set and no price engine initialised. Set FINNHUB_API_KEY, TWELVE_API_KEY, or POLYGON_API_KEY."}
+
+
+def _ml_engine_section() -> dict:
+    """Build the ml_engine sub-section of the status response."""
+    ml_engine: dict = {"status": "unavailable", "model_available": False}
+    try:
+        from ml.inference_engine import get_inference_engine
+        h = get_inference_engine().health()
+        ml_engine = {"status": h.get("status", "unavailable"), "model_available": h.get("model_available", False), "model_version": h.get("model_version", "none"), "predict_count": h.get("predict_count", 0), "fallback_rate": h.get("fallback_rate", 0.0), "last_latency_ms": h.get("last_latency_ms", 0.0), "pipeline": h.get("pipeline", {})}
+    except Exception as ml_exc:
+        ml_engine["error"] = str(ml_exc)
+    return ml_engine
+
+
 async def broker_status():
     """
-    Return the current broker type, connection state, account balance, and
-    data feed engine status.
+    Return broker connection state, account balance, data feed, and ML engine status.
 
-    Reads from the live app_state broker, nuclear_streamer, and price_engine.
-    For paper trading this returns the simulated balance.
-    For OANDA it calls get_account_info() to retrieve the live balance.
-
-    data_feed section reports:
-      - NuclearStreamer status when streaming keys are configured (primary)
-      - RealTimePriceEngine REST status as fallback
+    data_feed: NuclearStreamer (primary) → RealTimePriceEngine (fallback).
     OANDA is never used as a price source.
     """
     from datetime import datetime
@@ -282,175 +299,10 @@ async def broker_status():
 
         broker = getattr(app_state, "broker", None)
 
-        # ── Broker section ────────────────────────────────────────────────────
-        if broker is None:
-            broker_section: dict = {
-                "connected": False,
-                "broker_type": "none",
-                "balance": None,
-                "currency": None,
-                "open_positions": 0,
-                "error": "Broker not initialised",
-            }
-        else:
-            # Prefer explicit broker_type attr; fall back to class name stripped of
-            # "broker"/"trading" suffixes so "PaperTradingBroker" → "paper"
-            _raw_type = getattr(broker, "broker_type", None)
-            if not _raw_type:
-                _raw_type = (
-                    type(broker)
-                    .__name__.lower()
-                    .replace("tradingbroker", "")
-                    .replace("broker", "")
-                    .replace("trading", "")
-                    .strip("_")
-                    or "unknown"
-                )
-            broker_type = _raw_type
-            balance = None
-            currency = None
-            open_positions = 0
-            broker_error: str | None = None
-
-            try:
-                if hasattr(broker, "get_account_info"):
-                    import inspect as _inspect
-
-                    if _inspect.iscoroutinefunction(broker.get_account_info):
-                        info = await broker.get_account_info()
-                    else:
-                        info = broker.get_account_info()
-                    # info may be a dataclass, dict, or object
-                    if hasattr(info, "__dict__"):
-                        info = info.__dict__
-                    if isinstance(info, dict):
-                        balance = (
-                            info.get("balance") or info.get("equity") or info.get("nav")
-                        )
-                        currency = info.get("currency", "USD")
-                    else:
-                        balance = getattr(info, "balance", None) or getattr(
-                            info, "equity", None
-                        )
-                        currency = getattr(info, "currency", "USD")
-                elif hasattr(broker, "get_account_balance"):
-                    balance = broker.get_account_balance()
-                elif hasattr(broker, "balance"):
-                    balance = broker.balance
-            except Exception as exc:
-                broker_error = str(exc)
-                logger.warning("broker_status: account info error: %s", exc)
-
-            try:
-                if hasattr(broker, "get_positions"):
-                    positions = await broker.get_positions()
-                    open_positions = len(positions) if positions else 0
-            except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
-
-            broker_section = {
-                "connected": True,
-                "broker_type": broker_type,
-                "balance": balance,
-                "currency": currency,
-                "open_positions": open_positions,
-            }
-            if broker_error:
-                broker_section["error"] = broker_error
-
-        # ── Data feed / price engine section ──────────────────────────────────
-        # NuclearStreamer is the primary live tick source (WebSocket).
-        # RealTimePriceEngine is the REST polling fallback.
-        # OANDA is never used as a price source.
-        nuclear = getattr(app_state, "nuclear_streamer", None)
-        price_engine = getattr(app_state, "price_engine", None)
-
-        if nuclear is not None:
-            # Primary: NuclearStreamer WebSocket status
-            ns_status = nuclear.status()
-            # REST fallback status (may be None if not initialised)
-            rest_status: dict = {}
-            if price_engine is not None and hasattr(price_engine, "get_status"):
-                try:
-                    rest_status = price_engine.get_status()
-                except Exception:
-                    rest_status = {}
-            data_feed: dict = {
-                "active": ns_status.get("is_running", False),
-                "source": "NuclearStreamer",
-                "symbol": ns_status.get("symbol"),
-                "last_price": ns_status.get("last_price"),
-                "subscriber_count": ns_status.get("subscriber_count", 0),
-                "anomaly_counts": ns_status.get("anomaly_counts", {}),
-                "circuit_breakers": ns_status.get("circuit_breakers", {}),
-                "rest_fallback": {
-                    "active": rest_status.get("active", False),
-                    "primary_active": rest_status.get("primary_active", False),
-                    "fallback_active": rest_status.get("fallback_active", False),
-                }
-                if rest_status
-                else {"active": False},
-            }
-        elif price_engine is not None and hasattr(price_engine, "get_status"):
-            # Fallback only: RealTimePriceEngine REST polling
-            try:
-                feed_raw = price_engine.get_status()
-                data_feed = {
-                    "active": feed_raw.get("active", False),
-                    "source": "RealTimePriceEngine",
-                    "primary_active": feed_raw.get("primary_active", False),
-                    "fallback_active": feed_raw.get("fallback_active", False),
-                    "websocket_connected": feed_raw.get("websocket_connected", False),
-                    "rest_available": feed_raw.get("rest_available", False),
-                    "symbols": feed_raw.get("symbols", []),
-                    "note": "NuclearStreamer not active — no streaming API keys set",
-                }
-            except Exception as exc:
-                data_feed = {
-                    "active": False,
-                    "error": str(exc),
-                    "source": "RealTimePriceEngine",
-                }
-        elif price_engine is not None:
-            data_feed = {
-                "active": getattr(price_engine, "active", False),
-                "source": type(price_engine).__name__,
-                "symbols": getattr(price_engine, "symbols", []),
-            }
-        else:
-            has_feed = hasattr(broker, "market_prices") if broker else False
-            data_feed = {
-                "active": has_feed,
-                "source": "broker_internal" if has_feed else "none",
-                "note": (
-                    "No streaming keys set and no price engine initialised. "
-                    "Set FINNHUB_API_KEY, TWELVE_API_KEY, or POLYGON_API_KEY."
-                ),
-            }
-
-        # ── Signal engine status ──────────────────────────────────────────────
-        signal_engine_running = any(
-            not t.done() for t in getattr(app_state, "background_tasks", [])
-        )
-
-        # ── ML engine status ──────────────────────────────────────────────────
-        ml_engine: dict = {"status": "unavailable", "model_available": False}
-        try:
-            from ml.inference_engine import get_inference_engine
-
-            eng = get_inference_engine()
-            h = eng.health()
-            ml_engine = {
-                "status": h.get("status", "unavailable"),
-                "model_available": h.get("model_available", False),
-                "model_version": h.get("model_version", "none"),
-                "predict_count": h.get("predict_count", 0),
-                "fallback_rate": h.get("fallback_rate", 0.0),
-                "last_latency_ms": h.get("last_latency_ms", 0.0),
-                "pipeline": h.get("pipeline", {}),
-            }
-        except Exception as ml_exc:
-            ml_engine["error"] = str(ml_exc)
+        broker_section = await _broker_section(broker)
+        data_feed = _data_feed_section(app_state, broker)
+        signal_engine_running = any(not t.done() for t in getattr(app_state, "background_tasks", []))
+        ml_engine = _ml_engine_section()
 
         return {
             "broker": broker_section,

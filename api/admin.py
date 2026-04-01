@@ -132,24 +132,12 @@ def _save_risk_settings(settings: dict[str, Any], changed_by: str = "system") ->
         return False
 
 
-def apply_persisted_risk_settings() -> None:
-    """
-    Load risk settings from the shared store and apply them at startup.
-
-    Also migrates any legacy JSON file to the shared store on first run.
-    Called once at startup by app.py after app_state is initialised.
-    """
-    global _risk_settings  # noqa: PLW0602
-
-    # One-time migration: if the legacy JSON file exists and the shared store
-    # has no value yet, migrate the file contents to the store.
+def _migrate_legacy_risk_settings() -> None:
+    """One-time migration of legacy JSON file into config_store."""
     try:
         from core.config_store import config_store
 
-        if (
-            _RISK_SETTINGS_FILE.exists()
-            and config_store.get(_RISK_SETTINGS_KEY) is None
-        ):
+        if _RISK_SETTINGS_FILE.exists() and config_store.get(_RISK_SETTINGS_KEY) is None:
             try:
                 legacy = json.loads(_RISK_SETTINGS_FILE.read_text())
                 if legacy:
@@ -160,14 +148,40 @@ def apply_persisted_risk_settings() -> None:
                         _RISK_SETTINGS_FILE,
                     )
             except Exception as mig_exc:
-                logger.warning(
-                    "Risk settings migration failed (non-fatal): %s", mig_exc
-                )
+                logger.warning("Risk settings migration failed (non-fatal): %s", mig_exc)
     except Exception as exc:
         logger.debug(
             "apply_persisted_risk_settings: config_store unavailable, skipping migration: %s",
             exc,
         )
+
+
+def _push_risk_settings_to_manager(persisted: dict) -> None:
+    """Apply persisted settings to the live RiskManager if initialised."""
+    try:
+        if app_state is not None:
+            rm = getattr(app_state, "risk_manager", None)
+            if rm is not None:
+                for key, value in persisted.items():
+                    if hasattr(rm, key):
+                        setattr(rm, key, value)
+                        logger.debug(
+                            "apply_persisted_risk_settings: set risk_manager.%s = %s", key, value
+                        )
+    except Exception as exc:
+        logger.warning("apply_persisted_risk_settings: RiskManager update failed: %s", exc)
+
+
+def apply_persisted_risk_settings() -> None:
+    """
+    Load risk settings from the shared store and apply them at startup.
+
+    Also migrates any legacy JSON file to the shared store on first run.
+    Called once at startup by app.py after app_state is initialised.
+    """
+    global _risk_settings  # noqa: PLW0602
+
+    _migrate_legacy_risk_settings()
 
     persisted = _get_risk_settings()
     if not persisted:
@@ -179,24 +193,7 @@ def apply_persisted_risk_settings() -> None:
         "apply_persisted_risk_settings: restored %d keys from shared config store",
         len(persisted),
     )
-
-    # Push into the live RiskManager if it is already initialised.
-    try:
-        if app_state is not None:
-            rm = getattr(app_state, "risk_manager", None)
-            if rm is not None:
-                for key, value in persisted.items():
-                    if hasattr(rm, key):
-                        setattr(rm, key, value)
-                        logger.debug(
-                            "apply_persisted_risk_settings: set risk_manager.%s = %s",
-                            key,
-                            value,
-                        )
-    except Exception as exc:
-        logger.warning(
-            "apply_persisted_risk_settings: RiskManager update failed: %s", exc
-        )
+    _push_risk_settings_to_manager(persisted)
 
 
 class AdminStatusResponse(BaseModel):
@@ -589,35 +586,23 @@ def get_activity(user: TokenPayload = Depends(require_role("admin"))):
     return {"events": list(activity_log)}
 
 
-@router.get("/dashboard-data")
-def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
-    """Full system state. Requires: role >= 'admin'."""
-    trading_stats: dict[str, Any] = {
-        "total_trades": 0,
-        "open_positions": 0,
-        "daily_pnl": 0.0,
-    }
-    risk_status: dict[str, Any] = {"within_limits": True}
-    module_status: dict[str, Any] = {
-        "strategies": False,
-        "brokers": False,
-        "signal_engine": False,
-    }
-
-    # Live broker stats
+def _dashboard_broker_stats(trading_stats: dict, module_status: dict) -> None:
+    """Populate broker-related fields in-place."""
     try:
         if app_state is not None:
             broker = getattr(app_state, "broker", None)
             if broker is not None:
                 module_status["brokers"] = True
-                # Positions count (sync-safe: use cached value if available)
                 pos = getattr(broker, "_cached_positions", None)
                 if pos is not None:
                     trading_stats["open_positions"] = len(pos)
     except Exception as exc:
         logger.debug("dashboard-data broker stats failed: %s", exc)
 
-    # Risk manager stats
+
+def _dashboard_risk_stats(trading_stats: dict) -> dict:
+    """Return risk_status dict and update trading_stats daily_pnl."""
+    risk_status: dict[str, Any] = {"within_limits": True}
     try:
         if app_state is not None:
             rm = getattr(app_state, "risk_manager", None)
@@ -634,35 +619,47 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
                 trading_stats["daily_pnl"] = rm_status.get("daily_pnl", 0.0)
     except Exception as exc:
         logger.debug("dashboard-data risk stats failed: %s", exc)
+    return risk_status
 
-    # Trade logger stats
+
+def _dashboard_trade_stats(trading_stats: dict) -> None:
+    """Populate total_trades and paper_fill_count in-place."""
     try:
         from core.trade_logger import TradeLogger
-
         tl = TradeLogger.get_trade_logger()
         tl_stats = tl.get_stats() if hasattr(tl, "get_stats") else {}
         trading_stats["total_trades"] = tl_stats.get("total_fills", 0)
     except Exception as exc:
         logger.debug("dashboard-data trade logger stats failed: %s", exc)
 
-    # Signal engine
+    try:
+        from research.pipeline.paper_trading_gate import get_gate
+        trading_stats["paper_fill_count"] = get_gate().fill_count
+    except Exception as exc:
+        logger.debug("dashboard-data paper trading gate stats failed: %s", exc)
+
+
+def _dashboard_signal_status(module_status: dict) -> None:
+    """Populate signal_engine and strategies flags in-place."""
     try:
         from core.signal_engine import get_signal_engine_status
-
         se = get_signal_engine_status()
         module_status["signal_engine"] = se.get("ml_available", False)
         module_status["strategies"] = True
     except Exception as exc:
         logger.debug("dashboard-data signal engine status failed: %s", exc)
 
-    # Paper trading gate fill count
-    try:
-        from research.pipeline.paper_trading_gate import get_gate
 
-        gate = get_gate()
-        trading_stats["paper_fill_count"] = gate.fill_count
-    except Exception as exc:
-        logger.debug("dashboard-data paper trading gate stats failed: %s", exc)
+@router.get("/dashboard-data")
+def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
+    """Full system state. Requires: role >= 'admin'."""
+    trading_stats: dict[str, Any] = {"total_trades": 0, "open_positions": 0, "daily_pnl": 0.0}
+    module_status: dict[str, Any] = {"strategies": False, "brokers": False, "signal_engine": False}
+
+    _dashboard_broker_stats(trading_stats, module_status)
+    risk_status = _dashboard_risk_stats(trading_stats)
+    _dashboard_trade_stats(trading_stats)
+    _dashboard_signal_status(module_status)
 
     return {
         "system_health": {"status": "ok", "uptime": time.time() - _start_time},

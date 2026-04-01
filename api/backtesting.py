@@ -876,16 +876,13 @@ def _resolve_strategy(strategy_name: str) -> Any:
     is not found in the registry.
     """
 
-    def _microstructure_heuristic(timestamp, symbol, tick, positions, capital, history):
+    def _microstructure_heuristic(timestamp, symbol, tick, positions, capital, history):  # noqa: PLR0913
         """Minimal OFI-based strategy for testing the replay pipeline."""
         from backtesting.engine import Order, OrderSide, OrderType
         import uuid as _uuid
 
-        # No signal if already in a position
         if symbol in positions:
             return []
-
-        # Simple momentum: buy if ask > recent average
         if len(history) < 20:  # noqa: PLR2004
             return []
 
@@ -894,16 +891,7 @@ def _resolve_strategy(strategy_name: str) -> Any:
         current_mid = (tick.bid + tick.ask) / 2
 
         if current_mid > avg * 1.001:
-            return [
-                Order(
-                    order_id=str(_uuid.uuid4()),
-                    timestamp=timestamp,
-                    symbol=symbol,
-                    side=OrderSide.BUY,
-                    order_type=OrderType.MARKET,
-                    quantity=0.01,
-                )
-            ]
+            return [Order(order_id=str(_uuid.uuid4()), timestamp=timestamp, symbol=symbol, side=OrderSide.BUY, order_type=OrderType.MARKET, quantity=0.01)]
         return []
 
     # Strategy registry lookup
@@ -920,76 +908,41 @@ def _resolve_strategy(strategy_name: str) -> Any:
     return fn
 
 
-def _build_pdf(result: dict) -> bytes:
-    """Render a backtest result dict into a PDF and return raw bytes."""
+def _pdf_imports():
+    """Import reportlab modules, raising HTTP 503 if not installed."""
     try:
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import cm
-        from reportlab.platypus import (
-            HRFlowable,
-            Paragraph,
-            SimpleDocTemplate,
-            Spacer,
-            Table,
-            TableStyle,
-        )
+        from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+        return colors, A4, ParagraphStyle, getSampleStyleSheet, cm, HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     except ImportError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=f"PDF generation unavailable: reportlab not installed ({exc})",
-        ) from exc
+        raise HTTPException(status_code=503, detail=f"PDF generation unavailable: reportlab not installed ({exc})") from exc
+
+
+def _pdf_styles(ParagraphStyle, getSampleStyleSheet, colors):
+    """Build and return the paragraph style dict for the PDF report."""
+    styles = getSampleStyleSheet()
+    return {
+        "title": ParagraphStyle("Title", parent=styles["Heading1"], fontSize=20, spaceAfter=6, textColor=colors.HexColor("#1e3a5f")),
+        "subtitle": ParagraphStyle("Subtitle", parent=styles["Normal"], fontSize=11, textColor=colors.HexColor("#64748b"), spaceAfter=16),
+        "section": ParagraphStyle("Section", parent=styles["Heading2"], fontSize=13, spaceBefore=14, spaceAfter=6, textColor=colors.HexColor("#1e293b")),
+        "body": ParagraphStyle("Body", parent=styles["Normal"], fontSize=10, textColor=colors.HexColor("#334155"), leading=14),
+        "disclaimer": ParagraphStyle("Disclaimer", parent=styles["Normal"], fontSize=8, textColor=colors.HexColor("#94a3b8"), leading=11),
+    }
+
+
+def _build_pdf(result: dict) -> bytes:
+    """Render a backtest result dict into a PDF and return raw bytes."""
+    colors, A4, ParagraphStyle, getSampleStyleSheet, cm, HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle = _pdf_imports()
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        leftMargin=2 * cm,
-        rightMargin=2 * cm,
-        topMargin=2 * cm,
-        bottomMargin=2 * cm,
-    )
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm, topMargin=2 * cm, bottomMargin=2 * cm)
 
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "Title",
-        parent=styles["Heading1"],
-        fontSize=20,
-        spaceAfter=6,
-        textColor=colors.HexColor("#1e3a5f"),
-    )
-    subtitle_style = ParagraphStyle(
-        "Subtitle",
-        parent=styles["Normal"],
-        fontSize=11,
-        textColor=colors.HexColor("#64748b"),
-        spaceAfter=16,
-    )
-    section_style = ParagraphStyle(
-        "Section",
-        parent=styles["Heading2"],
-        fontSize=13,
-        spaceBefore=14,
-        spaceAfter=6,
-        textColor=colors.HexColor("#1e293b"),
-    )
-    body_style = ParagraphStyle(
-        "Body",
-        parent=styles["Normal"],
-        fontSize=10,
-        textColor=colors.HexColor("#334155"),
-        leading=14,
-    )
-    disclaimer_style = ParagraphStyle(
-        "Disclaimer",
-        parent=styles["Normal"],
-        fontSize=8,
-        textColor=colors.HexColor("#94a3b8"),
-        leading=11,
-    )
+    st = _pdf_styles(ParagraphStyle, getSampleStyleSheet, colors)
+    title_style, subtitle_style, section_style, body_style, disclaimer_style = st["title"], st["subtitle"], st["section"], st["body"], st["disclaimer"]
 
-    # ── Colour palette ────────────────────────────────────────────────────────
     _blue = colors.HexColor("#3b82f6")
     _light = colors.HexColor("#eff6ff")
     _border = colors.HexColor("#cbd5e1")

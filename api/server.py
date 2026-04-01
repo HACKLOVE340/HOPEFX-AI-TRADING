@@ -47,6 +47,68 @@ class ConfigUpdate(BaseModel):
     value: Any
 
 
+async def _start_nuclear_streamer() -> Any:
+    """Start NuclearStreamer if streaming API keys are configured. Returns the task or None."""
+    import os
+    _has_key = any([os.getenv("FINNHUB_API_KEY"), os.getenv("TWELVE_API_KEY"), os.getenv("POLYGON_API_KEY")])
+    if not _has_key:
+        logger.info("No streaming API keys set — live tick stream disabled.")
+        return None
+    try:
+        from data_feed import NuclearStreamer
+        from core.event_bus import bus, CH_TICK
+
+        class _EventBusSubscriber:
+            async def on_new_price(self, price: float) -> None:
+                try:
+                    await bus.publish(CH_TICK, {"price": price, "symbol": "XAUUSD"})
+                except Exception as _exc:
+                    logger.debug("NuclearStreamer EventBus forward error: %s", _exc)
+
+        _streamer = NuclearStreamer()
+        _streamer.subscribe(_EventBusSubscriber())
+        task = asyncio.create_task(_streamer.run())
+        logger.info("NuclearStreamer started — finnhub=%s twelvedata=%s polygon=%s", bool(os.getenv("FINNHUB_API_KEY")), bool(os.getenv("TWELVE_API_KEY")), bool(os.getenv("POLYGON_API_KEY")))
+        return task
+    except Exception as _exc:
+        logger.warning("NuclearStreamer init failed (non-fatal): %s", _exc)
+        return None
+
+
+async def _stop_nuclear_streamer(task: Any) -> None:
+    """Cancel and await the NuclearStreamer task."""
+    if task and not task.done():
+        task.cancel()
+        with contextlib.suppress(TimeoutError, asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=3.0)
+
+
+def _start_scheduler() -> Any:
+    """Start APScheduler for weekly reports. Returns scheduler or None."""
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
+        from reports.weekly_report import schedule_weekly_report
+        scheduler = AsyncIOScheduler()
+        schedule_weekly_report(scheduler)
+        scheduler.start()
+        return scheduler
+    except ImportError:
+        logger.info("APScheduler not installed — weekly report scheduling disabled.")
+        return None
+    except Exception as _exc:
+        logger.warning("Scheduler init failed (non-fatal): %s", _exc)
+        return None
+
+
+def _stop_scheduler(scheduler: Any) -> None:
+    """Shut down APScheduler if running."""
+    if scheduler is not None:
+        try:
+            scheduler.shutdown(wait=False)
+        except Exception as _exc:
+            logger.debug("Suppressed exception: %s", _exc)
+
+
 def create_api_app(trading_app=None) -> Any | None:
     """Create FastAPI application"""
     if not FASTAPI_AVAILABLE:
@@ -91,86 +153,11 @@ def create_api_app(trading_app=None) -> Any | None:
         logger.info("API server starting...")
         if trading_app:
             asyncio.create_task(health_checker.start_monitoring())
-
-        # ── NuclearStreamer — live tick stream → EventBus → WebSocket clients ──
-        # Streams XAUUSD from Finnhub / Twelve Data / Polygon concurrently.
-        # OANDA is NOT used for streaming; it is execution-only.
-        # At least one of FINNHUB_API_KEY / TWELVE_API_KEY / POLYGON_API_KEY
-        # must be set for live ticks.  If none are set the stream is skipped
-        # gracefully and the WebSocket falls back to no_live_feed.
-        _nuclear_stream_task = None
-        _has_any_stream_key = any(
-            [
-                os.getenv("FINNHUB_API_KEY"),
-                os.getenv("TWELVE_API_KEY"),
-                os.getenv("POLYGON_API_KEY"),
-            ]
-        )
-
-        if _has_any_stream_key:
-            try:
-                from data_feed import NuclearStreamer
-                from core.event_bus import bus, CH_TICK
-
-                class _EventBusSubscriber:
-                    """Bridge: forwards NuclearStreamer ticks onto the EventBus."""
-
-                    async def on_new_price(self, price: float) -> None:
-                        try:
-                            await bus.publish(
-                                CH_TICK, {"price": price, "symbol": "XAUUSD"}
-                            )
-                        except Exception as _exc:
-                            logger.debug(
-                                "NuclearStreamer EventBus forward error: %s", _exc
-                            )
-
-                _streamer = NuclearStreamer()
-                _streamer.subscribe(_EventBusSubscriber())
-                _nuclear_stream_task = asyncio.create_task(_streamer.run())
-                logger.info(
-                    "NuclearStreamer started — sources: finnhub=%s twelvedata=%s polygon=%s",
-                    bool(os.getenv("FINNHUB_API_KEY")),
-                    bool(os.getenv("TWELVE_API_KEY")),
-                    bool(os.getenv("POLYGON_API_KEY")),
-                )
-            except Exception as _exc:
-                logger.warning("NuclearStreamer init failed (non-fatal): %s", _exc)
-        else:
-            logger.info(
-                "No streaming API keys set (FINNHUB_API_KEY / TWELVE_API_KEY / "
-                "POLYGON_API_KEY) — live tick stream disabled."
-            )
-
-        # ── Weekly performance report scheduler ───────────────────────────────
-        _scheduler = None
-        try:
-            from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore
-            from reports.weekly_report import schedule_weekly_report
-
-            _scheduler = AsyncIOScheduler()
-            schedule_weekly_report(_scheduler)
-            _scheduler.start()
-        except ImportError:
-            logger.info(
-                "APScheduler not installed — weekly report scheduling disabled. "
-                "Install: pip install apscheduler"
-            )
-        except Exception as _exc:
-            logger.warning("Scheduler init failed (non-fatal): %s", _exc)
-
+        _nuclear_stream_task = await _start_nuclear_streamer()
+        _scheduler = _start_scheduler()
         yield
-
-        # ── Shutdown ──────────────────────────────────────────────────────────
-        if _scheduler is not None:
-            try:
-                _scheduler.shutdown(wait=False)
-            except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
-        if _nuclear_stream_task and not _nuclear_stream_task.done():
-            _nuclear_stream_task.cancel()
-            with contextlib.suppress((TimeoutError, asyncio.CancelledError)):
-                await asyncio.wait_for(_nuclear_stream_task, timeout=3.0)
+        _stop_scheduler(_scheduler)
+        await _stop_nuclear_streamer(_nuclear_stream_task)
         logger.info("API server shutting down...")
         health_checker.stop_monitoring()
 
@@ -290,9 +277,8 @@ def _register_probe_routes(app, trading_app, health_checker):
         return PlainTextResponse(content=registry.export_prometheus(), media_type="text/plain")
 
 
-def _register_trading_routes(app, trading_app, get_current_user, require_trader, allowed_symbols, max_qty):
-    """Register account, position, and order endpoints."""
-
+def _register_account_routes(app: Any, trading_app: Any, get_current_user: Any) -> None:
+    """Register status, account, and position read routes."""
     @app.get("/api/v1/status")
     async def get_status(user=Depends(get_current_user)):
         if not trading_app:
@@ -320,12 +306,11 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             logger.error("Error getting positions: %s", exc)
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+
+def _register_order_routes(app: Any, trading_app: Any, require_trader: Any, allowed_symbols: Any, max_qty: float) -> None:  # noqa: C901
+    """Register order placement and position close routes."""
     @app.post("/api/v1/orders", status_code=201)
-    async def place_order(
-        request: TradeRequest,
-        background_tasks: BackgroundTasks,
-        user=Depends(require_trader),
-    ):
+    async def place_order(request: TradeRequest, background_tasks: BackgroundTasks, user=Depends(require_trader)):
         if not trading_app or not trading_app.broker:
             raise HTTPException(status_code=503, detail="Broker not available")
         symbol = request.symbol.upper().strip()
@@ -336,9 +321,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
         if request.side.lower() not in ("buy", "sell"):
             raise HTTPException(status_code=400, detail="side must be 'buy' or 'sell'")
         try:
-            order = await trading_app.broker.place_market_order(
-                symbol=symbol, side=request.side.lower(), quantity=request.quantity,
-            )
+            order = await trading_app.broker.place_market_order(symbol=symbol, side=request.side.lower(), quantity=request.quantity)
             logger.info("Order placed: user=%s symbol=%s side=%s qty=%s id=%s", user.sub, symbol, request.side, request.quantity, order.id)
             background_tasks.add_task(get_metrics_registry().record_order_latency, 0)
             return {"order_id": order.id, "status": order.status.value, "filled_quantity": order.filled_quantity, "average_price": order.average_fill_price}
@@ -361,6 +344,12 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
         except Exception as exc:
             logger.error("Error closing position: %s", exc)
             raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _register_trading_routes(app, trading_app, get_current_user, require_trader, allowed_symbols, max_qty):  # noqa: PLR0913
+    """Register account, position, and order endpoints."""
+    _register_account_routes(app, trading_app, get_current_user)
+    _register_order_routes(app, trading_app, require_trader, allowed_symbols, max_qty)
 
 
 def _register_brain_routes(app, trading_app, get_current_user, require_admin):
