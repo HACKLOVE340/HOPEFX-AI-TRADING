@@ -508,7 +508,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     except Exception as exc:
         raise ValueError(f"Formula evaluation error: {exc}") from exc
 
-    if isinstance(result, (int, float)):
+    if isinstance(result, (int, float)):  # noqa: UP038
         result = [result] * len(closes)
 
     output = []
@@ -615,7 +615,7 @@ async def get_correlation(
                         float(
                             bar.get(
                                 "close",
-                                bar[-2] if isinstance(bar, (list, tuple)) else 0,
+                                bar[-2] if isinstance(bar, (list, tuple)) else 0,  # noqa: UP038
                             )
                         )
                         for bar in ohlcv

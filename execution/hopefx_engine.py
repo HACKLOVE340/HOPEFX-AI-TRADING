@@ -643,7 +643,7 @@ class HopeFXEngine:
             # OANDA XAU_USD: 1 lot = 100 units (oz).
             # If the fill quantity looks like units (>> requested lots),
             # convert to lots.
-            if raw_qty > requested_qty * 10 and requested_qty < 100:
+            if raw_qty > requested_qty * 10 and requested_qty < 100:  # noqa: PLR2004
                 quantity = raw_qty / 100.0
                 logger.debug(
                     "OANDA XAU_USD unit→lot conversion: %.0f units → %.4f lots",

@@ -508,7 +508,7 @@ async def get_transactions(
         d = tx.get("date")
         if d is None:
             return ""
-        if isinstance(d, (int, float)):
+        if isinstance(d, (int, float)):  # noqa: UP038
             from datetime import datetime
 
             return datetime.fromtimestamp(d, tz=UTC).isoformat()

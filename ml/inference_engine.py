@@ -574,8 +574,7 @@ class InferenceEngine:
                 train_mean = float(train_stats[feat_name].get("mean", 0.0))
                 train_std = float(train_stats[feat_name].get("std", 1.0))
                 z = abs(live_means[i] - train_mean) / max(train_std, 1e-9)
-                if z > max_z:
-                    max_z = z
+                max_z = max(max_z, z)
                 if z > _DRIFT_Z_THRESHOLD:
                     drifted_features.append(f"{feat_name}(z={z:.1f})")
 
@@ -1190,9 +1189,8 @@ class InferenceEngine:
         train_stats_available = self._load_train_stats() is not None
 
         # Degrade status when model is stale or drift is blocking
-        if self._model_stale or (self._drift_detected and _DRIFT_BLOCK):
-            if status == "ok":
-                status = "degraded"
+        if (self._model_stale or (self._drift_detected and _DRIFT_BLOCK)) and status == "ok":
+            status = "degraded"
 
         return {
             "status": status,

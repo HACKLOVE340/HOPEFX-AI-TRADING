@@ -505,9 +505,7 @@ class Gatekeeper:
 
         # Local calendar fallback (tests / standalone mode)
         cal = getattr(self, "_calendar", None)
-        if cal is not None and cal.is_blackout():
-            return True
-        return False
+        return bool(cal is not None and cal.is_blackout())
 
     def _get_impact_score(self, signal) -> float:
         score = self._get_impact_score_from_orch()

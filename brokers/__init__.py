@@ -15,7 +15,7 @@ import random
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timezone  # noqa: F401
+from datetime import datetime, timezone  # noqa: F401
 UTC = timezone.utc
 from enum import Enum
 from typing import Any, Dict, List, Optional  # noqa: F401
@@ -655,10 +655,10 @@ class PaperTradingBroker(BaseBroker):
             side_enum = DBOrderSide.BUY if "buy" in raw_side else DBOrderSide.SELL
 
             opened_at = record.get("opened_at")
-            if isinstance(opened_at, (int, float)):
+            if isinstance(opened_at, (int, float)):  # noqa: UP038
                 opened_at = datetime.fromtimestamp(opened_at, tz=UTC)
             closed_at = record.get("closed_at")
-            if isinstance(closed_at, (int, float)):
+            if isinstance(closed_at, (int, float)):  # noqa: UP038
                 closed_at = datetime.fromtimestamp(closed_at, tz=UTC)
 
             qty = float(record.get("quantity", 0))
