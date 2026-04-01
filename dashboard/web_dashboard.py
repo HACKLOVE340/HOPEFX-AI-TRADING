@@ -259,7 +259,14 @@ _DASHBOARD_TEMPLATE = Path(__file__).parent / "templates" / "dashboard.html"
 
 async def index_handler(request):
     """Main dashboard page — serves the pre-built HTML template."""
-    html_content = _DASHBOARD_TEMPLATE.read_text(encoding="utf-8")
+    try:
+        html_content = _DASHBOARD_TEMPLATE.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        logger.error("Dashboard template not found: %s", _DASHBOARD_TEMPLATE)
+        html_content = "<h1>Dashboard template missing — please redeploy.</h1>"
+    except OSError as exc:
+        logger.error("Failed to read dashboard template: %s", exc)
+        html_content = "<h1>Dashboard temporarily unavailable.</h1>"
     return web.Response(text=html_content, content_type="text/html")
 
 
