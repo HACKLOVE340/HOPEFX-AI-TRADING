@@ -67,7 +67,7 @@ def _get_kill_switch():
 
         _kill_switch_instance = _app_ks
         return _kill_switch_instance
-    except Exception:
+    except ImportError:
         return None
 
 
@@ -113,7 +113,8 @@ def _read_oos_meta() -> dict:
         _deployment_gate_cache["mtime"] = mtime
         _deployment_gate_cache["data"] = data
         return data
-    except Exception:
+    except Exception as exc:  # nosec B110 — returns {} on any file/parse error by design
+        logger.debug("_read_oos_meta fallback: %s", exc)
         return {}
 
 
@@ -207,7 +208,8 @@ def _check_order_rate_limit(user_id: str) -> None:
             )
     except HTTPException:
         raise
-    except Exception:
+    except Exception as exc:  # nosec B110 — Redis fallback to in-memory rate limiting
+        logger.debug("Rate-limit Redis fallback: %s", exc)
         # Redis unavailable — fall back to in-memory sliding window
         now = time.time()
         timestamps = _order_rl_cache.get(user_id, [])

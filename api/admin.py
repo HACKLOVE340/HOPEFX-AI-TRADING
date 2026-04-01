@@ -232,14 +232,16 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
     try:
         broker = getattr(app_state, "broker", None)
         components["broker"] = broker is not None
-    except Exception:
+    except Exception as exc:  # nosec B110 — health-check resilience
+        logger.debug("Health check: broker probe failed: %s", exc)
         components["broker"] = False
 
     # Risk manager
     try:
         rm = getattr(app_state, "risk_manager", None)
         components["risk_manager"] = rm is not None
-    except Exception:
+    except Exception as exc:  # nosec B110 — health-check resilience
+        logger.debug("Health check: risk_manager probe failed: %s", exc)
         components["risk_manager"] = False
 
     # Brain / strategy brain
@@ -248,7 +250,8 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
             app_state, "brain", None
         )
         components["brain"] = brain is not None
-    except Exception:
+    except Exception as exc:  # nosec B110 — health-check resilience
+        logger.debug("Health check: brain probe failed: %s", exc)
         components["brain"] = False
 
     # Signal engine
@@ -257,14 +260,16 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
 
         se_status = get_signal_engine_status()
         components["signal_engine"] = se_status.get("ml_available", False)
-    except Exception:
+    except Exception as exc:  # nosec B110 — health-check resilience
+        logger.debug("Health check: signal_engine probe failed: %s", exc)
         components["signal_engine"] = False
 
     # Hourly trainer
     try:
         ht = getattr(app_state, "hourly_trainer", None)
         components["hourly_trainer"] = ht is not None
-    except Exception:
+    except Exception as exc:  # nosec B110 — health-check resilience
+        logger.debug("Health check: hourly_trainer probe failed: %s", exc)
         components["hourly_trainer"] = False
 
     # Online learner (Phase 3)
@@ -273,7 +278,8 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
 
         learners = list_online_learners()
         components["online_learner"] = len(learners) > 0
-    except Exception:
+    except Exception as exc:  # nosec B110 — health-check resilience
+        logger.debug("Health check: online_learner probe failed: %s", exc)
         components["online_learner"] = False
 
     # Data feed — NuclearStreamer (primary) or RealTimePriceEngine (fallback)
@@ -289,7 +295,8 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
                 getattr(df_engine, "active", False)
                 or getattr(df_engine, "is_running", False)
             )
-    except Exception:
+    except Exception as exc:  # nosec B110 — health-check resilience
+        logger.debug("Health check: data_feed probe failed: %s", exc)
         components["data_feed"] = False
 
     return {"components": components}
