@@ -105,7 +105,6 @@ class HRP:
         weights_arr = np.ones(n)
         cluster_list = [list(range(n))]  # work in quasi-diagonal indices
 
-        while cluster_list:
         while any(len(c) > 1 for c in cluster_list):
             cluster_list = [
                 sub
