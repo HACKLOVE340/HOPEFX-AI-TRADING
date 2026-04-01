@@ -147,8 +147,9 @@ class StrategyPurchaseRequest(BaseModel):
 
     buyer_id: str
     strategy_id: str
-    # Stripe customer ID — required to create a PaymentIntent
-    stripe_customer_id: str
+    # Stripe customer ID — created server-side when absent; callers may
+    # supply an existing ID to reuse a Stripe customer record.
+    stripe_customer_id: str | None = None
     # Presentment currency (ISO 4217, e.g. "USD", "EUR", "NGN")
     currency: str = "USD"
 

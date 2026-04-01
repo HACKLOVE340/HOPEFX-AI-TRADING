@@ -361,7 +361,7 @@ class StripeProductionClient:
 
     def create_payment_intent(
         self,
-        customer_id: str,
+        customer_id: str | None,
         amount_usd: Decimal,
         currency: str = "USD",
         description: str = "HopeFX subscription",
@@ -439,7 +439,6 @@ class StripeProductionClient:
             pi_params: dict[str, Any] = {
                 "amount": amount_cents,
                 "currency": currency.lower(),
-                "customer": customer_id,
                 "description": description,
                 "payment_method_types": ["card"],
                 # Radar: request 3DS for card payments
@@ -454,6 +453,8 @@ class StripeProductionClient:
                     **(metadata or {}),
                 },
             }
+            if customer_id:
+                pi_params["customer"] = customer_id
 
             # Radar: pass IP + user agent for risk scoring
             if user_ip or user_agent:
