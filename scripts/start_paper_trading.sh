@@ -17,9 +17,9 @@
 #   ./scripts/start_paper_trading.sh
 #
 # Logs:
-#   logs/paper_trading.log   — full session log
-#   data/paper_trades.csv    — trade-by-trade record
-#   data/oanda_paper_start.json — session anchor (balance, start time)
+#   logs/paper_trading_YYYYMMDD_HHMMSS.log  — full session log (timestamped per run)
+#   data/paper_trades.csv                   — trade-by-trade record
+#   data/oanda_paper_start.json             — session anchor (balance, start time)
 #
 # Stop:
 #   Ctrl+C  — graceful shutdown, closes all positions
