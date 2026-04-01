@@ -129,13 +129,17 @@ class UniverseEngine:
         elif symbol not in self._specs:
             # Auto-create minimal spec for unknown symbols
             self._specs[symbol] = InstrumentSpec(
-                symbol=symbol, asset_class="unknown",
+                symbol=symbol,
+                asset_class="unknown",
                 description=f"Auto-registered: {symbol}",
-                tick_size=0.01, lot_size=1.0,
+                tick_size=0.01,
+                lot_size=1.0,
             )
+        was_new = symbol not in self._active
         self._active.add(symbol)
-        logger.info("Universe: added symbol %s", symbol)
-        return True
+        if was_new:
+            logger.info("Universe: added symbol %s", symbol)
+        return was_new
 
     def remove_symbol(self, symbol: str) -> bool:
         """Remove symbol from active universe (keep spec)."""
