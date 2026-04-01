@@ -807,6 +807,38 @@ class CSVDataHandler:
             yield row["timestamp"], row["symbol"], tick
 
 
+class DataFrameDataHandler:
+    """Adapts a pre-loaded OHLCV DataFrame for use with BacktestEngine.
+
+    The DataFrame must have a DatetimeIndex and columns:
+    open, high, low, close, volume.  Each bar is converted to a synthetic
+    TickData where bid = close and ask = close (mid-price approximation).
+    """
+
+    def __init__(self, df: "pd.DataFrame", symbol: str) -> None:
+        self._df = df
+        self._symbol = symbol
+
+    def get_data(
+        self,
+        start_date: "datetime",
+        end_date: "datetime",
+        symbols: "list[str]",  # noqa: ARG002 — symbol fixed at construction time
+    ):
+        """Yield (timestamp, symbol, TickData) for each bar in the date range."""
+        mask = (self._df.index >= start_date) & (self._df.index <= end_date)
+        for ts, row in self._df[mask].iterrows():
+            close = float(row["close"])
+            tick = TickData(
+                timestamp=ts,
+                symbol=self._symbol,
+                bid=close,
+                ask=close,
+                volume=float(row.get("volume", 0.0)),
+            )
+            yield ts, self._symbol, tick
+
+
 if __name__ == "__main__":
     # Example usage
     print("HOPEFX Backtesting Engine")
