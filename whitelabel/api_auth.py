@@ -11,7 +11,9 @@ API key authentication and per-tier rate limiting for white-label tenants.
 Authentication
 --------------
 Tenants authenticate via the ``X-API-Key: hfx_<token>`` header.
-Keys are stored as SHA-256 hashes in the key store (never in plaintext).
+Keys are stored as HMAC-SHA256(key, WHITELABEL_KEY_HASH_SECRET) digests —
+never in plaintext.  The server secret means a leaked key-store cannot be
+used to brute-force keys offline.
 The ``verify_api_key`` dependency resolves the key to a TenantContext
 containing the tenant ID, tier, and allowed features.
 
@@ -45,6 +47,7 @@ FastAPI integration
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 import os
 import time
@@ -57,6 +60,31 @@ from fastapi import Depends, Header, HTTPException, status
 from whitelabel.config import TierConfig, TierName, get_tier_config
 
 logger = logging.getLogger(__name__)
+
+# ── Key-hashing secret ────────────────────────────────────────────────────────
+# API keys are stored as HMAC-SHA256(key, _KEY_HASH_SECRET) rather than bare
+# SHA-256.  This means a leaked key-store cannot be used to brute-force keys
+# offline without also knowing this secret.
+#
+# Set WHITELABEL_KEY_HASH_SECRET in the environment (≥32 random bytes).
+# Falls back to CONFIG_ENCRYPTION_KEY so existing deployments keep working
+# without a new env var.  Logs a warning if neither is set.
+def _load_key_hash_secret() -> bytes:
+    raw = (
+        os.getenv("WHITELABEL_KEY_HASH_SECRET")
+        or os.getenv("CONFIG_ENCRYPTION_KEY")
+        or ""
+    )
+    if not raw:
+        logger.warning(
+            "WHITELABEL_KEY_HASH_SECRET is not set. "
+            "API key hashes are using a weak fallback. "
+            "Set this env var to a random 32+ byte value in production."
+        )
+        # Use a deterministic but non-empty fallback so the module still works
+        # in dev without crashing.  This is NOT secure for production.
+        raw = "hopefx-dev-key-hash-secret-change-me"
+    return raw.encode()
 
 # ── Redis (optional) ──────────────────────────────────────────────────────────
 try:
@@ -85,15 +113,24 @@ _mem_counters: dict[str, dict[str, float]] = defaultdict(
 
 
 # ── Key store ─────────────────────────────────────────────────────────────────
-# Maps SHA-256(api_key) → (tenant_id, tier_name)
+# Maps HMAC-SHA256(api_key, secret) → (tenant_id, tier_name).
 # In production this should be a database table. Here it's an in-process dict
 # populated by the whitelabel admin API when keys are generated.
 _key_store: dict[str, tuple[str, TierName]] = {}
 
+# Loaded once at import time; refreshed if the env var changes via
+# _reload_key_hash_secret() (called by the secrets rotation callback).
+_KEY_HASH_SECRET: bytes = _load_key_hash_secret()
+
+
+def _reload_key_hash_secret() -> None:
+    """Re-read the hashing secret from the environment (call after rotation)."""
+    global _KEY_HASH_SECRET  # noqa: PLW0603
+    _KEY_HASH_SECRET = _load_key_hash_secret()
+
 
 def register_api_key(raw_key: str, tenant_id: str, tier: TierName) -> str:
-    """
-    Register an API key in the key store.
+    """Register an API key in the key store.
 
     Args:
         raw_key: The plaintext key (e.g. "hfx_abc123...").
@@ -101,7 +138,7 @@ def register_api_key(raw_key: str, tenant_id: str, tier: TierName) -> str:
         tier: The tier that determines rate limits and features.
 
     Returns:
-        The SHA-256 hash of the key (stored, never the plaintext).
+        The HMAC-SHA256 digest of the key (stored, never the plaintext).
     """
     key_hash = _hash_key(raw_key)
     _key_store[key_hash] = (tenant_id, tier)
@@ -118,7 +155,12 @@ def revoke_api_key(raw_key: str) -> bool:
 
 
 def _hash_key(raw_key: str) -> str:
-    return hashlib.sha256(raw_key.encode()).hexdigest()
+    """Return HMAC-SHA256(raw_key, _KEY_HASH_SECRET) as a hex digest.
+
+    Using a server-side secret means a leaked key-store cannot be used to
+    brute-force API keys offline.
+    """
+    return hmac.new(_KEY_HASH_SECRET, raw_key.encode(), hashlib.sha256).hexdigest()  # nosec B324
 
 
 # ── Tenant context ────────────────────────────────────────────────────────────
