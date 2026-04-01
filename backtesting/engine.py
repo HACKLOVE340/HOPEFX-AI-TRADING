@@ -18,7 +18,11 @@ from typing import Any
 from collections.abc import Callable
 from enum import Enum
 import json
+import logging
 from pathlib import Path
+
+
+logger = logging.getLogger(__name__)
 
 
 class OrderType(Enum):
@@ -354,8 +358,8 @@ class BacktestEngine:
         if self.data_handler is None:
             raise ValueError("Data handler not set. Call set_data_handler() first.")
 
-        print(f"Starting backtest from {start_date} to {end_date}")
-        print(f"Initial capital: ${self.initial_capital:,.2f}")
+        logger.info(f"Starting backtest from {start_date} to {end_date}")
+        logger.info(f"Initial capital: ${self.initial_capital:,.2f}")
 
         # Reset state
         self.capital = self.initial_capital
@@ -404,10 +408,10 @@ class BacktestEngine:
         # Calculate metrics
         metrics = self._calculate_metrics(start_date, end_date)
 
-        print(f"Backtest complete. Final equity: ${self.capital:,.2f}")
-        print(f"Total return: {metrics.total_return:.2%}")
-        print(f"Max drawdown: {metrics.max_drawdown:.2%}")
-        print(f"Sharpe ratio: {metrics.sharpe_ratio:.2f}")
+        logger.info(f"Backtest complete. Final equity: ${self.capital:,.2f}")
+        logger.info(f"Total return: {metrics.total_return:.2%}")
+        logger.info(f"Max drawdown: {metrics.max_drawdown:.2%}")
+        logger.info(f"Sharpe ratio: {metrics.sharpe_ratio:.2f}")
 
         return metrics
 
@@ -769,7 +773,7 @@ class BacktestEngine:
         with open(f"{filepath_prefix}_state.json", "w") as f:
             json.dump(state, f, indent=2)
 
-        print(f"Results saved to {filepath_prefix}*")
+        logger.info(f"Results saved to {filepath_prefix}*")
 
 
 # Simple data handler for CSV files
@@ -786,7 +790,7 @@ class CSVDataHandler:
         self.data = pd.read_csv(self.filepath)
         self.data["timestamp"] = pd.to_datetime(self.data["timestamp"], format=self.date_format)
         self.data.sort_values("timestamp", inplace=True)
-        print(f"Loaded {len(self.data)} rows from {self.filepath}")
+        logger.info(f"Loaded {len(self.data)} rows from {self.filepath}")
 
     def get_data(self, start_date: datetime, end_date: datetime, symbols: list[str]):
         """Generator yielding (timestamp, symbol, tick)"""

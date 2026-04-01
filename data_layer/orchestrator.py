@@ -738,7 +738,7 @@ class MarketDataOrchestrator:
         Example
         -------
         def on_tick(tick: GoldTick) -> None:
-            print(tick.mid)
+            logger.debug("tick.mid=%s", tick.mid)
 
         orchestrator.subscribe_ticks("my_handler", on_tick)
         """
