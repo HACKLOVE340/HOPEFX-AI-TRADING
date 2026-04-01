@@ -17,16 +17,26 @@ POST /api/notifications/test       — send a test message to a channel
 Settings are stored in the `configurations` table keyed by
 `notification_settings:{user_id}`. Falls back to an in-memory dict when
 the DB is unavailable (dev mode without a running database).
+
+Security
+--------
+- Outbound webhook calls are restricted to an explicit allowlist of hostnames
+  (SSRF prevention).  Only discord.com, hooks.slack.com, and api.telegram.org
+  are permitted.
+- Webhook URLs must use HTTPS.
+- JWT extraction uses SECURITY_JWT_SECRET (same key as the rest of the app).
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +47,46 @@ _notification_config: dict[str, Any] = {}
 
 # Config key prefix in the configurations table
 _CONFIG_KEY_PREFIX = "notification_settings"
+
+# ---------------------------------------------------------------------------
+# Outbound webhook allowlist (SSRF prevention)
+# ---------------------------------------------------------------------------
+# Only these exact hostnames may receive notification payloads.
+_WEBHOOK_ALLOWED_HOSTS: frozenset[str] = frozenset(
+    {
+        "discord.com",
+        "discordapp.com",
+        "hooks.slack.com",
+        "api.telegram.org",
+    }
+)
+
+
+def _validate_webhook_url(url: str, label: str) -> None:
+    """Raise HTTPException(400) if *url* is not an allowed HTTPS webhook endpoint."""
+    if not url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{label} webhook URL is empty",
+        )
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid {label} webhook URL",
+        )
+    if parsed.scheme != "https":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{label} webhook URL must use HTTPS",
+        )
+    if host not in _WEBHOOK_ALLOWED_HOSTS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{label} webhook host '{host}' is not in the permitted list",
+        )
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -57,37 +107,55 @@ class NotificationSettings(BaseModel):
     notify_on_error: bool = True
     notify_on_daily_summary: bool = True
 
+    @field_validator("discord_webhook_url")
+    @classmethod
+    def _validate_discord_url(cls, v: str) -> str:
+        if v:
+            parsed = urlparse(v)
+            host = (parsed.hostname or "").lower()
+            if parsed.scheme != "https" or host not in ("discord.com", "discordapp.com"):
+                raise ValueError("discord_webhook_url must be an HTTPS discord.com URL")
+        return v
+
+    @field_validator("slack_webhook_url")
+    @classmethod
+    def _validate_slack_url(cls, v: str) -> str:
+        if v:
+            parsed = urlparse(v)
+            host = (parsed.hostname or "").lower()
+            if parsed.scheme != "https" or host != "hooks.slack.com":
+                raise ValueError("slack_webhook_url must be an HTTPS hooks.slack.com URL")
+        return v
+
 
 class TestNotificationRequest(BaseModel):
     channel: str  # "discord" | "slack" | "telegram"
     settings: NotificationSettings
 
 
-# ── DB helpers ────────────────────────────────────────────────────────────────
+# ── JWT / user helpers ────────────────────────────────────────────────────────
 
 
 def _get_user_id(request: Request) -> str:
-    """Extract user_id from JWT token, fall back to 'anonymous'."""
+    """Extract user_id from JWT Bearer token; fall back to 'anonymous'."""
     try:
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             token = auth[7:]
-            import os
-
             import jwt as pyjwt
 
-            secret = os.getenv(
-                "JWT_SECRET_KEY",
-                "hopefx-secret-key-change-in-production",
-            )
+            secret = os.getenv("SECURITY_JWT_SECRET", "")
+            if not secret:
+                logger.warning("SECURITY_JWT_SECRET not set; cannot decode JWT")
+                return "anonymous"
             payload = pyjwt.decode(token, secret, algorithms=["HS256"])
             return str(payload.get("sub", "anonymous"))
     except Exception as exc:
-        logger.debug(
-            "Settings user extraction failed, defaulting to anonymous: %s",
-            exc,
-        )
+        logger.debug("Settings JWT extraction failed, defaulting to anonymous: %s", exc)
     return "anonymous"
+
+
+# ── DB helpers ────────────────────────────────────────────────────────────────
 
 
 def _db_save(user_id: str, data: dict) -> bool:
@@ -110,9 +178,7 @@ def _db_save(user_id: str, data: dict) -> bool:
             existing.config_value = value
             existing.changed_by = user_id
         else:
-            from database.models import Configuration as Cfg
-
-            record = Cfg(
+            record = Configuration(
                 environment="production",
                 config_key=key,
                 config_value=value,
@@ -154,6 +220,7 @@ def _db_load(user_id: str) -> dict | None:
 
 @router.post("/api/settings/notifications", summary="Save notification settings")
 async def save_notification_settings(body: NotificationSettings, request: Request):
+    """Persist notification channel configuration for the authenticated user."""
     global _notification_config  # noqa: PLW0602
     data = body.model_dump()
     user_id = _get_user_id(request)
@@ -169,6 +236,7 @@ async def save_notification_settings(body: NotificationSettings, request: Reques
 
 @router.get("/api/settings/notifications", summary="Get notification settings")
 async def get_notification_settings(request: Request):
+    """Return the current notification configuration for the authenticated user."""
     user_id = _get_user_id(request)
 
     db_data = _db_load(user_id)
@@ -184,19 +252,24 @@ async def get_notification_settings(request: Request):
 
 @router.post("/api/notifications/test", summary="Send a test notification")
 async def test_notification(body: TestNotificationRequest):
-    """Send a test message to the specified channel."""
+    """Send a test message to the specified channel to verify connectivity."""
     channel = body.channel.lower()
     cfg = body.settings
 
     try:
         if channel == "discord":
-            await _test_discord(cfg.discord_webhook_url)
+            _validate_webhook_url(cfg.discord_webhook_url, "Discord")
+            await _send_discord(cfg.discord_webhook_url)
         elif channel == "slack":
-            await _test_slack(cfg.slack_webhook_url)
+            _validate_webhook_url(cfg.slack_webhook_url, "Slack")
+            await _send_slack(cfg.slack_webhook_url)
         elif channel == "telegram":
-            await _test_telegram(cfg.telegram_bot_token, cfg.telegram_chat_id)
+            await _send_telegram(cfg.telegram_bot_token, cfg.telegram_chat_id)
         else:
-            raise HTTPException(status_code=400, detail=f"Unknown channel: {channel}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown channel: {channel}",
+            )
     except HTTPException:
         raise
     except Exception as exc:
@@ -209,12 +282,12 @@ async def test_notification(body: TestNotificationRequest):
     return {"status": "delivered", "channel": channel}
 
 
-# ── Channel helpers ───────────────────────────────────────────────────────────
+# ── Channel send helpers ──────────────────────────────────────────────────────
+# URL validation is always performed by the caller before these are invoked.
 
 
-async def _test_discord(webhook_url: str) -> None:
-    if not webhook_url:
-        raise ValueError("Discord webhook URL is empty")
+async def _send_discord(webhook_url: str) -> None:
+    """POST a test embed to a Discord webhook URL."""
     import aiohttp
 
     payload = {
@@ -232,9 +305,8 @@ async def _test_discord(webhook_url: str) -> None:
             raise ValueError(f"Discord returned {resp.status}: {text[:200]}")
 
 
-async def _test_slack(webhook_url: str) -> None:
-    if not webhook_url:
-        raise ValueError("Slack webhook URL is empty")
+async def _send_slack(webhook_url: str) -> None:
+    """POST a test message to a Slack incoming webhook URL."""
     import aiohttp
 
     payload = {"text": "*HOPEFX* — Slack notifications are working correctly."}
@@ -244,11 +316,13 @@ async def _test_slack(webhook_url: str) -> None:
             raise ValueError(f"Slack returned {resp.status}: {text[:200]}")
 
 
-async def _test_telegram(bot_token: str, chat_id: str) -> None:
+async def _send_telegram(bot_token: str, chat_id: str) -> None:
+    """Send a test message via the Telegram Bot API."""
     if not bot_token or not chat_id:
         raise ValueError("Telegram bot token or chat ID is empty")
     import aiohttp
 
+    # URL is constructed from the bot token — not from user-supplied input.
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = {
         "chat_id": chat_id,
