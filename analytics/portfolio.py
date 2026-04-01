@@ -829,7 +829,7 @@ class PortfolioOptimizer:
         import numpy as np
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == self.MIN_ASSETS_FOR_OPTIMISATION else len(assets)
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)
 
         if method == "equal_weight" or returns.shape[0] < self.MIN_OBSERVATIONS_OPTIMISE:
             w = np.ones(n) / n
