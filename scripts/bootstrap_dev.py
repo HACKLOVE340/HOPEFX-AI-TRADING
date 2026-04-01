@@ -83,7 +83,15 @@ BROKER_TYPE=paper
 # ── Sentry (disabled in dev) ──────────────────────────────────────────────────
 # SENTRY_DSN=
 """
-    ENV_PATH.write_text(content, encoding="utf-8")
+    # Write with owner-read-write only (0o600) so the generated secrets are
+    # not world-readable.  nosec: writing secrets to a local .env file is the
+    # intended behaviour of this dev-bootstrap script; the file is gitignored.
+    ENV_PATH.write_text(content, encoding="utf-8")  # nosec B106
+    try:
+        import stat
+        ENV_PATH.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    except Exception:
+        pass  # chmod may fail on Windows; non-fatal
     return True
 
 
@@ -159,12 +167,14 @@ def bootstrap(verbose: bool = True) -> None:
         print(f"  ✅  Generated .env  →  {ENV_PATH}")
 
     try:
-        admin_password = _seed_admin()
+        _seed_admin()
         if verbose and created:
             print("  ✅  Admin user seeded")
             print(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
             print(f"      Username : {DEFAULT_ADMIN_USERNAME}")
-            print(f"      Password : {admin_password}  ← save this now")
+            # Do not echo the password to stdout — it is stored in .env under
+            # BOOTSTRAP_ADMIN_PASSWORD and is only readable by the local user.
+            print(f"      Password : see {ENV_PATH} → {_ADMIN_PASSWORD_KEY}")
             print("─" * 58)
             print("  Start the server:  python app.py")
             print("  Login at:          http://localhost:8000/login")
