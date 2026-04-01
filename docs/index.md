@@ -138,7 +138,7 @@ See [Architecture](architecture.md) for the full module map and startup sequence
 | ML model (`advanced_oos.pkl`) | ✅ 66.4% OOS accuracy, p=0.0000, 176 features |
 | Multi-symbol backtest | ✅ N>919 trades, SE≤0.10 gate satisfied |
 | Risk engine | ✅ CVaR gate, kill switch, drawdown circuit breaker |
-| OANDA paper broker | Active — 30-day paper run in progress |
+| OANDA paper broker | ✅ Stable — 30-day paper run completed |
 | REST + WebSocket API | ✅ 108 endpoints, stable |
 | Test suite | ✅ 2,560+ tests, CI green |
 | Online learning | ✅ SGD + EWC, enable with `ML_HOURLY_ENABLED=true` |

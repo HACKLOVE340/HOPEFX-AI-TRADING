@@ -1,7 +1,7 @@
 # CI/CD Pipeline
 
 > GitHub Actions CI/CD for HOPEFX AI Trading.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 
@@ -363,4 +363,4 @@ Key differences between staging and production:
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-04-01*

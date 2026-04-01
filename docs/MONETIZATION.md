@@ -1,7 +1,7 @@
 # HOPEFX Monetization Guide
 
 > Premium AI-Powered Trading Platform — Professional Trading Solutions
-> Last updated: 2026-07-14 | Version: 1.17
+> Last updated: 2026-04-01 | Version: 1.17
 
 ---
 
@@ -680,7 +680,7 @@ Requests exceeding plan limits return `403 Forbidden` with `error_code: PLAN_LIM
 
 ## Implementation Roadmap
 
-> Last updated: 2026-07-14 | v1.17
+> Last updated: 2026-04-01 | v1.17
 >
 > **Legend:** ✅ Implemented in code | 🔧 Operator config required | ⏳ Planned
 

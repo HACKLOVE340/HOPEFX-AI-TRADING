@@ -1,7 +1,7 @@
 # HOPEFX Sample Trading Strategies
 
 > Ready-to-use trading strategies with explanations and example code.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 
