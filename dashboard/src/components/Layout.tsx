@@ -25,6 +25,7 @@ const navItems = [
   { path: '/trading', icon: TrendingUp, label: 'Trading' },
   { path: '/prop-firm', icon: Shield, label: 'Prop Firm' },
   { path: '/performance', icon: BarChart2, label: 'Performance' },
+  { path: '/pnl',         icon: TrendingUp, label: 'Live P&L' },
   { path: '/copy-trading', icon: Users, label: 'Copy Trading' },
   { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
   { path: '/wallet', icon: Wallet, label: 'Wallet' },

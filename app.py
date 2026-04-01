@@ -240,6 +240,18 @@ except Exception as _tca_router_err:
         "TCA router failed to register: %s", _tca_router_err
     )
 
+# Live P&L dashboard — auditable trade log, equity curve, Sharpe, drawdown
+try:
+    from api.pnl_dashboard import router as _pnl_router
+
+    app.include_router(_pnl_router)
+except Exception as _pnl_router_err:
+    import logging as _logging
+
+    _logging.getLogger(__name__).warning(
+        "P&L dashboard router failed to register: %s", _pnl_router_err
+    )
+
 # Chaos engineering + mutation testing endpoints
 try:
     from api.chaos import router as _chaos_router
