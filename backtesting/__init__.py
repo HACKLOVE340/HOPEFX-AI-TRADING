@@ -22,7 +22,7 @@ from backtesting.engine_config import (
 
 try:
     from backtesting.enhanced_engine import EnhancedBacktestEngine
-except Exception:  # optional heavy deps (numba, cupy)
+except ImportError:  # optional heavy deps (numba, cupy)
     EnhancedBacktestEngine = None  # type: ignore[assignment,misc]
 from backtesting.events import MarketEvent, SignalEvent, OrderEvent, FillEvent
 from backtesting.execution import SimulatedExecutionHandler

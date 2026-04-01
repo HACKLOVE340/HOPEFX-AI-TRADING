@@ -285,7 +285,7 @@ def mount_nuclear_routes(
 
             sup = get_nuclear_supervisor()
             status = sup.get_status()
-        except Exception:
+        except ImportError:
             status = {}
         return JSONResponse(
             {
@@ -348,7 +348,7 @@ async def _handle_client_message(
             from brain.nuclear_supervisor import get_nuclear_supervisor
 
             history = get_nuclear_supervisor().get_event_history(n)
-        except Exception:
+        except ImportError:
             history = []
         await _manager.send_to(
             ws,

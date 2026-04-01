@@ -748,7 +748,7 @@ class MarketDataType(enum.Enum):
 # the "User" string reference in Account.user without a second class definition.
 try:
     from database.user_models import User
-except Exception:
+except ImportError:
     # Fallback stub so imports never fail when user_models has a dep issue
     class User:  # type: ignore[no-redef]
         __tablename__ = "users"

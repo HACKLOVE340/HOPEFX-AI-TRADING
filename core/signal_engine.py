@@ -41,7 +41,7 @@ def _get_macro_store() -> Any | None:
         from ml.macro_store import macro_store
 
         return macro_store
-    except Exception:
+    except ImportError:
         return None
 
 
@@ -62,7 +62,7 @@ def _get_macro_store_bridge() -> Any | None:
 
         bridge = orchestrator._macro_bridge
         return bridge if bridge.is_loaded else None
-    except Exception:
+    except ImportError:
         return None
 
 
@@ -71,7 +71,7 @@ try:
     from ml import get_active_model, get_advanced_predictor, get_model_version
 
     _ML_AVAILABLE: bool = True
-except Exception:
+except ImportError:
     _ML_AVAILABLE = False
 
 # ── Anomaly weight store (Phase 2 — down-weight signals on anomalous bars) ────
@@ -92,7 +92,7 @@ def _get_deep_ensemble_store() -> Any | None:
 
         if not flags.DEEP_ENSEMBLE:
             return None
-    except Exception:
+    except ImportError:
         return None
     if _deep_ensemble_store is None:
         try:
@@ -124,7 +124,7 @@ def _get_online_learner_store() -> Any | None:
 
         if not flags.ONLINE_LEARNING:
             return None
-    except Exception:
+    except ImportError:
         return None
     if _online_learner_store is None:
         try:
@@ -145,7 +145,7 @@ def _get_anomaly_store() -> Any | None:
 
         if not flags.ANOMALY_WEIGHTING:
             return None
-    except Exception:
+    except ImportError:
         return None
     if _anomaly_store is None:
         try:
@@ -656,7 +656,7 @@ def _get_factor_engine(app_state: Any = None) -> Any | None:
     try:
         from portfolio.factor_model import get_live_factor_engine
         return get_live_factor_engine()
-    except Exception:
+    except ImportError:
         return None
 
 
@@ -714,7 +714,7 @@ def get_signal_engine_status() -> dict[str, Any]:
         from config.feature_flags import flags
 
         status["phase1_mtf_enabled"] = getattr(flags, "MTF_FUSION", True)
-    except Exception:
+    except ImportError:
         status["phase1_mtf_enabled"] = None
 
     try:

@@ -69,7 +69,7 @@ try:
     _redis_client.ping()
     _REDIS_AVAILABLE = True
     logger.info("whitelabel rate limiter: Redis backend at %s", _REDIS_URL)
-except Exception:
+except Exception:  # nosec B110 - Redis may be unavailable; logged below
     _redis_client = None
     _REDIS_AVAILABLE = False
     logger.warning(

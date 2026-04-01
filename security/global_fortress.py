@@ -86,7 +86,7 @@ async def _get_redis() -> Any:
             from cache.redis_client import get_redis as _get_redis_client
 
             _redis_client = await _get_redis_client()
-        except Exception:
+        except ImportError:
             # Fallback: direct URL
             try:
                 import redis.asyncio as aioredis

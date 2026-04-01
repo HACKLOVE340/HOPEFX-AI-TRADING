@@ -907,7 +907,7 @@ async def init_inference_engine(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except Exception:
+    except ImportError:
 
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
@@ -984,7 +984,7 @@ async def init_anomaly_store(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except Exception:
+    except ImportError:
 
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
@@ -997,7 +997,7 @@ async def init_anomaly_store(s: Any) -> Any:
                 "AnomalyWeightStore: disabled by FEATURE_ANOMALY_WEIGHTING=false"
             )
             return None
-    except Exception:
+    except (ImportError, AttributeError):
         return None
 
     try:
@@ -1044,7 +1044,7 @@ async def init_online_learner_store(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except Exception:
+    except ImportError:
 
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
@@ -1055,7 +1055,7 @@ async def init_online_learner_store(s: Any) -> Any:
         if not getattr(flags, "ONLINE_LEARNING", False):
             logger.info("OnlineLearnerStore: disabled by FEATURE_ONLINE_LEARNING=false")
             return None
-    except Exception:
+    except (ImportError, AttributeError):
         return None
 
     try:
@@ -1107,7 +1107,7 @@ async def init_deep_ensemble_store(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except Exception:
+    except ImportError:
 
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
@@ -1118,7 +1118,7 @@ async def init_deep_ensemble_store(s: Any) -> Any:
         if not getattr(flags, "DEEP_ENSEMBLE", False):
             logger.info("DeepEnsembleStore: disabled by FEATURE_DEEP_ENSEMBLE=false")
             return None
-    except Exception:
+    except (ImportError, AttributeError):
         return None
 
     try:
@@ -1360,7 +1360,7 @@ async def init_daily_online_learner(s: Any) -> Any:
 
     try:
         from api.admin import log_activity
-    except Exception:
+    except ImportError:
 
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
@@ -1477,7 +1477,7 @@ async def init_daily_online_learner(s: Any) -> Any:
                 return "ranging"
             else:
                 return "trending"
-        except Exception:
+        except (ImportError, AttributeError):
             return None
 
     t = asyncio.create_task(_daily_ewc_loop())
@@ -1813,7 +1813,7 @@ async def init_tick_feed(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except Exception:
+    except ImportError:
         def log_activity(msg: str) -> None:
             logger.info(msg)
 
@@ -1881,7 +1881,7 @@ async def init_factor_engine(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except Exception:
+    except ImportError:
         def log_activity(msg: str) -> None:
             logger.info(msg)
 
@@ -1919,7 +1919,7 @@ async def init_portfolio_rebalancer(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except Exception:
+    except ImportError:
         def log_activity(msg: str) -> None:
             logger.info(msg)
 
