@@ -9,7 +9,9 @@ HOPEFX Portfolio Management System
 Real-time P&L, exposure, and portfolio optimization
 """
 
+import contextlib
 import numpy as np
+from typing import Optional
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from decimal import Decimal
@@ -280,10 +282,8 @@ class PortfolioManager:
 
 
 # Forward reference resolved at runtime
-try:
-    from portfolio.rebalancer import DynamicRebalancer  # noqa: F401
-except ImportError:
-    pass
+with contextlib.suppress(ImportError):
+    from portfolio.rebalancer import DynamicRebalancer
 
 
 class PortfolioOptimizer:

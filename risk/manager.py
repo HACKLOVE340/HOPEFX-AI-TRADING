@@ -728,11 +728,11 @@ class RiskManager:
 
     def factor_scale_size(
         self,
-        sizing: "PositionSizingResult",
+        sizing: PositionSizingResult,
         positions: dict[str, float],
         total_pnl: float = 0.0,
         app_state: Any | None = None,
-    ) -> "PositionSizingResult":
+    ) -> PositionSizingResult:
         """
         Apply factor-model-based position scaling to an already-sized order.
 

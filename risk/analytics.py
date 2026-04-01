@@ -572,6 +572,18 @@ def compute_max_drawdown(equity_curve: NDArray[np.float64]) -> float:
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class PreTradeRiskLimits:
+    """Risk limits for :func:`generate_pre_trade_report`."""
+
+    bid_ask_spread_bps: float = 5.0
+    max_var_pct: float = 0.02
+    max_es_pct: float = 0.03
+    max_slippage_bps: float = 20.0
+    max_drift_score: float = 2.0
+    min_sharpe: float = 1.5
+    max_drawdown_limit: float = 0.08
+
 def generate_pre_trade_report(
     symbol: str,
     side: str,

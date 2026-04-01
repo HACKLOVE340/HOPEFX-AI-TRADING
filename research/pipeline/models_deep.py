@@ -41,6 +41,7 @@ Training improvements
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -377,6 +378,25 @@ if TORCH_AVAILABLE:
 # ─────────────────────────────────────────────────────────────────────────────
 # Unified trainer wrapper
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class DeepPredictorConfig:
+    """Configuration for :class:`DeepPredictor`."""
+
+    architecture: str = "lstm"
+    n_features: int = 50
+    seq_len: int = 60
+    task: str = "binary"
+    device: str = "auto"
+    lr: float = 1e-3
+    batch_size: int = 64
+    max_epochs: int = 100
+    patience: int = 10
+    label_smoothing: float = 0.05
+    pos_weight: float | None = None
+    grad_clip: float = 1.0
+    use_amp: bool = True
 
 
 class DeepPredictor:
