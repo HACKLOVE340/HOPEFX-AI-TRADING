@@ -492,6 +492,38 @@ class InferenceEngine:
             ).inc()
             return base_result
 
+        # Step 0: Timeframe alignment — resample intraday bars to daily when
+        # the model was trained on daily data (INFERENCE_TIMEFRAME=daily, default).
+        # This prevents the regime mismatch where rolling windows span minutes
+        # instead of months and volatility features are scaled to intraday noise.
+        try:
+            from ml.daily_aggregator import ensure_daily, needs_resampling
+            if needs_resampling(ohlcv):
+                daily_ohlcv = ensure_daily(ohlcv, min_bars=_MIN_BARS)
+                if daily_ohlcv is None:
+                    logger.debug(
+                        "InferenceEngine: insufficient daily bars after resampling "
+                        "(%d intraday → too few daily) — abstaining for %s",
+                        len(ohlcv),
+                        sym_label,
+                    )
+                    base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
+                    base_result["direction"] = "neutral"
+                    _PROM.fallback_total.labels(
+                        symbol=sym_label, reason="insufficient_daily_bars"
+                    ).inc()
+                    return base_result
+                logger.debug(
+                    "InferenceEngine: resampled %d intraday → %d daily bars for %s",
+                    len(ohlcv),
+                    len(daily_ohlcv),
+                    sym_label,
+                )
+                ohlcv = daily_ohlcv
+                base_result["bars_used"] = len(ohlcv)
+        except Exception as _resample_exc:
+            logger.debug("Daily resampling skipped: %s", _resample_exc)
+
         # Step 1: MacroStore (now auto-populated from FRED via MacroStoreBridge)
         macro_df = self._get_macro_df(ohlcv)
         macro_active = macro_df is not None and not macro_df.empty
