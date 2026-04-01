@@ -63,4 +63,5 @@
             "notes": "Stacking ensemble. Metrics inherited from advanced_oos_v1 training run. Sub-model; not independently promoted."
         }
     }
+  }
 }

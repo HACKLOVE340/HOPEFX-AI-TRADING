@@ -257,7 +257,7 @@ class LiveTradingGate:
                     gate_passed = bool(mse.get("sharpe_gate_passed", False))
                     n = int(mse.get("pooled_n_trades", 0))
                     se = float(mse.get("pooled_sharpe_se", 999.0))
-                    if gate_passed and se <= 0.10:
+                    if gate_passed and se <= 0.10:  # noqa: PLR2004
                         return True, (
                             f"Sharpe gate passed (extended backtest): N={n}, SE={se:.3f}"
                         )

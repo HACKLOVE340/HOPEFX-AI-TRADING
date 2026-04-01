@@ -913,7 +913,7 @@ class TestMonetizationModels:
         assert r.tags is None
 
     def test_strategy_purchase_request(self):
-        r = StrategyPurchaseRequest(buyer_id="b1", strategy_id="strat_001")
+        r = StrategyPurchaseRequest(buyer_id="b1", strategy_id="strat_001", stripe_customer_id="cus_test")
         assert r.buyer_id == "b1"
 
     def test_review_request_valid(self):
