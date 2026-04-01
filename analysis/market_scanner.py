@@ -169,6 +169,34 @@ class MarketOpportunity:
         }
 
 
+
+def _parse_market_scan_data(data: dict) -> dict:
+    """Normalise raw data dict into canonical field names used by scan criteria checkers."""
+    price = data.get("price", data.get("close", 0))
+    open_price = data.get("open", price)
+    high = data.get("high", price)
+    low = data.get("low", price)
+    volume = data.get("volume", 0)
+    ma_20 = data.get("ma_20", data.get("sma_20", price))
+    ma_50 = data.get("ma_50", data.get("sma_50", price))
+    ma_200 = data.get("ma_200", data.get("sma_200", price))
+    rsi = data.get("rsi", data.get("rsi_14", 50))
+    macd = data.get("macd", 0)
+    macd_signal = data.get("macd_signal", 0)
+    stoch_k = data.get("stoch_k", 50)
+    stoch_d = data.get("stoch_d", 50)
+    atr = data.get("atr", 0)
+    high_20 = data.get("high_20", high)
+    low_20 = data.get("low_20", low)
+    avg_volume = data.get("avg_volume", volume)
+    return dict(
+        price=price, open_price=open_price, high=high, low=low, volume=volume,
+        ma_20=ma_20, ma_50=ma_50, ma_200=ma_200,
+        rsi=rsi, macd=macd, macd_signal=macd_signal,
+        stoch_k=stoch_k, stoch_d=stoch_d, atr=atr,
+        high_20=high_20, low_20=low_20, avg_volume=avg_volume,
+    )
+
 class MarketScanner:
     """
     Multi-symbol market scanner for opportunity detection.
@@ -490,30 +518,21 @@ class MarketScanner:
         ctype = criterion.type
         params = criterion.parameters
 
-        price = data.get("price", data.get("close", 0))
-        open_price = data.get("open", price)
-        high = data.get("high", price)
-        low = data.get("low", price)
-        volume = data.get("volume", 0)
-
-        # Moving averages
-        ma_20 = data.get("ma_20", data.get("sma_20", price))
-        ma_50 = data.get("ma_50", data.get("sma_50", price))
-        data.get("ma_200", data.get("sma_200", price))
-
-        # Indicators
-        rsi = data.get("rsi", data.get("rsi_14", 50))
-        macd = data.get("macd", 0)
-        macd_signal = data.get("macd_signal", 0)
-        data.get("stoch_k", 50)
-        data.get("stoch_d", 50)
-        atr = data.get("atr", 0)
-
-        # Historical levels
-        high_20 = data.get("high_20", high)
-        low_20 = data.get("low_20", low)
-        avg_volume = data.get("avg_volume", volume)
-
+        ctx = _parse_market_scan_data(data)
+        price = ctx["price"]
+        open_price = ctx["open_price"]
+        high = ctx["high"]
+        low = ctx["low"]
+        volume = ctx["volume"]
+        ma_20 = ctx["ma_20"]
+        ma_50 = ctx["ma_50"]
+        rsi = ctx["rsi"]
+        macd = ctx["macd"]
+        macd_signal = ctx["macd_signal"]
+        atr = ctx["atr"]
+        high_20 = ctx["high_20"]
+        low_20 = ctx["low_20"]
+        avg_volume = ctx["avg_volume"]
         # Check criteria
         if ctype == ScanCriteriaType.BREAKOUT:
             period = params.get("period", 20)

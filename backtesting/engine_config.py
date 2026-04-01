@@ -424,6 +424,146 @@ class SimulatedBroker:
                 self.positions[symbol]["current_price"] = price
 
 
+
+def _compute_statistical_metrics(
+    bar_returns: "np.ndarray",
+    trade_pnls: "np.ndarray",
+    total_return: float,
+    equity_values: list,
+    initial_equity: float,
+    trades: list,
+    ann_factor: float,
+    max_drawdown: float = 0.0,
+    run_mc_fallback: "Any | None" = None,
+) -> dict[str, Any]:
+    """
+    Compute advanced statistical metrics for a backtest result.
+
+    Returns a flat dict with keys: sortino, calmar, omega, tail_ratio,
+    skewness, kurtosis, avg_mae, avg_mfe, t_stat, p_val, is_significant,
+    sample_size, mc.
+    """
+    gross_profit = sum(t["net_pnl"] for t in trades if t["net_pnl"] > 0)
+    gross_loss = sum(t["net_pnl"] for t in trades if t["net_pnl"] < 0)
+    winning_trades = sum(1 for t in trades if t["net_pnl"] > 0)
+    losing_trades = len(trades) - winning_trades
+
+    # ── Sortino (bar-level — acceptable for downside deviation) ───
+    sortino = 0.0
+    if len(bar_returns) > 0:
+        downside = bar_returns[bar_returns < 0]
+        downside_std = float(np.std(downside)) if len(downside) > 0 else 0.0
+        if downside_std > 0:
+            sortino = float(np.mean(bar_returns) / downside_std * ann_factor)
+
+    # ── Calmar ────────────────────────────────────────────────────
+    annual_return = (1 + total_return) ** (252.0 / max(len(equity_values), 1)) - 1
+    calmar = float(annual_return / max_drawdown) if max_drawdown > 0 else 0.0
+
+    # ── Omega ─────────────────────────────────────────────────────
+    threshold = 0.0
+    gains = bar_returns[bar_returns > threshold] - threshold
+    losses = threshold - bar_returns[bar_returns <= threshold]
+    omega = float(np.sum(gains) / np.sum(losses)) if np.sum(losses) > 0 else float("inf")
+
+    # ── Tail ratio ────────────────────────────────────────────────
+    tail_ratio = 0.0
+    if len(bar_returns) > 0:
+        p95 = abs(float(np.percentile(bar_returns, 95)))
+        p5 = abs(float(np.percentile(bar_returns, 5)))
+        tail_ratio = p95 / p5 if p5 > 0 else 0.0
+
+    # ── Skewness / Kurtosis ───────────────────────────────────────
+    skewness = 0.0
+    kurtosis = 0.0
+    if len(bar_returns) > 3:  # noqa: PLR2004
+        if SCIPY_AVAILABLE and _scipy_stats is not None:
+            skewness = float(_scipy_stats.skew(bar_returns))
+            kurtosis = float(_scipy_stats.kurtosis(bar_returns))
+        else:
+            skewness = float(pd.Series(bar_returns).skew())
+            kurtosis = float(pd.Series(bar_returns).kurtosis())
+
+    # ── MAE / MFE ─────────────────────────────────────────────────
+    # Approximate: MAE = avg losing trade magnitude, MFE = avg winning trade magnitude
+    avg_mae = abs(gross_loss / losing_trades) if losing_trades > 0 else 0.0
+    avg_mfe = gross_profit / winning_trades if winning_trades > 0 else 0.0
+
+    # ── Statistical significance (t-test vs 0) ────────────────────
+    trade_returns_arr = np.array([t["net_pnl"] for t in trades])
+    t_stat = p_val = 0.0
+    is_significant = False
+    sample_size = len(trade_returns_arr)
+
+    if sample_size < 100:  # noqa: PLR2004
+        logger.warning(
+            "Backtest significance test: sample_size=%d < 100 — results may not be reliable",
+            sample_size,
+        )
+
+    if sample_size >= 2:  # noqa: PLR2004
+        if SCIPY_AVAILABLE and _scipy_stats is not None:
+            t_result = _scipy_stats.ttest_1samp(trade_returns_arr, popmean=0.0)
+            t_stat = float(t_result.statistic)
+            p_val = float(t_result.pvalue)
+            is_significant = bool(p_val < 0.05)  # noqa: PLR2004
+        else:
+            # Manual t-statistic
+            mean_r = float(np.mean(trade_returns_arr))
+            std_r = float(np.std(trade_returns_arr, ddof=1))
+            if std_r > 0:
+                t_stat = mean_r / (std_r / np.sqrt(sample_size))
+
+    # ── Monte Carlo bootstrap (production-grade) ──────────────────
+    # Uses analytics.monte_carlo for bootstrap resampling with
+    # confidence intervals on Sharpe, drawdown, CAGR, and ruin prob.
+    # Falls back to the internal simple MC if the module is unavailable.
+    try:
+        from analytics.monte_carlo import run_bootstrap
+
+        _mc_result = run_bootstrap(
+            trade_pnls=[t.get("net_pnl", 0.0) for t in trades],
+            initial_capital=initial_equity,
+            n_paths=int(os.getenv("MC_N_PATHS", "5000")),
+            method="iid",
+        )
+        mc = {
+            "mc_median_final": _mc_result.final_equity_ci_95[0],
+            "mc_p5_final": _mc_result.final_equity_ci_95[0],
+            "mc_p95_final": _mc_result.final_equity_ci_95[1],
+            "mc_ruin_probability": _mc_result.ruin_probability,
+            "mc_sharpe_ci_95_lower": _mc_result.sharpe_ci_95[0],
+            "mc_sharpe_ci_95_upper": _mc_result.sharpe_ci_95[1],
+            "mc_max_dd_ci_95_lower": _mc_result.max_dd_ci_95[0],
+            "mc_max_dd_ci_95_upper": _mc_result.max_dd_ci_95[1],
+            "mc_sharpe_positive_fraction": _mc_result.sharpe_positive_fraction,
+            "mc_probability_of_profit": _mc_result.probability_of_profit,
+            "mc_expected_shortfall_5pct": _mc_result.expected_shortfall_5pct,
+            "mc_sharpe_se": _mc_result.sharpe_se,
+            "mc_n_paths": _mc_result.n_paths,
+        }
+    except Exception as _mc_exc:
+        logger.warning("Bootstrap MC failed, using simple MC: %s", _mc_exc)
+        trade_return_fracs = trade_returns_arr / initial_equity
+        mc = run_mc_fallback(trade_return_fracs) if run_mc_fallback is not None else {}
+
+    # ── Regime breakdown ──────────────────────────────────────────
+    return dict(
+        sortino=sortino,
+        calmar=calmar,
+        omega=omega,
+        tail_ratio=tail_ratio,
+        skewness=skewness,
+        kurtosis=kurtosis,
+        avg_mae=avg_mae,
+        avg_mfe=avg_mfe,
+        t_stat=t_stat,
+        p_val=p_val,
+        is_significant=is_significant,
+        sample_size=sample_size,
+        mc=mc,
+    )
+
 class BacktestEngine:
     """
     Event-driven backtesting engine
@@ -855,106 +995,30 @@ class BacktestEngine:
             # Sharpe standard error: 1/sqrt(2*(N-1)) for iid returns
             sharpe_se = float(1.0 / np.sqrt(2.0 * (len(trade_pnls) - 1)))
 
-        # ── Sortino (bar-level — acceptable for downside deviation) ───
-        sortino = 0.0
-        if len(bar_returns) > 0:
-            downside = bar_returns[bar_returns < 0]
-            downside_std = float(np.std(downside)) if len(downside) > 0 else 0.0
-            if downside_std > 0:
-                sortino = float(np.mean(bar_returns) / downside_std * ann_factor)
-
-        # ── Calmar ────────────────────────────────────────────────────
-        annual_return = (1 + total_return) ** (252.0 / max(len(equity_values), 1)) - 1
-        calmar = float(annual_return / max_drawdown) if max_drawdown > 0 else 0.0
-
-        # ── Omega ─────────────────────────────────────────────────────
-        threshold = 0.0
-        gains = bar_returns[bar_returns > threshold] - threshold
-        losses = threshold - bar_returns[bar_returns <= threshold]
-        omega = float(np.sum(gains) / np.sum(losses)) if np.sum(losses) > 0 else float("inf")
-
-        # ── Tail ratio ────────────────────────────────────────────────
-        tail_ratio = 0.0
-        if len(bar_returns) > 0:
-            p95 = abs(float(np.percentile(bar_returns, 95)))
-            p5 = abs(float(np.percentile(bar_returns, 5)))
-            tail_ratio = p95 / p5 if p5 > 0 else 0.0
-
-        # ── Skewness / Kurtosis ───────────────────────────────────────
-        skewness = 0.0
-        kurtosis = 0.0
-        if len(bar_returns) > 3:  # noqa: PLR2004
-            if SCIPY_AVAILABLE and _scipy_stats is not None:
-                skewness = float(_scipy_stats.skew(bar_returns))
-                kurtosis = float(_scipy_stats.kurtosis(bar_returns))
-            else:
-                skewness = float(pd.Series(bar_returns).skew())
-                kurtosis = float(pd.Series(bar_returns).kurtosis())
-
-        # ── MAE / MFE ─────────────────────────────────────────────────
-        # Approximate: MAE = avg losing trade magnitude, MFE = avg winning trade magnitude
-        avg_mae = abs(gross_loss / losing_trades) if losing_trades > 0 else 0.0
-        avg_mfe = gross_profit / winning_trades if winning_trades > 0 else 0.0
-
-        # ── Statistical significance (t-test vs 0) ────────────────────
-        trade_returns_arr = np.array([t["net_pnl"] for t in trades])
-        t_stat = p_val = 0.0
-        is_significant = False
-        sample_size = len(trade_returns_arr)
-
-        if sample_size < 100:  # noqa: PLR2004
-            logger.warning(
-                "Backtest significance test: sample_size=%d < 100 — results may not be reliable",
-                sample_size,
-            )
-
-        if sample_size >= 2:  # noqa: PLR2004
-            if SCIPY_AVAILABLE and _scipy_stats is not None:
-                t_result = _scipy_stats.ttest_1samp(trade_returns_arr, popmean=0.0)
-                t_stat = float(t_result.statistic)
-                p_val = float(t_result.pvalue)
-                is_significant = bool(p_val < 0.05)  # noqa: PLR2004
-            else:
-                # Manual t-statistic
-                mean_r = float(np.mean(trade_returns_arr))
-                std_r = float(np.std(trade_returns_arr, ddof=1))
-                if std_r > 0:
-                    t_stat = mean_r / (std_r / np.sqrt(sample_size))
-
-        # ── Monte Carlo bootstrap (production-grade) ──────────────────
-        # Uses analytics.monte_carlo for bootstrap resampling with
-        # confidence intervals on Sharpe, drawdown, CAGR, and ruin prob.
-        # Falls back to the internal simple MC if the module is unavailable.
-        try:
-            from analytics.monte_carlo import run_bootstrap
-
-            _mc_result = run_bootstrap(
-                trade_pnls=[t.get("net_pnl", 0.0) for t in trades],
-                initial_capital=initial_equity,
-                n_paths=int(os.getenv("MC_N_PATHS", "5000")),
-                method="iid",
-            )
-            mc = {
-                "mc_median_final": _mc_result.final_equity_ci_95[0],
-                "mc_p5_final": _mc_result.final_equity_ci_95[0],
-                "mc_p95_final": _mc_result.final_equity_ci_95[1],
-                "mc_ruin_probability": _mc_result.ruin_probability,
-                "mc_sharpe_ci_95_lower": _mc_result.sharpe_ci_95[0],
-                "mc_sharpe_ci_95_upper": _mc_result.sharpe_ci_95[1],
-                "mc_max_dd_ci_95_lower": _mc_result.max_dd_ci_95[0],
-                "mc_max_dd_ci_95_upper": _mc_result.max_dd_ci_95[1],
-                "mc_sharpe_positive_fraction": _mc_result.sharpe_positive_fraction,
-                "mc_probability_of_profit": _mc_result.probability_of_profit,
-                "mc_expected_shortfall_5pct": _mc_result.expected_shortfall_5pct,
-                "mc_sharpe_se": _mc_result.sharpe_se,
-                "mc_n_paths": _mc_result.n_paths,
-            }
-        except Exception as _mc_exc:
-            logger.warning("Bootstrap MC failed, using simple MC: %s", _mc_exc)
-            trade_return_fracs = trade_returns_arr / initial_equity
-            mc = self.run_monte_carlo_simulation(trade_return_fracs)
-
-        # ── Regime breakdown ──────────────────────────────────────────
+        stats = _compute_statistical_metrics(
+            bar_returns=bar_returns,
+            trade_pnls=trade_pnls,
+            total_return=total_return,
+            equity_values=equity_values,
+            initial_equity=initial_equity,
+            trades=trades,
+            ann_factor=ann_factor,
+            max_drawdown=max_drawdown,
+            run_mc_fallback=self.run_monte_carlo_simulation,
+        )
+        sortino = stats["sortino"]
+        calmar = stats["calmar"]
+        omega = stats["omega"]
+        tail_ratio = stats["tail_ratio"]
+        skewness = stats["skewness"]
+        kurtosis = stats["kurtosis"]
+        avg_mae = stats["avg_mae"]
+        avg_mfe = stats["avg_mfe"]
+        t_stat = stats["t_stat"]
+        p_val = stats["p_val"]
+        is_significant = stats["is_significant"]
+        sample_size = stats["sample_size"]
+        mc = stats["mc"]
         regime_breakdown = self._compute_regime_breakdown(trades, self.broker.equity_curve)
 
         # ── Aggregate metrics dict ────────────────────────────────────
