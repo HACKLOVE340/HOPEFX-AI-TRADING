@@ -452,7 +452,8 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     if stamp_path.exists():
         try:
             existing = json.loads(stamp_path.read_text())
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to parse OANDA stamp file: %s, using empty config", exc)
             existing = {}
 
         # If a real account is already stamped, preserve the clock start time.
@@ -477,7 +478,8 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
             from datetime import datetime as _dt
 
             started_utc = _dt.fromisoformat(started_utc_str)
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to parse started_utc timestamp '%s': %s, using now", started_utc_str, exc)
             started_utc = now
     else:
         started_utc = now
