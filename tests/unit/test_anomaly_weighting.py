@@ -74,7 +74,7 @@ class TestAnomalyWeighter:
         X = np.random.default_rng(3).normal(0, 1, (200, 5))
         aw.fit(X)
         w = aw.sample_weights(X, min_weight=0.1)
-        assert (w >= 0.1).all() and (w <= 1.0).all()  # noqa: PLR2004
+        assert (w >= 0.1).all() and (w <= 1.0).all()
 
     def test_flag_returns_bool_array(self):
         aw = self._cls(contamination=0.05)
@@ -114,9 +114,7 @@ class TestAnomalyWeighter:
         path = tmp_path / "aw.pkl"
         aw.save(path)
         loaded = self._cls.load(path)
-        np.testing.assert_allclose(
-            aw.decision_scores(X), loaded.decision_scores(X), rtol=1e-5
-        )
+        np.testing.assert_allclose(aw.decision_scores(X), loaded.decision_scores(X), rtol=1e-5)
 
 
 # ── AnomalyWeightStore ────────────────────────────────────────────────────────
@@ -175,22 +173,20 @@ class TestAnomalyWeightStore:
         from unittest import mock
 
         # Patch decision_scores to return a very anomalous score
-        with mock.patch.object(
-            mock_weighter, "decision_scores", return_value=np.array([-10.0])
-        ):
+        with mock.patch.object(mock_weighter, "decision_scores", return_value=np.array([-10.0])):
             store._weighter = mock_weighter
             store._fitted = True
             df = _make_ohlcv(100)
             weight = store.update_and_score(df)
-        assert weight == 0.3  # noqa: PLR2004
+        assert weight == 0.3
 
     def test_extract_features_returns_correct_shape(self):
         df = _make_ohlcv(100)
         feat = self._cls._extract_features(df)
         assert feat is not None
         # Feature count may vary as the pipeline evolves; verify rows and min columns
-        assert feat.shape[0] == 100  # noqa: PLR2004
-        assert feat.shape[1] >= 5  # noqa: PLR2004
+        assert feat.shape[0] == 100
+        assert feat.shape[1] >= 5
 
     def test_extract_features_no_nan(self):
         df = _make_ohlcv(100)
@@ -231,16 +227,16 @@ class TestAnomalyWeightingSignalEngine:
         prob_in = 0.8
         weight = 0.5
         expected = 0.5 + (prob_in - 0.5) * weight
-        assert abs(expected - 0.65) < 1e-9  # noqa: PLR2004
+        assert abs(expected - 0.65) < 1e-9
 
     def test_anomaly_weight_one_leaves_prob_unchanged(self):
         prob_in = 0.75
         weight = 1.0
         result = 0.5 + (prob_in - 0.5) * weight
-        assert abs(result - prob_in) < 1e-9  # noqa: PLR2004
+        assert abs(result - prob_in) < 1e-9
 
     def test_anomaly_weight_zero_returns_neutral(self):
         prob_in = 0.9
         weight = 0.0
         result = 0.5 + (prob_in - 0.5) * weight
-        assert abs(result - 0.5) < 1e-9  # noqa: PLR2004
+        assert abs(result - 0.5) < 1e-9

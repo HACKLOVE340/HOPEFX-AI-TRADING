@@ -71,9 +71,7 @@ if _FIX_BACKEND == "none":
     except ImportError:
         simplefix = None  # type: ignore
         logger.warning(
-            "fix_adapter: no FIX library found. "
-            "Install quickfix (preferred) or simplefix for live FIX execution. "
-            "On Ubuntu: sudo apt-get install libquickfix-dev && pip install quickfix==1.15.1",
+            "fix_adapter: no FIX library found. Install quickfix or pyfixmsg for live execution.",
         )
 
 
@@ -182,8 +180,7 @@ class CircuitBreaker:
         """Raise if circuit is open."""
         if self.is_open:
             raise RuntimeError(
-                f"FIX circuit breaker is OPEN (latency > {self.threshold_ms} ms). "
-                "Order flow suspended.",
+                f"FIX circuit breaker is OPEN (latency > {self.threshold_ms} ms). Order flow suspended.",
             )
 
 
@@ -276,18 +273,18 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
     def _log_logout(self, message: Any, session_id: Any) -> None:
         """Log an inbound Logout message with its optional reason text."""
         text = _get_fix_field(message, fix.Text(), "fix.fromAdmin: Logout Text")
-        logger.warning(
-            "fix.fromAdmin: Logout received session=%s text=%r", session_id, text
-        )
+        logger.warning("fix.fromAdmin: Logout received session=%s text=%r", session_id, text)
 
     def _log_session_reject(self, message: Any) -> None:
         """Log an inbound session-level Reject with ref_seq, reason, and text."""
-        ref_seq = _get_fix_field(message, fix.RefSeqNum(),           "fix.fromAdmin: Reject RefSeqNum")
-        reason  = _get_fix_field(message, fix.SessionRejectReason(), "fix.fromAdmin: Reject SessionRejectReason")
-        text    = _get_fix_field(message, fix.Text(),                "fix.fromAdmin: Reject Text")
+        ref_seq = _get_fix_field(message, fix.RefSeqNum(), "fix.fromAdmin: Reject RefSeqNum")
+        reason = _get_fix_field(message, fix.SessionRejectReason(), "fix.fromAdmin: Reject SessionRejectReason")
+        text = _get_fix_field(message, fix.Text(), "fix.fromAdmin: Reject Text")
         logger.error(
             "fix.fromAdmin: session Reject ref_seq=%s reason=%s text=%r",
-            ref_seq, reason, text,
+            ref_seq,
+            reason,
+            text,
         )
 
     def fromAdmin(self, message, session_id):
@@ -339,37 +336,38 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         Returns a plain dict so _handle_exec_report stays under 20 lines.
         Raises on any missing required field — callers catch and reject.
         """
+
         def _req(field_obj: Any) -> Any:
             """Fetch a required field; raises if absent."""
             message.getField(field_obj)
             return field_obj
 
-        cl_ord_id_f  = _req(fix.ClOrdID())
-        order_id_f   = _req(fix.OrderID())
-        exec_type_f  = _req(fix.ExecType())
-        symbol_f     = _req(fix.Symbol())
-        side_f       = _req(fix.Side())
-        last_qty_f   = _req(fix.LastQty())
-        avg_px_f     = _req(fix.AvgPx())
+        cl_ord_id_f = _req(fix.ClOrdID())
+        order_id_f = _req(fix.OrderID())
+        exec_type_f = _req(fix.ExecType())
+        symbol_f = _req(fix.Symbol())
+        side_f = _req(fix.Side())
+        last_qty_f = _req(fix.LastQty())
+        avg_px_f = _req(fix.AvgPx())
         leaves_qty_f = _req(fix.LeavesQty())
-        cum_qty_f    = _req(fix.CumQty())
+        cum_qty_f = _req(fix.CumQty())
 
         return {
-            "cl_ord_id":  cl_ord_id_f.getString(),
-            "order_id":   order_id_f.getString(),
-            "exec_type":  FIXExecType(exec_type_f.getValue()),
-            "symbol":     symbol_f.getString(),
-            "side":       FIXSide(side_f.getValue()),
+            "cl_ord_id": cl_ord_id_f.getString(),
+            "order_id": order_id_f.getString(),
+            "exec_type": FIXExecType(exec_type_f.getValue()),
+            "symbol": symbol_f.getString(),
+            "side": FIXSide(side_f.getValue()),
             "filled_qty": float(last_qty_f.getValue()),
-            "avg_px":     float(avg_px_f.getValue()),
+            "avg_px": float(avg_px_f.getValue()),
             "leaves_qty": float(leaves_qty_f.getValue()),
-            "cum_qty":    float(cum_qty_f.getValue()),
+            "cum_qty": float(cum_qty_f.getValue()),
         }
 
     def _handle_exec_report(self, message) -> None:
         cl_ord_id = "<unknown>"
         try:
-            fields    = self._extract_exec_report_fields(message)
+            fields = self._extract_exec_report_fields(message)
             cl_ord_id = fields["cl_ord_id"]
 
             latency_ms = 0.0
@@ -395,7 +393,8 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
         except Exception as exc:
             logger.exception(
                 "fix_adapter._handle_exec_report error cl_ord_id=%s: %s",
-                cl_ord_id, exc,
+                cl_ord_id,
+                exc,
             )
             self._reject_pending(cl_ord_id, exc)
 
@@ -407,28 +406,26 @@ class _QuickfixApp(_QuickfixBase):  # type: ignore[misc]
             message.getField(cl_ord_id_f)
             cl_ord_id = cl_ord_id_f.getString()
 
-            reason_code = _get_fix_field(
-                message, fix.CxlRejReason(), "fix_adapter.OrderCancelReject: CxlRejReason"
-            )
-            text = _get_fix_field(
-                message, fix.Text(), "fix_adapter.OrderCancelReject: Text"
-            )
+            reason_code = _get_fix_field(message, fix.CxlRejReason(), "fix_adapter.OrderCancelReject: CxlRejReason")
+            text = _get_fix_field(message, fix.Text(), "fix_adapter.OrderCancelReject: Text")
 
             logger.error(
                 "fix_adapter.OrderCancelReject cl_ord_id=%s reason=%s text=%r",
-                cl_ord_id, reason_code, text,
+                cl_ord_id,
+                reason_code,
+                text,
             )
             self._reject_pending(
                 cl_ord_id,
                 RuntimeError(
-                    f"Order cancel/replace rejected by broker: cl_ord_id={cl_ord_id} "
-                    f"reason={reason_code} text={text!r}"
+                    f"Order cancel/replace rejected by broker: cl_ord_id={cl_ord_id} reason={reason_code} text={text!r}"
                 ),
             )
         except Exception as exc:
             logger.exception(
                 "fix_adapter._handle_order_cancel_reject error cl_ord_id=%s: %s",
-                cl_ord_id, exc,
+                cl_ord_id,
+                exc,
             )
 
     def _reject_pending(self, cl_ord_id: str, exc: Exception) -> None:
@@ -580,10 +577,7 @@ class FIXAdapter:
                 "Set FIX_TARGET_COMP_ID to the TargetCompID from your broker's FIX spec."
             )
         if host in self._PLACEHOLDER_VALUES or host.startswith("<CHANGE_ME"):
-            errors.append(
-                f"FIX_HOST is a placeholder ('{host}'). "
-                "Set FIX_HOST to your broker's FIX gateway hostname."
-            )
+            errors.append(f"FIX_HOST is a placeholder ('{host}'). Set FIX_HOST to your broker's FIX gateway hostname.")
 
         for msg in errors:
             logger.critical("fix_adapter credential error: %s", msg)
@@ -643,6 +637,10 @@ class FIXAdapter:
     def stop(self) -> None:
         """Stop the FIX session."""
         self._running = False
+        # Signal the heartbeat Event.wait() to wake up immediately.
+        hb_stop = getattr(self, "_hb_stop_event", None)
+        if hb_stop is not None:
+            hb_stop.set()
         if self._initiator:
             try:
                 self._initiator.stop()
@@ -734,8 +732,7 @@ class FIXAdapter:
             sock.connect((self.host, self.port))
         except OSError as exc:
             raise RuntimeError(
-                f"fix_adapter._start_pyfixmsg: cannot connect to "
-                f"{self.host}:{self.port} — {exc}",
+                f"fix_adapter._start_pyfixmsg: cannot connect to {self.host}:{self.port} — {exc}",
             ) from exc
 
         sock.settimeout(None)  # switch to blocking for the reader thread
@@ -880,9 +877,18 @@ class FIXAdapter:
     # ------------------------------------------------------------------
 
     def _heartbeat_loop(self) -> None:
-        """Log heartbeat every HEARTBEAT_INTERVAL seconds and check circuit breaker."""
+        """Log heartbeat every HEARTBEAT_INTERVAL seconds and check circuit breaker.
+
+        Uses threading.Event.wait() instead of time.sleep() so the GIL is
+        released during the wait and stop() can interrupt the interval promptly.
+        """
+        _stop_event = threading.Event()
+        # Store on self so stop() can set it for a clean interrupt.
+        self._hb_stop_event = _stop_event
         while self._running:
-            time.sleep(self.HEARTBEAT_INTERVAL)
+            _stop_event.wait(timeout=self.HEARTBEAT_INTERVAL)
+            if not self._running:
+                break
             status = "OPEN" if self.circuit_breaker.is_open else "CLOSED"
             logger.debug(
                 "fix_adapter.heartbeat backend=%s circuit=%s",
@@ -1067,15 +1073,10 @@ class FIXAdapter:
 
         if not future.done():
             try:
-                loop = (
-                    future.get_loop()
-                    if hasattr(future, "get_loop")
-                    else future.get_event_loop()
-                )
+                loop = future.get_loop() if hasattr(future, "get_loop") else future.get_event_loop()
                 if report.exec_type == FIXExecType.REJECTED:
                     exc = RuntimeError(
-                        f"FIX order rejected by broker: cl_ord_id={report.cl_ord_id} "
-                        f"text={report.text!r}",
+                        f"FIX order rejected by broker: cl_ord_id={report.cl_ord_id} text={report.text!r}",
                     )
                     loop.call_soon_threadsafe(future.set_exception, exc)
                 else:
@@ -1099,9 +1100,7 @@ class FIXAdapter:
         async def _route(order_dict: dict) -> dict:
             fix_order = FIXOrder(
                 symbol=order_dict["symbol"],
-                side=FIXSide.BUY
-                if order_dict.get("side", "BUY") == "BUY"
-                else FIXSide.SELL,
+                side=FIXSide.BUY if order_dict.get("side", "BUY") == "BUY" else FIXSide.SELL,
                 quantity=float(order_dict.get("quantity", 1.0)),
                 ord_type=FIXOrdType.MARKET,
                 price=order_dict.get("price"),

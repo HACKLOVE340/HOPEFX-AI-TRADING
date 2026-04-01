@@ -53,6 +53,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -82,9 +83,7 @@ class PaperTradingGate:
     """
 
     def __init__(self, state_path: str | None = None) -> None:
-        self._state_path = Path(
-            state_path or os.getenv("PAPER_GATE_STATE_PATH", _DEFAULT_STATE_PATH)
-        )
+        self._state_path = Path(state_path or os.getenv("PAPER_GATE_STATE_PATH", _DEFAULT_STATE_PATH))
         self._state: dict = self._load_state()
 
     # ── State persistence ─────────────────────────────────────────────────────
@@ -108,9 +107,7 @@ class PaperTradingGate:
                 default.update(loaded)
                 logger.debug("PaperTradingGate: state loaded from %s", self._state_path)
             except Exception as exc:
-                logger.warning(
-                    "PaperTradingGate: state load failed (%s), using defaults", exc
-                )
+                logger.warning("PaperTradingGate: state load failed (%s), using defaults", exc)
         return default
 
     def _save_state(self) -> None:
@@ -224,15 +221,11 @@ class PaperTradingGate:
         """
         # Time gate
         if self.run_start is None:
-            return False, (
-                "Run start not set. Call set_run_start() or set "
-                "OANDA_PAPER_RUN_START_UTC."
-            )
+            return False, ("Run start not set. Call set_run_start() or set OANDA_PAPER_RUN_START_UTC.")
         if self.elapsed_days < PHASE2_MIN_DAYS:
             remaining = PHASE2_MIN_DAYS - self.elapsed_days
             return False, (
-                f"Phase 2: {self.elapsed_days} days elapsed, "
-                f"{remaining} days remaining (need {PHASE2_MIN_DAYS})."
+                f"Phase 2: {self.elapsed_days} days elapsed, {remaining} days remaining (need {PHASE2_MIN_DAYS})."
             )
 
         # Sharpe gate (only checked if Sharpe has been recorded)
@@ -242,8 +235,7 @@ class PaperTradingGate:
             drop = float(sb) - float(sa)
             if drop > PHASE2_MAX_SHARPE_DROP:
                 return False, (
-                    f"Phase 2 Sharpe gate failed: drop={drop:.3f} "
-                    f"({sb:.3f}→{sa:.3f}), max={PHASE2_MAX_SHARPE_DROP}."
+                    f"Phase 2 Sharpe gate failed: drop={drop:.3f} ({sb:.3f}→{sa:.3f}), max={PHASE2_MAX_SHARPE_DROP}."
                 )
 
         return True, (f"Phase 2 gate passed: {self.elapsed_days} days elapsed.")
@@ -256,27 +248,18 @@ class PaperTradingGate:
         """
         # Fill count gate
         if self.fill_count < PHASE3_MIN_FILLS:
-            return False, (
-                f"Phase 3: {self.fill_count} fills, " f"need >= {PHASE3_MIN_FILLS}."
-            )
+            return False, (f"Phase 3: {self.fill_count} fills, need >= {PHASE3_MIN_FILLS}.")
 
         # Time gate
         if self.run_start is None:
-            return False, (
-                "Run start not set. Call set_run_start() or set "
-                "OANDA_PAPER_RUN_START_UTC."
-            )
+            return False, ("Run start not set. Call set_run_start() or set OANDA_PAPER_RUN_START_UTC.")
         if self.elapsed_days < PHASE3_MIN_DAYS:
             remaining = PHASE3_MIN_DAYS - self.elapsed_days
             return False, (
-                f"Phase 3: {self.elapsed_days} days elapsed, "
-                f"{remaining} days remaining (need {PHASE3_MIN_DAYS})."
+                f"Phase 3: {self.elapsed_days} days elapsed, {remaining} days remaining (need {PHASE3_MIN_DAYS})."
             )
 
-        return True, (
-            f"Phase 3 gate passed: {self.elapsed_days} days elapsed, "
-            f"{self.fill_count} fills."
-        )
+        return True, (f"Phase 3 gate passed: {self.elapsed_days} days elapsed, {self.fill_count} fills.")
 
     def status(self) -> dict:
         """Return a full status dict for health-check endpoints."""
@@ -391,13 +374,9 @@ def _cli() -> None:
 
     if args.record_sharpe:
         gate.record_sharpe(before=args.record_sharpe[0], after=args.record_sharpe[1])
-        print(
-            f"Sharpe recorded: {args.record_sharpe[0]:.3f} → {args.record_sharpe[1]:.3f}"
-        )
+        print(f"Sharpe recorded: {args.record_sharpe[0]:.3f} → {args.record_sharpe[1]:.3f}")
 
-    if args.status or not any(
-        [args.set_start, args.record_fill is not None, args.record_sharpe]
-    ):
+    if args.status or not any([args.set_start, args.record_fill is not None, args.record_sharpe]):
         gate.print_status()
 
 

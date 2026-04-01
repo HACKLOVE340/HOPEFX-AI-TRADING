@@ -10,6 +10,7 @@ Direct bank transfer handling for Nigerian banks.
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 import logging
@@ -52,9 +53,7 @@ class BankTransferClient:
             logger.error(f"Error validating account: {e}")
             raise
 
-    def initiate_transfer(
-        self, user_id: str, amount: Decimal, bank_code: str, account_number: str
-    ) -> dict:
+    def initiate_transfer(self, user_id: str, amount: Decimal, bank_code: str, account_number: str) -> dict:
         """Initiate bank transfer"""
         try:
             transfer_id = f"BT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"

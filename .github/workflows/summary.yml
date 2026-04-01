@@ -23,7 +23,7 @@ jobs:
         # Pinned to SHA for supply-chain safety (tag: v1)
         uses: actions/ai-inference@b81b2afb8390ee6839b494a404766bef6493c7d9  # v1
         with:
-          # Issue title/body are untrusted — the prompt instructs the model to
+          # Issue title/body are untrusted - the prompt instructs the model to
           # only summarise and not follow any embedded instructions.
           prompt: |
             You are summarizing a GitHub issue. The title and body below are

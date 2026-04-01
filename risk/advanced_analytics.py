@@ -34,6 +34,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -609,10 +610,7 @@ class AdvancedRiskAnalytics:
                 # Fall back to overlapping if too few blocks
                 method = "overlapping"
             else:
-                blocks = [
-                    np.sum(returns[i * time_horizon : (i + 1) * time_horizon])
-                    for i in range(n_blocks)
-                ]
+                blocks = [np.sum(returns[i * time_horizon : (i + 1) * time_horizon]) for i in range(n_blocks)]
                 multiday_returns = np.array(blocks)
 
         if method == "overlapping":
@@ -630,11 +628,7 @@ class AdvancedRiskAnalytics:
                 )
                 var_1d = np.percentile(returns, (1 - confidence_level) * 100)
                 var_scaled = var_1d * np.sqrt(time_horizon)
-                val = (
-                    abs(var_scaled * portfolio_value)
-                    if portfolio_value
-                    else abs(var_scaled)
-                )
+                val = abs(var_scaled * portfolio_value) if portfolio_value else abs(var_scaled)
                 return VaRResult(
                     var_value=val,
                     confidence_level=confidence_level,
@@ -648,18 +642,11 @@ class AdvancedRiskAnalytics:
                     ),
                 )
             multiday_returns = np.array(
-                [
-                    np.sum(returns[i : i + time_horizon])
-                    for i in range(len(returns) - time_horizon + 1)
-                ],
+                [np.sum(returns[i : i + time_horizon]) for i in range(len(returns) - time_horizon + 1)],
             )
 
         var_percentile = np.percentile(multiday_returns, (1 - confidence_level) * 100)
-        val = (
-            abs(var_percentile * portfolio_value)
-            if portfolio_value
-            else abs(var_percentile)
-        )
+        val = abs(var_percentile * portfolio_value) if portfolio_value else abs(var_percentile)
 
         return VaRResult(
             var_value=val,
@@ -745,10 +732,7 @@ class AdvancedRiskAnalytics:
                 # Overlapping t-day windows on EWMA-scaled returns.
                 # No sqrt(t) assumption — captures autocorrelation and fat tails.
                 multi_day = np.array(
-                    [
-                        np.sum(scaled_returns[i : i + t])
-                        for i in range(len(scaled_returns) - t + 1)
-                    ],
+                    [np.sum(scaled_returns[i : i + t]) for i in range(len(scaled_returns) - t + 1)],
                 )
                 var_scaled = np.percentile(multi_day, (1 - confidence_level) * 100)
             else:
@@ -849,7 +833,7 @@ class AdvancedRiskAnalytics:
         """
         cl: float = confidence or confidence_level or self.var_confidence
 
-        returns_arr   = np.asarray(returns, dtype=float)
+        returns_arr = np.asarray(returns, dtype=float)
         var_threshold = np.percentile(returns_arr, (1 - cl) * 100)
 
         # Calculate expected shortfall (average of returns below VaR)
@@ -913,9 +897,7 @@ class AdvancedRiskAnalytics:
         final_returns = (final_values - initial_value) / initial_value
 
         fr: NDArray[np.float64] = np.asarray(final_returns, dtype=np.float64)
-        paths: NDArray[np.float64] | None = (
-            np.asarray(cumulative_returns, dtype=np.float64) if return_paths else None
-        )
+        paths: NDArray[np.float64] | None = np.asarray(cumulative_returns, dtype=np.float64) if return_paths else None
         result = MonteCarloResult(
             expected_return=float(np.mean(fr)),
             expected_volatility=float(np.std(fr)),
@@ -988,9 +970,7 @@ class AdvancedRiskAnalytics:
         initial_portfolio_value = np.sum(values)
 
         # Calculate metrics
-        portfolio_returns = (
-            final_portfolio_values - initial_portfolio_value
-        ) / initial_portfolio_value
+        portfolio_returns = (final_portfolio_values - initial_portfolio_value) / initial_portfolio_value
 
         return {
             "initial_value": initial_portfolio_value,
@@ -1252,9 +1232,7 @@ class AdvancedRiskAnalytics:
         annual_return = float(np.mean(returns) * 252)
 
         ec: NDArray[np.float64] = (
-            equity_curve
-            if equity_curve is not None
-            else np.asarray(np.cumprod(1 + returns), dtype=np.float64)
+            equity_curve if equity_curve is not None else np.asarray(np.cumprod(1 + returns), dtype=np.float64)
         )
 
         analysis = self.analyze_drawdowns(ec)
@@ -1376,9 +1354,7 @@ class AdvancedRiskAnalytics:
         sigma2_t = self._garch_current_variance(arr, omega, alpha, beta)
 
         # ── h-step ahead variance forecast (sum of conditional variances) ────
-        sigma2_forecast = self._garch_hstep_variance(
-            sigma2_t, omega, alpha, beta, time_horizon
-        )
+        sigma2_forecast = self._garch_hstep_variance(sigma2_t, omega, alpha, beta, time_horizon)
 
         sigma_forecast = float(np.sqrt(sigma2_forecast))
         alpha_level = 1.0 - confidence_level
@@ -1450,13 +1426,9 @@ class AdvancedRiskAnalytics:
         var_multiday_10 = None
         var_garch_10 = None
         if len(returns) >= 30:  # noqa: PLR2004
-            var_multiday_10 = self.calculate_var_multiday(
-                returns, time_horizon=10, portfolio_value=portfolio_value
-            )
+            var_multiday_10 = self.calculate_var_multiday(returns, time_horizon=10, portfolio_value=portfolio_value)
         if len(returns) >= 100:  # noqa: PLR2004
-            var_garch_10 = self.calculate_var_garch(
-                returns, time_horizon=10, portfolio_value=portfolio_value
-            )
+            var_garch_10 = self.calculate_var_garch(returns, time_horizon=10, portfolio_value=portfolio_value)
 
         # Drawdown analysis
         drawdown = self.analyze_drawdowns(ec)
@@ -1513,6 +1485,7 @@ class AdvancedRiskAnalytics:
         result = self.calculate_sharpe_ratio(np.asarray(returns, dtype=float))
         self.risk_free_rate = old_rfr
         return float(result)
+
 
 # Alias expected by tests
 RiskAnalytics = AdvancedRiskAnalytics

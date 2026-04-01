@@ -49,9 +49,7 @@ class TestStripeWebhook:
     def test_webhook_acks_when_stripe_unavailable(self, client):
         """When stripe package is missing, webhook must still return 200 (ack to avoid retries)."""
         mock_mgr = MagicMock()
-        mock_mgr.handle_stripe_webhook.side_effect = RuntimeError(
-            "stripe not installed"
-        )
+        mock_mgr.handle_stripe_webhook.side_effect = RuntimeError("stripe not installed")
 
         with patch("api.billing._get_subscription_manager", return_value=mock_mgr):
             res = client.post(
@@ -60,7 +58,7 @@ class TestStripeWebhook:
                 headers={"stripe-signature": "t=123,v1=abc"},
             )
             # Must ack (200) even when stripe package missing
-            assert res.status_code == 200  # noqa: PLR2004
+            assert res.status_code == 200
             assert res.json().get("received") is True
 
     def test_webhook_processes_valid_event(self, client):
@@ -74,7 +72,7 @@ class TestStripeWebhook:
                 content=b'{"type":"checkout.session.completed","data":{}}',
                 headers={"stripe-signature": "t=123,v1=abc"},
             )
-            assert res.status_code == 200  # noqa: PLR2004
+            assert res.status_code == 200
             assert res.json().get("received") is True
 
 

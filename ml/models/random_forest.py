@@ -79,8 +79,7 @@ class RandomForestTradingClassifier(BaseMLModel):
             )
 
             self.logger.info(
-                f"Random Forest built with {self.n_estimators} trees, "
-                f"max_depth={self.max_depth}",
+                f"Random Forest built with {self.n_estimators} trees, max_depth={self.max_depth}",
             )
 
         except Exception as e:
@@ -155,9 +154,7 @@ class RandomForestTradingClassifier(BaseMLModel):
             # Feature importance
             feature_importance = self.get_feature_importance_dict()
             metrics["top_features"] = dict(
-                sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)[
-                    :10
-                ],
+                sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)[:10],
             )
 
             # Store training history

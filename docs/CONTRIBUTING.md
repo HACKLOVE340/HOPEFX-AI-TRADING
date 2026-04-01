@@ -2,7 +2,7 @@
 
 > HOPEFX AI Trading is a paid subscription platform licensed under AGPL-3.0.
 > Read this document fully before opening a pull request.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 
@@ -342,4 +342,4 @@ for critical issues. See [SECURITY.md](SECURITY.md) for the full disclosure poli
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-04-01*

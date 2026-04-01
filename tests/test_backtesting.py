@@ -42,7 +42,7 @@ class TestDataGenerator:
         data = gen.generate()
 
         closes = [d["close"] for d in data]
-        assert all(1800 <= c <= 2200 for c in closes)  # noqa: PLR2004
+        assert all(1800 <= c <= 2200 for c in closes)
 
     def test_ohlc_consistency(self):
         """Test OHLC consistency."""
@@ -100,8 +100,8 @@ class TestBacktestEngine:
 
     def test_initial_state(self):
         """Test initial engine state."""
-        assert self.engine.initial_capital == 10000.0  # noqa: PLR2004
-        assert self.engine.capital == 10000.0  # noqa: PLR2004
+        assert self.engine.initial_capital == 10000.0
+        assert self.engine.capital == 10000.0
         assert len(self.engine.equity_curve) == 0
 
     def test_run_backtest(self):
@@ -133,9 +133,7 @@ class TestBacktestEngine:
 
     def test_no_trades_with_small_data(self):
         """Test behavior with insufficient data (fewer candles than slow_period)."""
-        gen = XAUUSDDataGenerator(
-            days=5, candles_per_day=1
-        )  # 5 candles < slow_period=20
+        gen = XAUUSDDataGenerator(days=5, candles_per_day=1)  # 5 candles < slow_period=20
         data = gen.generate()
         strategy = MovingAverageCrossover(fast_period=10, slow_period=20)
         engine = BacktestEngine(data, strategy, initial_capital=10000.0)

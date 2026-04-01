@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 from typing import Any
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from dataclasses import dataclass
 from enum import Enum
@@ -93,9 +94,7 @@ class TestDataGenerator:
         return df
 
     @staticmethod
-    def generate_ticks(
-        n: int = 1000, base_price: float = 1950.0, spread: float = 0.05
-    ) -> list[TickData]:
+    def generate_ticks(n: int = 1000, base_price: float = 1950.0, spread: float = 0.05) -> list[TickData]:
         """Generate synthetic tick data"""
         np.random.seed(42)
 
@@ -198,13 +197,9 @@ class UnitTests:
         if not COMPONENTS_AVAILABLE:
             return
 
-        cost_model = TransactionCostModel(
-            commission_per_lot=7.0, spread_markup_bps=0.8, slippage_model="square_root"
-        )
+        cost_model = TransactionCostModel(commission_per_lot=7.0, spread_markup_bps=0.8, slippage_model="square_root")
 
-        costs = cost_model.total_cost(
-            order_size=100000, price=1950.0, volatility=0.001, volume=10000
-        )
+        costs = cost_model.total_cost(order_size=100000, price=1950.0, volatility=0.001, volume=10000)
 
         assert costs["commission"] == 7.0  # nosec B101  # noqa: PLR2004
         assert costs["spread_cost"] > 0  # nosec B101
@@ -313,9 +308,7 @@ class IntegrationTests:
         ticks = TestDataGenerator.generate_ticks(n=500)
 
         # Initialize engine
-        engine = EnhancedBacktestEngine(
-            initial_capital=100000, cost_model=TransactionCostModel(), parallel=False
-        )
+        engine = EnhancedBacktestEngine(initial_capital=100000, cost_model=TransactionCostModel(), parallel=False)
 
         # Run simple strategy
         position = 0
@@ -353,9 +346,7 @@ class IntegrationTests:
 
         # Add mock providers
         for i in range(3):
-            aggregator.add_provider(
-                MockProvider(volatility=0.0002 + i * 0.0001, drift=0.00001 * (i - 1))
-            )
+            aggregator.add_provider(MockProvider(volatility=0.0002 + i * 0.0001, drift=0.00001 * (i - 1)))
 
         # Collect ticks
         received_ticks = []
@@ -385,9 +376,7 @@ class IntegrationTests:
         df = TestDataGenerator.generate_ohlcv(n=1000)
 
         # Initialize predictor
-        predictor = EnhancedMLPredictor(
-            sequence_length=60, prediction_horizon=5, confidence_threshold=0.6
-        )
+        predictor = EnhancedMLPredictor(sequence_length=60, prediction_horizon=5, confidence_threshold=0.6)
 
         # Build ensemble (lightweight for testing)
         predictor.build_ensemble(["random_forest"])

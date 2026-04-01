@@ -36,6 +36,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -282,9 +283,11 @@ class MacroFeed:
 
         Keys are prefixed with 'macro_' to avoid collisions with OHLCV features.
         Missing values are filled with 0.0 so the feature vector stays fixed-width.
+
+        Includes WGC gold demand series from MacroStore when available.
         """
         snap = self.latest_snapshot()
-        return {
+        features: dict[str, float] = {
             "macro_dxy": snap.get("dxy") or 0.0,
             "macro_yield_10y": snap.get("yield_10y") or 0.0,
             "macro_yield_2y": snap.get("yield_2y") or 0.0,
@@ -292,6 +295,34 @@ class MacroFeed:
             "macro_cpi_yoy": snap.get("cpi_yoy_pct") or 0.0,
             "macro_regime_score": snap.get("macro_regime_score") or 50.0,
         }
+
+        # Merge WGC series from MacroStore (latest values, forward-filled)
+        try:
+            from ml.macro_store import macro_store
+
+            store_snap = macro_store.snapshot()
+            wgc_keys = [
+                "wgc_total_demand",
+                "wgc_investment",
+                "wgc_central_bank",
+                "wgc_jewellery",
+                "wgc_etf_flow",
+            ]
+            for key in wgc_keys:
+                info = store_snap.get(key)
+                features[f"macro_{key}"] = float(info["value"]) if info else 0.0
+        except Exception:
+            # MacroStore unavailable — WGC features default to 0.0
+            for key in [
+                "wgc_total_demand",
+                "wgc_investment",
+                "wgc_central_bank",
+                "wgc_jewellery",
+                "wgc_etf_flow",
+            ]:
+                features.setdefault(f"macro_{key}", 0.0)
+
+        return features
 
     async def refresh_async(self) -> dict[str, Any]:
         """Async version of refresh() — preferred in FastAPI context."""
@@ -321,9 +352,7 @@ class MacroFeed:
                 if cpi_prev > 0:
                     cpi_yoy = round((cpi_now - cpi_prev) / cpi_prev * 100, 2)
             except Exception as exc:
-                logger.warning(
-                    "MacroFeed.refresh_async: CPI YoY calculation failed: %s", exc
-                )
+                logger.warning("MacroFeed.refresh_async: CPI YoY calculation failed: %s", exc)
 
         score = _macro_regime_score(dxy, y10, spread, cpi_yoy)
         snapshot = {

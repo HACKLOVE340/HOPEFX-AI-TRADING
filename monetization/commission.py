@@ -12,6 +12,7 @@ Commissions are charged based on subscription tier (0.1% - 0.5% per trade).
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum
@@ -90,9 +91,7 @@ class Commission:
             "currency": self.currency,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
-            "collected_at": self.collected_at.isoformat()
-            if self.collected_at
-            else None,
+            "collected_at": self.collected_at.isoformat() if self.collected_at else None,
         }
 
 
@@ -167,13 +166,9 @@ class CommissionTracker:
     def get_user_commissions(self, user_id: str) -> list[Commission]:
         """Get all commissions for a user"""
         commission_ids = self._user_commissions.get(user_id, [])
-        return [
-            self._commissions[cid] for cid in commission_ids if cid in self._commissions
-        ]
+        return [self._commissions[cid] for cid in commission_ids if cid in self._commissions]
 
-    def get_user_total_commissions(
-        self, user_id: str, status: CommissionStatus | None = None
-    ) -> Decimal:
+    def get_user_total_commissions(self, user_id: str, status: CommissionStatus | None = None) -> Decimal:
         """Get total commissions for a user"""
         commissions = self.get_user_commissions(user_id)
 
@@ -183,33 +178,21 @@ class CommissionTracker:
         total = sum(c.commission_amount for c in commissions)
         return Decimal(str(total))
 
-    def get_pending_commissions(
-        self, user_id: str | None = None
-    ) -> list[Commission]:
+    def get_pending_commissions(self, user_id: str | None = None) -> list[Commission]:
         """Get pending commissions"""
         if user_id:
             commissions = self.get_user_commissions(user_id)
             return [c for c in commissions if c.status == CommissionStatus.PENDING]
 
-        return [
-            c
-            for c in self._commissions.values()
-            if c.status == CommissionStatus.PENDING
-        ]
+        return [c for c in self._commissions.values() if c.status == CommissionStatus.PENDING]
 
-    def get_collected_commissions(
-        self, user_id: str | None = None
-    ) -> list[Commission]:
+    def get_collected_commissions(self, user_id: str | None = None) -> list[Commission]:
         """Get collected commissions"""
         if user_id:
             commissions = self.get_user_commissions(user_id)
             return [c for c in commissions if c.status == CommissionStatus.COLLECTED]
 
-        return [
-            c
-            for c in self._commissions.values()
-            if c.status == CommissionStatus.COLLECTED
-        ]
+        return [c for c in self._commissions.values() if c.status == CommissionStatus.COLLECTED]
 
     def get_commission_stats(self, user_id: str | None = None) -> dict:
         """Get commission statistics"""
@@ -217,22 +200,12 @@ class CommissionTracker:
 
         total_commissions = len(commissions)
         pending = sum(1 for c in commissions if c.status == CommissionStatus.PENDING)
-        collected = sum(
-            1 for c in commissions if c.status == CommissionStatus.COLLECTED
-        )
+        collected = sum(1 for c in commissions if c.status == CommissionStatus.COLLECTED)
         failed = sum(1 for c in commissions if c.status == CommissionStatus.FAILED)
 
         total_amount = sum(c.commission_amount for c in commissions)
-        collected_amount = sum(
-            c.commission_amount
-            for c in commissions
-            if c.status == CommissionStatus.COLLECTED
-        )
-        pending_amount = sum(
-            c.commission_amount
-            for c in commissions
-            if c.status == CommissionStatus.PENDING
-        )
+        collected_amount = sum(c.commission_amount for c in commissions if c.status == CommissionStatus.COLLECTED)
+        pending_amount = sum(c.commission_amount for c in commissions if c.status == CommissionStatus.PENDING)
 
         return {
             "total_commissions": total_commissions,
@@ -242,9 +215,7 @@ class CommissionTracker:
             "total_amount": float(total_amount),
             "collected_amount": float(collected_amount),
             "pending_amount": float(pending_amount),
-            "average_commission": float(total_amount / total_commissions)
-            if total_commissions > 0
-            else 0.0,
+            "average_commission": float(total_amount / total_commissions) if total_commissions > 0 else 0.0,
         }
 
     def get_monthly_commissions(
@@ -260,18 +231,10 @@ class CommissionTracker:
 
         commissions = self.get_user_commissions(user_id) if user_id else list(self._commissions.values())
 
-        monthly_commissions = [
-            c
-            for c in commissions
-            if c.created_at.year == year and c.created_at.month == month
-        ]
+        monthly_commissions = [c for c in commissions if c.created_at.year == year and c.created_at.month == month]
 
         total = sum(c.commission_amount for c in monthly_commissions)
-        collected = sum(
-            c.commission_amount
-            for c in monthly_commissions
-            if c.status == CommissionStatus.COLLECTED
-        )
+        collected = sum(c.commission_amount for c in monthly_commissions if c.status == CommissionStatus.COLLECTED)
 
         return {
             "year": year,
@@ -279,9 +242,7 @@ class CommissionTracker:
             "total_count": len(monthly_commissions),
             "total_amount": float(total),
             "collected_amount": float(collected),
-            "average_commission": float(total / len(monthly_commissions))
-            if monthly_commissions
-            else 0.0,
+            "average_commission": float(total / len(monthly_commissions)) if monthly_commissions else 0.0,
         }
 
     def get_tier_breakdown(self) -> dict:
@@ -292,11 +253,7 @@ class CommissionTracker:
             tier_commissions = [c for c in self._commissions.values() if c.tier == tier]
 
             total = sum(c.commission_amount for c in tier_commissions)
-            collected = sum(
-                c.commission_amount
-                for c in tier_commissions
-                if c.status == CommissionStatus.COLLECTED
-            )
+            collected = sum(c.commission_amount for c in tier_commissions if c.status == CommissionStatus.COLLECTED)
 
             breakdown[tier.value] = {
                 "count": len(tier_commissions),

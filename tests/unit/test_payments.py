@@ -19,6 +19,7 @@ import hmac
 import os
 import time
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -54,7 +55,7 @@ class TestRateFeed:
         assert "BTC" in rates
         assert "ETH" in rates
         assert "USDT" in rates
-        assert rates["BTC"] == 67_500.0  # noqa: PLR2004
+        assert rates["BTC"] == 67_500.0
 
     @pytest.mark.asyncio
     async def test_get_rates_uses_cache_within_ttl(self):
@@ -73,27 +74,30 @@ class TestRateFeed:
             rates = await get_rates()
 
         mock_cg.assert_not_called()
-        assert rates["BTC"] == 65_000.0  # noqa: PLR2004
+        assert rates["BTC"] == 65_000.0
 
     @pytest.mark.asyncio
     async def test_get_rates_falls_back_to_binance_on_coingecko_failure(self):
         """Falls back to Binance when CoinGecko raises."""
         binance_rates = {"BTC": 66_000.0, "ETH": 3_100.0, "USDT": 1.0}
 
-        with patch(
-            "payments.crypto.rate_feed._fetch_coingecko",
-            new_callable=AsyncMock,
-            side_effect=Exception("CoinGecko timeout"),
-        ), patch(
-            "payments.crypto.rate_feed._fetch_binance_fallback",
-            new_callable=AsyncMock,
-            return_value=binance_rates,
+        with (
+            patch(
+                "payments.crypto.rate_feed._fetch_coingecko",
+                new_callable=AsyncMock,
+                side_effect=Exception("CoinGecko timeout"),
+            ),
+            patch(
+                "payments.crypto.rate_feed._fetch_binance_fallback",
+                new_callable=AsyncMock,
+                return_value=binance_rates,
+            ),
         ):
             from payments.crypto.rate_feed import get_rates
 
             rates = await get_rates(force_refresh=True)
 
-        assert rates["BTC"] == 66_000.0  # noqa: PLR2004
+        assert rates["BTC"] == 66_000.0
 
     @pytest.mark.asyncio
     async def test_get_rates_uses_stale_cache_when_all_feeds_fail(self):
@@ -103,20 +107,23 @@ class TestRateFeed:
         rf._cached_rates = {"BTC": 64_000.0, "ETH": 2_900.0, "USDT": 1.0}
         rf._cache_ts = time.monotonic() - 999  # expired
 
-        with patch(
-            "payments.crypto.rate_feed._fetch_coingecko",
-            new_callable=AsyncMock,
-            side_effect=Exception("down"),
-        ), patch(
-            "payments.crypto.rate_feed._fetch_binance_fallback",
-            new_callable=AsyncMock,
-            side_effect=Exception("down"),
+        with (
+            patch(
+                "payments.crypto.rate_feed._fetch_coingecko",
+                new_callable=AsyncMock,
+                side_effect=Exception("down"),
+            ),
+            patch(
+                "payments.crypto.rate_feed._fetch_binance_fallback",
+                new_callable=AsyncMock,
+                side_effect=Exception("down"),
+            ),
         ):
             from payments.crypto.rate_feed import get_rates
 
             rates = await get_rates(force_refresh=True)
 
-        assert rates["BTC"] == 64_000.0  # noqa: PLR2004
+        assert rates["BTC"] == 64_000.0
 
     @pytest.mark.asyncio
     async def test_get_rates_uses_hardcoded_fallback_when_no_cache(self):
@@ -126,14 +133,17 @@ class TestRateFeed:
         rf._cached_rates = {}
         rf._cache_ts = 0.0
 
-        with patch(
-            "payments.crypto.rate_feed._fetch_coingecko",
-            new_callable=AsyncMock,
-            side_effect=Exception("down"),
-        ), patch(
-            "payments.crypto.rate_feed._fetch_binance_fallback",
-            new_callable=AsyncMock,
-            side_effect=Exception("down"),
+        with (
+            patch(
+                "payments.crypto.rate_feed._fetch_coingecko",
+                new_callable=AsyncMock,
+                side_effect=Exception("down"),
+            ),
+            patch(
+                "payments.crypto.rate_feed._fetch_binance_fallback",
+                new_callable=AsyncMock,
+                side_effect=Exception("down"),
+            ),
         ):
             from payments.crypto.rate_feed import get_rates
 
@@ -156,7 +166,7 @@ class TestRateFeed:
 
             btc_amount = await coin_per_usd("BTC", 1000.0)
 
-        assert abs(btc_amount - 0.02) < 1e-8  # 1000 / 50000 = 0.02  # noqa: PLR2004
+        assert abs(btc_amount - 0.02) < 1e-8  # 1000 / 50000 = 0.02
 
     @pytest.mark.asyncio
     async def test_coin_per_usd_raises_for_unsupported_coin(self):
@@ -174,7 +184,7 @@ class TestRateFeed:
         from payments.crypto.rate_feed import coin_per_usd_sync
 
         result = coin_per_usd_sync("BTC", 400.0)
-        assert abs(result - 0.01) < 1e-8  # noqa: PLR2004
+        assert abs(result - 0.01) < 1e-8
 
     def test_coin_per_usd_sync_returns_none_for_unknown_coin(self):
         """coin_per_usd_sync() returns None for unknown coins with no fallback."""
@@ -275,13 +285,13 @@ class TestPaymentDBHelpers:
         import logging
         from api.payments import _save_payment
 
-        with patch("api.payments._get_db_session", return_value=None), caplog.at_level(logging.WARNING, logger="api.payments"):
+        with (
+            patch("api.payments._get_db_session", return_value=None),
+            caplog.at_level(logging.WARNING, logger="api.payments"),
+        ):
             _save_payment(self._make_payment())
 
-        assert (
-            "not persisted" in caplog.text.lower()
-            or "unavailable" in caplog.text.lower()
-        )
+        assert "not persisted" in caplog.text.lower() or "unavailable" in caplog.text.lower()
 
     def test_load_payment_returns_none_when_db_unavailable(self):
         """_load_payment() returns None when DB session is None."""
@@ -303,9 +313,7 @@ class TestPaymentDBHelpers:
         mock_record.to_dict.return_value = payment
 
         mock_session = MagicMock()
-        mock_session.query.return_value.filter.return_value.first.return_value = (
-            mock_record
-        )
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_record
 
         with patch("api.payments._get_db_session", return_value=mock_session):
             result = _load_payment("PAY_roundtrip_001")
@@ -323,15 +331,13 @@ class TestPaymentDBHelpers:
         mock_record.payment_id = "PAY_update_001"
 
         mock_session = MagicMock()
-        mock_session.query.return_value.filter.return_value.first.return_value = (
-            mock_record
-        )
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_record
 
         with patch("api.payments._get_db_session", return_value=mock_session):
             _update_payment("PAY_update_001", status="complete", confirmations=3)
 
         assert mock_record.status == "complete"
-        assert mock_record.confirmations == 3  # noqa: PLR2004
+        assert mock_record.confirmations == 3
         mock_session.commit.assert_called_once()
 
     def test_update_payment_rolls_back_on_error(self):
@@ -339,9 +345,7 @@ class TestPaymentDBHelpers:
         from api.payments import _update_payment
 
         mock_session = MagicMock()
-        mock_session.query.return_value.filter.return_value.first.side_effect = (
-            Exception("DB error")
-        )
+        mock_session.query.return_value.filter.return_value.first.side_effect = Exception("DB error")
 
         with patch("api.payments._get_db_session", return_value=mock_session):
             _update_payment("PAY_err_001", status="failed")
@@ -382,12 +386,13 @@ class TestPaymentStatusAutoExpiry:
             "confirmed_at": None,
         }
 
-        with patch("api.payments._load_payment", return_value=expired_payment), patch(
-            "api.payments._update_payment"
-        ) as mock_update:
+        with (
+            patch("api.payments._load_payment", return_value=expired_payment),
+            patch("api.payments._update_payment") as mock_update,
+        ):
             response = client.get("/api/payments/crypto/status/PAY_expired_001")
 
-        assert response.status_code == 200  # noqa: PLR2004
+        assert response.status_code == 200
         data = response.json()
         assert data["status"] == "expired"
         mock_update.assert_called_once_with("PAY_expired_001", status="expired")
@@ -416,11 +421,11 @@ class TestPaymentRatesEndpoint:
         ):
             response = client.get("/api/payments/crypto/rates")
 
-        assert response.status_code == 200  # noqa: PLR2004
+        assert response.status_code == 200
         data = response.json()
         assert "rates" in data
         assert "BTC" in data["rates"]
-        assert data["rates"]["BTC"]["usd_per_coin"] == 67_500.0  # noqa: PLR2004
+        assert data["rates"]["BTC"]["usd_per_coin"] == 67_500.0
         assert data["rates"]["BTC"]["coin_per_usd"] == round(1 / 67_500.0, 8)
         assert data["source"] == "live"
 
@@ -442,4 +447,4 @@ class TestPaymentRatesEndpoint:
         ):
             response = client.get("/api/payments/crypto/rates")
 
-        assert response.status_code == 503  # noqa: PLR2004
+        assert response.status_code == 503

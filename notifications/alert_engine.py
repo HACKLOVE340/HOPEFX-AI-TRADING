@@ -19,6 +19,7 @@ Inspired by: TradingView alerts, MT5 alerts, cTrader alerts
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable
@@ -180,9 +181,7 @@ class Alert:
             "cooldown_minutes": self.cooldown_minutes,
             "max_triggers": self.max_triggers,
             "created_at": self.created_at.isoformat(),
-            "last_triggered_at": self.last_triggered_at.isoformat()
-            if self.last_triggered_at
-            else None,
+            "last_triggered_at": self.last_triggered_at.isoformat() if self.last_triggered_at else None,
             "trigger_count": self.trigger_count,
             "is_active": self.is_active(),
             "is_in_cooldown": self.is_in_cooldown(),
@@ -240,6 +239,7 @@ class AlertConfig:
     max_triggers: int = 0
     user_id: str | None = None
     tags: list[str] | None = None
+
 
 class AlertEngine:
     """
@@ -370,9 +370,7 @@ class AlertEngine:
 
             expires_at = None
             if expires_in_hours:
-                expires_at = datetime.now(UTC) + timedelta(
-                    hours=expires_in_hours
-                )
+                expires_at = datetime.now(UTC) + timedelta(hours=expires_in_hours)
 
             alert = Alert(
                 id=alert_id,
@@ -399,9 +397,7 @@ class AlertEngine:
             # Update stats
             self._stats["total_alerts_created"] += 1
             type_key = condition_type.value
-            self._stats["alerts_by_type"][type_key] = (
-                self._stats["alerts_by_type"].get(type_key, 0) + 1
-            )
+            self._stats["alerts_by_type"][type_key] = self._stats["alerts_by_type"].get(type_key, 0) + 1
 
             logger.info(f"Alert created: {alert_id} - {name} for {symbol}")
             return alert
@@ -430,9 +426,7 @@ class AlertEngine:
         with self._lock:
             alert_id = f"ALERT-{uuid.uuid4().hex[:8].upper()}"
 
-            alert = Alert(
-                id=alert_id, name=name, symbol=symbol, conditions=conditions, **kwargs
-            )
+            alert = Alert(id=alert_id, name=name, symbol=symbol, conditions=conditions, **kwargs)
 
             # Store metadata about condition logic
             alert.tags.append(f"logic:{'all' if require_all else 'any'}")
@@ -443,9 +437,7 @@ class AlertEngine:
                 self._alerts_by_symbol[symbol] = []
             self._alerts_by_symbol[symbol].append(alert_id)
 
-            logger.info(
-                f"Complex alert created: {alert_id} with {len(conditions)} conditions"
-            )
+            logger.info(f"Complex alert created: {alert_id} with {len(conditions)} conditions")
             return alert
 
     def update_alert(self, alert_id: str, **updates) -> Alert | None:
@@ -474,9 +466,7 @@ class AlertEngine:
             # Remove from symbol index
             if alert.symbol in self._alerts_by_symbol:
                 self._alerts_by_symbol[alert.symbol] = [
-                    aid
-                    for aid in self._alerts_by_symbol[alert.symbol]
-                    if aid != alert_id
+                    aid for aid in self._alerts_by_symbol[alert.symbol] if aid != alert_id
                 ]
 
             del self._alerts[alert_id]
@@ -533,9 +523,7 @@ class AlertEngine:
     # ALERT CHECKING
     # ================================================================
 
-    def check_alerts(
-        self, market_data: dict[str, dict[str, Any]]
-    ) -> list[AlertTrigger]:
+    def check_alerts(self, market_data: dict[str, dict[str, Any]]) -> list[AlertTrigger]:
         """
         Check all active alerts against market data.
 
@@ -582,9 +570,7 @@ class AlertEngine:
 
         return triggered
 
-    def _check_alert_conditions(
-        self, alert: Alert, data: dict[str, Any]
-    ) -> AlertTrigger | None:
+    def _check_alert_conditions(self, alert: Alert, data: dict[str, Any]) -> AlertTrigger | None:
         """Check if alert conditions are met."""
         price = data.get("price", 0)
         volume = data.get("volume", 0)
@@ -724,9 +710,7 @@ class AlertEngine:
 
         return False, 0
 
-    def _create_trigger(
-        self, alert: Alert, trigger_value: float, condition: AlertCondition
-    ) -> AlertTrigger:
+    def _create_trigger(self, alert: Alert, trigger_value: float, condition: AlertCondition) -> AlertTrigger:
         """Create an alert trigger record."""
         now = datetime.now(UTC)
 
@@ -757,16 +741,12 @@ class AlertEngine:
 
         # Update stats
         self._stats["total_triggers"] += 1
-        self._stats["triggers_by_symbol"][alert.symbol] = (
-            self._stats["triggers_by_symbol"].get(alert.symbol, 0) + 1
-        )
+        self._stats["triggers_by_symbol"][alert.symbol] = self._stats["triggers_by_symbol"].get(alert.symbol, 0) + 1
 
         logger.info(f"Alert triggered: {alert.id} - {alert.name}")
         return trigger
 
-    def _generate_message(
-        self, alert: Alert, trigger_value: float, condition: AlertCondition
-    ) -> str:
+    def _generate_message(self, alert: Alert, trigger_value: float, condition: AlertCondition) -> str:
         """Generate alert message."""
         if alert.message_template:
             return alert.message_template.format(
@@ -829,13 +809,9 @@ class AlertEngine:
         with self._lock:
             return {
                 **self._stats,
-                "active_alerts": len(
-                    [a for a in self._alerts.values() if a.is_active()]
-                ),
+                "active_alerts": len([a for a in self._alerts.values() if a.is_active()]),
                 "total_alerts": len(self._alerts),
-                "alerts_in_cooldown": len(
-                    [a for a in self._alerts.values() if a.is_in_cooldown()]
-                ),
+                "alerts_in_cooldown": len([a for a in self._alerts.values() if a.is_in_cooldown()]),
                 "trigger_history_size": len(self._trigger_history),
             }
 
@@ -843,9 +819,7 @@ class AlertEngine:
     # BACKGROUND MONITORING
     # ================================================================
 
-    async def start_monitoring(
-        self, data_provider: Callable, interval_seconds: float = 1.0
-    ):
+    async def start_monitoring(self, data_provider: Callable, interval_seconds: float = 1.0):
         """
         Start background alert monitoring.
 
@@ -971,9 +945,7 @@ def create_alert_router(alert_engine: AlertEngine):
         return {"status": "resumed"}
 
     @router.get("/history/triggers")
-    async def get_trigger_history(
-        symbol: str | None = None, alert_id: str | None = None, limit: int = 50
-    ):
+    async def get_trigger_history(symbol: str | None = None, alert_id: str | None = None, limit: int = 50):
         """Get trigger history."""
         history = alert_engine.get_trigger_history(symbol, alert_id, limit)
         return [t.to_dict() for t in history]

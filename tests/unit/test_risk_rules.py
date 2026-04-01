@@ -84,8 +84,9 @@ class TestRiskManagerAssessRisk:
         mock_push = MagicMock()
         mock_push.send_drawdown_warning.return_value = True
 
-        with patch("risk.manager.push_manager", mock_push, create=True), patch(
-            "risk.manager._device_tokens", {"user-1": ["token-abc"]}, create=True
+        with (
+            patch("risk.manager.push_manager", mock_push, create=True),
+            patch("risk.manager._device_tokens", {"user-1": ["token-abc"]}, create=True),
         ):
             result = rm.assess_risk(self._account(equity=rm._state.account_equity), [])
             assert result.can_trade is False
@@ -171,7 +172,7 @@ class TestPositionSizing:
         )
         size = result.recommended_size
         assert size >= 0
-        assert size < 10_000  # noqa: PLR2004
+        assert size < 10_000
 
     def test_zero_stop_loss_distance_returns_zero(self, rm):
         """Zero stop distance must not cause division by zero."""
@@ -201,11 +202,11 @@ class TestRiskRewardCalculator:
 
     def test_2to1_rr(self):
         rr = self._calc_rr(entry=2050, stop=2040, target=2070)
-        assert abs(rr - 2.0) < 0.01  # noqa: PLR2004
+        assert abs(rr - 2.0) < 0.01
 
     def test_3to1_rr(self):
         rr = self._calc_rr(entry=2050, stop=2040, target=2080)
-        assert abs(rr - 3.0) < 0.01  # noqa: PLR2004
+        assert abs(rr - 3.0) < 0.01
 
     def test_zero_stop_distance(self):
         rr = self._calc_rr(entry=2050, stop=2050, target=2070)
@@ -214,7 +215,7 @@ class TestRiskRewardCalculator:
     def test_short_trade_rr(self):
         """Short trade: entry > stop, target < entry."""
         rr = self._calc_rr(entry=2050, stop=2060, target=2030)
-        assert abs(rr - 2.0) < 0.01  # noqa: PLR2004
+        assert abs(rr - 2.0) < 0.01
 
 
 # ── ML router accuracy endpoint ───────────────────────────────────────────────
@@ -244,26 +245,24 @@ class TestMlRouter:
 
     def test_accuracy_returns_200(self, client):
         res = client.get("/api/ml/accuracy")
-        assert res.status_code == 200  # noqa: PLR2004
+        assert res.status_code == 200
         data = res.json()
         assert "accuracy" in data
         assert "model_id" in data
 
     def test_models_returns_list(self, client):
         res = client.get("/api/ml/models")
-        assert res.status_code == 200  # noqa: PLR2004
+        assert res.status_code == 200
         assert isinstance(res.json(), list)
 
     def test_predict_returns_direction(self, client):
-        res = client.post(
-            "/api/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 50}
-        )
-        assert res.status_code == 200  # noqa: PLR2004
+        res = client.post("/api/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 50})
+        assert res.status_code == 200
         data = res.json()
         assert data["direction"] in ("BUY", "SELL", "HOLD")
-        assert 0 <= data["confidence"] <= 100  # noqa: PLR2004
+        assert 0 <= data["confidence"] <= 100
 
     def test_predict_invalid_symbol_still_returns(self, client):
         """Even unknown symbols must return a valid response (fallback)."""
         res = client.post("/api/ml/predict/UNKNOWN", json={})
-        assert res.status_code == 200  # noqa: PLR2004
+        assert res.status_code == 200

@@ -30,6 +30,7 @@ import logging
 import os
 import sys
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -171,7 +172,7 @@ def run_pipeline(
             "metrics": {
                 k: v
                 for k, v in (info.get("metrics") or {}).items()
-                if isinstance(v, (int, float))
+                if isinstance(v, (int, float))  # noqa: UP038
             },
         }
 

@@ -25,6 +25,7 @@ import pytest
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from strategies.base import (
@@ -314,7 +315,7 @@ class TestBaseStrategyInterface:
         assert cfg.symbol == "XAUUSD"
         assert cfg.enabled is True
         assert cfg.risk_per_trade == 1.0
-        assert cfg.max_positions == 3  # noqa: PLR2004
+        assert cfg.max_positions == 3
         assert cfg.parameters is None
 
     def test_strategy_config_custom_params(self):
@@ -328,9 +329,9 @@ class TestBaseStrategyInterface:
             parameters={"fast": 10, "slow": 30},
         )
         assert cfg.enabled is False
-        assert cfg.risk_per_trade == 2.5  # noqa: PLR2004
-        assert cfg.max_positions == 5  # noqa: PLR2004
-        assert cfg.parameters["fast"] == 10  # noqa: PLR2004
+        assert cfg.risk_per_trade == 2.5
+        assert cfg.max_positions == 5
+        assert cfg.parameters["fast"] == 10
 
     def test_signal_type_enum_values(self):
         assert SignalType.BUY.value == "BUY"
@@ -356,8 +357,8 @@ class TestBaseStrategyInterface:
             metadata={"reason": "test"},
         )
         assert sig.signal_type == SignalType.BUY
-        assert sig.price == 1900.0  # noqa: PLR2004
-        assert sig.confidence == 0.75  # noqa: PLR2004
+        assert sig.price == 1900.0
+        assert sig.confidence == 0.75
 
     def test_signal_invalid_confidence_raises(self):
         with pytest.raises(ValueError):
@@ -444,7 +445,7 @@ class TestBaseStrategyInterface:
         s.update_performance(2, pnl=-50.0, is_winner=False)
 
         metrics = s.get_performance_metrics()
-        assert metrics["total_pnl"] == 50.0  # noqa: PLR2004
+        assert metrics["total_pnl"] == 50.0
         assert metrics["winning_signals"] == 1
         assert metrics["losing_signals"] == 1
 
@@ -484,8 +485,8 @@ class TestBollingerBandsStrategy:
 
     def test_init_attributes(self):
         s = self._make(period=14, std_dev=1.5)
-        assert s.period == 14  # noqa: PLR2004
-        assert s.std_dev == 1.5  # noqa: PLR2004
+        assert s.period == 14
+        assert s.std_dev == 1.5
         assert s.config.symbol == "XAUUSD"
 
     def test_insufficient_data_returns_hold(self):
@@ -555,8 +556,8 @@ class TestEMAcrossoverStrategy:
 
     def test_init_attributes(self):
         s = self._make(fast=5, slow=20)
-        assert s.fast_period == 5  # noqa: PLR2004
-        assert s.slow_period == 20  # noqa: PLR2004
+        assert s.fast_period == 5
+        assert s.slow_period == 20
 
     def test_insufficient_data_returns_hold(self):
         s = self._make()
@@ -622,9 +623,9 @@ class TestMACDStrategy:
 
     def test_init_attributes(self):
         s = self._make(fast=8, slow=21, signal=5)
-        assert s.fast_period == 8  # noqa: PLR2004
-        assert s.slow_period == 21  # noqa: PLR2004
-        assert s.signal_period == 5  # noqa: PLR2004
+        assert s.fast_period == 8
+        assert s.slow_period == 21
+        assert s.signal_period == 5
 
     def test_insufficient_data_returns_hold(self):
         s = self._make()
@@ -697,9 +698,9 @@ class TestRSIStrategy:
 
     def test_init_attributes(self):
         s = self._make(period=10, oversold=25, overbought=75)
-        assert s.period == 10  # noqa: PLR2004
-        assert s.oversold == 25  # noqa: PLR2004
-        assert s.overbought == 75  # noqa: PLR2004
+        assert s.period == 10
+        assert s.oversold == 25
+        assert s.overbought == 75
 
     def test_insufficient_data_returns_hold(self):
         s = self._make()
@@ -718,14 +719,14 @@ class TestRSIStrategy:
         df = make_rsi_oversold_df(period=14, n=60)
         result = s.generate_signal(df)
         assert result["type"] == "BUY"
-        assert result["confidence"] > 0.5  # noqa: PLR2004
+        assert result["confidence"] > 0.5
 
     def test_sell_signal_when_overbought(self):
         s = self._make(period=14)
         df = make_rsi_overbought_df(period=14, n=60)
         result = s.generate_signal(df)
         assert result["type"] == "SELL"
-        assert result["confidence"] > 0.5  # noqa: PLR2004
+        assert result["confidence"] > 0.5
 
     def test_result_metadata_contains_rsi(self):
         s = self._make()
@@ -733,8 +734,8 @@ class TestRSIStrategy:
         result = s.generate_signal(df)
         assert "metadata" in result
         assert "rsi" in result["metadata"]
-        assert result["metadata"]["oversold_level"] == 30  # noqa: PLR2004
-        assert result["metadata"]["overbought_level"] == 70  # noqa: PLR2004
+        assert result["metadata"]["oversold_level"] == 30
+        assert result["metadata"]["overbought_level"] == 70
 
     def test_hold_for_neutral_rsi(self):
         """Flat prices should produce neutral RSI (≈50) → HOLD."""
@@ -772,8 +773,8 @@ class TestMeanReversionStrategy:
 
     def test_init_attributes(self):
         s = self._make(period=15, std_dev=2.5)
-        assert s.period == 15  # noqa: PLR2004
-        assert s.std_dev == 2.5  # noqa: PLR2004
+        assert s.period == 15
+        assert s.std_dev == 2.5
 
     def test_insufficient_data_returns_hold(self):
         s = self._make()
@@ -836,10 +837,10 @@ class TestStochasticStrategy:
 
     def test_init_attributes(self):
         s = self._make(k=10, d=5, oversold=25, overbought=75)
-        assert s.k_period == 10  # noqa: PLR2004
-        assert s.d_period == 5  # noqa: PLR2004
-        assert s.oversold == 25  # noqa: PLR2004
-        assert s.overbought == 75  # noqa: PLR2004
+        assert s.k_period == 10
+        assert s.d_period == 5
+        assert s.oversold == 25
+        assert s.overbought == 75
 
     def test_insufficient_data_returns_hold(self):
         s = self._make()
@@ -905,8 +906,8 @@ class TestBreakoutStrategy:
 
     def test_init_attributes(self):
         s = self._make(lookback=15, threshold=0.01)
-        assert s.lookback_period == 15  # noqa: PLR2004
-        assert s.breakout_threshold == 0.01  # noqa: PLR2004
+        assert s.lookback_period == 15
+        assert s.breakout_threshold == 0.01
 
     def test_insufficient_data_returns_hold(self):
         s = self._make()
@@ -997,8 +998,8 @@ class TestSMCICTStrategy:
 
     def test_init_attributes(self, strategy):
         assert strategy.config.symbol == "XAUUSD"
-        assert strategy.ob_lookback == 20  # noqa: PLR2004
-        assert strategy.fvg_min_gap == 0.001  # noqa: PLR2004
+        assert strategy.ob_lookback == 20
+        assert strategy.fvg_min_gap == 0.001
         assert strategy.market_structure == "neutral"
 
     def test_analyze_returns_dict(self, strategy, prices_list):
@@ -1188,34 +1189,26 @@ class TestITS8OSStrategy:
 
     def test_init_attributes(self, strategy):
         assert strategy.config.symbol == "XAUUSD"
-        assert strategy.min_setup_score == 0.6  # noqa: PLR2004
-        assert strategy.confluence_required == 2  # noqa: PLR2004
-        assert len(strategy.kill_zones) == 4  # noqa: PLR2004
+        assert strategy.min_setup_score == 0.6
+        assert strategy.confluence_required == 2
+        assert len(strategy.kill_zones) == 4
 
     def test_analyze_returns_dict(self, strategy, prices_list):
-        result = strategy.analyze(
-            {"prices": prices_list, "timestamp": datetime.now(UTC)}
-        )
+        result = strategy.analyze({"prices": prices_list, "timestamp": datetime.now(UTC)})
         assert isinstance(result, dict)
 
     def test_analyze_insufficient_data_returns_error(self, strategy):
-        result = strategy.analyze(
-            {"prices": [], "timestamp": datetime.now(UTC)}
-        )
+        result = strategy.analyze({"prices": [], "timestamp": datetime.now(UTC)})
         assert "error" in result
 
     def test_analyze_returns_setup_results(self, strategy, prices_list):
-        result = strategy.analyze(
-            {"prices": prices_list, "timestamp": datetime.now(UTC)}
-        )
+        result = strategy.analyze({"prices": prices_list, "timestamp": datetime.now(UTC)})
         if "error" not in result:
             assert "setup_results" in result
             assert "confluence" in result
 
     def test_generate_signal_returns_none_or_signal(self, strategy, prices_list):
-        analysis = strategy.analyze(
-            {"prices": prices_list, "timestamp": datetime.now(UTC)}
-        )
+        analysis = strategy.analyze({"prices": prices_list, "timestamp": datetime.now(UTC)})
         result = strategy.generate_signal(analysis)
         assert result is None or isinstance(result, Signal)
 
@@ -1289,7 +1282,7 @@ class TestITS8OSStrategy:
         result = strategy._calculate_confluence(setup_results)
         assert "bullish_score" in result
         assert "bearish_score" in result
-        assert result["agreeing_setups"] >= 2  # noqa: PLR2004
+        assert result["agreeing_setups"] >= 2
 
     def test_confluence_bullish_generates_buy(self, strategy):
         """Bullish confluence should generate BUY."""
@@ -1310,9 +1303,7 @@ class TestITS8OSStrategy:
 
     def test_on_bar_integration(self, strategy, prices_list):
         strategy.start()
-        result = strategy.on_bar(
-            {"prices": prices_list, "timestamp": datetime.now(UTC)}
-        )
+        result = strategy.on_bar({"prices": prices_list, "timestamp": datetime.now(UTC)})
         assert result is None or isinstance(result, Signal)
 
 
@@ -1404,13 +1395,13 @@ class TestStrategyBrain:
         from strategies.strategy_brain import StrategyBrain
 
         b = StrategyBrain()
-        assert b.min_strategies_required == 2  # noqa: PLR2004
-        assert b.consensus_threshold == 0.6  # noqa: PLR2004
+        assert b.min_strategies_required == 2
+        assert b.consensus_threshold == 0.6
         assert len(b.strategies) == 0
 
     def test_init_custom_config(self, brain):
-        assert brain.min_strategies_required == 2  # noqa: PLR2004
-        assert brain.performance_weight == 0.4  # noqa: PLR2004
+        assert brain.min_strategies_required == 2
+        assert brain.performance_weight == 0.4
 
     # Strategy registration
 
@@ -1423,7 +1414,7 @@ class TestStrategyBrain:
     def test_register_multiple_strategies(self, brain, buy_strategy, sell_strategy):
         brain.register_strategy(buy_strategy)
         brain.register_strategy(sell_strategy)
-        assert len(brain.strategies) == 2  # noqa: PLR2004
+        assert len(brain.strategies) == 2
 
     def test_unregister_strategy(self, brain, buy_strategy):
         brain.register_strategy(buy_strategy)
@@ -1434,7 +1425,7 @@ class TestStrategyBrain:
         brain.register_strategy(buy_strategy)
         brain.register_strategy(sell_strategy)
         total = sum(brain.strategy_weights.values())
-        assert abs(total - 1.0) < 1e-9  # noqa: PLR2004
+        assert abs(total - 1.0) < 1e-9
 
     # Consensus analysis
 
@@ -1529,7 +1520,7 @@ class TestStrategyBrain:
         assert perf["total_signals"] == 1
         assert perf["correct_signals"] == 1
         assert perf["win_rate"] == 1.0
-        assert perf["total_pnl"] == 200.0  # noqa: PLR2004
+        assert perf["total_pnl"] == 200.0
 
     def test_update_performance_loss(self, brain, buy_strategy):
         brain.register_strategy(buy_strategy)
@@ -1575,7 +1566,7 @@ class TestStrategyBrain:
         brain.analyze_joint({"close": 1900.0})
         stats = brain.get_statistics()
         assert stats["total_analyses"] == 1
-        assert stats["registered_strategies"] == 2  # noqa: PLR2004
+        assert stats["registered_strategies"] == 2
 
     # Correlations
 
@@ -1644,7 +1635,7 @@ class TestStrategyBrain:
         brain.analyze_joint({"close": 1900.0})
         brain.analyze_joint({"close": 1901.0})
 
-        assert len(brain.signal_history) == 2  # noqa: PLR2004
+        assert len(brain.signal_history) == 2
         assert len(brain.consensus_signals) >= 0
 
     # Weights recalculation
@@ -1665,9 +1656,7 @@ class TestStrategyBrain:
 
         # Update performance to skew weights
         for _ in range(5):
-            brain.update_strategy_performance(
-                "BuyAlways", signal_correct=True, pnl=100.0
-            )
+            brain.update_strategy_performance("BuyAlways", signal_correct=True, pnl=100.0)
         for _ in range(5):
             brain.update_strategy_performance("BA2c", signal_correct=False, pnl=-100.0)
 

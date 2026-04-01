@@ -1,44 +1,23 @@
 /**
  * DrawdownChart
  * Underwater equity curve — shows drawdown % from peak at each point in time.
- * Red area below zero, annotates the maximum drawdown point.
- * Loads data from /api/performance/equity-curve; falls back to sample data.
+ * Loads real data from /api/pnl/drawdown-curve.
+ * Shows an empty state when no fills have occurred yet.
+ * No synthetic/random data is used.
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createChart, IChartApi, AreaData, Time } from 'lightweight-charts'
 
-interface EquityPoint {
-  time: number | string
-  value: number
-}
-
-function computeDrawdown(points: EquityPoint[]): AreaData[] {
-  let peak = -Infinity
-  return points.map((p) => {
-    const v = p.value
-    if (v > peak) peak = v
-    const dd = peak > 0 ? ((v - peak) / peak) * 100 : 0
-    return {
-      time: (typeof p.time === 'number' ? p.time : new Date(p.time).getTime() / 1000) as Time,
-      value: dd,
-    }
-  })
-}
-
-function sampleEquity(): EquityPoint[] {
-  const pts: EquityPoint[] = []
-  let v = 100_000
-  const now = Math.floor(Date.now() / 1000)
-  for (let i = 100; i >= 0; i--) {
-    v = v * (1 + (Math.random() - 0.48) * 0.02)
-    pts.push({ time: now - i * 86400, value: v })
-  }
-  return pts
+interface DrawdownPoint {
+  time: number
+  drawdown_pct: number
 }
 
 export function DrawdownChart() {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
+  const [empty, setEmpty] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -52,15 +31,8 @@ export function DrawdownChart() {
         vertLines: { color: '#1e293b' },
         horzLines: { color: '#1e293b' },
       },
-      rightPriceScale: {
-        borderColor: '#334155',
-        // Format as percentage
-        mode: 0,
-      },
-      timeScale: {
-        borderColor: '#334155',
-        timeVisible: true,
-      },
+      rightPriceScale: { borderColor: '#334155', mode: 0 },
+      timeScale: { borderColor: '#334155', timeVisible: true },
       crosshair: {
         vertLine: { color: '#ef4444', labelBackgroundColor: '#ef4444' },
         horzLine: { color: '#ef4444', labelBackgroundColor: '#ef4444' },
@@ -72,26 +44,33 @@ export function DrawdownChart() {
       topColor: 'rgba(239, 68, 68, 0.0)',
       bottomColor: 'rgba(239, 68, 68, 0.4)',
       lineWidth: 2,
-      // Invert: drawdown is negative, so area fills downward
-      invertFilledArea: false,
-      priceFormat: { type: 'percent', precision: 2 },
+      priceFormat: { type: 'custom', formatter: (v: number) => `${v.toFixed(2)}%` },
     })
+
+    chartRef.current = chart
 
     const loadData = async () => {
       try {
-        const res = await fetch('/api/performance/equity-curve')
-        if (!res.ok) throw new Error('no data')
-        const raw: EquityPoint[] = await res.json()
-        series.setData(computeDrawdown(raw))
-      } catch {
-        // Fall back to sample data so the chart is never blank
-        series.setData(computeDrawdown(sampleEquity()))
+        const res = await fetch('/api/pnl/drawdown-curve')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const points: DrawdownPoint[] = await res.json()
+        if (!points || points.length === 0) {
+          setEmpty(true)
+          return
+        }
+        const data: AreaData[] = points.map((p) => ({
+          time: p.time as Time,
+          value: p.drawdown_pct,
+        }))
+        series.setData(data)
+        chart.timeScale().fitContent()
+        setEmpty(false)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load drawdown data')
       }
-      chart.timeScale().fitContent()
     }
 
     loadData()
-    chartRef.current = chart
 
     const handleResize = () => {
       chart.applyOptions({ width: containerRef.current?.clientWidth })
@@ -110,7 +89,19 @@ export function DrawdownChart() {
         <h3 className="font-semibold text-slate-200">Drawdown</h3>
         <span className="text-xs text-slate-500">% from peak equity</span>
       </div>
-      <div ref={containerRef} className="h-[180px]" />
+      <div className="relative h-[180px]">
+        <div ref={containerRef} className="h-full" />
+        {empty && (
+          <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
+            No fills yet — drawdown chart will appear after the first trade.
+          </div>
+        )}
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

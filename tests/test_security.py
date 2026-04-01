@@ -37,12 +37,8 @@ class TestAuthRoutesDeleted:
             pytest.skip("auth/jwt.py not found")
         content = jwt_path.read_text()
         # The file may have a default for dev, but must warn and not silently use it
-        assert (
-            "your_secret_key" not in content
-        ), "auth/jwt.py contains literal 'your_secret_key'"
-        assert (
-            "fakehashedsecret" not in content
-        ), "auth/jwt.py contains 'fakehashedsecret' backdoor"
+        assert "your_secret_key" not in content, "auth/jwt.py contains literal 'your_secret_key'"
+        assert "fakehashedsecret" not in content, "auth/jwt.py contains 'fakehashedsecret' backdoor"
 
 
 # ---------------------------------------------------------------------------
@@ -69,22 +65,18 @@ class TestCORSConfiguration:
     def test_mobile_api_v2_no_wildcard_with_credentials(self):
         content = self._read_file("mobile/api_v2.py")
         if "allow_credentials=True" in content:
-            assert (
-                'allow_origins=["*"]' not in content
-            ), "mobile/api_v2.py: allow_credentials=True with allow_origins=['*']"
+            assert 'allow_origins=["*"]' not in content, (
+                "mobile/api_v2.py: allow_credentials=True with allow_origins=['*']"
+            )
 
     def test_mobile_api_credentials_false(self):
         """After fix, allow_credentials must be False."""
         content = self._read_file("mobile/api.py")
-        assert (
-            "allow_credentials=False" in content
-        ), "mobile/api.py: allow_credentials must be False"
+        assert "allow_credentials=False" in content, "mobile/api.py: allow_credentials must be False"
 
     def test_mobile_api_v2_credentials_false(self):
         content = self._read_file("mobile/api_v2.py")
-        assert (
-            "allow_credentials=False" in content
-        ), "mobile/api_v2.py: allow_credentials must be False"
+        assert "allow_credentials=False" in content, "mobile/api_v2.py: allow_credentials must be False"
 
 
 # ---------------------------------------------------------------------------

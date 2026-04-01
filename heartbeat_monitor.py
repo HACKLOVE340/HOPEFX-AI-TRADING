@@ -37,6 +37,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from collections.abc import Callable
 import contextlib
@@ -226,20 +227,15 @@ class HeartbeatMonitor:
 
                 if status.critical:
                     logger.critical(
-                        "🚨 CRITICAL component '%s' missed heartbeat "
-                        "(%.0fs since last beat, missed: %d)",
+                        "🚨 CRITICAL component '%s' missed heartbeat (%.0fs since last beat, missed: %d)",
                         status.name,
                         elapsed,
                         status.missed_beats,
                     )
-                    print(
-                        f"\n🚨 HEARTBEAT TIMEOUT: critical component "
-                        f"'{status.name}' silent for {elapsed:.0f}s"
-                    )
+                    print(f"\n🚨 HEARTBEAT TIMEOUT: critical component '{status.name}' silent for {elapsed:.0f}s")
                 else:
                     logger.warning(
-                        "⚠️  Component '%s' missed heartbeat "
-                        "(%.0fs since last beat, missed: %d)",
+                        "⚠️  Component '%s' missed heartbeat (%.0fs since last beat, missed: %d)",
                         status.name,
                         elapsed,
                         status.missed_beats,
@@ -260,9 +256,7 @@ class HeartbeatMonitor:
                     and self._kill_switch is not None
                     and not self._kill_switch.is_active()
                 ):
-                    self._kill_switch.activate(
-                        f"critical component '{status.name}' heartbeat timeout"
-                    )
+                    self._kill_switch.activate(f"critical component '{status.name}' heartbeat timeout")
             # Component recovered
             elif not status.alive:
                 status.alive = True

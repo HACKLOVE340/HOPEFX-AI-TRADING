@@ -89,6 +89,7 @@ import logging
 import os
 import tempfile
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -105,9 +106,7 @@ _SCHEMA_VERSION = 1
 # ── Promotion gate thresholds ─────────────────────────────────────────────────
 _MIN_OOS_ACC: float = float(os.getenv("REGISTRY_MIN_OOS_ACC", "0.60"))
 _MAX_OOS_PVAL: float = float(os.getenv("REGISTRY_MAX_OOS_PVAL", "0.05"))
-_REQUIRE_SHARPE_GATE: bool = (
-    os.getenv("REGISTRY_REQUIRE_SHARPE_GATE", "true").lower() != "false"
-)
+_REQUIRE_SHARPE_GATE: bool = os.getenv("REGISTRY_REQUIRE_SHARPE_GATE", "true").lower() != "false"
 
 
 # ── SHA-256 helper ────────────────────────────────────────────────────────────
@@ -168,9 +167,7 @@ class ModelRegistry:
 
     def _save(self, manifest: dict[str, Any]) -> None:
         """Atomically write the manifest via a temp-file rename."""
-        tmp_fd, tmp_path = tempfile.mkstemp(
-            dir=self._path.parent, prefix=".registry_tmp_", suffix=".json"
-        )
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=self._path.parent, prefix=".registry_tmp_", suffix=".json")
         try:
             with os.fdopen(tmp_fd, "w") as fh:
                 json.dump(manifest, fh, indent=2)
@@ -286,17 +283,11 @@ class ModelRegistry:
             )
         if pval >= _MAX_OOS_PVAL:
             return False, (
-                f"OOS p-value {pval:.6f} >= threshold {_MAX_OOS_PVAL:.4f}. "
-                "Result is not statistically significant."
+                f"OOS p-value {pval:.6f} >= threshold {_MAX_OOS_PVAL:.4f}. Result is not statistically significant."
             )
         if _REQUIRE_SHARPE_GATE and not sharpe_ok:
-            return False, (
-                "Sharpe gate not passed. "
-                "Run multi-symbol backtest with N >= 600 trades."
-            )
-        return True, (
-            f"Gate passed: acc={acc:.4f}, p={pval:.6f}, sharpe_ok={sharpe_ok}"
-        )
+            return False, ("Sharpe gate not passed. Run multi-symbol backtest with N >= 600 trades.")
+        return True, (f"Gate passed: acc={acc:.4f}, p={pval:.6f}, sharpe_ok={sharpe_ok}")
 
     def promote(self, name: str) -> dict[str, Any]:
         """
@@ -367,9 +358,7 @@ class ModelRegistry:
                 previous_version=prev_active,
             )
         except Exception as _mon_exc:
-            logger.debug(
-                "ModelRegistry: performance monitor notify failed: %s", _mon_exc
-            )
+            logger.debug("ModelRegistry: performance monitor notify failed: %s", _mon_exc)
 
         return entry
 
@@ -395,9 +384,7 @@ class ModelRegistry:
             tmp_link.replace(symlink)
             logger.info("ModelRegistry: symlink %s → %s", symlink.name, abs_target.name)
         except (OSError, NotImplementedError) as exc:
-            logger.warning(
-                "ModelRegistry: symlink update failed (%s); skipping symlink", exc
-            )
+            logger.warning("ModelRegistry: symlink update failed (%s); skipping symlink", exc)
 
     # ── Integrity verification ────────────────────────────────────────────────
 
@@ -422,10 +409,7 @@ class ModelRegistry:
 
         actual = sha256_file(artifact)
         if actual != expected:
-            return False, (
-                f"SHA-256 MISMATCH for '{name}': "
-                f"expected {expected[:16]}… got {actual[:16]}…"
-            )
+            return False, (f"SHA-256 MISMATCH for '{name}': expected {expected[:16]}… got {actual[:16]}…")
         return True, f"Integrity OK: {name}  sha256={actual[:16]}…"
 
     def verify_active(self) -> tuple[bool, str]:
@@ -502,15 +486,11 @@ class ModelRegistry:
         # Already registered — skip
         manifest = self._load()
         if name in manifest["versions"]:
-            logger.debug(
-                "ModelRegistry.bootstrap_from_meta: '%s' already registered", name
-            )
+            logger.debug("ModelRegistry.bootstrap_from_meta: '%s' already registered", name)
             return manifest["versions"][name]
 
         if not model_path.exists():
-            logger.warning(
-                "ModelRegistry.bootstrap_from_meta: artifact not found: %s", model_path
-            )
+            logger.warning("ModelRegistry.bootstrap_from_meta: artifact not found: %s", model_path)
             return None
 
         # Parse meta
@@ -538,9 +518,7 @@ class ModelRegistry:
             try:
                 entry = self.promote(name)
             except RuntimeError as exc:
-                logger.warning(
-                    "ModelRegistry.bootstrap_from_meta: promotion blocked: %s", exc
-                )
+                logger.warning("ModelRegistry.bootstrap_from_meta: promotion blocked: %s", exc)
 
         return entry
 

@@ -66,9 +66,7 @@ class SecureConfig:
         self.redis_port: int = int(os.getenv("REDIS_PORT", "6379"))
         self.telegram_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
-        self.symbols: list[str] = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAU_USD").split(
-            ","
-        )
+        self.symbols: list[str] = os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAU_USD").split(",")
         self.initial_balance: float = float(os.getenv("INITIAL_BALANCE", "10000"))
 
     def validate_live(self) -> None:
@@ -143,8 +141,7 @@ class LiveDataPipeline:
             self._streamer.subscribe(_TickBridge())
             self._running = True
             logger.info(
-                "LiveDataPipeline: NuclearStreamer started | mode=%s | "
-                "finnhub=%s twelvedata=%s polygon=%s",
+                "LiveDataPipeline: NuclearStreamer started | mode=%s | finnhub=%s twelvedata=%s polygon=%s",
                 self._config.app_env,
                 bool(os.getenv("FINNHUB_API_KEY")),
                 bool(os.getenv("TWELVE_API_KEY")),
@@ -319,9 +316,7 @@ class RiskManager:
         except Exception as exc:
             logger.warning("RiskManager.setup: %s", exc)
 
-    def approve_trade(
-        self, symbol: str, side: str, price: float, equity: float
-    ) -> dict:
+    def approve_trade(self, symbol: str, side: str, price: float, equity: float) -> dict:
         if self._rm is None:
             return {"approved": False, "reason": "risk manager not initialised"}
         try:
@@ -377,9 +372,7 @@ class StateManager:
                 self._redis_port,
             )
         except Exception as exc:
-            logger.warning(
-                "StateManager: Redis unavailable (%s) — state will not persist", exc
-            )
+            logger.warning("StateManager: Redis unavailable (%s) — state will not persist", exc)
             self._redis = None
 
     def save(self, key: str, value: str, ttl: int = 86400) -> None:

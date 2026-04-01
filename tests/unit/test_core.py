@@ -38,9 +38,7 @@ async def test_event_bus(tmp_path):
 
     bus.subscribe_local(CH_TICK, handler)
 
-    await bus.publish(
-        CH_TICK, {"type": "tick", "symbol": "XAUUSD", "bid": 1800.0, "ask": 1800.1}
-    )
+    await bus.publish(CH_TICK, {"type": "tick", "symbol": "XAUUSD", "bid": 1800.0, "ask": 1800.1})
 
     # Local fallback is synchronous — no sleep needed, but yield once to let
     # any pending coroutines complete.
@@ -48,15 +46,13 @@ async def test_event_bus(tmp_path):
 
     assert len(received) == 1
     assert received[0]["symbol"] == "XAUUSD"
-    assert received[0]["bid"] == 1800.0  # noqa: PLR2004
+    assert received[0]["bid"] == 1800.0
 
 
 @pytest.mark.asyncio
 async def test_memory_mapped_event_store(tmp_path):
     """Test MemoryMappedEventStore append and query."""
-    store = MemoryMappedEventStore(
-        base_path=str(tmp_path / "events") + "/", max_file_size=1_048_576
-    )
+    store = MemoryMappedEventStore(base_path=str(tmp_path / "events") + "/", max_file_size=1_048_576)
 
     event = DomainEvent.create(
         "PRICE_UPDATE",
@@ -97,6 +93,6 @@ def test_exceptions():
     )
 
     assert error.rule == "max_position"
-    assert error.limit == 100.0  # noqa: PLR2004
-    assert error.actual == 150.0  # noqa: PLR2004
+    assert error.limit == 100.0
+    assert error.actual == 150.0
     assert isinstance(error, HopeFXError)

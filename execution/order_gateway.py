@@ -63,9 +63,7 @@ class Order:
         # Use abs(quantity) so sell orders (negative quantity) work correctly.
         max_qty = abs(self.quantity)
         if filled_quantity > max_qty + 1e-9:
-            raise ValueError(
-                f"Filled quantity {filled_quantity} cannot exceed order quantity {max_qty}."
-            )
+            raise ValueError(f"Filled quantity {filled_quantity} cannot exceed order quantity {max_qty}.")
         self.executed_quantity += filled_quantity
         self.commission_paid += filled_quantity * self.commission_rate
         if self.executed_quantity >= max_qty - 1e-9:
@@ -157,9 +155,7 @@ class OrderGateway:
 
             if loop is not None and loop.is_running():
                 # Running inside an async context — use thread-safe future.
-                future = asyncio.run_coroutine_threadsafe(
-                    self.executor.execute_signal(signal), loop
-                )
+                future = asyncio.run_coroutine_threadsafe(self.executor.execute_signal(signal), loop)
                 result: ExecutionResult = future.result(timeout=30)
             else:
                 result = asyncio.run(self.executor.execute_signal(signal))

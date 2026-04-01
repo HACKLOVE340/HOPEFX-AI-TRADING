@@ -1,9 +1,22 @@
-import { useEffect, useRef } from 'react'
-import { createChart, IChartApi, ISeriesApi, AreaData } from 'lightweight-charts'
+/**
+ * EquityChart
+ * Loads real equity curve data from /api/pnl/equity-curve.
+ * Shows an empty state when no fills have occurred yet.
+ * No synthetic/random data is used.
+ */
+import { useEffect, useRef, useState } from 'react'
+import { createChart, IChartApi, AreaData, Time } from 'lightweight-charts'
+
+interface EquityPoint {
+  time: number
+  value: number
+}
 
 export function EquityChart() {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
+  const [empty, setEmpty] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -17,23 +30,12 @@ export function EquityChart() {
         vertLines: { color: '#1e293b' },
         horzLines: { color: '#1e293b' },
       },
-      rightPriceScale: {
-        borderColor: '#334155',
-      },
-      timeScale: {
-        borderColor: '#334155',
-        timeVisible: true,
-      },
+      rightPriceScale: { borderColor: '#334155' },
+      timeScale: { borderColor: '#334155', timeVisible: true },
       crosshair: {
         mode: 1,
-        vertLine: {
-          color: '#f59e0b',
-          labelBackgroundColor: '#f59e0b',
-        },
-        horzLine: {
-          color: '#f59e0b',
-          labelBackgroundColor: '#f59e0b',
-        },
+        vertLine: { color: '#f59e0b', labelBackgroundColor: '#f59e0b' },
+        horzLine: { color: '#f59e0b', labelBackgroundColor: '#f59e0b' },
       },
     })
 
@@ -44,23 +46,30 @@ export function EquityChart() {
       lineWidth: 2,
     })
 
-    // Generate sample equity curve
-    const data: AreaData[] = []
-    let value = 100000
-    const now = Date.now() / 1000
+    chartRef.current = chart
 
-    for (let i = 100; i >= 0; i--) {
-      value = value * (1 + (Math.random() - 0.48) * 0.02)
-      data.push({
-        time: now - i * 86400 as any,
-        value: value,
-      })
+    const load = async () => {
+      try {
+        const res = await fetch('/api/pnl/equity-curve')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const points: EquityPoint[] = await res.json()
+        if (!points || points.length === 0) {
+          setEmpty(true)
+          return
+        }
+        const data: AreaData[] = points.map((p) => ({
+          time: p.time as Time,
+          value: p.value,
+        }))
+        series.setData(data)
+        chart.timeScale().fitContent()
+        setEmpty(false)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load equity curve')
+      }
     }
 
-    series.setData(data)
-    chart.timeScale().fitContent()
-
-    chartRef.current = chart
+    load()
 
     const handleResize = () => {
       chart.applyOptions({ width: containerRef.current?.clientWidth })
@@ -73,5 +82,19 @@ export function EquityChart() {
     }
   }, [])
 
-  return <div ref={containerRef} className="h-[300px]" />
+  return (
+    <div className="relative h-[300px]">
+      <div ref={containerRef} className="h-full" />
+      {empty && (
+        <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
+          No fills yet — equity curve will appear after the first trade.
+        </div>
+      )}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+    </div>
+  )
 }

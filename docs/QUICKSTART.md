@@ -2,7 +2,7 @@
 
 > Get HOPEFX running and producing your first signal in under 15 minutes.
 > A valid subscription license key is required for trading endpoints.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 

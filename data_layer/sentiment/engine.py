@@ -41,6 +41,7 @@ import logging
 import time
 from collections import deque
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -156,9 +157,7 @@ class NewsSentimentEngine:
     async def start(self) -> None:
         """Start background polling loops for all configured feeds."""
         self._running = True
-        configured = [
-            (src, feed) for src, feed in self._feeds.items() if feed.is_configured
-        ]
+        configured = [(src, feed) for src, feed in self._feeds.items() if feed.is_configured]
         if not configured:
             logger.warning(
                 "NewsSentimentEngine: no news API keys configured — "
@@ -204,9 +203,7 @@ class NewsSentimentEngine:
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                logger.warning(
-                    "NewsSentimentEngine poll error source=%s: %s", src.value, exc
-                )
+                logger.warning("NewsSentimentEngine poll error source=%s: %s", src.value, exc)
 
             self._last_fetch_at[src] = time.time()
             elapsed = time.monotonic() - t0
@@ -228,18 +225,14 @@ class NewsSentimentEngine:
         key = f"{article.headline[:80]}|{article.published_at.date()}"
         return hashlib.sha256(key.encode()).hexdigest()[:20]
 
-    async def _ingest_articles(
-        self, articles: list[NewsArticle], src: NewsSource
-    ) -> None:
+    async def _ingest_articles(self, articles: list[NewsArticle], src: NewsSource) -> None:
         """Update EMA, cache, and lineage for a batch of scored articles."""
         now = datetime.now(UTC)
         max_age_cutoff = now - timedelta(hours=_MAX_ARTICLE_AGE_H)
         dedup_cutoff_epoch = time.time() - _DEDUP_WINDOW_H * 3600.0
 
         # Prune stale dedup entries to bound memory
-        self._seen_urls = {
-            fp: ts for fp, ts in self._seen_urls.items() if ts > dedup_cutoff_epoch
-        }
+        self._seen_urls = {fp: ts for fp, ts in self._seen_urls.items() if ts > dedup_cutoff_epoch}
 
         for article in articles:
             # Causal check: reject future-dated articles
@@ -265,8 +258,7 @@ class NewsSentimentEngine:
             fp = self._url_fingerprint(article)
             if fp in self._seen_urls:
                 logger.debug(
-                    "NewsSentimentEngine: duplicate article skipped "
-                    "(source=%s fp=%s)",
+                    "NewsSentimentEngine: duplicate article skipped (source=%s fp=%s)",
                     src.value,
                     fp,
                 )
@@ -279,8 +271,7 @@ class NewsSentimentEngine:
             # Update sentiment EMA
             self._prev_ema = self._sentiment_ema
             self._sentiment_ema = (
-                _SENTIMENT_EMA_ALPHA * article.sentiment_score
-                + (1.0 - _SENTIMENT_EMA_ALPHA) * self._sentiment_ema
+                _SENTIMENT_EMA_ALPHA * article.sentiment_score + (1.0 - _SENTIMENT_EMA_ALPHA) * self._sentiment_ema
             )
 
             # Prometheus
@@ -329,11 +320,7 @@ class NewsSentimentEngine:
         cutoff_1h = now - timedelta(hours=_ARTICLE_WINDOW_H)
 
         # Filter causally
-        recent = [
-            a
-            for a in self._articles
-            if a.published_at <= now and a.published_at >= cutoff_1h
-        ]
+        recent = [a for a in self._articles if a.published_at <= now and a.published_at >= cutoff_1h]
 
         if not recent:
             # Try Redis cache on cold start (no as_of = live mode only)
@@ -345,18 +332,10 @@ class NewsSentimentEngine:
                     if raw:
                         cached = json.loads(raw)
                         return {
-                            "news_sentiment_score": float(
-                                cached.get("news_sentiment_score", self._sentiment_ema)
-                            ),
-                            "news_sentiment_momentum": float(
-                                cached.get("news_sentiment_momentum", 0.0)
-                            ),
-                            "news_article_count_1h": float(
-                                cached.get("news_article_count_1h", 0.0)
-                            ),
-                            "news_bullish_ratio": float(
-                                cached.get("news_bullish_ratio", 0.5)
-                            ),
+                            "news_sentiment_score": float(cached.get("news_sentiment_score", self._sentiment_ema)),
+                            "news_sentiment_momentum": float(cached.get("news_sentiment_momentum", 0.0)),
+                            "news_article_count_1h": float(cached.get("news_article_count_1h", 0.0)),
+                            "news_bullish_ratio": float(cached.get("news_bullish_ratio", 0.5)),
                         }
                 except Exception as exc:
                     logger.debug("NewsSentimentEngine Redis read error: %s", exc)
@@ -370,10 +349,7 @@ class NewsSentimentEngine:
         # Recompute EMA over causal window
         ema = 0.0
         for a in sorted(recent, key=lambda x: x.published_at):
-            ema = (
-                _SENTIMENT_EMA_ALPHA * a.sentiment_score
-                + (1.0 - _SENTIMENT_EMA_ALPHA) * ema
-            )
+            ema = _SENTIMENT_EMA_ALPHA * a.sentiment_score + (1.0 - _SENTIMENT_EMA_ALPHA) * ema
 
         # Momentum: current EMA vs previous EMA
         momentum = ema - self._prev_ema
@@ -389,16 +365,10 @@ class NewsSentimentEngine:
             "news_bullish_ratio": round(bull_ratio, 4),
         }
 
-    def get_recent_articles(
-        self, hours: float = 1.0, min_relevance: float = 0.1
-    ) -> list[NewsArticle]:
+    def get_recent_articles(self, hours: float = 1.0, min_relevance: float = 0.1) -> list[NewsArticle]:
         """Return recent gold-relevant articles."""
         cutoff = datetime.now(UTC) - timedelta(hours=hours)
-        return [
-            a
-            for a in self._articles
-            if a.published_at >= cutoff and a.gold_relevance >= min_relevance
-        ]
+        return [a for a in self._articles if a.published_at >= cutoff and a.gold_relevance >= min_relevance]
 
     def get_articles_since(
         self,
@@ -420,9 +390,7 @@ class NewsSentimentEngine:
         results = [
             a
             for a in self._articles
-            if a.published_at >= since
-            and a.gold_relevance >= min_relevance
-            and (source is None or a.source == source)
+            if a.published_at >= since and a.gold_relevance >= min_relevance and (source is None or a.source == source)
         ]
         return sorted(results, key=lambda a: a.published_at)
 
@@ -476,16 +444,9 @@ class NewsSentimentEngine:
             "running": self._running,
             "article_count": self._article_count,
             "sentiment_ema": round(self._sentiment_ema, 4),
-            "active_feeds": [
-                src.value for src, feed in self._feeds.items() if feed.is_configured
-            ],
-            "last_fetch": {
-                src.value: round(time.time() - ts, 1)
-                for src, ts in self._last_fetch_at.items()
-            },
-            "feed_health": {
-                src.value: feed.health_summary() for src, feed in self._feeds.items()
-            },
+            "active_feeds": [src.value for src, feed in self._feeds.items() if feed.is_configured],
+            "last_fetch": {src.value: round(time.time() - ts, 1) for src, ts in self._last_fetch_at.items()},
+            "feed_health": {src.value: feed.health_summary() for src, feed in self._feeds.items()},
         }
 
     # ── Internal helpers ──────────────────────────────────────────────────────

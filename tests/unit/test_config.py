@@ -145,9 +145,7 @@ class TestAPIConfig:
 
     def test_api_config_creation(self):
         """Test APIConfig creation."""
-        config = APIConfig(
-            provider="OANDA", api_key="test-api-key", api_secret="test-api-secret"
-        )
+        config = APIConfig(provider="OANDA", api_key="test-api-key", api_secret="test-api-secret")
 
         assert config.provider == "OANDA"
         assert config.api_key == "test-api-key"
@@ -158,8 +156,8 @@ class TestAPIConfig:
         config = APIConfig(provider="Binance", api_key="key", api_secret="secret")
 
         assert config.sandbox_mode is True  # Default should be sandbox
-        assert config.timeout == 30  # noqa: PLR2004
-        assert config.max_retries == 3  # noqa: PLR2004
+        assert config.timeout == 30
+        assert config.max_retries == 3
 
     def test_api_config_validate(self):
         """Test APIConfig validation."""
@@ -231,7 +229,7 @@ class TestTradingConfig:
         config = TradingConfig()
 
         assert config.paper_trading_mode is True  # Default to paper trading
-        assert config.max_position_size == 10000.0  # noqa: PLR2004
+        assert config.max_position_size == 10000.0
         assert config.risk_per_trade == 1.0  # 1% risk per trade
 
     def test_trading_config_validate(self):

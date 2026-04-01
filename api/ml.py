@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -115,12 +116,7 @@ def _get_predictor():
         import pathlib
         import joblib
 
-        path = (
-            pathlib.Path(__file__).parent.parent
-            / "ml"
-            / "saved_models"
-            / "xgb_macro.pkl"
-        )
+        path = pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
         if path.exists():
             return joblib.load(str(path))
     except Exception as exc:
@@ -168,9 +164,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
                 df = df[["open", "high", "low", "close", "volume"]].dropna()
                 df = df.tail(lookback)
                 if len(df) >= 20:  # noqa: PLR2004
-                    logger.debug(
-                        "ML predict: loaded %d bars from %s", len(df), csv_path.name
-                    )
+                    logger.debug("ML predict: loaded %d bars from %s", len(df), csv_path.name)
                     return df
             except Exception as exc:
                 logger.debug("CSV load failed (%s): %s", csv_path, exc)
@@ -181,19 +175,13 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
 
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_market_data"):
-            raw = broker.get_market_data(
-                symbol.upper().replace("_", ""), "1h", lookback
-            )
+            raw = broker.get_market_data(symbol.upper().replace("_", ""), "1h", lookback)
             if raw:
                 df = pd.DataFrame(raw)
                 df["time"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
-                df = df.set_index("time")[
-                    ["open", "high", "low", "close", "volume"]
-                ].dropna()
+                df = df.set_index("time")[["open", "high", "low", "close", "volume"]].dropna()
                 if len(df) >= 20:  # noqa: PLR2004
-                    logger.debug(
-                        "ML predict: loaded %d bars from paper broker", len(df)
-                    )
+                    logger.debug("ML predict: loaded %d bars from paper broker", len(df))
                     return df
     except Exception as exc:
         logger.debug("Paper broker OHLCV load failed: %s", exc)
@@ -416,34 +404,13 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
             try:
                 data = json.loads(p.read_text())
                 # Normalise field names across different file formats
-                accuracy = float(
-                    data.get("accuracy")
-                    or data.get("oos_accuracy")
-                    or data.get("test_accuracy")
-                    or 0.0
-                )
-                precision = float(
-                    data.get("precision")
-                    or data.get("test_precision")
-                    or data.get("oos_f1")
-                    or 0.0
-                )
-                recall = float(
-                    data.get("recall")
-                    or data.get("test_recall")
-                    or data.get("oos_auc")
-                    or 0.0
-                )
-                f1 = float(
-                    data.get("f1") or data.get("f1_score") or data.get("oos_f1") or 0.0
-                )
+                accuracy = float(data.get("accuracy") or data.get("oos_accuracy") or data.get("test_accuracy") or 0.0)
+                precision = float(data.get("precision") or data.get("test_precision") or data.get("oos_f1") or 0.0)
+                recall = float(data.get("recall") or data.get("test_recall") or data.get("oos_auc") or 0.0)
+                f1 = float(data.get("f1") or data.get("f1_score") or data.get("oos_f1") or 0.0)
                 # Sharpe: prefer multi-symbol pooled, then sharpe_gate, then direct key
                 sharpe_gate = data.get("sharpe_gate") or {}
-                multi = (
-                    data.get("multi_symbol_backtest_extended")
-                    or data.get("multi_symbol_backtest")
-                    or {}
-                )
+                multi = data.get("multi_symbol_backtest_extended") or data.get("multi_symbol_backtest") or {}
                 sharpe = float(
                     data.get("sharpe")
                     or data.get("sharpe_ratio")
@@ -461,20 +428,9 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                     or multi.get("pooled_n_trades")
                     or 0
                 )
-                model_id = str(
-                    data.get("model_id") or data.get("model_file") or "advanced_oos"
-                )
-                evaluated_at = (
-                    data.get("evaluated_at")
-                    or data.get("validated_at")
-                    or datetime.now(UTC).isoformat()
-                )
-                note = (
-                    data.get("note")
-                    or data.get("validation_notes")
-                    or data.get("sharpe_note")
-                    or ""
-                )
+                model_id = str(data.get("model_id") or data.get("model_file") or "advanced_oos")
+                evaluated_at = data.get("evaluated_at") or data.get("validated_at") or datetime.now(UTC).isoformat()
+                note = data.get("note") or data.get("validation_notes") or data.get("sharpe_note") or ""
 
                 # If accuracy is still 0 try to derive from InferenceEngine counters
                 if accuracy == 0.0:
@@ -489,10 +445,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                             accuracy = round(1.0 - fallback / total, 4)
                             win_rate = accuracy
                             total_signals = total
-                            note = (
-                                note
-                                or "Accuracy derived from live predict/fallback ratio"
-                            )
+                            note = note or "Accuracy derived from live predict/fallback ratio"
                     except Exception as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
 
@@ -580,11 +533,7 @@ async def predict(
             from monetization.subscription import subscription_manager, plan_gate
 
             sub = subscription_manager.get_user_subscription(user.sub)
-            user_plan = (
-                sub.tier.value
-                if (sub and sub.is_active() and hasattr(sub.tier, "value"))
-                else "free"
-            )
+            user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
             if not plan_gate("professional", user_plan):
                 from fastapi import HTTPException as _HTTPException, status as _status
 
@@ -613,9 +562,7 @@ async def predict(
             if hasattr(predictor, "predict") and hasattr(predictor, "health"):
                 result = predictor.predict(ohlcv, symbol=symbol_upper)
                 direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
-                direction = direction_map.get(
-                    result.get("direction", "neutral"), "HOLD"
-                )
+                direction = direction_map.get(result.get("direction", "neutral"), "HOLD")
                 confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
                 entry_price = result.get("last_close")
                 sl, tp = (None, None)
@@ -635,16 +582,10 @@ async def predict(
 
             # AdvancedModelPredictor path
             if hasattr(predictor, "predict_signal"):
-                macro_df = _get_macro_df_for_symbol(
-                    symbol_upper, lookback=body.lookback
-                )
-                result = predictor.predict_signal(
-                    ohlcv, macro_df=macro_df, symbol=symbol_upper
-                )
+                macro_df = _get_macro_df_for_symbol(symbol_upper, lookback=body.lookback)
+                result = predictor.predict_signal(ohlcv, macro_df=macro_df, symbol=symbol_upper)
                 direction_map = {"long": "BUY", "short": "SELL", "neutral": "HOLD"}
-                direction = direction_map.get(
-                    result.get("direction", "neutral"), "HOLD"
-                )
+                direction = direction_map.get(result.get("direction", "neutral"), "HOLD")
                 confidence = round(float(result.get("confidence", 0.0)) * 100, 1)
                 entry_price = result.get("last_close")
                 sl, tp = (None, None)
@@ -664,9 +605,7 @@ async def predict(
 
             # EnsemblePredictor / legacy path
             if hasattr(predictor, "predict_symbol"):
-                result = predictor.predict_symbol(
-                    symbol_upper, timeframe=body.timeframe
-                )
+                result = predictor.predict_symbol(symbol_upper, timeframe=body.timeframe)
                 return PredictResponse(
                     symbol=symbol_upper,
                     direction=result.get("direction", "HOLD"),
@@ -695,9 +634,7 @@ async def predict(
             )
 
     # No predictor loaded — return a safe HOLD fallback
-    logger.warning(
-        "No ML predictor loaded for %s — returning HOLD fallback", symbol_upper
-    )
+    logger.warning("No ML predictor loaded for %s — returning HOLD fallback", symbol_upper)
     return PredictResponse(
         symbol=symbol_upper,
         direction="HOLD",
@@ -728,9 +665,7 @@ async def get_feature_importances(user: TokenPayload = Depends(require_role("adm
 
     import joblib
 
-    model_path = (
-        pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
-    )
+    model_path = pathlib.Path(__file__).parent.parent / "ml" / "saved_models" / "xgb_macro.pkl"
     if not model_path.exists():
         return {"features": [], "note": "Model not trained yet"}
 
@@ -838,14 +773,8 @@ async def signal_filter_stats(
                 "ev_window": int(os.getenv("EV_WINDOW", "50")),
                 "threshold_long": float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.58")),
                 "threshold_short": float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.42")),
-                "regime_filter_enabled": os.getenv(
-                    "REGIME_FILTER_ENABLED", "true"
-                ).lower()
-                == "true",
-                "mtf_confluence_required": os.getenv(
-                    "MTF_CONFLUENCE_REQUIRED", "false"
-                ).lower()
-                == "true",
+                "regime_filter_enabled": os.getenv("REGIME_FILTER_ENABLED", "true").lower() == "true",
+                "mtf_confluence_required": os.getenv("MTF_CONFLUENCE_REQUIRED", "false").lower() == "true",
                 "sizing_method": os.getenv("POSITION_SIZING_METHOD", "volatility"),
             },
         }

@@ -16,6 +16,7 @@ Production Mobile API v2.0
 import logging
 from typing import Any
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 import uuid
 import asyncio
@@ -174,9 +175,7 @@ class MobileAPIServer:
         """Initialize mobile API"""
         import os
 
-        resolved_secret = (
-            jwt_secret or os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET")
-        )
+        resolved_secret = jwt_secret or os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET")
         if not resolved_secret or len(resolved_secret) < 32:  # noqa: PLR2004
             raise ValueError(
                 "jwt_secret must be >= 32 characters. "
@@ -204,11 +203,7 @@ class MobileAPIServer:
         # explicit allowlist sourced from the environment; default to no
         # cross-origin access so misconfigured deployments fail closed.
         _raw_origins = os.getenv("MOBILE_CORS_ORIGINS", "")
-        _allowed_origins: list[str] = (
-            [o.strip() for o in _raw_origins.split(",") if o.strip()]
-            if _raw_origins
-            else []
-        )
+        _allowed_origins: list[str] = [o.strip() for o in _raw_origins.split(",") if o.strip()] if _raw_origins else []
         self.app.add_middleware(
             CORSMiddleware,
             allow_origins=_allowed_origins,
@@ -310,16 +305,12 @@ class MobileAPIServer:
                     raise HTTPException(status_code=401, detail="Invalid credentials")
 
                 # Verify password
-                if not bcrypt.checkpw(
-                    password.encode(), user["password_hash"].encode()
-                ):
+                if not bcrypt.checkpw(password.encode(), user["password_hash"].encode()):
                     raise HTTPException(status_code=401, detail="Invalid credentials")
 
                 # Generate tokens
                 access_token = self._generate_token(user["user_id"], expires_hours=24)
-                refresh_token = self._generate_token(
-                    user["user_id"], expires_hours=7 * 24
-                )
+                refresh_token = self._generate_token(user["user_id"], expires_hours=7 * 24)
 
                 logger.info("User logged in: user_id=%s", user["user_id"])
 
@@ -340,9 +331,7 @@ class MobileAPIServer:
             """Refresh access token"""
 
             try:
-                payload = jwt.decode(
-                    refresh_token, self.jwt_secret, algorithms=["HS256"]
-                )
+                payload = jwt.decode(refresh_token, self.jwt_secret, algorithms=["HS256"])
                 user_id = payload["user_id"]
 
                 new_access_token = self._generate_token(user_id, expires_hours=24)
@@ -406,9 +395,7 @@ class MobileAPIServer:
     # ── Trading ───────────────────────────────────────────────────────────────
 
     def _register_trading_routes(self) -> None:
-        @self.app.get(
-            "/api/v2/quotes/{symbol}", response_model=QuoteData, tags=["Trading"]
-        )
+        @self.app.get("/api/v2/quotes/{symbol}", response_model=QuoteData, tags=["Trading"])
         async def get_quote(symbol: str, user_id: str = Depends(self._verify_token)):
             """Get real-time quote"""
 
@@ -434,9 +421,7 @@ class MobileAPIServer:
                 logger.error(f"Failed to fetch quote: {e}")
                 raise HTTPException(status_code=500, detail="Failed to fetch quote") from e
 
-        @self.app.post(
-            "/api/v2/orders", response_model=dict[str, Any], tags=["Trading"]
-        )
+        @self.app.post("/api/v2/orders", response_model=dict[str, Any], tags=["Trading"])
         async def place_order(
             order: PlaceOrderRequest,
             background_tasks: BackgroundTasks,
@@ -504,9 +489,7 @@ class MobileAPIServer:
                 logger.error(f"Order placement failed: {e}")
                 raise HTTPException(status_code=500, detail="Order placement failed") from e
 
-        @self.app.get(
-            "/api/v2/trades", response_model=list[TradeData], tags=["Trading"]
-        )
+        @self.app.get("/api/v2/trades", response_model=list[TradeData], tags=["Trading"])
         async def get_open_trades(user_id: str = Depends(self._verify_token)):
             """Get all open trades"""
 
@@ -528,10 +511,7 @@ class MobileAPIServer:
                         pnl_percentage=float(t["pnl_percentage"]),
                         entry_time=datetime.fromisoformat(t["entry_time"]),
                         duration_seconds=int(
-                            (
-                                datetime.now(UTC)
-                                - datetime.fromisoformat(t["entry_time"])
-                            ).total_seconds()
+                            (datetime.now(UTC) - datetime.fromisoformat(t["entry_time"])).total_seconds()
                         ),
                         spread=float(t.get("spread", 0)),
                     )
@@ -615,9 +595,7 @@ class MobileAPIServer:
                 raise
             except Exception as e:
                 logger.error(f"Failed to fetch performance: {e}")
-                raise HTTPException(
-                    status_code=500, detail="Failed to fetch performance"
-                ) from e
+                raise HTTPException(status_code=500, detail="Failed to fetch performance") from e
 
     # ── News ──────────────────────────────────────────────────────────────────
 
@@ -651,17 +629,11 @@ class MobileAPIServer:
                     return NotificationPreferences()
 
                 prefs = self.db.get_notification_preferences(user_id)
-                return (
-                    NotificationPreferences(**prefs)
-                    if prefs
-                    else NotificationPreferences()
-                )
+                return NotificationPreferences(**prefs) if prefs else NotificationPreferences()
 
             except Exception as e:
                 logger.error(f"Failed to fetch preferences: {e}")
-                raise HTTPException(
-                    status_code=500, detail="Failed to fetch preferences"
-                ) from e
+                raise HTTPException(status_code=500, detail="Failed to fetch preferences") from e
 
         @self.app.post("/api/v2/notifications/preferences", tags=["Notifications"])
         async def update_notification_preferences(
@@ -678,9 +650,7 @@ class MobileAPIServer:
 
             except Exception as e:
                 logger.error(f"Failed to update preferences: {e}")
-                raise HTTPException(
-                    status_code=500, detail="Failed to update preferences"
-                ) from e
+                raise HTTPException(status_code=500, detail="Failed to update preferences") from e
 
     # ── WebSocket ─────────────────────────────────────────────────────────────
 
@@ -790,26 +760,18 @@ class MobileAPIServer:
             return payload["user_id"]
 
         except jwt.ExpiredSignatureError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
-            ) from None
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired") from None
         except jwt.DecodeError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-            ) from None
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from None
         except Exception as e:
             logger.error(f"Token verification failed: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed"
-            ) from e
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed") from e
 
     def run(self, reload: bool = False):
         """Run the API server"""
         import uvicorn
 
-        uvicorn.run(
-            self.app, host=self.host, port=self.port, log_level="info", reload=reload
-        )
+        uvicorn.run(self.app, host=self.host, port=self.port, log_level="info", reload=reload)
 
 
 # ---------------------------------------------------------------------------
@@ -828,10 +790,7 @@ from fastapi import APIRouter as _APIRouter
 
 
 def _build_module_app() -> "FastAPI":
-    _secret = (
-        _os.getenv("SECURITY_JWT_SECRET", "").strip()
-        or _os.getenv("JWT_SECRET", "").strip()
-    )
+    _secret = _os.getenv("SECURITY_JWT_SECRET", "").strip() or _os.getenv("JWT_SECRET", "").strip()
     if not _secret or len(_secret) < 32:  # noqa: PLR2004
         raise RuntimeError(
             "SECURITY_JWT_SECRET (or JWT_SECRET) must be set to at least 32 characters. "

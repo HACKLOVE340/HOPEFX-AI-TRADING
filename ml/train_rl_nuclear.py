@@ -190,9 +190,7 @@ if _GYM_AVAILABLE:
             }
             return self._obs.copy(), reward, terminated, truncated, info
 
-        def _compute_reward(
-            self, action: int, severity: float, vol: float, exposure: float
-        ) -> float:
+        def _compute_reward(self, action: int, severity: float, vol: float, exposure: float) -> float:
             reward = 0.0
 
             if self.reward_mode == "sharpe_minus_drawdown":
@@ -404,9 +402,7 @@ def walk_forward_train(
         logger.error("gymnasium and stable-baselines3 required")
         return
 
-    logger.info(
-        "Walk-forward training: %d folds × %d steps", n_folds, timesteps_per_fold
-    )
+    logger.info("Walk-forward training: %d folds × %d steps", n_folds, timesteps_per_fold)
     best_reward = float("-inf")
     best_fold = -1
 
@@ -456,9 +452,7 @@ def walk_forward_train(
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Train NuclearDecision PPO agent for HOPEFX"
-    )
+    parser = argparse.ArgumentParser(description="Train NuclearDecision PPO agent for HOPEFX")
     parser.add_argument(
         "--timesteps",
         type=int,

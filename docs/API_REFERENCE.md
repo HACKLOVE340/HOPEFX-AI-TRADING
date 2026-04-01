@@ -2,7 +2,7 @@
 
 > Base URL: `http://localhost:8000` (development) | `https://yourdomain.com` (production)
 > Interactive docs: `/docs` (Swagger UI) | `/redoc` (ReDoc)
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 All endpoints except `/health`, `/docs`, `/openapi.json`, and `/redoc`
 require a valid JWT in the `Authorization: Bearer <token>` header.

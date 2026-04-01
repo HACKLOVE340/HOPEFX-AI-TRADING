@@ -92,9 +92,7 @@ class EWCRegularizer:
         loss = 0
         for name, param in model.named_parameters():
             if name in self.fisher_dict:
-                loss += (
-                    self.fisher_dict[name] * (param - self.optimal_params[name]) ** 2
-                ).sum()
+                loss += (self.fisher_dict[name] * (param - self.optimal_params[name]) ** 2).sum()
 
         return self.lambda_ewc * loss
 
@@ -245,9 +243,7 @@ class EnsemblePredictor:
     def __init__(self, models: list[nn.Module], weights: list[float] | None = None):
         self.models = models
         self.weights = weights or [1.0 / len(models)] * len(models)
-        self.performance_history: dict[int, list[float]] = {
-            i: [] for i in range(len(models))
-        }
+        self.performance_history: dict[int, list[float]] = {i: [] for i in range(len(models))}
 
     def predict(self, X: np.ndarray) -> tuple[float, float]:
         """
@@ -410,15 +406,14 @@ class SklearnOnlineLearner:
         All values are padded/truncated to ``n_features``.
         """
         try:
-            cols = [
-                c
-                for c in ["open", "high", "low", "close", "volume"]
-                if c in bars.columns
-            ]
+            cols = [c for c in ["open", "high", "low", "close", "volume"] if c in bars.columns]
             if not cols:
                 return None
 
-            ohlcv_vals = bars[cols].ffill().bfill().values.astype(float)
+            # ffill propagates the last known value forward (causal).
+            # fillna(0.0) handles any leading NaNs at the start of the window
+            # without back-filling from future bars (no look-ahead bias).
+            ohlcv_vals = bars[cols].ffill().fillna(0.0).values.astype(float)
             flat = ohlcv_vals.flatten()
 
             # Log returns (last 20 bars)
@@ -439,9 +434,7 @@ class SklearnOnlineLearner:
                 dl_extra[2] = float(feats.get("macro_impact_score_now", 0.0))
                 dl_extra[3] = float(feats.get("macro_is_blackout", 0.0))
             except Exception as _exc:
-                logger.debug(
-                    "SklearnOnlineLearner: data layer injection skipped: %s", _exc
-                )
+                logger.debug("SklearnOnlineLearner: data layer injection skipped: %s", _exc)
 
             flat = np.concatenate([flat, dl_extra])
 
@@ -506,9 +499,7 @@ class SklearnOnlineLearner:
         try:
             drift = float(np.mean(np.abs(self._model.coef_ - self._anchor_coef)))
             new_alpha = self._base_alpha * (1.0 + self.ewc_lambda * drift * 100.0)
-            new_alpha = float(
-                np.clip(new_alpha, self._base_alpha, self._base_alpha * 100)
-            )
+            new_alpha = float(np.clip(new_alpha, self._base_alpha, self._base_alpha * 100))
             self._model.alpha = new_alpha
         except Exception as exc:
             logger.debug("EWC penalty application failed: %s", exc)
@@ -538,8 +529,7 @@ class SklearnOnlineLearner:
             _, p_value = ks_2samp(self._ref_probs, window_arr)
             if p_value < self._DRIFT_P_THRESH:
                 logger.info(
-                    "SklearnOnlineLearner[%s]: drift detected (p=%.4f) — "
-                    "resetting model to adapt to new regime",
+                    "SklearnOnlineLearner[%s]: drift detected (p=%.4f) — resetting model to adapt to new regime",
                     self.symbol,
                     p_value,
                 )
@@ -640,9 +630,7 @@ class SklearnOnlineLearner:
             )
             return True
         except Exception as exc:
-            logger.warning(
-                "SklearnOnlineLearner[%s] partial_fit failed: %s", self.symbol, exc
-            )
+            logger.warning("SklearnOnlineLearner[%s] partial_fit failed: %s", self.symbol, exc)
             return False
 
     def predict_proba(self, bars: pd.DataFrame) -> float | None:
@@ -736,9 +724,7 @@ def get_online_learner(
                 learner = SklearnOnlineLearner.load(str(p))
                 import logging as _log
 
-                _log.getLogger(__name__).info(
-                    "Loaded persisted OnlineLearner for %s from %s", symbol, p
-                )
+                _log.getLogger(__name__).info("Loaded persisted OnlineLearner for %s from %s", symbol, p)
             except Exception:
                 learner = SklearnOnlineLearner(symbol=symbol, persist_path=str(p))
         else:
@@ -790,10 +776,7 @@ class XGBoostOnlineModel:
         try:
             import xgboost as xgb  # noqa: F401
         except ImportError as exc:
-            raise ImportError(
-                "xgboost is required for XGBoostOnlineModel. "
-                "Install with: pip install xgboost"
-            ) from exc
+            raise ImportError("xgboost is required for XGBoostOnlineModel. Install with: pip install xgboost") from exc
 
         self._n_estimators = n_estimators
         self._max_depth = max_depth
@@ -921,6 +904,4 @@ class XGBoostOnlineModel:
         )
         updated.fit(X, y, xgb_model=prev.get_booster(), verbose=False)
         self._model = updated
-        logger.debug(
-            "XGBoostOnlineModel partial_fit: added %d trees", self._n_estimators
-        )
+        logger.debug("XGBoostOnlineModel partial_fit: added %d trees", self._n_estimators)
