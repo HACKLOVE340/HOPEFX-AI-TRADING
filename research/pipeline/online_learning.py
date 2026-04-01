@@ -75,7 +75,7 @@ try:
 
     sys.path.insert(0, str(_P(__file__).resolve().parents[2]))
     DEEP_ONLINE_AVAILABLE = True
-except Exception:
+except (ImportError, OSError):
     DEEP_ONLINE_AVAILABLE = False
 
 
@@ -557,7 +557,7 @@ class IncrementalXGBoost:
     def load(cls, path: str | Path) -> IncrementalXGBoost:
         try:
             obj = joblib.load(path)
-        except Exception:
+        except (ValueError, OSError, ModuleNotFoundError):
             with open(path, "rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         logger.info("IncrementalXGBoost loaded ← %s", path)

@@ -86,7 +86,7 @@ class NewsAPIFeed(NewsFeedBase):
                 pub_str = item.get("publishedAt", "")
                 try:
                     published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
-                except Exception:
+                except (ValueError, TypeError):
                     published = datetime.now(UTC)
 
                 articles.append(
@@ -139,7 +139,7 @@ class NewsAPIFeed(NewsFeedBase):
                 pub_str = item.get("dateTime", item.get("date", ""))
                 try:
                     published = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
-                except Exception:
+                except (ValueError, TypeError):
                     published = datetime.now(UTC)
 
                 # NewsAPI.ai provides sentiment

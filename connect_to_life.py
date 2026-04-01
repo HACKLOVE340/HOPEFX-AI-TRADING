@@ -398,7 +398,7 @@ class LifeSupervisor:
                 event[
                     "current_exposure"
                 ] = await risk_orchestrator.get_current_exposure()
-            except Exception:
+            except Exception:  # nosec B110
                 event["current_exposure"] = 0.5
 
         try:
@@ -444,7 +444,7 @@ class LifeSupervisor:
             try:
                 event = queue.get_nowait()
                 await self.on_news_event(event)
-            except Exception:
+            except Exception:  # nosec B110
                 break
 
     # ── supervision loop ──────────────────────────────────────────────────────

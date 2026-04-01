@@ -261,7 +261,7 @@ class AnomalyWeighter:
             raise FileNotFoundError(f"AnomalyWeighter model not found: {path}")
         try:
             obj = joblib.load(path)
-        except Exception:
+        except (ValueError, OSError, ModuleNotFoundError):
             with open(path, "rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
@@ -394,7 +394,7 @@ class AnomalyWeightStore:
                 ]
             )
             return np.nan_to_num(feat, nan=0.0, posinf=0.0, neginf=0.0)
-        except Exception:
+        except (ValueError, IndexError, KeyError):
             return None
 
     # ── Update + score ────────────────────────────────────────────────────────
