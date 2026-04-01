@@ -737,7 +737,7 @@ def create_portfolio_report(
     risk_analyzer.plot_drawdowns(save_path=str(dd_path))
 
     logger.info(
-        "Portfolio report complete: %s | Sharpe: %.2f | Sortino: %.2f | MaxDD: %.2%% | Calmar: %.2f",
+        "Portfolio report complete: %s | Sharpe: %.2f | Sortino: %.2f | MaxDD: %.2f%% | Calmar: %.2f",
         report_path, metrics["sharpe_ratio"], metrics["sortino_ratio"],
         metrics["max_drawdown"], metrics["calmar_ratio"],
     )

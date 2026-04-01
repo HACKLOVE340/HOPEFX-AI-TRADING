@@ -377,6 +377,8 @@ class AsyncExecutionEngine:
 
         slippage = self._rng.normal(0, volatility * size_factor)
 
+        fill_price = base_price  # default: use base price for unmatched order types
+
         if order.order_type == OrderType.MARKET:
             fill_price = base_price * (1 + slippage)
         elif order.order_type == OrderType.LIMIT:

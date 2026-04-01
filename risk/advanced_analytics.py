@@ -609,9 +609,12 @@ class AdvancedRiskAnalytics:
             if n_blocks < 10:  # noqa: PLR2004
                 # Fall back to overlapping if too few blocks
                 method = "overlapping"
+                multiday_returns = np.array([])  # will be computed in overlapping branch
             else:
                 blocks = [np.sum(returns[i * time_horizon : (i + 1) * time_horizon]) for i in range(n_blocks)]
                 multiday_returns = np.array(blocks)
+        else:
+            multiday_returns = np.array([])  # will be computed in overlapping branch
 
         if method == "overlapping":
             # Overlapping t-day cumulative returns
