@@ -70,9 +70,16 @@ _DEFAULT_SERIES: dict[str, str] = {
     "us10y": "us10y_daily.csv",
     "us2y": "us2y_daily.csv",
     "cpi_surprise": "cpi_surprise.csv",
-    "cot_net_spec": "cot_net_spec.csv",
     "vix": "vix_daily.csv",
     "gold_etf_flow": "gold_etf_flow.csv",
+    # CFTC COT series (populated by CFTCCOTFeed, persisted to data/macro/)
+    "cot_net_spec": "cot_net_spec.csv",
+    "cot_net_spec_pct": "cot_net_spec_pct.csv",
+    "cot_comm_net": "cot_comm_net.csv",
+    "cot_open_interest": "cot_open_interest.csv",
+    # IMF central bank gold reserves (populated by IMFGoldFeed)
+    "imf_cb_gold_tonnes": "imf_cb_gold_tonnes.csv",
+    "imf_cb_gold_chg_qoq": "imf_cb_gold_chg_qoq.csv",
 }
 
 
