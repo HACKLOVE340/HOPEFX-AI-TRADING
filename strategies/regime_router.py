@@ -35,6 +35,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -366,10 +367,7 @@ class RegimeRouter:
 
     def regime_history(self, limit: int = 20) -> list[dict[str, Any]]:
         """Return recent regime transitions."""
-        return [
-            {"regime": r, "confidence": round(c, 3), "timestamp": ts}
-            for r, c, ts in self._regime_history[-limit:]
-        ]
+        return [{"regime": r, "confidence": round(c, 3), "timestamp": ts} for r, c, ts in self._regime_history[-limit:]]
 
     def status(self) -> dict[str, Any]:
         """Return current routing status for the dashboard."""

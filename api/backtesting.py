@@ -20,6 +20,7 @@ import io
 import logging
 import uuid
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -55,7 +56,7 @@ def _load_results_from_db() -> None:
         return
     try:
         for key in db_keys_prefix(_DB_PREFIX):
-            run_id = key[len(_DB_PREFIX):]
+            run_id = key[len(_DB_PREFIX) :]
             value = db_get(key)
             if value:
                 _results[run_id] = value
@@ -87,7 +88,7 @@ def _load_wf_results_from_db() -> None:
         return
     try:
         for key in db_keys_prefix(_WF_DB_PREFIX):
-            run_id = key[len(_WF_DB_PREFIX):]
+            run_id = key[len(_WF_DB_PREFIX) :]
             value = db_get(key)
             if value:
                 _wf_results[run_id] = value
@@ -282,9 +283,7 @@ def _run_backtest_sync(req: BacktestRequest) -> dict:
         "sharpe_ratio": round(results.get("sharpe_ratio", 0.0), 4),
         "total_trades": results.get("total_trades", 0),
         "win_rate_pct": round(results.get("win_rate", 0) * 100, 2),
-        "raw": {
-            k: v for k, v in results.items() if k not in ("equity_curve", "trades")
-        },
+        "raw": {k: v for k, v in results.items() if k not in ("equity_curve", "trades")},
     }
 
 
@@ -524,11 +523,7 @@ async def run_multi_symbol_backtest(
         raise HTTPException(status_code=500, detail=f"Backtest failed: {exc}") from exc
 
     pooled = report.get("pooled", {})
-    report_filename = (
-        "multi_symbol_report_extended.json"
-        if req.extended
-        else "multi_symbol_report.json"
-    )
+    report_filename = "multi_symbol_report_extended.json" if req.extended else "multi_symbol_report.json"
 
     return MultiSymbolBacktestResponse(
         run_id=str(uuid.uuid4()),
@@ -565,9 +560,7 @@ async def get_latest_multi_symbol_report(
     import json
     from pathlib import Path
 
-    filename = (
-        "multi_symbol_report_extended.json" if extended else "multi_symbol_report.json"
-    )
+    filename = "multi_symbol_report_extended.json" if extended else "multi_symbol_report.json"
     report_path = Path("backtest/results") / filename
 
     if not report_path.exists():
@@ -658,9 +651,7 @@ async def refresh_reconciled_investigation(
             import json as _json
 
             results = run_investigation(smoke=False)
-            _Path("data/backtest_investigation.json").write_text(
-                _json.dumps(results, indent=2)
-            )
+            _Path("data/backtest_investigation.json").write_text(_json.dumps(results, indent=2))
         except Exception as exc:
             import logging
 
@@ -730,27 +721,30 @@ async def run_replay_backtest(
             )
             metrics = await runner.run(start=start, end=end, symbol=req.symbol)
 
-            _persist_result(run_id, {
-                "run_id": run_id,
-                "type": "replay",
-                "strategy": req.strategy,
-                "symbol": req.symbol,
-                "start_date": req.start_date,
-                "end_date": req.end_date,
-                "initial_capital": req.initial_capital,
-                "status": "completed",
-                "metrics": {
-                    "total_return": getattr(metrics, "total_return", None),
-                    "sharpe_ratio": getattr(metrics, "sharpe_ratio", None),
-                    "max_drawdown": getattr(metrics, "max_drawdown", None),
-                    "win_rate": getattr(metrics, "win_rate", None),
-                    "total_trades": getattr(metrics, "total_trades", None),
-                    "profit_factor": getattr(metrics, "profit_factor", None),
-                }
-                if metrics
-                else {},
-                "completed_at": datetime.now(UTC).isoformat(),
-            })
+            _persist_result(
+                run_id,
+                {
+                    "run_id": run_id,
+                    "type": "replay",
+                    "strategy": req.strategy,
+                    "symbol": req.symbol,
+                    "start_date": req.start_date,
+                    "end_date": req.end_date,
+                    "initial_capital": req.initial_capital,
+                    "status": "completed",
+                    "metrics": {
+                        "total_return": getattr(metrics, "total_return", None),
+                        "sharpe_ratio": getattr(metrics, "sharpe_ratio", None),
+                        "max_drawdown": getattr(metrics, "max_drawdown", None),
+                        "win_rate": getattr(metrics, "win_rate", None),
+                        "total_trades": getattr(metrics, "total_trades", None),
+                        "profit_factor": getattr(metrics, "profit_factor", None),
+                    }
+                    if metrics
+                    else {},
+                    "completed_at": datetime.now(UTC).isoformat(),
+                },
+            )
         except Exception as exc:
             logger.error("Replay backtest %s failed: %s", run_id, exc, exc_info=True)
             _persist_result(run_id, {"run_id": run_id, "status": "error", "error": str(exc)})
@@ -764,9 +758,7 @@ async def run_replay_backtest(
     }
 
 
-@router.post(
-    "/replay/stress", summary="Regime-shift stress test across historical regimes"
-)
+@router.post("/replay/stress", summary="Regime-shift stress test across historical regimes")
 async def run_regime_stress_test(
     req: RegimeStressRequest,
     background_tasks: BackgroundTasks,
@@ -805,39 +797,42 @@ async def run_regime_stress_test(
             )
             report = await tester.run_all_regimes()
 
-            _persist_result(run_id, {
-                "run_id": run_id,
-                "type": "regime_stress",
-                "strategy": req.strategy,
-                "status": "completed",
-                "regimes_run": report.regimes_run,
-                "regimes_passed": report.regimes_passed,
-                "regimes_failed": report.regimes_failed,
-                "worst_drawdown": report.worst_drawdown(),
-                "best_sharpe": report.best_sharpe(),
-                "worst_sharpe": report.worst_sharpe(),
-                "summary": tester.summary(report),
-                "results": [
-                    {
-                        "regime": r.regime.name,
-                        "description": r.regime.description,
-                        "passed": r.passed,
-                        "tick_count": r.tick_count,
-                        "error": r.error,
-                        "metrics": {
-                            "total_return": getattr(r.metrics, "total_return", None),
-                            "sharpe_ratio": getattr(r.metrics, "sharpe_ratio", None),
-                            "max_drawdown": getattr(r.metrics, "max_drawdown", None),
-                            "win_rate": getattr(r.metrics, "win_rate", None),
-                            "total_trades": getattr(r.metrics, "total_trades", None),
+            _persist_result(
+                run_id,
+                {
+                    "run_id": run_id,
+                    "type": "regime_stress",
+                    "strategy": req.strategy,
+                    "status": "completed",
+                    "regimes_run": report.regimes_run,
+                    "regimes_passed": report.regimes_passed,
+                    "regimes_failed": report.regimes_failed,
+                    "worst_drawdown": report.worst_drawdown(),
+                    "best_sharpe": report.best_sharpe(),
+                    "worst_sharpe": report.worst_sharpe(),
+                    "summary": tester.summary(report),
+                    "results": [
+                        {
+                            "regime": r.regime.name,
+                            "description": r.regime.description,
+                            "passed": r.passed,
+                            "tick_count": r.tick_count,
+                            "error": r.error,
+                            "metrics": {
+                                "total_return": getattr(r.metrics, "total_return", None),
+                                "sharpe_ratio": getattr(r.metrics, "sharpe_ratio", None),
+                                "max_drawdown": getattr(r.metrics, "max_drawdown", None),
+                                "win_rate": getattr(r.metrics, "win_rate", None),
+                                "total_trades": getattr(r.metrics, "total_trades", None),
+                            }
+                            if r.metrics
+                            else None,
                         }
-                        if r.metrics
-                        else None,
-                    }
-                    for r in report.results
-                ],
-                "completed_at": datetime.now(UTC).isoformat(),
-            })
+                        for r in report.results
+                    ],
+                    "completed_at": datetime.now(UTC).isoformat(),
+                },
+            )
         except Exception as exc:
             logger.error("Regime stress %s failed: %s", run_id, exc, exc_info=True)
             _persist_result(run_id, {"run_id": run_id, "status": "error", "error": str(exc)})

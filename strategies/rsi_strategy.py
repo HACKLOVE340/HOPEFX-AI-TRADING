@@ -11,6 +11,7 @@ This strategy uses RSI to identify overbought and oversold conditions.
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -51,8 +52,7 @@ class RSIStrategy(BaseStrategy):
         self.oversold = oversold
         self.overbought = overbought
         logger.info(
-            f"RSI Strategy initialized: period={period}, "
-            f"oversold={oversold}, overbought={overbought}",
+            f"RSI Strategy initialized: period={period}, oversold={oversold}, overbought={overbought}",
         )
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -170,10 +170,7 @@ class RSIStrategy(BaseStrategy):
             elif current_rsi > self.overbought:
                 signal_type = "SELL"
                 # Confidence increases as RSI gets more overbought
-                confidence = (
-                    0.5
-                    + (current_rsi - self.overbought) / (100 - self.overbought) * 0.4
-                )
+                confidence = 0.5 + (current_rsi - self.overbought) / (100 - self.overbought) * 0.4
                 confidence = min(0.95, confidence)
                 reason = f"RSI overbought: {current_rsi:.2f} > {self.overbought}"
 
@@ -184,9 +181,7 @@ class RSIStrategy(BaseStrategy):
 
             # Exit long position if RSI reaches neutral/overbought
             elif (
-                hasattr(self, "position")
-                and self.position == "LONG"
-                and current_rsi > 50  # noqa: PLR2004
+                hasattr(self, "position") and self.position == "LONG" and current_rsi > 50  # noqa: PLR2004
             ):
                 if current_rsi > self.overbought or current_rsi < previous_rsi:
                     signal_type = "SELL"
@@ -195,9 +190,7 @@ class RSIStrategy(BaseStrategy):
 
             # Exit short position if RSI reaches neutral/oversold
             elif (
-                hasattr(self, "position")
-                and self.position == "SHORT"
-                and current_rsi < 50  # noqa: PLR2004
+                hasattr(self, "position") and self.position == "SHORT" and current_rsi < 50  # noqa: PLR2004
             ):
                 if current_rsi < self.oversold or current_rsi > previous_rsi:
                     signal_type = "BUY"

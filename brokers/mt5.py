@@ -17,6 +17,7 @@ Supported:
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -87,8 +88,7 @@ class MT5Connector(BrokerConnector):
 
         if not MT5_AVAILABLE:
             raise ImportError(
-                "MetaTrader5 package not installed. "
-                "Install with: pip install MetaTrader5",
+                "MetaTrader5 package not installed. Install with: pip install MetaTrader5",
             )
 
         self.server = config.get("server")
@@ -200,26 +200,16 @@ class MT5Connector(BrokerConnector):
                 return None
 
             if not symbol_info.visible and not mt5.symbol_select(symbol, True):
-                    logger.error(f"Failed to select symbol {symbol}")
-                    return None
+                logger.error(f"Failed to select symbol {symbol}")
+                return None
 
             # Determine order type
             if order_type == OrderType.MARKET:
-                mt5_order_type = (
-                    mt5.ORDER_TYPE_BUY if side == OrderSide.BUY else mt5.ORDER_TYPE_SELL
-                )
+                mt5_order_type = mt5.ORDER_TYPE_BUY if side == OrderSide.BUY else mt5.ORDER_TYPE_SELL
             elif order_type == OrderType.LIMIT:
-                mt5_order_type = (
-                    mt5.ORDER_TYPE_BUY_LIMIT
-                    if side == OrderSide.BUY
-                    else mt5.ORDER_TYPE_SELL_LIMIT
-                )
+                mt5_order_type = mt5.ORDER_TYPE_BUY_LIMIT if side == OrderSide.BUY else mt5.ORDER_TYPE_SELL_LIMIT
             elif order_type == OrderType.STOP:
-                mt5_order_type = (
-                    mt5.ORDER_TYPE_BUY_STOP
-                    if side == OrderSide.BUY
-                    else mt5.ORDER_TYPE_SELL_STOP
-                )
+                mt5_order_type = mt5.ORDER_TYPE_BUY_STOP if side == OrderSide.BUY else mt5.ORDER_TYPE_SELL_STOP
             else:
                 logger.error(f"Unsupported order type: {order_type}")
                 return None
@@ -234,9 +224,7 @@ class MT5Connector(BrokerConnector):
 
             # Build request
             request = {
-                "action": mt5.TRADE_ACTION_DEAL
-                if order_type == OrderType.MARKET
-                else mt5.TRADE_ACTION_PENDING,
+                "action": mt5.TRADE_ACTION_DEAL if order_type == OrderType.MARKET else mt5.TRADE_ACTION_PENDING,
                 "symbol": symbol,
                 "volume": float(quantity),
                 "type": mt5_order_type,
@@ -269,12 +257,8 @@ class MT5Connector(BrokerConnector):
                 type=order_type,
                 quantity=quantity,
                 price=price,
-                status=OrderStatus.FILLED
-                if result.retcode == mt5.TRADE_RETCODE_DONE
-                else OrderStatus.PENDING,
-                filled_quantity=result.volume
-                if hasattr(result, "volume")
-                else quantity,
+                status=OrderStatus.FILLED if result.retcode == mt5.TRADE_RETCODE_DONE else OrderStatus.PENDING,
+                filled_quantity=result.volume if hasattr(result, "volume") else quantity,
                 average_price=result.price if hasattr(result, "price") else price,
                 timestamp=datetime.now(UTC),
                 metadata={
@@ -339,9 +323,7 @@ class MT5Connector(BrokerConnector):
             for mt5_pos in positions:
                 # Get current price
                 tick = mt5.symbol_info_tick(mt5_pos.symbol)
-                current_price = (
-                    tick.bid if mt5_pos.type == mt5.POSITION_TYPE_BUY else tick.ask
-                )
+                current_price = tick.bid if mt5_pos.type == mt5.POSITION_TYPE_BUY else tick.ask
 
                 position = Position(
                     symbol=mt5_pos.symbol,
@@ -374,20 +356,14 @@ class MT5Connector(BrokerConnector):
 
             for position in positions:
                 # Determine close type (opposite of position)
-                close_type = (
-                    mt5.ORDER_TYPE_SELL
-                    if position.type == mt5.POSITION_TYPE_BUY
-                    else mt5.ORDER_TYPE_BUY
-                )
+                close_type = mt5.ORDER_TYPE_SELL if position.type == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY
 
                 # Get current price
                 tick = mt5.symbol_info_tick(symbol)
                 if tick is None:
                     continue
 
-                close_price = (
-                    tick.bid if close_type == mt5.ORDER_TYPE_SELL else tick.ask
-                )
+                close_price = tick.bid if close_type == mt5.ORDER_TYPE_SELL else tick.ask
                 close_volume = quantity if quantity else position.volume
 
                 request = {
@@ -519,12 +495,9 @@ class MT5Connector(BrokerConnector):
             id=str(mt5_order.ticket),
             symbol=mt5_order.symbol,
             side=OrderSide.BUY
-            if mt5_order.type
-            in [mt5.ORDER_TYPE_BUY, mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP]
+            if mt5_order.type in [mt5.ORDER_TYPE_BUY, mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP]
             else OrderSide.SELL,
-            type=OrderType.MARKET
-            if mt5_order.type in [mt5.ORDER_TYPE_BUY, mt5.ORDER_TYPE_SELL]
-            else OrderType.LIMIT,
+            type=OrderType.MARKET if mt5_order.type in [mt5.ORDER_TYPE_BUY, mt5.ORDER_TYPE_SELL] else OrderType.LIMIT,
             quantity=mt5_order.volume_current,
             price=mt5_order.price_open,
             status=OrderStatus.OPEN,

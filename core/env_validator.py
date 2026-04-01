@@ -251,8 +251,7 @@ def validate_environment(strict: bool = False) -> ValidationResult:
             val = os.getenv(name)
             if val and val == placeholder:
                 result.errors.append(
-                    f"{name} is set to the dev placeholder value in production. "
-                    f"Generate a real value before deploying."
+                    f"{name} is set to the dev placeholder value in production. Generate a real value before deploying."
                 )
 
     for var in RECOMMENDED_VARS:

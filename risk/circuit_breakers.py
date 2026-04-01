@@ -16,6 +16,7 @@ import threading
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from collections.abc import Callable
@@ -143,9 +144,7 @@ class CircuitBreaker:
 
         # Update drawdown
         self.peak_balance = max(self.peak_balance, current_balance)
-        self.current_drawdown = (
-            self.peak_balance - current_balance
-        ) / self.peak_balance
+        self.current_drawdown = (self.peak_balance - current_balance) / self.peak_balance
 
         # Check drawdown limits
         if self.current_drawdown >= self.limits.max_daily_drawdown_pct:
@@ -183,11 +182,11 @@ class CircuitBreaker:
             self.consecutive_losses >= self.limits.max_consecutive_losses
             and self.loss_streak_amount >= self.limits.max_loss_streak_pct * self.session_start_balance
         ):
-                await self._trigger_circuit_breaker(
-                    "LOSS_STREAK",
-                    f"Loss streak: {self.consecutive_losses} trades, ${self.loss_streak_amount:.2f}",
-                )
-                return
+            await self._trigger_circuit_breaker(
+                "LOSS_STREAK",
+                f"Loss streak: {self.consecutive_losses} trades, ${self.loss_streak_amount:.2f}",
+            )
+            return
 
     async def _trigger_circuit_breaker(
         self,
@@ -349,9 +348,7 @@ class CircuitBreaker:
             # Check exposure
             current_exposure = self._calculate_total_exposure()
             new_exposure = current_exposure + notional
-            max_exposure = (
-                self.broker.get_balance() * self.limits.max_total_exposure_pct
-            )
+            max_exposure = self.broker.get_balance() * self.limits.max_total_exposure_pct
 
             if new_exposure > max_exposure:
                 return (
@@ -446,11 +443,7 @@ class CircuitBreaker:
     def _calculate_daily_pnl(self) -> float:
         """Calculate today's P&L"""
         # Implementation depends on broker API
-        return (
-            self.broker.get_daily_pnl()
-            if hasattr(self.broker, "get_daily_pnl")
-            else 0.0
-        )
+        return self.broker.get_daily_pnl() if hasattr(self.broker, "get_daily_pnl") else 0.0
 
     def _calculate_total_exposure(self) -> float:
         """Calculate current total exposure"""
@@ -461,9 +454,7 @@ class CircuitBreaker:
         """Check if adding this symbol would breach correlation limits"""
         # Simplified - implement actual correlation matrix check
         positions = self.broker.get_positions()
-        correlated_count = sum(
-            1 for p in positions if self._is_correlated(p["symbol"], symbol)
-        )
+        correlated_count = sum(1 for p in positions if self._is_correlated(p["symbol"], symbol))
         return correlated_count >= self.limits.max_correlated_positions
 
     def _is_correlated(self, sym1: str, sym2: str) -> bool:

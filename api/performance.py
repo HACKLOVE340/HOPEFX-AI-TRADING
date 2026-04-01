@@ -121,9 +121,7 @@ def _compute_public_stats(curve: list[EquityPoint]) -> PublicPerformance:
 
     return PublicPerformance(
         total_trades=len(returns),
-        win_rate=round(sum(1 for r in returns if r > 0) / len(returns) * 100, 1)
-        if returns
-        else None,
+        win_rate=round(sum(1 for r in returns if r > 0) / len(returns) * 100, 1) if returns else None,
         avg_return_pct=round(avg_ret, 4) if avg_ret is not None else None,
         sharpe=sharpe,
         max_drawdown_pct=round(max_dd * 100, 3),

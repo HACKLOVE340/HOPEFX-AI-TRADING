@@ -38,6 +38,7 @@ import os
 import time
 from collections import deque
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -51,9 +52,7 @@ _SAVED = Path(__file__).parent / "saved_models"
 _MIN_BARS = 100
 _THRESHOLD_LONG = float(os.getenv("SIGNAL_THRESHOLD_LONG", "0.58"))
 _THRESHOLD_SHORT = float(os.getenv("SIGNAL_THRESHOLD_SHORT", "0.42"))
-_ONLINE_LEARNING_ENABLED = (
-    os.getenv("FEATURE_ONLINE_LEARNING", "false").lower() == "true"
-)
+_ONLINE_LEARNING_ENABLED = os.getenv("FEATURE_ONLINE_LEARNING", "false").lower() == "true"
 _MTF_FUSION_ENABLED = os.getenv("FEATURE_MTF_FUSION", "true").lower() == "true"
 
 # Rolling window size for non-neutral rate tracking
@@ -167,8 +166,7 @@ def _init_prometheus():
 
     except ImportError:
         logger.debug(
-            "prometheus_client not installed — inference metrics disabled. "
-            "Install with: pip install prometheus-client"
+            "prometheus_client not installed — inference metrics disabled. Install with: pip install prometheus-client"
         )
         return _Noop()
     except Exception as exc:
@@ -253,9 +251,7 @@ class InferenceEngine:
                     from data_layer.orchestrator import orchestrator
 
                     if not orchestrator._macro_bridge.is_loaded:
-                        logger.debug(
-                            "MacroStoreBridge not yet loaded — using CSV defaults"
-                        )
+                        logger.debug("MacroStoreBridge not yet loaded — using CSV defaults")
                 except Exception as _exc:
                     logger.debug("Suppressed exception: %s", _exc)
                 macro_store.load_defaults()
@@ -367,8 +363,7 @@ class InferenceEngine:
                 )
             except Exception as dl_exc:
                 logger.debug(
-                    "build_extended_features_with_data_layer failed (%s) — "
-                    "falling back to build_extended_features",
+                    "build_extended_features_with_data_layer failed (%s) — falling back to build_extended_features",
                     dl_exc,
                 )
                 from ml.features_extended import build_extended_features
@@ -391,9 +386,7 @@ class InferenceEngine:
                     new_cols = [c for c in mtf_aligned.columns if c not in X.columns]
                     if new_cols:
                         X = pd.concat([X, mtf_aligned[new_cols]], axis=1)
-                        logger.debug(
-                            "MTF: appended %d columns for %s", len(new_cols), symbol
-                        )
+                        logger.debug("MTF: appended %d columns for %s", len(new_cols), symbol)
                 except Exception as mtf_exc:
                     logger.debug("MTF append failed: %s", mtf_exc)
 
@@ -440,24 +433,16 @@ class InferenceEngine:
             if label == 1:
                 # Ensure last close > first close so the learner sees a win
                 bars = ohlcv.copy()
-                if (
-                    "close" in bars.columns
-                    and bars["close"].iloc[-1] <= bars["close"].iloc[0]
-                ):
+                if "close" in bars.columns and bars["close"].iloc[-1] <= bars["close"].iloc[0]:
                     bars.loc[bars.index[-1], "close"] = bars["close"].iloc[0] * 1.001
             else:
                 bars = ohlcv.copy()
-                if (
-                    "close" in bars.columns
-                    and bars["close"].iloc[-1] >= bars["close"].iloc[0]
-                ):
+                if "close" in bars.columns and bars["close"].iloc[-1] >= bars["close"].iloc[0]:
                     bars.loc[bars.index[-1], "close"] = bars["close"].iloc[0] * 0.999
 
             ok = learner.partial_fit(bars)
             if ok:
-                logger.debug(
-                    "InferenceEngine: online learner updated with label=%d", label
-                )
+                logger.debug("InferenceEngine: online learner updated with label=%d", label)
         except Exception as exc:
             logger.debug("Online learner update failed: %s", exc)
 
@@ -491,8 +476,7 @@ class InferenceEngine:
             self._model_stale = age_days > _MODEL_MAX_AGE_DAYS
             if self._model_stale:
                 logger.warning(
-                    "STALE MODEL: %s is %.1f days old (max=%s days). "
-                    "Retrain or set MODEL_MAX_AGE_DAYS=0 to suppress.",
+                    "STALE MODEL: %s is %.1f days old (max=%s days). Retrain or set MODEL_MAX_AGE_DAYS=0 to suppress.",
                     model_path.name,
                     age_days,
                     _MODEL_MAX_AGE_DAYS,
@@ -583,9 +567,7 @@ class InferenceEngine:
 
             if self._drift_detected:
                 logger.warning(
-                    "FEATURE DRIFT detected: %d features exceed z=%.1f threshold. "
-                    "Top drifted: %s. max_z=%.2f. "
-                    "%s",
+                    "FEATURE DRIFT detected: %d features exceed z=%.1f threshold. Top drifted: %s. max_z=%.2f. %s",
                     len(drifted_features),
                     _DRIFT_Z_THRESHOLD,
                     ", ".join(drifted_features[:5]),
@@ -655,9 +637,7 @@ class InferenceEngine:
 
         if len(ohlcv) < _MIN_BARS:
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
-            _PROM.fallback_total.labels(
-                symbol=sym_label, reason="insufficient_bars"
-            ).inc()
+            _PROM.fallback_total.labels(symbol=sym_label, reason="insufficient_bars").inc()
             return base_result
 
         # Step 0: Timeframe alignment — resample intraday bars to daily when
@@ -666,6 +646,7 @@ class InferenceEngine:
         # instead of months and volatility features are scaled to intraday noise.
         try:
             from ml.daily_aggregator import ensure_daily, needs_resampling
+
             if needs_resampling(ohlcv):
                 daily_ohlcv = ensure_daily(ohlcv, min_bars=_MIN_BARS)
                 if daily_ohlcv is None:
@@ -677,9 +658,7 @@ class InferenceEngine:
                     )
                     base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
                     base_result["direction"] = "neutral"
-                    _PROM.fallback_total.labels(
-                        symbol=sym_label, reason="insufficient_daily_bars"
-                    ).inc()
+                    _PROM.fallback_total.labels(symbol=sym_label, reason="insufficient_daily_bars").inc()
                     return base_result
                 logger.debug(
                     "InferenceEngine: resampled %d intraday → %d daily bars for %s",
@@ -705,9 +684,7 @@ class InferenceEngine:
         if X is None:
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             self._fallback_count += 1
-            _PROM.fallback_total.labels(
-                symbol=sym_label, reason="feature_build_failed"
-            ).inc()
+            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_build_failed").inc()
             return base_result
 
         # Step 3a: Stale model detection
@@ -742,9 +719,7 @@ class InferenceEngine:
             base_result["feature_drift"] = True
             base_result["drift_z_max"] = self._drift_z_max
             self._fallback_count += 1
-            _PROM.fallback_total.labels(
-                symbol=sym_label, reason="feature_drift"
-            ).inc()
+            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_drift").inc()
             return base_result
 
         # Step 4: Model prediction
@@ -754,9 +729,7 @@ class InferenceEngine:
 
         if predictor is not None and predictor.is_available:
             try:
-                raw_prob = predictor.predict_proba(
-                    ohlcv, macro_df=macro_df, symbol=symbol
-                )
+                raw_prob = predictor.predict_proba(ohlcv, macro_df=macro_df, symbol=symbol)
                 model_version = predictor.version
             except Exception as exc:
                 logger.warning("Predictor failed: %s", exc)
@@ -1003,12 +976,7 @@ class InferenceEngine:
             features_hash = ""
             if features_df is not None and not features_df.empty:
                 try:
-                    feat_dict = (
-                        features_df.iloc[-1]
-                        .replace([float("inf"), float("-inf")], 0.0)
-                        .fillna(0.0)
-                        .to_dict()
-                    )
+                    feat_dict = features_df.iloc[-1].replace([float("inf"), float("-inf")], 0.0).fillna(0.0).to_dict()
                     # Round to 4dp to avoid float noise in hash
                     feat_dict = {k: round(float(v), 4) for k, v in feat_dict.items()}
                     blob = json.dumps(feat_dict, sort_keys=True, separators=(",", ":"))
@@ -1080,16 +1048,10 @@ class InferenceEngine:
         checked_at           : str  — ISO timestamp of this health call
         """
         predictor = self._get_predictor()
-        model_available = predictor is not None and getattr(
-            predictor, "is_available", False
-        )
+        model_available = predictor is not None and getattr(predictor, "is_available", False)
 
         # ── Fallback rate ─────────────────────────────────────────────────────
-        fallback_rate = (
-            round(self._fallback_count / self._predict_count, 4)
-            if self._predict_count > 0
-            else 0.0
-        )
+        fallback_rate = round(self._fallback_count / self._predict_count, 4) if self._predict_count > 0 else 0.0
 
         # ── Non-neutral rate (signal quality) ─────────────────────────────────
         window = list(self._signal_window)
@@ -1220,9 +1182,7 @@ class InferenceEngine:
             "threshold_short": _THRESHOLD_SHORT,
             "signal_filter": signal_filter_stats,
             "rollback_count": self._rollback_count,
-            "active_model_path": str(self._active_model_path)
-            if self._active_model_path
-            else None,
+            "active_model_path": str(self._active_model_path) if self._active_model_path else None,
             # ── Stale model ────────────────────────────────────────────────
             "stale_model": self._model_stale,
             "model_age_days": self._model_age_days,
@@ -1279,9 +1239,7 @@ class InferenceEngine:
                 return False
             # Force-load the model now so failures surface here, not at predict time
             if not new_predictor._load():
-                logger.error(
-                    "reload_model: model file exists but failed to load: %s", target
-                )
+                logger.error("reload_model: model file exists but failed to load: %s", target)
                 return False
             self._predictor = new_predictor
             self._active_model_path = target
@@ -1313,9 +1271,7 @@ class InferenceEngine:
         if success:
             self._rollback_count += 1
             _PROM.rollback_total.labels(reason="manual_rollback").inc()
-            logger.warning(
-                "rollback_model: rollback complete (count=%d)", self._rollback_count
-            )
+            logger.warning("rollback_model: rollback complete (count=%d)", self._rollback_count)
         return success
 
 

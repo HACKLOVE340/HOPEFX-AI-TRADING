@@ -12,6 +12,7 @@ Supports stocks, options, futures, forex, and more.
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -266,17 +267,13 @@ class InteractiveBrokersConnector(BrokerConnector):
                 current_price = ticker.marketPrice() if ticker else 0.0
 
                 # Calculate P&L
-                unrealized_pnl = (
-                    pos.unrealizedPNL if hasattr(pos, "unrealizedPNL") else 0.0
-                )
+                unrealized_pnl = pos.unrealizedPNL if hasattr(pos, "unrealizedPNL") else 0.0
 
                 position = Position(
                     symbol=pos.contract.symbol,
                     side="LONG" if pos.position > 0 else "SHORT",
                     quantity=abs(pos.position),
-                    entry_price=pos.avgCost / abs(pos.position)
-                    if pos.position != 0
-                    else 0.0,
+                    entry_price=pos.avgCost / abs(pos.position) if pos.position != 0 else 0.0,
                     current_price=current_price,
                     unrealized_pnl=unrealized_pnl,
                     realized_pnl=0.0,
@@ -303,9 +300,7 @@ class InteractiveBrokersConnector(BrokerConnector):
 
             for position in positions:
                 # Create closing order
-                close_side = (
-                    OrderSide.SELL if position.side == "LONG" else OrderSide.BUY
-                )
+                close_side = OrderSide.SELL if position.side == "LONG" else OrderSide.BUY
                 close_qty = quantity if quantity else position.quantity
 
                 # Place closing order
@@ -412,13 +407,9 @@ class InteractiveBrokersConnector(BrokerConnector):
             id=str(trade.order.orderId),
             symbol=trade.contract.symbol,
             side=OrderSide.BUY if trade.order.action == "BUY" else OrderSide.SELL,
-            type=OrderType.MARKET
-            if trade.order.orderType == "MKT"
-            else OrderType.LIMIT,
+            type=OrderType.MARKET if trade.order.orderType == "MKT" else OrderType.LIMIT,
             quantity=trade.order.totalQuantity,
             price=trade.order.lmtPrice if hasattr(trade.order, "lmtPrice") else None,
-            status=OrderStatus.OPEN
-            if trade.orderStatus.status == "Submitted"
-            else OrderStatus.FILLED,
+            status=OrderStatus.OPEN if trade.orderStatus.status == "Submitted" else OrderStatus.FILLED,
             timestamp=datetime.now(UTC),
         )

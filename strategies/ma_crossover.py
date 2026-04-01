@@ -11,6 +11,7 @@ A simple trend-following strategy based on moving average crossovers.
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -51,8 +52,7 @@ class MovingAverageCrossover(BaseStrategy):
         self.prev_slow_ma = None
 
         logger.info(
-            f"MA Crossover Strategy initialized: "
-            f"fast={self.fast_period}, slow={self.slow_period}",
+            f"MA Crossover Strategy initialized: fast={self.fast_period}, slow={self.slow_period}",
         )
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:

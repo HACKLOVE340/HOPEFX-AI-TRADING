@@ -20,6 +20,7 @@ Inner Circle Trader methodology:
 
 import logging
 from datetime import datetime, time, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -271,9 +272,7 @@ class ITS8OSStrategy(BaseStrategy):
 
             # Manipulation: Sharp move against trend (liquidity grab)
             elif len(prices) > 5:  # noqa: PLR2004
-                last_move = (
-                    abs(prices[-1]["close"] - prices[-5]["close"]) / prices[-5]["close"]
-                )
+                last_move = abs(prices[-1]["close"] - prices[-5]["close"]) / prices[-5]["close"]
                 if last_move > 0.01:  # 1% move  # noqa: PLR2004
                     phase = "manipulation"
                     # After manipulation, expect reversal
@@ -316,15 +315,13 @@ class ITS8OSStrategy(BaseStrategy):
 
             # Simplified: Look for range expansion after consolidation
             consolidation = all(
-                abs(prices[i]["close"] - prices[i]["open"])
-                < abs(prices[-1]["close"] - prices[-1]["open"])
+                abs(prices[i]["close"] - prices[i]["open"]) < abs(prices[-1]["close"] - prices[-1]["open"])
                 for i in range(-10, -1)
                 if i + len(prices) > 0
             )
 
             expansion = (
-                abs(prices[-1]["close"] - prices[-1]["open"]) / prices[-1]["open"]
-                > 0.005  # noqa: PLR2004
+                abs(prices[-1]["close"] - prices[-1]["open"]) / prices[-1]["open"] > 0.005  # noqa: PLR2004
             )
 
             if consolidation and expansion:
@@ -366,14 +363,10 @@ class ITS8OSStrategy(BaseStrategy):
             current = prices[-1]
 
             # Bullish Judas: False break below support, then reversal up
-            false_break_low = (
-                current["low"] < recent_low and current["close"] > recent_low
-            )
+            false_break_low = current["low"] < recent_low and current["close"] > recent_low
 
             # Bearish Judas: False break above resistance, then reversal down
-            false_break_high = (
-                current["high"] > recent_high and current["close"] < recent_high
-            )
+            false_break_high = current["high"] > recent_high and current["close"] < recent_high
 
             if false_break_low:
                 signal = "bullish"
@@ -458,9 +451,7 @@ class ITS8OSStrategy(BaseStrategy):
                 detected = True
 
             # Bearish Turtle Soup: Failed break above 20-day high
-            elif (
-                current["high"] > twenty_day_high and current["close"] < twenty_day_high
-            ):
+            elif current["high"] > twenty_day_high and current["close"] < twenty_day_high:
                 signal = "bearish"
                 score = 0.75
                 detected = True

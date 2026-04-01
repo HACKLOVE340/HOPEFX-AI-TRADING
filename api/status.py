@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -451,9 +452,7 @@ async def _run_checks() -> dict[str, Any]:
             result[check.name] = {
                 "status": check.status.value,
                 "message": check.message or "",
-                "response_time_ms": round(check.response_time * 1000, 1)
-                if check.response_time
-                else None,
+                "response_time_ms": round(check.response_time * 1000, 1) if check.response_time else None,
             }
         return result
     except Exception as exc:
@@ -520,9 +519,7 @@ async def paper_trading_status():
         try:
             starter_status = _json.loads(_starter_path.read_text())
         except Exception as _e:
-            logger.warning(
-                "paper_trading_status: could not read starter status: %s", _e
-            )
+            logger.warning("paper_trading_status: could not read starter status: %s", _e)
 
     # Source 2: oanda_paper_clock (legacy clock)
     clock_status: dict = {}
@@ -537,17 +534,10 @@ async def paper_trading_status():
     merged = {
         "started": clock_status.get("started", bool(starter_status)),
         "started_utc": clock_status.get("started_utc"),
-        "elapsed_days": starter_status.get(
-            "elapsed_days", clock_status.get("elapsed_days", 0.0)
-        ),
+        "elapsed_days": starter_status.get("elapsed_days", clock_status.get("elapsed_days", 0.0)),
         "remaining_days": max(
             0.0,
-            30.0
-            - float(
-                starter_status.get(
-                    "elapsed_days", clock_status.get("elapsed_days", 30.0)
-                )
-            ),
+            30.0 - float(starter_status.get("elapsed_days", clock_status.get("elapsed_days", 30.0))),
         ),
         "target_days": 30,
         "complete": starter_status.get("complete", clock_status.get("complete", False)),

@@ -14,6 +14,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum, auto
@@ -131,9 +132,7 @@ class OrderLifecycleManager:
         self.order_history: list[dict] = []
         self.event_bus = event_bus
         self._broker = broker  # BrokerConnector instance; None = paper/backtest mode
-        self._callbacks: dict[OrderStatus, list[Callable]] = {
-            status: [] for status in OrderStatus
-        }
+        self._callbacks: dict[OrderStatus, list[Callable]] = {status: [] for status in OrderStatus}
 
     def register_callback(self, status: OrderStatus, callback: Callable):
         """Register callback for status changes"""
@@ -206,7 +205,9 @@ class OrderLifecycleManager:
                     "symbol": order.symbol,
                     "side": order.side.value if hasattr(order.side, "value") else str(order.side),
                     "quantity": float(order.quantity),
-                    "order_type": order.order_type.value if hasattr(order.order_type, "value") else str(order.order_type),
+                    "order_type": order.order_type.value
+                    if hasattr(order.order_type, "value")
+                    else str(order.order_type),
                     "price": float(order.price) if order.price else None,
                     "client_order_id": order.client_order_id,
                 }
@@ -412,9 +413,7 @@ class ComplexOrderManager:
         self.oms.register_callback(
             OrderStatus.FILLED,
             lambda o, ctx: (
-                self._place_bracket_exits(o, take_profit, stop_loss, bracket_id)
-                if "BRACKET_ENTRY" in o.tags
-                else None
+                self._place_bracket_exits(o, take_profit, stop_loss, bracket_id) if "BRACKET_ENTRY" in o.tags else None
             ),
         )
 
@@ -487,9 +486,7 @@ class ComplexOrderManager:
         self.oms.register_callback(
             OrderStatus.PARTIALLY_FILLED,
             lambda o, ctx: (
-                self._check_reveal_next(o, parent_id, display_size)
-                if o.parent_order_id == parent_id
-                else None
+                self._check_reveal_next(o, parent_id, display_size) if o.parent_order_id == parent_id else None
             ),
         )
 

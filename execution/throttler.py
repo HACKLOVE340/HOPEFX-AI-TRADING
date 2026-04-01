@@ -153,6 +153,5 @@ class MessageThrottler:
             "messages_per_minute": len(self.minute_window),
             "max_per_second": self.max_per_second,
             "max_per_minute": self.max_per_minute,
-            "in_cooldown": self.state.cooldown_until is not None
-            and time.time() < self.state.cooldown_until,
+            "in_cooldown": self.state.cooldown_until is not None and time.time() < self.state.cooldown_until,
         }
