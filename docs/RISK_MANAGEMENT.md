@@ -1,7 +1,7 @@
 # Risk Management Guide
 
 > How HOPEFX manages risk at every layer — from position sizing to kill switch.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 
@@ -435,4 +435,4 @@ hopefx_open_positions        — number of open positions
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-04-01*

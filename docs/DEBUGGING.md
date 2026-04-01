@@ -1,7 +1,7 @@
 # Debugging Guide
 
 > How to diagnose and resolve issues in a running HOPEFX instance.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 
@@ -682,4 +682,4 @@ alembic current && alembic heads
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-04-01*
