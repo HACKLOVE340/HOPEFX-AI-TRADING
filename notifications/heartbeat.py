@@ -180,6 +180,8 @@ class HeartbeatService:
         self._running = False
         self._ping_count = 0
         self._last_ping: float | None = None
+        # Event used to interrupt the wait in _loop() when stop() is called.
+        self._stop_event = threading.Event()
 
     def _get_status(self) -> dict[str, Any]:
         """Collect current system status."""
@@ -258,7 +260,11 @@ class HeartbeatService:
         )
 
     def _loop(self) -> None:
-        """Main heartbeat loop — runs in daemon thread."""
+        """Main heartbeat loop — runs in daemon thread.
+
+        Uses threading.Event.wait() instead of time.sleep() so stop() can
+        interrupt the interval immediately without waiting up to 30 s.
+        """
         logger.info(
             "HeartbeatService started — interval=%.1fh chats=%d",
             self._interval / 3600,
@@ -268,11 +274,8 @@ class HeartbeatService:
         self._send_ping()
 
         while self._running:
-            # Sleep in small increments so stop() is responsive
-            elapsed = 0.0
-            while elapsed < self._interval and self._running:
-                time.sleep(min(30, self._interval - elapsed))
-                elapsed += 30
+            # Block until the interval elapses or stop() sets the event.
+            self._stop_event.wait(timeout=self._interval)
             if self._running:
                 self._send_ping()
 
@@ -304,6 +307,9 @@ class HeartbeatService:
     def stop(self) -> None:
         """Stop the heartbeat thread gracefully."""
         self._running = False
+        # Wake the sleeping _loop() immediately instead of waiting up to
+        # _interval seconds for the Event.wait() timeout to expire.
+        self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=5)
 
