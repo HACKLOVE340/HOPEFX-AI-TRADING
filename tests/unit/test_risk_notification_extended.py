@@ -117,13 +117,13 @@ class TestRiskManagerExtended:
     def test_close_position_updates_balance(self, risk_mgr):
         risk_mgr.open_positions = [{"id": "POS001", "symbol": "XAUUSD"}]
         risk_mgr.close_position("POS001", pnl=500.0)
-        assert risk_mgr.current_balance == 50500.0  # noqa: PLR2004
+        assert risk_mgr.current_balance == 50500.0
         assert len(risk_mgr.open_positions) == 0
 
     def test_close_position_updates_peak_balance(self, risk_mgr):
         risk_mgr.open_positions = [{"id": "POS001"}]
         risk_mgr.close_position("POS001", pnl=2000.0)
-        assert risk_mgr.peak_balance == 52000.0  # noqa: PLR2004
+        assert risk_mgr.peak_balance == 52000.0
 
     # --- validate_trade ---
 
@@ -170,37 +170,37 @@ class TestRiskManagerExtended:
 
     def test_calculate_stop_loss_buy(self, risk_mgr):
         stop = risk_mgr.calculate_stop_loss(1950.0, "BUY", percent=2.0)
-        assert stop < 1950.0  # noqa: PLR2004
-        assert abs(stop - 1950.0 * 0.98) < 0.01  # noqa: PLR2004
+        assert stop < 1950.0
+        assert abs(stop - 1950.0 * 0.98) < 0.01
 
     def test_calculate_stop_loss_sell(self, risk_mgr):
         stop = risk_mgr.calculate_stop_loss(1950.0, "SELL", percent=2.0)
-        assert stop > 1950.0  # noqa: PLR2004
+        assert stop > 1950.0
 
     def test_calculate_stop_loss_long(self, risk_mgr):
         stop = risk_mgr.calculate_stop_loss(1950.0, "LONG")
-        assert stop < 1950.0  # noqa: PLR2004
+        assert stop < 1950.0
 
     def test_calculate_stop_loss_short(self, risk_mgr):
         stop = risk_mgr.calculate_stop_loss(1950.0, "SHORT")
-        assert stop > 1950.0  # noqa: PLR2004
+        assert stop > 1950.0
 
     def test_calculate_stop_loss_default_percent(self, risk_mgr):
         stop = risk_mgr.calculate_stop_loss(1950.0, "BUY")
         expected = 1950.0 * (1 - 2.0 / 100.0)
-        assert abs(stop - expected) < 0.01  # noqa: PLR2004
+        assert abs(stop - expected) < 0.01
 
     def test_calculate_take_profit_buy(self, risk_mgr):
         tp = risk_mgr.calculate_take_profit(1950.0, "BUY", percent=4.0)
-        assert tp > 1950.0  # noqa: PLR2004
+        assert tp > 1950.0
 
     def test_calculate_take_profit_sell(self, risk_mgr):
         tp = risk_mgr.calculate_take_profit(1950.0, "SELL", percent=4.0)
-        assert tp < 1950.0  # noqa: PLR2004
+        assert tp < 1950.0
 
     def test_calculate_take_profit_long(self, risk_mgr):
         tp = risk_mgr.calculate_take_profit(1950.0, "LONG")
-        assert tp > 1950.0  # noqa: PLR2004
+        assert tp > 1950.0
 
     # --- reset_daily_pnl / update_daily_pnl ---
 
@@ -218,7 +218,7 @@ class TestRiskManagerExtended:
 
     def test_update_daily_pnl(self, risk_mgr):
         risk_mgr.update_daily_pnl(200.0)
-        assert risk_mgr.daily_pnl == 200.0  # noqa: PLR2004
+        assert risk_mgr.daily_pnl == 200.0
 
     # --- get_risk_metrics / get_status ---
 
@@ -227,7 +227,7 @@ class TestRiskManagerExtended:
         assert "current_balance" in metrics
         assert "daily_pnl" in metrics
         assert "current_drawdown" in metrics
-        assert metrics["current_balance"] == 50000.0  # noqa: PLR2004
+        assert metrics["current_balance"] == 50000.0
 
     def test_get_status(self, risk_mgr):
         status = risk_mgr.get_status()

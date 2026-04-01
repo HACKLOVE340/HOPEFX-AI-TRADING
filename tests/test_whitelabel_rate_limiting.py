@@ -21,18 +21,15 @@ Covers:
 from __future__ import annotations
 
 import time
-from collections.abc import Awaitable, Callable
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
 from starlette.testclient import TestClient
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.responses import PlainTextResponse
 
-from whitelabel.api_auth import _hash_key, _key_store, register_api_key
+from whitelabel.api_auth import _key_store, register_api_key
 from whitelabel.config import TierName
 from whitelabel.rate_limiting import WhitelabelRateLimitMiddleware, _counters
 

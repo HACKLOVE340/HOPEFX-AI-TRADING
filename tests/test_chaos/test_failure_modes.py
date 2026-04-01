@@ -108,7 +108,7 @@ class TestRiskManagerFailureModes:
         risk = self._risk()
         result = risk.check_risk_limits()
         assert isinstance(result, tuple)
-        assert len(result) == 2  # noqa: PLR2004
+        assert len(result) == 2
 
 
 class TestKillSwitchFailureModes:

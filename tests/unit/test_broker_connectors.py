@@ -297,7 +297,7 @@ class TestAlpacaConnector:
 
         assert len(positions) == 1
         assert positions[0].symbol == "AAPL"
-        assert positions[0].quantity == 10.0  # noqa: PLR2004
+        assert positions[0].quantity == 10.0
 
     @patch("brokers.alpaca.requests.Session")
     def test_get_positions_not_connected(self, _):
@@ -324,8 +324,8 @@ class TestAlpacaConnector:
         info = broker.get_account_info()
 
         assert info is not None
-        assert info.balance == 10000.0  # noqa: PLR2004
-        assert info.equity == 11000.0  # noqa: PLR2004
+        assert info.balance == 10000.0
+        assert info.equity == 11000.0
 
     @patch("brokers.alpaca.requests.Session")
     def test_get_account_info_not_connected(self, _):
@@ -369,7 +369,7 @@ class TestAlpacaConnector:
 
         assert candles is not None
         assert len(candles) == 1
-        assert candles[0]["open"] == 100.0  # noqa: PLR2004
+        assert candles[0]["open"] == 100.0
 
     @patch("brokers.alpaca.requests.Session")
     def test_get_quote(self, mock_session_cls):
@@ -393,8 +393,8 @@ class TestAlpacaConnector:
         quote = broker.get_quote("AAPL")
 
         assert quote is not None
-        assert quote["bid"] == 149.0  # noqa: PLR2004
-        assert quote["ask"] == 149.1  # noqa: PLR2004
+        assert quote["bid"] == 149.0
+        assert quote["ask"] == 149.1
 
     def test_convert_order_type(self):
         broker = AlpacaConnector(ALPACA_CONFIG)
@@ -559,7 +559,7 @@ class TestBinanceConnector:
         positions = broker.get_positions()
 
         # Only non-zero balances
-        assert len(positions) == 2  # noqa: PLR2004
+        assert len(positions) == 2
 
     @patch("brokers.binance.requests.Session")
     def test_get_account_info(self, mock_session_cls):
@@ -580,7 +580,7 @@ class TestBinanceConnector:
         info = broker.get_account_info()
 
         assert info is not None
-        assert info.balance == 5000.0  # noqa: PLR2004
+        assert info.balance == 5000.0
 
     @patch("brokers.binance.requests.Session")
     def test_get_market_data(self, mock_session_cls):
@@ -612,13 +612,13 @@ class TestBinanceConnector:
 
         assert candles is not None
         assert len(candles) == 1
-        assert candles[0]["open"] == 50000.0  # noqa: PLR2004
+        assert candles[0]["open"] == 50000.0
 
     def test_generate_signature(self):
         broker = BinanceConnector(BINANCE_CONFIG)
         sig = broker._generate_signature({"timestamp": 1704067200000})
         assert isinstance(sig, str)
-        assert len(sig) == 64  # SHA256 hex length  # noqa: PLR2004
+        assert len(sig) == 64  # SHA256 hex length
 
     def test_parse_order_status(self):
         broker = BinanceConnector(BINANCE_CONFIG)
@@ -705,7 +705,7 @@ class TestOANDAConnector:
 
         assert order is not None
         assert order.status == OrderStatus.FILLED
-        assert order.quantity == 10000.0  # noqa: PLR2004
+        assert order.quantity == 10000.0
 
     @patch("brokers.oanda.requests.Session")
     def test_place_limit_order_create_response(self, mock_session_cls):
@@ -801,8 +801,8 @@ class TestOANDAConnector:
         info = broker.get_account_info()
 
         assert info is not None
-        assert info.balance == 50000.0  # noqa: PLR2004
-        assert info.positions_count == 2  # noqa: PLR2004
+        assert info.balance == 50000.0
+        assert info.positions_count == 2
 
     @patch("brokers.oanda.requests.Session")
     def test_close_position(self, mock_session_cls):
@@ -844,7 +844,7 @@ class TestOANDAConnector:
 
         assert candles is not None
         assert len(candles) == 1
-        assert candles[0]["open"] == 1.1000  # noqa: PLR2004
+        assert candles[0]["open"] == 1.1000
 
     def test_parse_order_status(self):
         broker = OANDAConnector(OANDA_CONFIG)
@@ -879,7 +879,7 @@ class TestMT5Connector:
     def test_initialization(self):
         broker = MT5Connector(MT5_CONFIG)
         assert broker.server == "Demo-Server"
-        assert broker.login == 12345678  # noqa: PLR2004
+        assert broker.login == 12345678
         assert not broker.connected
 
     def test_initialization_missing_fields_raises(self):
@@ -1009,8 +1009,8 @@ class TestMT5Connector:
         info = broker.get_account_info()
 
         assert info is not None
-        assert info.balance == 100000.0  # noqa: PLR2004
-        assert info.equity == 100500.0  # noqa: PLR2004
+        assert info.balance == 100000.0
+        assert info.equity == 100500.0
 
     def test_get_account_info_not_connected(self):
         broker = MT5Connector(MT5_CONFIG)
@@ -1056,7 +1056,7 @@ class TestMT5Connector:
 
         assert candles is not None
         assert len(candles) == 1
-        assert candles[0]["open"] == 1950.0  # noqa: PLR2004
+        assert candles[0]["open"] == 1950.0
 
     def test_get_symbols(self):
         sym1 = MagicMock()
@@ -1093,7 +1093,7 @@ class TestInteractiveBrokersConnector:
     def test_initialization(self):
         broker = InteractiveBrokersConnector(IB_CONFIG)
         assert broker.host == "127.0.0.1"
-        assert broker.port == 7497  # noqa: PLR2004
+        assert broker.port == 7497
         assert broker.paper is True
         assert not broker.connected
 
@@ -1141,7 +1141,7 @@ class TestInteractiveBrokersConnector:
         order = broker.place_order("AAPL", OrderSide.SELL, 5, OrderType.LIMIT, price=190.0)
 
         assert order is not None
-        assert order.price == 190.0  # noqa: PLR2004
+        assert order.price == 190.0
 
     def test_place_order_not_connected(self):
         broker = self._make_broker()
@@ -1205,8 +1205,8 @@ class TestInteractiveBrokersConnector:
         info = broker.get_account_info()
 
         assert info is not None
-        assert info.balance == 10000.0  # noqa: PLR2004
-        assert info.equity == 11000.0  # noqa: PLR2004
+        assert info.balance == 10000.0
+        assert info.equity == 11000.0
 
     def test_get_account_info_not_connected(self):
         broker = self._make_broker()
@@ -1250,7 +1250,7 @@ class TestInteractiveBrokersConnector:
 
         assert candles is not None
         assert len(candles) == 1
-        assert candles[0]["open"] == 150.0  # noqa: PLR2004
+        assert candles[0]["open"] == 150.0
 
 
 # ---------------------------------------------------------------------------
@@ -1274,29 +1274,29 @@ class TestAdvancedOrderManager:
         order = mgr.create_order("EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 10000, price=1.1000)
         assert order.symbol == "EURUSD"
         assert order.side == AdvOrderSide.BUY
-        assert order.price == 1.1000  # noqa: PLR2004
+        assert order.price == 1.1000
         assert order.id in mgr.orders
         assert mgr.stats["total_orders"] == 1
 
     def test_create_trailing_stop(self):
         mgr = AdvancedOrderManager()
         order = mgr.create_trailing_stop("EURUSD", AdvOrderSide.SELL, 10000, trail_amount=50.0)
-        assert order.trail_amount == 50.0  # noqa: PLR2004
+        assert order.trail_amount == 50.0
         assert order.id in mgr.trailing_stops
 
     def test_create_trailing_stop_percent(self):
         mgr = AdvancedOrderManager()
         order = mgr.create_trailing_stop("XAUUSD", AdvOrderSide.SELL, 1.0, trail_percent=1.5)
-        assert order.trail_percent == 1.5  # noqa: PLR2004
+        assert order.trail_percent == 1.5
 
     def test_create_oco_order(self):
         mgr = AdvancedOrderManager()
         oco = mgr.create_oco_order("EURUSD", AdvOrderSide.SELL, 10000, limit_price=1.1100, stop_price=1.0900)
-        assert oco.order1.price == 1.1100  # noqa: PLR2004
-        assert oco.order2.stop_price == 1.0900  # noqa: PLR2004
+        assert oco.order1.price == 1.1100
+        assert oco.order2.stop_price == 1.0900
         assert oco.id in mgr.oco_orders
         # 2 child orders created
-        assert mgr.stats["total_orders"] == 2  # noqa: PLR2004
+        assert mgr.stats["total_orders"] == 2
 
     def test_oco_order_fill_cancels_other(self):
         mgr = AdvancedOrderManager()
@@ -1319,11 +1319,11 @@ class TestAdvancedOrderManager:
             take_profit_price=2000.0,
         )
         assert bracket.entry_order.side == AdvOrderSide.BUY
-        assert bracket.stop_loss_order.stop_price == 1920.0  # noqa: PLR2004
-        assert bracket.take_profit_order.price == 2000.0  # noqa: PLR2004
+        assert bracket.stop_loss_order.stop_price == 1920.0
+        assert bracket.take_profit_order.price == 2000.0
         assert bracket.id in mgr.bracket_orders
         # 3 orders: entry + sl + tp
-        assert mgr.stats["total_orders"] == 3  # noqa: PLR2004
+        assert mgr.stats["total_orders"] == 3
 
     def test_bracket_entry_fill_activates_sl_tp(self):
         mgr = AdvancedOrderManager()
@@ -1402,8 +1402,8 @@ class TestAdvancedOrderManager:
     def test_create_scaled_order(self):
         mgr = AdvancedOrderManager()
         scaled = mgr.create_scaled_order("EURUSD", AdvOrderSide.BUY, 10000, 4, 1.0900, 1.1000)
-        assert len(scaled.levels) == 4  # noqa: PLR2004
-        assert len(scaled.child_orders) == 4  # noqa: PLR2004
+        assert len(scaled.levels) == 4
+        assert len(scaled.child_orders) == 4
         assert sum(l["quantity"] for l in scaled.levels) == pytest.approx(10000, rel=1e-5)
 
     def test_get_open_orders(self):
@@ -1442,7 +1442,7 @@ class TestAdvancedOrderManager:
         order = mgr.create_order("EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000, price=1.10)
         d = order.to_dict()
         assert d["symbol"] == "EURUSD"
-        assert d["price"] == 1.10  # noqa: PLR2004
+        assert d["price"] == 1.10
         assert d["side"] == "buy"
 
     def test_oco_to_dict(self):
@@ -1661,7 +1661,7 @@ class TestMyForexFundsConnector:
         cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file
         broker = MyForexFundsConnector(cfg)
         assert broker.server == "MyForexFunds-Demo"
-        assert broker.account_size == 100000  # noqa: PLR2004
+        assert broker.account_size == 100000
 
     def test_initialization_explicit_server(self):
         cfg = {
@@ -1672,7 +1672,7 @@ class TestMyForexFundsConnector:
         }
         broker = MyForexFundsConnector(cfg)
         assert broker.server == "MyForexFunds-Live"
-        assert broker.account_size == 50000  # noqa: PLR2004
+        assert broker.account_size == 50000
 
     def test_get_myforexfunds_rules(self):
         cfg = {"login": 12345, "password": "pass"}  # nosec B105 - test file

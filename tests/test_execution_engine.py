@@ -37,7 +37,7 @@ class TestExecutionRequest:
 
     def test_valid_sell_limit(self):
         req = ExecutionRequest(symbol="XAUUSD", side="SELL", quantity=1.0, order_type="LIMIT", price=1950.0)
-        assert req.price == 1950.0  # noqa: PLR2004
+        assert req.price == 1950.0
 
     def test_invalid_side_raises(self):
         with pytest.raises(ValueError, match="side"):

@@ -156,7 +156,7 @@ def test_stop_hit_closes_at_loss(tmp_path):
     pnl = (stop - entry) * size  # negative
     rm.close_position("pos_stop", pnl=pnl)
 
-    assert rm.current_balance < 100_000.0  # noqa: PLR2004
+    assert rm.current_balance < 100_000.0
     assert rm.daily_pnl < 0
 
 
@@ -174,7 +174,7 @@ def test_take_profit_hit_closes_at_gain(tmp_path):
     pnl = (tp - entry) * size  # positive
     rm.close_position("pos_tp", pnl=pnl)
 
-    assert rm.current_balance > 100_000.0  # noqa: PLR2004
+    assert rm.current_balance > 100_000.0
     assert rm.daily_pnl > 0
 
 

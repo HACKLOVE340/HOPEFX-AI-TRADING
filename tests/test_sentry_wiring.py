@@ -185,7 +185,7 @@ class TestInitSentryWithDSN:
             sc.init_sentry()
 
         call_kwargs = sdk_mock.init.call_args[1]
-        assert call_kwargs["traces_sample_rate"] == 0.05  # noqa: PLR2004
+        assert call_kwargs["traces_sample_rate"] == 0.05
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ class TestScrubDict:
         # user_id is in _SCRUB_FIELDS (account IDs are PII); use a safe field instead
         result = self.scrub({"token": "Bearer xyz", "request_id": 42})
         assert result["token"] == "[Filtered]"
-        assert result["request_id"] == 42  # noqa: PLR2004
+        assert result["request_id"] == 42
 
     def test_scrubs_nested_dict(self):
         result = self.scrub({"outer": {"api_key": "secret", "safe": "value"}})
@@ -241,7 +241,7 @@ class TestScrubDict:
         import monitoring.sentry_config as sc
 
         assert sc._scrub_dict("string") == "string"
-        assert sc._scrub_dict(42) == 42  # noqa: PLR2004
+        assert sc._scrub_dict(42) == 42
 
 
 # ---------------------------------------------------------------------------

@@ -151,8 +151,8 @@ class TestAlmgrenChriss:
 
         model = AlmgrenChrissModel()
         impact = model.estimate(100.0, 10_000.0, 0.012, 3.0, 2000.0)
-        assert impact.fill_price("BUY") > 2000.0  # noqa: PLR2004
-        assert impact.fill_price("SELL") < 2000.0  # noqa: PLR2004
+        assert impact.fill_price("BUY") > 2000.0
+        assert impact.fill_price("SELL") < 2000.0
 
     def test_zero_adv_spread_only(self):
         from execution.market_impact import AlmgrenChrissModel
@@ -178,7 +178,7 @@ class TestAlmgrenChriss:
             volatility_daily=0.012,
         )
         assert fill.partial_fill
-        assert fill.fill_quantity < 1000.0  # noqa: PLR2004
+        assert fill.fill_quantity < 1000.0
 
     def test_fill_simulator_price_clamped_to_bar(self):
         from execution.market_impact import FillSimulator
@@ -194,7 +194,7 @@ class TestAlmgrenChriss:
             adv=10_000.0,
             volatility_daily=0.012,
         )
-        assert fill.fill_price <= 2001.0  # noqa: PLR2004
+        assert fill.fill_price <= 2001.0
 
     def test_fill_simulator_sell_clamped(self):
         from execution.market_impact import FillSimulator
@@ -210,7 +210,7 @@ class TestAlmgrenChriss:
             adv=10_000.0,
             volatility_daily=0.012,
         )
-        assert fill.fill_price >= 1999.0  # noqa: PLR2004
+        assert fill.fill_price >= 1999.0
 
 
 # ── execution/algo_orders.py ──────────────────────────────────────────────────
@@ -242,7 +242,7 @@ class TestAlgoOrders:
         )
         report = await order.run()
         assert report.filled_quantity == pytest.approx(10.0, abs=0.01)
-        assert len(fills) == 5  # noqa: PLR2004
+        assert len(fills) == 5
 
     @pytest.mark.asyncio
     async def test_iceberg_completes(self):
@@ -269,7 +269,7 @@ class TestAlgoOrders:
         )
         report = await order.run()
         assert report.filled_quantity == pytest.approx(5.0, abs=0.01)
-        assert len(fills) == 5  # noqa: PLR2004
+        assert len(fills) == 5
 
     @pytest.mark.asyncio
     async def test_vwap_completes(self):
@@ -496,8 +496,8 @@ class TestMonteCarlo:
 
         engine = MonteCarloEngine(n_paths=100)
         result = engine.run(self._pnls())
-        assert result.n_paths == 100  # noqa: PLR2004
-        assert result.n_trades == 200  # noqa: PLR2004
+        assert result.n_paths == 100
+        assert result.n_trades == 200
         assert result.sharpe_ci_95[0] <= result.sharpe_ci_95[1]
         assert result.max_dd_ci_95[0] <= result.max_dd_ci_95[1]
 
@@ -520,7 +520,7 @@ class TestMonteCarlo:
 
         engine = MonteCarloEngine(n_paths=100)
         result = engine.run(self._pnls(), method="block")
-        assert result.n_paths == 100  # noqa: PLR2004
+        assert result.n_paths == 100
 
     def test_empty_pnls_returns_empty(self):
         from analytics.monte_carlo import MonteCarloEngine
@@ -533,7 +533,7 @@ class TestMonteCarlo:
         from analytics.monte_carlo import run_bootstrap
 
         result = run_bootstrap(self._pnls(), n_paths=100)
-        assert result.n_trades == 200  # noqa: PLR2004
+        assert result.n_trades == 200
 
     def test_summary_dict_keys(self):
         from analytics.monte_carlo import run_bootstrap
@@ -565,7 +565,7 @@ class TestSharpeCircuitBreaker:
             cb.record_trade(pnl=-100.0, model_version="bad_model")
         state = cb._states.get("bad_model")
         assert state is not None
-        assert state.total_trades == 60  # noqa: PLR2004
+        assert state.total_trades == 60
 
     @pytest.mark.asyncio
     async def test_circuit_trips_on_bad_sharpe(self):

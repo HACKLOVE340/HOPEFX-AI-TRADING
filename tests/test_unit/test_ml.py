@@ -43,7 +43,7 @@ def test_xgboost_training():
 
     assert model._is_trained
     assert model.metadata is not None
-    assert model.metadata.val_score > 0.5  # noqa: PLR2004
+    assert model.metadata.val_score > 0.5
 
 
 def test_drift_detection():

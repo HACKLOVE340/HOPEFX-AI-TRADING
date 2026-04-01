@@ -55,7 +55,7 @@ class TestRateFeed:
         assert "BTC" in rates
         assert "ETH" in rates
         assert "USDT" in rates
-        assert rates["BTC"] == 67_500.0  # noqa: PLR2004
+        assert rates["BTC"] == 67_500.0
 
     @pytest.mark.asyncio
     async def test_get_rates_uses_cache_within_ttl(self):
@@ -74,7 +74,7 @@ class TestRateFeed:
             rates = await get_rates()
 
         mock_cg.assert_not_called()
-        assert rates["BTC"] == 65_000.0  # noqa: PLR2004
+        assert rates["BTC"] == 65_000.0
 
     @pytest.mark.asyncio
     async def test_get_rates_falls_back_to_binance_on_coingecko_failure(self):
@@ -97,7 +97,7 @@ class TestRateFeed:
 
             rates = await get_rates(force_refresh=True)
 
-        assert rates["BTC"] == 66_000.0  # noqa: PLR2004
+        assert rates["BTC"] == 66_000.0
 
     @pytest.mark.asyncio
     async def test_get_rates_uses_stale_cache_when_all_feeds_fail(self):
@@ -123,7 +123,7 @@ class TestRateFeed:
 
             rates = await get_rates(force_refresh=True)
 
-        assert rates["BTC"] == 64_000.0  # noqa: PLR2004
+        assert rates["BTC"] == 64_000.0
 
     @pytest.mark.asyncio
     async def test_get_rates_uses_hardcoded_fallback_when_no_cache(self):
@@ -166,7 +166,7 @@ class TestRateFeed:
 
             btc_amount = await coin_per_usd("BTC", 1000.0)
 
-        assert abs(btc_amount - 0.02) < 1e-8  # 1000 / 50000 = 0.02  # noqa: PLR2004
+        assert abs(btc_amount - 0.02) < 1e-8  # 1000 / 50000 = 0.02
 
     @pytest.mark.asyncio
     async def test_coin_per_usd_raises_for_unsupported_coin(self):
@@ -184,7 +184,7 @@ class TestRateFeed:
         from payments.crypto.rate_feed import coin_per_usd_sync
 
         result = coin_per_usd_sync("BTC", 400.0)
-        assert abs(result - 0.01) < 1e-8  # noqa: PLR2004
+        assert abs(result - 0.01) < 1e-8
 
     def test_coin_per_usd_sync_returns_none_for_unknown_coin(self):
         """coin_per_usd_sync() returns None for unknown coins with no fallback."""
@@ -337,7 +337,7 @@ class TestPaymentDBHelpers:
             _update_payment("PAY_update_001", status="complete", confirmations=3)
 
         assert mock_record.status == "complete"
-        assert mock_record.confirmations == 3  # noqa: PLR2004
+        assert mock_record.confirmations == 3
         mock_session.commit.assert_called_once()
 
     def test_update_payment_rolls_back_on_error(self):
@@ -392,7 +392,7 @@ class TestPaymentStatusAutoExpiry:
         ):
             response = client.get("/api/payments/crypto/status/PAY_expired_001")
 
-        assert response.status_code == 200  # noqa: PLR2004
+        assert response.status_code == 200
         data = response.json()
         assert data["status"] == "expired"
         mock_update.assert_called_once_with("PAY_expired_001", status="expired")
@@ -421,11 +421,11 @@ class TestPaymentRatesEndpoint:
         ):
             response = client.get("/api/payments/crypto/rates")
 
-        assert response.status_code == 200  # noqa: PLR2004
+        assert response.status_code == 200
         data = response.json()
         assert "rates" in data
         assert "BTC" in data["rates"]
-        assert data["rates"]["BTC"]["usd_per_coin"] == 67_500.0  # noqa: PLR2004
+        assert data["rates"]["BTC"]["usd_per_coin"] == 67_500.0
         assert data["rates"]["BTC"]["coin_per_usd"] == round(1 / 67_500.0, 8)
         assert data["source"] == "live"
 
@@ -447,4 +447,4 @@ class TestPaymentRatesEndpoint:
         ):
             response = client.get("/api/payments/crypto/rates")
 
-        assert response.status_code == 503  # noqa: PLR2004
+        assert response.status_code == 503

@@ -78,7 +78,7 @@ class TestAlertCondition:
         condition = AlertCondition(type=AlertConditionType.PRICE_ABOVE, threshold=2000.00)
 
         assert condition.type == AlertConditionType.PRICE_ABOVE
-        assert condition.threshold == 2000.00  # noqa: PLR2004
+        assert condition.threshold == 2000.00
 
     def test_condition_with_indicator(self):
         """Test condition with indicator."""
@@ -96,7 +96,7 @@ class TestAlertCondition:
 
         result = condition.to_dict()
         assert result["type"] == "price_below"
-        assert result["threshold"] == 1900.00  # noqa: PLR2004
+        assert result["threshold"] == 1900.00
 
 
 class TestAlert:
@@ -250,8 +250,8 @@ class TestAlertEngine:
         )
 
         assert alert.priority == AlertPriority.HIGH
-        assert alert.cooldown_minutes == 10  # noqa: PLR2004
-        assert alert.max_triggers == 5  # noqa: PLR2004
+        assert alert.cooldown_minutes == 10
+        assert alert.max_triggers == 5
 
     def test_get_alert(self):
         """Test getting an alert by ID."""
@@ -330,11 +330,11 @@ class TestAlertEngine:
 
         # Get all
         all_alerts = engine.get_alerts()
-        assert len(all_alerts) >= 3  # noqa: PLR2004
+        assert len(all_alerts) >= 3
 
         # Filter by symbol
         xauusd_alerts = engine.get_alerts(symbol="XAUUSD")
-        assert len(xauusd_alerts) >= 2  # noqa: PLR2004
+        assert len(xauusd_alerts) >= 2
 
     def test_get_active_alerts(self):
         """Test getting active alerts only."""

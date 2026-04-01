@@ -73,7 +73,7 @@ class TestModelRegistryRegister:
         )
         assert entry["name"] == "v1"
         assert entry["state"] == "staging"
-        assert len(entry["sha256"]) == 64  # noqa: PLR2004
+        assert len(entry["sha256"]) == 64
         assert entry["oos_accuracy"] == pytest.approx(0.65)
         pkl.unlink()
 
@@ -132,7 +132,7 @@ class TestModelRegistryRegister:
                 sharpe_gate_passed=True,
             )
             pkl.unlink()
-        assert len(reg.list_versions()) == 3  # noqa: PLR2004
+        assert len(reg.list_versions()) == 3
 
 
 # ===========================================================================
@@ -591,7 +591,7 @@ class TestOandaPaperClockTrackerWiring:
         for r in [0.01, -0.005, 0.008, 0.003, -0.002]:
             clock.record_fill(r)
         s = clock.sharpe_status()
-        assert s["n_trades"] == 5  # noqa: PLR2004
+        assert s["n_trades"] == 5
 
     def test_record_fill_returns_status_dict(self, tmp_path):
         clock = self._make_clock(tmp_path)

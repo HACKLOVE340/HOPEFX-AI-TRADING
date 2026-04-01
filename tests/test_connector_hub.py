@@ -51,7 +51,7 @@ class TestDrawdownMonitor:
         dd = self._make(100_000)
         dd.update(100_000)  # peak = 100k
         result = dd.update(97_000)
-        assert abs(result - 0.03) < 1e-6  # noqa: PLR2004
+        assert abs(result - 0.03) < 1e-6
 
     def test_peak_updates_on_new_high(self):
         dd = self._make(100_000)
@@ -63,7 +63,7 @@ class TestDrawdownMonitor:
         dd = self._make(100_000)
         dd.update(100_000)
         dd.update(95_000)
-        assert abs(dd.daily_drawdown - 0.05) < 1e-6  # noqa: PLR2004
+        assert abs(dd.daily_drawdown - 0.05) < 1e-6
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ class TestEventBus:
         # Give the local bus a moment to deliver
         await asyncio.sleep(0.01)
         assert len(received) == 1
-        assert received[0]["bid"] == 1920.0  # noqa: PLR2004
+        assert received[0]["bid"] == 1920.0
 
     @pytest.mark.asyncio
     async def test_publish_retries_then_falls_back(self):
@@ -224,9 +224,9 @@ class TestOHLCVBuffer:
         for p in prices:
             buf.push(p, 0.5, "2025-01-01T00:00:00Z")
         df = buf.to_dataframe()
-        assert df.iloc[0]["open"] == 1900.0  # noqa: PLR2004
-        assert df.iloc[0]["high"] == 1950.0  # noqa: PLR2004
-        assert df.iloc[0]["low"] == 1880.0  # noqa: PLR2004
+        assert df.iloc[0]["open"] == 1900.0
+        assert df.iloc[0]["high"] == 1950.0
+        assert df.iloc[0]["low"] == 1880.0
         assert df.iloc[0]["close"] == prices[-1]
 
     def test_not_ready_below_min_bars(self):
@@ -261,7 +261,7 @@ class TestMLPredictorFallback:
         df = pd.DataFrame()  # empty — won't be used
         direction, confidence = pred.predict(df, ema_cross=0.5, symbol="XAU/USD")
         assert direction == "BUY"
-        assert confidence == 0.60  # noqa: PLR2004
+        assert confidence == 0.60
 
     def test_ema_sell_when_cross_negative(self):
         from strategy.engine import _MLPredictor
@@ -534,7 +534,7 @@ class TestNewsCalendarFeed:
         with patch("data.news_calendar_feed.aioredis.from_url", return_value=mock_redis):
             count = await feed._write_redis(events)
 
-        assert count == 3  # noqa: PLR2004
+        assert count == 3
         mock_pipe.delete.assert_called_once()
         mock_pipe.rpush.assert_called_once()
         mock_pipe.expire.assert_called_once()
