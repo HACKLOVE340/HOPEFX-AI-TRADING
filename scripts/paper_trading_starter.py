@@ -393,11 +393,35 @@ class PaperTradingRunner:
 
     def run(self) -> None:
         self._bootstrap()
+        self._bootstrap_mtf()
         logger.info(
             "Starting %s-day paper session | Kill at %.0f%% DD",
             self._duration_days(),
             self.max_dd_pct * 100,
         )
+
+    def _bootstrap_mtf(self) -> None:
+        """Bootstrap MTFFusionStore so the MTF confluence gate has H4/D1 data."""
+        import asyncio
+        try:
+            from research.pipeline.mtf_fusion import init_mtf_store_standalone
+            store = asyncio.run(init_mtf_store_standalone(
+                symbol=os.getenv("ML_SYMBOLS", "XAUUSD"),
+                data_dir=str(DATA_DIR),
+            ))
+            if store.is_ready:
+                logger.info(
+                    "MTFFusionStore ready — H4=%d bars, D1=%d bars",
+                    store.status()["h4_bars"],
+                    store.status()["d1_bars"],
+                )
+            else:
+                logger.warning(
+                    "MTFFusionStore not ready (%s) — MTF gate will pass-through",
+                    store.status().get("bootstrap_error", "unknown"),
+                )
+        except Exception as exc:
+            logger.warning("MTFFusionStore bootstrap failed (non-fatal): %s", exc)
 
         last_daily_alert = time.time()
         end_time = self.start_time + self.duration_s
