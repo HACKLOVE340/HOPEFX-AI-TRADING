@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 
@@ -62,9 +63,7 @@ class ComplianceManager:
                 from database.models import KYCRecord
 
                 with self._session_factory() as session:
-                    existing = (
-                        session.query(KYCRecord).filter_by(user_id=user_id).first()
-                    )
+                    existing = session.query(KYCRecord).filter_by(user_id=user_id).first()
                     if existing:
                         existing.status = KYCStatus.PENDING.value
                         existing.document_type = document_type
@@ -83,9 +82,7 @@ class ComplianceManager:
             except Exception as exc:
                 logger.error("KYC DB write failed: %s", exc)
 
-        self._log_audit(
-            "KYC", user_id, "kyc_submitted", {"document_type": document_type}
-        )
+        self._log_audit("KYC", user_id, "kyc_submitted", {"document_type": document_type})
         return record
 
     def approve_kyc(self, user_id: str) -> bool:
@@ -131,9 +128,7 @@ class ComplianceManager:
             except Exception as exc:
                 logger.error("KYC reject DB write failed: %s", exc)
 
-        self._log_audit(
-            "KYC", "system", "kyc_rejected", {"user_id": user_id, "reason": reason}
-        )
+        self._log_audit("KYC", "system", "kyc_rejected", {"user_id": user_id, "reason": reason})
         return True
 
     def get_kyc_status(self, user_id: str) -> KYCStatus:
@@ -214,18 +209,11 @@ class ComplianceManager:
                 from database.models import AuditLogEntry
 
                 with self._session_factory() as session:
-                    rows = (
-                        session.query(AuditLogEntry)
-                        .order_by(AuditLogEntry.id.desc())
-                        .limit(limit)
-                        .all()
-                    )
+                    rows = session.query(AuditLogEntry).order_by(AuditLogEntry.id.desc()).limit(limit).all()
                     return [
                         {
                             "sequence_number": r.sequence_number,
-                            "timestamp": r.timestamp.isoformat()
-                            if r.timestamp
-                            else None,
+                            "timestamp": r.timestamp.isoformat() if r.timestamp else None,
                             "level": r.level,
                             "category": r.category,
                             "actor": r.actor,

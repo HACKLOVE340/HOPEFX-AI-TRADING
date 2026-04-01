@@ -134,9 +134,7 @@ def run(verbose: bool = False) -> int:
                 failures += 1
             else:
                 with engine.connect() as conn:
-                    row = conn.execute(
-                        text("SELECT version_num FROM alembic_version")
-                    ).fetchone()
+                    row = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
                     current = row[0] if row else None
                 head_rev = script.get_current_head()
                 if current == head_rev:
@@ -184,9 +182,7 @@ def run(verbose: bool = False) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Alembic migration smoke test")
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="List each revision before running"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="List each revision before running")
     args = parser.parse_args()
     sys.exit(run(verbose=args.verbose))
 

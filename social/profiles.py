@@ -12,6 +12,7 @@ Trader Profiles Management
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 
@@ -50,9 +51,7 @@ class TraderProfile:
             "avatar_url": self.avatar_url,
             "website": self.website,
             "verified": self.verified,
-            "verification_date": self.verification_date.isoformat()
-            if self.verification_date
-            else None,
+            "verification_date": self.verification_date.isoformat() if self.verification_date else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "total_followers": self.total_followers,
@@ -72,9 +71,7 @@ class TraderProfileManager:
     def __init__(self):
         self.profiles: dict[str, TraderProfile] = {}
 
-    def create_profile(
-        self, trader_id: str, username: str, email: str
-    ) -> TraderProfile:
+    def create_profile(self, trader_id: str, username: str, email: str) -> TraderProfile:
         """Create new trader profile"""
         profile = TraderProfile(
             trader_id=trader_id,

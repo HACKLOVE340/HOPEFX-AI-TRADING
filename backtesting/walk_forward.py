@@ -70,10 +70,7 @@ class WalkForwardEngine:
         n_samples = len(data)
         window_start = 0
 
-        while (
-            window_start + self.train_size + self.purge_size + self.test_size
-            <= n_samples
-        ):
+        while window_start + self.train_size + self.purge_size + self.test_size <= n_samples:
             # Define windows with purge/embargo
             train_start = window_start
             train_end = train_start + self.train_size
@@ -98,9 +95,7 @@ class WalkForwardEngine:
             )
 
             # Optimize on training data
-            best_params, train_perf = self._optimize_parameters(
-                train_data, strategy_factory, parameter_grid
-            )
+            best_params, train_perf = self._optimize_parameters(train_data, strategy_factory, parameter_grid)
 
             # Test on out-of-sample data
             test_strategy = strategy_factory(**best_params)
@@ -178,11 +173,7 @@ class WalkForwardEngine:
                     position -= 1
 
             # Mark to market
-            pnl = (
-                position
-                * (row["close"] - data.iloc[0]["close"])
-                / data.iloc[0]["close"]
-            )
+            pnl = position * (row["close"] - data.iloc[0]["close"]) / data.iloc[0]["close"]
             equity.append(1.0 + pnl)
 
         # Calculate metrics
@@ -190,14 +181,10 @@ class WalkForwardEngine:
 
         return {
             "total_return": equity[-1] - 1,
-            "sharpe_ratio": returns.mean() / returns.std() * np.sqrt(252)
-            if len(returns) > 1
-            else 0,
+            "sharpe_ratio": returns.mean() / returns.std() * np.sqrt(252) if len(returns) > 1 else 0,
             "max_drawdown": self._calculate_max_drawdown(equity),
             "num_trades": len(trades),
-            "win_rate": len([t for t in trades if t.get("pnl", 0) > 0]) / len(trades)
-            if trades
-            else 0,
+            "win_rate": len([t for t in trades if t.get("pnl", 0) > 0]) / len(trades) if trades else 0,
         }
 
     def _calculate_max_drawdown(self, equity: list[float]) -> float:
@@ -212,9 +199,7 @@ class WalkForwardEngine:
 
         return max_dd
 
-    def _detect_overfit(
-        self, train_perf: dict[str, Any], test_perf: dict[str, Any]
-    ) -> bool:
+    def _detect_overfit(self, train_perf: dict[str, Any], test_perf: dict[str, Any]) -> bool:
         """Detect if strategy is overfit."""
         # Sharpe ratio degradation
         train_sharpe = train_perf.get("sharpe_ratio", 0)

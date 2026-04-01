@@ -53,6 +53,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
@@ -78,14 +79,14 @@ class RebalanceResult:
     """Output of a single rebalance run."""
 
     method: str
-    weights: Dict[str, float]          # strategy_id -> target weight
-    trades: Dict[str, float]           # strategy_id -> weight delta (+ = increase)
-    expected_return: float             # annualised
-    expected_vol: float                # annualised
+    weights: Dict[str, float]  # strategy_id -> target weight
+    trades: Dict[str, float]  # strategy_id -> weight delta (+ = increase)
+    expected_return: float  # annualised
+    expected_vol: float  # annualised
     expected_sharpe: float
     correlation_matrix: Dict[str, Dict[str, float]]
-    risk_contributions: Dict[str, float]   # strategy_id -> % of portfolio risk
-    constrained_strategies: List[str]      # strategies that hit a constraint
+    risk_contributions: Dict[str, float]  # strategy_id -> % of portfolio risk
+    constrained_strategies: List[str]  # strategies that hit a constraint
     computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -97,8 +98,7 @@ class RebalanceResult:
             "expected_vol": round(self.expected_vol, 4),
             "expected_sharpe": round(self.expected_sharpe, 4),
             "correlation_matrix": {
-                k: {kk: round(vv, 4) for kk, vv in v.items()}
-                for k, v in self.correlation_matrix.items()
+                k: {kk: round(vv, 4) for kk, vv in v.items()} for k, v in self.correlation_matrix.items()
             },
             "risk_contributions": {k: round(v, 4) for k, v in self.risk_contributions.items()},
             "constrained_strategies": self.constrained_strategies,
@@ -245,7 +245,9 @@ class BookOptimiser:
                     forced_zero.add(i)
                     logger.info(
                         "BookOptimiser: %s zeroed (drawdown=%.1f%% > limit=%.1f%%)",
-                        sid, drawdowns[sid] * 100, self.dd_limit * 100,
+                        sid,
+                        drawdowns[sid] * 100,
+                        self.dd_limit * 100,
                     )
 
         # Correlation constraint: if two strategies are too correlated,
@@ -273,7 +275,7 @@ class BookOptimiser:
             excess_ret = port_ret - self.risk_free_rate / 252
             d_ret = expected_returns
             d_vol = (cov_matrix @ w) / port_vol
-            return -(d_ret * port_vol - excess_ret * d_vol) / (port_vol ** 2)
+            return -(d_ret * port_vol - excess_ret * d_vol) / (port_vol**2)
 
         constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
         bounds = []
@@ -382,9 +384,7 @@ class BookOptimiser:
 
     # ── Risk contribution decomposition ───────────────────────────────────────
 
-    def risk_contributions(
-        self, weights: np.ndarray, cov_matrix: np.ndarray
-    ) -> np.ndarray:
+    def risk_contributions(self, weights: np.ndarray, cov_matrix: np.ndarray) -> np.ndarray:
         """Return fractional risk contribution of each strategy."""
         port_var = float(weights @ cov_matrix @ weights)
         if port_var <= 0:
@@ -552,9 +552,7 @@ class DynamicRebalancer:
         corr_matrix = self._tracker.get_correlation_matrix()
 
         if not force:
-            should, reason = self._scheduler.should_rebalance(
-                self._current_weights, corr_matrix
-            )
+            should, reason = self._scheduler.should_rebalance(self._current_weights, corr_matrix)
             if not should:
                 logger.debug("DynamicRebalancer: skipping rebalance (%s)", reason)
                 return None
@@ -576,15 +574,15 @@ class DynamicRebalancer:
         # ── Optimise ──────────────────────────────────────────────────────────
         if self.method == OptimMethod.MEAN_VARIANCE:
             weights_arr, converged = self._optimiser.mean_variance(
-                strategies, mu, cov_matrix,
+                strategies,
+                mu,
+                cov_matrix,
                 current_weights=current_w,
                 drawdowns=self._drawdowns,
                 corr_matrix=corr_arr,
             )
         elif self.method == OptimMethod.RISK_PARITY:
-            weights_arr, converged = self._optimiser.risk_parity(
-                strategies, cov_matrix, drawdowns=self._drawdowns
-            )
+            weights_arr, converged = self._optimiser.risk_parity(strategies, cov_matrix, drawdowns=self._drawdowns)
         else:  # equal_weight
             n = len(strategies)
             weights_arr = np.full(n, 1.0 / n)
@@ -603,21 +601,12 @@ class DynamicRebalancer:
         risk_contribs = {s: float(rc_arr[i]) for i, s in enumerate(strategies)}
 
         # ── Trades (weight deltas) ────────────────────────────────────────────
-        trades = {
-            s: weights[s] - self._current_weights.get(s, 0.0)
-            for s in strategies
-        }
+        trades = {s: weights[s] - self._current_weights.get(s, 0.0) for s in strategies}
 
         # ── Constrained strategies ────────────────────────────────────────────
-        constrained = [
-            s for s in strategies
-            if self._drawdowns.get(s, 0.0) > self._optimiser.dd_limit
-        ]
+        constrained = [s for s in strategies if self._drawdowns.get(s, 0.0) > self._optimiser.dd_limit]
 
-        corr_dict = {
-            s: {ss: float(corr_matrix.loc[s, ss]) for ss in strategies}
-            for s in strategies
-        }
+        corr_dict = {s: {ss: float(corr_matrix.loc[s, ss]) for ss in strategies} for s in strategies}
 
         result = RebalanceResult(
             method=self.method.value,
@@ -637,9 +626,12 @@ class DynamicRebalancer:
         self._last_result = result
 
         logger.info(
-            "DynamicRebalancer: rebalanced %d strategies via %s "
-            "(Sharpe=%.2f, vol=%.1f%%, converged=%s)",
-            len(strategies), self.method.value, sharpe, port_vol * 100, converged,
+            "DynamicRebalancer: rebalanced %d strategies via %s (Sharpe=%.2f, vol=%.1f%%, converged=%s)",
+            len(strategies),
+            self.method.value,
+            sharpe,
+            port_vol * 100,
+            converged,
         )
         return result
 
@@ -665,13 +657,9 @@ class DynamicRebalancer:
             "current_weights": {k: round(v, 4) for k, v in self._current_weights.items()},
             "drawdowns": {k: round(v, 4) for k, v in self._drawdowns.items()},
             "last_rebalance": (
-                self._scheduler._last_rebalance.isoformat()
-                if self._scheduler._last_rebalance else None
+                self._scheduler._last_rebalance.isoformat() if self._scheduler._last_rebalance else None
             ),
-            "last_sharpe": (
-                round(self._last_result.expected_sharpe, 3)
-                if self._last_result else None
-            ),
+            "last_sharpe": (round(self._last_result.expected_sharpe, 3) if self._last_result else None),
         }
 
 

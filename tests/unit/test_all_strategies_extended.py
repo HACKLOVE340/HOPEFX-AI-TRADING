@@ -25,6 +25,7 @@ import pytest
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from strategies.base import (
@@ -1193,29 +1194,21 @@ class TestITS8OSStrategy:
         assert len(strategy.kill_zones) == 4  # noqa: PLR2004
 
     def test_analyze_returns_dict(self, strategy, prices_list):
-        result = strategy.analyze(
-            {"prices": prices_list, "timestamp": datetime.now(UTC)}
-        )
+        result = strategy.analyze({"prices": prices_list, "timestamp": datetime.now(UTC)})
         assert isinstance(result, dict)
 
     def test_analyze_insufficient_data_returns_error(self, strategy):
-        result = strategy.analyze(
-            {"prices": [], "timestamp": datetime.now(UTC)}
-        )
+        result = strategy.analyze({"prices": [], "timestamp": datetime.now(UTC)})
         assert "error" in result
 
     def test_analyze_returns_setup_results(self, strategy, prices_list):
-        result = strategy.analyze(
-            {"prices": prices_list, "timestamp": datetime.now(UTC)}
-        )
+        result = strategy.analyze({"prices": prices_list, "timestamp": datetime.now(UTC)})
         if "error" not in result:
             assert "setup_results" in result
             assert "confluence" in result
 
     def test_generate_signal_returns_none_or_signal(self, strategy, prices_list):
-        analysis = strategy.analyze(
-            {"prices": prices_list, "timestamp": datetime.now(UTC)}
-        )
+        analysis = strategy.analyze({"prices": prices_list, "timestamp": datetime.now(UTC)})
         result = strategy.generate_signal(analysis)
         assert result is None or isinstance(result, Signal)
 
@@ -1310,9 +1303,7 @@ class TestITS8OSStrategy:
 
     def test_on_bar_integration(self, strategy, prices_list):
         strategy.start()
-        result = strategy.on_bar(
-            {"prices": prices_list, "timestamp": datetime.now(UTC)}
-        )
+        result = strategy.on_bar({"prices": prices_list, "timestamp": datetime.now(UTC)})
         assert result is None or isinstance(result, Signal)
 
 
@@ -1665,9 +1656,7 @@ class TestStrategyBrain:
 
         # Update performance to skew weights
         for _ in range(5):
-            brain.update_strategy_performance(
-                "BuyAlways", signal_correct=True, pnl=100.0
-            )
+            brain.update_strategy_performance("BuyAlways", signal_correct=True, pnl=100.0)
         for _ in range(5):
             brain.update_strategy_performance("BA2c", signal_correct=False, pnl=-100.0)
 

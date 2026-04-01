@@ -19,9 +19,7 @@ class TestCopyRelationship:
 
     def test_copy_relationship_creation(self):
         """Test creating a copy relationship."""
-        relationship = CopyRelationship(
-            follower_id="user_1", leader_id="user_2", copy_ratio=0.5
-        )
+        relationship = CopyRelationship(follower_id="user_1", leader_id="user_2", copy_ratio=0.5)
 
         assert relationship.follower_id == "user_1"
         assert relationship.leader_id == "user_2"
@@ -52,9 +50,7 @@ class TestCopyTradingEngine:
         """Test starting copy relationship."""
         engine = CopyTradingEngine()
 
-        relationship = engine.start_copying(
-            follower_id="follower_1", leader_id="leader_1", copy_ratio=0.75
-        )
+        relationship = engine.start_copying(follower_id="follower_1", leader_id="leader_1", copy_ratio=0.75)
 
         assert relationship is not None
         assert relationship.follower_id == "follower_1"

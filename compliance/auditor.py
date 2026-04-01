@@ -15,6 +15,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 
@@ -60,9 +61,7 @@ class ImmutableAuditLog:
         self.sequence = 0
         self.last_hash = "0" * 64  # Genesis hash
 
-    def append(
-        self, level: AuditLevel, category: str, actor: str, action: str, data: dict
-    ):
+    def append(self, level: AuditLevel, category: str, actor: str, action: str, data: dict):
         """Append immutable audit record."""
         self.sequence += 1
 
@@ -108,9 +107,7 @@ class ImmutableAuditLog:
                 "seq": self.sequence,
                 "prev_hash": self.last_hash,
                 "timestamp": timestamp,
-                "data_hash": hashlib.sha256(
-                    json.dumps(data, sort_keys=True).encode()
-                ).hexdigest(),
+                "data_hash": hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest(),
             },
             sort_keys=True,
         )
@@ -121,9 +118,7 @@ class ImmutableAuditLog:
         import os as _os
 
         _os.makedirs(self.log_path, exist_ok=True)
-        filename = (
-            f"{self.log_path}audit_{datetime.now(UTC).strftime('%Y-%m')}.jsonl"
-        )
+        filename = f"{self.log_path}audit_{datetime.now(UTC).strftime('%Y-%m')}.jsonl"
         try:
             loop = asyncio.get_running_loop()
             loop.create_task(self._async_write(filename, record))
@@ -202,18 +197,14 @@ class ImmutableAuditLog:
                 "seq": record.sequence_number,
                 "prev_hash": prev_hash,
                 "timestamp": record.timestamp,
-                "data_hash": hashlib.sha256(
-                    json.dumps(record.data, sort_keys=True).encode()
-                ).hexdigest(),
+                "data_hash": hashlib.sha256(json.dumps(record.data, sort_keys=True).encode()).hexdigest(),
             },
             sort_keys=True,
         )
 
         return hashlib.sha256(record_str.encode()).hexdigest()
 
-    def export_for_regulator(
-        self, start_date: datetime, end_date: datetime
-    ) -> list[dict]:
+    def export_for_regulator(self, start_date: datetime, end_date: datetime) -> list[dict]:
         """Export compliant audit trail for regulatory review"""
         return [
             {
@@ -276,9 +267,7 @@ class TradeReporting:
     def _requires_immediate_reporting(self, trade: dict) -> bool:
         """Check if trade requires immediate regulatory reporting"""
         # Large trader threshold
-        if trade.get("size", 0) > self.reporting_obligations.get("cftc", {}).get(
-            "threshold", 25
-        ):
+        if trade.get("size", 0) > self.reporting_obligations.get("cftc", {}).get("threshold", 25):
             return True
 
         # Suspicious activity
@@ -302,9 +291,7 @@ class TradeReporting:
             AuditLevel.COMPLIANCE,
             "REGULATORY",
             "system",
-            "REPORT_SUBMITTED"
-            if record.status == "submitted"
-            else record.status.upper(),
+            "REPORT_SUBMITTED" if record.status == "submitted" else record.status.upper(),
             {
                 "trade_id": trade.get("id"),
                 "report_id": record.report_id,
@@ -331,8 +318,7 @@ class TradeReporting:
             )
         else:
             logger.error(
-                "Regulatory report FAILED: trade_id=%s report_id=%s "
-                "enqueued to DLQ for retry",
+                "Regulatory report FAILED: trade_id=%s report_id=%s enqueued to DLQ for retry",
                 trade.get("id"),
                 record.report_id,
             )
@@ -344,17 +330,14 @@ class TradeReporting:
         trades_today = [
             r
             for r in self.audit_log.records
-            if r.category == "TRADE"
-            and datetime.fromisoformat(r.timestamp).date() == today
+            if r.category == "TRADE" and datetime.fromisoformat(r.timestamp).date() == today
         ]
 
         return {
             "date": today.isoformat(),
             "total_trades": len(trades_today),
             "total_notional": sum(t.data.get("notional", 0) for t in trades_today),
-            "regulatory_reports_filed": len(
-                [t for t in trades_today if self._requires_immediate_reporting(t.data)]
-            ),
+            "regulatory_reports_filed": len([t for t in trades_today if self._requires_immediate_reporting(t.data)]),
             "audit_hash": self.audit_log.last_hash,
             "integrity_verified": self.audit_log.verify_integrity(),
         }

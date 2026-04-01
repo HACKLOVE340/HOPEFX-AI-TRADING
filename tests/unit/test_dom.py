@@ -177,9 +177,7 @@ class TestDepthOfMarketService:
         from data.depth_of_market import DepthOfMarketService
 
         service = DepthOfMarketService()
-        service.update_order_book(
-            symbol="EURUSD", bids=[(1.0800, 1000)], asks=[(1.0802, 800)]
-        )
+        service.update_order_book(symbol="EURUSD", bids=[(1.0800, 1000)], asks=[(1.0802, 800)])
 
         spread = service.get_spread("EURUSD")
         assert spread == pytest.approx(0.0002, rel=0.01)
@@ -189,9 +187,7 @@ class TestDepthOfMarketService:
         from data.depth_of_market import DepthOfMarketService
 
         service = DepthOfMarketService()
-        service.update_order_book(
-            symbol="GBPUSD", bids=[(1.2500, 200)], asks=[(1.2502, 100)]
-        )
+        service.update_order_book(symbol="GBPUSD", bids=[(1.2500, 200)], asks=[(1.2502, 100)])
 
         imbalance = service.get_imbalance("GBPUSD")
         assert imbalance > 0  # More bids = bullish
@@ -240,9 +236,7 @@ class TestDepthOfMarketService:
 
         # Add multiple updates
         for i in range(5):
-            service.update_order_book(
-                symbol="XAUUSD", bids=[(1950.00 + i, 100)], asks=[(1951.00 + i, 80)]
-            )
+            service.update_order_book(symbol="XAUUSD", bids=[(1950.00 + i, 100)], asks=[(1951.00 + i, 80)])
 
         history = service.get_order_book_history("XAUUSD", limit=3)
         assert len(history) == 3  # noqa: PLR2004
@@ -255,9 +249,7 @@ class TestDepthOfMarketService:
 
         # Add multiple updates
         for i in range(3):
-            service.update_order_book(
-                symbol="XAUUSD", bids=[(1950.00, 100 + i * 50)], asks=[(1950.50, 80)]
-            )
+            service.update_order_book(symbol="XAUUSD", bids=[(1950.00, 100 + i * 50)], asks=[(1950.50, 80)])
 
         history = service.get_imbalance_history("XAUUSD", limit=2)
         assert len(history) == 2  # noqa: PLR2004

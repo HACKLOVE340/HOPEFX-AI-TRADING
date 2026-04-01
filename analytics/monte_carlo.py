@@ -182,9 +182,7 @@ class MonteCarloEngine:
         BootstrapResult with confidence intervals on all key metrics.
         """
         if len(trade_pnls) < 2:  # noqa: PLR2004
-            logger.warning(
-                "MonteCarloEngine: need at least 2 trades — returning empty result"
-            )
+            logger.warning("MonteCarloEngine: need at least 2 trades — returning empty result")
             return self._empty_result(initial_capital)
 
         pnls = np.array(trade_pnls, dtype=float)
@@ -262,27 +260,19 @@ class MonteCarloEngine:
             max_dd_distribution=max_dd_dist,
             cagr_distribution=cagr_dist,
             final_equity_distribution=final_equity_dist,
-            sharpe_ci_95=ci(valid_sharpe, 0.95)
-            if len(valid_sharpe) > 1
-            else (0.0, 0.0),
-            sharpe_ci_99=ci(valid_sharpe, 0.99)
-            if len(valid_sharpe) > 1
-            else (0.0, 0.0),
+            sharpe_ci_95=ci(valid_sharpe, 0.95) if len(valid_sharpe) > 1 else (0.0, 0.0),
+            sharpe_ci_99=ci(valid_sharpe, 0.99) if len(valid_sharpe) > 1 else (0.0, 0.0),
             max_dd_ci_95=ci(max_dd_arr, 0.95),
             max_dd_ci_99=ci(max_dd_arr, 0.99),
             cagr_ci_95=ci(cagr_arr, 0.95),
             final_equity_ci_95=ci(final_arr, 0.95),
             ruin_probability=ruin_count / self.n_paths,
             probability_of_profit=float(np.mean(final_arr > initial_capital)),
-            expected_shortfall_5pct=float(
-                np.mean(final_arr[final_arr <= np.percentile(final_arr, 5)])
-            )
+            expected_shortfall_5pct=float(np.mean(final_arr[final_arr <= np.percentile(final_arr, 5)]))
             if len(final_arr) > 0
             else 0.0,
             sharpe_se=1.0 / math.sqrt(2 * (n_trades - 1)) if n_trades > 1 else 0.0,
-            sharpe_positive_fraction=float(np.mean(valid_sharpe > 0))
-            if len(valid_sharpe) > 0
-            else 0.0,
+            sharpe_positive_fraction=float(np.mean(valid_sharpe > 0)) if len(valid_sharpe) > 0 else 0.0,
         )
 
         logger.info(

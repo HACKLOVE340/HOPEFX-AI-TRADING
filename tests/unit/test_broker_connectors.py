@@ -247,9 +247,7 @@ class TestAlpacaConnector:
 
         broker = AlpacaConnector(ALPACA_CONFIG)
         broker.connect()
-        order = broker.place_order(
-            "AAPL", OrderSide.SELL, 5, OrderType.LIMIT, price=200.0
-        )
+        order = broker.place_order("AAPL", OrderSide.SELL, 5, OrderType.LIMIT, price=200.0)
 
         assert order is not None
         assert order.side == OrderSide.SELL
@@ -441,9 +439,7 @@ class TestBinanceConnector:
     def test_connect_success(self, mock_session_cls):
         mock_sess = MagicMock()
         mock_session_cls.return_value = mock_sess
-        mock_sess.get.return_value = _mock_response(
-            {"balances": [{"asset": "USDT", "free": "1000", "locked": "0"}]}
-        )
+        mock_sess.get.return_value = _mock_response({"balances": [{"asset": "USDT", "free": "1000", "locked": "0"}]})
 
         broker = BinanceConnector(BINANCE_CONFIG)
         assert broker.connect() is True
@@ -516,9 +512,7 @@ class TestBinanceConnector:
         broker = BinanceConnector(BINANCE_CONFIG)
         broker.connected = True
         broker.session = mock_sess
-        order = broker.place_order(
-            "BTCUSDT", OrderSide.SELL, 0.001, OrderType.LIMIT, price=55000
-        )
+        order = broker.place_order("BTCUSDT", OrderSide.SELL, 0.001, OrderType.LIMIT, price=55000)
 
         assert order is not None
         assert order.status == OrderStatus.OPEN
@@ -730,9 +724,7 @@ class TestOANDAConnector:
 
         broker = OANDAConnector(OANDA_CONFIG)
         broker.connect()
-        order = broker.place_order(
-            "EUR_USD", OrderSide.BUY, 5000, OrderType.LIMIT, price=1.0950
-        )
+        order = broker.place_order("EUR_USD", OrderSide.BUY, 5000, OrderType.LIMIT, price=1.0950)
 
         assert order is not None
         assert order.status == OrderStatus.OPEN
@@ -1146,9 +1138,7 @@ class TestInteractiveBrokersConnector:
         mock_trade.order.orderId = 55
         broker.ib.placeOrder.return_value = mock_trade
 
-        order = broker.place_order(
-            "AAPL", OrderSide.SELL, 5, OrderType.LIMIT, price=190.0
-        )
+        order = broker.place_order("AAPL", OrderSide.SELL, 5, OrderType.LIMIT, price=190.0)
 
         assert order is not None
         assert order.price == 190.0  # noqa: PLR2004
@@ -1281,9 +1271,7 @@ class TestAdvancedOrderManager:
 
     def test_create_basic_order(self):
         mgr = AdvancedOrderManager()
-        order = mgr.create_order(
-            "EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 10000, price=1.1000
-        )
+        order = mgr.create_order("EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 10000, price=1.1000)
         assert order.symbol == "EURUSD"
         assert order.side == AdvOrderSide.BUY
         assert order.price == 1.1000  # noqa: PLR2004
@@ -1292,24 +1280,18 @@ class TestAdvancedOrderManager:
 
     def test_create_trailing_stop(self):
         mgr = AdvancedOrderManager()
-        order = mgr.create_trailing_stop(
-            "EURUSD", AdvOrderSide.SELL, 10000, trail_amount=50.0
-        )
+        order = mgr.create_trailing_stop("EURUSD", AdvOrderSide.SELL, 10000, trail_amount=50.0)
         assert order.trail_amount == 50.0  # noqa: PLR2004
         assert order.id in mgr.trailing_stops
 
     def test_create_trailing_stop_percent(self):
         mgr = AdvancedOrderManager()
-        order = mgr.create_trailing_stop(
-            "XAUUSD", AdvOrderSide.SELL, 1.0, trail_percent=1.5
-        )
+        order = mgr.create_trailing_stop("XAUUSD", AdvOrderSide.SELL, 1.0, trail_percent=1.5)
         assert order.trail_percent == 1.5  # noqa: PLR2004
 
     def test_create_oco_order(self):
         mgr = AdvancedOrderManager()
-        oco = mgr.create_oco_order(
-            "EURUSD", AdvOrderSide.SELL, 10000, limit_price=1.1100, stop_price=1.0900
-        )
+        oco = mgr.create_oco_order("EURUSD", AdvOrderSide.SELL, 10000, limit_price=1.1100, stop_price=1.0900)
         assert oco.order1.price == 1.1100  # noqa: PLR2004
         assert oco.order2.stop_price == 1.0900  # noqa: PLR2004
         assert oco.id in mgr.oco_orders
@@ -1318,9 +1300,7 @@ class TestAdvancedOrderManager:
 
     def test_oco_order_fill_cancels_other(self):
         mgr = AdvancedOrderManager()
-        oco = mgr.create_oco_order(
-            "EURUSD", AdvOrderSide.SELL, 10000, limit_price=1.1100, stop_price=1.0900
-        )
+        oco = mgr.create_oco_order("EURUSD", AdvOrderSide.SELL, 10000, limit_price=1.1100, stop_price=1.0900)
         # Simulate order1 fill
         mgr.handle_order_fill(oco.order1.id, 1.1100, 10000)
         assert oco.order2.status == AdvOrderStatus.CANCELLED
@@ -1347,9 +1327,7 @@ class TestAdvancedOrderManager:
 
     def test_bracket_entry_fill_activates_sl_tp(self):
         mgr = AdvancedOrderManager()
-        bracket = mgr.create_bracket_order(
-            "XAUUSD", AdvOrderSide.BUY, 1.0, AdvOrderType.MARKET, None, 1920.0, 2000.0
-        )
+        bracket = mgr.create_bracket_order("XAUUSD", AdvOrderSide.BUY, 1.0, AdvOrderType.MARKET, None, 1920.0, 2000.0)
         mgr.handle_order_fill(bracket.entry_order.id, 1960.0, 1.0)
         assert bracket.position_filled is True
         assert bracket.stop_loss_order.status == AdvOrderStatus.OPEN
@@ -1357,9 +1335,7 @@ class TestAdvancedOrderManager:
 
     def test_bracket_tp_fill_cancels_sl(self):
         mgr = AdvancedOrderManager()
-        bracket = mgr.create_bracket_order(
-            "XAUUSD", AdvOrderSide.BUY, 1.0, AdvOrderType.MARKET, None, 1920.0, 2000.0
-        )
+        bracket = mgr.create_bracket_order("XAUUSD", AdvOrderSide.BUY, 1.0, AdvOrderType.MARKET, None, 1920.0, 2000.0)
         mgr.handle_order_fill(bracket.entry_order.id, 1960.0, 1.0)
         mgr.handle_order_fill(bracket.take_profit_order.id, 2000.0, 1.0)
         assert bracket.stop_loss_order.status == AdvOrderStatus.CANCELLED
@@ -1368,9 +1344,7 @@ class TestAdvancedOrderManager:
 
     def test_bracket_sl_fill_cancels_tp(self):
         mgr = AdvancedOrderManager()
-        bracket = mgr.create_bracket_order(
-            "XAUUSD", AdvOrderSide.BUY, 1.0, AdvOrderType.MARKET, None, 1920.0, 2000.0
-        )
+        bracket = mgr.create_bracket_order("XAUUSD", AdvOrderSide.BUY, 1.0, AdvOrderType.MARKET, None, 1920.0, 2000.0)
         mgr.handle_order_fill(bracket.entry_order.id, 1960.0, 1.0)
         mgr.handle_order_fill(bracket.stop_loss_order.id, 1920.0, 1.0)
         assert bracket.take_profit_order.status == AdvOrderStatus.CANCELLED
@@ -1378,18 +1352,14 @@ class TestAdvancedOrderManager:
 
     def test_update_trailing_stop_sell(self):
         mgr = AdvancedOrderManager()
-        order = mgr.create_trailing_stop(
-            "EURUSD", AdvOrderSide.SELL, 10000, trail_amount=0.0020
-        )
+        order = mgr.create_trailing_stop("EURUSD", AdvOrderSide.SELL, 10000, trail_amount=0.0020)
         # Price moves up
         new_stop = mgr.update_trailing_stop(order.id, 1.1100)
         assert new_stop == pytest.approx(1.1080, abs=1e-5)
 
     def test_update_trailing_stop_buy(self):
         mgr = AdvancedOrderManager()
-        order = mgr.create_trailing_stop(
-            "EURUSD", AdvOrderSide.BUY, 10000, trail_amount=0.0020
-        )
+        order = mgr.create_trailing_stop("EURUSD", AdvOrderSide.BUY, 10000, trail_amount=0.0020)
         # Price moves down
         new_stop = mgr.update_trailing_stop(order.id, 1.0900)
         assert new_stop == pytest.approx(1.0920, abs=1e-5)
@@ -1408,18 +1378,14 @@ class TestAdvancedOrderManager:
 
     def test_create_conditional_order(self):
         mgr = AdvancedOrderManager()
-        base_order = mgr.create_order(
-            "EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000
-        )
+        base_order = mgr.create_order("EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000)
         conditions = [{"type": "price_above", "value": 1.1000}]
         cond_order = mgr.create_conditional_order(base_order, conditions)
         assert cond_order.id in mgr.conditional_orders
 
     def test_evaluate_conditional_order_price_above_true(self):
         mgr = AdvancedOrderManager()
-        base_order = mgr.create_order(
-            "EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000
-        )
+        base_order = mgr.create_order("EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000)
         conditions = [{"type": "price_above", "value": 1.1000}]
         cond = mgr.create_conditional_order(base_order, conditions)
         result = mgr.evaluate_conditional_order(cond.id, {"price": 1.1100})
@@ -1427,9 +1393,7 @@ class TestAdvancedOrderManager:
 
     def test_evaluate_conditional_order_price_below_false(self):
         mgr = AdvancedOrderManager()
-        base_order = mgr.create_order(
-            "EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000
-        )
+        base_order = mgr.create_order("EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000)
         conditions = [{"type": "price_below", "value": 1.0900}]
         cond = mgr.create_conditional_order(base_order, conditions)
         result = mgr.evaluate_conditional_order(cond.id, {"price": 1.1000})
@@ -1437,14 +1401,10 @@ class TestAdvancedOrderManager:
 
     def test_create_scaled_order(self):
         mgr = AdvancedOrderManager()
-        scaled = mgr.create_scaled_order(
-            "EURUSD", AdvOrderSide.BUY, 10000, 4, 1.0900, 1.1000
-        )
+        scaled = mgr.create_scaled_order("EURUSD", AdvOrderSide.BUY, 10000, 4, 1.0900, 1.1000)
         assert len(scaled.levels) == 4  # noqa: PLR2004
         assert len(scaled.child_orders) == 4  # noqa: PLR2004
-        assert sum(l["quantity"] for l in scaled.levels) == pytest.approx(
-            10000, rel=1e-5
-        )
+        assert sum(l["quantity"] for l in scaled.levels) == pytest.approx(10000, rel=1e-5)
 
     def test_get_open_orders(self):
         mgr = AdvancedOrderManager()
@@ -1479,9 +1439,7 @@ class TestAdvancedOrderManager:
 
     def test_order_to_dict(self):
         mgr = AdvancedOrderManager()
-        order = mgr.create_order(
-            "EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000, price=1.10
-        )
+        order = mgr.create_order("EURUSD", AdvOrderSide.BUY, AdvOrderType.LIMIT, 1000, price=1.10)
         d = order.to_dict()
         assert d["symbol"] == "EURUSD"
         assert d["price"] == 1.10  # noqa: PLR2004
@@ -1496,9 +1454,7 @@ class TestAdvancedOrderManager:
 
     def test_bracket_to_dict(self):
         mgr = AdvancedOrderManager()
-        bracket = mgr.create_bracket_order(
-            "EURUSD", AdvOrderSide.BUY, 10000, AdvOrderType.LIMIT, 1.10, 1.08, 1.12
-        )
+        bracket = mgr.create_bracket_order("EURUSD", AdvOrderSide.BUY, 10000, AdvOrderType.LIMIT, 1.10, 1.08, 1.12)
         d = bracket.to_dict()
         assert "entry_order" in d
         assert "stop_loss_order" in d

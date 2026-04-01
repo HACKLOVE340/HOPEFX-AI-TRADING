@@ -283,9 +283,7 @@ try:
 except ImportError:
     _FASTAPI_AVAILABLE = False
 
-_skip_no_fastapi = pytest.mark.skipif(
-    not _FASTAPI_AVAILABLE, reason="fastapi not installed in this environment"
-)
+_skip_no_fastapi = pytest.mark.skipif(not _FASTAPI_AVAILABLE, reason="fastapi not installed in this environment")
 
 
 class TestPrometheusMonitoringIntegration:

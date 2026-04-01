@@ -219,9 +219,12 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     # Check conditional secrets based on feature flags
     broker_type = env.get("BROKER_TYPE", os.getenv("BROKER_TYPE", "paper"))
-    payments_on = env.get(
-        "FEATURE_PAYMENTS", os.getenv("FEATURE_PAYMENTS", "true")
-    ).lower() not in ("false", "0", "no", "off")
+    payments_on = env.get("FEATURE_PAYMENTS", os.getenv("FEATURE_PAYMENTS", "true")).lower() not in (
+        "false",
+        "0",
+        "no",
+        "off",
+    )
 
     for var, desc, condition in CONDITIONAL_SECRETS:
         active = (
@@ -229,17 +232,14 @@ def cmd_validate(args: argparse.Namespace) -> int:
             or (condition == "FEATURE_PAYMENTS=true" and payments_on)
             or (
                 condition == "FEATURE_ML_PREDICTIONS=true"
-                and env.get("FEATURE_ML_PREDICTIONS", "false").lower()
-                not in ("false", "0", "no", "off")
+                and env.get("FEATURE_ML_PREDICTIONS", "false").lower() not in ("false", "0", "no", "off")
             )
         )
         if not active:
             continue
         val = env.get(var, os.getenv(var, ""))
         if not val or _is_placeholder(val):
-            warnings.append(
-                f"  ⚠ {var} — required for {condition} but not set ({desc})"
-            )
+            warnings.append(f"  ⚠ {var} — required for {condition} but not set ({desc})")
         else:
             print(f"  ✓ {var} (conditional)")
 
@@ -335,9 +335,7 @@ def cmd_check_env(args: argparse.Namespace) -> int:
         print("No missing keys.")
 
     if extra:
-        print(
-            f"\nKeys in .env but not in .env.example ({len(extra)}) — consider documenting:"
-        )
+        print(f"\nKeys in .env but not in .env.example ({len(extra)}) — consider documenting:")
         for k in extra:
             print(f"  + {k}")
 

@@ -19,6 +19,7 @@ import json
 import pathlib
 import sys
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from unittest.mock import AsyncMock, MagicMock
 
@@ -30,9 +31,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def _write_stamp(
-    data_dir: pathlib.Path, started_utc: datetime, days: int = 30
-) -> pathlib.Path:
+def _write_stamp(data_dir: pathlib.Path, started_utc: datetime, days: int = 30) -> pathlib.Path:
     stamp = data_dir / "oanda_paper_start.json"
     stamp.write_text(
         json.dumps(
@@ -275,9 +274,7 @@ class TestInitBrokerSelection:
             # globally as that drops all cached modules and breaks subsequent tests.
             _saved = {k: sys.modules.get(k) for k in _INJECTED}
             sys.modules["api.admin"] = mock_admin
-            sys.modules["brokers.paper_trading"] = MagicMock(
-                PaperTradingBroker=MockPaperClass
-            )
+            sys.modules["brokers.paper_trading"] = MagicMock(PaperTradingBroker=MockPaperClass)
             try:
                 import importlib
                 import core.startup_factories as sf
@@ -313,9 +310,7 @@ class TestInitBrokerSelection:
             mock_admin.log_activity = MagicMock()
             _saved = {k: sys.modules.get(k) for k in _INJECTED}
             sys.modules["api.admin"] = mock_admin
-            sys.modules["brokers.paper_trading"] = MagicMock(
-                PaperTradingBroker=MockPaperClass
-            )
+            sys.modules["brokers.paper_trading"] = MagicMock(PaperTradingBroker=MockPaperClass)
             try:
                 import importlib
                 import core.startup_factories as sf

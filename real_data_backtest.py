@@ -109,9 +109,7 @@ def fetch_ohlcv_paginated(
     fetch_since = since_ms
 
     while len(all_bars) < max_bars:
-        batch = exchange.fetch_ohlcv(
-            symbol, timeframe, since=fetch_since, limit=batch_size
-        )
+        batch = exchange.fetch_ohlcv(symbol, timeframe, since=fetch_since, limit=batch_size)
         if not batch:
             break
 
@@ -134,9 +132,7 @@ def fetch_ohlcv_paginated(
     if not all_bars:
         raise RuntimeError(f"No OHLCV data returned for {symbol} {timeframe}")
 
-    df = pd.DataFrame(
-        all_bars, columns=["timestamp", "open", "high", "low", "close", "volume"]
-    )
+    df = pd.DataFrame(all_bars, columns=["timestamp", "open", "high", "low", "close", "volume"])
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
     df.set_index("timestamp", inplace=True)
     df = df[~df.index.duplicated(keep="first")].sort_index()
@@ -264,12 +260,8 @@ def run_backtest(
 
         # --- Manage open position ---
         if position != 0:
-            stop_hit = (position == 1 and row["low"] <= stop_price) or (
-                position == -1 and row["high"] >= stop_price
-            )
-            tp_hit = (position == 1 and row["high"] >= tp_price) or (
-                position == -1 and row["low"] <= tp_price
-            )
+            stop_hit = (position == 1 and row["low"] <= stop_price) or (position == -1 and row["high"] >= stop_price)
+            tp_hit = (position == 1 and row["high"] >= tp_price) or (position == -1 and row["low"] <= tp_price)
 
             if stop_hit or tp_hit:
                 exit_price = stop_price if stop_hit else tp_price
@@ -481,10 +473,7 @@ def run_multi_symbol_backtest(
         symbols = SYMBOLS
 
     if not _CCXT_AVAILABLE:
-        raise RuntimeError(
-            "ccxt is required for live data fetching. "
-            "Install it with: pip install ccxt"
-        )
+        raise RuntimeError("ccxt is required for live data fetching. Install it with: pip install ccxt")
     exchange = _ccxt_module.binance(
         {
             "enableRateLimit": True,
@@ -526,12 +515,8 @@ def run_multi_symbol_backtest(
                         print(f"  {sym}: rejections={report.rejection_reasons}")
             except Exception as _mv_exc:
                 # Multi-source validation unavailable — fall back to single source
-                print(
-                    f"  {sym}: multi-source validation failed ({_mv_exc}) — using Binance only"
-                )
-                df = fetch_ohlcv_paginated(
-                    exchange, sym, TIMEFRAME, since_ms=since_ms, max_bars=max_bars
-                )
+                print(f"  {sym}: multi-source validation failed ({_mv_exc}) — using Binance only")
+                df = fetch_ohlcv_paginated(exchange, sym, TIMEFRAME, since_ms=since_ms, max_bars=max_bars)
 
             if df is None or df.empty:
                 print(f"  {sym}: SKIP — no data returned")
@@ -561,24 +546,18 @@ def run_multi_symbol_backtest(
     se_target = 1.0 / math.sqrt(2.0 * (TARGET_TRADE_COUNT - 1))
     robust = total_test_trades >= TARGET_TRADE_COUNT
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"POOLED RESULTS ({len(symbol_results)} symbols)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  Train trades total : {total_train_trades}")
-    print(
-        f"  Test  trades total : {total_test_trades}  "
-        f"(target: {TARGET_TRADE_COUNT})"
-    )
+    print(f"  Test  trades total : {total_test_trades}  (target: {TARGET_TRADE_COUNT})")
     print(
         f"  Pooled test Sharpe : {pooled_sharpe:.3f}  "
         f"SE ±{pooled_se:.3f}  "
         f"({'✅ robust' if robust else f'⚠️  need {TARGET_TRADE_COUNT - total_test_trades} more'})"
     )
     print(f"  SE at N={TARGET_TRADE_COUNT}          : ±{se_target:.3f}")
-    print(
-        "\nNOTE: Sharpe is trade-level (corrected). "
-        "Bar-level Sharpe is NOT reported here."
-    )
+    print("\nNOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is NOT reported here.")
 
     return {
         "symbol_results": symbol_results,

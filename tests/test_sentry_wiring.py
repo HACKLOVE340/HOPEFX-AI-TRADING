@@ -107,24 +107,16 @@ class TestInitSentryWithDSN:
             {
                 "sentry_sdk": sdk_mock,
                 "sentry_sdk.integrations": MagicMock(),
-                "sentry_sdk.integrations.logging": MagicMock(
-                    LoggingIntegration=MagicMock(return_value=MagicMock())
-                ),
-                "sentry_sdk.integrations.fastapi": MagicMock(
-                    FastApiIntegration=MagicMock(return_value=MagicMock())
-                ),
+                "sentry_sdk.integrations.logging": MagicMock(LoggingIntegration=MagicMock(return_value=MagicMock())),
+                "sentry_sdk.integrations.fastapi": MagicMock(FastApiIntegration=MagicMock(return_value=MagicMock())),
                 "sentry_sdk.integrations.starlette": MagicMock(
                     StarletteIntegration=MagicMock(return_value=MagicMock())
                 ),
                 "sentry_sdk.integrations.sqlalchemy": MagicMock(
                     SqlalchemyIntegration=MagicMock(return_value=MagicMock())
                 ),
-                "sentry_sdk.integrations.redis": MagicMock(
-                    RedisIntegration=MagicMock(return_value=MagicMock())
-                ),
-                "sentry_sdk.integrations.aiohttp": MagicMock(
-                    AioHttpIntegration=MagicMock(return_value=MagicMock())
-                ),
+                "sentry_sdk.integrations.redis": MagicMock(RedisIntegration=MagicMock(return_value=MagicMock())),
+                "sentry_sdk.integrations.aiohttp": MagicMock(AioHttpIntegration=MagicMock(return_value=MagicMock())),
             },
         ):
             import importlib
@@ -143,24 +135,12 @@ class TestInitSentryWithDSN:
         sdk_mock = _make_sentry_mock()
         integration_mocks = {
             "sentry_sdk": sdk_mock,
-            "sentry_sdk.integrations.logging": MagicMock(
-                LoggingIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.fastapi": MagicMock(
-                FastApiIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.starlette": MagicMock(
-                StarletteIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.sqlalchemy": MagicMock(
-                SqlalchemyIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.redis": MagicMock(
-                RedisIntegration=MagicMock(return_value=MagicMock())
-            ),
-            "sentry_sdk.integrations.aiohttp": MagicMock(
-                AioHttpIntegration=MagicMock(return_value=MagicMock())
-            ),
+            "sentry_sdk.integrations.logging": MagicMock(LoggingIntegration=MagicMock(return_value=MagicMock())),
+            "sentry_sdk.integrations.fastapi": MagicMock(FastApiIntegration=MagicMock(return_value=MagicMock())),
+            "sentry_sdk.integrations.starlette": MagicMock(StarletteIntegration=MagicMock(return_value=MagicMock())),
+            "sentry_sdk.integrations.sqlalchemy": MagicMock(SqlalchemyIntegration=MagicMock(return_value=MagicMock())),
+            "sentry_sdk.integrations.redis": MagicMock(RedisIntegration=MagicMock(return_value=MagicMock())),
+            "sentry_sdk.integrations.aiohttp": MagicMock(AioHttpIntegration=MagicMock(return_value=MagicMock())),
         }
         with patch.dict(sys.modules, integration_mocks):
             import importlib
@@ -186,24 +166,16 @@ class TestInitSentryWithDSN:
             sys.modules,
             {
                 "sentry_sdk": sdk_mock,
-                "sentry_sdk.integrations.logging": MagicMock(
-                    LoggingIntegration=MagicMock(return_value=MagicMock())
-                ),
-                "sentry_sdk.integrations.fastapi": MagicMock(
-                    FastApiIntegration=MagicMock(return_value=MagicMock())
-                ),
+                "sentry_sdk.integrations.logging": MagicMock(LoggingIntegration=MagicMock(return_value=MagicMock())),
+                "sentry_sdk.integrations.fastapi": MagicMock(FastApiIntegration=MagicMock(return_value=MagicMock())),
                 "sentry_sdk.integrations.starlette": MagicMock(
                     StarletteIntegration=MagicMock(return_value=MagicMock())
                 ),
                 "sentry_sdk.integrations.sqlalchemy": MagicMock(
                     SqlalchemyIntegration=MagicMock(return_value=MagicMock())
                 ),
-                "sentry_sdk.integrations.redis": MagicMock(
-                    RedisIntegration=MagicMock(return_value=MagicMock())
-                ),
-                "sentry_sdk.integrations.aiohttp": MagicMock(
-                    AioHttpIntegration=MagicMock(return_value=MagicMock())
-                ),
+                "sentry_sdk.integrations.redis": MagicMock(RedisIntegration=MagicMock(return_value=MagicMock())),
+                "sentry_sdk.integrations.aiohttp": MagicMock(AioHttpIntegration=MagicMock(return_value=MagicMock())),
             },
         ):
             import importlib

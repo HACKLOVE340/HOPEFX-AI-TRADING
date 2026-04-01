@@ -10,6 +10,7 @@ and Phase 26: White-Label Module (whitelabel/).
 
 import pytest
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 
@@ -87,9 +88,7 @@ class TestDrawing:
     def test_from_dict_roundtrip(self):
         from charting.drawing_tools import Drawing, DrawingType
 
-        d = Drawing(
-            DrawingType.FIBONACCI_RETRACEMENT, drawing_id="fib_1", color="#FF5722"
-        )
+        d = Drawing(DrawingType.FIBONACCI_RETRACEMENT, drawing_id="fib_1", color="#FF5722")
         d.properties = {"levels": [0.382, 0.618]}
         d.visible = False
         data = d.to_dict()
@@ -332,9 +331,7 @@ class TestDrawingToolkitFibonacciExtension:
         tc = datetime(2024, 1, 8)
         # A=1800, B=2000, C=1900; swing=200
         # 1.618 extension: 1900 + 1.618*200 = 2223.6
-        d = toolkit.draw_fibonacci_extension(
-            ta, 1800.0, tb, 2000.0, tc, 1900.0, levels=[1.618]
-        )
+        d = toolkit.draw_fibonacci_extension(ta, 1800.0, tb, 2000.0, tc, 1900.0, levels=[1.618])
         level_prices = d.properties["level_prices"]
         assert level_prices["1.618"] == pytest.approx(1900.0 + 1.618 * 200.0, rel=1e-4)
 
@@ -419,9 +416,7 @@ class TestDrawingToolkitElliottWave:
 
     def test_elliott_wave_too_few_points(self, toolkit):
         with pytest.raises(ValueError, match="At least 2"):
-            toolkit.draw_elliott_wave(
-                [{"time": "2024-01-01", "price": 1800.0, "label": "0"}]
-            )
+            toolkit.draw_elliott_wave([{"time": "2024-01-01", "price": 1800.0, "label": "0"}])
 
     def test_elliott_wave_corrective(self, toolkit):
         points = [
@@ -586,10 +581,7 @@ class TestDrawingToolkitManagement:
         drawings = populated_toolkit.get_drawings()
         did = drawings[0].drawing_id
         populated_toolkit.update_drawing(did, custom_key="custom_val")
-        assert (
-            populated_toolkit.get_drawing(did).properties.get("custom_key")
-            == "custom_val"
-        )
+        assert populated_toolkit.get_drawing(did).properties.get("custom_key") == "custom_val"
 
     def test_update_nonexistent_drawing(self, toolkit):
         assert toolkit.update_drawing("ghost", color="#000") is False
@@ -870,9 +862,7 @@ class TestWhiteLabelManagerTheme:
 
     def test_update_theme(self, manager_with_tenant):
         mgr, t = manager_with_tenant
-        result = mgr.update_theme(
-            t.tenant_id, {"primary_color": "#FF0000", "app_name": "MyBrand"}
-        )
+        result = mgr.update_theme(t.tenant_id, {"primary_color": "#FF0000", "app_name": "MyBrand"})
         assert result is True
         assert t.theme.primary_color == "#FF0000"
         assert t.theme.app_name == "MyBrand"
@@ -902,9 +892,7 @@ class TestWhiteLabelManagerFeatures:
         from whitelabel import WhiteLabelManager, FeatureFlag
 
         mgr = WhiteLabelManager()
-        t = mgr.create_tenant(
-            "FeatureTenant", "ft@ft.com", features=[FeatureFlag.TRADING]
-        )
+        t = mgr.create_tenant("FeatureTenant", "ft@ft.com", features=[FeatureFlag.TRADING])
         return mgr, t
 
     def test_enable_feature(self, manager_with_tenant):

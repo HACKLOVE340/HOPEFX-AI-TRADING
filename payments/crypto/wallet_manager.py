@@ -38,10 +38,7 @@ class CryptoWalletManager:
             "currency": currency,
             "hot_wallet": float(self.hot_wallet_balances.get(currency, 0)),
             "cold_wallet": float(self.cold_wallet_balances.get(currency, 0)),
-            "total": float(
-                self.hot_wallet_balances.get(currency, 0)
-                + self.cold_wallet_balances.get(currency, 0)
-            ),
+            "total": float(self.hot_wallet_balances.get(currency, 0) + self.cold_wallet_balances.get(currency, 0)),
         }
 
     def move_to_cold_storage(self, currency: str, amount: Decimal) -> bool:

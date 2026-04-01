@@ -15,12 +15,14 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 
 def _utcnow() -> datetime:
     """Return current UTC time as timezone-aware datetime."""
     return datetime.now(UTC)
+
 
 from database.models import Base
 
@@ -60,9 +62,7 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False, default=UserRole.TRADER.value)
-    status = Column(
-        String(30), nullable=False, default=UserStatus.PENDING_VERIFICATION.value
-    )
+    status = Column(String(30), nullable=False, default=UserStatus.PENDING_VERIFICATION.value)
 
     # Verification
     is_email_verified = Column(Boolean, default=False, nullable=False)
@@ -78,9 +78,7 @@ class User(Base):
     totp_enabled = Column(Boolean, default=False)
 
     # KYC
-    kyc_status = Column(
-        String(20), default="unverified"
-    )  # unverified/pending/approved/rejected
+    kyc_status = Column(String(20), default="unverified")  # unverified/pending/approved/rejected
 
     # Metadata
     created_at = Column(DateTime, default=_utcnow, nullable=False)
@@ -89,12 +87,8 @@ class User(Base):
     last_login_ip = Column(String(45), nullable=True)
 
     # Relations
-    sessions = relationship(
-        "UserSession", back_populates="user", cascade="all, delete-orphan"
-    )
-    login_attempts = relationship(
-        "LoginAttempt", back_populates="user", cascade="all, delete-orphan"
-    )
+    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+    login_attempts = relationship("LoginAttempt", back_populates="user", cascade="all, delete-orphan")
     accounts = relationship("Account", back_populates="user", lazy="dynamic")
 
     __table_args__ = (
@@ -122,9 +116,7 @@ class UserSession(Base):
         nullable=False,
         index=True,
     )
-    refresh_token_hash = Column(
-        String(64), unique=True, nullable=False
-    )  # SHA-256 of raw token
+    refresh_token_hash = Column(String(64), unique=True, nullable=False)  # SHA-256 of raw token
     device_info = Column(String(255), nullable=True)
     ip_address = Column(String(45), nullable=True)
     created_at = Column(DateTime, default=_utcnow)
@@ -146,9 +138,7 @@ class LoginAttempt(Base):
     __tablename__ = "login_attempts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
-    )
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     email = Column(String(255), nullable=True, index=True)
     ip_address = Column(String(45), nullable=False, index=True)
     success = Column(Boolean, default=False)

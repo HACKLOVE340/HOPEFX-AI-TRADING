@@ -21,6 +21,7 @@ import abc
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -37,10 +38,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 if not _FEEDPARSER_AVAILABLE:
-    logger.warning(
-        "feedparser not installed — RSS news feed disabled. "
-        "Install with: pip install feedparser"
-    )
+    logger.warning("feedparser not installed — RSS news feed disabled. Install with: pip install feedparser")
 
 
 @dataclass
@@ -137,9 +135,7 @@ class NewsAPIProvider(NewsProvider):
                 "apiKey": self.api_key,
             }
 
-            response = requests.get(
-                f"{self.BASE_URL}/everything", params=params, timeout=10
-            )
+            response = requests.get(f"{self.BASE_URL}/everything", params=params, timeout=10)
             response.raise_for_status()
 
             data = response.json()
@@ -172,9 +168,7 @@ class NewsAPIProvider(NewsProvider):
             title=raw_article.get("title", ""),
             description=raw_article.get("description", ""),
             source=raw_article.get("source", {}).get("name", "Unknown"),
-            published_at=datetime.fromisoformat(
-                raw_article.get("publishedAt", "").replace("Z", "+00:00")
-            ),
+            published_at=datetime.fromisoformat(raw_article.get("publishedAt", "").replace("Z", "+00:00")),
             url=raw_article.get("url", ""),
             author=raw_article.get("author"),
             content=raw_article.get("content"),
@@ -256,17 +250,13 @@ class AlphaVantageNewsProvider(NewsProvider):
         sentiment_score = float(raw_article.get("overall_sentiment_score", 0))
 
         # Extract symbols
-        symbols = [
-            ticker["ticker"] for ticker in raw_article.get("ticker_sentiment", [])
-        ]
+        symbols = [ticker["ticker"] for ticker in raw_article.get("ticker_sentiment", [])]
 
         return NewsArticle(
             title=raw_article.get("title", ""),
             description=raw_article.get("summary", ""),
             source=raw_article.get("source", "Unknown"),
-            published_at=datetime.strptime(
-                raw_article.get("time_published", ""), "%Y%m%dT%H%M%S"
-            ),
+            published_at=datetime.strptime(raw_article.get("time_published", ""), "%Y%m%dT%H%M%S"),
             url=raw_article.get("url", ""),
             author=", ".join(raw_article.get("authors", [])),
             sentiment=sentiment_score,
@@ -296,9 +286,7 @@ class RSSFeedProvider(NewsProvider):
         """Add a custom RSS feed"""
         self.feeds[name] = url
 
-    def get_news(
-        self, feeds: list[str] | None = None, hours_back: int = 24
-    ) -> list[NewsArticle]:
+    def get_news(self, feeds: list[str] | None = None, hours_back: int = 24) -> list[NewsArticle]:
         """
         Get news from RSS feeds
 
@@ -322,9 +310,7 @@ class RSSFeedProvider(NewsProvider):
 
             try:
                 if not _FEEDPARSER_AVAILABLE:
-                    self.logger.warning(
-                        "feedparser not installed — skipping RSS feed '%s'", feed_name
-                    )
+                    self.logger.warning("feedparser not installed — skipping RSS feed '%s'", feed_name)
                     continue
                 feed_url = self.feeds[feed_name]
                 feed = feedparser.parse(feed_url)
@@ -363,9 +349,7 @@ class RSSFeedProvider(NewsProvider):
             published_at=published_at,
             url=entry.get("link", ""),
             author=entry.get("author"),
-            content=entry.get("content", [{}])[0].get("value")
-            if hasattr(entry, "content")
-            else None,
+            content=entry.get("content", [{}])[0].get("value") if hasattr(entry, "content") else None,
         )
 
 
@@ -428,9 +412,7 @@ class MultiSourceAggregator:
                 all_articles.extend(articles)
 
             except Exception as e:
-                self.logger.error(
-                    f"Error fetching from {provider.__class__.__name__}: {e}"
-                )
+                self.logger.error(f"Error fetching from {provider.__class__.__name__}: {e}")
                 continue
 
         if deduplicate:
@@ -465,7 +447,5 @@ news_aggregator = None
 def initialize_aggregator(newsapi_key=None, alphavantage_key=None):
     """Initialize the global news aggregator"""
     global news_aggregator
-    news_aggregator = MultiSourceAggregator(
-        newsapi_key=newsapi_key, alphavantage_key=alphavantage_key
-    )
+    news_aggregator = MultiSourceAggregator(newsapi_key=newsapi_key, alphavantage_key=alphavantage_key)
     return news_aggregator

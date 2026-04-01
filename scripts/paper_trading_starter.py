@@ -45,6 +45,7 @@ import signal
 import sys
 import time
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -120,9 +121,7 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
         import urllib.parse
 
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        data = urllib.parse.urlencode(
-            {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
-        ).encode()
+        data = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()
         req = urllib.request.Request(url, data=data, method="POST")
         with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 - API URL is always https://
             return resp.status == 200  # noqa: PLR2004
@@ -159,9 +158,7 @@ class OANDAPaperClient:
 
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode()
-        req = urllib.request.Request(
-            url, data=data, headers=self._headers, method="POST"
-        )
+        req = urllib.request.Request(url, data=data, headers=self._headers, method="POST")
         with urllib.request.urlopen(req, timeout=15) as resp:  # nosec B310 - API URL is always https://
             return json.loads(resp.read())
 
@@ -170,9 +167,7 @@ class OANDAPaperClient:
 
     def get_price(self, instrument: str) -> float | None:
         try:
-            resp = self._get(
-                f"/v3/accounts/{self.account_id}/pricing?instruments={instrument}"
-            )
+            resp = self._get(f"/v3/accounts/{self.account_id}/pricing?instruments={instrument}")
             prices = resp.get("prices", [])
             if prices:
                 bid = float(prices[0].get("bids", [{}])[0].get("price", 0))
@@ -257,9 +252,7 @@ class PaperTradingRunner:
         self.tg_chat = _env("TELEGRAM_CHAT_ID")
         self.max_dd_pct = float(_env("PAPER_MAX_DD_PCT", "0.03"))
         self.duration_s = float(_env("PAPER_DURATION_DAYS", "30")) * 86400
-        self.instruments = [
-            i.strip() for i in _env("OANDA_INSTRUMENTS", "XAU_USD,EUR_USD").split(",")
-        ]
+        self.instruments = [i.strip() for i in _env("OANDA_INSTRUMENTS", "XAU_USD,EUR_USD").split(",")]
         self.poll_interval = 60  # seconds between signal checks
 
         self.client = OANDAPaperClient(self.api_key, self.account_id, self.environment)
@@ -364,7 +357,7 @@ class PaperTradingRunner:
                 self.tg_token,
                 self.tg_chat,
                 f"🚨 <b>HOPEFX KILL SWITCH</b>\n"
-                f"Drawdown {dd*100:.2f}% exceeded {self.max_dd_pct*100:.0f}% limit.\n"
+                f"Drawdown {dd * 100:.2f}% exceeded {self.max_dd_pct * 100:.0f}% limit.\n"
                 f"All positions closed. Session halted.",
             )
             self._running = False
@@ -379,8 +372,8 @@ class PaperTradingRunner:
             f"📊 <b>HOPEFX Daily Paper Report</b>\n"
             f"Day {elapsed_days:.1f} / {self._duration_days()}\n"
             f"Balance: <b>${self.current_balance:,.2f}</b>\n"
-            f"P&L: {'+'if pnl>=0 else ''}{pnl:,.2f}\n"
-            f"Drawdown: {dd*100:.2f}%\n"
+            f"P&L: {'+' if pnl >= 0 else ''}{pnl:,.2f}\n"
+            f"Drawdown: {dd * 100:.2f}%\n"
             f"Trades: {self.trade_count}\n"
             f"Instruments: {', '.join(self.instruments)}"
         )
@@ -514,9 +507,7 @@ class PaperTradingRunner:
                         "current_balance": self.current_balance,
                         "drawdown_pct": round(dd * 100, 4),
                         "trade_count": self.trade_count,
-                        "elapsed_days": round(
-                            (time.time() - self.start_time) / 86400, 2
-                        ),
+                        "elapsed_days": round((time.time() - self.start_time) / 86400, 2),
                     }
                 )
 

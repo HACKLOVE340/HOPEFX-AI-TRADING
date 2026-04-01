@@ -214,9 +214,7 @@ class TestCacheOhlcv:
 
     def test_get_ohlcv_hit(self):
         ohlcv = _make_ohlcv(2)
-        serialised = json.dumps(
-            {"data": [asdict(c) for c in ohlcv], "cached_at": "2024-01-01T00:00:00"}
-        )
+        serialised = json.dumps({"data": [asdict(c) for c in ohlcv], "cached_at": "2024-01-01T00:00:00"})
         self.mock_redis.get.return_value = serialised
 
         result = self.cache.get_ohlcv("XAUUSD", Timeframe.ONE_HOUR)
@@ -246,9 +244,7 @@ class TestCacheOhlcv:
     def test_all_timeframes_cache_and_retrieve(self):
         for tf in Timeframe:
             ohlcv = _make_ohlcv(1)
-            serialised = json.dumps(
-                {"data": [asdict(c) for c in ohlcv], "cached_at": "2024-01-01T00:00:00"}
-            )
+            serialised = json.dumps({"data": [asdict(c) for c in ohlcv], "cached_at": "2024-01-01T00:00:00"})
             self.mock_redis.get.return_value = serialised
             result = self.cache.get_ohlcv("XAUUSD", tf)
             assert result is not None, f"Expected result for timeframe {tf}"
@@ -284,9 +280,7 @@ class TestCacheTick:
 
     def test_get_tick_hit(self):
         tick = _make_tick()
-        serialised = json.dumps(
-            {"data": asdict(tick), "cached_at": "2024-01-01T00:00:00"}
-        )
+        serialised = json.dumps({"data": asdict(tick), "cached_at": "2024-01-01T00:00:00"})
         self.mock_redis.get.return_value = serialised
 
         result = self.cache.get_tick("XAUUSD")
@@ -364,9 +358,7 @@ class TestAppendOhlcv:
 
     def test_append_ohlcv_existing_key(self):
         existing = _make_ohlcv(3)
-        serialised = json.dumps(
-            {"data": [asdict(c) for c in existing], "cached_at": "2024-01-01T00:00:00"}
-        )
+        serialised = json.dumps({"data": [asdict(c) for c in existing], "cached_at": "2024-01-01T00:00:00"})
         self.mock_redis.get.return_value = serialised
         candle = _make_ohlcv(1)[0]
         result = self.cache.append_ohlcv("XAUUSD", Timeframe.ONE_HOUR, candle)
@@ -374,14 +366,10 @@ class TestAppendOhlcv:
 
     def test_append_ohlcv_max_size_enforced(self):
         existing = _make_ohlcv(100)
-        serialised = json.dumps(
-            {"data": [asdict(c) for c in existing], "cached_at": "2024-01-01T00:00:00"}
-        )
+        serialised = json.dumps({"data": [asdict(c) for c in existing], "cached_at": "2024-01-01T00:00:00"})
         self.mock_redis.get.return_value = serialised
         candle = _make_ohlcv(1)[0]
-        result = self.cache.append_ohlcv(
-            "XAUUSD", Timeframe.ONE_HOUR, candle, max_size=50
-        )
+        result = self.cache.append_ohlcv("XAUUSD", Timeframe.ONE_HOUR, candle, max_size=50)
         assert result is True
         stored_json = self.mock_redis.setex.call_args[0][2]
         stored_data = json.loads(stored_json)
@@ -416,13 +404,9 @@ class TestMultiTimeframe:
 
     def test_get_multi_timeframe(self):
         ohlcv = _make_ohlcv(1)
-        serialised = json.dumps(
-            {"data": [asdict(c) for c in ohlcv], "cached_at": "2024-01-01T00:00:00"}
-        )
+        serialised = json.dumps({"data": [asdict(c) for c in ohlcv], "cached_at": "2024-01-01T00:00:00"})
         self.mock_redis.get.return_value = serialised
-        result = self.cache.get_multi_timeframe(
-            "XAUUSD", [Timeframe.ONE_HOUR, Timeframe.ONE_DAY]
-        )
+        result = self.cache.get_multi_timeframe("XAUUSD", [Timeframe.ONE_HOUR, Timeframe.ONE_DAY])
         assert Timeframe.ONE_HOUR in result
         assert Timeframe.ONE_DAY in result
         assert result[Timeframe.ONE_HOUR] is not None
@@ -524,9 +508,7 @@ class TestCacheStatisticsOperations:
 
     def test_stats_accumulate_across_operations(self):
         ohlcv = _make_ohlcv(1)
-        serialised = json.dumps(
-            {"data": [asdict(c) for c in ohlcv], "cached_at": "2024-01-01T00:00:00"}
-        )
+        serialised = json.dumps({"data": [asdict(c) for c in ohlcv], "cached_at": "2024-01-01T00:00:00"})
         # 2 hits
         self.mock_redis.get.return_value = serialised
         self.cache.get_ohlcv("XAUUSD", Timeframe.ONE_HOUR)
@@ -594,9 +576,7 @@ class TestCacheThreadSafety:
         cache = MarketDataCache()
 
         ohlcv = _make_ohlcv(1)
-        serialised = json.dumps(
-            {"data": [asdict(c) for c in ohlcv], "cached_at": "2024-01-01T00:00:00"}
-        )
+        serialised = json.dumps({"data": [asdict(c) for c in ohlcv], "cached_at": "2024-01-01T00:00:00"})
         mock_redis.get.return_value = serialised
 
         def do_hits():
@@ -883,9 +863,7 @@ class TestAppConfigValidation:
 
     def test_validate_with_valid_api_config(self):
         cfg = AppConfig()
-        cfg.api_configs["binance"] = APIConfig(
-            provider="binance", api_key="k", api_secret="s"
-        )
+        cfg.api_configs["binance"] = APIConfig(provider="binance", api_key="k", api_secret="s")
         assert cfg.validate() is True
 
 
@@ -1037,9 +1015,7 @@ class TestConfigManagerSaveConfig:
     def test_save_encrypts_api_credentials(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
         cfg = AppConfig(environment="enc_test")
-        cfg.api_configs["binance"] = APIConfig(
-            provider="binance", api_key="myapikey", api_secret="mysecret"
-        )
+        cfg.api_configs["binance"] = APIConfig(provider="binance", api_key="myapikey", api_secret="mysecret")
         mgr.save_config(cfg)
 
         raw = json.loads((tmp_path / "config.enc_test.json").read_text())
@@ -1198,9 +1174,7 @@ class TestConfigManagerDefaultsFallback:
         assert cfg.logging.level == "INFO"
 
     def test_partial_trading_config_uses_defaults(self, tmp_path):
-        (tmp_path / "config.partial.json").write_text(
-            json.dumps({"trading": {"max_leverage": 3.0}})
-        )
+        (tmp_path / "config.partial.json").write_text(json.dumps({"trading": {"max_leverage": 3.0}}))
         mgr = ConfigManager(config_dir=str(tmp_path))
         cfg = mgr.load_config("partial")
         assert cfg.trading.max_leverage == 3.0  # noqa: PLR2004
@@ -1219,9 +1193,7 @@ class TestEncryptDecryptIntegration:
     def test_api_credentials_survive_save_load(self, tmp_path):
         mgr = ConfigManager(config_dir=str(tmp_path))
         cfg = AppConfig(environment="creds_test")
-        cfg.api_configs["alpaca"] = APIConfig(
-            provider="alpaca", api_key="real_api_key", api_secret="real_api_secret"
-        )
+        cfg.api_configs["alpaca"] = APIConfig(provider="alpaca", api_key="real_api_key", api_secret="real_api_secret")
         mgr.save_config(cfg)
 
         mgr2 = ConfigManager(config_dir=str(tmp_path))

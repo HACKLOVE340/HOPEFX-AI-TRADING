@@ -74,11 +74,7 @@ def test_feature_store_consistency():
     """Property-based test for feature store."""
     from hypothesis import given, strategies as st
 
-    @given(
-        st.lists(
-            st.floats(allow_nan=False, allow_infinity=False), min_size=10, max_size=100
-        )
-    )
+    @given(st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=10, max_size=100))
     def features_computed_correctly(prices):
         # Property: features should be deterministic given same inputs
         pass

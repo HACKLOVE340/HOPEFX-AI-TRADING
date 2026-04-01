@@ -132,9 +132,7 @@ class TestIncrementalXGBoost:
         path = tmp_path / "ixgb.pkl"
         model.save(path)
         loaded = self._cls.load(path)
-        np.testing.assert_allclose(
-            model.predict_proba(X), loaded.predict_proba(X), rtol=1e-5
-        )
+        np.testing.assert_allclose(model.predict_proba(X), loaded.predict_proba(X), rtol=1e-5)
 
 
 # ── OnlineLearnerStore ────────────────────────────────────────────────────────

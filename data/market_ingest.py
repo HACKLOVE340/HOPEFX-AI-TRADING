@@ -29,6 +29,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 # ccxt.pro for async WebSocket streaming
@@ -79,9 +80,7 @@ def _validate_tick(bid: float, ask: float, symbol: str) -> bool:
     - spread does not exceed MAX_SPREAD_USD (catches bad data / flash crashes)
     """
     if bid <= 0 or ask <= 0:
-        logger.warning(
-            "Tick rejected: non-positive bid/ask  bid=%.5f ask=%.5f", bid, ask
-        )
+        logger.warning("Tick rejected: non-positive bid/ask  bid=%.5f ask=%.5f", bid, ask)
         return False
     if ask <= bid:
         logger.warning("Tick rejected: inverted spread  bid=%.5f ask=%.5f", bid, ask)
@@ -155,9 +154,7 @@ class MarketIngest:
 
         # Credentials from env
         self._api_key = os.environ.get("OANDA_API_KEY", "")
-        self._api_secret = os.environ.get(
-            "OANDA_API_SECRET", os.environ.get("OANDA_API_KEY", "")
-        )
+        self._api_secret = os.environ.get("OANDA_API_SECRET", os.environ.get("OANDA_API_KEY", ""))
         self._account_id = os.environ.get("OANDA_ACCOUNT_ID", "")
         self._practice = os.environ.get("OANDA_PRACTICE", "true").lower() != "false"
 
@@ -188,9 +185,7 @@ class MarketIngest:
 
         await bus.connect()
         self._running = True
-        logger.info(
-            "MarketIngest starting — symbol=%s exchange=%s", SYMBOL, EXCHANGE_ID
-        )
+        logger.info("MarketIngest starting — symbol=%s exchange=%s", SYMBOL, EXCHANGE_ID)
 
         # Run staleness checker in background
         asyncio.create_task(self._staleness_loop())
@@ -235,9 +230,7 @@ class MarketIngest:
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                logger.error(
-                    "MarketIngest WS error: %s — reconnecting in %.1f s", exc, backoff
-                )
+                logger.error("MarketIngest WS error: %s — reconnecting in %.1f s", exc, backoff)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, WS_RECONNECT_MAX)
                 # Close stale exchange object before reconnecting
@@ -307,9 +300,7 @@ class MarketIngest:
             },
         )
 
-    async def _emit_tick(
-        self, bid: float, ask: float, extra: dict | None = None
-    ) -> None:
+    async def _emit_tick(self, bid: float, ask: float, extra: dict | None = None) -> None:
         """Validate, record staleness, and publish a tick to the EventBus."""
         if not _validate_tick(bid, ask, SYMBOL):
             return

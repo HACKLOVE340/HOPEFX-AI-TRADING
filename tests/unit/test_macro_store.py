@@ -87,9 +87,7 @@ class TestUpdate:
 class TestLoadCsv:
     def test_load_csv_parses_correctly(self, tmp_path):
         csv = tmp_path / "dxy.csv"
-        csv.write_text(
-            "date,value\n2026-01-05,102.34\n2026-01-06,101.89\n2026-01-07,103.10\n"
-        )
+        csv.write_text("date,value\n2026-01-05,102.34\n2026-01-06,101.89\n2026-01-07,103.10\n")
         store = _make_store()
         n = store.load_csv(csv, "dxy")
         assert n == 3  # noqa: PLR2004
@@ -111,9 +109,7 @@ class TestLoadCsv:
 
     def test_load_csv_drops_na_rows(self, tmp_path):
         csv = tmp_path / "data.csv"
-        csv.write_text(
-            "date,value\n2026-01-05,102.34\n2026-01-06,\n2026-01-07,103.10\n"
-        )
+        csv.write_text("date,value\n2026-01-05,102.34\n2026-01-06,\n2026-01-07,103.10\n")
         store = _make_store()
         n = store.load_csv(csv, "dxy")
         assert n == 2  # NaN row dropped  # noqa: PLR2004

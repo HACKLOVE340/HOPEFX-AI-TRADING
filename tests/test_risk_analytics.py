@@ -57,9 +57,7 @@ class TestComputeVaR:
 
     def test_conservative_var_is_max(self):
         result = compute_var(RETURNS_NORMAL, confidence=0.95)
-        assert result.var == max(
-            result.var_historical, result.var_parametric, result.var_cornish_fisher
-        )
+        assert result.var == max(result.var_historical, result.var_parametric, result.var_cornish_fisher)
 
     def test_99_var_greater_than_95(self):
         var95 = compute_var(RETURNS_NORMAL, confidence=0.95)
@@ -135,15 +133,11 @@ class TestSimulateSlippage:
         assert isinstance(result, SlippageSimResult)
 
     def test_p99_greater_than_mean(self):
-        result = simulate_slippage(
-            symbol="XAUUSD", quantity=1.0, side="BUY", mid_price=1950.0
-        )
+        result = simulate_slippage(symbol="XAUUSD", quantity=1.0, side="BUY", mid_price=1950.0)
         assert result.p99_slippage_bps >= result.mean_slippage_bps
 
     def test_p99_greater_than_p95(self):
-        result = simulate_slippage(
-            symbol="XAUUSD", quantity=1.0, side="BUY", mid_price=1950.0
-        )
+        result = simulate_slippage(symbol="XAUUSD", quantity=1.0, side="BUY", mid_price=1950.0)
         assert result.p99_slippage_bps >= result.p95_slippage_bps
 
     def test_larger_quantity_higher_impact(self):

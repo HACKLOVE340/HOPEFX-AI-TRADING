@@ -37,9 +37,7 @@ class DataSource(abc.ABC):
     """Abstract base class for backtesting data sources."""
 
     @abc.abstractmethod
-    def get_data(
-        self, symbol: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Return OHLCV DataFrame for *symbol* between *start_date* and *end_date*."""
 
 
@@ -59,9 +57,7 @@ class YahooFinanceSource(DataSource):
         self.interval = interval
         logger.info(f"Initialized Yahoo Finance source with {interval} interval")
 
-    def get_data(
-        self, symbol: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Download data from Yahoo Finance."""
         try:
             ticker = yf.Ticker(symbol)
@@ -101,9 +97,7 @@ class CSVDataSource(DataSource):
         self.date_column = date_column
         logger.info(f"Initialized CSV source from {data_dir}")
 
-    def get_data(
-        self, symbol: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Load data from CSV file."""
         import os
 
@@ -160,16 +154,12 @@ class BrokerDataSource(DataSource):
         self.broker = broker
         logger.info("Initialized broker data source")
 
-    def get_data(
-        self, symbol: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Get historical data from broker."""
         try:
             # This depends on broker implementation
             if hasattr(self.broker, "get_market_data"):
-                df = self.broker.get_market_data(
-                    symbol=symbol, timeframe="D1", start=start_date, end=end_date
-                )
+                df = self.broker.get_market_data(symbol=symbol, timeframe="D1", start=start_date, end=end_date)
                 return df
             else:
                 logger.error("Broker does not support historical data retrieval")
@@ -211,15 +201,12 @@ class AlphaVantageSource(DataSource):
         self.api_key = api_key or os.environ.get("ALPHA_VANTAGE_API_KEY", "")
         if not self.api_key:
             logger.warning(
-                "Alpha Vantage API key not set. "
-                "Get a free key at https://www.alphavantage.co/support/#api-key"
+                "Alpha Vantage API key not set. Get a free key at https://www.alphavantage.co/support/#api-key"
             )
         else:
             logger.info("Initialized Alpha Vantage source")
 
-    def get_data(
-        self, symbol: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Download data from Alpha Vantage."""
         if not self.api_key:
             logger.error("Alpha Vantage API key required")
@@ -358,9 +345,7 @@ class AlphaVantageSource(DataSource):
             if end_date:
                 result = result[result.index <= end_date]
 
-            logger.info(
-                f"Downloaded {len(result)} bars for {symbol}/{market} crypto from Alpha Vantage"
-            )
+            logger.info(f"Downloaded {len(result)} bars for {symbol}/{market} crypto from Alpha Vantage")
             return result
 
         except ImportError:
@@ -385,9 +370,7 @@ class CoinGeckoSource(DataSource):
         """Initialize CoinGecko source."""
         logger.info("Initialized CoinGecko source (free, no API key needed)")
 
-    def get_data(
-        self, symbol: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Download crypto data from CoinGecko."""
         try:
             import requests
@@ -429,9 +412,7 @@ class CoinGeckoSource(DataSource):
 
             # Add volume if available
             if "total_volumes" in data:
-                volumes = pd.DataFrame(
-                    data["total_volumes"], columns=["timestamp", "volume"]
-                )
+                volumes = pd.DataFrame(data["total_volumes"], columns=["timestamp", "volume"])
                 volumes["timestamp"] = pd.to_datetime(volumes["timestamp"], unit="ms")
                 volumes.set_index("timestamp", inplace=True)
                 prices = prices.join(volumes)
@@ -493,9 +474,7 @@ class ExchangeRateSource(DataSource):
         self.api_key = api_key or os.environ.get("EXCHANGE_RATE_API_KEY", "")
         logger.info("Initialized Exchange Rate source")
 
-    def get_data(
-        self, symbol: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """
         Get forex data.
 
@@ -630,16 +609,12 @@ class DataManager:
             alpha_vantage_key: Optional Alpha Vantage API key
             cache_dir: Directory for caching data
         """
-        self.alpha_vantage_key = alpha_vantage_key or os.environ.get(
-            "ALPHA_VANTAGE_API_KEY"
-        )
+        self.alpha_vantage_key = alpha_vantage_key or os.environ.get("ALPHA_VANTAGE_API_KEY")
         self.cache_dir = cache_dir or os.environ.get("DATA_CACHE_DIR", "./data/cache")
 
         # Initialize normalized forex pairs set (cached)
         if DataManager._NORMALIZED_FOREX_PAIRS is None:
-            DataManager._NORMALIZED_FOREX_PAIRS = set(
-                p.replace("/", "") for p in self.FOREX_PAIRS
-            )
+            DataManager._NORMALIZED_FOREX_PAIRS = set(p.replace("/", "") for p in self.FOREX_PAIRS)
 
         # Initialize sources
         self.sources = {}
@@ -658,9 +633,7 @@ class DataManager:
         # Exchange Rate API (always available for current rates)
         self.sources["exchangerate"] = ExchangeRateSource()
 
-        logger.info(
-            f"DataManager initialized with sources: {list(self.sources.keys())}"
-        )
+        logger.info(f"DataManager initialized with sources: {list(self.sources.keys())}")
 
     def get_data(
         self,
@@ -710,9 +683,7 @@ class DataManager:
         normalized = symbol.replace("/", "")
         return normalized in self._NORMALIZED_FOREX_PAIRS
 
-    def _get_crypto_data(
-        self, symbol: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def _get_crypto_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Get cryptocurrency data."""
         # Try CoinGecko first (free, no API key)
         if "coingecko" in self.sources:
@@ -722,9 +693,7 @@ class DataManager:
 
         # Try Alpha Vantage
         if "alphavantage" in self.sources:
-            df = self.sources["alphavantage"].get_crypto(
-                symbol, "USD", start_date, end_date
-            )
+            df = self.sources["alphavantage"].get_crypto(symbol, "USD", start_date, end_date)
             if not df.empty:
                 return df
 
@@ -738,9 +707,7 @@ class DataManager:
         logger.warning(f"No data found for crypto symbol {symbol}")
         return pd.DataFrame()
 
-    def _get_forex_data(
-        self, symbol: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def _get_forex_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Get forex data."""
         # Try Alpha Vantage first (best forex support)
         if "alphavantage" in self.sources:
@@ -762,9 +729,7 @@ class DataManager:
         logger.warning(f"No data found for forex symbol {symbol}")
         return pd.DataFrame()
 
-    def _get_stock_data(
-        self, symbol: str, start_date: datetime, end_date: datetime
-    ) -> pd.DataFrame:
+    def _get_stock_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Get stock data."""
         # Try Yahoo Finance first (best stock support)
         if "yahoo" in self.sources:

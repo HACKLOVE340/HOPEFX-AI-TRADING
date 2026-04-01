@@ -10,6 +10,7 @@ Unit tests for Risk Manager - FIA 2024 Compliant
 
 import pytest
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from risk.manager import RiskManager, RiskLevel
@@ -64,16 +65,12 @@ class TestRiskManager:
 
         # Valid price (within 2%)
         valid_order = {"price": 1.0870}  # 0.18% deviation
-        result = risk_manager.check_price_tolerance(
-            valid_order, current_price, tolerance=0.02
-        )
+        result = risk_manager.check_price_tolerance(valid_order, current_price, tolerance=0.02)
         assert result.passed is True
 
         # Invalid price (outside tolerance)
         invalid_order = {"price": 1.1200}  # 3.2% deviation
-        result = risk_manager.check_price_tolerance(
-            invalid_order, current_price, tolerance=0.02
-        )
+        result = risk_manager.check_price_tolerance(invalid_order, current_price, tolerance=0.02)
         assert result.passed is False
         assert "Price tolerance" in result.message
 
@@ -84,17 +81,11 @@ class TestRiskManager:
         account_value = 100000
 
         # Should not trigger at 2.8%
-        assert (
-            risk_manager.check_kill_switch(daily_pnl, account_value, threshold=0.03)
-            is False
-        )
+        assert risk_manager.check_kill_switch(daily_pnl, account_value, threshold=0.03) is False
 
         # Should trigger at 3.1%
         daily_pnl = -3100
-        assert (
-            risk_manager.check_kill_switch(daily_pnl, account_value, threshold=0.03)
-            is True
-        )
+        assert risk_manager.check_kill_switch(daily_pnl, account_value, threshold=0.03) is True
         assert risk_manager.kill_switch_active is True
 
     def test_max_drawdown_protection(self, risk_manager):

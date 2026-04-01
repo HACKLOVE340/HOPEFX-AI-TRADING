@@ -15,6 +15,7 @@ Tests for all security modules including:
 
 import os
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from unittest.mock import patch
 
@@ -175,9 +176,7 @@ class TestSecurityAuditor:
         )
 
         # Details should be sanitized
-        assert "supersecret" not in str(
-            event.details["password"]
-        ) or "[REDACTED]" in str(event.details["password"])
+        assert "supersecret" not in str(event.details["password"]) or "[REDACTED]" in str(event.details["password"])
 
     def test_get_events_filtered(self):
         """Test filtering audit events"""
@@ -196,9 +195,7 @@ class TestSecurityAuditor:
         """Test that disabled auditor returns None"""
         auditor = SecurityAuditor(enabled=False)
 
-        event = auditor.log_event(
-            event_type=AuditEventType.LOGIN_SUCCESS, resource="session", action="create"
-        )
+        event = auditor.log_event(event_type=AuditEventType.LOGIN_SUCCESS, resource="session", action="create")
 
         assert event is None
 
@@ -273,10 +270,7 @@ class TestSecurityConfigValidator:
 
             # Should fail without CONFIG_ENCRYPTION_KEY
             assert is_valid is False
-            assert any(
-                "CONFIG_ENCRYPTION_KEY" in issue["variable"]
-                for issue in validator.issues
-            )
+            assert any("CONFIG_ENCRYPTION_KEY" in issue["variable"] for issue in validator.issues)
 
     def test_validate_short_encryption_key(self):
         """Test validation fails with short encryption key"""
@@ -285,9 +279,7 @@ class TestSecurityConfigValidator:
             is_valid = validator.validate()
 
             assert is_valid is False
-            assert any(
-                "32 characters" in issue["message"] for issue in validator.issues
-            )
+            assert any("32 characters" in issue["message"] for issue in validator.issues)
 
     def test_validate_valid_config(self):
         """Test validation passes with valid config"""

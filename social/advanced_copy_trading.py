@@ -14,6 +14,7 @@ Advanced Copy Trading Engine
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 import uuid
 from enum import Enum
@@ -206,11 +207,7 @@ class CopyTradingEngine:
         """Broadcast signal to all followers"""
         results = {}
 
-        followers_of_trader = [
-            f
-            for f in self.followers.values()
-            if f.trader_id == signal.trader_id and f.enabled
-        ]
+        followers_of_trader = [f for f in self.followers.values() if f.trader_id == signal.trader_id and f.enabled]
 
         for follower in followers_of_trader:
             try:
@@ -256,18 +253,10 @@ class CopyTradingEngine:
 
         return results
 
-    def _can_accept_trade(
-        self, follower: FollowerConfig, signal: SignalMessage
-    ) -> bool:
+    def _can_accept_trade(self, follower: FollowerConfig, signal: SignalMessage) -> bool:
         """Check if follower can accept trade"""
         # Check concurrent trades limit
-        open_trades = len(
-            [
-                t
-                for t in self.active_trades.get(follower.follower_id, [])
-                if t.status == TradeStatus.OPEN
-            ]
-        )
+        open_trades = len([t for t in self.active_trades.get(follower.follower_id, []) if t.status == TradeStatus.OPEN])
 
         if open_trades >= follower.max_concurrent_trades:
             return False
@@ -276,9 +265,7 @@ class CopyTradingEngine:
         current_drawdown = self._calculate_current_drawdown(follower.follower_id)
         return current_drawdown < follower.max_account_drawdown
 
-    def _calculate_lot_size(
-        self, signal: SignalMessage, follower: FollowerConfig
-    ) -> float:
+    def _calculate_lot_size(self, signal: SignalMessage, follower: FollowerConfig) -> float:
         """Calculate appropriate lot size for follower"""
         max_risk = follower.account_balance * follower.risk_per_trade
         price_diff = abs(signal.entry_price - signal.stop_loss)
@@ -289,9 +276,7 @@ class CopyTradingEngine:
         base_lot_size = max_risk / price_diff
         return base_lot_size * follower.copy_ratio
 
-    def close_trade(
-        self, follower_id: str, trade_id: str, exit_price: float
-    ) -> ExecutedTrade | None:
+    def close_trade(self, follower_id: str, trade_id: str, exit_price: float) -> ExecutedTrade | None:
         """Close an active trade"""
         if follower_id not in self.active_trades:
             return None
@@ -369,12 +354,8 @@ class CopyTradingEngine:
             "losing_trades": len(losing_trades),
             "win_rate": len(winning_trades) / len(all_trades) if all_trades else 0,
             "total_pnl": sum(t.pnl for t in all_trades),
-            "avg_win": sum(t.pnl for t in winning_trades) / len(winning_trades)
-            if winning_trades
-            else 0,
-            "avg_loss": sum(t.pnl for t in losing_trades) / len(losing_trades)
-            if losing_trades
-            else 0,
+            "avg_win": sum(t.pnl for t in winning_trades) / len(winning_trades) if winning_trades else 0,
+            "avg_loss": sum(t.pnl for t in losing_trades) / len(losing_trades) if losing_trades else 0,
         }
 
     def get_follower_performance(self, follower_id: str) -> dict:
@@ -397,11 +378,7 @@ class CopyTradingEngine:
             "losing_trades": len(losing_trades),
             "win_rate": len(winning_trades) / len(trades) if trades else 0,
             "total_pnl": sum(t.pnl for t in trades),
-            "roi": (
-                sum(t.pnl for t in trades)
-                / (follower.account_balance - sum(t.pnl for t in trades))
-                * 100
-            )
+            "roi": (sum(t.pnl for t in trades) / (follower.account_balance - sum(t.pnl for t in trades)) * 100)
             if trades
             else 0,
         }

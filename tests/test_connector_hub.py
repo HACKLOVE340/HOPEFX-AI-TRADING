@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -106,7 +107,7 @@ class TestEventBus:
         bus._degraded = False
 
         received: list = []
-        bus.subscribe_local(CH_SIGNAL, lambda m: received.append(m))  # noqa: PLW0108
+        bus.subscribe_local(CH_SIGNAL, lambda m: received.append(m))
 
         # Patch sleep to avoid waiting during retries
         with patch("core.event_bus.asyncio.sleep", new_callable=AsyncMock):
@@ -271,9 +272,7 @@ class TestMLPredictorFallback:
 
         import pandas as pd
 
-        direction, confidence = pred.predict(
-            pd.DataFrame(), ema_cross=-0.5, symbol="XAU/USD"
-        )
+        direction, confidence = pred.predict(pd.DataFrame(), ema_cross=-0.5, symbol="XAU/USD")
         assert direction == "SELL"
 
     def test_hold_when_cross_zero(self):
@@ -446,9 +445,7 @@ class TestFaultGuard:
         from utils.fault_guard import HEARTBEAT_TIMEOUT_S
 
         fg = self._make()
-        fg._modules["test_module"].last_heartbeat = (
-            time.monotonic() - HEARTBEAT_TIMEOUT_S - 1
-        )
+        fg._modules["test_module"].last_heartbeat = time.monotonic() - HEARTBEAT_TIMEOUT_S - 1
 
         with patch("utils.fault_guard.bus") as mock_bus:
             mock_bus.publish_breach = AsyncMock()
@@ -534,9 +531,7 @@ class TestNewsCalendarFeed:
         mock_redis.pipeline = MagicMock(return_value=mock_pipe)
         mock_redis.aclose = AsyncMock()
 
-        with patch(
-            "data.news_calendar_feed.aioredis.from_url", return_value=mock_redis
-        ):
+        with patch("data.news_calendar_feed.aioredis.from_url", return_value=mock_redis):
             count = await feed._write_redis(events)
 
         assert count == 3  # noqa: PLR2004
@@ -564,9 +559,7 @@ class TestFIXRouter:
         router._fallback = MagicMock()
 
         # Should return without calling fallback
-        await router._route(
-            {"type": "order_request", "symbol": "XAU/USD", "direction": "BUY"}
-        )
+        await router._route({"type": "order_request", "symbol": "XAU/USD", "direction": "BUY"})
         router._fallback.send.assert_not_called()
 
     @pytest.mark.asyncio

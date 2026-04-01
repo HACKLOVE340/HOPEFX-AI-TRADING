@@ -35,9 +35,7 @@ from config import initialize_config
 from database.models import Base
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -172,9 +170,7 @@ def cmd_cache(args):
             logger.info(f"  Total hits: {stats.total_hits}")
             logger.info(f"  Total misses: {stats.total_misses}")
             logger.info(f"  Hit rate: {stats.hit_rate:.2f}%")
-            logger.info(
-                f"  Memory usage: {stats.memory_usage_bytes / 1024 / 1024:.2f} MB"
-            )
+            logger.info(f"  Memory usage: {stats.memory_usage_bytes / 1024 / 1024:.2f} MB")
 
         elif args.action == "clear":
             if cache.clear_all():
@@ -236,12 +232,8 @@ def cmd_start(args):
                 'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
             )
             return 1
-        logger.warning(
-            "CONFIG_ENCRYPTION_KEY not set. Using default for development only."
-        )
-        os.environ["CONFIG_ENCRYPTION_KEY"] = (
-            "dev-key-minimum-32-characters-long-for-testing"
-        )
+        logger.warning("CONFIG_ENCRYPTION_KEY not set. Using default for development only.")
+        os.environ["CONFIG_ENCRYPTION_KEY"] = "dev-key-minimum-32-characters-long-for-testing"
 
     host = args.host
     port = args.port
@@ -281,9 +273,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    parser.add_argument(
-        "--version", action="version", version="HOPEFX AI Trading Framework v1.0.0"
-    )
+    parser.add_argument("--version", action="version", version="HOPEFX AI Trading Framework v1.0.0")
 
     parser.add_argument(
         "--env",
@@ -305,16 +295,12 @@ def main():
 
     # config command
     parser_config = subparsers.add_parser("config", help="Manage configuration")
-    parser_config.add_argument(
-        "action", choices=["show", "validate"], help="Config action"
-    )
+    parser_config.add_argument("action", choices=["show", "validate"], help="Config action")
     parser_config.set_defaults(func=cmd_config)
 
     # cache command
     parser_cache = subparsers.add_parser("cache", help="Manage cache")
-    parser_cache.add_argument(
-        "action", choices=["stats", "clear", "health"], help="Cache action"
-    )
+    parser_cache.add_argument("action", choices=["stats", "clear", "health"], help="Cache action")
     parser_cache.set_defaults(func=cmd_cache)
 
     # db command

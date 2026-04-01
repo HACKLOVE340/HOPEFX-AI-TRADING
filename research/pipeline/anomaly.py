@@ -179,9 +179,7 @@ class AnomalyWeighter:
                 lof_norm = lof_scores - self._lof_threshold
                 return self.if_weight * if_norm + (1.0 - self.if_weight) * lof_norm
             except Exception as _exc:
-                logger.debug(
-                    "Suppressed exception: %s", _exc
-                )  # fall through to IF-only
+                logger.debug("Suppressed exception: %s", _exc)  # fall through to IF-only
 
         return if_scores - self._threshold
 
@@ -282,9 +280,7 @@ class AnomalyWeighter:
         """
         scores = self.decision_scores(X)
         idx = np.argsort(scores)[:top_n]
-        report = (
-            X.iloc[idx].copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X[idx])
-        )
+        report = X.iloc[idx].copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X[idx])
         report["anomaly_score"] = scores[idx]
         return report
 
@@ -440,8 +436,7 @@ class AnomalyWeightStore:
                 if score < self.anomaly_threshold:
                     self._anomaly_count += 1
                     logger.debug(
-                        "Anomaly detected: score=%.4f (threshold=%.4f) "
-                        "→ down-weight %.0f%% [%d/%d total]",
+                        "Anomaly detected: score=%.4f (threshold=%.4f) → down-weight %.0f%% [%d/%d total]",
                         score,
                         self.anomaly_threshold,
                         (1 - self.down_weight_factor) * 100,

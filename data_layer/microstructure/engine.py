@@ -41,6 +41,7 @@ import threading
 import time
 from collections import deque
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 import os
@@ -191,9 +192,7 @@ class MicrostructureEngine:
             ticks = list(self._ticks)
             mids = np.array([t.mid for t in ticks], dtype=np.float64)
             spreads = np.array([t.spread for t in ticks], dtype=np.float64)
-            deltas = np.array(
-                [t.volume if t.is_buy else -t.volume for t in ticks], dtype=np.float64
-            )
+            deltas = np.array([t.volume if t.is_buy else -t.volume for t in ticks], dtype=np.float64)
 
             # OFI over last 50 ticks
             recent = ticks[-50:]
@@ -325,9 +324,7 @@ class MicrostructureEngine:
                 "trade_pressure": round(self._trade_pressure, 4),
                 "spread_ema_fast": round(self._spread_ema_fast, 6),
                 "spread_ema_slow": round(self._spread_ema_slow, 6),
-                "session_open_age_s": round(time.time() - self._session_open, 1)
-                if self._session_open > 0
-                else None,
+                "session_open_age_s": round(time.time() - self._session_open, 1) if self._session_open > 0 else None,
                 "has_data": len(self._ticks) >= 10,  # noqa: PLR2004
             }
 
@@ -394,10 +391,7 @@ class MicrostructureEngine:
         self._cumulative_delta += signed_vol
 
         # Trade pressure EMA
-        self._trade_pressure = (
-            _PRESSURE_ALPHA * signed_vol
-            + (1.0 - _PRESSURE_ALPHA) * self._trade_pressure
-        )
+        self._trade_pressure = _PRESSURE_ALPHA * signed_vol + (1.0 - _PRESSURE_ALPHA) * self._trade_pressure
 
         # VWAP (mid-price weighted by tick count — best proxy without real volume)
         self._vwap_num += mid
@@ -413,14 +407,8 @@ class MicrostructureEngine:
             self._spread_ema_fast = spread
             self._spread_ema_slow = spread
         else:
-            self._spread_ema_fast = (
-                _SPREAD_ALPHA_F * spread
-                + (1.0 - _SPREAD_ALPHA_F) * self._spread_ema_fast
-            )
-            self._spread_ema_slow = (
-                _SPREAD_ALPHA_S * spread
-                + (1.0 - _SPREAD_ALPHA_S) * self._spread_ema_slow
-            )
+            self._spread_ema_fast = _SPREAD_ALPHA_F * spread + (1.0 - _SPREAD_ALPHA_F) * self._spread_ema_fast
+            self._spread_ema_slow = _SPREAD_ALPHA_S * spread + (1.0 - _SPREAD_ALPHA_S) * self._spread_ema_slow
 
         self._last_mid = mid
 
@@ -482,9 +470,7 @@ class MicrostructureEngine:
         bid_depth = last.bid_depth
         ask_depth = last.ask_depth
         depth_total = bid_depth + ask_depth
-        depth_imbalance = (
-            (bid_depth - ask_depth) / depth_total if depth_total > 0 else 0.0
-        )
+        depth_imbalance = (bid_depth - ask_depth) / depth_total if depth_total > 0 else 0.0
 
         vwap = self._vwap_num / max(self._vwap_den, 1e-9)
 

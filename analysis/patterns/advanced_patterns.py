@@ -24,8 +24,8 @@ from scipy.ndimage import argrelextrema
 # ── Module constants ─────────────────────────────────────────────────────────
 _MIN_PATTERN_BARS = 3
 _MIN_SWING_BARS = 2
-_PRICE_TOLERANCE = 0.02        # 2% price similarity threshold
-_TICK_EPSILON = 0.0001         # minimum price movement
+_PRICE_TOLERANCE = 0.02  # 2% price similarity threshold
+_TICK_EPSILON = 0.0001  # minimum price movement
 _CONFIDENCE_HIGH = 0.75
 _CONFIDENCE_MED = 0.55
 _HARMONIC_RATIO_1_618 = 1.618  # Fibonacci golden ratio
@@ -142,9 +142,7 @@ class AdvancedPatternDetector:
         self.min_pattern_bars = min_pattern_bars
         self.harmonic_tolerance = harmonic_tolerance
 
-    def detect_all_patterns(
-        self, df: pd.DataFrame, min_confidence: float = 0.7
-    ) -> list[PatternSignal]:
+    def detect_all_patterns(self, df: pd.DataFrame, min_confidence: float = 0.7) -> list[PatternSignal]:
         """
         Detect all patterns in price data
 
@@ -182,9 +180,7 @@ class AdvancedPatternDetector:
             # Sort by confidence
             patterns.sort(key=lambda x: x.confidence, reverse=True)
 
-            logger.info(
-                f"Detected {len(patterns)} patterns with confidence >= {min_confidence}"
-            )
+            logger.info(f"Detected {len(patterns)} patterns with confidence >= {min_confidence}")
             return patterns
 
         except Exception as e:
@@ -212,9 +208,7 @@ class AdvancedPatternDetector:
                 right_peak_idx = peaks[i + 1]
 
                 # Find intermediate troughs
-                troughs_between = troughs[
-                    (troughs > left_peak_idx) & (troughs < right_peak_idx)
-                ]
+                troughs_between = troughs[(troughs > left_peak_idx) & (troughs < right_peak_idx)]
                 if len(troughs_between) < 2:  # noqa: PLR2004
                     continue
 
@@ -228,8 +222,7 @@ class AdvancedPatternDetector:
                 # Head & Shoulders validation
                 shoulder_ratio = 0.05
                 if (
-                    abs(left_shoulder_height - right_shoulder_height) / head_height
-                    < shoulder_ratio
+                    abs(left_shoulder_height - right_shoulder_height) / head_height < shoulder_ratio
                     and left_shoulder_height < head_height * 0.98
                     and right_shoulder_height < head_height * 0.98
                 ):
@@ -257,8 +250,7 @@ class AdvancedPatternDetector:
                         pattern_start_idx=left_peak_idx,
                         pattern_end_idx=right_peak_idx,
                         formation_bars=right_peak_idx - left_peak_idx,
-                        risk_reward_ratio=(entry_price - target)
-                        / (stop_loss - entry_price + 1e-10),
+                        risk_reward_ratio=(entry_price - target) / (stop_loss - entry_price + 1e-10),
                         timestamp=index[right_trough],
                         additional_data={
                             "neckline": float(neckline),
@@ -297,9 +289,7 @@ class AdvancedPatternDetector:
                 # Check if peaks are similar in height (within 2%)
                 if abs(peak1 - peak2) / peak1 < 0.02:  # noqa: PLR2004
                     # Find intermediate trough
-                    troughs_between = troughs[
-                        (troughs > peak1_idx) & (troughs < peak2_idx)
-                    ]
+                    troughs_between = troughs[(troughs > peak1_idx) & (troughs < peak2_idx)]
 
                     if len(troughs_between) > 0:
                         intermediate_trough_idx = troughs_between[0]
@@ -319,8 +309,7 @@ class AdvancedPatternDetector:
                             pattern_start_idx=peak1_idx,
                             pattern_end_idx=peak2_idx,
                             formation_bars=peak2_idx - peak1_idx,
-                            risk_reward_ratio=(entry_price - target)
-                            / (stop_loss - entry_price + 1e-10),
+                            risk_reward_ratio=(entry_price - target) / (stop_loss - entry_price + 1e-10),
                             timestamp=index[peak2_idx],
                             additional_data={
                                 "peak1_height": float(peak1),
@@ -340,9 +329,7 @@ class AdvancedPatternDetector:
 
                     if abs(trough1 - trough2) / trough1 < 0.02:  # noqa: PLR2004
                         # Find intermediate peak
-                        peaks_between = peaks[
-                            (peaks > trough1_idx) & (peaks < trough2_idx)
-                        ]
+                        peaks_between = peaks[(peaks > trough1_idx) & (peaks < trough2_idx)]
 
                         if len(peaks_between) > 0:
                             intermediate_peak_idx = peaks_between[0]
@@ -362,8 +349,7 @@ class AdvancedPatternDetector:
                                 pattern_start_idx=trough1_idx,
                                 pattern_end_idx=trough2_idx,
                                 formation_bars=trough2_idx - trough1_idx,
-                                risk_reward_ratio=(target - entry_price)
-                                / (entry_price - stop_loss + 1e-10),
+                                risk_reward_ratio=(target - entry_price) / (entry_price - stop_loss + 1e-10),
                                 timestamp=index[trough2_idx],
                                 additional_data={
                                     "trough1": float(trough1),
@@ -400,9 +386,7 @@ class AdvancedPatternDetector:
                 if abs(high_trend) < 0.0001 and low_trend > 0.0001:  # noqa: PLR2004
                     entry_price = window_high[-1]
                     target = entry_price + (window_high[-1] - window_low[-1]) * 1.5
-                    stop_loss = (
-                        window_low[-1] - (window_high[-1] - window_low[-1]) * 0.5
-                    )
+                    stop_loss = window_low[-1] - (window_high[-1] - window_low[-1]) * 0.5
 
                     pattern = PatternSignal(
                         pattern_type=PatternType.TRIANGLE_ASCENDING,
@@ -414,8 +398,7 @@ class AdvancedPatternDetector:
                         pattern_start_idx=i - window_size,
                         pattern_end_idx=i,
                         formation_bars=window_size,
-                        risk_reward_ratio=(target - entry_price)
-                        / (entry_price - stop_loss + 1e-10),
+                        risk_reward_ratio=(target - entry_price) / (entry_price - stop_loss + 1e-10),
                         timestamp=index[i],
                         additional_data={
                             "high_trend": float(high_trend),
@@ -428,9 +411,7 @@ class AdvancedPatternDetector:
                 elif high_trend < -0.0001 and abs(low_trend) < 0.0001:  # noqa: PLR2004
                     entry_price = window_low[-1]
                     target = entry_price - (window_high[-1] - window_low[-1]) * 1.5
-                    stop_loss = (
-                        window_high[-1] + (window_high[-1] - window_low[-1]) * 0.5
-                    )
+                    stop_loss = window_high[-1] + (window_high[-1] - window_low[-1]) * 0.5
 
                     pattern = PatternSignal(
                         pattern_type=PatternType.TRIANGLE_DESCENDING,
@@ -442,8 +423,7 @@ class AdvancedPatternDetector:
                         pattern_start_idx=i - window_size,
                         pattern_end_idx=i,
                         formation_bars=window_size,
-                        risk_reward_ratio=(entry_price - target)
-                        / (stop_loss - entry_price + 1e-10),
+                        risk_reward_ratio=(entry_price - target) / (stop_loss - entry_price + 1e-10),
                         timestamp=index[i],
                         additional_data={
                             "high_trend": float(high_trend),
@@ -502,9 +482,7 @@ class AdvancedPatternDetector:
                 if high_trend > 0.0001 and low_trend > high_trend * 1.5:  # noqa: PLR2004
                     entry_price = window_high[-1]
                     target = window_low[-1] - (window_high[-1] - window_low[-1]) * 1.5
-                    stop_loss = (
-                        window_high[-1] + (window_high[-1] - window_low[-1]) * 0.5
-                    )
+                    stop_loss = window_high[-1] + (window_high[-1] - window_low[-1]) * 0.5
 
                     pattern = PatternSignal(
                         pattern_type=PatternType.WEDGE_RISING,
@@ -516,8 +494,7 @@ class AdvancedPatternDetector:
                         pattern_start_idx=i - window_size,
                         pattern_end_idx=i,
                         formation_bars=window_size,
-                        risk_reward_ratio=(entry_price - target)
-                        / (stop_loss - entry_price + 1e-10),
+                        risk_reward_ratio=(entry_price - target) / (stop_loss - entry_price + 1e-10),
                         timestamp=index[i],
                         additional_data={
                             "high_trend": float(high_trend),
@@ -530,9 +507,7 @@ class AdvancedPatternDetector:
                 elif high_trend < -0.0001 and high_trend < low_trend * 1.5:  # noqa: PLR2004
                     entry_price = window_low[-1]
                     target = window_high[-1] + (window_high[-1] - window_low[-1]) * 1.5
-                    stop_loss = (
-                        window_low[-1] - (window_high[-1] - window_low[-1]) * 0.5
-                    )
+                    stop_loss = window_low[-1] - (window_high[-1] - window_low[-1]) * 0.5
 
                     pattern = PatternSignal(
                         pattern_type=PatternType.WEDGE_FALLING,
@@ -544,8 +519,7 @@ class AdvancedPatternDetector:
                         pattern_start_idx=i - window_size,
                         pattern_end_idx=i,
                         formation_bars=window_size,
-                        risk_reward_ratio=(target - entry_price)
-                        / (entry_price - stop_loss + 1e-10),
+                        risk_reward_ratio=(target - entry_price) / (entry_price - stop_loss + 1e-10),
                         timestamp=index[i],
                         additional_data={
                             "high_trend": float(high_trend),
@@ -577,10 +551,7 @@ class AdvancedPatternDetector:
 
                 if abs(trend_change) > 0.02:  # At least 2% move  # noqa: PLR2004
                     # Check consolidation period
-                    consolidation = (
-                        high[i : i + consolidation_window]
-                        - low[i : i + consolidation_window]
-                    )
+                    consolidation = high[i : i + consolidation_window] - low[i : i + consolidation_window]
                     avg_consolidation = np.mean(consolidation)
 
                     # Flag/Pennant detected if consolidation is narrow
@@ -601,8 +572,7 @@ class AdvancedPatternDetector:
                                 pattern_start_idx=i - window_size,
                                 pattern_end_idx=i + consolidation_window,
                                 formation_bars=consolidation_window,
-                                risk_reward_ratio=(target - entry_price)
-                                / (entry_price - stop_loss + 1e-10),
+                                risk_reward_ratio=(target - entry_price) / (entry_price - stop_loss + 1e-10),
                                 timestamp=index[i + consolidation_window - 1],
                                 additional_data={
                                     "prior_trend": float(trend_change),
@@ -627,8 +597,7 @@ class AdvancedPatternDetector:
                                 pattern_start_idx=i - window_size,
                                 pattern_end_idx=i + consolidation_window,
                                 formation_bars=consolidation_window,
-                                risk_reward_ratio=(entry_price - target)
-                                / (stop_loss - entry_price + 1e-10),
+                                risk_reward_ratio=(entry_price - target) / (stop_loss - entry_price + 1e-10),
                                 timestamp=index[i + consolidation_window - 1],
                                 additional_data={
                                     "prior_trend": float(trend_change),
@@ -660,9 +629,7 @@ class AdvancedPatternDetector:
                 low_range = np.max(window_low) - np.min(window_low)
 
                 # Rectangle if both highs and lows are relatively flat
-                if high_range < (np.mean(window_high) * 0.02) and low_range < (
-                    np.mean(window_low) * 0.02
-                ):
+                if high_range < (np.mean(window_high) * 0.02) and low_range < (np.mean(window_low) * 0.02):
                     resistance = np.max(window_high)
                     support = np.min(window_low)
 
@@ -690,8 +657,7 @@ class AdvancedPatternDetector:
                         pattern_start_idx=i - window_size,
                         pattern_end_idx=i,
                         formation_bars=window_size,
-                        risk_reward_ratio=abs(target - entry_price)
-                        / abs(stop_loss - entry_price + 1e-10),
+                        risk_reward_ratio=abs(target - entry_price) / abs(stop_loss - entry_price + 1e-10),
                         timestamp=index[i],
                         additional_data={
                             "resistance": float(resistance),
@@ -752,11 +718,7 @@ class AdvancedPatternDetector:
                 if 0.55 < ab_ratio < 0.75 and 1.2 < bc_ratio < 1.8:  # noqa: PLR2004
                     cd_target = c_price + bc_move * 1.272
 
-                    direction = (
-                        PatternDirection.BULLISH
-                        if x_price > a_price
-                        else PatternDirection.BEARISH
-                    )
+                    direction = PatternDirection.BULLISH if x_price > a_price else PatternDirection.BEARISH
 
                     pattern = PatternSignal(
                         pattern_type=PatternType.GARTLEY,
@@ -768,8 +730,7 @@ class AdvancedPatternDetector:
                         pattern_start_idx=x_idx,
                         pattern_end_idx=c_idx,
                         formation_bars=c_idx - x_idx,
-                        risk_reward_ratio=abs(cd_target - c_price)
-                        / (abs(x_price - c_price) + 1e-10),
+                        risk_reward_ratio=abs(cd_target - c_price) / (abs(x_price - c_price) + 1e-10),
                         timestamp=index[c_idx],
                         additional_data={
                             "ab_ratio": float(ab_ratio),
@@ -782,11 +743,7 @@ class AdvancedPatternDetector:
                 elif 0.75 < ab_ratio < 0.82 and 1.5 < bc_ratio < 1.75:  # noqa: PLR2004
                     cd_target = c_price + bc_move * 1.618
 
-                    direction = (
-                        PatternDirection.BULLISH
-                        if x_price > a_price
-                        else PatternDirection.BEARISH
-                    )
+                    direction = PatternDirection.BULLISH if x_price > a_price else PatternDirection.BEARISH
 
                     pattern = PatternSignal(
                         pattern_type=PatternType.BUTTERFLY,
@@ -798,8 +755,7 @@ class AdvancedPatternDetector:
                         pattern_start_idx=x_idx,
                         pattern_end_idx=c_idx,
                         formation_bars=c_idx - x_idx,
-                        risk_reward_ratio=abs(cd_target - c_price)
-                        / (abs(x_price - c_price) + 1e-10),
+                        risk_reward_ratio=abs(cd_target - c_price) / (abs(x_price - c_price) + 1e-10),
                         timestamp=index[c_idx],
                         additional_data={
                             "ab_ratio": float(ab_ratio),
@@ -812,11 +768,7 @@ class AdvancedPatternDetector:
                 elif 0.35 < ab_ratio < 0.42 and 2.1 < bc_ratio < 2.4:  # noqa: PLR2004
                     cd_target = c_price + bc_move * 1.618
 
-                    direction = (
-                        PatternDirection.BULLISH
-                        if x_price > a_price
-                        else PatternDirection.BEARISH
-                    )
+                    direction = PatternDirection.BULLISH if x_price > a_price else PatternDirection.BEARISH
 
                     pattern = PatternSignal(
                         pattern_type=PatternType.CRAB,
@@ -828,8 +780,7 @@ class AdvancedPatternDetector:
                         pattern_start_idx=x_idx,
                         pattern_end_idx=c_idx,
                         formation_bars=c_idx - x_idx,
-                        risk_reward_ratio=abs(cd_target - c_price)
-                        / (abs(x_price - c_price) + 1e-10),
+                        risk_reward_ratio=abs(cd_target - c_price) / (abs(x_price - c_price) + 1e-10),
                         timestamp=index[c_idx],
                         additional_data={
                             "ab_ratio": float(ab_ratio),
@@ -842,11 +793,7 @@ class AdvancedPatternDetector:
                 elif 0.45 < ab_ratio < 0.55 and 0.8 < bc_ratio < 1.0:  # noqa: PLR2004
                     cd_target = c_price + bc_move * 0.886
 
-                    direction = (
-                        PatternDirection.BULLISH
-                        if x_price > a_price
-                        else PatternDirection.BEARISH
-                    )
+                    direction = PatternDirection.BULLISH if x_price > a_price else PatternDirection.BEARISH
 
                     pattern = PatternSignal(
                         pattern_type=PatternType.BAT,
@@ -858,8 +805,7 @@ class AdvancedPatternDetector:
                         pattern_start_idx=x_idx,
                         pattern_end_idx=c_idx,
                         formation_bars=c_idx - x_idx,
-                        risk_reward_ratio=abs(cd_target - c_price)
-                        / (abs(x_price - c_price) + 1e-10),
+                        risk_reward_ratio=abs(cd_target - c_price) / (abs(x_price - c_price) + 1e-10),
                         timestamp=index[c_idx],
                         additional_data={
                             "ab_ratio": float(ab_ratio),
@@ -892,11 +838,7 @@ class AdvancedPatternDetector:
                     avg_resistance = np.mean(high[nearby_peaks])
 
                     # Support is below
-                    support_idx = (
-                        max(troughs[troughs < peak_idx])
-                        if len(troughs[troughs < peak_idx]) > 0
-                        else 0
-                    )
+                    support_idx = max(troughs[troughs < peak_idx]) if len(troughs[troughs < peak_idx]) > 0 else 0
                     support_price = low[support_idx]
 
                     pattern = PatternSignal(
@@ -909,8 +851,7 @@ class AdvancedPatternDetector:
                         pattern_start_idx=support_idx,
                         pattern_end_idx=peak_idx,
                         formation_bars=len(nearby_peaks),
-                        risk_reward_ratio=(avg_resistance - support_price)
-                        / (avg_resistance - support_price + 1e-10),
+                        risk_reward_ratio=(avg_resistance - support_price) / (avg_resistance - support_price + 1e-10),
                         timestamp=index[peak_idx],
                         additional_data={
                             "resistance_level": float(avg_resistance),
@@ -925,9 +866,7 @@ class AdvancedPatternDetector:
 
         return patterns
 
-    def _calculate_pattern_confidence(
-        self, actual_ratio: float, expected_ratio: float, tolerance: float
-    ) -> float:
+    def _calculate_pattern_confidence(self, actual_ratio: float, expected_ratio: float, tolerance: float) -> float:
         """Calculate confidence score for pattern"""
         if expected_ratio == 0:
             return 0.0

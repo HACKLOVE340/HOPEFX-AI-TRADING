@@ -110,9 +110,7 @@ class TestGoldSlippage:
         broker = SimulatedBroker(cfg)
         # Wide bar: $20 range on $2000 = 1% — much wider than 0.015% base
         slip_wide = broker._calculate_slippage(2000.0, bar_high=2010.0, bar_low=1990.0)
-        slip_narrow = broker._calculate_slippage(
-            2000.0, bar_high=2000.3, bar_low=1999.7
-        )
+        slip_narrow = broker._calculate_slippage(2000.0, bar_high=2000.3, bar_low=1999.7)
         assert slip_wide > slip_narrow
 
 
@@ -133,9 +131,7 @@ class TestCommission:
         broker.place_market_order("XAUUSD", "buy", 1.0, 2000.0)
         # cash should decrease by cost + commission
         assert broker.cash < initial_cash - 2000.0
-        assert (
-            abs(broker.cash - (initial_cash - 2000.0 - 7.0)) < 1.0
-        )  # within $1 (slippage)
+        assert abs(broker.cash - (initial_cash - 2000.0 - 7.0)) < 1.0  # within $1 (slippage)
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +158,7 @@ class TestTradeLevelSharpe:
         for i in range(200):
             engine.broker.equity_curve.append(
                 {
-                    "timestamp": f"2024-01-{i+1:02d}",
+                    "timestamp": f"2024-01-{i + 1:02d}",
                     "equity": 100_000.0,  # flat — no trades in equity curve
                     "cash": 100_000.0,
                     "positions_value": 0.0,
@@ -172,9 +168,7 @@ class TestTradeLevelSharpe:
         result = engine._calculate_results()
 
         # Trade-level Sharpe should be positive (mean pnl > 0)
-        assert (
-            result.sharpe_ratio > 0
-        ), "Sharpe should be positive with positive mean PnL"
+        assert result.sharpe_ratio > 0, "Sharpe should be positive with positive mean PnL"
 
         # Bar-level Sharpe on a flat equity curve would be 0 (std=0).
         # Trade-level Sharpe should be non-zero.
@@ -225,9 +219,7 @@ class TestTradeLevelSharpe:
         se_50 = _run(50)
         se_250 = _run(250)
         se_600 = _run(600)
-        assert (
-            se_50 > se_250 > se_600
-        ), f"SE should decrease: {se_50:.4f} > {se_250:.4f} > {se_600:.4f}"
+        assert se_50 > se_250 > se_600, f"SE should decrease: {se_50:.4f} > {se_250:.4f} > {se_600:.4f}"
 
     def test_sharpe_se_at_600_trades(self):
         """At N=600, SE ≤ ±0.029 — well within the ±0.3 target."""
@@ -287,9 +279,7 @@ class TestKellyPositionSizing:
         equity = engine.broker.get_equity()
         max_risk = equity * cfg.risk_per_trade * 2
         # qty * stop_distance should not exceed max_risk (with 1% tolerance)
-        assert (
-            qty * 20.0 <= max_risk * 1.01
-        ), f"qty={qty:.4f} × $20 stop = ${qty*20:.2f} > max_risk=${max_risk:.2f}"
+        assert qty * 20.0 <= max_risk * 1.01, f"qty={qty:.4f} × $20 stop = ${qty * 20:.2f} > max_risk=${max_risk:.2f}"
 
     def test_kelly_fallback_with_no_history(self):
         """With < 20 trades, falls back to 1% equity / stop_distance, capped by cash."""

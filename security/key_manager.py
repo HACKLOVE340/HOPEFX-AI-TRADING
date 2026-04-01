@@ -41,8 +41,7 @@ class KeyManager:
         if not key:
             if require_production_key:
                 raise SecurityError(
-                    "HOPEFX_MASTER_KEY environment variable not set. "
-                    "System cannot start without encryption key."
+                    "HOPEFX_MASTER_KEY environment variable not set. System cannot start without encryption key."
                 )
             else:
                 # Development mode with strict warnings
@@ -108,7 +107,6 @@ class KeyManager:
 
 class SecurityError(Exception):
     """Security-related errors"""
-
 
 
 # Updated config_manager.py security section

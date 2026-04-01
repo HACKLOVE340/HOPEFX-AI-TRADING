@@ -84,8 +84,9 @@ class TestRiskManagerAssessRisk:
         mock_push = MagicMock()
         mock_push.send_drawdown_warning.return_value = True
 
-        with patch("risk.manager.push_manager", mock_push, create=True), patch(
-            "risk.manager._device_tokens", {"user-1": ["token-abc"]}, create=True
+        with (
+            patch("risk.manager.push_manager", mock_push, create=True),
+            patch("risk.manager._device_tokens", {"user-1": ["token-abc"]}, create=True),
         ):
             result = rm.assess_risk(self._account(equity=rm._state.account_equity), [])
             assert result.can_trade is False
@@ -255,9 +256,7 @@ class TestMlRouter:
         assert isinstance(res.json(), list)
 
     def test_predict_returns_direction(self, client):
-        res = client.post(
-            "/api/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 50}
-        )
+        res = client.post("/api/ml/predict/XAUUSD", json={"timeframe": "H1", "lookback": 50})
         assert res.status_code == 200  # noqa: PLR2004
         data = res.json()
         assert data["direction"] in ("BUY", "SELL", "HOLD")

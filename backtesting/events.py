@@ -11,6 +11,7 @@ Defines events used in event-driven backtesting architecture.
 
 from enum import Enum
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 

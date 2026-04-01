@@ -48,11 +48,10 @@ Environment variables
 from __future__ import annotations
 
 import asyncio
-import csv
 import io
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -81,13 +80,8 @@ _ETF_FLOW_URL = os.getenv(
 
 # WGC also publishes machine-readable CSVs via their data API endpoint.
 # These are the direct download links used by their own charting tools.
-_WGC_DEMAND_CSV_URL = (
-    "https://www.gold.org/goldhub/data/gold-demand-statistics?download=csv"
-)
-_WGC_ETF_CSV_URL = (
-    "https://www.gold.org/goldhub/data/global-gold-backed-etf-holdings-and-flows"
-    "?download=csv"
-)
+_WGC_DEMAND_CSV_URL = "https://www.gold.org/goldhub/data/gold-demand-statistics?download=csv"
+_WGC_ETF_CSV_URL = "https://www.gold.org/goldhub/data/global-gold-backed-etf-holdings-and-flows?download=csv"
 
 # HTTP timeout for WGC requests
 _HTTP_TIMEOUT = 30.0
@@ -188,7 +182,7 @@ def _parse_date_col(df: pd.DataFrame) -> pd.Series | None:
         return None
 
     parsed = raw.apply(_parse_quarter)
-    if parsed.notna().sum() > len(df) * 0.5:  # noqa: PLR2004
+    if parsed.notna().sum() > len(df) * 0.5:
         return parsed
 
     # Try pandas general date parsing
@@ -302,14 +296,13 @@ class WGCFeed:
             timeout = aiohttp.ClientTimeout(total=_HTTP_TIMEOUT)
             headers = {
                 "User-Agent": (
-                    "Mozilla/5.0 (compatible; HOPEFX-AI-TRADING/1.0; "
-                    "+https://github.com/HACKLOVE340/HOPEFX-AI-TRADING)"
+                    "Mozilla/5.0 (compatible; HOPEFX-AI-TRADING/1.0; +https://github.com/HACKLOVE340/HOPEFX-AI-TRADING)"
                 ),
                 "Accept": "text/csv,application/csv,text/plain,*/*",
             }
-            async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with aiohttp.ClientSession(timeout=timeout) as session:  # noqa: SIM117
                 async with session.get(url, headers=headers, allow_redirects=True) as resp:
-                    if resp.status == 200:
+                    if resp.status == 200:  # noqa: PLR2004
                         return await resp.text(encoding="utf-8", errors="replace")
                     logger.warning("WGC fetch %s returned HTTP %d", url, resp.status)
                     return None
@@ -329,18 +322,14 @@ class WGCFeed:
                     url,
                     timeout=_HTTP_TIMEOUT,
                     headers={
-                        "User-Agent": (
-                            "Mozilla/5.0 (compatible; HOPEFX-AI-TRADING/1.0)"
-                        ),
+                        "User-Agent": ("Mozilla/5.0 (compatible; HOPEFX-AI-TRADING/1.0)"),
                         "Accept": "text/csv,application/csv,text/plain,*/*",
                     },
                     allow_redirects=True,
                 )
-                if r.status_code == 200:
+                if r.status_code == 200:  # noqa: PLR2004
                     return r.text
-                logger.warning(
-                    "WGC requests fetch %s returned HTTP %d", url, r.status_code
-                )
+                logger.warning("WGC requests fetch %s returned HTTP %d", url, r.status_code)
                 return None
 
             return await loop.run_in_executor(None, _sync_get)
@@ -365,9 +354,7 @@ class WGCFeed:
         try:
             path = self._cache_path(filename)
             if path.exists():
-                age_s = (
-                    datetime.now(UTC) - datetime.fromtimestamp(path.stat().st_mtime, UTC)
-                ).total_seconds()
+                age_s = (datetime.now(UTC) - datetime.fromtimestamp(path.stat().st_mtime, UTC)).total_seconds()
                 if age_s < _REFRESH_INTERVAL:
                     return path.read_text(encoding="utf-8")
                 logger.debug("WGC: cache stale for %s (age=%.0fs)", filename, age_s)
@@ -398,14 +385,12 @@ class WGCFeed:
                 self._write_cache(_DEMAND_CACHE_FILE, text)
                 return _csv_to_series(text, _DEMAND_COL_VARIANTS)
             logger.warning(
-                "WGC demand URL returned HTML — WGC may require browser session. "
-                "Place a manually downloaded CSV at %s",
+                "WGC demand URL returned HTML — WGC may require browser session. Place a manually downloaded CSV at %s",
                 self._cache_path(_DEMAND_CACHE_FILE),
             )
         else:
             logger.warning(
-                "WGC demand fetch returned no usable data. "
-                "Place a manually downloaded CSV at %s",
+                "WGC demand fetch returned no usable data. Place a manually downloaded CSV at %s",
                 self._cache_path(_DEMAND_CACHE_FILE),
             )
 
@@ -434,8 +419,7 @@ class WGCFeed:
             )
         else:
             logger.warning(
-                "WGC ETF flow fetch returned no usable data. "
-                "Place a manually downloaded CSV at %s",
+                "WGC ETF flow fetch returned no usable data. Place a manually downloaded CSV at %s",
                 self._cache_path(_ETF_CACHE_FILE),
             )
 
@@ -452,9 +436,7 @@ class WGCFeed:
         demand_task = asyncio.create_task(self._fetch_demand())
         etf_task = asyncio.create_task(self._fetch_etf_flow())
 
-        demand_series, etf_series = await asyncio.gather(
-            demand_task, etf_task, return_exceptions=True
-        )
+        demand_series, etf_series = await asyncio.gather(demand_task, etf_task, return_exceptions=True)
 
         results: dict[str, pd.Series] = {}
 
@@ -501,10 +483,7 @@ class WGCFeed:
         try:
             text = p.read_text(encoding="utf-8")
             # Determine which column map to use based on series_name
-            if series_name == "wgc_etf_flow":
-                col_map = _ETF_COL_VARIANTS
-            else:
-                col_map = _DEMAND_COL_VARIANTS
+            col_map = _ETF_COL_VARIANTS if series_name == "wgc_etf_flow" else _DEMAND_COL_VARIANTS
             parsed = _csv_to_series(text, col_map)
             return parsed.get(series_name)
         except Exception as exc:

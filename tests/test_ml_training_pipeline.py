@@ -44,18 +44,14 @@ sys.path.insert(0, str(ROOT))
 def test_train_advanced_importable():
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location(
-        "train_advanced", ROOT / "ml" / "train_advanced.py"
-    )
+    spec = importlib.util.spec_from_file_location("train_advanced", ROOT / "ml" / "train_advanced.py")
     assert spec is not None
 
 
 def test_retrain_model_importable():
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location(
-        "retrain_model", ROOT / "scripts" / "retrain_model.py"
-    )
+    spec = importlib.util.spec_from_file_location("retrain_model", ROOT / "scripts" / "retrain_model.py")
     assert spec is not None
 
 
@@ -81,9 +77,7 @@ def test_fetch_gold_ohlcv_uses_cache(tmp_path):
     csv_path = tmp_path / "test_cache.csv"
     df.to_csv(csv_path)
 
-    result = fetch_gold_ohlcv(
-        "GC=F", years=1, use_cached=True, cached_csv=str(csv_path)
-    )
+    result = fetch_gold_ohlcv("GC=F", years=1, use_cached=True, cached_csv=str(csv_path))
     assert not result.empty
     assert "close" in result.columns
 
@@ -128,9 +122,7 @@ def test_smoke_flag_overrides_args():
         import importlib
         import importlib.util
 
-        spec = importlib.util.spec_from_file_location(
-            "train_advanced_mod", ROOT / "ml" / "train_advanced.py"
-        )
+        spec = importlib.util.spec_from_file_location("train_advanced_mod", ROOT / "ml" / "train_advanced.py")
         _mod = importlib.util.module_from_spec(spec)
         # Don't exec — just verify the argparse setup by parsing directly
         import argparse as _ap
@@ -164,9 +156,7 @@ def test_smoke_flag_overrides_args():
 
 
 def test_advanced_oos_pkl_exists():
-    assert (
-        MODELS / "advanced_oos.pkl"
-    ).exists(), "Run: python ml/train_advanced.py --smoke"
+    assert (MODELS / "advanced_oos.pkl").exists(), "Run: python ml/train_advanced.py --smoke"
 
 
 def test_advanced_oos_pkl_is_sklearn_pipeline():
@@ -174,15 +164,13 @@ def test_advanced_oos_pkl_is_sklearn_pipeline():
 
     model = joblib.load(MODELS / "advanced_oos.pkl")
     # Should be a sklearn Pipeline or CalibratedClassifierCV
-    assert hasattr(model, "predict") or hasattr(
-        model, "predict_proba"
-    ), "advanced_oos.pkl does not have predict/predict_proba"
+    assert hasattr(model, "predict") or hasattr(model, "predict_proba"), (
+        "advanced_oos.pkl does not have predict/predict_proba"
+    )
 
 
 def test_feature_scaler_pkl_exists():
-    assert (
-        MODELS / "feature_scaler.pkl"
-    ).exists(), "Run: python ml/train_advanced.py --smoke"
+    assert (MODELS / "feature_scaler.pkl").exists(), "Run: python ml/train_advanced.py --smoke"
 
 
 def test_feature_scaler_transforms():
@@ -199,9 +187,7 @@ def test_feature_scaler_transforms():
 
 
 def test_advanced_training_report_exists():
-    assert (
-        MODELS / "advanced_training_report.json"
-    ).exists(), "Run: python ml/train_advanced.py --smoke"
+    assert (MODELS / "advanced_training_report.json").exists(), "Run: python ml/train_advanced.py --smoke"
 
 
 def test_advanced_training_report_keys():
@@ -237,10 +223,8 @@ def test_retrain_model_smoke_exits_zero():
         text=True,
         timeout=300,
         cwd=str(ROOT),
-            check=False,
+        check=False,
     )
     assert result.returncode == 0, (
-        f"retrain_model.py --smoke --advanced failed:\n"
-        f"STDOUT: {result.stdout[-2000:]}\n"
-        f"STDERR: {result.stderr[-2000:]}"
+        f"retrain_model.py --smoke --advanced failed:\nSTDOUT: {result.stdout[-2000:]}\nSTDERR: {result.stderr[-2000:]}"
     )

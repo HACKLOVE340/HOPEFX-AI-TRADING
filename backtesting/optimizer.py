@@ -37,9 +37,7 @@ class ParameterOptimizer:
 
         logger.info(f"Initialized parameter optimizer for {strategy_class.__name__}")
 
-    def grid_search(
-        self, param_grid: dict[str, list[Any]], metric: str = "sharpe_ratio"
-    ) -> dict:
+    def grid_search(self, param_grid: dict[str, list[Any]], metric: str = "sharpe_ratio") -> dict:
         """
         Perform grid search over parameter space.
 
@@ -71,9 +69,7 @@ class ParameterOptimizer:
                 strategy = self.strategy_class(**params)
 
                 # Run backtest
-                engine = BacktestEngine(
-                    self.data_handler, strategy, self.initial_capital
-                )
+                engine = BacktestEngine(self.data_handler, strategy, self.initial_capital)
 
                 backtest_results = engine.run()
                 score = backtest_results["metrics"].get(metric, 0)

@@ -12,6 +12,7 @@ Simulates order execution with realistic fills, slippage, and commissions.
 import hashlib
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from backtesting.events import OrderEvent, FillEvent
@@ -47,9 +48,7 @@ class SimulatedExecutionHandler:
     Models market orders, limit orders, slippage, and commissions.
     """
 
-    def __init__(
-        self, data_handler, commission_pct: float = 0.001, slippage_pct: float = 0.0005
-    ):
+    def __init__(self, data_handler, commission_pct: float = 0.001, slippage_pct: float = 0.0005):
         """
         Initialize execution handler.
 
@@ -63,7 +62,7 @@ class SimulatedExecutionHandler:
         self.slippage_pct = slippage_pct
 
         logger.info(
-            f"Initialized execution handler (commission: {commission_pct*100}%, slippage: {slippage_pct*100}%)"
+            f"Initialized execution handler (commission: {commission_pct * 100}%, slippage: {slippage_pct * 100}%)"
         )
 
     def execute_order(self, order: OrderEvent) -> FillEvent | None:
@@ -80,9 +79,7 @@ class SimulatedExecutionHandler:
         bar = self.data_handler.get_latest_bar(order.symbol)
 
         if bar is None:
-            logger.warning(
-                f"No data available for {order.symbol}, cannot execute order"
-            )
+            logger.warning(f"No data available for {order.symbol}, cannot execute order")
             return None
 
         # Determine fill price based on order type
@@ -134,8 +131,6 @@ class SimulatedExecutionHandler:
             commission=commission,
         )
 
-        logger.debug(
-            f"Filled {order.direction} {order.quantity} {order.symbol} @ {fill_price:.4f}"
-        )
+        logger.debug(f"Filled {order.direction} {order.quantity} {order.symbol} @ {fill_price:.4f}")
 
         return fill

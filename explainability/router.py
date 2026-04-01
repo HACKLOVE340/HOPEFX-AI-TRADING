@@ -62,9 +62,7 @@ def create_explainability_router(explainer: "AIExplainer"):
         """Get performance explanation for a named model."""
         perf = explainer.get_model_performance_explanation(model_name)
         if perf is None:
-            raise HTTPException(
-                status_code=404, detail=f"No data for model '{model_name}'"
-            )
+            raise HTTPException(status_code=404, detail=f"No data for model '{model_name}'")
         return {
             "model_name": perf.model_name,
             "accuracy": perf.accuracy,
@@ -77,13 +75,9 @@ def create_explainability_router(explainer: "AIExplainer"):
     @router.post("/counterfactual")
     async def generate_counterfactual(req: CounterfactualRequest):
         """Generate a counterfactual explanation (what would need to change)."""
-        result = explainer.generate_counterfactual(
-            req.explanation_id, req.target_prediction
-        )
+        result = explainer.generate_counterfactual(req.explanation_id, req.target_prediction)
         if result is None:
-            raise HTTPException(
-                status_code=404, detail=f"Explanation {req.explanation_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Explanation {req.explanation_id} not found")
         return result
 
     @router.get("/explanation/{explanation_id}/chart")
@@ -92,22 +86,14 @@ def create_explainability_router(explainer: "AIExplainer"):
         history = explainer.get_explanation_history(limit=1000)
         match = next((e for e in history if e["id"] == explanation_id), None)
         if match is None:
-            raise HTTPException(
-                status_code=404, detail=f"Explanation {explanation_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Explanation {explanation_id} not found")
         # Return the stored explanation object's chart data via the explainer
         stored = next(
-            (
-                e
-                for e in explainer.explanation_history
-                if e.explanation_id == explanation_id
-            ),
+            (e for e in explainer.explanation_history if e.explanation_id == explanation_id),
             None,
         )
         if stored is None:
-            raise HTTPException(
-                status_code=404, detail=f"Explanation {explanation_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Explanation {explanation_id} not found")
         return explainer.get_feature_importance_chart_data(stored)
 
     return router

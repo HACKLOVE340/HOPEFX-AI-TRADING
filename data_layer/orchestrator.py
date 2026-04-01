@@ -195,8 +195,7 @@ class MarketDataOrchestrator:
             logger.info("MarketDataOrchestrator: Redis connected (%s)", _REDIS_URL)
         except Exception as exc:
             logger.warning(
-                "MarketDataOrchestrator: Redis unavailable (%s) — "
-                "caching disabled, continuing without Redis",
+                "MarketDataOrchestrator: Redis unavailable (%s) — caching disabled, continuing without Redis",
                 exc,
             )
 
@@ -257,9 +256,7 @@ class MarketDataOrchestrator:
         self._start_ts = time.time()
 
         # Start uptime/health reporter — track task so stop() can cancel it
-        self._uptime_task = asyncio.create_task(
-            self._uptime_loop(), name="orchestrator_uptime"
-        )
+        self._uptime_task = asyncio.create_task(self._uptime_loop(), name="orchestrator_uptime")
 
         logger.info("MarketDataOrchestrator: all components started")
 
@@ -343,9 +340,7 @@ class MarketDataOrchestrator:
                         _r = self._redis_store._r
                         await asyncio.get_running_loop().run_in_executor(
                             None,
-                            lambda: _r.setex(
-                                "hopefx:dl:orchestrator_health", 30, payload
-                            ),
+                            lambda: _r.setex("hopefx:dl:orchestrator_health", 30, payload),
                         )
                     except Exception as _exc:
                         logger.debug("Orchestrator health push error: %s", _exc)
@@ -374,9 +369,7 @@ class MarketDataOrchestrator:
                     # rather than labelling the tick with a fabricated origin.
                     raw_source = cached.get("source")
                     if not raw_source:
-                        raise ValueError(
-                            f"Cached tick for {symbol} has no 'source' field"
-                        )
+                        raise ValueError(f"Cached tick for {symbol} has no 'source' field")
                     return GoldTick(
                         symbol=cached["symbol"],
                         timestamp=datetime.fromisoformat(cached["timestamp"]),
@@ -528,17 +521,13 @@ class MarketDataOrchestrator:
             tick = self.get_latest_tick()
             if tick:
                 features["tick_confidence"] = tick.confidence
-                features["tick_spread_pct"] = (
-                    tick.spread / tick.mid * 100.0 if tick.mid > 0 else 0.0
-                )
+                features["tick_spread_pct"] = tick.spread / tick.mid * 100.0 if tick.mid > 0 else 0.0
             else:
                 features["tick_confidence"] = 0.0
                 features["tick_spread_pct"] = 0.0
 
             if self._gold_feed:
-                features["tick_source_count"] = float(
-                    len(self._gold_feed.active_sources())
-                )
+                features["tick_source_count"] = float(len(self._gold_feed.active_sources()))
             else:
                 features["tick_source_count"] = 0.0
         except Exception as exc:
@@ -667,9 +656,7 @@ class MarketDataOrchestrator:
                 try:
                     self._redis_store.set_quality_report(symbol, report_dict)
                 except Exception as _exc:
-                    logger.debug(
-                        "Orchestrator: quality report Redis cache error: %s", _exc
-                    )
+                    logger.debug("Orchestrator: quality report Redis cache error: %s", _exc)
 
             # Write to lineage store
             try:
@@ -756,9 +743,7 @@ class MarketDataOrchestrator:
         orchestrator.subscribe_ticks("my_handler", on_tick)
         """
         if not callable(callback):
-            raise TypeError(
-                f"subscribe_ticks: callback must be callable, got {type(callback)}"
-            )
+            raise TypeError(f"subscribe_ticks: callback must be callable, got {type(callback)}")
         self._tick_callbacks[name] = callback
         logger.debug("Orchestrator: tick subscriber registered: %s", name)
 

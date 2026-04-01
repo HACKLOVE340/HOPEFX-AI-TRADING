@@ -12,6 +12,7 @@ import pytest
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from strategies.base import StrategyConfig
@@ -99,9 +100,7 @@ class TestITS8OSStrategyComprehensive:
     @pytest.fixture
     def its_config(self):
         """Create ITS strategy config."""
-        return StrategyConfig(
-            name="ITS_Test", symbol="EUR_USD", timeframe="1H", parameters={}
-        )
+        return StrategyConfig(name="ITS_Test", symbol="EUR_USD", timeframe="1H", parameters={})
 
     @pytest.fixture
     def its_strategy(self, its_config):

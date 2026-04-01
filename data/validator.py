@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -92,9 +93,7 @@ class DataValidator:
     def __init__(self, symbol: str = "XAUUSD", timeframe_secs: int = 3600) -> None:
         self.symbol = symbol.upper()
         self.timeframe_secs = timeframe_secs
-        self._price_min, self._price_max = _PRICE_BOUNDS.get(
-            self.symbol, _DEFAULT_BOUNDS
-        )
+        self._price_min, self._price_max = _PRICE_BOUNDS.get(self.symbol, _DEFAULT_BOUNDS)
         self._last_bar_time: datetime | None = None
         self._last_close: float | None = None
 
@@ -125,8 +124,7 @@ class DataValidator:
         for label, price in [("open", o), ("high", h), ("low", l), ("close", c)]:
             if not (self._price_min <= price <= self._price_max):
                 result.add_error(
-                    f"{label}={price} outside sanity bounds "
-                    f"[{self._price_min}, {self._price_max}] for {self.symbol}"
+                    f"{label}={price} outside sanity bounds [{self._price_min}, {self._price_max}] for {self.symbol}"
                 )
 
         # ── Intra-bar consistency ────────────────────────────────────────
@@ -168,15 +166,10 @@ class DataValidator:
                 dt = datetime.fromisoformat(str(ts)) if isinstance(ts, str) else ts
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=UTC)
-                expected_max_gap = timedelta(
-                    seconds=self.timeframe_secs * _STALE_MULTIPLIER
-                )
+                expected_max_gap = timedelta(seconds=self.timeframe_secs * _STALE_MULTIPLIER)
                 actual_gap = dt - self._last_bar_time
                 if actual_gap > expected_max_gap:
-                    result.add_warning(
-                        f"Stale data gap: {actual_gap} between bars "
-                        f"(expected <= {expected_max_gap})"
-                    )
+                    result.add_warning(f"Stale data gap: {actual_gap} between bars (expected <= {expected_max_gap})")
             except Exception as exc:
                 logger.debug(
                     "validate_bar: could not parse timestamp for stale check: %r — %s",
