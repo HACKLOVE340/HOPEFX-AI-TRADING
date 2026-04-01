@@ -31,34 +31,78 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# ── Known dev-only placeholder values — rejected in production ────────────────
+_DEV_JWT_SECRET = "dev-jwt-secret-minimum-32-characters-long!!"
+_DEV_ENCRYPTION_KEY = "dev-key-minimum-32-characters-long-for-testing"
+
 # ── Environment / config ──────────────────────────────────────────────────────
 
 
 async def init_env(s: Any) -> bool:
+    """
+    Validate environment variables and apply dev defaults where safe.
+
+    Production behaviour (APP_ENV=production):
+    - Missing or placeholder SECURITY_JWT_SECRET / CONFIG_ENCRYPTION_KEY
+      cause immediate sys.exit(1).  No dev fallback is injected.
+    - validate_and_report() runs with strict=True, exit_on_error=True.
+
+    Development behaviour (APP_ENV != production):
+    - Dev fallback secrets are injected with a WARNING so the app starts
+      without a .env file.
+    - validate_and_report() runs with strict=False, exit_on_error=False.
+    """
+    app_env = os.getenv("APP_ENV", "development").lower()
+    is_production = app_env == "production"
+
     if not os.getenv("OPENAI_API_KEY"):
         logger.warning(
             "OPENAI_API_KEY not set — /api/chat will return 503 until configured",
         )
-    if not os.getenv("CONFIG_ENCRYPTION_KEY"):
+
+    # ── SECURITY_JWT_SECRET ───────────────────────────────────────────────────
+    jwt_secret = os.getenv("SECURITY_JWT_SECRET", "")
+    if not jwt_secret or jwt_secret == _DEV_JWT_SECRET:
+        if is_production:
+            logger.critical(
+                "STARTUP ABORTED: SECURITY_JWT_SECRET is missing or uses the "
+                "dev placeholder in production. "
+                "Generate a secret: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+            sys.exit(1)
         logger.warning(
-            "CONFIG_ENCRYPTION_KEY not set — using dev default (not for production)",
+            "SECURITY_JWT_SECRET not set — using dev default. "
+            "Set a real secret before deploying to production."
         )
-        os.environ["CONFIG_ENCRYPTION_KEY"] = (
-            "dev-key-minimum-32-characters-long-for-testing"
-        )
-    if not os.getenv("SECURITY_JWT_SECRET"):
+        os.environ["SECURITY_JWT_SECRET"] = _DEV_JWT_SECRET  # nosec B105
+
+    # ── CONFIG_ENCRYPTION_KEY ─────────────────────────────────────────────────
+    enc_key = os.getenv("CONFIG_ENCRYPTION_KEY", "")
+    if not enc_key or enc_key == _DEV_ENCRYPTION_KEY:
+        if is_production:
+            logger.critical(
+                "STARTUP ABORTED: CONFIG_ENCRYPTION_KEY is missing or uses the "
+                "dev placeholder in production. "
+                "Generate a key: python3 -c \"import secrets; print(secrets.token_urlsafe(48))\""
+            )
+            sys.exit(1)
         logger.warning(
-            "SECURITY_JWT_SECRET not set — using dev default (not for production)",
+            "CONFIG_ENCRYPTION_KEY not set — using dev default. "
+            "Set a real key before deploying to production."
         )
-        os.environ["SECURITY_JWT_SECRET"] = (  # nosec B105 - dev-only fallback, warning logged above
-            "dev-jwt-secret-minimum-32-characters-long!!"
-        )
+        os.environ["CONFIG_ENCRYPTION_KEY"] = _DEV_ENCRYPTION_KEY
+
+    # ── Run full env validator ────────────────────────────────────────────────
     try:
         from core.env_validator import validate_and_report
 
-        validate_and_report(strict=False, exit_on_error=False)
+        validate_and_report(
+            strict=is_production,
+            exit_on_error=is_production,
+        )
     except Exception as exc:
         logger.warning("Env validator unavailable: %s", exc)
+
     return True
 
 
