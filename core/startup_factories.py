@@ -56,7 +56,11 @@ async def init_env(s: Any) -> bool:
     try:
         from core.env_validator import validate_and_report
 
-        validate_and_report(strict=False, exit_on_error=False)
+        _is_production = os.getenv("HOPEFX_ENV", "").lower() == "production"
+        validate_and_report(
+            strict=_is_production,
+            exit_on_error=_is_production,
+        )
     except Exception as exc:
         logger.warning("Env validator unavailable: %s", exc)
     return True
