@@ -418,7 +418,10 @@ class SklearnOnlineLearner:
             if not cols:
                 return None
 
-            ohlcv_vals = bars[cols].ffill().bfill().values.astype(float)
+            # ffill propagates the last known value forward (causal).
+            # fillna(0.0) handles any leading NaNs at the start of the window
+            # without back-filling from future bars (no look-ahead bias).
+            ohlcv_vals = bars[cols].ffill().fillna(0.0).values.astype(float)
             flat = ohlcv_vals.flatten()
 
             # Log returns (last 20 bars)
