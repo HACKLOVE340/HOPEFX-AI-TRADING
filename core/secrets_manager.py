@@ -189,7 +189,7 @@ class SecretsManager:
             except asyncio.CancelledError:
                 logger.info("SecretsManager: refresh loop stopped")
                 return
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 self._error_count += 1
                 logger.warning("SecretsManager: refresh error: %s", exc)
 
@@ -211,12 +211,13 @@ class SecretsManager:
             self._refresh_count += 1
 
             if changed:
-                # nosec B105 - sorted(changed) is a list of env var *names*, not values
+                # Log only the variable *names* that changed, never their values.
+                # nosec B105 — sorted(changed) is a list of env var names, not secret values
                 logger.info(
                     "SecretsManager: refreshed %d secrets (%d changed): %s",
                     len(new_secrets),
                     len(changed),
-                    sorted(changed),
+                    sorted(changed),  # nosec B105
                 )
                 # Notify registered rotation callbacks
                 await self._notify_rotation(changed)
@@ -257,7 +258,7 @@ class SecretsManager:
                 result = cb(changed_keys)
                 if asyncio.iscoroutine(result):
                     await result
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 logger.warning("SecretsManager: rotation callback error: %s", exc)
 
     # ── Backend implementations ───────────────────────────────────────────────
@@ -315,7 +316,7 @@ class SecretsManager:
             logger.debug("SecretsManager: fetched %d keys from Vault", len(secrets_data))
             return {k.lower(): str(v) for k, v in secrets_data.items()}
 
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.error("SecretsManager: Vault fetch failed: %s — using cached/env values", exc)
             return self._fetch_env()
 
@@ -347,7 +348,7 @@ class SecretsManager:
             )
             return {k.lower(): str(v) for k, v in secrets_data.items()}
 
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.error(
                 "SecretsManager: AWS Secrets Manager fetch failed: %s — using cached/env values",
                 exc,
