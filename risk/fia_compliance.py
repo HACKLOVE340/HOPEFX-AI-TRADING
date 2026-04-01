@@ -202,7 +202,7 @@ class FIAComplianceManager:
         # Check timestamp staleness
         tick_time = tick_data.get("timestamp")
         if tick_time:
-            if isinstance(tick_time, (int, float)):
+            if isinstance(tick_time, (int, float)):  # noqa: UP038
                 tick_time = datetime.fromtimestamp(tick_time)
             age = (datetime.now(UTC) - tick_time).total_seconds()
             checks.append(("staleness", age < 30))  # 30 seconds max  # noqa: PLR2004

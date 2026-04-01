@@ -68,7 +68,7 @@ def _bars_to_df(bars: list[dict[str, Any]]) -> pd.DataFrame | None:
             ts_raw = b.get("ts") or b.get("bar_open_ts") or b.get("timestamp")
             if ts_raw is None:
                 continue
-            if isinstance(ts_raw, (int, float)):
+            if isinstance(ts_raw, (int, float)):  # noqa: UP038
                 ts = datetime.fromtimestamp(float(ts_raw), tz=UTC)
             else:
                 ts = pd.to_datetime(ts_raw, utc=True)
