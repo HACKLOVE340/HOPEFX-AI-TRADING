@@ -226,7 +226,7 @@ class PerformanceMetrics:
 
     def save(self, filepath: str):
         """Save metrics to JSON"""
-        with open(filepath, "w") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2)
 
 
@@ -766,7 +766,7 @@ class BacktestEngine:
             "data_frequency": self.data_frequency,
         }
 
-        with open(f"{filepath_prefix}_state.json", "w") as f:
+        with open(f"{filepath_prefix}_state.json", "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
 
         print(f"Results saved to {filepath_prefix}*")
@@ -788,7 +788,7 @@ class CSVDataHandler:
         self.data.sort_values("timestamp", inplace=True)
         print(f"Loaded {len(self.data)} rows from {self.filepath}")
 
-    def get_data(self, start_date: datetime, end_date: datetime, symbols: list[str]):
+    def get_data(self, start_date: datetime, end_date: datetime, _symbols: list[str]):
         """Generator yielding (timestamp, symbol, tick)"""
         if self.data is None:
             self.load()
@@ -823,7 +823,7 @@ class DataFrameDataHandler:
         self,
         start_date: "datetime",
         end_date: "datetime",
-        symbols: "list[str]",  # noqa: ARG002 — symbol fixed at construction time
+        _symbols: "list[str]",  # symbol is fixed at construction time
     ):
         """Yield (timestamp, symbol, TickData) for each bar in the date range."""
         mask = (self._df.index >= start_date) & (self._df.index <= end_date)
