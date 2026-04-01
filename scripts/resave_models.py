@@ -62,7 +62,7 @@ def resave_all() -> int:
     for pkl in pkls:
         log.info("Processing %s ...", pkl.name)
         try:
-            model = joblib.load(pkl)
+            model = joblib.load(pkl)  # nosec B301 - pkl iterates ml/saved_models directory
         except Exception as exc:
             log.warning("  SKIP — cannot load %s: %s", pkl.name, exc)
             errors += 1

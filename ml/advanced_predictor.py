@@ -330,7 +330,7 @@ class AdvancedPredictor:
             try:
                 import joblib
 
-                payload = joblib.load(self._model_path)
+                payload = joblib.load(self._model_path)  # nosec B301 - _model_path set from saved_models
                 self._model = payload
                 # Extract feature names from the pipeline
                 if hasattr(payload, "feature_names_in_"):

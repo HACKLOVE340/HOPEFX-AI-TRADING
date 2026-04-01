@@ -425,11 +425,20 @@ class EnsemblePredictor:
 
     @classmethod
     def load(cls, path: str | Path) -> EnsemblePredictor:
-        path = Path(path)
+        path = Path(path).resolve()
+        # Confine loads to the project's saved_models directory.
+        _ALLOWED_ROOT = (Path(__file__).resolve().parent.parent.parent / "ml" / "saved_models")
+        try:
+            path.relative_to(_ALLOWED_ROOT)
+        except ValueError:
+            raise ValueError(
+                f"EnsemblePredictor.load: path '{path}' is outside the permitted "
+                f"directory '{_ALLOWED_ROOT}'"
+            )
         if not path.exists():
             raise FileNotFoundError(f"EnsemblePredictor not found: {path}")
         try:
-            obj = joblib.load(path)
+            obj = joblib.load(path)  # nosec B301 - path confined to ml/saved_models above
         except Exception:
             with open(path, "rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback

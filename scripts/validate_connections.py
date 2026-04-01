@@ -197,7 +197,7 @@ def check_ml_model():
     model_path = ROOT / "ml" / "saved_models" / "advanced_oos.pkl"
     if not model_path.exists():
         raise AssertionError("advanced_oos.pkl not found (will train on first run)")
-    model = joblib.load(model_path)
+    model = joblib.load(model_path)  # nosec B301 - model_path is hardcoded to ml/saved_models
     return f"ML model loaded: {type(model).__name__}"
 
 
