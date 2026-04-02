@@ -25,12 +25,8 @@ try:
     from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
     from tensorflow.keras.layers import (
         LSTM,
-        Attention,
-        Bidirectional,
-        Concatenate,
         Dense,
         Dropout,
-        Input,
     )
     from tensorflow.keras.models import Model, Sequential
     from tensorflow.keras.optimizers import Adam

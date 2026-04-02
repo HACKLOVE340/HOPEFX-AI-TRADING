@@ -36,7 +36,6 @@ try:
         Text,
         Index,
         UniqueConstraint,
-        create_engine,  # pylint: disable=unused-import
     )
     from sqlalchemy.sql import func
 
@@ -62,7 +61,7 @@ except ImportError:
             return self
 
     Column = BigInteger = Integer = String = Float = Boolean = _Stub()
-    DateTime = ForeignKey = Enum = Text = Index = UniqueConstraint = create_engine = _Stub()
+    DateTime = ForeignKey = Enum = Text = Index = UniqueConstraint = _Stub()
     relationship = sessionmaker = _Stub()
     func = _Stub()
 
