@@ -10,12 +10,21 @@ User-facing settings endpoints with DB persistence.
 
 Routes
 ------
-POST /api/settings/notifications   — save notification channel config
-GET  /api/settings/notifications   — retrieve current config
-POST /api/notifications/test       — send a test message to a channel
+POST /api/settings/notifications    — save notification channel config
+GET  /api/settings/notifications    — retrieve current config
+POST /api/notifications/test        — send a test message to a channel
+GET  /api/settings/preferences      — get timezone/language preferences
+POST /api/settings/preferences      — save timezone/language preferences
+GET  /api/settings/appearance       — get appearance/theme settings
+POST /api/settings/appearance       — save appearance/theme settings
+GET  /api/settings/trading          — get trading preferences
+POST /api/settings/trading          — save trading preferences
+POST /api/settings/broker           — save broker connection settings
+POST /api/auth/change-password      — change authenticated user's password
+DELETE /api/auth/account            — delete authenticated user's account
 
 Settings are stored in the `configurations` table keyed by
-`notification_settings:{user_id}`. Falls back to an in-memory dict when
+`{section}_settings:{user_id}`. Falls back to an in-memory dict when
 the DB is unavailable (dev mode without a running database).
 
 Security
@@ -388,3 +397,4 @@ async def _send_telegram(bot_token: str, chat_id: str) -> None:
             raise ValueError(
                 f"Telegram error: {data.get('description', 'unknown')}",
             )
+

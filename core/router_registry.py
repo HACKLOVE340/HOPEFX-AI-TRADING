@@ -51,6 +51,7 @@ def register_routers(
     from api.landing import router as landing_router
     from api.payments import router as payments_router
     from api.settings import router as settings_router
+    from api.settings_extended import router as settings_extended_router
     from api.status import router as status_router
     from api.brain import router as brain_router
     from api.calendar import router as calendar_router
@@ -80,6 +81,7 @@ def register_routers(
         landing_router,
         payments_router,
         settings_router,
+        settings_extended_router,
         status_router,
         brain_router,
         calendar_router,

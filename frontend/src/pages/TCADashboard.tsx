@@ -232,7 +232,7 @@ const SlippageTrendChart: React.FC<{ points: TrendPoint[] }> = ({ points }) => (
       <Tooltip
         contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, fontSize: 11 }}
         labelStyle={{ color: '#94a3b8' }}
-        formatter={(v: number) => [`${v} bps`, 'Slippage']}
+        formatter={(v) => [`${v} bps`, 'Slippage']}
       />
       <ReferenceLine y={5} stroke="#ef4444" strokeDasharray="4 2" label={{ value: '5 bps', fill: '#ef4444', fontSize: 10 }} />
       <Area type="monotone" dataKey="slippage" stroke="#f97316" fill="url(#slipGrad)" strokeWidth={1.5} dot={false} />
@@ -249,7 +249,7 @@ const LatencyTrendChart: React.FC<{ points: TrendPoint[] }> = ({ points }) => (
       <Tooltip
         contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, fontSize: 11 }}
         labelStyle={{ color: '#94a3b8' }}
-        formatter={(v: number) => [`${v} ms`, 'Latency']}
+        formatter={(v) => [`${v} ms`, 'Latency']}
       />
       <ReferenceLine y={100} stroke="#facc15" strokeDasharray="4 2" label={{ value: '100ms', fill: '#facc15', fontSize: 10 }} />
       <Line type="monotone" dataKey="latency" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
