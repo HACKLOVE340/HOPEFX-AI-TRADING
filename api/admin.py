@@ -386,7 +386,8 @@ async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("admin endpoint error: %s", exc)
+        raise HTTPException(status_code=500, detail="Operation failed — check server logs") from None
 
 
 @router.post("/kyc/decide")
@@ -467,7 +468,8 @@ async def decide_kyc(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("admin endpoint error: %s", exc)
+        raise HTTPException(status_code=500, detail="Operation failed — check server logs") from None
 
 
 @router.get("/kyc/{user_id}")
@@ -497,7 +499,8 @@ async def get_kyc_status(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("admin endpoint error: %s", exc)
+        raise HTTPException(status_code=500, detail="Operation failed — check server logs") from None
 
 
 # ── New endpoints expected by tests ──────────────────────────────────────────

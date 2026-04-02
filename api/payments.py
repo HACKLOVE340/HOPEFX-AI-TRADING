@@ -207,8 +207,8 @@ async def generate_deposit_address(req: AddressRequest):
         logger.warning("Address generation failed: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail=f"Address generation unavailable: {exc}",
-        ) from exc
+            detail="Address generation unavailable — check server logs",
+        ) from None
 
     payment_id = f"PAY_{req.user_id}_{currency}_{int(time.time())}"
     payment = {
