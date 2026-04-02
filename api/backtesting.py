@@ -167,7 +167,8 @@ def _load_strategy(name: str, params: dict | None = None):
         cls = getattr(mod, class_name)
         return cls(**(params or {}))
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-        raise ValueError(f"Failed to load strategy '{name}': {exc}") from exc
+        logger.error("Failed to load strategy '%s': %s", name, exc)
+        raise ValueError(f"Failed to load strategy '{name}' — check server logs") from None
 
 
 import re as _re
@@ -418,7 +419,7 @@ async def run_backtest(
             "total_trades": 0,
             "win_rate_pct": 0.0,
             "status": "error",
-            "error": str(exc),
+            "error": "Backtest failed — check server logs",
             "created_at": created_at,
         }
 
@@ -578,10 +579,11 @@ async def run_multi_symbol_backtest(
     try:
         from backtest.multi_symbol_backtest import run_backtest as _run_backtest  # noqa: PLC0415
     except ImportError as exc:
+        logger.error("multi_symbol_backtest module unavailable: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail=f"multi_symbol_backtest module unavailable: {exc}",
-        ) from exc
+            detail="multi_symbol_backtest module unavailable — check server logs",
+        ) from None
 
     loop = asyncio.get_event_loop()
     try:
@@ -598,7 +600,7 @@ async def run_multi_symbol_backtest(
         )
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         logger.exception("Multi-symbol backtest failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Backtest failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Backtest failed — check server logs") from None
 
     pooled = report.get("pooled", {})
     report_filename = "multi_symbol_report_extended.json" if req.extended else "multi_symbol_report.json"
@@ -653,7 +655,8 @@ async def get_latest_multi_symbol_report(
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-        raise HTTPException(status_code=500, detail=f"Could not read report: {exc}") from exc
+        logger.error("Could not read report: %s", exc)
+        raise HTTPException(status_code=500, detail="Could not read report — check server logs") from None
 
     return report
 
@@ -698,10 +701,11 @@ async def get_reconciled_investigation(
         cache_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
         return results
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        logger.error("Investigation failed: %s", exc)
         raise HTTPException(
             status_code=500,
-            detail=f"Investigation failed: {exc}. Ensure data/reconciled_backtest.json exists.",
-        ) from exc
+            detail="Investigation failed — ensure data/reconciled_backtest.json exists and check server logs",
+        ) from None
 
 
 @router.post(
@@ -824,7 +828,7 @@ async def run_replay_backtest(
             )
         except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.error("Replay backtest %s failed: %s", run_id, exc, exc_info=True)
-            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": str(exc)})
+            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
 
     _persist_result(run_id, {"run_id": run_id, "status": "running"})
     background_tasks.add_task(_run)
@@ -911,7 +915,7 @@ async def run_regime_stress_test(
             )
         except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.error("Regime stress %s failed: %s", run_id, exc, exc_info=True)
-            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": str(exc)})
+            _persist_result(run_id, {"run_id": run_id, "status": "error", "error": "Task failed — check server logs"})
 
     _persist_result(run_id, {"run_id": run_id, "status": "running"})
     background_tasks.add_task(_run)
@@ -1007,10 +1011,11 @@ def _build_pdf(result: dict) -> bytes:
             TableStyle,
         )
     except ImportError as exc:
+        logger.error("PDF generation unavailable: reportlab not installed: %s", exc)
         raise HTTPException(
             status_code=503,
-            detail=f"PDF generation unavailable: reportlab not installed ({exc})",
-        ) from exc
+            detail="PDF generation unavailable: reportlab not installed — check server logs",
+        ) from None
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(

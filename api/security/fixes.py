@@ -66,7 +66,8 @@ def _require_auth(request: Request) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        logger.warning("Security auth token decode failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
 
 
 def _require_admin(request: Request) -> dict[str, Any]:

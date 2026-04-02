@@ -46,7 +46,8 @@ def _get_orchestrator():
 
         return orchestrator
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Data layer unavailable: {exc}") from exc
+        logger.error("Data layer unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="Data layer unavailable — check server logs") from None
 
 
 @router.get("/health")
@@ -111,7 +112,8 @@ async def get_sentiment() -> dict[str, Any]:
             "recent_articles": recent_articles,
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/macro")
@@ -157,7 +159,8 @@ async def get_macro() -> dict[str, Any]:
             "fred_snapshot": macro_snapshot,
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/microstructure")
@@ -193,7 +196,8 @@ async def get_microstructure(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
             "features": micro_features,
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/quality")
@@ -223,7 +227,8 @@ async def get_quality_report(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
             "source_health": orch._dqe.get_source_health(),
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/lineage")
@@ -243,7 +248,8 @@ async def get_lineage(
         stats = orch._lineage.stats()
         return {"records": records, "stats": stats}
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/feeds")
@@ -261,7 +267,8 @@ async def get_feed_health() -> dict[str, Any]:
             "dqe_health": health.get("dqe", {}),
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None
 
 
 @router.get("/ml-features")
@@ -277,4 +284,5 @@ async def get_ml_features(symbol: str = Query("XAU_USD")) -> dict[str, Any]:
             "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.error("Data layer endpoint error: %s", exc)
+        raise HTTPException(status_code=503, detail="Data unavailable — check server logs") from None

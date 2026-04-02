@@ -86,7 +86,8 @@ def _require_auth(request: Request) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        logger.warning("KYC auth token decode failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
 
 
 def _require_admin(request: Request) -> dict[str, Any]:
@@ -131,10 +132,11 @@ async def create_applicant(
             },
         )
     except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        # PermissionError message is a controlled internal string (role check) — safe to surface.
+        raise HTTPException(status_code=403, detail=str(exc)) from None
     except Exception as exc:
         logger.error("KYC create_applicant error: %s", exc)
-        raise HTTPException(status_code=502, detail="KYC provider error") from exc
+        raise HTTPException(status_code=502, detail="KYC provider error") from None
 
     return ApplicantResponse(
         applicant_id=applicant.applicant_id,
