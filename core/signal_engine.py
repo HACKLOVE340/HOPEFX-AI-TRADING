@@ -161,13 +161,13 @@ def _get_anomaly_store() -> Any | None:
 
 if not _ML_AVAILABLE:
     # Provide no-op stubs so the rest of the module can reference these names
-    def get_active_model() -> Any | None:  # type: ignore[misc]
+    def get_active_model() -> Any | None:  # type: ignore[misc]  # pylint: disable=function-redefined
         return None
 
-    def get_model_version() -> str:  # type: ignore[misc]
+    def get_model_version() -> str:  # type: ignore[misc]  # pylint: disable=function-redefined
         return "none"
 
-    def get_advanced_predictor() -> Any | None:  # type: ignore[misc]
+    def get_advanced_predictor() -> Any | None:  # type: ignore[misc]  # pylint: disable=function-redefined
         return None
 
 
