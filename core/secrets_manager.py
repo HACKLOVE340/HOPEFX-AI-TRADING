@@ -211,14 +211,14 @@ class SecretsManager:
             self._refresh_count += 1
 
             if changed:
-                # Log only the variable *names* that changed, never their values.
-                # nosec B105 — sorted(changed) is a list of env var names, not secret values
+                # INFO: log only counts — no variable names or values reach the log sink.
                 logger.info(
-                    "SecretsManager: refreshed %d secrets (%d changed): %s",
+                    "SecretsManager: refreshed %d secrets (%d changed)",
                     len(new_secrets),
                     len(changed),
-                    sorted(changed),  # nosec B105
                 )
+                # DEBUG: variable names only (never values) for local troubleshooting.
+                logger.debug("SecretsManager: changed keys: %s", sorted(changed))
                 # Notify registered rotation callbacks
                 await self._notify_rotation(changed)
             else:
