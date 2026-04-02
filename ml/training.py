@@ -9,6 +9,7 @@ LSTM, XGBoost, Random Forest with model saving/loading, hyperparameter tuning, e
 """
 
 import json
+import logging
 import warnings
 from datetime import datetime, timezone
 
@@ -21,6 +22,8 @@ import numpy as np
 import pandas as pd
 
 warnings.filterwarnings("ignore")
+
+logger = logging.getLogger(__name__)
 
 # sklearn imports
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
@@ -509,7 +512,7 @@ class LSTMModel:
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
 
-        print(f"LSTM model saved: {filepath}")
+        logger.info(f"LSTM model saved: {filepath}")
         return filepath
 
     def load(self, filepath: str):
@@ -531,7 +534,7 @@ class LSTMModel:
                 self.n_features = config.get("n_features", self.n_features)
                 self.lstm_units = config.get("lstm_units", self.lstm_units)
 
-        print(f"LSTM model loaded: {filepath}")
+        logger.info(f"LSTM model loaded: {filepath}")
 
     def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]:
         """Evaluate model performance"""
@@ -716,7 +719,7 @@ class XGBoostModel:
             )
             self.feature_importance.to_csv(importance_path, index=False)
 
-        print(f"XGBoost model saved: {filepath}")
+        logger.info(f"XGBoost model saved: {filepath}")
         return filepath
 
     def load(self, filepath: str):
@@ -728,7 +731,7 @@ class XGBoostModel:
         else:
             self.model = joblib.load(filepath)  # nosec B301 - filepath set by caller from saved_models
 
-        print(f"XGBoost model loaded: {filepath}")
+        logger.info(f"XGBoost model loaded: {filepath}")
 
     def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]:
         """Evaluate model performance"""
@@ -884,14 +887,14 @@ class RandomForestModel:
             importance_path = filepath.replace(".pkl", "_importance.csv")
             self.feature_importance.to_csv(importance_path, index=False)
 
-        print(f"Random Forest model saved: {filepath}")
+        logger.info(f"Random Forest model saved: {filepath}")
         return filepath
 
     def load(self, filepath: str):
         """Load model from disk"""
         self.model = joblib.load(filepath)  # nosec B301 - filepath set by caller from saved_models
 
-        print(f"Random Forest model loaded: {filepath}")
+        logger.info(f"Random Forest model loaded: {filepath}")
 
     def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]:
         """Evaluate model performance"""
@@ -1108,7 +1111,7 @@ class HyperparameterTuner:
                 index=False,
             )
 
-        print(f"Tuning results saved to {output_dir}/")
+        logger.info(f"Tuning results saved to {output_dir}/")
 
 
 class MLEvaluationReport:
@@ -1154,7 +1157,7 @@ class MLEvaluationReport:
         pred_path = self.output_dir / f"{model_name}_predictions_{report_time}.csv"
         pred_df.to_csv(pred_path, index=False)
 
-        print(f"Evaluation report saved: {report_path}")
+        logger.info(f"Evaluation report saved: {report_path}")
         return str(report_path)
 
     def plot_confusion_matrix(self, cm: np.ndarray, model_name: str, save: bool = True):
@@ -1171,7 +1174,7 @@ class MLEvaluationReport:
         if save:
             plot_path = self.output_dir / f"{model_name}_confusion_matrix.png"
             plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-            print(f"Confusion matrix saved: {plot_path}")
+            logger.info(f"Confusion matrix saved: {plot_path}")
 
         plt.show()
 
@@ -1199,7 +1202,7 @@ class MLEvaluationReport:
         if save:
             plot_path = self.output_dir / f"{model_name}_feature_importance.png"
             plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-            print(f"Feature importance plot saved: {plot_path}")
+            logger.info(f"Feature importance plot saved: {plot_path}")
 
         plt.show()
 
@@ -1236,20 +1239,20 @@ def train_ml_pipeline(
     # each split.  Computing rolling statistics (lags, MAs, volatility) on the
     # full dataset before splitting contaminates rows near the boundary with
     # future information that would not be available at prediction time.
-    print("Splitting raw data before feature engineering (prevents look-ahead bias)...")
+    logger.info("Splitting raw data before feature engineering (prevents look-ahead bias)...")
     split_idx_raw = int(len(df) * (1 - test_size))
     df_train_raw = df.iloc[:split_idx_raw].copy()
     df_test_raw = df.iloc[split_idx_raw:].copy()
 
     fe = FeatureEngineer()
 
-    print("Creating training features (fit)...")
+    logger.info("Creating training features (fit)...")
     X_train, y_train_class, y_train_reg, _ = fe.create_features(
         df_train_raw,
         prediction_horizon=prediction_horizon,
     )
 
-    print("Creating test features (transform only)...")
+    logger.info("Creating test features (transform only)...")
     # Re-use the same FeatureEngineer instance so lag/window parameters are
     # identical; the scaler is fitted only on training data below.
     X_test, y_test_class, y_test_reg, _ = fe.create_features(
@@ -1306,15 +1309,13 @@ def train_ml_pipeline(
                     df_test_raw,
                     prediction_horizon=prediction_horizon,
                 )
-                print(
-                    f"Historical macro features merged: {macro_hist.shape[1]} series, {len(macro_hist)} bars",
-                )
+                logger.info(f"Historical macro features merged: {macro_hist.shape[1]} series, {len(macro_hist)} bars")
             else:
                 _macro_logger.warning(
                     "Historical macro fetch returned empty — skipping macro features",
                 )
         except Exception as _macro_exc:
-            print(f"Historical macro features unavailable: {_macro_exc} — skipping")
+            logger.info(f"Historical macro features unavailable: {_macro_exc} — skipping")
     elif MACRO_AVAILABLE:
         # Fallback: point-in-time broadcast (introduces look-ahead bias for
         # historical training data — acceptable only for live inference).
@@ -1333,26 +1334,22 @@ def train_ml_pipeline(
                 for col, val in macro_features.items():
                     X_train[col] = float(val) if val is not None else 0.0
                     X_test[col] = float(val) if val is not None else 0.0
-                print(
-                    f"Point-in-time macro features merged (look-ahead bias warning): {list(macro_features.keys())}",
+                logger.info(
+                    f"Point-in-time macro features merged (look-ahead bias warning): {list(macro_features.keys())}"
                 )
         except Exception as _macro_exc:
-            print(
-                f"Macro features unavailable (FRED unreachable?): {_macro_exc} — skipping",
-            )
+            logger.info(f"Macro features unavailable (FRED unreachable?): {_macro_exc} — skipping")
 
     # Scale: fit on train, transform both — never fit on test data
     X_train_scaled, X_test_scaled = fe.scale_features(X_train, X_test)
 
-    print(
-        f"Train: {len(X_train)} bars | Test: {len(X_test)} bars | Features: {X_train.shape[1]}",
-    )
+    logger.info(f"Train: {len(X_train)} bars | Test: {len(X_test)} bars | Features: {X_train.shape[1]}")
 
     evaluator = MLEvaluationReport()
 
     # Train LSTM
     if "lstm" in model_types and TENSORFLOW_AVAILABLE:
-        print("\nTraining LSTM...")
+        logger.info("\nTraining LSTM...")
 
         # Prepare sequences
         lstm_model = LSTMModel(sequence_length=60, n_features=X_train_scaled.shape[1])
@@ -1398,11 +1395,11 @@ def train_ml_pipeline(
             "report_path": report_path,
         }
 
-        print(f"LSTM RMSE: {metrics['rmse']:.4f}")
+        logger.info(f"LSTM RMSE: {metrics['rmse']:.4f}")
 
     # Train XGBoost
     if "xgboost" in model_types and XGBOOST_AVAILABLE:
-        print("\nTraining XGBoost...")
+        logger.info("\nTraining XGBoost...")
 
         xgb_model = XGBoostModel(model_type="classifier")
         xgb_model.fit(
@@ -1438,11 +1435,11 @@ def train_ml_pipeline(
             "report_path": report_path,
         }
 
-        print(f"XGBoost Accuracy: {metrics['accuracy']:.4f}, F1: {metrics['f1']:.4f}")
+        logger.info(f"XGBoost Accuracy: {metrics['accuracy']:.4f}, F1: {metrics['f1']:.4f}")
 
     # Train Random Forest
     if "random_forest" in model_types:
-        print("\nTraining Random Forest...")
+        logger.info("\nTraining Random Forest...")
 
         rf_model = RandomForestModel(model_type="classifier", n_estimators=100)
         rf_model.fit(X_train_scaled, y_train_class.values)
@@ -1476,14 +1473,12 @@ def train_ml_pipeline(
             "report_path": report_path,
         }
 
-        print(
-            f"Random Forest Accuracy: {metrics['accuracy']:.4f}, F1: {metrics['f1']:.4f}",
-        )
+        logger.info(f"Random Forest Accuracy: {metrics['accuracy']:.4f}, F1: {metrics['f1']:.4f}")
 
     # Save feature engineer
     fe.save_scaler(f"{model_dir}/feature_scaler.pkl")
 
-    print(f"\nPipeline complete. Models saved to {model_dir}/")
+    logger.info(f"\nPipeline complete. Models saved to {model_dir}/")
     return results
 
 
@@ -1579,11 +1574,14 @@ def walk_forward_validate(
         metrics["test_start_date"] = str(df.index[test_start]) if hasattr(df.index, "__getitem__") else test_start
         fold_results.append(metrics)
 
-        print(
-            f"Fold {fold + 1}/{n_splits} | "
-            f"train={len(X_train)} test={len(X_test)} | "
-            f"accuracy={metrics.get('accuracy', 0):.3f} | "
-            f"f1={metrics.get('f1', 0):.3f}",
+        logger.info(
+            "Fold %d/%d | train=%d test=%d | accuracy=%.3f | f1=%.3f",
+            fold + 1,
+            n_splits,
+            len(X_train),
+            len(X_test),
+            metrics.get("accuracy", 0),
+            metrics.get("f1", 0),
         )
 
     if not fold_results:
@@ -1609,10 +1607,13 @@ def walk_forward_validate(
         ),
     }
 
-    print(
-        f"\nWalk-forward summary ({len(fold_results)} folds): "
-        f"accuracy={summary['mean_accuracy']:.3f} ± {summary['std_accuracy']:.3f} | "
-        f"f1={summary['mean_f1']:.3f} ± {summary['std_f1']:.3f}",
+    logger.info(
+        "Walk-forward summary (%d folds): accuracy=%.3f ± %.3f | f1=%.3f ± %.3f",
+        len(fold_results),
+        summary["mean_accuracy"],
+        summary["std_accuracy"],
+        summary["mean_f1"],
+        summary["std_f1"],
     )
     return summary
 

@@ -10,12 +10,15 @@ Captures price discrepancies across multiple venues
 """
 
 import asyncio
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
 UTC = timezone.utc
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -126,7 +129,7 @@ class ArbitrageDetector:
                 "timestamp": datetime.now(UTC),
             }
         except Exception as e:
-            print(f"Price fetch error {exchange.name}/{symbol}: {e}")
+            logger.warning("Price fetch error %s/%s: %s", exchange.name, symbol, e)
 
     def detect_opportunities(self, symbol: str) -> list[ArbitrageOpportunity]:
         """Find profitable arbitrage for symbol"""
@@ -203,11 +206,15 @@ class ArbitrageExecutor:
         Execute both legs simultaneously with protection.
         If one leg fails, immediately hedge the other.
         """
-        print(
-            f"⚡ Executing: {opportunity.buy_exchange} -> {opportunity.sell_exchange}",
+        logger.info(
+            "Executing: %s -> %s",
+            opportunity.buy_exchange,
+            opportunity.sell_exchange,
         )
-        print(
-            f"   Profit: {opportunity.net_profit:.2f} ({opportunity.profit_bps:.1f} bps)",
+        logger.info(
+            "Profit: %.2f (%.1f bps)",
+            opportunity.net_profit,
+            opportunity.profit_bps,
         )
 
         buy_ex = exchanges[opportunity.buy_exchange]
@@ -249,12 +256,12 @@ class ArbitrageExecutor:
 
         # Check results
         if buy_result and sell_result and buy_result["filled"] and sell_result["filled"]:
-            print(f"   ✅ Both legs filled. Profit: {opportunity.net_profit:.2f}")
+            logger.info("Both legs filled. Profit: %.2f", opportunity.net_profit)
             return True
 
         # Handle partial execution - emergency hedge
         if buy_result and buy_result["filled"] and not sell_result:
-            print("   ⚠️ Buy filled, sell failed. Emergency hedging...")
+            logger.warning("Buy filled, sell failed. Emergency hedging...")
             await self._emergency_hedge(
                 buy_ex,
                 opportunity.symbol,
@@ -264,7 +271,7 @@ class ArbitrageExecutor:
             return False
 
         if sell_result and sell_result["filled"] and not buy_result:
-            print("   ⚠️ Sell filled, buy failed. Emergency hedging...")
+            logger.warning("Sell filled, buy failed. Emergency hedging...")
             await self._emergency_hedge(
                 sell_ex,
                 opportunity.symbol,
@@ -273,7 +280,7 @@ class ArbitrageExecutor:
             )
             return False
 
-        print("   ❌ Both legs failed")
+        logger.error("Both legs failed")
         return False
 
     async def _place_limit_order(self, exchange, symbol, side, size, price):
@@ -288,7 +295,7 @@ class ArbitrageExecutor:
 
     async def _emergency_hedge(self, exchange, symbol, size, side):
         """Market order to close naked position"""
-        print(f"   🚨 Emergency {side} {size} {symbol} on {exchange.name}")
+        logger.warning("Emergency %s %.8g %s on %s", side, size, symbol, exchange.name)
         await exchange.place_order(
             symbol=symbol,
             side=side,
@@ -341,7 +348,7 @@ class CrossExchangeEngine:
                 await asyncio.sleep(0.1)  # 10Hz scan rate
 
             except Exception as e:
-                print(f"Arbitrage error: {e}")
+                logger.error("Arbitrage error: %s", e)
                 await asyncio.sleep(1)
 
     def get_stats(self):

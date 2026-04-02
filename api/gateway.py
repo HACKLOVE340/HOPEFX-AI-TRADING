@@ -354,7 +354,7 @@ class APIGateway:
                     await asyncio.sleep(1)
 
             except Exception as e:
-                print(f"WebSocket error: {e}")
+                logger.warning("WebSocket error: %s", e)
             finally:
                 await limiter.release(client_ip)
 
