@@ -469,10 +469,9 @@ class Gatekeeper:
         try:
             tick = getattr(self, "_orch", None) and self._orch.get_latest_tick()
             return tick.confidence if tick else 1.0
-        except Exception:
+        except Exception as _dq_exc:
+            logger.debug("Data quality check failed (%s) — defaulting to 1.0", _dq_exc)
             return 1.0
-
-    def _get_blackout(self) -> bool:
         """Return True when a news/macro blackout is active.
 
         Priority
@@ -497,8 +496,8 @@ class Gatekeeper:
         if getattr(self, "_orch", None) is not None:
             try:
                 return self._orch.is_blackout_window()
-            except Exception:
-                pass  # fall through to local calendar
+            except Exception as _bo_exc:
+                logger.debug("Orchestrator blackout check failed (%s) — falling back to local calendar", _bo_exc)
 
         # Local calendar fallback (tests / standalone mode)
         cal = getattr(self, "_calendar", None)
@@ -515,7 +514,8 @@ class Gatekeeper:
             return 0.0
         try:
             return self._orch.get_macro_impact_score()
-        except Exception:
+        except Exception as _imp_exc:
+            logger.debug("Impact score fetch failed (%s) — defaulting to 0.0", _imp_exc)
             return 0.0
 
     def _get_sentiment(self, signal) -> float:
@@ -530,10 +530,9 @@ class Gatekeeper:
         try:
             features = self._orch.get_ml_features()
             return float(features.get("news_sentiment_score", 0.0))
-        except Exception:
+        except Exception as _sent_exc:
+            logger.debug("Sentiment score fetch failed (%s) — defaulting to 0.0", _sent_exc)
             return 0.0
-
-    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _reset_daily_counter(self) -> None:
         today = datetime.now(UTC).day
@@ -597,7 +596,8 @@ def _make_gatekeeper() -> Gatekeeper:
             orchestrator=orchestrator,
             lineage_store=orchestrator._lineage,
         )
-    except Exception:
+    except Exception as _gk_exc:
+        logger.warning("Gatekeeper wiring via orchestrator failed (%s) — starting ungated", _gk_exc)
         return Gatekeeper()
 
 

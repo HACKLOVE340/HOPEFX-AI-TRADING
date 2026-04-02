@@ -490,7 +490,8 @@ class OANDABroker:
             async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/summary") as resp:
                 await resp.read()
             return (time.monotonic() - t0) * 1000
-        except Exception:  # pylint: disable=broad-exception-caught
+        except Exception as _lat_exc:  # pylint: disable=broad-exception-caught
+            logger.debug("OANDA latency probe failed: %s", _lat_exc)
             return 9999.0
 
     # ── FORBIDDEN: market data methods ───────────────────────────────────────
