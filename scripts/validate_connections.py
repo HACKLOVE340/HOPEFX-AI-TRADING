@@ -304,7 +304,7 @@ def check_env_example():
 
 def check_graphql():
     try:
-        from api.graphql_schema import graphql_router
+        from api.graphql_schema import graphql_router  # pylint: disable=unused-import
 
         return "GraphQL router importable"
     except ImportError as e:
