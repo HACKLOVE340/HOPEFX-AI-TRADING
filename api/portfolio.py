@@ -462,7 +462,8 @@ async def factor_risk_report(
                 "engine_status": engine.status(),
             }
         except Exception as exc:
-            factor_section = {"available": False, "error": str(exc)}
+            logger.warning("factor analysis unavailable: %s", exc)
+            factor_section = {"available": False, "error": "Factor analysis unavailable — check server logs"}
 
     # Rebalancer weights
     rebalancer_section: Dict[str, Any] = {"available": False}

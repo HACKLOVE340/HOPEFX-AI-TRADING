@@ -562,7 +562,7 @@ def save_settings(
             return {"status": "error", "detail": "Config store write failed"}
     except Exception as exc:
         logger.error("save_settings failed: %s", exc, exc_info=True)
-        return {"status": "error", "detail": str(exc)}
+        return {"status": "error", "detail": "Settings save failed — check server logs"}
 
 
 @router.get("/activity")

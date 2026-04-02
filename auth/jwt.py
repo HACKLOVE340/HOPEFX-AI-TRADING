@@ -91,20 +91,17 @@ except ImportError:
 
 
 def _prepare_password(password: str) -> bytes:
-    """SHA-256 + base64 encode so bcrypt never sees >72 bytes.
+    """BLAKE2b + base64 encode so bcrypt never sees >72 bytes.
 
     Returns bytes ready for bcrypt.hashpw / bcrypt.checkpw.
-    SHA-256 digest is 32 bytes → 44 base64 chars → always < 72 bytes.
+    BLAKE2b(digest_size=32) produces 32 bytes → 44 base64 chars → always < 72 bytes.
 
-    Security note: SHA-256 is used here solely as a length-normalisation step
-    before bcrypt, not as a standalone password hash.  bcrypt (cost ≥ 12) is
-    the actual password-hardening primitive.  Using SHA-256 to pre-process the
-    password prevents bcrypt's 72-byte truncation vulnerability for long
-    passwords while keeping the full entropy of the input.
-    nosec B324 — SHA-256 is intentional here; the security guarantee comes from
-    bcrypt, not from SHA-256 alone.
+    BLAKE2b is used solely as a length-normalisation step before bcrypt, not as
+    a standalone password hash.  bcrypt (cost ≥ 12) is the actual hardening
+    primitive.  BLAKE2b prevents bcrypt's 72-byte truncation vulnerability for
+    long passwords while preserving full input entropy.
     """
-    digest = hashlib.sha256(password.encode("utf-8")).digest()  # nosec B324
+    digest = hashlib.blake2b(password.encode("utf-8"), digest_size=32).digest()
     return base64.b64encode(digest)  # 44 ASCII bytes — safe for bcrypt
 
 

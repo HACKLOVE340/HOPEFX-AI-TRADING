@@ -265,7 +265,8 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
             )
             return JSONResponse({"status": "resumed"})
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            logger.error("nuclear resume failed: %s", exc)
+            raise HTTPException(status_code=500, detail="Operation failed — check server logs") from exc
 
     @app.get("/api/nuclear/history")
     async def nuclear_history(n: int = 20):
@@ -277,7 +278,8 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
             history = sup.get_event_history(n)
             return JSONResponse({"events": history})
         except Exception as exc:
-            return JSONResponse({"events": [], "error": str(exc)})
+            logger.warning("nuclear_history failed: %s", exc)
+            return JSONResponse({"events": [], "error": "History unavailable — check server logs"})
 
     @app.get("/api/nuclear/status")
     async def nuclear_status():

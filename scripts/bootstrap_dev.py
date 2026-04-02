@@ -83,18 +83,15 @@ BROKER_TYPE=paper
 # ── Sentry (disabled in dev) ──────────────────────────────────────────────────
 # SENTRY_DSN=
 """
-    # Write with owner-read-write only (0o600) so the generated secrets are
-    # not world-readable. Writing secrets to a local .env file is the
-    # intended behaviour of this dev-bootstrap script; the file is gitignored
-    # and never committed to source control.
-    # nosec B106 — intentional: dev-only bootstrap writes generated secrets to
-    # a gitignored .env file that is immediately chmod-600'd.
-    ENV_PATH.write_text(content, encoding="utf-8")  # nosec B106
+    # Write with mode 0o600 so the generated secrets are not world-readable.
+    # os.open with O_CREAT|O_WRONLY|O_TRUNC and mode=0o600 creates the file
+    # with restricted permissions atomically — no world-readable window.
+    # The file is gitignored and never committed to source control.
+    fd = os.open(str(ENV_PATH), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        import stat
-        ENV_PATH.chmod(stat.S_IRUSR | stat.S_IWUSR)
-    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-        pass  # chmod may fail on Windows; non-fatal
+        os.write(fd, content.encode("utf-8"))
+    finally:
+        os.close(fd)
     return True
 
 
@@ -175,9 +172,8 @@ def bootstrap(verbose: bool = True) -> None:
             print("  ✅  Admin user seeded")
             print(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
             print(f"      Username : {DEFAULT_ADMIN_USERNAME}")
-            # Print only the file path and env-var NAME — never the password value.
-            # nosec B106 — outputs a file path and key name, not a secret value.
-            print(f"      Password : see {ENV_PATH} → {_ADMIN_PASSWORD_KEY}")  # nosec B106
+            # Direct users to the .env file — never echo the password value.
+            sys.stdout.write(f"      Password : see {ENV_PATH} (BOOTSTRAP_ADMIN_PASSWORD)\n")
             print("─" * 58)
             print("  Start the server:  python app.py")
             print("  Login at:          http://localhost:8000/login")

@@ -134,24 +134,25 @@ def main():
         alphabet = string.ascii_letters + string.digits + "!@#$%"
         args.password = "".join(secrets.choice(alphabet) for _ in range(16))
 
-        # Write the generated password to a chmod-600 restricted local file so
+        # Write the generated password to a mode-0600 restricted local file so
         # it survives terminal scroll. The user is instructed to delete it
         # immediately after saving to a password manager.
-        # nosec B106 — intentional clear-text storage: this is a one-time
-        # bootstrap credential written to a local file that is immediately
-        # chmod-600'd and never committed (admin_password.txt is gitignored).
+        # os.open with O_CREAT|O_WRONLY|O_TRUNC and mode=0o600 creates the file
+        # with restricted permissions atomically — no world-readable window.
+        import datetime as _dt  # noqa: PLC0415
+
         pw_file = ROOT / "admin_password.txt"
-        pw_file.write_text(  # nosec B106
-            f"Admin password (generated {__import__('datetime').datetime.now().isoformat()}):\n"
+        pw_content = (
+            f"Admin password (generated {_dt.datetime.now().isoformat()}):\n"
             f"{args.password}\n"
-            "Delete this file after saving the password to a password manager.\n",
-            encoding="utf-8",
-        )
+            "Delete this file after saving the password to a password manager.\n"
+        ).encode("utf-8")
+        fd = os.open(str(pw_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
-            pw_file.chmod(stat.S_IRUSR | stat.S_IWUSR)
-        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-            pass  # chmod may fail on Windows; non-fatal
-        print(f"[INFO] Auto-generated password written to: {pw_file}")  # nosec B106
+            os.write(fd, pw_content)
+        finally:
+            os.close(fd)
+        print(f"[INFO] Auto-generated password written to: {pw_file}")
         print("[INFO] Delete that file after saving the password to a password manager.")
 
     create_or_update_admin(args.email, args.username, args.password, args.reset)

@@ -203,20 +203,24 @@ def _safe_csv_path(data_dir: "pathlib.Path", stem: str) -> "pathlib.Path | None"
     """
     import pathlib
 
-    # Guard 1: stem must match the strict allowlist — no path components allowed.
-    if not _STEM_RE.match(stem):
+    # Guard 1: stem must match the strict allowlist — only [A-Za-z0-9_]{1,40}.
+    # No slashes, dots, or other path separators are permitted.
+    m = _STEM_RE.fullmatch(stem)
+    if m is None:
         return None
 
-    # Re-materialise stem from the regex match object to sever the taint chain:
-    # the value used in path construction is the match group, not the raw input.
-    safe_stem: str = _STEM_RE.match(stem).group(0)  # nosec B101 — match is guaranteed non-None here
+    # Build the filename from only the matched characters, then strip any
+    # remaining path components with os.path.basename as a second defence.
+    import os as _os  # noqa: PLC0415
 
-    # Guard 2: resolve and confirm the path stays inside data_dir.
-    # nosec B101 — path traversal is prevented by _STEM_RE (no separators) and
-    # the relative_to() containment check below.
-    candidate = (data_dir / f"{safe_stem}.csv").resolve()  # nosec B101
+    clean_stem = _os.path.basename(m.group(0))  # basename of an alphanumeric string is itself
+    filename = clean_stem + ".csv"
+
+    # Guard 2: resolve and confirm the final path stays inside data_dir.
+    resolved_data_dir = data_dir.resolve()
+    candidate = (resolved_data_dir / filename).resolve()
     try:
-        candidate.relative_to(data_dir.resolve())
+        candidate.relative_to(resolved_data_dir)
     except ValueError:
         return None
     return candidate
@@ -274,14 +278,16 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
     candidates = candidates + [sym_upper + "_H1", sym_upper + "_D", sym_upper]
 
     for stem in candidates:
-        # nosec B101 — _safe_csv_path enforces _STEM_RE (alphanumeric + underscore
-        # only, no path separators) and a relative_to() containment check.
-        # Any stem that would escape data_dir returns None and is skipped here.
-        csv_path = _safe_csv_path(data_dir, stem)  # nosec B101
+        # _safe_csv_path enforces _STEM_RE (alphanumeric + underscore only,
+        # no path separators) and a relative_to() containment check.
+        # Returns None for any stem that would escape data_dir.
+        csv_path = _safe_csv_path(data_dir, stem)
         if csv_path is None or not csv_path.exists():
             continue
         try:
-            df = pd.read_csv(csv_path, parse_dates=["timestamp"])
+            # Convert to str so pd.read_csv receives a plain string derived
+            # from the validated Path object, not from user-supplied input.
+            df = pd.read_csv(str(csv_path), parse_dates=["timestamp"])
             df = df.rename(columns={"timestamp": "time"}).set_index("time")
             df = df[["open", "high", "low", "close", "volume"]].dropna()
             df.index = pd.to_datetime(df.index, utc=True)

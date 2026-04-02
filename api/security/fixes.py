@@ -261,7 +261,7 @@ async def approve_fix(
         )
     except Exception as exc:
         logger.error("fixes router: PR publisher error for %s: %s", endpoint, exc)
-        pr_result = {"status": "error", "error": str(exc)}
+        pr_result = {"status": "error", "error": "PR publish failed — check server logs"}
 
     # Archive approved record
     approved_record = {

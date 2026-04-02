@@ -217,12 +217,10 @@ class SecretsManager:
                     len(new_secrets),
                     len(changed),
                 )
-                # DEBUG: log only the env-var NAMES of changed keys for local
-                # troubleshooting.  Secret values never appear here.
-                # nosec B106 — `changed` is a set of env-var name strings, not values.
-                logger.debug(  # nosec B106
-                    "SecretsManager: changed keys: %s",
-                    sorted(changed),
+                # Log only the count of changed keys — no names or values.
+                logger.debug(
+                    "SecretsManager: %d key(s) changed in this refresh cycle",
+                    len(changed),
                 )
                 # Notify registered rotation callbacks
                 await self._notify_rotation(changed)

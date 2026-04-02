@@ -183,18 +183,19 @@ def cmd_generate(_args: argparse.Namespace) -> int:
         new_val = _generate(gen_kind or "token48")
         env[var] = new_val
         generated.append(var)
-        print(f"  ✓ Generated {var}")  # nosec B106 — prints env var NAME only, never the value
+        # Print the env-var name (from the hardcoded REQUIRED_SECRETS list) only.
+        # The generated value is written to .env — never echoed to stdout.
+        sys.stdout.write(f"  \u2713 Generated {var}\n")
 
     if not generated:
-        print("All required secrets already set — nothing to generate.")
+        sys.stdout.write("All required secrets already set \u2014 nothing to generate.\n")
         return 0
 
     _write_env(ENV_FILE, env)
-    print(f"\n{len(generated)} secret(s) written to {ENV_FILE}")
+    sys.stdout.write(f"\n{len(generated)} secret(s) written to {ENV_FILE}\n")
     if skipped:
-        # nosec B106 — prints env var NAMES only, never values
-        print(f"{len(skipped)} already set (not overwritten): {', '.join(skipped)}")
-    print("\nNext: run `python scripts/manage_secrets.py validate` to confirm.")
+        sys.stdout.write(f"{len(skipped)} already set (not overwritten): {', '.join(skipped)}\n")
+    sys.stdout.write("\nNext: run `python scripts/manage_secrets.py validate` to confirm.\n")
     return 0
 
 
@@ -216,7 +217,8 @@ def cmd_validate(_args: argparse.Namespace) -> int:
         elif _is_placeholder(val):
             errors.append(f"  ✗ {var} — still a placeholder ({desc})")
         else:
-            print(f"  ✓ {var}")  # nosec B106 — prints env var NAME only, never the value
+            # Print only the env-var name from the hardcoded REQUIRED_SECRETS list.
+            sys.stdout.write(f"  \u2713 {var}\n")
 
     # Check conditional secrets based on feature flags
     broker_type = env.get("BROKER_TYPE", os.getenv("BROKER_TYPE", "paper"))
@@ -240,22 +242,22 @@ def cmd_validate(_args: argparse.Namespace) -> int:
             continue
         val = env.get(var, os.getenv(var, ""))
         if not val or _is_placeholder(val):
-            warnings.append(f"  ⚠ {var} — required for {condition} but not set ({desc})")
+            warnings.append(f"  \u26a0 {var} \u2014 required for {condition} but not set ({desc})")
         else:
-            print(f"  ✓ {var} (conditional)")  # nosec B106 — prints env var NAME only, never the value
+            sys.stdout.write(f"  \u2713 {var} (conditional)\n")
 
     if warnings:
-        print("\nWarnings:")
+        sys.stdout.write("\nWarnings:\n")
         for w in warnings:
-            print(w)  # nosec B106 — warning messages contain env var names and descriptions, never values
+            sys.stdout.write(w + "\n")
 
     if errors:
-        print("\nErrors (must fix before production launch):")
+        sys.stdout.write("\nErrors (must fix before production launch):\n")
         for e in errors:
-            print(e)  # nosec B106 — error messages contain env var names and descriptions, never values
+            sys.stdout.write(e + "\n")
         return 1
 
-    print(f"\nAll {len(REQUIRED_SECRETS)} required secrets validated.")
+    sys.stdout.write(f"\nAll {len(REQUIRED_SECRETS)} required secrets validated.\n")
     return 0
 
 

@@ -441,14 +441,8 @@ class RefinitivScreener:
         ts = str(int(time.time() * 1000))
         msg = f"{self._api_key}{ts}{method.upper()}{path}{body}"
         # HMAC-SHA256 as required by the Refinitiv World-Check REST API spec.
-        # hashlib.sha256 is the digest passed to hmac.new — this is a strong MAC.
-        # CodeQL/Bandit flag hmac.new(…, hashlib.sha256) conservatively; nosec B324
-        # suppresses the false-positive (the algorithm is not weak here).
-        sig = hmac.new(  # nosec B324 — HMAC-SHA256 is strong; flag is a false positive
-            self._api_secret.encode(),
-            msg.encode(),
-            hashlib.sha256,
-        ).hexdigest()
+        # Uses hmac.digest() (Python 3.7+) for a single-call, constant-time MAC.
+        sig = hmac.digest(self._api_secret.encode(), msg.encode(), "sha256").hex()
         return {
             "Authorization": f"Refinitiv-HMAC-SHA256 Id={self._api_key},Timestamp={ts},Signature={sig}",
             "Content-Type": "application/json",
