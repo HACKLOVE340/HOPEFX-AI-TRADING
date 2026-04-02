@@ -41,11 +41,11 @@ class EncryptionManager:
             # so the same key survives process restarts within the same directory.
             key_file = Path(".encryption_key")
             if key_file.exists():
-                key = key_file.read_text().strip()
+                key = key_file.read_text(encoding="utf-8").strip()
             else:
                 key = secrets.token_hex(32)
                 with contextlib.suppress(OSError):
-                    key_file.write_text(key)
+                    key_file.write_text(key, encoding="utf-8")
             logger.warning(
                 "CONFIG_ENCRYPTION_KEY not set — using auto-generated key (not for production)",
             )
@@ -225,21 +225,21 @@ class AppConfig:
         db_d = d.get("database", {})
         if db_d:
             cfg.database = DatabaseConfig(
-                **{k: db_d[k] for k in DatabaseConfig.__dataclass_fields__ if k in db_d},
+                **{k: db_d[k] for k in DatabaseConfig.__dataclass_fields__ if k in db_d},  # pylint: disable=no-member
             )
         tr_d = d.get("trading", {})
         if tr_d:
             cfg.trading = TradingConfig(
-                **{k: tr_d[k] for k in TradingConfig.__dataclass_fields__ if k in tr_d},
+                **{k: tr_d[k] for k in TradingConfig.__dataclass_fields__ if k in tr_d},  # pylint: disable=no-member
             )
         lg_d = d.get("logging", {})
         if lg_d:
             cfg.logging = LoggingConfig(
-                **{k: lg_d[k] for k in LoggingConfig.__dataclass_fields__ if k in lg_d},
+                **{k: lg_d[k] for k in LoggingConfig.__dataclass_fields__ if k in lg_d},  # pylint: disable=no-member
             )
         for name, api_d in d.get("api_configs", {}).items():
             cfg.api_configs[name] = APIConfig(
-                **{k: api_d[k] for k in APIConfig.__dataclass_fields__ if k in api_d},
+                **{k: api_d[k] for k in APIConfig.__dataclass_fields__ if k in api_d},  # pylint: disable=no-member
             )
         return cfg
 
@@ -273,8 +273,8 @@ class ConfigManager:
         if self._encryption_key:
             try:
                 self._enc = EncryptionManager(master_key=self._encryption_key)
-            except Exception as e:
-                logger.warning(f"EncryptionManager init failed: {e}")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning("EncryptionManager init failed: %s", e)
 
         self.config: AppConfig | None = None
         self._environment: str | None = None
@@ -298,7 +298,7 @@ class ConfigManager:
         if self._enc and value:
             try:
                 return self._enc.decrypt(value)
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 return value
         return value
 
@@ -312,7 +312,7 @@ class ConfigManager:
         for _name, api_d in d.get("api_configs", {}).items():
             api_d["api_key"] = self._encrypt_value(api_d.get("api_key", ""))
             api_d["api_secret"] = self._encrypt_value(api_d.get("api_secret", ""))
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX)
                 json.dump(d, f, indent=2)
@@ -320,7 +320,7 @@ class ConfigManager:
                 fcntl.flock(f, fcntl.LOCK_UN)
 
     def _read_config(self, path: Path) -> AppConfig:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_SH)
                 d = json.load(f)
@@ -405,7 +405,7 @@ _manager: ConfigManager | None = None
 
 
 def get_config_manager() -> ConfigManager:
-    global _manager
+    global _manager  # pylint: disable=global-statement
     if _manager is None:
         _manager = ConfigManager()
     return _manager
