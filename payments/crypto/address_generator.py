@@ -45,11 +45,10 @@ try:
 
     except ImportError:
         # hdwallet v3+: use BIP39Mnemonic.from_entropy
-        import os as _os
         from hdwallet.mnemonics import BIP39Mnemonic as _BIP39Mnemonic
 
         def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
-            entropy_bytes = _os.urandom(strength // 8)
+            entropy_bytes = os.urandom(strength // 8)
             return _BIP39Mnemonic.from_entropy(entropy=entropy_bytes.hex(), language=language)
 
     _HDWALLET_AVAILABLE = True

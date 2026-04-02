@@ -30,11 +30,10 @@ try:
     # hdwallet v3+ — BIP39Mnemonic.from_entropy() is the generator
     from hdwallet import HDWallet
     from hdwallet.mnemonics import BIP39Mnemonic as _BIP39Mnemonic
-    import os as _os
 
     def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
         # strength is in bits (128 = 12 words, 256 = 24 words)
-        entropy_bytes = _os.urandom(strength // 8)
+        entropy_bytes = os.urandom(strength // 8)
         return _BIP39Mnemonic.from_entropy(entropy=entropy_bytes.hex(), language=language)
 
     BTC = "BTC"

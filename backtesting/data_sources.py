@@ -99,8 +99,6 @@ class CSVDataSource(DataSource):
 
     def get_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Load data from CSV file."""
-        import os
-
         try:
             # Try different filename patterns
             patterns = [
