@@ -180,14 +180,14 @@ async def init_config(s: Any) -> Any:
             max_overflow = 10
 
             def get_connection_string(self):
-                return _os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
+                return os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
 
         class _NS:
             def __init__(self, d):
                 for k, v in d.items():
                     setattr(self, k, v)
                 if not hasattr(self, "environment"):
-                    self.environment = _os.getenv("APP_ENV", "development")
+                    self.environment = os.getenv("APP_ENV", "development")
                 self.database = _DB()
                 if not hasattr(self, "api_configs"):
                     self.api_configs = {}
