@@ -773,7 +773,8 @@ async def signal_filter_stats(
             },
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.error("signal_filter_stats failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Signal filter stats unavailable — check server logs") from None
 
 
 @router.get(
@@ -1036,7 +1037,7 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
                 mtf_store={},
                 saved_model_files_kb={},
                 checked_at=checked_at,
-                error=str(exc),
+                error="ML engine unavailable — check server logs",
             ).model_dump(),
         )
 
@@ -1107,13 +1108,14 @@ async def rl_train(
             "metrics": metrics,
         }
     except ImportError as exc:
+        logger.error("rl_train: missing RL dependencies: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RL dependencies not installed: {exc}",
-        ) from exc
+            detail="RL dependencies not installed — check server logs",
+        ) from None
     except Exception as exc:
         logger.error("rl_train failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="RL training failed — check server logs") from None
 
 
 @router.post("/rl/walk-forward", tags=["ML Models"])
@@ -1150,13 +1152,14 @@ async def rl_walk_forward(
         return asdict(result)
 
     except ImportError as exc:
+        logger.error("rl_walk_forward: missing RL dependencies: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RL dependencies not installed: {exc}",
-        ) from exc
+            detail="RL dependencies not installed — check server logs",
+        ) from None
     except Exception as exc:
         logger.error("rl_walk_forward failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="RL walk-forward failed — check server logs") from None
 
 
 @router.get("/rl/status", tags=["ML Models"])
