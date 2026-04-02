@@ -62,8 +62,7 @@ except ImportError:
 
 # ── TensorFlow / Keras fallback ───────────────────────────────────────────────
 try:
-    import tensorflow as tf
-    from tensorflow.keras import layers, Model
+    import tensorflow as tf  # pylint: disable=unused-import
 
     TF_AVAILABLE = True
 except ImportError:
