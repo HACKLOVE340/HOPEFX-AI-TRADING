@@ -194,7 +194,7 @@ async def generate_deposit_address(req: AddressRequest):
             raise ValueError(f"No rate for {currency}")
     except Exception as exc:
         logger.error("Rate fetch failed: %s", exc)
-        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from exc
+        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from None
 
     amount_crypto = req.amount_usd / rate_usd
     network = (req.network or currency).upper()
@@ -279,7 +279,7 @@ async def get_rates_endpoint():
         rates = await get_rates()
     except Exception as exc:
         logger.error("Rate fetch failed: %s", exc)
-        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from exc
+        raise HTTPException(status_code=503, detail="Exchange rate service unavailable") from None
 
     return {
         "rates": {

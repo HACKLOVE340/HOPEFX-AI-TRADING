@@ -157,7 +157,7 @@ async def manual_resume(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
-        ) from exc
+        ) from None
     except Exception as exc:
         logger.error("manual_resume failed: %s", exc)
         raise HTTPException(
@@ -282,5 +282,5 @@ async def deactivate_kill_switch(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
-        ) from exc
+        ) from None
     return {"status": "deactivated", "kill_switch": ks.status()}

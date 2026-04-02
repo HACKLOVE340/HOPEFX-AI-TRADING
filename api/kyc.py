@@ -158,7 +158,7 @@ async def get_applicant_status(
         status_val = await gateway.check_status(applicant_id)
     except Exception as exc:
         logger.error("KYC check_status error: %s", exc)
-        raise HTTPException(status_code=502, detail="KYC provider error") from exc
+        raise HTTPException(status_code=502, detail="KYC provider error") from None
     return {"applicant_id": applicant_id, "status": status_val.value}
 
 
@@ -183,7 +183,7 @@ async def get_my_kyc_status(request: Request) -> dict[str, str]:
         return {"user_id": user_id, "kyc_status": kyc_status.value}
     except Exception as exc:
         logger.error("KYC status lookup error: %s", exc)
-        raise HTTPException(status_code=500, detail="Status lookup failed") from exc
+        raise HTTPException(status_code=500, detail="Status lookup failed") from None
 
 
 @router.post("/webhooks/sumsub", status_code=200)
@@ -260,7 +260,7 @@ async def screen_sanctions(
         )
     except Exception as exc:
         logger.error("Sanctions screen error: %s", exc)
-        raise HTTPException(status_code=502, detail="Sanctions screening error") from exc
+        raise HTTPException(status_code=502, detail="Sanctions screening error") from None
 
     return SanctionsScreenResponse(
         screened=result.screened,
