@@ -117,7 +117,8 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
             "BacktestEngine is not available. Ensure the backtest module is installed and configured."
         ) from None
     except Exception as exc:
-        raise ValueError(f"Backtest failed for strategy '{strategy_name}': {exc}") from exc
+        logger.error("Backtest failed for strategy '%s': %s", strategy_name, exc)
+        raise ValueError(f"Backtest failed for strategy '{strategy_name}' — check server logs") from None
 
 
 @router.post("/api/ab-test/start", status_code=201)
@@ -136,7 +137,8 @@ async def start_ab_test(
         result_a = _run_real_backtest(req.strategy_a, req.symbol, req.duration_days, req.initial_capital)
         result_b = _run_real_backtest(req.strategy_b, req.symbol, req.duration_days, req.initial_capital)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        logger.warning("ab_test start failed: %s", exc)
+        raise HTTPException(status_code=422, detail="A/B test failed — check strategy names and data availability") from None
 
     # Winner by Sharpe ratio (risk-adjusted)
     winner = req.strategy_a if result_a["sharpe_ratio"] >= result_b["sharpe_ratio"] else req.strategy_b
@@ -409,7 +411,9 @@ def _parse_formula(formula: str) -> _ast.Expression:
     try:
         tree = _ast.parse(stripped, mode="eval")
     except SyntaxError as exc:
-        raise ValueError(f"Formula syntax error: {exc}") from exc
+        # Surface a sanitized message — SyntaxError.msg is safe (describes the
+        # syntax problem, not internal state), but lineno/offset are omitted.
+        raise ValueError(f"Formula syntax error: {exc.msg}") from None
     _validate_formula_ast(tree)
     return tree
 
@@ -513,7 +517,8 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     try:
         result = _interp_node(tree.body, name_map)
     except Exception as exc:
-        raise ValueError(f"Formula evaluation error: {exc}") from exc
+        logger.warning("Formula evaluation error: %s", exc)
+        raise ValueError("Formula evaluation error — check formula syntax and variable names") from None
 
     closes = ohlcv["close"]
     if isinstance(result, (int, float)):
@@ -544,7 +549,8 @@ async def preview_indicator(
             "points": len(data),
         }
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # ValueError messages from _eval_indicator are sanitized (no internal state).
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 @router.get("/api/indicators")
