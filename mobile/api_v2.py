@@ -482,12 +482,13 @@ class MobileAPIServer:
                 }
 
             except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e)) from e
+                logger.warning("Order validation failed for %s: %s", user_id, e)
+                raise HTTPException(status_code=400, detail="Invalid order parameters") from None
             except HTTPException:
                 raise
             except Exception as e:
                 logger.error(f"Order placement failed: {e}")
-                raise HTTPException(status_code=500, detail="Order placement failed") from e
+                raise HTTPException(status_code=500, detail="Order placement failed") from None
 
         @self.app.get("/api/v2/trades", response_model=list[TradeData], tags=["Trading"])
         async def get_open_trades(user_id: str = Depends(self._verify_token)):
