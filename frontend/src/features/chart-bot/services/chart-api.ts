@@ -2,11 +2,11 @@
  * chart-bot/services/chart-api.ts
  *
  * REST API client for all chart-bot data fetching.
- * Uses axios with TanStack Query for caching, background refetch,
- * and optimistic updates.
+ * Uses the shared axios instance (JWT injected via interceptor) with
+ * TanStack Query for caching and background refetch.
  */
 
-import axios from 'axios';
+import { api } from '../../../hooks/useApi';
 import type {
   OHLCVBar,
   MLSignal,
@@ -23,30 +23,6 @@ import type {
   TradeResult,
   MicrostructureSnapshot,
 } from '../types';
-
-// ─── Axios instance ───────────────────────────────────────────────────────────
-
-const api = axios.create({
-  baseURL: '/api',
-  timeout: 10_000,
-  headers: { 'Content-Type': 'application/json' },
-});
-
-// Inject JWT on every request
-api.interceptors.request.use((config) => {
-  try {
-    const stored = localStorage.getItem('hopefx-store');
-    if (stored) {
-      const parsed = JSON.parse(stored) as { state?: { token?: string } };
-      const token = parsed?.state?.token;
-      if (token) config.headers.Authorization = `Bearer ${token}`;
-    }
-  } catch (err: unknown) {
-    // Corrupted localStorage entry — request proceeds without auth token
-    console.warn('[chart-api] Failed to read auth token from localStorage:', err);
-  }
-  return config;
-});
 
 // ─── OHLCV ────────────────────────────────────────────────────────────────────
 

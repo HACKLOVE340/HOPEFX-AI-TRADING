@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
+import { api } from '../hooks/useApi';
 import { GlobalAttackMap, type AttackLog } from '../components/GlobalAttackMap';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
 import { MetricCard } from '../components/MetricCard';
@@ -33,28 +33,24 @@ interface Alert {
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
-const API_BASE = import.meta.env.VITE_API_URL ?? '';
-
 async function fetchAttacks(): Promise<AttackLog> {
-  const { data } = await axios.get<AttackLog>(`${API_BASE}/api/security/attacks`);
+  const { data } = await api.get<AttackLog>('/security/attacks');
   return data ?? {};
 }
 
 async function fetchLockdown(): Promise<LockdownStatus> {
-  const { data } = await axios.get<LockdownStatus>(`${API_BASE}/api/security/lockdown`);
+  const { data } = await api.get<LockdownStatus>('/security/lockdown');
   return data;
 }
 
 async function fetchBlockedIPs(): Promise<string[]> {
-  const { data } = await axios.get<string[]>(`${API_BASE}/api/security/blocked-ips`);
+  const { data } = await api.get<string[]>('/security/blocked-ips');
   return data ?? [];
 }
 
 async function fetchAlerts(): Promise<Alert[]> {
-  // Alerts are stored in Redis list alerts:critical — exposed via the same router
-  // If the endpoint doesn't exist yet, return empty gracefully
   try {
-    const { data } = await axios.get<Alert[]>(`${API_BASE}/api/security/alerts`);
+    const { data } = await api.get<Alert[]>('/security/alerts');
     return data ?? [];
   } catch {
     return [];
@@ -62,7 +58,7 @@ async function fetchAlerts(): Promise<Alert[]> {
 }
 
 async function clearLockdown(): Promise<void> {
-  await axios.post(`${API_BASE}/api/security/lockdown/clear`);
+  await api.post('/security/lockdown/clear');
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
