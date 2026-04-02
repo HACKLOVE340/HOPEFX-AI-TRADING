@@ -290,7 +290,7 @@ class FeatureEngineer:
 
     def load_scaler(self, filepath: str):
         """Load fitted scaler"""
-        self.scaler = joblib.load(filepath)
+        self.scaler = joblib.load(filepath)  # nosec B301 - filepath set by caller from saved_models
 
     @staticmethod
     def _calculate_rsi(prices: pd.Series, period: int = 14) -> pd.Series:
@@ -729,7 +729,7 @@ class XGBoostModel:
                 self.build_model()
             self.model.load_model(filepath)
         else:
-            self.model = joblib.load(filepath)
+            self.model = joblib.load(filepath)  # nosec B301 - filepath set by caller from saved_models
 
         logger.info(f"XGBoost model loaded: {filepath}")
 
@@ -892,7 +892,7 @@ class RandomForestModel:
 
     def load(self, filepath: str):
         """Load model from disk"""
-        self.model = joblib.load(filepath)
+        self.model = joblib.load(filepath)  # nosec B301 - filepath set by caller from saved_models
 
         logger.info(f"Random Forest model loaded: {filepath}")
 

@@ -707,7 +707,7 @@ async def init_prop_enforcer(s: Any) -> Any:
         ks = getattr(s, "kill_switch", None)
         if ks is not None:
 
-            def kill_fn(reason: str) -> None:
+            def kill_fn(reason: str) -> None:  # pylint: disable=function-redefined
                 ks.activate(reason)
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)

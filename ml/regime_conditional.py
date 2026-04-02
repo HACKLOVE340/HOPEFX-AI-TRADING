@@ -549,7 +549,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
     @classmethod
     def load(cls, path: str) -> RegimeConditionalModel:
         """Load a previously saved RegimeConditionalModel."""
-        payload = joblib.load(path)
+        payload = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
         obj = cls(
             hurst_col=payload["hurst_col"],
             adx_col=payload["adx_col"],

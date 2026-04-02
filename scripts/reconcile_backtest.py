@@ -194,8 +194,8 @@ def load_model():
             f"Model not found: {pkl}\nRun: python scripts/retrain_model.py --advanced --years 50 --oos-years 5"
         )
 
-    model = joblib.load(str(pkl))
-    scaler = joblib.load(str(scaler_path)) if scaler_path.exists() else None
+    model = joblib.load(str(pkl))  # nosec B301 - pkl is hardcoded to ml/saved_models
+    scaler = joblib.load(str(scaler_path)) if scaler_path.exists() else None  # nosec B301 - hardcoded path
     logger.info("Loaded model from %s", pkl)
     return model, scaler
 

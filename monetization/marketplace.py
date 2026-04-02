@@ -931,6 +931,16 @@ class _Review:
     title: str
     content: str
 
+    def to_dict(self) -> dict:
+        return {
+            "review_id": self.review_id,
+            "user_id": self.user_id,
+            "strategy_id": self.strategy_id,
+            "rating": self.rating,
+            "title": self.title,
+            "content": self.content,
+        }
+
 
 class StrategyMarketplace:
     """In-memory strategy marketplace — full API used by tests."""
@@ -1121,6 +1131,15 @@ class StrategyMarketplace:
         )
         self._strategies[sid] = s
         return s
+
+    def get_strategy(self, strategy_id: str) -> "_StrategyListing | None":
+        """Return a strategy listing by ID, or None if not found."""
+        return self._strategies.get(strategy_id)
+
+    def get_strategy_reviews(self, strategy_id: str, limit: int = 10) -> list:
+        """Return reviews for a strategy, newest first, up to limit."""
+        reviews = [r for r in self._reviews.values() if r.strategy_id == strategy_id]
+        return reviews[:limit]
 
     def get_all_listings(self) -> dict:
         """Return all strategy IDs mapped to their listing objects."""

@@ -433,7 +433,7 @@ class PreTradeGate:
 
         def _rf(attr: str) -> float:
             val = getattr(rm, attr, None)
-            if isinstance(val, (int, float)):
+            if isinstance(val, int | float):
                 return float(val)
             return 0.0
 
@@ -511,7 +511,7 @@ class PreTradeGate:
             val = getattr(rm, attr, None)
             if val is None:
                 return 0.0
-            if isinstance(val, (int, float)):
+            if isinstance(val, int | float):
                 return float(val)
             return 0.0
 

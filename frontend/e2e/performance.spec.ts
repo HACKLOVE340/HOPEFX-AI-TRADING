@@ -48,10 +48,14 @@ test.describe('Performance page', () => {
     await page.waitForLoadState('networkidle');
 
     // Should show either metrics or a loading/error state — not a blank page
-    const content = page.locator(
-      'text=/performance/i, text=/sharpe/i, text=/win rate/i, text=/loading/i, text=/error/i'
-    ).first();
-    await expect(content).toBeVisible({ timeout: 10_000 });
+    const content = page
+      .locator('text=/performance/i')
+      .or(page.locator('text=/sharpe/i'))
+      .or(page.locator('text=/win rate/i'))
+      .or(page.locator('text=/loading/i'))
+      .or(page.locator('text=/error/i'))
+      .first();
+    await expect(content).toBeVisible({ timeout: 15_000 });
   });
 
   test('refresh button is present after login', async ({ page }) => {

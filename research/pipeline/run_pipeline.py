@@ -78,7 +78,7 @@ def _parse_args() -> argparse.Namespace:
         description="HOPEFX Deep Prediction Pipeline",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--ticker", default="AAPL", help="Yahoo Finance ticker")
+    p.add_argument("--ticker", default="GC=F", help="Yahoo Finance ticker (default: GC=F Gold futures)")
     p.add_argument("--interval", default="1d", help="Bar interval: 1d | 5m | 15m | 1h")
     p.add_argument("--start", default="2000-01-01", help="Start date (daily only)")
     p.add_argument("--lookback", type=int, default=730, help="Lookback days (intraday)")

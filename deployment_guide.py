@@ -135,7 +135,7 @@ def check_ml_model() -> None:
         try:
             import joblib
 
-            model = joblib.load(model_path)
+            model = joblib.load(model_path)  # nosec B301 - model_path is hardcoded to ml/saved_models
         except Exception:
             import pickle  # nosec B403
 
@@ -289,7 +289,10 @@ def check_port_availability() -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            sock.bind(("0.0.0.0", port))  # nosec B104 - port availability check only, socket closed immediately
+            # Bind to loopback only — sufficient to detect port conflicts since
+            # a port in use on 127.0.0.1 is unavailable system-wide.
+            # The socket is closed immediately in the finally block.
+            sock.bind(("127.0.0.1", port))
             _good(f"Port {port} ({label}) is free")
         except OSError:
             _err(

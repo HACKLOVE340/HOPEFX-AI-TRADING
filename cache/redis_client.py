@@ -1,6 +1,7 @@
 # HOPEFX-AI-TRADING
 # Copyright (c) 2025-2026
 # AGPL-3.0 — Share all modifications
+# pylint: disable=broad-exception-caught,global-statement
 """
 cache/redis_client.py
 =====================
@@ -72,7 +73,7 @@ async def _try_cluster(
     hosts_str: str,
     password: str | None,
     decode_responses: bool,
-    db: int,
+    db: int,  # pylint: disable=unused-argument  # cluster mode ignores db
 ) -> Any | None:
     """Attempt Redis Cluster connection. Returns client or None."""
     try:

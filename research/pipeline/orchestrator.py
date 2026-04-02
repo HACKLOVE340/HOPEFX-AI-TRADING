@@ -77,7 +77,7 @@ ARTEFACT_DIR.mkdir(parents=True, exist_ok=True)
 
 @dataclass
 class PipelineConfig:
-    ticker: str = "AAPL"
+    ticker: str = "GC=F"  # Gold futures (Yahoo Finance) — primary HOPEFX instrument
     interval: str = "1d"  # '1d', '5m', '15m', '1h'
     start_date: str = "2000-01-01"
     lookback_days: int = 730  # for intraday
@@ -234,7 +234,7 @@ class PipelineOrchestrator:
 
     Usage
     -----
-        cfg = PipelineConfig(ticker="AAPL", interval="1d", start_date="2000-01-01")
+        cfg = PipelineConfig(ticker="GC=F", interval="1d", start_date="2000-01-01")
         orch = PipelineOrchestrator(cfg)
         report = orch.run()
         logger.info("Pipeline report: %s", report)

@@ -411,7 +411,7 @@ def _compute_atr_sl_tp(
 
     # ── 1. Signal engine data buffer ─────────────────────────────────────────
     try:
-        from core.signal_engine import _data_buffers  # type: ignore[attr-defined]
+        from core.signal_engine import _data_buffers  # type: ignore[attr-defined]  # pylint: disable=no-name-in-module
 
         broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
         buf = _data_buffers.get(broker_sym) or _data_buffers.get(symbol)

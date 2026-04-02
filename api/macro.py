@@ -191,7 +191,7 @@ async def macro_refresh():
         logger.warning("macro refresh failed (FRED unavailable): %s", exc)
         return {
             "status": "unavailable",
-            "error": str(exc),
+            "error": "FRED fetch failed — check server logs for details",
             "note": "FRED fetch failed. Set FRED_API_KEY in .env for live data.",
         }
 
@@ -225,7 +225,7 @@ async def macro_features():
         logger.warning("macro features failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Macro features unavailable: {exc}",
+            detail="Macro features unavailable — check server logs",
         ) from exc
 
 
@@ -388,7 +388,7 @@ async def wgc_refresh():
         logger.warning("WGC refresh failed: %s", exc)
         return {
             "status": "error",
-            "error": str(exc),
+            "error": "WGC fetch failed — check server logs for details",
             "note": (
                 "WGC fetch failed. Check WGC_CACHE_DIR or place CSV files manually. "
                 "See data_layer/feeds/macro/wgc.py for download instructions."

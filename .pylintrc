@@ -1,0 +1,38 @@
+[MAIN]
+# Add the project root to sys.path so deferred imports resolve correctly.
+init-hook='import sys; sys.path.insert(0, ".")'
+
+# Use multiple processes for speed.
+jobs=0
+
+[MESSAGES CONTROL]
+# Disable categories/checks that are either false positives in this codebase
+# or intentionally suppressed project-wide.
+disable=
+    # Import errors for internal modules resolved at runtime (not at lint time).
+    import-error,
+    # Dynamic attribute access on SQLAlchemy / ORM objects.
+    no-member,
+    # Codacy/Pylint style checks not enforced here.
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-instance-attributes,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    too-many-return-statements,
+    too-many-public-methods,
+    fixme,
+    line-too-long,
+    invalid-name,
+    duplicate-code
+
+[FORMAT]
+max-line-length=120
+
+[DESIGN]
+max-args=10
+max-attributes=15

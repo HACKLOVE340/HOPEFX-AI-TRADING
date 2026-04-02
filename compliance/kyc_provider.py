@@ -112,22 +112,18 @@ class KYCProvider(ABC):
     @abstractmethod
     async def create_applicant(self, user_id: str, metadata: dict[str, Any]) -> KYCApplicant:
         """Create a new applicant and return SDK token for frontend."""
-        ...
 
     @abstractmethod
     async def get_status(self, applicant_id: str) -> VerificationStatus:
         """Poll provider for current verification status."""
-        ...
 
     @abstractmethod
     def verify_webhook(self, payload: bytes, signature: str) -> bool:
         """Verify webhook signature from provider."""
-        ...
 
     @abstractmethod
     def parse_webhook(self, payload: dict[str, Any]) -> tuple[str, VerificationStatus]:
         """Parse webhook payload → (applicant_id, new_status)."""
-        ...
 
 
 # ── Sumsub provider ───────────────────────────────────────────────────────────
@@ -444,7 +440,9 @@ class RefinitivScreener:
     def _auth_header(self, method: str, path: str, body: str = "") -> dict[str, str]:
         ts = str(int(time.time() * 1000))
         msg = f"{self._api_key}{ts}{method.upper()}{path}{body}"
-        sig = hmac.new(self._api_secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
+        # HMAC-SHA256 as required by the Refinitiv World-Check REST API spec.
+        # Uses hmac.digest() (Python 3.7+) for a single-call, constant-time MAC.
+        sig = hmac.digest(self._api_secret.encode(), msg.encode(), "sha256").hex()
         return {
             "Authorization": f"Refinitiv-HMAC-SHA256 Id={self._api_key},Timestamp={ts},Signature={sig}",
             "Content-Type": "application/json",
@@ -537,7 +535,7 @@ class RefinitivScreener:
                 details=best.get("name", ""),
                 provider="refinitiv",
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.error("Refinitiv screen error: %s", exc)
             return SanctionsResult(
                 screened=False,
@@ -582,17 +580,15 @@ class LocalSDNScreener:
                     self._names = [n.upper().strip() for n in self._names]
                     self._loaded = True
                     logger.info("LocalSDN: loaded %d name entries", len(self._names))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.warning("LocalSDN: failed to load SDN list: %s", exc)
 
     async def screen(self, full_name: str, **_kwargs: Any) -> SanctionsResult:
-        import os as _os
-
         # In CI/test environments skip the live SDN download entirely.
         # Return safe default (screened=False, is_match=False) so tests that
         # verify the "not loaded" path pass without network access.
-        _env = _os.getenv("ENVIRONMENT", "").lower()
-        _ci = _os.getenv("HOPEFX_CI") or _env in ("testing", "test", "ci")
+        _env = os.getenv("ENVIRONMENT", "").lower()
+        _ci = os.getenv("HOPEFX_CI") or _env in ("testing", "test", "ci")
 
         if not self._loaded:
             if _ci:
@@ -771,7 +767,7 @@ class KYCGateway:
             logger.warning("KYCGateway: invalid webhook signature — rejected")
             return False
 
-        applicant_id, status = self._provider.parse_webhook(raw_payload)
+        applicant_id, _status = self._provider.parse_webhook(raw_payload)
         if applicant_id:
             await self.check_status(applicant_id)
         return True
@@ -804,7 +800,7 @@ class KYCGateway:
 
     def _audit(self, action: str, user_id: str, data: dict[str, Any]) -> None:
         if self._compliance and hasattr(self._compliance, "_log_audit"):
-            self._compliance._log_audit("KYC", user_id, action, data)
+            getattr(self._compliance, "_log_audit")("KYC", user_id, action, data)
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────
@@ -814,7 +810,7 @@ _kyc_gateway: KYCGateway | None = None
 
 def get_kyc_gateway() -> KYCGateway:
     """Return the module-level KYCGateway singleton."""
-    global _kyc_gateway
+    global _kyc_gateway  # pylint: disable=global-statement
     if _kyc_gateway is None:
         _kyc_gateway = KYCGateway()
     return _kyc_gateway
@@ -822,7 +818,7 @@ def get_kyc_gateway() -> KYCGateway:
 
 def init_kyc_gateway(compliance_manager: Any) -> KYCGateway:
     """Wire the KYCGateway with a ComplianceManager. Call once at startup."""
-    global _kyc_gateway
+    global _kyc_gateway  # pylint: disable=global-statement
     _kyc_gateway = KYCGateway(compliance_manager=compliance_manager)
     logger.info("KYCGateway initialised (provider=%s)", KYC_PROVIDER)
     return _kyc_gateway

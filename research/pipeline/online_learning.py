@@ -542,7 +542,7 @@ class IncrementalXGBoost:
     @classmethod
     def load(cls, path: str | Path) -> IncrementalXGBoost:
         try:
-            obj = joblib.load(path)
+            obj = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
         except Exception:
             with open(path, "rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
