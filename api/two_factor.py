@@ -114,7 +114,10 @@ def _totp(secret_b32: str, t: int | None = None) -> str:
         t = int(time.time()) // 30
     key = base64.b32decode(secret_b32 + "=" * (-len(secret_b32) % 8))
     msg = struct.pack(">Q", t)
-    h = hmac.new(key, msg, hashlib.sha1).digest()
+    # nosec B324 — SHA-1 is mandated by RFC 6238 (TOTP) and RFC 4226 (HOTP).
+    # All TOTP authenticator apps (Google Authenticator, Authy, etc.) require
+    # HMAC-SHA1 for interoperability.  This is not a password hash.
+    h = hmac.new(key, msg, hashlib.sha1).digest()  # nosec B324
     offset = h[-1] & 0x0F
     code = struct.unpack(">I", h[offset : offset + 4])[0] & 0x7FFFFFFF
     return str(code % 1_000_000).zfill(6)
