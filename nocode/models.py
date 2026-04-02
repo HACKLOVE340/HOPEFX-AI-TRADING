@@ -139,8 +139,8 @@ class ConditionGroup:
 
         if self.logic == LogicOperator.AND:
             return all(results)
-        else:  # OR
-            return any(results)
+        # OR
+        return any(results)
 
 
 @dataclass

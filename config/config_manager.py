@@ -162,7 +162,7 @@ class TradingConfig:
     def validate(self) -> bool:
         if self.max_position_size <= 0:
             return False
-        if self.max_leverage <= 0 or self.max_leverage > 100:  # noqa: PLR2004
+        if self.max_leverage <= 0 or self.max_leverage > 100:
             return False
         return self.risk_per_trade > 0
 

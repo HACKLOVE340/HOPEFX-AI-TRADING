@@ -570,7 +570,7 @@ class MTFFusionStore:
                 "bootstrap_error": self._bootstrap_error,
             }
 
-    def get(self, symbol: str, default: dict | None = None) -> dict:  # noqa: ARG002
+    def get(self, symbol: str, default: dict | None = None) -> dict:
         """Return the latest fused regime features, or *default* if unavailable.
 
         The *symbol* parameter is accepted for API compatibility but the store

@@ -190,7 +190,7 @@ class AsyncExecutionEngine:
                 latency = (time.time() - start_time) * 1000  # ms
                 self.latency_stats["submit"].append(latency)
 
-                if latency > 100:  # noqa: PLR2004
+                if latency > 100:
                     logger.warning(f"High submission latency: {latency:.1f}ms")
 
             except TimeoutError:
@@ -342,7 +342,7 @@ class AsyncExecutionEngine:
         payload = self._format_order(order, broker)
 
         async with self.rate_limiters[venue], session.post(f"{broker['url']}/orders", json=payload) as resp:
-            if resp.status == 200:  # noqa: PLR2004
+            if resp.status == 200:
                 data = await resp.json()
                 order.status = OrderStatus.SUBMITTED
                 order.metadata["broker_id"] = data.get("id")
@@ -390,7 +390,7 @@ class AsyncExecutionEngine:
                 fill_price = order.price
             else:
                 # Limit not hit - simulate partial fill probability
-                if self._rng.random() < 0.3:  # 30% chance of no fill  # noqa: PLR2004
+                if self._rng.random() < 0.3:  # 30% chance of no fill
                     order.status = OrderStatus.SUBMITTED
                     asyncio.create_task(self._delayed_fill_simulation(order))
                     return
@@ -400,7 +400,7 @@ class AsyncExecutionEngine:
         remaining = order.quantity
         fills = []
 
-        while remaining > 0 and len(fills) < 5:  # Max 5 partial fills  # noqa: PLR2004
+        while remaining > 0 and len(fills) < 5:  # Max 5 partial fills
             fill_qty = min(remaining, self._rng.uniform(0.1, 0.5) * order.quantity)
             fill_qty = min(fill_qty, remaining)
 
@@ -447,7 +447,7 @@ class AsyncExecutionEngine:
             order.side == "sell" and current >= order.price
         )
 
-        if would_fill or self._rng.random() < 0.1:  # 10% chance of fill anyway  # noqa: PLR2004
+        if would_fill or self._rng.random() < 0.1:  # 10% chance of fill anyway
             fill = Fill(
                 order_id=order.id,
                 symbol=order.symbol,
@@ -581,7 +581,7 @@ class AsyncExecutionEngine:
                         try:
                             params = {"instruments": ",".join(symbols)}
                             async with session.get(price_url, params=params) as resp:
-                                if resp.status == 200:  # noqa: PLR2004
+                                if resp.status == 200:
                                     data = await resp.json()
                                     # Normalise: support both OANDA-style and generic dicts
                                     prices_list = data.get("prices") or data.get("ticks") or []
@@ -619,7 +619,7 @@ class AsyncExecutionEngine:
             # Enforce minimum interval between requests
             last = self.last_request_time.get(venue, 0)
             elapsed = time.time() - last
-            if elapsed < 0.1:  # Max 10 req/sec  # noqa: PLR2004
+            if elapsed < 0.1:  # Max 10 req/sec
                 await asyncio.sleep(0.1 - elapsed)
 
             self.last_request_time[venue] = time.time()
@@ -628,9 +628,9 @@ class AsyncExecutionEngine:
             _broker = self.brokers[venue]
             if method == "get_positions":
                 return []  # Implement actual API call
-            elif method == "cancel":
+            if method == "cancel":
                 return True
-            elif method == "get_fills":
+            if method == "get_fills":
                 return []
 
             return None
@@ -669,7 +669,7 @@ class AsyncExecutionEngine:
         # Position limit check
         current = self.position_cache.get(order.symbol, {}).get("quantity", 0)
         if (
-            abs(current + (order.quantity if order.side == "buy" else -order.quantity)) > 100  # noqa: PLR2004
+            abs(current + (order.quantity if order.side == "buy" else -order.quantity)) > 100
         ):
             return False, "position_limit_exceeded"
 
@@ -679,7 +679,7 @@ class AsyncExecutionEngine:
 
         if market:
             mid = market["mid"]
-            if order.price and abs(order.price - mid) / mid > 0.05:  # noqa: PLR2004
+            if order.price and abs(order.price - mid) / mid > 0.05:
                 return False, "price_deviation_too_large"
 
         return True, ""

@@ -544,7 +544,7 @@ class TestTCAEngine:
         from execution.tca import BenchmarkType, Side
 
         fired = []
-        self.engine.register_cost_callback(lambda m: fired.append(m))
+        self.engine.register_cost_callback(fired.append)
         await self.engine.start_order(
             "ord5",
             "XAU_USD",

@@ -205,7 +205,7 @@ def _compute_fold_sharpe(
     signal = np.where(preds == 1, 1.0, -1.0)
     strategy_returns = signal * bar_returns
 
-    if len(strategy_returns) < 2:  # noqa: PLR2004
+    if len(strategy_returns) < 2:
         return 0.0
 
     mu = np.mean(strategy_returns)
@@ -321,7 +321,7 @@ def walk_forward_eval(
         "mean_sharpe": round(float(np.mean(sharpes)), 4),
         "t_stat": round(float(t_stat), 4),
         "p_value": round(float(p_value), 4),
-        "significant": bool(p_value < 0.05),  # noqa: PLR2004
+        "significant": bool(p_value < 0.05),
     }
 
 
@@ -501,7 +501,7 @@ def oos_eval(
         n,
         k,
         p_value,
-        p_value < 0.05,  # noqa: PLR2004
+        p_value < 0.05,
     )
     logger.info("\n%s", classification_report(y_oos, preds))
 
@@ -528,7 +528,7 @@ def oos_eval(
         "f1": round(f1, 4),
         "auc": round(auc, 4),
         "p_value_binomial": round(p_value, 4),
-        "significant": bool(p_value < 0.05),  # noqa: PLR2004
+        "significant": bool(p_value < 0.05),
         "oos_period": f"{oos_start} → {oos_end}",
         "test": "one-sided binomial (H0: accuracy <= 0.5)",
         "top_features": top10,
@@ -614,7 +614,7 @@ def main():
     if args.oos_years > 0:
         oos_n = int(round(args.oos_years * 252))  # ~252 trading days/year
         oos_n = min(oos_n, len(X) // 4)  # cap at 25% of data
-        if oos_n < 100:  # noqa: PLR2004
+        if oos_n < 100:
             # < 100 bars gives accuracy SE > ±0.05 — not meaningful for production.
             logger.warning(
                 "--oos-years %.1f produces only %d bars (need >= 100 for SE <= ±0.05). "

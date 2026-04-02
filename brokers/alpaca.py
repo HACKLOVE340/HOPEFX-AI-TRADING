@@ -348,15 +348,14 @@ class AlpacaConnector(BrokerConnector):
 
                 logger.warning(f"No position found for {symbol}")
                 return False
-            else:
-                # Close entire position
-                response = self.session.delete(
-                    f"{self.base_url}/v2/positions/{symbol.upper()}",
-                )
-                response.raise_for_status()
+            # Close entire position
+            response = self.session.delete(
+                f"{self.base_url}/v2/positions/{symbol.upper()}",
+            )
+            response.raise_for_status()
 
-                logger.info(f"Position closed: {symbol}")
-                return True
+            logger.info(f"Position closed: {symbol}")
+            return True
 
         except Exception as e:
             logger.error(f"Failed to close position {symbol}: {e}")

@@ -148,9 +148,8 @@ def cmd_config(args):
             if config.validate():
                 logger.info("✓ Configuration is valid")
                 return 0
-            else:
-                logger.error("✗ Configuration validation failed")
-                return 1
+            logger.error("✗ Configuration validation failed")
+            return 1
         except Exception as e:
             logger.error(f"Validation failed: {e}")
             return 1

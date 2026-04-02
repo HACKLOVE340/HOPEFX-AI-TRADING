@@ -120,7 +120,7 @@ def check_types() -> ValidationResult:
         )
         assert tick.is_valid(), "GoldTick.is_valid() returned False"  # nosec B101
         # spread auto-computed via __post_init__
-        assert abs(tick.spread - 0.5) < 1e-6, f"Expected spread=0.5, got {tick.spread}"  # nosec B101  # noqa: PLR2004
+        assert abs(tick.spread - 0.5) < 1e-6, f"Expected spread=0.5, got {tick.spread}"  # nosec B101
         # MicrostructureSnapshot.mid property
         snap = MicrostructureSnapshot(
             symbol="XAU_USD",
@@ -136,7 +136,7 @@ def check_types() -> ValidationResult:
             order_flow_imbalance=0.0,
             trade_pressure=0.0,
         )
-        assert abs(snap.mid - 1980.5) < 1e-6, f"Expected mid=1980.5, got {snap.mid}"  # nosec B101  # noqa: PLR2004
+        assert abs(snap.mid - 1980.5) < 1e-6, f"Expected mid=1980.5, got {snap.mid}"  # nosec B101
         return ValidationResult("Types module", True, "GoldTick/MicrostructureSnapshot/MacroEvent")
     except Exception as exc:
         return ValidationResult("Types module", False, str(exc))
@@ -231,7 +231,7 @@ def check_microstructure() -> ValidationResult:
 
         features = engine.get_ml_features()
         # 17 features: 16 original + micro_tick_count added for dl_tick_count wiring
-        assert len(features) >= 17, f"Expected >= 17 features, got {len(features)}"  # nosec B101  # noqa: PLR2004
+        assert len(features) >= 17, f"Expected >= 17 features, got {len(features)}"  # nosec B101
         assert "micro_ofi" in features  # nosec B101
         assert "micro_cumulative_delta" in features  # nosec B101
         assert (  # nosec B101
@@ -474,7 +474,7 @@ def check_macro_calendar() -> ValidationResult:
         assert "macro_impact_score_now" in features  # nosec B101
         assert "macro_hours_to_next_high" in features  # nosec B101
         assert "macro_is_blackout" in features  # nosec B101
-        assert len(features) == 6  # nosec B101  # noqa: PLR2004
+        assert len(features) == 6  # nosec B101
         return ValidationResult("MacroCalendarEngine", True, f"{len(features)} ML features")
     except Exception as exc:
         return ValidationResult("MacroCalendarEngine", False, str(exc))
@@ -504,7 +504,7 @@ def check_api_router() -> ValidationResult:
         from api.data_layer import router
 
         routes = [r.path for r in router.routes]
-        assert len(routes) >= 8  # nosec B101  # noqa: PLR2004
+        assert len(routes) >= 8  # nosec B101
         return ValidationResult("API router", True, f"{len(routes)} endpoints registered")
     except Exception as exc:
         return ValidationResult("API router", False, str(exc))
@@ -648,7 +648,7 @@ def check_redis_auto_connect() -> ValidationResult:
         # Round-trip test
         store.set_tick("XAU_USD_TEST", {"mid": 2000.0, "epoch": time.time()})
         result = store.get_tick("XAU_USD_TEST")
-        assert result is not None and result["mid"] == 2000.0  # nosec B101  # noqa: PLR2004
+        assert result is not None and result["mid"] == 2000.0  # nosec B101
 
         return ValidationResult("Redis auto-connect", True, "singleton auto-connects on init")
     except Exception as exc:
@@ -754,7 +754,7 @@ def check_normalization_batch() -> ValidationResult:
             for i in range(10)
         ]
         batch = normalization_pipeline.normalize_ticks_batch(ticks)
-        assert len(batch) == 10, f"Expected 10 ticks, got {len(batch)}"  # nosec B101  # noqa: PLR2004
+        assert len(batch) == 10, f"Expected 10 ticks, got {len(batch)}"  # nosec B101
 
         df = normalization_pipeline.tick_to_ohlcv(ticks, timeframe_minutes=60)
         assert not df.empty, "tick_to_ohlcv returned empty DataFrame"  # nosec B101
@@ -985,7 +985,7 @@ def check_data_layer_features_injection() -> ValidationResult:
 
         result = add_data_layer_features(df)
         dl_cols = [c for c in result.columns if c.startswith("dl_")]
-        assert len(dl_cols) >= 26, f"Expected >= 26 dl_* columns, got {len(dl_cols)}"  # nosec B101  # noqa: PLR2004
+        assert len(dl_cols) >= 26, f"Expected >= 26 dl_* columns, got {len(dl_cols)}"  # nosec B101
 
         nan_count = result[dl_cols].isna().sum().sum()
         assert nan_count == 0, f"{nan_count} NaN values in dl_* columns"  # nosec B101
@@ -1085,7 +1085,7 @@ def check_orchestrator_subscribe_ticks() -> ValidationResult:
         from data_layer.orchestrator import orchestrator
 
         received = []
-        orchestrator.subscribe_ticks("_test_sub", lambda t: received.append(t))
+        orchestrator.subscribe_ticks("_test_sub", received.append)
         assert "_test_sub" in orchestrator._tick_callbacks, "subscriber not registered"  # nosec B101
         orchestrator.unsubscribe_ticks("_test_sub")
         assert "_test_sub" not in orchestrator._tick_callbacks, "subscriber not removed"  # nosec B101

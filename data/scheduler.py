@@ -203,14 +203,14 @@ async def _fetch_oanda(
             aiohttp.ClientSession() as session,
             session.get(url, headers=headers, params=params, timeout=timeout) as resp,
         ):
-            if resp.status == 401:  # noqa: PLR2004
+            if resp.status == 401:
                 logger.error("OANDA auth failed (401) — check OANDA_API_KEY")
                 return []
-            if resp.status == 400:  # noqa: PLR2004
+            if resp.status == 400:
                 text = await resp.text()
                 logger.error("OANDA bad request (400): %s", text[:300])
                 return []
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 text = await resp.text()
                 logger.error("OANDA fetch failed status=%d: %s", resp.status, text[:200])
                 return []

@@ -197,7 +197,7 @@ class OANDAStream:
 
         Live price streaming is handled by data_feed.NuclearStreamer.
         """
-        raise StreamingForbiddenError()
+        raise StreamingForbiddenError
 
     # ── Account ───────────────────────────────────────────────────────────────
 

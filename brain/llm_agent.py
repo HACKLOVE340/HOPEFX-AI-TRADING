@@ -310,7 +310,7 @@ def _run_backtest(
         logger.error("Backtest dependency missing: %s", exc)
         return BacktestResult(0, 0, 0, 0, 0, error="Missing dependency — check server logs")
 
-    if len(candles) < 60:  # noqa: PLR2004
+    if len(candles) < 60:
         return BacktestResult(0, 0, 0, 0, 0, error="Not enough candle data")
 
     balance = initial_balance

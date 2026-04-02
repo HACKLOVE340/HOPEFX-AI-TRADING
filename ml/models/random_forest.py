@@ -254,8 +254,7 @@ class RandomForestTradingClassifier(BaseMLModel):
 
         if self.feature_names:
             return dict(zip(self.feature_names, importances, strict=False))
-        else:
-            return dict(enumerate(importances))
+        return dict(enumerate(importances))
 
     def get_top_features(self, n: int = 10) -> list[tuple]:
         """

@@ -222,19 +222,18 @@ class WalletManager:
                 "wallet_type": "subscription",
                 "currency": wallet.currency,
             }
-        elif wallet_type == WalletType.COMMISSION:
+        if wallet_type == WalletType.COMMISSION:
             return {
                 "balance": float(wallet.commission_balance),
                 "wallet_type": "commission",
                 "currency": wallet.currency,
             }
-        else:
-            return {
-                "subscription_balance": float(wallet.subscription_balance),
-                "commission_balance": float(wallet.commission_balance),
-                "total_balance": float(wallet.subscription_balance + wallet.commission_balance),
-                "currency": wallet.currency,
-            }
+        return {
+            "subscription_balance": float(wallet.subscription_balance),
+            "commission_balance": float(wallet.commission_balance),
+            "total_balance": float(wallet.subscription_balance + wallet.commission_balance),
+            "currency": wallet.currency,
+        }
 
     def credit_wallet(
         self,

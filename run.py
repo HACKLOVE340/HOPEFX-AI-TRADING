@@ -266,9 +266,9 @@ def _get_pipeline(mode: str) -> list[str]:
             "Gatekeeper (prop-firm risk checks)",
             "FIXRouter (order execution + OANDA REST fallback)",
         ]
-    elif mode == "api":
+    if mode == "api":
         return ["FastAPI server (uvicorn)", "WebSocket live broadcaster"]
-    elif mode == "backtest":
+    if mode == "backtest":
         return ["BacktestEngine (historical OHLCV)"]
     return []
 

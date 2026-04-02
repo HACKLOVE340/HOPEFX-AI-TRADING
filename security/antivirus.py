@@ -47,14 +47,12 @@ Start from connect_to_life.py::
 from __future__ import annotations
 
 import asyncio
-import base64
 import hashlib
 import json
 import logging
 import math
 import os
 import re
-import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -337,7 +335,7 @@ rule SuspiciousImport {
             return
         # Try Unix socket first, then TCP
         for attempt in [
-            lambda: clamd.ClamdUnixSocket(),
+            clamd.ClamdUnixSocket,
             lambda: clamd.ClamdNetworkSocket(host="127.0.0.1", port=3310),
         ]:
             try:

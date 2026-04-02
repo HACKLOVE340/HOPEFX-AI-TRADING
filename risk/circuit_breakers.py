@@ -262,10 +262,9 @@ class CircuitBreaker:
                 if not remaining:
                     logger.info("✅ All positions closed successfully")
                     break
-                else:
-                    logger.warning(
-                        f"⚠️ {len(remaining)} positions still open, retrying...",
-                    )
+                logger.warning(
+                    f"⚠️ {len(remaining)} positions still open, retrying...",
+                )
 
             except Exception as e:
                 logger.error(f"Kill switch attempt {attempt + 1} failed: {e}")

@@ -56,7 +56,7 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -79,17 +79,17 @@ class RebalanceResult:
     """Output of a single rebalance run."""
 
     method: str
-    weights: Dict[str, float]  # strategy_id -> target weight
-    trades: Dict[str, float]  # strategy_id -> weight delta (+ = increase)
+    weights: dict[str, float]  # strategy_id -> target weight
+    trades: dict[str, float]  # strategy_id -> weight delta (+ = increase)
     expected_return: float  # annualised
     expected_vol: float  # annualised
     expected_sharpe: float
-    correlation_matrix: Dict[str, Dict[str, float]]
-    risk_contributions: Dict[str, float]  # strategy_id -> % of portfolio risk
-    constrained_strategies: List[str]  # strategies that hit a constraint
+    correlation_matrix: dict[str, dict[str, float]]
+    risk_contributions: dict[str, float]  # strategy_id -> % of portfolio risk
+    constrained_strategies: list[str]  # strategies that hit a constraint
     computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "method": self.method,
             "weights": {k: round(v, 4) for k, v in self.weights.items()},
@@ -120,7 +120,7 @@ class CorrelationTracker:
     def __init__(self, ewm_span: int = 60, min_periods: int = 20):
         self.ewm_span = ewm_span
         self.min_periods = min_periods
-        self._returns: Dict[str, pd.Series] = {}
+        self._returns: dict[str, pd.Series] = {}
 
     def update(self, strategy_id: str, returns: pd.Series) -> None:
         """Add or replace the return series for a strategy."""
@@ -135,7 +135,7 @@ class CorrelationTracker:
         """
         strategies = list(self._returns.keys())
         n = len(strategies)
-        if n < 2:  # noqa: PLR2004
+        if n < 2:
             return pd.DataFrame(
                 np.eye(max(n, 1)),
                 index=strategies,
@@ -168,7 +168,7 @@ class CorrelationTracker:
         """Return the EWMA covariance matrix."""
         strategies = list(self._returns.keys())
         n = len(strategies)
-        if n < 2:  # noqa: PLR2004
+        if n < 2:
             return pd.DataFrame(np.eye(max(n, 1)), index=strategies, columns=strategies)
 
         df = pd.DataFrame({sid: self._returns[sid] for sid in strategies})
@@ -219,13 +219,13 @@ class BookOptimiser:
 
     def mean_variance(
         self,
-        strategies: List[str],
+        strategies: list[str],
         expected_returns: np.ndarray,
         cov_matrix: np.ndarray,
-        current_weights: Optional[np.ndarray] = None,
-        drawdowns: Optional[Dict[str, float]] = None,
-        corr_matrix: Optional[np.ndarray] = None,
-    ) -> Tuple[np.ndarray, bool]:
+        current_weights: np.ndarray | None = None,
+        drawdowns: dict[str, float] | None = None,
+        corr_matrix: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, bool]:
         """
         Maximise Sharpe ratio via SLSQP.
 
@@ -316,10 +316,10 @@ class BookOptimiser:
 
     def risk_parity(
         self,
-        strategies: List[str],
+        strategies: list[str],
         cov_matrix: np.ndarray,
-        drawdowns: Optional[Dict[str, float]] = None,
-    ) -> Tuple[np.ndarray, bool]:
+        drawdowns: dict[str, float] | None = None,
+    ) -> tuple[np.ndarray, bool]:
         """
         Equal Risk Contribution (ERC) optimisation via SLSQP.
 
@@ -416,15 +416,15 @@ class RebalanceScheduler:
         self.drift_threshold = drift_threshold
         self.corr_change_threshold = corr_change_threshold
         self.interval_hours = interval_hours
-        self._last_rebalance: Optional[datetime] = None
+        self._last_rebalance: datetime | None = None
         self._last_corr_max: float = 0.0
-        self._target_weights: Dict[str, float] = {}
+        self._target_weights: dict[str, float] = {}
 
     def should_rebalance(
         self,
-        current_weights: Dict[str, float],
+        current_weights: dict[str, float],
         corr_matrix: pd.DataFrame,
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """
         Returns (should_rebalance, reason).
         """
@@ -449,7 +449,7 @@ class RebalanceScheduler:
         # Correlation regime change
         if not corr_matrix.empty:
             n = len(corr_matrix)
-            if n >= 2:  # noqa: PLR2004
+            if n >= 2:
                 vals = corr_matrix.values
                 upper = vals[np.triu_indices(n, k=1)]
                 max_corr = float(np.max(np.abs(upper))) if len(upper) > 0 else 0.0
@@ -461,14 +461,14 @@ class RebalanceScheduler:
 
     def record_rebalance(
         self,
-        weights: Dict[str, float],
+        weights: dict[str, float],
         corr_matrix: pd.DataFrame,
     ) -> None:
         self._last_rebalance = datetime.now(UTC)
         self._target_weights = weights.copy()
         if not corr_matrix.empty:
             n = len(corr_matrix)
-            if n >= 2:  # noqa: PLR2004
+            if n >= 2:
                 vals = corr_matrix.values
                 upper = vals[np.triu_indices(n, k=1)]
                 self._last_corr_max = float(np.max(np.abs(upper))) if len(upper) > 0 else 0.0
@@ -517,9 +517,9 @@ class DynamicRebalancer:
             drift_threshold=drift_threshold,
             interval_hours=interval_hours,
         )
-        self._current_weights: Dict[str, float] = {}
-        self._drawdowns: Dict[str, float] = {}
-        self._last_result: Optional[RebalanceResult] = None
+        self._current_weights: dict[str, float] = {}
+        self._drawdowns: dict[str, float] = {}
+        self._last_result: RebalanceResult | None = None
 
     # ── data ingestion ────────────────────────────────────────────────────────
 
@@ -537,7 +537,7 @@ class DynamicRebalancer:
 
     # ── rebalance ─────────────────────────────────────────────────────────────
 
-    def rebalance(self, force: bool = False) -> Optional[RebalanceResult]:
+    def rebalance(self, force: bool = False) -> RebalanceResult | None:
         """
         Run the optimiser and return a RebalanceResult.
 
@@ -635,7 +635,7 @@ class DynamicRebalancer:
         )
         return result
 
-    async def rebalance_async(self, force: bool = False) -> Optional[RebalanceResult]:
+    async def rebalance_async(self, force: bool = False) -> RebalanceResult | None:
         """Async wrapper — runs the blocking optimiser in a thread pool."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.rebalance, force)
@@ -643,14 +643,14 @@ class DynamicRebalancer:
     # ── status ────────────────────────────────────────────────────────────────
 
     @property
-    def current_weights(self) -> Dict[str, float]:
+    def current_weights(self) -> dict[str, float]:
         return self._current_weights.copy()
 
     @property
-    def last_result(self) -> Optional[RebalanceResult]:
+    def last_result(self) -> RebalanceResult | None:
         return self._last_result
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         return {
             "method": self.method.value,
             "strategies": list(self._tracker._returns.keys()),
@@ -665,7 +665,7 @@ class DynamicRebalancer:
 
 # ── module-level singleton ────────────────────────────────────────────────────
 
-_rebalancer: Optional[DynamicRebalancer] = None
+_rebalancer: DynamicRebalancer | None = None
 
 
 def get_rebalancer(method: str = "risk_parity") -> DynamicRebalancer:

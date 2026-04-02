@@ -50,7 +50,7 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 try:
-    import zmq  # pylint: disable=unused-import
+    import zmq  # noqa: F401
     ZMQ_AVAILABLE = True
 except ImportError:
     ZMQ_AVAILABLE = False
@@ -170,14 +170,13 @@ class MarketTick:
 
         if latency_ms < 1:
             return DataQuality.EXCELLENT
-        elif latency_ms < 10:  # noqa: PLR2004
+        if latency_ms < 10:
             return DataQuality.GOOD
-        elif latency_ms < 100:  # noqa: PLR2004
+        if latency_ms < 100:
             return DataQuality.FAIR
-        elif latency_ms < 1000:  # noqa: PLR2004
+        if latency_ms < 1000:
             return DataQuality.POOR
-        else:
-            return DataQuality.STALE
+        return DataQuality.STALE
 
 
 @dataclass
@@ -244,16 +243,16 @@ class VenueMetrics:
 
     def _update_health(self):
         """Update health score based on recent performance"""
-        if len(self.latency_history) < 10:  # noqa: PLR2004
+        if len(self.latency_history) < 10:
             return
 
         recent_latencies = list(self.latency_history)[-100:]
         p99_latency = np.percentile(recent_latencies, 99)
 
         # Degrade health if latency too high
-        if p99_latency > 100_000_000:  # 100ms  # noqa: PLR2004
+        if p99_latency > 100_000_000:  # 100ms
             self.health_score = max(0, self.health_score - 1)
-        elif p99_latency < 10_000_000:  # 10ms  # noqa: PLR2004
+        elif p99_latency < 10_000_000:  # 10ms
             self.health_score = min(100, self.health_score + 0.5)
 
 
@@ -763,7 +762,7 @@ class ConsensusAggregator:
         ticks = list(self.latest_ticks[symbol].values())
 
         # Need minimum sources
-        if len(ticks) < 2:  # noqa: PLR2004
+        if len(ticks) < 2:
             return ticks[0] if ticks else None
 
         # Check freshness (< 1 second old)
@@ -771,7 +770,7 @@ class ConsensusAggregator:
         fresh_ticks = [
             t
             for t in ticks
-            if (now - (t.timestamp.seconds * 1_000_000_000 + t.timestamp.nanoseconds)) < 1_000_000_000  # noqa: PLR2004
+            if (now - (t.timestamp.seconds * 1_000_000_000 + t.timestamp.nanoseconds)) < 1_000_000_000
         ]
 
         # Check if we have enough fresh data
@@ -807,7 +806,7 @@ class ConsensusAggregator:
         prices = [t.mid for _, t in scored_ticks]
 
         # Detect outliers using IQR
-        if len(prices) >= 3:  # noqa: PLR2004
+        if len(prices) >= 3:
             q1, q3 = np.percentile(prices, [25, 75])
             iqr = q3 - q1
             lower_bound = q1 - 1.5 * iqr

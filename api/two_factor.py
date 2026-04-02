@@ -221,7 +221,7 @@ async def verify_2fa(
         )
 
     # Backup code path (8 hex chars)
-    if len(req.code) == 8 and _verify_backup_code(user.sub, req.code):  # noqa: PLR2004
+    if len(req.code) == 8 and _verify_backup_code(user.sub, req.code):
         logger.info("2FA verified via backup code for user %s", user.sub)
         return VerifyResponse(success=True, message="Verified via backup code.")
 
@@ -256,7 +256,7 @@ async def disable_2fa(
             detail="2FA state inconsistent — no secret found.",
         )
 
-    valid = (len(req.code) == 8 and _verify_backup_code(user.sub, req.code)) or (  # noqa: PLR2004
+    valid = (len(req.code) == 8 and _verify_backup_code(user.sub, req.code)) or (
         _verify_totp(secret, req.code)
     )
 

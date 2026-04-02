@@ -138,14 +138,14 @@ def main():
         # immediately after saving to a password manager.
         # os.open with O_CREAT|O_WRONLY|O_TRUNC and mode=0o600 creates the file
         # with restricted permissions atomically — no world-readable window.
-        import datetime as _dt  # noqa: PLC0415
+        import datetime as _dt
 
         pw_file = ROOT / "admin_password.txt"
         pw_content = (
             f"Admin password (generated {_dt.datetime.now().isoformat()}):\n"
             f"{args.password}\n"
             "Delete this file after saving the password to a password manager.\n"
-        ).encode("utf-8")
+        ).encode()
         fd = os.open(str(pw_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
             os.write(fd, pw_content)

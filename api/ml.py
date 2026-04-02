@@ -142,7 +142,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
 
     symbol_upper = symbol.upper().replace("-", "/").replace("/", "_")
     # Normalise: XAU/USD → XAU_USD, XAUUSD → XAU_USD
-    if "_" not in symbol_upper and len(symbol_upper) == 6:  # noqa: PLR2004
+    if "_" not in symbol_upper and len(symbol_upper) == 6:
         symbol_upper = symbol_upper[:3] + "_" + symbol_upper[3:]
 
     # 1. Live price engine async buffer — skip (sync context here)
@@ -161,7 +161,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
                 df = df.rename(columns={"timestamp": "time"}).set_index("time")
                 df = df[["open", "high", "low", "close", "volume"]].dropna()
                 df = df.tail(lookback)
-                if len(df) >= 20:  # noqa: PLR2004
+                if len(df) >= 20:
                     logger.debug("ML predict: loaded %d bars from %s", len(df), csv_path.name)
                     return df
             except Exception as exc:
@@ -178,7 +178,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
                 df = pd.DataFrame(raw)
                 df["time"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
                 df = df.set_index("time")[["open", "high", "low", "close", "volume"]].dropna()
-                if len(df) >= 20:  # noqa: PLR2004
+                if len(df) >= 20:
                     logger.debug("ML predict: loaded %d bars from paper broker", len(df))
                     return df
     except Exception as exc:
@@ -220,7 +220,7 @@ def _compute_atr_sl_tp(
     atr: float | None = None
 
     try:
-        if ohlcv is not None and len(ohlcv) >= 15:  # noqa: PLR2004
+        if ohlcv is not None and len(ohlcv) >= 15:
             highs = ohlcv["high"].to_numpy(dtype=float)[-15:]
             lows = ohlcv["low"].to_numpy(dtype=float)[-15:]
             closes = ohlcv["close"].to_numpy(dtype=float)[-15:]
@@ -231,7 +231,7 @@ def _compute_atr_sl_tp(
                     _np.abs(lows[1:] - closes[:-1]),
                 ),
             )
-            if len(tr) >= 14:  # noqa: PLR2004
+            if len(tr) >= 14:
                 atr = float(_np.mean(tr[-14:]))
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
@@ -250,7 +250,7 @@ def _compute_atr_sl_tp(
     return sl, tp
 
 
-def _get_macro_df_for_symbol(symbol: str, lookback: int = 200) -> "pd.DataFrame | None":
+def _get_macro_df_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame | None:
     """
     Fetch aligned macro features from MacroStore for the given symbol.
 

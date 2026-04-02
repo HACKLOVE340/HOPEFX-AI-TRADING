@@ -1308,7 +1308,7 @@ def _make_strategy_router():
             # Sharpe from point-to-point returns
             returns = [(values[i] - values[i - 1]) / values[i - 1] for i in range(1, len(values)) if values[i - 1] > 0]
             sharpe = 0.0
-            if len(returns) >= 2:  # noqa: PLR2004
+            if len(returns) >= 2:
                 mean_r = sum(returns) / len(returns)
                 var = sum((r - mean_r) ** 2 for r in returns) / len(returns)
                 std_r = _math.sqrt(var) if var > 0 else 0.0
@@ -1321,7 +1321,7 @@ def _make_strategy_router():
             ts_list = [t for t, _ in equity_history]
             period_days = (
                 max(1, round((ts_list[-1] - ts_list[0]) / 86400))
-                if len(ts_list) >= 2  # noqa: PLR2004
+                if len(ts_list) >= 2
                 else 1
             )
 

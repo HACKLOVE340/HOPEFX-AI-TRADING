@@ -599,10 +599,10 @@ def _predict_basic(
         "low": data["low"],
         "volume": data.get("volume", 0),
         "ret_1": closes.pct_change(1).iloc[-1] if len(closes) > 1 else 0,
-        "ret_5": closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,  # noqa: PLR2004
-        "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,  # noqa: PLR2004
+        "ret_5": closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,
+        "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
         "vol_20": (
-            closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0  # noqa: PLR2004
+            closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0
         ),
     }
     X = pd.DataFrame([feat])
@@ -964,7 +964,7 @@ async def _execute_if_approved(
                 # Build a minimal OHLCV-like object from data dict for regime gate
                 _ohlcv_proxy = None
                 try:
-                    
+
 
                     _prices = data.get("prices", [])
                     _highs = data.get("highs", [])
@@ -1026,7 +1026,7 @@ async def _execute_if_approved(
                     highs = _data.get("highs", [])
                     lows = _data.get("lows", [])
                     closes_list = _data.get("prices", [entry])
-                    if len(highs) >= 14 and len(lows) >= 14:  # noqa: PLR2004
+                    if len(highs) >= 14 and len(lows) >= 14:
                         import numpy as _np
 
                         h = _np.array(highs[-15:], dtype=float)
@@ -1071,7 +1071,7 @@ async def _execute_if_approved(
 
             try:
                 from ml.position_sizer import get_position_sizer
-                
+
 
                 _ohlcv_sz = None
                 _prices_sz = (data or {}).get("prices", [])
@@ -1112,7 +1112,7 @@ async def _execute_if_approved(
                 import numpy as _np2
 
                 _prices = (data or {}).get("prices", [entry])
-                if len(_prices) >= 20:  # noqa: PLR2004
+                if len(_prices) >= 20:
                     _rets = _np2.diff(_np2.log(_np2.array(_prices[-21:], dtype=float)))
                     _vol = float(_np2.std(_rets)) * (252**0.5)
                 else:
@@ -1192,7 +1192,7 @@ async def _execute_if_approved(
         # Online learner feedback — notify Phase-3 store of the confirmed fill.
         # label=1 (trade was approved by risk + ML gates, so it's a positive sample).
         try:
-            
+
 
             _fill_price = order.average_fill_price or signal_payload["entry_price"]
             _features = pd.DataFrame(

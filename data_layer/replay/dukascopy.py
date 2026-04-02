@@ -185,7 +185,7 @@ class DukascopyFetcher:
 
         try:
             async with session.get(url) as resp:
-                if resp.status == 404:  # noqa: PLR2004
+                if resp.status == 404:
                     # No data for this hour (weekend, holiday) — cache empty marker
                     self._save_cache(symbol, hour, b"")
                     return None

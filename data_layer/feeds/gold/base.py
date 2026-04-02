@@ -218,7 +218,7 @@ class GoldFeedBase(ABC):
                 async with session.get(url, params=params, headers=headers) as resp:
                     self._total_calls += 1
 
-                    if resp.status == 429:  # noqa: PLR2004
+                    if resp.status == 429:
                         retry_after = float(resp.headers.get("Retry-After", backoff))
                         wait = min(retry_after + random.uniform(0, 1.0), 120.0)  # nosec B311 - retry jitter, not cryptographic
                         logger.warning(
@@ -236,7 +236,7 @@ class GoldFeedBase(ABC):
                         self._on_error("auth", msg=msg)
                         raise RuntimeError(f"{self.name.value}: {msg}")
 
-                    if resp.status >= 500:  # noqa: PLR2004
+                    if resp.status >= 500:
                         raise aiohttp.ClientResponseError(
                             resp.request_info,
                             resp.history,
@@ -263,7 +263,7 @@ class GoldFeedBase(ABC):
                     exc,
                     wait,
                 )
-                if attempt < 3:  # noqa: PLR2004
+                if attempt < 3:
                     await asyncio.sleep(wait)
                     backoff = min(backoff * 2, 30.0)
                 else:

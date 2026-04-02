@@ -390,7 +390,7 @@ class TestRevenueAnalytics:
 
         metrics = ra.get_growth_metrics()
 
-        assert metrics.mrr >= Decimal("0")
+        assert metrics.mrr >= Decimal(0)
         assert metrics.arr == metrics.mrr * 12
 
     def test_generate_report(self):

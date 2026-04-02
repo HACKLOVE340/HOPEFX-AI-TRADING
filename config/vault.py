@@ -30,7 +30,7 @@ from core.exceptions import AuthenticationError, VaultError
 class SecureVault:
     """Hardware-backed or keyring-backed secure vault."""
 
-    _instance: "SecureVault | None" = None
+    _instance: SecureVault | None = None
     _initialized: bool = False  # declared here so pylint sees it before __new__ sets it
     # passlib uses "argon2" as the scheme name (wraps argon2-cffi which
     # defaults to Argon2id internally).

@@ -76,7 +76,7 @@ def needs_resampling(ohlcv: pd.DataFrame) -> bool:
     if not isinstance(ohlcv.index, pd.DatetimeIndex):
         return False  # can't determine frequency without a DatetimeIndex
 
-    if len(ohlcv) < 2:  # noqa: PLR2004
+    if len(ohlcv) < 2:
         return False
 
     try:

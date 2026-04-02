@@ -69,7 +69,7 @@ class MetricCollector:
             self._values[label_key].append(MetricValue(value=value, timestamp=time.time(), labels=labels or {}))
 
             # Keep only last 1000 values per label set
-            if len(self._values[label_key]) > 1000:  # noqa: PLR2004
+            if len(self._values[label_key]) > 1000:
                 self._values[label_key] = self._values[label_key][-1000:]
 
     def get_values(self, labels: dict[str, str] | None = None) -> list[MetricValue]:

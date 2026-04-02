@@ -178,7 +178,7 @@ def bootstrap(verbose: bool = True) -> None:
             print("  Start the server:  python app.py")
             print("  Login at:          http://localhost:8000/login")
             print("─" * 58 + "\n")
-    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+    except Exception as exc:  # pylint: disable=broad-exception-caught
         if verbose:
             print(f"  ⚠️  Admin seed skipped: {exc}")
 

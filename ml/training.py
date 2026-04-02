@@ -579,17 +579,16 @@ class XGBoostModel:
                 "use_label_encoder": False,
                 # scale_pos_weight is set dynamically in fit() from training labels
             }
-        else:
-            return {
-                "objective": "reg:squarederror",
-                "eval_metric": "rmse",
-                "max_depth": 6,
-                "learning_rate": 0.1,
-                "n_estimators": 300,
-                "subsample": 0.8,
-                "colsample_bytree": 0.8,
-                "random_state": 42,
-            }
+        return {
+            "objective": "reg:squarederror",
+            "eval_metric": "rmse",
+            "max_depth": 6,
+            "learning_rate": 0.1,
+            "n_estimators": 300,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "random_state": 42,
+        }
 
     def build_model(self):
         """Build XGBoost model"""
@@ -635,7 +634,7 @@ class XGBoostModel:
         import xgboost as _xgb_ver
 
         _xgb_major = int(_xgb_ver.__version__.split(".")[0])
-        if _xgb_major < 2 and len(eval_set) > 1:  # noqa: PLR2004
+        if _xgb_major < 2 and len(eval_set) > 1:
             fit_kwargs["early_stopping_rounds"] = early_stopping_rounds
 
         self.model.fit(X_train, y_train, **fit_kwargs)
@@ -746,14 +745,13 @@ class XGBoostModel:
                 "f1": f1,
                 "confusion_matrix": cm.tolist(),
             }
-        else:
-            # Regression metrics
-            mse = mean_squared_error(y_test, predictions)
-            rmse = np.sqrt(mse)
-            mae = mean_absolute_error(y_test, predictions)
-            r2 = r2_score(y_test, predictions)
+        # Regression metrics
+        mse = mean_squared_error(y_test, predictions)
+        rmse = np.sqrt(mse)
+        mae = mean_absolute_error(y_test, predictions)
+        r2 = r2_score(y_test, predictions)
 
-            return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
+        return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
 
 
 class RandomForestModel:
@@ -907,13 +905,12 @@ class RandomForestModel:
                 "f1": f1,
                 "confusion_matrix": cm.tolist(),
             }
-        else:
-            mse = mean_squared_error(y_test, predictions)
-            rmse = np.sqrt(mse)
-            mae = mean_absolute_error(y_test, predictions)
-            r2 = r2_score(y_test, predictions)
+        mse = mean_squared_error(y_test, predictions)
+        rmse = np.sqrt(mse)
+        mae = mean_absolute_error(y_test, predictions)
+        r2 = r2_score(y_test, predictions)
 
-            return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
+        return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2}
 
 
 class EnsembleModel:
@@ -1544,7 +1541,7 @@ def walk_forward_validate(
             prediction_horizon=prediction_horizon,
         )
 
-        if len(X_train) < 10 or len(X_test) < 5:  # noqa: PLR2004
+        if len(X_train) < 10 or len(X_test) < 5:
             continue
 
         X_tr_sc, X_te_sc = fe_fold.scale_features(X_train, X_test)

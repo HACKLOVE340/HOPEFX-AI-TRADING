@@ -89,14 +89,14 @@ class SelfTradePrevention:
         if self.level == "firm":
             return True  # All orders in firm
 
-        elif self.level == "group":
+        if self.level == "group":
             # Would need group ID
             return order1.strategy_id == order2.strategy_id
 
-        elif self.level == "account":
+        if self.level == "account":
             return order1.account_id == order2.account_id
 
-        elif self.level == "strategy":
+        if self.level == "strategy":
             return order1.strategy_id == order2.strategy_id
 
         return False
@@ -115,14 +115,14 @@ class SelfTradePrevention:
                 "allow_new": True,
             }
 
-        elif self.action == SelfTradeAction.CANCEL_NEW:
+        if self.action == SelfTradeAction.CANCEL_NEW:
             return {
                 "action": "reject",
                 "reason": "self_trade_prevention",
                 "message": "Order would self-match with resting order",
             }
 
-        elif self.action == SelfTradeAction.CANCEL_BOTH:
+        if self.action == SelfTradeAction.CANCEL_BOTH:
             return {
                 "action": "cancel_both",
                 "orders_to_cancel": [resting_order.id],
@@ -130,7 +130,7 @@ class SelfTradePrevention:
                 "reason": "self_trade_prevention",
             }
 
-        elif self.action == SelfTradeAction.DECREMENT_SIZE:
+        if self.action == SelfTradeAction.DECREMENT_SIZE:
             min_size = min(new_order.size, resting_order.size)
             return {
                 "action": "decrement",

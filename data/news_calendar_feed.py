@@ -204,7 +204,7 @@ class NewsCalendarFeed:
                     headers={"User-Agent": "HOPEFX-AI-TRADING/1.0"},
                 ) as resp,
             ):
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     logger.warning("NewsCalendarFeed: ForexFactory HTTP %d", resp.status)
                     return []
                 data = await resp.json(content_type=None)

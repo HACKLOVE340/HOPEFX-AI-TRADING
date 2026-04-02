@@ -34,9 +34,9 @@ def generate_signals(data):
 
     # Generate signals based on conditions
     data["Signal"] = 0
-    data.loc[(data["EMA9"] > data["EMA21"]) & (data["RSI14"] < 70), "Signal"] = 1  # Buy  # noqa: PLR2004
+    data.loc[(data["EMA9"] > data["EMA21"]) & (data["RSI14"] < 70), "Signal"] = 1  # Buy
     data.loc[
-        (data["EMA9"] < data["EMA21"]) & (data["RSI14"] > 30), "Signal"  # noqa: PLR2004
+        (data["EMA9"] < data["EMA21"]) & (data["RSI14"] > 30), "Signal"
     ] = -1  # Sell
     return data
 

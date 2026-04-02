@@ -164,8 +164,7 @@ class ComponentRegistry:
                     raise RuntimeError(
                         f"Required component '{name}' failed: {exc}",
                     ) from exc
-                else:
-                    logger.warning("⚠ %-30s %.0f ms — %s", name, comp.elapsed_ms, exc)
+                logger.warning("⚠ %-30s %.0f ms — %s", name, comp.elapsed_ms, exc)
 
         return self._components
 

@@ -115,7 +115,7 @@ def bootstrap(force: bool = False) -> int:
         # Skip if file is fresh (< 24 h) and force=False
         if not force and csv_path.exists():
             age_hours = (datetime.now().timestamp() - csv_path.stat().st_mtime) / 3600
-            if age_hours < 24:  # noqa: PLR2004
+            if age_hours < 24:
                 logger.debug(
                     "MacroBootstrap: %s is %.1f h old — skipping (use force=True to refresh)",
                     csv_path.name,

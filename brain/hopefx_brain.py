@@ -332,7 +332,7 @@ class HOPEFXBrain:
             highs = ohlcv["high"].values.astype(float)
             lows = ohlcv["low"].values.astype(float)
 
-            if len(closes) < 20:  # noqa: PLR2004
+            if len(closes) < 20:
                 return Regime.UNKNOWN
 
             # ── ATR (14-bar) ──────────────────────────────────────────────────
@@ -340,7 +340,7 @@ class HOPEFXBrain:
             tr2 = np.abs(highs[1:] - closes[:-1])
             tr3 = np.abs(lows[1:] - closes[:-1])
             tr = np.maximum(np.maximum(tr1, tr2), tr3)
-            atr = float(np.mean(tr[-14:])) if len(tr) >= 14 else float(np.mean(tr))  # noqa: PLR2004
+            atr = float(np.mean(tr[-14:])) if len(tr) >= 14 else float(np.mean(tr))
 
             current_price = float(closes[-1])
             if current_price <= 0:
@@ -359,9 +359,9 @@ class HOPEFXBrain:
             range_atr_ratio = price_range / atr if atr > 0 else 0
 
             # ── Classification ────────────────────────────────────────────────
-            if volatility_pct > 2.0:  # noqa: PLR2004
+            if volatility_pct > 2.0:
                 regime = Regime.VOLATILE
-            elif abs(norm_slope) > 0.0008 and range_atr_ratio > 3.0:  # noqa: PLR2004
+            elif abs(norm_slope) > 0.0008 and range_atr_ratio > 3.0:
                 regime = Regime.TRENDING_UP if norm_slope > 0 else Regime.TRENDING_DOWN
             else:
                 regime = Regime.RANGING
@@ -422,11 +422,11 @@ class HOPEFXBrain:
             "mtf_alignment": "unknown",
         }
 
-        if d1_ohlcv is not None and len(d1_ohlcv) >= 20:  # noqa: PLR2004
+        if d1_ohlcv is not None and len(d1_ohlcv) >= 20:
             d1_regime = self.detect_regime(d1_ohlcv, symbol=f"{symbol}_D1")
             ctx["d1_regime"] = d1_regime.value
 
-        if h4_ohlcv is not None and len(h4_ohlcv) >= 20:  # noqa: PLR2004
+        if h4_ohlcv is not None and len(h4_ohlcv) >= 20:
             h4_regime = self.detect_regime(h4_ohlcv, symbol=f"{symbol}_H4")
             ctx["h4_regime"] = h4_regime.value
 

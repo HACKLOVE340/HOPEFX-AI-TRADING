@@ -70,7 +70,7 @@ def check_env_vars():
         if not os.getenv(var, "").strip():
             missing.append(var)
     if missing:
-        raise EnvironmentError(f"Missing required env vars: {missing}")
+        raise OSError(f"Missing required env vars: {missing}")
     return "All required env vars present"
 
 
@@ -304,7 +304,7 @@ def check_env_example():
 
 def check_graphql():
     try:
-        from api.graphql_schema import graphql_router  # pylint: disable=unused-import
+        from api.graphql_schema import graphql_router  # noqa: F401
 
         return "GraphQL router importable"
     except ImportError as e:

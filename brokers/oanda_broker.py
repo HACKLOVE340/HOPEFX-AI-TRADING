@@ -104,7 +104,7 @@ class OandaBroker:
 
         try:
             async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}") as resp:
-                if resp.status == 200:  # noqa: PLR2004
+                if resp.status == 200:
                     data = await resp.json()
                     currency = data.get("account", {}).get("currency", "?")
                     balance = data.get("account", {}).get("balance", "?")
@@ -144,7 +144,7 @@ class OandaBroker:
         if not self._assert_connected("get_account_info"):
             return None
         async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/summary") as resp:
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 logger.error("get_account_info failed: %s", resp.status)
                 return None
             data = await resp.json()
@@ -168,7 +168,7 @@ class OandaBroker:
         if not self._assert_connected("get_positions"):
             return []
         async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/openPositions") as resp:
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 return []
             data = await resp.json()
             positions = []
@@ -192,7 +192,7 @@ class OandaBroker:
         if not self._assert_connected("get_orders"):
             return []
         async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}/pendingOrders") as resp:
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 return []
             data = await resp.json()
             return [
@@ -321,7 +321,7 @@ class OandaBroker:
                 json=payload,
             ) as resp:
                 data = await resp.json()
-                if resp.status == 200:  # noqa: PLR2004
+                if resp.status == 200:
                     logger.info("OANDA trade closed | trade_id=%s | units=%s", trade_id, units)
                     return {"success": True, "comment": "OK", "data": data}
                 error_msg = data.get("errorMessage", "Close rejected")
@@ -338,7 +338,7 @@ class OandaBroker:
             async with self._session.put(
                 f"{self._base_url}/v3/accounts/{self._account_id}/orders/{order_id}/cancel"
             ) as resp:
-                if resp.status == 200:  # noqa: PLR2004
+                if resp.status == 200:
                     logger.info("OANDA order cancelled | order_id=%s", order_id)
                     return {"success": True, "comment": "OK"}
                 data = await resp.json()
@@ -359,7 +359,7 @@ class OandaBroker:
                 f"{self._base_url}/v3/accounts/{self._account_id}/pricing",
                 params={"instruments": instrument},
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     return None
                 data = await resp.json()
                 prices = data.get("prices", [])

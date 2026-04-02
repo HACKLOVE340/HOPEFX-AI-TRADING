@@ -128,7 +128,7 @@ import re as _re
 
 _PII_PATTERNS = [
     # Bearer tokens — match base64url + padding chars after "Bearer "
-    (_re.compile(r"Bearer\s+\S+", _re.I), "Bearer [Filtered]"),
+    (_re.compile(r"Bearer\s+\S+", _re.IGNORECASE), "Bearer [Filtered]"),
     # JWT tokens (3 base64 segments)
     (
         _re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"),

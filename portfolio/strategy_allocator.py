@@ -89,6 +89,7 @@ class StrategyPod:
     last_updated    : ISO timestamp of last metric update
     return_history  : list of daily returns (for correlation computation)
     """
+
     name: str
     oos_sharpe: float
     oos_n: int
@@ -383,7 +384,7 @@ class StrategyAllocator:
         corr = self._corr_engine.compute(pods)
         raw_weights = self._optimiser.optimise(sharpes, corr)
 
-        weights = {p.name: float(w) for p, w in zip(pods, raw_weights)}
+        weights = {p.name: float(w) for p, w in zip(pods, raw_weights, strict=False)}
         self._last_weights = weights
         self._last_corr = corr.tolist()
         self._computed_at = datetime.now(UTC).isoformat()

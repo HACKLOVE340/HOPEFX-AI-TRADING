@@ -243,41 +243,40 @@ class ExecutionTransparencyEngine:
         score = 100
 
         # Slippage impact (higher slippage = lower score)
-        if avg_slippage > 5:  # noqa: PLR2004
+        if avg_slippage > 5:
             score -= 30
-        elif avg_slippage > 2:  # noqa: PLR2004
+        elif avg_slippage > 2:
             score -= 15
-        elif avg_slippage > 0.5:  # noqa: PLR2004
+        elif avg_slippage > 0.5:
             score -= 5
         elif avg_slippage < 0:  # Positive slippage (improvement)
             score += 5
 
         # Latency impact
-        if avg_latency > 500:  # noqa: PLR2004
+        if avg_latency > 500:
             score -= 20
-        elif avg_latency > 200:  # noqa: PLR2004
+        elif avg_latency > 200:
             score -= 10
-        elif avg_latency > 100:  # noqa: PLR2004
+        elif avg_latency > 100:
             score -= 5
 
         # Fill ratio impact
-        if avg_fill_ratio < 90:  # noqa: PLR2004
+        if avg_fill_ratio < 90:
             score -= 20
-        elif avg_fill_ratio < 95:  # noqa: PLR2004
+        elif avg_fill_ratio < 95:
             score -= 10
-        elif avg_fill_ratio < 99:  # noqa: PLR2004
+        elif avg_fill_ratio < 99:
             score -= 5
 
-        if score >= 90:  # noqa: PLR2004
+        if score >= 90:
             return ExecutionQuality.EXCELLENT
-        elif score >= 75:  # noqa: PLR2004
+        if score >= 75:
             return ExecutionQuality.GOOD
-        elif score >= 60:  # noqa: PLR2004
+        if score >= 60:
             return ExecutionQuality.AVERAGE
-        elif score >= 40:  # noqa: PLR2004
+        if score >= 40:
             return ExecutionQuality.POOR
-        else:
-            return ExecutionQuality.VERY_POOR
+        return ExecutionQuality.VERY_POOR
 
     def _compare_brokers(self, executions: list[ExecutionRecord]) -> dict[str, dict[str, float]]:
         """Compare execution quality across brokers."""
@@ -326,7 +325,7 @@ class ExecutionTransparencyEngine:
         counts = [0] * 7
 
         for s in slippages:
-            if s < -2:  # noqa: PLR2004
+            if s < -2:
                 counts[0] += 1
             elif s < -1:
                 counts[1] += 1
@@ -336,7 +335,7 @@ class ExecutionTransparencyEngine:
                 counts[3] += 1
             elif s < 1:
                 counts[4] += 1
-            elif s < 2:  # noqa: PLR2004
+            elif s < 2:
                 counts[5] += 1
             else:
                 counts[6] += 1

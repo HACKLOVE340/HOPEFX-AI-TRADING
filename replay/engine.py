@@ -360,7 +360,7 @@ class ChartReplayEngine:
         """Get session by ID or active session."""
         if session_id:
             return self.sessions.get(session_id)
-        elif self.active_session_id:
+        if self.active_session_id:
             return self.sessions.get(self.active_session_id)
         return None
 

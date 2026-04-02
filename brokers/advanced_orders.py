@@ -774,8 +774,8 @@ class AdvancedOrderManager:
             # Apply logic
             if conditional.condition_logic == "AND":
                 return all(results) if results else False
-            else:  # OR
-                return any(results) if results else False
+            # OR
+            return any(results) if results else False
 
     def handle_order_fill(self, order_id: str, fill_price: float, fill_quantity: float):
         """

@@ -376,7 +376,7 @@ class MutationTestRunner:
                 )
 
             # Off-by-one on small integer literals
-            elif isinstance(node, ast.Constant) and isinstance(node.value, int) and 0 < abs(node.value) <= 100:  # noqa: PLR2004
+            elif isinstance(node, ast.Constant) and isinstance(node.value, int) and 0 < abs(node.value) <= 100:
                 mutants.append(
                     {
                         "line": node.lineno,
@@ -457,7 +457,7 @@ class MutationTestRunner:
                 lines[target_line] = lines[target_line].replace(orig_tok, repl_tok, 1)
             return "\n".join(lines)
 
-        elif node_type == "Constant":
+        if node_type == "Constant":
             lines = source.splitlines()
             target_line = mutant.get("line", 1) - 1
             if 0 <= target_line < len(lines):

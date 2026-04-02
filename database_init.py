@@ -21,6 +21,7 @@ This module provides:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 
@@ -142,10 +143,9 @@ def recover_database(file_path: str) -> bool:
             src = sqlite3.connect(str(path))
             dst = sqlite3.connect(str(recovered))
             for line in src.iterdump():
-                try:
+                with contextlib.suppress(sqlite3.Error):
+                    # skip rows that fail (e.g. constraint violations in corrupt data)
                     dst.execute(line)
-                except sqlite3.Error:
-                    pass  # skip rows that fail (e.g. constraint violations in corrupt data)
             dst.commit()
             src.close()
             dst.close()

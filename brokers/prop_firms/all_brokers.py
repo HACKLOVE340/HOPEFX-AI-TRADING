@@ -206,10 +206,10 @@ class BasePropFirmBroker(ABC):
         if metrics.remaining_monthly_loss <= 0:
             return True, "Monthly loss limit exceeded"
 
-        if metrics.daily_drawdown_percentage >= 5.0:  # noqa: PLR2004
+        if metrics.daily_drawdown_percentage >= 5.0:
             return True, "Maximum daily drawdown exceeded"
 
-        if metrics.monthly_drawdown_percentage >= 10.0:  # noqa: PLR2004
+        if metrics.monthly_drawdown_percentage >= 10.0:
             return True, "Maximum monthly drawdown exceeded"
 
         return False, None
@@ -277,7 +277,7 @@ class FTMOBroker(BasePropFirmBroker):
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     error = await resp.json()
                     raise RuntimeError(f"FTMO API error: {error}")
 
@@ -402,7 +402,7 @@ class FTMOBroker(BasePropFirmBroker):
                 f"{self.base_url}{endpoint}",
                 headers=headers,
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -462,7 +462,7 @@ class FTMOBroker(BasePropFirmBroker):
                 headers=headers,
                 params={"limit": limit},
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -527,7 +527,7 @@ class The5ersBroker(BasePropFirmBroker):
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(f"The5ers API error: {await resp.text()}")
 
                 data = await resp.json()
@@ -630,7 +630,7 @@ class The5ersBroker(BasePropFirmBroker):
                 f"{self.base_url}{endpoint}",
                 headers=headers,
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -696,7 +696,7 @@ class The5ersBroker(BasePropFirmBroker):
                 headers=headers,
                 params={"limit": limit},
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -766,7 +766,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(f"MyForexFunds API error: {await resp.text()}")
 
                 data = await resp.json()
@@ -865,7 +865,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
                 f"{self.base_url}{endpoint}",
                 headers=headers,
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -925,7 +925,7 @@ class MyForexFundsBroker(BasePropFirmBroker):
                 headers=headers,
                 params={"limit": limit},
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -997,7 +997,7 @@ class TopStepBroker(BasePropFirmBroker):
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(f"TopStep API error: {await resp.text()}")
 
                 data = await resp.json()
@@ -1098,7 +1098,7 @@ class TopStepBroker(BasePropFirmBroker):
                 f"{self.base_url}{endpoint}",
                 headers=headers,
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()
@@ -1158,7 +1158,7 @@ class TopStepBroker(BasePropFirmBroker):
                 headers=headers,
                 params={"limit": limit, "status": "closed"},
             ) as resp:
-                if resp.status != 200:  # noqa: PLR2004
+                if resp.status != 200:
                     raise RuntimeError(await resp.json())
 
                 data = await resp.json()

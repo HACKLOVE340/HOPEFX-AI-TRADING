@@ -300,8 +300,7 @@ class PositionReconciler:
         entry = pos.entry_price or 0.0
         if pos.side == "buy":
             return (current_price - entry) * qty
-        else:
-            return (entry - current_price) * qty
+        return (entry - current_price) * qty
 
     @property
     def stats(self) -> dict:

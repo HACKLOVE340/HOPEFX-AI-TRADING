@@ -304,7 +304,7 @@ class CrossExchangeEngine:
         self.detector = ArbitrageDetector(min_profit_bps=5.0)
         self.executor = ArbitrageExecutor()
         self.is_running = False
-        self.stats = {"detected": 0, "executed": 0, "profit": Decimal("0")}
+        self.stats = {"detected": 0, "executed": 0, "profit": Decimal(0)}
 
     def add_exchange(self, connector: ExchangeConnector):
         self.detector.add_exchange(connector)

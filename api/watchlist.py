@@ -290,7 +290,7 @@ async def add_symbol(
     """Add a symbol to the authenticated user's watchlist."""
     sym = symbol.upper()
     wl = _load_watchlist(user.sub)
-    if len(wl) >= 20:  # noqa: PLR2004
+    if len(wl) >= 20:
         raise HTTPException(status_code=400, detail="Watchlist limit is 20 symbols")
 
     persisted = _db_add(user.sub, sym)

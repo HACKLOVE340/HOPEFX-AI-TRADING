@@ -283,16 +283,15 @@ class ImpactPredictor:
         score = category_impact.get(category, 1) + high_impact_count
 
         # Map score to impact level
-        if score >= 6:  # noqa: PLR2004
+        if score >= 6:
             return ImpactLevel.VERY_HIGH
-        elif score >= 4:  # noqa: PLR2004
+        if score >= 4:
             return ImpactLevel.HIGH
-        elif score >= 3:  # noqa: PLR2004
+        if score >= 3:
             return ImpactLevel.MEDIUM
-        elif score >= 2:  # noqa: PLR2004
+        if score >= 2:
             return ImpactLevel.LOW
-        else:
-            return ImpactLevel.VERY_LOW
+        return ImpactLevel.VERY_LOW
 
     def _calculate_confidence(self, text: str, category: EventCategory, sentiment_score: float | None) -> float:
         """Calculate confidence in prediction"""
@@ -338,12 +337,11 @@ class ImpactPredictor:
         if sentiment_score is None:
             return None
 
-        if sentiment_score > 0.1:  # noqa: PLR2004
+        if sentiment_score > 0.1:
             return "bullish"
-        elif sentiment_score < -0.1:  # noqa: PLR2004
+        if sentiment_score < -0.1:
             return "bearish"
-        else:
-            return None
+        return None
 
     def _estimate_timeframe(self, category: EventCategory) -> str:
         """Estimate impact timeframe"""
@@ -351,11 +349,10 @@ class ImpactPredictor:
         if category in [EventCategory.CENTRAL_BANK, EventCategory.GEOPOLITICAL]:
             return "medium_term"
         # Economic data has short-term impact
-        elif category == EventCategory.ECONOMIC_DATA:
+        if category == EventCategory.ECONOMIC_DATA:
             return "short_term"
         # Most others are intraday
-        else:
-            return "intraday"
+        return "intraday"
 
     def batch_predict(self, articles: list[dict]) -> list[MarketImpact]:
         """

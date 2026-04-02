@@ -21,14 +21,14 @@ def test_account():
     return Account(
         broker="PAPER",
         account_id="TEST_001",
-        balance=Decimal("100000"),
-        equity=Decimal("100000"),
-        margin_used=Decimal("0"),
-        margin_available=Decimal("100000"),
+        balance=Decimal(100000),
+        equity=Decimal(100000),
+        margin_used=Decimal(0),
+        margin_available=Decimal(100000),
         open_positions={},
-        daily_pnl=Decimal("0"),
-        total_pnl=Decimal("0"),
-        max_drawdown=Decimal("0"),
+        daily_pnl=Decimal(0),
+        total_pnl=Decimal(0),
+        max_drawdown=Decimal(0),
     )
 
 
@@ -36,11 +36,11 @@ def test_position_sizing_atr(test_account):
     """Test ATR-based position sizing."""
     sizer = PositionSizer(method="atr")
 
-    size = sizer.calculate_size(account=test_account, entry_price=Decimal("1800"), atr=Decimal("2.0"))
+    size = sizer.calculate_size(account=test_account, entry_price=Decimal(1800), atr=Decimal("2.0"))
 
     # Should be reasonable size
     assert size > 0
-    assert size <= Decimal("100")  # Max position limit
+    assert size <= Decimal(100)  # Max position limit
 
 
 def test_kill_switch_trigger(tmp_path):

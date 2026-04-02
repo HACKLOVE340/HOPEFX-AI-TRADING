@@ -179,7 +179,7 @@ class DiscordChannel(NotificationChannel):
 
         # Add data fields
         for key, value in notification.data.items():
-            if len(embed["fields"]) < 25:  # Discord limit  # noqa: PLR2004
+            if len(embed["fields"]) < 25:  # Discord limit
                 embed["fields"].append({"name": str(key)[:256], "value": str(value)[:1024], "inline": True})
 
         payload = {"embeds": [embed]}
@@ -196,9 +196,8 @@ class DiscordChannel(NotificationChannel):
                 if response.status in [200, 204]:
                     logger.debug(f"Discord notification sent: {notification.title}")
                     return True
-                else:
-                    logger.error(f"Discord error {response.status}: {await response.text()}")
-                    return False
+                logger.error(f"Discord error {response.status}: {await response.text()}")
+                return False
 
         return await self._send_with_retry(_send)
 
@@ -240,7 +239,7 @@ class TelegramChannel(NotificationChannel):
                 text += f"• {key}: `{value}`\n"
 
         # Truncate if too long
-        if len(text) > 4096:  # noqa: PLR2004
+        if len(text) > 4096:
             text = text[:4093] + "..."
 
         payload = {
@@ -257,12 +256,11 @@ class TelegramChannel(NotificationChannel):
                 aiohttp.ClientSession() as session,
                 session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as response,
             ):
-                if response.status == 200:  # noqa: PLR2004
+                if response.status == 200:
                     logger.debug(f"Telegram notification sent: {notification.title}")
                     return True
-                else:
-                    logger.error(f"Telegram error {response.status}: {await response.text()}")
-                    return False
+                logger.error(f"Telegram error {response.status}: {await response.text()}")
+                return False
 
         return await self._send_with_retry(_send)
 
@@ -395,7 +393,7 @@ class EmailChannel(NotificationChannel):
                 plain_body,
                 html_body,
             )
-        elif self._send_mode == "smtp":
+        if self._send_mode == "smtp":
             return await asyncio.get_event_loop().run_in_executor(
                 None, self._send_via_smtp, recipients, subject, plain_body, html_body
             )
@@ -893,7 +891,6 @@ _notification_manager: NotificationManager | None = None
 
 def get_notification_manager() -> NotificationManager | None:
     """Get global notification manager"""
-    global _notification_manager  # noqa: PLW0602
     return _notification_manager
 
 

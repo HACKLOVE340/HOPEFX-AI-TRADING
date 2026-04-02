@@ -560,8 +560,7 @@ def save_settings(
                 logger.warning("save_settings: RiskManager update failed: %s", rm_exc)
             log_activity(f"Settings updated by {user.sub}: {list(payload.keys())}")
             return {"status": "ok", "saved": list(payload.keys())}
-        else:
-            return {"status": "error", "detail": "Config store write failed"}
+        return {"status": "error", "detail": "Config store write failed"}
     except Exception as exc:
         logger.error("save_settings failed: %s", exc, exc_info=True)
         return {"status": "error", "detail": "Settings save failed — check server logs"}
