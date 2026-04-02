@@ -102,7 +102,7 @@ def _compute_public_stats(curve: list[EquityPoint]) -> PublicPerformance:
 
     # Sharpe (annualised, daily returns assumed) — only after 50+ points
     sharpe = None
-    if len(returns) >= 50:  # noqa: PLR2004
+    if len(returns) >= 50:
         mean_r = sum(returns) / len(returns)
         variance = sum((r - mean_r) ** 2 for r in returns) / len(returns)
         std_r = math.sqrt(variance) if variance > 0 else 0
@@ -115,7 +115,7 @@ def _compute_public_stats(curve: list[EquityPoint]) -> PublicPerformance:
 
     note = (
         "Live paper trading results. Sharpe shown only after 50+ data points."
-        if len(returns) >= 50  # noqa: PLR2004
+        if len(returns) >= 50
         else f"Accumulating data ({len(returns)}/50 points for Sharpe)."
     )
 

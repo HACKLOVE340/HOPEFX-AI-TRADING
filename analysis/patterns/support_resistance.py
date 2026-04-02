@@ -234,7 +234,7 @@ def _build_psychological_levels(
 
         # Rough proximity check
         dist_ratio = abs(price - current_price) / current_price
-        if dist_ratio > 0.10:  # noqa: PLR2004
+        if dist_ratio > 0.10:
             continue
 
         touches = _count_touches(price, closes, closes, tolerance)
@@ -692,7 +692,7 @@ class SupportResistanceDetector:
             return []
 
         closes = df[cols["close"]].tolist()
-        if len(closes) < 20:  # noqa: PLR2004
+        if len(closes) < 20:
             return []
 
         ma20 = sum(closes[-20:]) / 20.0

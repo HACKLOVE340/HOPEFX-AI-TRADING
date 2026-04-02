@@ -12,8 +12,11 @@ CUDA-powered inference for sub-millisecond predictions
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass, field  # noqa: F401
 from typing import Dict, List  # noqa: F401
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -107,11 +110,11 @@ class GPUInferenceEngine:
         self.results: dict[str, asyncio.Future] = {}
         self.running = False
 
-        print(
-            f"🚀 GPU Engine: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}",
+        logger.info(
+            "GPU Engine: %s",
+            torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
         )
-        print(f"   Batch size: {self.config.batch_size}")
-        print(f"   Mixed precision: {self.config.mixed_precision}")
+        logger.info("Batch size: %d | Mixed precision: %s", self.config.batch_size, self.config.mixed_precision)
 
     async def infer(self, features: np.ndarray, request_id: str) -> dict:
         """Async inference with automatic batching"""

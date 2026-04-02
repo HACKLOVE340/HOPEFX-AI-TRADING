@@ -154,7 +154,7 @@ class AccessCodeGenerator:
         """Validate access code format and checksum"""
         try:
             parts = code.split("-")
-            if len(parts) != 4:  # noqa: PLR2004
+            if len(parts) != 4:
                 return False
 
             if parts[0] != "HOPEFX":
@@ -213,7 +213,7 @@ class AccessCodeGenerator:
         """Extract tier from code"""
         try:
             parts = code.split("-")
-            if len(parts) != 4:  # noqa: PLR2004
+            if len(parts) != 4:
                 return None
 
             tier_prefix = parts[1]

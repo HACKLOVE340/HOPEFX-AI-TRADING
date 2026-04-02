@@ -346,7 +346,7 @@ if TORCH_AVAILABLE:
             loss = -(target_smooth * torch.log(pred) + (1 - target_smooth) * torch.log(1 - pred))
             if self.pos_weight is not None:
                 weight = torch.where(
-                    target > 0.5,  # noqa: PLR2004
+                    target > 0.5,
                     torch.tensor(self.pos_weight, device=pred.device),
                     torch.ones_like(pred),
                 )
@@ -556,7 +556,7 @@ class DeepPredictor:
             self.model.train()
             train_losses = []
             for X_b, y_b in train_loader:
-                X_b, y_b = X_b.to(self.device), y_b.to(self.device)  # noqa: PLW2901
+                X_b, y_b = X_b.to(self.device), y_b.to(self.device)
                 self.optimizer.zero_grad(set_to_none=True)
 
                 if self.use_amp and self._scaler is not None:
@@ -588,7 +588,7 @@ class DeepPredictor:
                 val_losses = []
                 with torch.no_grad():
                     for X_b, y_b in val_loader:
-                        X_b, y_b = X_b.to(self.device), y_b.to(self.device)  # noqa: PLW2901
+                        X_b, y_b = X_b.to(self.device), y_b.to(self.device)
                         pred = self.model(X_b)
                         val_losses.append(self.criterion(pred, y_b).item())
                 avg_val = float(np.mean(val_losses))

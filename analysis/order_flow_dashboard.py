@@ -227,10 +227,10 @@ class OrderFlowDashboard:
 
         if bull > bear:
             bias = "bullish"
-            strength = "strong" if bull >= 2 else "moderate"  # noqa: PLR2004
+            strength = "strong" if bull >= 2 else "moderate"
         elif bear > bull:
             bias = "bearish"
-            strength = "strong" if bear >= 2 else "moderate"  # noqa: PLR2004
+            strength = "strong" if bear >= 2 else "moderate"
 
         return {
             "bias": bias,

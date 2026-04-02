@@ -258,9 +258,9 @@ class AuthenticatedTrader(HttpUser):
         ) as r:
             if r.status_code in (201, 400, 403, 422, 429, 503):
                 r.success()
-            elif r.status_code == 401:  # noqa: PLR2004
+            elif r.status_code == 401:
                 r.failure("Auth token rejected")
-            elif r.status_code == 500:  # noqa: PLR2004
+            elif r.status_code == 500:
                 r.failure(f"Server error placing order: {r.text[:200]}")
             else:
                 r.success()

@@ -166,8 +166,8 @@ class CognitiveEngine:
         support, resistance = self.detect_support_resistance()
 
         # Compute a simple signal strength in [0, 1]
-        bullish = (trend == "uptrend") and (momentum > 55)  # noqa: PLR2004
-        bearish = (trend == "downtrend") and (momentum < 45)  # noqa: PLR2004
+        bullish = (trend == "uptrend") and (momentum > 55)
+        bearish = (trend == "downtrend") and (momentum < 45)
         strength = 0.75 if (bullish or bearish) else 0.25
 
         return {

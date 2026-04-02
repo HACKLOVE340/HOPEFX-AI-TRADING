@@ -142,7 +142,7 @@ class OandaPaperClock:
         live_gate_opens = (started_dt + timedelta(days=_TARGET_DAYS)).isoformat()
 
         # Mask account_id: first 8 chars + ellipsis
-        masked = (account_id[:8] + "…") if len(account_id) > 8 else account_id  # noqa: PLR2004
+        masked = (account_id[:8] + "…") if len(account_id) > 8 else account_id
 
         stamp = {
             "started_utc": started_utc_str,

@@ -695,7 +695,7 @@ class IBKRConnector(BrokerConnector):
             raise RuntimeError("IBKRConnector.subscribe_ticks: not connected.")
         try:
             contract = self._make_contract(symbol, instrument)
-            ticker = self._ib.reqMktData(contract, "", False, False)  # noqa: F841
+            ticker = self._ib.reqMktData(contract, "", False, False)
 
             def _on_pending_tickers(tickers):
                 for t in tickers:

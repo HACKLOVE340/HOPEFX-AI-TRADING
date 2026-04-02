@@ -273,11 +273,11 @@ def add_candlestick_features(df: pd.DataFrame) -> pd.DataFrame:
     d["cs_upper_wick"] = (h - pd.concat([o, c], axis=1).max(axis=1)) / candle_range
     d["cs_lower_wick"] = (pd.concat([o, c], axis=1).min(axis=1) - l) / candle_range
     d["cs_bull"] = (c > o).astype(int)
-    d["cs_doji"] = (d["cs_body_ratio"] < 0.1).astype(int)  # noqa: PLR2004
-    d["cs_pin_bull"] = ((d["cs_lower_wick"] > 0.6) & (d["cs_body_ratio"] < 0.3)).astype(  # noqa: PLR2004
+    d["cs_doji"] = (d["cs_body_ratio"] < 0.1).astype(int)
+    d["cs_pin_bull"] = ((d["cs_lower_wick"] > 0.6) & (d["cs_body_ratio"] < 0.3)).astype(
         int
     )
-    d["cs_pin_bear"] = ((d["cs_upper_wick"] > 0.6) & (d["cs_body_ratio"] < 0.3)).astype(  # noqa: PLR2004
+    d["cs_pin_bear"] = ((d["cs_upper_wick"] > 0.6) & (d["cs_body_ratio"] < 0.3)).astype(
         int
     )
 

@@ -278,7 +278,7 @@ class HOPEFXBrain:
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(f"http://ip-api.com/json/{ip}?fields=country,city,lat,lon,isp,org")
-                if resp.status_code == 200:  # noqa: PLR2004
+                if resp.status_code == 200:
                     return resp.json()
         except Exception as exc:
             logger.debug("Geo lookup failed for %s: %s", ip, exc)
@@ -330,11 +330,11 @@ class HOPEFXBrain:
                 logger.debug("RL predict failed: %s", exc)
 
         # Rule-based fallback
-        if severity >= 0.8:  # noqa: PLR2004
+        if severity >= 0.8:
             return ACTION_NUCLEAR
-        if severity >= 0.5:  # noqa: PLR2004
+        if severity >= 0.5:
             return ACTION_BLOCK
-        if severity >= 0.3:  # noqa: PLR2004
+        if severity >= 0.3:
             return ACTION_RATE_LIMIT
         return ACTION_MONITOR
 
@@ -458,7 +458,7 @@ class HOPEFXBrain:
                     headers={"Authorization": f"Bearer {FLASHPOINT_KEY}"},
                     params={"limit": 100},
                 )
-                if resp.status_code == 200:  # noqa: PLR2004
+                if resp.status_code == 200:
                     iocs = resp.json().get("data", [])
                     redis = await _get_redis()
                     if redis and iocs:

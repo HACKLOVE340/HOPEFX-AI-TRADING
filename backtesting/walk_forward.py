@@ -228,7 +228,7 @@ class WalkForwardEngine:
             "avg_test_return": np.mean(test_returns),
             "avg_test_sharpe": np.mean(test_sharpes),
             "consistency": 1 - np.std(test_returns) / (np.mean(test_returns) + 1e-10),
-            "is_robust": np.mean(test_sharpes) > 0.5  # noqa: PLR2004
+            "is_robust": np.mean(test_sharpes) > 0.5
             and sum(1 for r in self.results if r.is_overfit) < len(self.results) * 0.3,
         }
 

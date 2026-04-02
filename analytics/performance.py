@@ -253,7 +253,7 @@ class PerformanceAnalytics:
             self.daily_equity.append((datetime.now(UTC), equity))
 
             # Calculate daily return
-            if len(self.daily_equity) >= 2:  # noqa: PLR2004
+            if len(self.daily_equity) >= 2:
                 prev_equity = self.daily_equity[-2][1]
                 daily_return = (equity - prev_equity) / prev_equity if prev_equity > 0 else 0
                 self.daily_returns.append(daily_return)
@@ -566,7 +566,7 @@ class PerformanceAnalytics:
 
     def _calculate_sharpe_ratio(self, trades: list[TradeRecord]) -> float:
         """Calculate Sharpe ratio for trades."""
-        if len(trades) < 2:  # noqa: PLR2004
+        if len(trades) < 2:
             return 0.0
 
         returns = [t.pnl_percent for t in trades]
@@ -585,7 +585,7 @@ class PerformanceAnalytics:
 
     def _calculate_sortino_ratio(self, trades: list[TradeRecord]) -> float:
         """Calculate Sortino ratio for trades."""
-        if len(trades) < 2:  # noqa: PLR2004
+        if len(trades) < 2:
             return 0.0
 
         returns = [t.pnl_percent for t in trades]
@@ -679,7 +679,7 @@ class PerformanceAnalytics:
 
     def _calculate_skewness(self, values: list[float]) -> float:
         """Calculate skewness of distribution."""
-        if len(values) < 3:  # noqa: PLR2004
+        if len(values) < 3:
             return 0.0
         n = len(values)
         mean = np.mean(values)
@@ -690,7 +690,7 @@ class PerformanceAnalytics:
 
     def _calculate_kurtosis(self, values: list[float]) -> float:
         """Calculate kurtosis of distribution."""
-        if len(values) < 4:  # noqa: PLR2004
+        if len(values) < 4:
             return 0.0
         n = len(values)
         mean = np.mean(values)

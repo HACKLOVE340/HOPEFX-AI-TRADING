@@ -551,7 +551,7 @@ class PaperTradingBroker(BrokerConnector):
         # Record a throttled equity snapshot (at most once per 60 seconds)
         # so the equity curve grows over time even without active trading.
         last_ts = self._equity_history[-1][0] if self._equity_history else 0.0
-        if time.time() - last_ts >= 60.0:  # noqa: PLR2004
+        if time.time() - last_ts >= 60.0:
             self._equity_history.append((time.time(), float(info.equity)))
         return info
 

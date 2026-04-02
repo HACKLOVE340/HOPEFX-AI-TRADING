@@ -308,9 +308,9 @@ class BitcoinClient:
     def _validate_address(self, address: str) -> bool:
         """Validate Bitcoin address format (bech32, P2PKH, P2SH)."""
         if address.startswith("bc1"):  # native SegWit bech32
-            return 42 <= len(address) <= 62  # noqa: PLR2004
+            return 42 <= len(address) <= 62
         if address.startswith(("1", "3")):  # legacy P2PKH / P2SH
-            return 26 <= len(address) <= 35  # noqa: PLR2004
+            return 26 <= len(address) <= 35
         return False
 
     def get_transaction_status(self, tx_hash: str) -> dict | None:

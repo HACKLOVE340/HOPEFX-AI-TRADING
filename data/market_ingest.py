@@ -270,7 +270,7 @@ class MarketIngest:
                         params={"instruments": instrument},
                         timeout=aiohttp.ClientTimeout(total=5),
                     ) as resp:
-                        if resp.status == 200:  # noqa: PLR2004
+                        if resp.status == 200:
                             data = await resp.json()
                             prices = data.get("prices", [])
                             if prices:

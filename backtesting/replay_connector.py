@@ -321,7 +321,7 @@ class RegimeResult:
         if self.metrics is None:
             return False
         max_dd = getattr(self.metrics, "max_drawdown", 1.0)
-        return max_dd < 0.20  # < 20% drawdown = survived  # noqa: PLR2004
+        return max_dd < 0.20  # < 20% drawdown = survived
 
 
 @dataclass

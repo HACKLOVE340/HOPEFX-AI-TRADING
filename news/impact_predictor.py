@@ -283,13 +283,13 @@ class ImpactPredictor:
         score = category_impact.get(category, 1) + high_impact_count
 
         # Map score to impact level
-        if score >= 6:  # noqa: PLR2004
+        if score >= 6:
             return ImpactLevel.VERY_HIGH
-        elif score >= 4:  # noqa: PLR2004
+        elif score >= 4:
             return ImpactLevel.HIGH
-        elif score >= 3:  # noqa: PLR2004
+        elif score >= 3:
             return ImpactLevel.MEDIUM
-        elif score >= 2:  # noqa: PLR2004
+        elif score >= 2:
             return ImpactLevel.LOW
         else:
             return ImpactLevel.VERY_LOW
@@ -338,9 +338,9 @@ class ImpactPredictor:
         if sentiment_score is None:
             return None
 
-        if sentiment_score > 0.1:  # noqa: PLR2004
+        if sentiment_score > 0.1:
             return "bullish"
-        elif sentiment_score < -0.1:  # noqa: PLR2004
+        elif sentiment_score < -0.1:
             return "bearish"
         else:
             return None

@@ -9,10 +9,11 @@ Strategy listings, pricing engine, subscription management, license validation
 """
 
 import json
+import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
-UTC = timezone.utc
+UTC = UTC
 from typing import Any
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -23,6 +24,9 @@ try:
     import stripe
 except ImportError:
     stripe = None  # type: ignore[assignment]
+
+
+logger = logging.getLogger(__name__)
 
 
 class SubscriptionTier(Enum):
@@ -390,11 +394,11 @@ class PricingEngine:
 
     def get_recommended_tier(self, trading_volume: float, account_balance: float) -> SubscriptionTier:
         """Recommend subscription tier based on user profile"""
-        if account_balance < 1000:  # noqa: PLR2004
+        if account_balance < 1000:
             return SubscriptionTier.FREE
-        elif trading_volume < 100000:  # noqa: PLR2004
+        elif trading_volume < 100000:
             return SubscriptionTier.BASIC
-        elif trading_volume < 1000000:  # noqa: PLR2004
+        elif trading_volume < 1000000:
             return SubscriptionTier.PRO
         else:
             return SubscriptionTier.ENTERPRISE
@@ -583,7 +587,7 @@ class SubscriptionManager:
         """Create new subscription"""
         strategy = self.db.get_strategy(strategy_id)
         if not strategy:
-            print(f"❌ Strategy {strategy_id} not found")
+            logger.warning("Strategy %s not found", strategy_id)
             return None
 
         # Calculate price
@@ -643,8 +647,8 @@ class SubscriptionManager:
         strategy.subscriber_count += 1
         self.db.save_strategy(strategy)
 
-        print(f"✅ Subscription created: {subscription_id}")
-        print(f"   License key: {license_key.key}")
+        logger.info("Subscription created: %s", subscription_id)
+        logger.info("License key generated: %s", license_key.key[:8] + "...")
 
         return subscription
 
@@ -675,7 +679,7 @@ class SubscriptionManager:
         conn.commit()
         conn.close()
 
-        print(f"✅ Subscription {subscription_id} cancelled")
+        logger.info("Subscription cancelled: %s", subscription_id)
         return True
 
     def check_access(self, user_id: str, strategy_id: str) -> bool:
@@ -737,7 +741,7 @@ class MarketplaceAPI:
         )
 
         self.db.save_strategy(strategy)
-        print(f"✅ Strategy listed: {name} (ID: {strategy_id})")
+        logger.info("Strategy listed: %s (ID: %s)", name, strategy_id)
 
         return strategy
 
@@ -748,7 +752,7 @@ class MarketplaceAPI:
             strategy.status = StrategyStatus.ACTIVE
             strategy.updated_at = datetime.now(UTC)
             self.db.save_strategy(strategy)
-            print(f"✅ Strategy {strategy_id} approved")
+            logger.info("Strategy %s approved", strategy_id)
             return True
         return False
 

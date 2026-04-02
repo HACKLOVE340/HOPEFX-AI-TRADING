@@ -521,7 +521,7 @@ def print_component_status_report() -> None:
 
         if status.error:
             error_display = (
-                status.error[:60] + "..." if len(status.error) > 60 else status.error  # noqa: PLR2004
+                status.error[:60] + "..." if len(status.error) > 60 else status.error
             )
             print(f"     Error: {error_display}")
 

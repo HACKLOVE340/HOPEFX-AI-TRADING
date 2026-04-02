@@ -65,7 +65,7 @@ class SecurityManager:
     @staticmethod
     def validate_password(password: str) -> bool:
         """Validate password strength"""
-        if len(password) < 12:  # noqa: PLR2004
+        if len(password) < 12:
             return False
         if not any(c.isupper() for c in password):
             return False
@@ -120,7 +120,7 @@ class SecurityManager:
         A length-only check (the previous implementation) allows any
         64-char string to pass — this replaces it with a real comparison.
         """
-        if not token or len(token) != 64:  # noqa: PLR2004
+        if not token or len(token) != 64:
             return False
         with self._csrf_lock:
             entry = self._csrf_store.get(user_id)

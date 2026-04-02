@@ -61,7 +61,7 @@ class StrategySignal:
         self.timestamp = datetime.now(UTC)
 
     def is_valid(self) -> bool:
-        return self.action in ["BUY", "SELL", "HOLD"] and self.confidence > 0.5  # noqa: PLR2004
+        return self.action in ["BUY", "SELL", "HOLD"] and self.confidence > 0.5
 
 
 class EnhancedStrategy(ABC):

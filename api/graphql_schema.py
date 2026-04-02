@@ -656,7 +656,7 @@ class Mutation:
         user = _require_auth(info)
         if side.upper() not in ("BUY", "SELL", "LONG", "SHORT"):
             raise ValueError(f"Invalid side: {side}")
-        if lots <= 0 or lots > 100:  # noqa: PLR2004
+        if lots <= 0 or lots > 100:
             raise ValueError(f"Invalid lot size: {lots}")
 
         order_id = str(uuid.uuid4())[:8]

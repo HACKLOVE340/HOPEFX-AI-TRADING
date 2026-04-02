@@ -42,7 +42,7 @@ class RiskAnalyzer:
         # Parametric VaR — assumes normally distributed returns (fat tails not captured)
         mean = np.mean(portfolio_returns)
         std = np.std(portfolio_returns)
-        z_score = 1.645 if confidence_level == 0.95 else 2.326  # noqa: PLR2004
+        z_score = 1.645 if confidence_level == 0.95 else 2.326
         return mean - z_score * std
 
     def calculate_cvar(self, portfolio_returns: list[float], confidence_level: float = 0.95) -> float:

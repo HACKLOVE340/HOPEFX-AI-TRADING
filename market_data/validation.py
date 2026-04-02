@@ -165,7 +165,7 @@ class MarketDataValidator:
             self.last_valid_data[symbol] = datetime.now(UTC)
 
         result = ValidationResult(
-            is_valid=is_valid and quality_score >= 0.8,  # noqa: PLR2004
+            is_valid=is_valid and quality_score >= 0.8,
             quality_score=quality_score,
             issues=issues,
             timestamp=datetime.now(UTC),
@@ -191,7 +191,7 @@ class MarketDataValidator:
 
         # Check for NaN values
         nan_pct = data.isnull().sum().sum() / (len(data) * len(data.columns))
-        if nan_pct > 0.05:  # More than 5% NaN  # noqa: PLR2004
+        if nan_pct > 0.05:  # More than 5% NaN
             issues.append(
                 {
                     "type": "excessive_nan",

@@ -46,14 +46,14 @@ class MultiTimeframeAnalyzer:
         buy_strength = buy_votes / total
         sell_strength = sell_votes / total
 
-        if buy_strength > 0.7:  # noqa: PLR2004
+        if buy_strength > 0.7:
             return AnalysisResult(
                 signal="buy",
                 confidence=buy_strength,
                 indicators=self._aggregate_indicators(signals),
                 timeframe="multi",
             )
-        elif sell_strength > 0.7:  # noqa: PLR2004
+        elif sell_strength > 0.7:
             return AnalysisResult(
                 signal="sell",
                 confidence=sell_strength,
@@ -71,9 +71,9 @@ class MultiTimeframeAnalyzer:
         rsi = self._calculate_rsi(df["close"], 14)
 
         signal = "neutral"
-        if df["close"].iloc[-1] > sma_20 > sma_50 and rsi < 70:  # noqa: PLR2004
+        if df["close"].iloc[-1] > sma_20 > sma_50 and rsi < 70:
             signal = "buy"
-        elif df["close"].iloc[-1] < sma_20 < sma_50 and rsi > 30:  # noqa: PLR2004
+        elif df["close"].iloc[-1] < sma_20 < sma_50 and rsi > 30:
             signal = "sell"
 
         return {

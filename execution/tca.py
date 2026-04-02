@@ -211,7 +211,7 @@ class MarketContextProvider:
         """Record a tick volume for in-memory ADV estimation."""
         self._tick_volumes[symbol].append((ts, volume))
         # Keep only last 100k ticks per symbol
-        if len(self._tick_volumes[symbol]) > 100_000:  # noqa: PLR2004
+        if len(self._tick_volumes[symbol]) > 100_000:
             self._tick_volumes[symbol] = self._tick_volumes[symbol][-100_000:]
 
     def get_adv(self, symbol: str) -> tuple[float, str]:
@@ -234,7 +234,7 @@ class MarketContextProvider:
         if cache is not None:
             try:
                 bars = cache.get_bars(symbol, "1d", n=_ADV_LOOKBACK_BARS)
-                if bars and len(bars) >= 5:  # noqa: PLR2004
+                if bars and len(bars) >= 5:
                     volumes = [float(b.get("volume", 0)) for b in bars if b.get("volume")]
                     if volumes and sum(volumes) > 0:
                         adv = sum(volumes) / len(volumes)
@@ -244,9 +244,9 @@ class MarketContextProvider:
 
         # 3. In-memory tick accumulator
         ticks = self._tick_volumes.get(symbol, [])
-        if len(ticks) >= 100:  # noqa: PLR2004
+        if len(ticks) >= 100:
             total_vol = sum(v for _, v in ticks)
-            if total_vol > 0 and len(ticks) >= 2:  # noqa: PLR2004
+            if total_vol > 0 and len(ticks) >= 2:
                 # Estimate daily volume from accumulated ticks
                 span_hours = (ticks[-1][0] - ticks[0][0]).total_seconds() / 3600
                 if span_hours > 0:
@@ -276,9 +276,9 @@ class MarketContextProvider:
         if cache is not None:
             try:
                 bars = cache.get_bars(symbol, "1d", n=_VOL_LOOKBACK_BARS + 1)
-                if bars and len(bars) >= 5:  # noqa: PLR2004
+                if bars and len(bars) >= 5:
                     closes = [float(b.get("close", 0)) for b in bars if b.get("close")]
-                    if len(closes) >= 5:  # noqa: PLR2004
+                    if len(closes) >= 5:
                         log_returns = [
                             math.log(closes[i] / closes[i - 1])
                             for i in range(1, len(closes))
@@ -367,13 +367,13 @@ class TCAEngine:
         if symbol not in self._vwap_cache:
             self._vwap_cache[symbol] = []
         self._vwap_cache[symbol].append((now, fill.price, fill.quantity))
-        if len(self._vwap_cache[symbol]) > 10_000:  # noqa: PLR2004
+        if len(self._vwap_cache[symbol]) > 10_000:
             self._vwap_cache[symbol].pop(0)
 
         if symbol not in self._twap_cache:
             self._twap_cache[symbol] = []
         self._twap_cache[symbol].append((now, fill.price))
-        if len(self._twap_cache[symbol]) > 10_000:  # noqa: PLR2004
+        if len(self._twap_cache[symbol]) > 10_000:
             self._twap_cache[symbol].pop(0)
 
     async def complete_order(self, order_id: str, status: str = "FILLED") -> TCAMetrics:
@@ -547,14 +547,14 @@ class TCAEngine:
         if symbol not in self._vwap_cache:
             self._vwap_cache[symbol] = []
         self._vwap_cache[symbol].append((now, tick.mid, tick.volume))
-        if len(self._vwap_cache[symbol]) > 10_000:  # noqa: PLR2004
+        if len(self._vwap_cache[symbol]) > 10_000:
             self._vwap_cache[symbol].pop(0)
 
         # TWAP cache
         if symbol not in self._twap_cache:
             self._twap_cache[symbol] = []
         self._twap_cache[symbol].append((now, tick.mid))
-        if len(self._twap_cache[symbol]) > 10_000:  # noqa: PLR2004
+        if len(self._twap_cache[symbol]) > 10_000:
             self._twap_cache[symbol].pop(0)
 
     def get_stats(self, n: int = 100) -> dict[str, Any]:

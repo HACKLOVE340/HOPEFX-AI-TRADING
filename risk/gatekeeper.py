@@ -106,7 +106,7 @@ class _NewsCalendar:
         for ev in self._events:
             # Normalise naive datetimes to UTC
             if ev.tzinfo is None:
-                ev = ev.replace(tzinfo=UTC)  # noqa: PLW2901
+                ev = ev.replace(tzinfo=UTC)
             if abs(now - ev) <= cutoff:
                 return True
         return False

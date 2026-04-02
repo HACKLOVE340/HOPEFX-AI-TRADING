@@ -254,7 +254,7 @@ def stage_data_loading() -> str:
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df = df.set_index("timestamp").sort_index()
 
-    if len(df) < 200:  # noqa: PLR2004
+    if len(df) < 200:
         raise ValueError(f"Insufficient rows: {len(df)} (need ≥ 200)")
 
     # Sanity checks on price data
@@ -286,7 +286,7 @@ def stage_feature_engineering() -> str:
         raise ValueError("Feature engineering returned empty DataFrame")
 
     n_rows, n_cols = features.shape
-    if n_cols < 10:  # noqa: PLR2004
+    if n_cols < 10:
         raise ValueError(f"Too few features: {n_cols}")
 
     # No NaN-only columns
@@ -376,7 +376,7 @@ def stage_online_learning() -> str:
 
     status = learner.status()
     update_count = status.get("update_count", 0)
-    if update_count < 2:  # noqa: PLR2004
+    if update_count < 2:
         raise ValueError(f"update_count too low: {update_count}")
 
     ctx.online_learner = learner
@@ -572,7 +572,7 @@ def stage_position_accounting() -> str:
     pnl = balance_after_close - 50_000.0
 
     # With a 1% up move on a long, realized P&L should be positive
-    if pnl <= -500:  # noqa: PLR2004
+    if pnl <= -500:
         raise ValueError(f"P&L unexpectedly negative after favourable move: {pnl:.2f}")
 
     # Position should be gone after close

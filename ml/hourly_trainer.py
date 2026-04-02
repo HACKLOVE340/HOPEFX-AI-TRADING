@@ -188,7 +188,7 @@ class HourlyTrainer:
                 return
 
             bars = await self._fetch_recent_bars(symbol, n=24)
-            if bars is None or len(bars) < 5:  # noqa: PLR2004
+            if bars is None or len(bars) < 5:
                 logger.debug(
                     "OnlineUpdate %s: insufficient bars (%s)",
                     symbol,

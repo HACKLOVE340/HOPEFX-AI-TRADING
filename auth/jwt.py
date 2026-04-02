@@ -27,7 +27,7 @@ def _load_secret() -> str:
             "SECURITY_JWT_SECRET is not set. "
             'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"',
         )
-    if len(val) < 32:  # noqa: PLR2004
+    if len(val) < 32:
         raise RuntimeError(
             f"SECURITY_JWT_SECRET is too short ({len(val)} chars). Must be >=32 characters.",
         )

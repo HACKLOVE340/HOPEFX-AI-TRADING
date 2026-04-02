@@ -643,7 +643,7 @@ class XGBoostModel:
         import xgboost as _xgb_ver
 
         _xgb_major = int(_xgb_ver.__version__.split(".")[0])
-        if _xgb_major < 2 and len(eval_set) > 1:  # noqa: PLR2004
+        if _xgb_major < 2 and len(eval_set) > 1:
             fit_kwargs["early_stopping_rounds"] = early_stopping_rounds
 
         self.model.fit(X_train, y_train, **fit_kwargs)
@@ -1551,7 +1551,7 @@ def walk_forward_validate(
             prediction_horizon=prediction_horizon,
         )
 
-        if len(X_train) < 10 or len(X_test) < 5:  # noqa: PLR2004
+        if len(X_train) < 10 or len(X_test) < 5:
             continue
 
         X_tr_sc, X_te_sc = fe_fold.scale_features(X_train, X_test)

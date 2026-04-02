@@ -126,7 +126,7 @@ class _UptimeHistoryProxy:
 
     def get(self, key: str, default: float = 100.0) -> float:
         val = _uptime_get(key)
-        return val if val != 100.0 or key in _uptime_cache else default  # noqa: PLR2004
+        return val if val != 100.0 or key in _uptime_cache else default
 
     def __setitem__(self, key: str, value: float) -> None:
         _uptime_set(key, value)
@@ -135,7 +135,7 @@ class _UptimeHistoryProxy:
         return _uptime_get(key)
 
     def __contains__(self, key: object) -> bool:
-        return _uptime_get(str(key)) != 100.0 or str(key) in _uptime_cache  # noqa: PLR2004
+        return _uptime_get(str(key)) != 100.0 or str(key) in _uptime_cache
 
 
 _uptime_history = _UptimeHistoryProxy()
@@ -223,8 +223,8 @@ async def status_incidents(limit: int = 20):
     for i in range(89, -1, -1):
         day = (today - timedelta(days=i)).isoformat()
         pct = _uptime_history.get(day, 100.0)
-        if pct < 100.0:  # noqa: PLR2004
-            severity = "major" if pct < 90 else "minor"  # noqa: PLR2004
+        if pct < 100.0:
+            severity = "major" if pct < 90 else "minor"
             incidents.append(
                 {
                     "date": day,

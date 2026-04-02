@@ -320,7 +320,7 @@ class ProductionDataEngine:
             await asyncio.sleep(15)
             if self.last_update is not None:
                 age = (datetime.now(tz=UTC) - self.last_update).total_seconds()
-                if age > 30:  # noqa: PLR2004
+                if age > 30:
                     logger.warning("Data feed stale (%.0f s) — forcing provider rotation", age)
                     self.active_provider = self._get_next_provider(self.active_provider)
 

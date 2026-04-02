@@ -92,7 +92,7 @@ _XAUUSD_VOLUME_PROFILE_RAW = [
 _total = sum(_XAUUSD_VOLUME_PROFILE_RAW)
 # Normalise so the profile always sums to exactly 1.0
 _XAUUSD_VOLUME_PROFILE = [v / _total for v in _XAUUSD_VOLUME_PROFILE_RAW]
-if abs(sum(_XAUUSD_VOLUME_PROFILE) - 1.0) >= 1e-9:  # noqa: PLR2004
+if abs(sum(_XAUUSD_VOLUME_PROFILE) - 1.0) >= 1e-9:
     raise ValueError("Volume profile must sum to 1")
 
 
@@ -353,7 +353,7 @@ class TWAPExecutor:
         return {
             "parent_id": parent_id,
             "algo": "twap",
-            "status": "filled" if fill_rate > 0.99 else "partial",  # noqa: PLR2004
+            "status": "filled" if fill_rate > 0.99 else "partial",
             "filled_lots": round(filled_lots, 4),
             "target_lots": total_lots,
             "fill_rate": round(fill_rate, 4),
@@ -456,7 +456,7 @@ class VWAPExecutor:
         return {
             "parent_id": parent_id,
             "algo": "vwap",
-            "status": "filled" if fill_rate > 0.99 else "partial",  # noqa: PLR2004
+            "status": "filled" if fill_rate > 0.99 else "partial",
             "filled_lots": round(filled_lots, 4),
             "target_lots": total_lots,
             "fill_rate": round(fill_rate, 4),

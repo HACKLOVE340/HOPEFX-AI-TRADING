@@ -125,7 +125,7 @@ class Order:
 
     @property
     def is_filled(self) -> bool:
-        return abs(self.filled_size - self.size) < 0.0001  # noqa: PLR2004
+        return abs(self.filled_size - self.size) < 0.0001
 
     @property
     def notional(self) -> float:
@@ -375,7 +375,7 @@ class VWAPStrategy(ExecutionStrategy):
         slice_sizes = [(vol / self.total_volume) * self.order.size for vol in self.volume_profile]
 
         for i, size in enumerate(slice_sizes):
-            if size < 0.001 or self.is_complete:  # noqa: PLR2004
+            if size < 0.001 or self.is_complete:
                 continue
 
             venue = self._select_venue()

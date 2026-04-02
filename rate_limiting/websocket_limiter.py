@@ -68,7 +68,6 @@ import logging
 import os
 import time
 from collections import defaultdict, deque
-import contextlib
 
 logger = logging.getLogger(__name__)
 

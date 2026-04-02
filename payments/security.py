@@ -310,7 +310,7 @@ class SecurityManager:
         # Check failed attempts
         failed = self.failed_attempts.get(user_id, [])
         recent_failed = [f for f in failed if datetime.now(UTC) - f < timedelta(hours=1)]
-        if len(recent_failed) > 5:  # noqa: PLR2004
+        if len(recent_failed) > 5:
             logger.warning(f"Suspicious: Multiple failed attempts for user {user_id}")
             return True
 

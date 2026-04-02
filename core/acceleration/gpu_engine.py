@@ -11,11 +11,14 @@ Monte Carlo simulation with GARCH volatility and copula correlation
 
 from dataclasses import dataclass
 from decimal import Decimal
+import logging
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.optimize import minimize
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,7 +51,7 @@ class GARCHModel:
             negative_alpha = alpha < 0
             negative_beta = beta < 0
             non_stationary = alpha + beta >= 1
-            invalid_df = nu <= 2  # Student-t requires df > 2 for finite variance  # noqa: PLR2004
+            invalid_df = nu <= 2  # Student-t requires df > 2 for finite variance
             return non_positive_omega or negative_alpha or negative_beta or non_stationary or invalid_df
 
         def neg_log_likelihood(params):
@@ -204,13 +207,13 @@ class MonteCarloRiskEngine:
     def _stress_correlation(self, weights: dict[str, float]) -> float:
         """Calculate correlation under stress (tail dependence)"""
         # Simplified: use historical correlation in worst 5% of days
-        if len(self.historical_returns) < 100:  # noqa: PLR2004
+        if len(self.historical_returns) < 100:
             return 0.5
 
         worst_days = self.historical_returns.sum(axis=1).quantile(0.05)
         stress_data = self.historical_returns[self.historical_returns.sum(axis=1) <= worst_days]
 
-        if len(stress_data) < 10:  # noqa: PLR2004
+        if len(stress_data) < 10:
             return 0.5
 
         return float(stress_data.corr().values.mean())
@@ -266,7 +269,7 @@ class RealTimeRiskMonitor:
 
     def _trigger_kill_switch(self, violations: list[str]):
         """Emergency position reduction"""
-        print(f"🚨 RISK LIMIT BREACH: {', '.join(violations)}")
+        logger.critical("RISK LIMIT BREACH: %s", ", ".join(violations))
         self.kill_switch_triggered = True
         # Signal to close all positions
 
@@ -473,7 +476,7 @@ class GPUFeatureEngine:
 
     def compute_features(self, prices: _np.ndarray) -> _np.ndarray:
         """Compute technical features from a price array."""
-        if len(prices) < 2:  # noqa: PLR2004
+        if len(prices) < 2:
             return prices
         returns = _np.diff(prices) / prices[:-1]
         # Simple feature set: returns, rolling mean, rolling std

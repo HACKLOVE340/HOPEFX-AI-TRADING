@@ -861,7 +861,7 @@ class InferenceEngine:
 
             # Data quality gate — refuse to nudge on bad data
             tick = orchestrator.get_latest_tick()
-            if tick is not None and tick.confidence < 0.30:  # noqa: PLR2004
+            if tick is not None and tick.confidence < 0.30:
                 logger.debug(
                     "InferenceEngine: data quality %.3f too low — suppressing nudge",
                     tick.confidence,
@@ -880,7 +880,7 @@ class InferenceEngine:
             self._last_macro_impact = impact
 
             # Hard suppress during blackout windows
-            if blackout > 0.5:  # noqa: PLR2004
+            if blackout > 0.5:
                 return 0.0
 
             # Dampen all nudges proportional to macro impact uncertainty

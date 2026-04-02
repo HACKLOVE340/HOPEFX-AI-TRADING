@@ -316,7 +316,7 @@ class MarketRegimeDetector:
             ]
         )
 
-        if bullish_count >= 4:  # noqa: PLR2004
+        if bullish_count >= 4:
             direction = "up"
             strength = bullish_count / 5
         elif bullish_count <= 1:
@@ -363,22 +363,22 @@ class MarketRegimeDetector:
         range_pct = (recent_high - recent_low) / recent_low
 
         # Classify based on ADX and volatility
-        if adx > 25 and trend["direction"] == "up":  # noqa: PLR2004
+        if adx > 25 and trend["direction"] == "up":
             return MarketRegime.TRENDING_UP, min(adx / 50, 1.0)
 
-        elif adx > 25 and trend["direction"] == "down":  # noqa: PLR2004
+        elif adx > 25 and trend["direction"] == "down":
             return MarketRegime.TRENDING_DOWN, min(adx / 50, 1.0)
 
-        elif volatility_pct > 80:  # noqa: PLR2004
+        elif volatility_pct > 80:
             return MarketRegime.VOLATILE, volatility_pct / 100
 
-        elif adx < 20 and range_pct < 0.02:  # noqa: PLR2004
+        elif adx < 20 and range_pct < 0.02:
             return MarketRegime.CONSOLIDATION, (20 - adx) / 20
 
-        elif adx < 20 and range_pct > 0.03:  # noqa: PLR2004
+        elif adx < 20 and range_pct > 0.03:
             return MarketRegime.RANGING, 0.6
 
-        elif volatility_pct > 60 and adx < 25:  # noqa: PLR2004
+        elif volatility_pct > 60 and adx < 25:
             return MarketRegime.CHOPPY, 0.5
 
         else:
@@ -405,7 +405,7 @@ class MarketRegimeDetector:
 
     def _calculate_transition_probability(self, current_regime: MarketRegime) -> dict[str, float]:
         """Calculate regime transition probabilities based on history."""
-        if len(self.regime_history) < 10:  # noqa: PLR2004
+        if len(self.regime_history) < 10:
             # Default probabilities
             return {r.value: 0.14 for r in MarketRegime}
 
@@ -489,7 +489,7 @@ class MultiTimeframeAnalyzer:
             weighted_trends = []
 
             for tf, data in data_by_timeframe.items():
-                if len(data) < 50:  # noqa: PLR2004
+                if len(data) < 50:
                     continue
 
                 analysis = self._analyze_single_timeframe(tf, data)
@@ -513,9 +513,9 @@ class MultiTimeframeAnalyzer:
             weighted_sum = sum(weighted_trends)
             alignment = sum(1 for t in trends if t == np.sign(weighted_sum)) / len(trends)
 
-            if weighted_sum > 0.1:  # noqa: PLR2004
+            if weighted_sum > 0.1:
                 overall_bias = "bullish"
-            elif weighted_sum < -0.1:  # noqa: PLR2004
+            elif weighted_sum < -0.1:
                 overall_bias = "bearish"
             else:
                 overall_bias = "neutral"
@@ -652,9 +652,9 @@ class MultiTimeframeAnalyzer:
             matching = [
                 s
                 for s in all_supports
-                if abs(s["level"] - sup["level"]) / sup["level"] < 0.005  # noqa: PLR2004
+                if abs(s["level"] - sup["level"]) / sup["level"] < 0.005
             ]
-            if len(matching) >= 2:  # noqa: PLR2004
+            if len(matching) >= 2:
                 avg_level = np.mean([s["level"] for s in matching])
                 tfs = list(set(s["timeframe"] for s in matching))
                 if not any(abs(cl["level"] - avg_level) < avg_level * 0.003 for cl in confluence_levels):
@@ -672,9 +672,9 @@ class MultiTimeframeAnalyzer:
             matching = [
                 r
                 for r in all_resistances
-                if abs(r["level"] - res["level"]) / res["level"] < 0.005  # noqa: PLR2004
+                if abs(r["level"] - res["level"]) / res["level"] < 0.005
             ]
-            if len(matching) >= 2:  # noqa: PLR2004
+            if len(matching) >= 2:
                 avg_level = np.mean([r["level"] for r in matching])
                 tfs = list(set(r["timeframe"] for r in matching))
                 if not any(abs(cl["level"] - avg_level) < avg_level * 0.003 for cl in confluence_levels):
@@ -698,19 +698,19 @@ class MultiTimeframeAnalyzer:
     ) -> tuple[str, str]:
         """Generate trading recommendation."""
 
-        if confidence > 0.7 and alignment > 0.7:  # noqa: PLR2004
+        if confidence > 0.7 and alignment > 0.7:
             if bias == "bullish":
                 return "Strong BUY setup - High timeframe alignment", "low"
             elif bias == "bearish":
                 return "Strong SELL setup - High timeframe alignment", "low"
 
-        elif confidence > 0.5 and alignment > 0.5:  # noqa: PLR2004
+        elif confidence > 0.5 and alignment > 0.5:
             if bias == "bullish":
                 return "Moderate BUY setup - Wait for pullback to support", "medium"
             elif bias == "bearish":
                 return "Moderate SELL setup - Wait for pullback to resistance", "medium"
 
-        elif confidence < 0.3 or alignment < 0.4:  # noqa: PLR2004
+        elif confidence < 0.3 or alignment < 0.4:
             return "No clear setup - Stay out or reduce position size", "high"
 
         else:

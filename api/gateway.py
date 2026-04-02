@@ -444,7 +444,7 @@ def build_gateway_app():
         pms = getattr(app_state, "portfolio_manager", None)
         auth_secret = os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET_KEY", "")
 
-        if not auth_secret or len(auth_secret) < 32:  # noqa: PLR2004
+        if not auth_secret or len(auth_secret) < 32:
             logger.warning(
                 "build_gateway_app: SECURITY_JWT_SECRET not set or too short — "
                 "gateway not mounted. Set SECURITY_JWT_SECRET (>=32 chars)."

@@ -657,7 +657,7 @@ class AdvancedAIEnsemble:
         rl_score = rl_action * rl_conf  # ∈ [-1, 1]
         combined = self.rl_weight * rl_score + self.sentiment_weight * sentiment
 
-        direction = int(np.sign(combined)) if abs(combined) > 0.1 else 0  # noqa: PLR2004
+        direction = int(np.sign(combined)) if abs(combined) > 0.1 else 0
         size = float(np.clip(abs(combined), 0.0, 1.0))
 
         return self.Signal(

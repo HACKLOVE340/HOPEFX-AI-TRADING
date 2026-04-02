@@ -147,13 +147,13 @@ class SmartOrderRouter:
     def _explain_selection(self, score: BrokerScore) -> str:
         """Generate human-readable explanation"""
         reasons = []
-        if score.latency_ms < 50:  # noqa: PLR2004
+        if score.latency_ms < 50:
             reasons.append("low_latency")
-        if score.fill_rate > 0.98:  # noqa: PLR2004
+        if score.fill_rate > 0.98:
             reasons.append("high_fill_rate")
-        if score.cost_score < 5:  # noqa: PLR2004
+        if score.cost_score < 5:
             reasons.append("low_cost")
-        if score.reliability_score > 0.99:  # noqa: PLR2004
+        if score.reliability_score > 0.99:
             reasons.append("high_reliability")
 
         return ", ".join(reasons) if reasons else "balanced_score"
@@ -230,7 +230,7 @@ class BrokerConnector:
         await self.client.get_server_time()
         latency = (datetime.now(UTC) - start).total_seconds() * 1000
         self.latency_history.append(latency)
-        if len(self.latency_history) > 1000:  # noqa: PLR2004
+        if len(self.latency_history) > 1000:
             self.latency_history.pop(0)
         return latency
 

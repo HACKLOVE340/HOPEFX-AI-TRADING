@@ -200,7 +200,7 @@ class BaseStrategy(abc.ABC):
         m["profit_factor"] = round(gross_profit / gross_loss, 4) if gross_loss else float("inf")
 
         # Sharpe ratio (annualised, assuming hourly bars)
-        if len(self._pnl_history) >= 2:  # noqa: PLR2004
+        if len(self._pnl_history) >= 2:
             arr = np.array(self._pnl_history)
             mean_r = float(np.mean(arr))
             std_r = float(np.std(arr, ddof=1))
@@ -570,7 +570,7 @@ class StrategyManager:
 
             try:
                 ohlcv = price_engine.get_ohlcv(symbol, "1h", limit=100)
-                if not ohlcv or len(ohlcv) < 50:  # noqa: PLR2004
+                if not ohlcv or len(ohlcv) < 50:
                     logger.debug("strategy.skip_no_data symbol=%s", symbol)
                     continue
             except Exception as exc:

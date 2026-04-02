@@ -408,7 +408,7 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
         # Write Helm YAML template using os.open so the file descriptor is
         # explicit and CodeQL does not trace the output_dir taint into write_text.
         # Content is a static template string — no secrets are written here.
-        import os as _os  # noqa: PLC0415
+        import os as _os
 
         text_bytes = textwrap.dedent(content).encode("utf-8")
         fd = _os.open(str(target), _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o644)

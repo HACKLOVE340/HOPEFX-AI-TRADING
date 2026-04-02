@@ -207,18 +207,18 @@ class HealthChecker:
         # CPU usage
         cpu_percent = psutil.cpu_percent(interval=0.1)
         details["cpu_percent"] = cpu_percent
-        if cpu_percent > 90:  # noqa: PLR2004
+        if cpu_percent > 90:
             issues.append(f"High CPU usage: {cpu_percent}%")
-        elif cpu_percent > 70:  # noqa: PLR2004
+        elif cpu_percent > 70:
             issues.append(f"Elevated CPU usage: {cpu_percent}%")
 
         # Memory usage
         memory = psutil.virtual_memory()
         details["memory_percent"] = memory.percent
         details["memory_available_mb"] = memory.available / 1024 / 1024
-        if memory.percent > 90:  # noqa: PLR2004
+        if memory.percent > 90:
             issues.append(f"High memory usage: {memory.percent}%")
-        elif memory.percent > 80:  # noqa: PLR2004
+        elif memory.percent > 80:
             issues.append(f"Elevated memory usage: {memory.percent}%")
 
         # Disk usage
@@ -226,7 +226,7 @@ class HealthChecker:
         disk_percent = (disk.used / disk.total) * 100
         details["disk_percent"] = disk_percent
         details["disk_free_gb"] = disk.free / 1024 / 1024 / 1024
-        if disk_percent > 90:  # noqa: PLR2004
+        if disk_percent > 90:
             issues.append(f"Low disk space: {disk_percent:.1f}% used")
 
         # Determine status
@@ -384,7 +384,7 @@ class HealthChecker:
 
             for symbol in getattr(engine, "symbols", []):
                 tick = engine.get_last_price(symbol)
-                if tick and (current_time - tick.timestamp) > 300:  # 5 min stale  # noqa: PLR2004
+                if tick and (current_time - tick.timestamp) > 300:  # 5 min stale
                     stale_symbols.append(symbol)
 
             if stale_symbols:

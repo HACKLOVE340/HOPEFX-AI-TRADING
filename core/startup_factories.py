@@ -946,7 +946,7 @@ async def init_macro_store(s: Any) -> Any:
 
     # ── Fallback: CSV bootstrap (original yfinance path) ────────────────────
     # Runs if FRED loaded fewer than 3 series (partial failure) or errored.
-    if fred_loaded < 3:  # noqa: PLR2004
+    if fred_loaded < 3:
         try:
             from ml.macro_bootstrap import bootstrap, load_into_store
 
@@ -966,7 +966,7 @@ async def init_macro_store(s: Any) -> Any:
     n_in_store = len(getattr(macro_store, "_series", {}))
     log_activity(
         f"MacroStore initialised — {n_in_store} series loaded "
-        f"({'FRED' if fred_loaded >= 3 else 'CSV fallback'}), "  # noqa: PLR2004
+        f"({'FRED' if fred_loaded >= 3 else 'CSV fallback'}), "
         "daily refresh scheduled at 18:00 UTC",
     )
     return macro_store
@@ -1528,7 +1528,7 @@ async def init_daily_online_learner(s: Any) -> Any:
             df = pd.read_csv(csv_path, parse_dates=["timestamp"])
             df.columns = [c.lower() for c in df.columns]
             df = df.tail(20)
-            if len(df) < 10 or "close" not in df.columns:  # noqa: PLR2004
+            if len(df) < 10 or "close" not in df.columns:
                 return None
 
             returns = df["close"].pct_change().dropna()
@@ -1537,9 +1537,9 @@ async def init_daily_online_learner(s: Any) -> Any:
             mid = float(df["close"].mean())
             range_pct = price_range / mid if mid > 0 else 0
 
-            if vol > 0.005:  # noqa: PLR2004
+            if vol > 0.005:
                 return "volatile"
-            elif range_pct < 0.005:  # noqa: PLR2004
+            elif range_pct < 0.005:
                 return "ranging"
             else:
                 return "trending"

@@ -534,7 +534,7 @@ class ForwardTestHarness:
                 return
 
             self._tick_buffer.append({"close": price, "bid": price, "ask": price})
-            if len(self._tick_buffer) > 200:  # noqa: PLR2004
+            if len(self._tick_buffer) > 200:
                 self._tick_buffer.pop(0)
 
             if not self._news.is_safe_to_trade():

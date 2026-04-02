@@ -179,7 +179,7 @@ def check_orchestrator() -> str:
     f2 = orchestrator.get_ml_features(symbol="XAU_USD")
     f3 = orchestrator.get_ml_features(as_of=datetime.now(UTC), symbol="XAU_USD")
     assert isinstance(f1, dict), "get_ml_features() must return dict"
-    assert len(f1) >= 20, f"Expected >=20 features, got {len(f1)}"  # noqa: PLR2004
+    assert len(f1) >= 20, f"Expected >=20 features, got {len(f1)}"
     assert len(f1) == len(f2) == len(f3), "All call signatures must return same count"
     h = orchestrator.health()
     required_keys = {
@@ -340,7 +340,7 @@ def check_normalization() -> str:
     assert not cleaned.empty, "normalize_ohlcv returned empty DataFrame"
     assert "log_return" in cleaned.columns
     assert "ohlcv_valid" in cleaned.columns
-    assert cleaned["ohlcv_valid"].sum() >= 40, "Too many invalid bars"  # noqa: PLR2004
+    assert cleaned["ohlcv_valid"].sum() >= 40, "Too many invalid bars"
     return f"{len(cleaned)} bars cleaned, {int(cleaned['ohlcv_valid'].sum())} valid"
 
 
@@ -369,7 +369,7 @@ def check_microstructure() -> str:
         micro.on_tick(tick)
 
     features = micro.get_ml_features()
-    assert len(features) >= 16, f"Expected >=16 features, got {len(features)}"  # noqa: PLR2004
+    assert len(features) >= 16, f"Expected >=16 features, got {len(features)}"
     assert "micro_spread" in features
     assert "micro_ofi" in features
     assert "micro_kyles_lambda" in features
@@ -398,7 +398,7 @@ def check_sentiment_scorer() -> str:
     )
     scored = scorer.score(article)
     assert (
-        scored.gold_relevance > 0.3  # noqa: PLR2004
+        scored.gold_relevance > 0.3
     ), f"Gold relevance too low: {scored.gold_relevance}"
     assert -1.0 <= scored.sentiment_score <= 1.0
     return (
@@ -648,7 +648,7 @@ async def check_orchestrator_start_stop() -> None:
         features = orch.get_ml_features()
         record(
             "Orchestrator: get_ml_features() after start()",
-            len(features) >= 20,  # noqa: PLR2004
+            len(features) >= 20,
             f"{len(features)} features",
         )
     except Exception as exc:

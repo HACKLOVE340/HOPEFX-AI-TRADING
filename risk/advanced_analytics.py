@@ -400,10 +400,10 @@ class AdvancedRiskAnalytics:
 
         # Test normality (Jarque-Bera) and warn if rejected at 5% level.
         # This is informational — the calculation proceeds regardless.
-        if len(returns) >= 20:  # noqa: PLR2004
+        if len(returns) >= 20:
             try:
                 _, jb_pvalue = stats.jarque_bera(returns)
-                if jb_pvalue < 0.05:  # noqa: PLR2004
+                if jb_pvalue < 0.05:
                     import warnings as _w
 
                     _w.warn(
@@ -606,7 +606,7 @@ class AdvancedRiskAnalytics:
         if method == "non_overlapping":
             # Non-overlapping t-day blocks
             n_blocks = len(returns) // time_horizon
-            if n_blocks < 10:  # noqa: PLR2004
+            if n_blocks < 10:
                 # Fall back to overlapping if too few blocks
                 method = "overlapping"
             else:
@@ -690,7 +690,7 @@ class AdvancedRiskAnalytics:
         """
         confidence_level = confidence_level or self.var_confidence
 
-        if len(returns) < 10:  # noqa: PLR2004
+        if len(returns) < 10:
             # Delegate to 1-day historical (no multi-day scaling needed)
             return self.calculate_var_historical(
                 returns,
@@ -982,7 +982,7 @@ class AdvancedRiskAnalytics:
             "best_case": np.percentile(final_portfolio_values, 95),
             "worst_case": np.percentile(final_portfolio_values, 5),
             "probability_loss": np.mean(portfolio_returns < 0),
-            "probability_gain_10pct": np.mean(portfolio_returns > 0.10),  # noqa: PLR2004
+            "probability_gain_10pct": np.mean(portfolio_returns > 0.10),
         }
 
     # ============================================================
@@ -1030,13 +1030,13 @@ class AdvancedRiskAnalytics:
         pct_impact = total_impact / total_value if total_value > 0 else 0
 
         # Determine risk level
-        if abs(pct_impact) < 0.05:  # noqa: PLR2004
+        if abs(pct_impact) < 0.05:
             risk_level = "low"
             recommendation = "Portfolio is resilient to this scenario"
-        elif abs(pct_impact) < 0.15:  # noqa: PLR2004
+        elif abs(pct_impact) < 0.15:
             risk_level = "medium"
             recommendation = "Consider hedging or reducing exposure"
-        elif abs(pct_impact) < 0.30:  # noqa: PLR2004
+        elif abs(pct_impact) < 0.30:
             risk_level = "high"
             recommendation = "Significant risk - implement protective measures"
         else:
@@ -1313,7 +1313,7 @@ class AdvancedRiskAnalytics:
         confidence_level = confidence_level or self.var_confidence
         arr = np.asarray(returns, dtype=float)
 
-        if len(arr) < 100:  # noqa: PLR2004
+        if len(arr) < 100:
             raise ValueError(
                 f"calculate_var_garch requires >= 100 observations, got {len(arr)}. "
                 "Use calculate_var_ewma or calculate_var_multiday for shorter series."
@@ -1425,9 +1425,9 @@ class AdvancedRiskAnalytics:
         # Multi-day VaR (10-day) — correct methods, no sqrt(t)
         var_multiday_10 = None
         var_garch_10 = None
-        if len(returns) >= 30:  # noqa: PLR2004
+        if len(returns) >= 30:
             var_multiday_10 = self.calculate_var_multiday(returns, time_horizon=10, portfolio_value=portfolio_value)
-        if len(returns) >= 100:  # noqa: PLR2004
+        if len(returns) >= 100:
             var_garch_10 = self.calculate_var_garch(returns, time_horizon=10, portfolio_value=portfolio_value)
 
         # Drawdown analysis

@@ -342,7 +342,7 @@ class RealTimeSignalService:
 
         # ── High-confidence pipeline: social feed + FCM push ─────────────────
         # Threshold: confidence >= 0.70 (70%)
-        if confidence >= 0.70:  # noqa: PLR2004
+        if confidence >= 0.70:
             self._publish_to_social_feed(signal)
             self._push_fcm_to_all_users(signal)
 
@@ -412,13 +412,13 @@ class RealTimeSignalService:
         # Weighted score
         composite = (confidence * 0.5) + (strategy_agreement * 0.3) + (rr_score * 0.2)
 
-        if composite >= 0.8:  # noqa: PLR2004
+        if composite >= 0.8:
             return SignalStrength.VERY_STRONG
-        elif composite >= 0.6:  # noqa: PLR2004
+        elif composite >= 0.6:
             return SignalStrength.STRONG
-        elif composite >= 0.4:  # noqa: PLR2004
+        elif composite >= 0.4:
             return SignalStrength.MODERATE
-        elif composite >= 0.2:  # noqa: PLR2004
+        elif composite >= 0.2:
             return SignalStrength.WEAK
         else:
             return SignalStrength.VERY_WEAK
@@ -713,11 +713,11 @@ class RealTimeSignalService:
 
             strength = (
                 SignalStrength.VERY_STRONG
-                if confidence >= 0.8  # noqa: PLR2004
+                if confidence >= 0.8
                 else SignalStrength.STRONG
-                if confidence >= 0.6  # noqa: PLR2004
+                if confidence >= 0.6
                 else SignalStrength.MODERATE
-                if confidence >= 0.4  # noqa: PLR2004
+                if confidence >= 0.4
                 else SignalStrength.WEAK
             )
 
@@ -1083,7 +1083,7 @@ def create_signals_router():
         report = (
             validator.validate()
             if (
-                len(validator._oos_signals) >= 30 and len(validator._live_signals) >= 30  # noqa: PLR2004
+                len(validator._oos_signals) >= 30 and len(validator._live_signals) >= 30
             )
             else None
         )

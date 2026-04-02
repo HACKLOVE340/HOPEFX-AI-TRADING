@@ -457,7 +457,7 @@ class AnomalyWeightStore:
             weighter = AnomalyWeighter(
                 contamination=self._contamination,
                 n_estimators=100,
-                use_lof=self.use_lof and len(X) >= 100,  # LOF needs enough neighbours  # noqa: PLR2004
+                use_lof=self.use_lof and len(X) >= 100,  # LOF needs enough neighbours
                 lof_neighbors=min(20, len(X) // 5),
             )
             weighter.fit(X)
@@ -467,7 +467,7 @@ class AnomalyWeightStore:
             logger.debug(
                 "AnomalyWeightStore: refitted on %d bars (LOF=%s)",
                 len(X),
-                self.use_lof and len(X) >= 100,  # noqa: PLR2004
+                self.use_lof and len(X) >= 100,
             )
             # Persist after successful refit
             if self.persist_path:
