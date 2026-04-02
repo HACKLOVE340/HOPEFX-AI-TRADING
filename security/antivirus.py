@@ -619,7 +619,16 @@ rule SuspiciousImport {
             _require_admin(request)
             if not body.file_path:
                 raise HTTPException(status_code=400, detail="file_path required")
-            path = PROJECT_ROOT / body.file_path
+            # Resolve and confine the path to PROJECT_ROOT to prevent traversal.
+            # resolve() expands symlinks and normalises ".." components; the
+            # relative_to() check then guarantees the result stays inside the
+            # project tree regardless of what the caller supplied.
+            resolved_root = PROJECT_ROOT.resolve()
+            try:
+                path = (resolved_root / body.file_path).resolve()
+                path.relative_to(resolved_root)  # raises ValueError if outside root
+            except (ValueError, OSError):
+                raise HTTPException(status_code=400, detail="Invalid file path") from None
             if not path.exists():
                 raise HTTPException(status_code=404, detail="File not found")
             threats = await asyncio.get_event_loop().run_in_executor(
