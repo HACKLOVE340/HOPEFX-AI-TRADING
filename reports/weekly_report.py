@@ -353,12 +353,9 @@ def _detect_data_source() -> str:
       4. Fallback → paper_simulation
     """
     try:
-        import json as _json
-        from pathlib import Path as _Path
-
-        oanda_stamp = _Path("data/oanda_paper_start.json")
+        oanda_stamp = Path("data/oanda_paper_start.json")
         if oanda_stamp.exists():
-            info = _json.loads(oanda_stamp.read_text())
+            info = json.loads(oanda_stamp.read_text())
             account_id = info.get("account_id", "PENDING")
             if account_id and account_id != "PENDING" and not account_id.startswith("PENDING"):
                 return DATA_SOURCE_PAPER_OANDA

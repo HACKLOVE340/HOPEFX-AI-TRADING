@@ -165,17 +165,14 @@ def _setup_env(args: argparse.Namespace) -> None:
     # Prop-firm enforcement
     if getattr(args, "prop", False):
         try:
-            import json as _json
-            from pathlib import Path as _Path
-
-            cfg_path = _Path(args.config)
+            cfg_path = Path(args.config)
             cfg = {}
             if cfg_path.exists():
-                with open(cfg_path) as f:
-                    cfg = _json.load(f)
+                with open(cfg_path, encoding="utf-8") as f:
+                    cfg = json.load(f)
             cfg["enabled"] = True
-            with open(cfg_path, "w") as f:
-                _json.dump(cfg, f, indent=2)
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, indent=2)
             logger.info("Prop-firm enforcement ENABLED in %s", cfg_path)
         except Exception as exc:
             logger.warning("Could not enable prop-firm mode: %s", exc)

@@ -244,7 +244,6 @@ class AdvancedFeatureEngineer:
         body = abs(df["close"] - df["open"])
         upper_shadow = df["high"] - np.maximum(df["close"], df["open"])
         lower_shadow = np.minimum(df["close"], df["open"]) - df["low"]
-        df["high"] - df["low"]
 
         # Hammer/Hanging Man
         df["hammer_score"] = (lower_shadow > 2 * upper_shadow).astype(int) * (body < body.rolling(20).mean()).astype(
@@ -448,7 +447,7 @@ class AdvancedFeatureEngineer:
                 ordering = tuple(np.argsort(prices[i : i + order]))
                 orderings.append(ordering)
 
-            unique, counts = np.unique(orderings, return_counts=True)
+            _, counts = np.unique(orderings, return_counts=True)
             probs = counts / len(orderings)
             entropy = -np.sum(probs * np.log(probs + 1e-10))
 

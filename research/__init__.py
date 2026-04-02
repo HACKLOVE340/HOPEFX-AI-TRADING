@@ -455,13 +455,13 @@ print("Feature engineering functions ready")
 
         return notebook
 
-    def export_notebook(self, notebook_id: str, format: str = "json") -> str | None:
+    def export_notebook(self, notebook_id: str, export_format: str = "json") -> str | None:
         """Export notebook to file format."""
         notebook = self.notebooks.get(notebook_id)
         if not notebook:
             return None
 
-        if format == "json":
+        if export_format == "json":
             data = {
                 "notebook_id": notebook.notebook_id,
                 "title": notebook.title,
@@ -481,7 +481,7 @@ print("Feature engineering functions ready")
             }
             return json.dumps(data, indent=2)
 
-        elif format == "python":
+        elif export_format == "python":
             # Export as Python script
             lines = [
                 f"# {notebook.title}",
@@ -639,12 +639,12 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         return {"notebook_id": notebook_id, "results": results}
 
     @router.get("/notebooks/{notebook_id}/export")
-    async def export_notebook(notebook_id: str, format: str = "json"):
+    async def export_notebook(notebook_id: str, export_format: str = "json"):
         """Export a notebook as JSON or Python script."""
-        exported = engine.export_notebook(notebook_id, format)
+        exported = engine.export_notebook(notebook_id, export_format)
         if exported is None:
             raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
-        return {"notebook_id": notebook_id, "format": format, "content": exported}
+        return {"notebook_id": notebook_id, "format": export_format, "content": exported}
 
     @router.get("/templates")
     async def list_templates():

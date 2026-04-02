@@ -97,7 +97,7 @@ class TransactionManager:
         self,
         user_id: str,
         wallet_id: str,
-        type: TransactionType,
+        transaction_type: TransactionType,
         amount: Decimal,
         currency: str,
         method: str,
@@ -135,7 +135,7 @@ class TransactionManager:
                 transaction_id=transaction_id,
                 user_id=user_id,
                 wallet_id=wallet_id,
-                type=type,
+                type=transaction_type,
                 amount=amount,
                 currency=currency,
                 method=method,
@@ -283,7 +283,7 @@ class TransactionManager:
     def get_user_transactions(
         self,
         user_id: str,
-        type: TransactionType | None = None,
+        transaction_type: TransactionType | None = None,
         status: TransactionStatus | None = None,
         limit: int = 100,
     ) -> list[Transaction]:
@@ -303,8 +303,8 @@ class TransactionManager:
         transactions = [self.transactions[tid] for tid in transaction_ids if tid in self.transactions]
 
         # Apply filters
-        if type:
-            transactions = [t for t in transactions if t.type == type]
+        if transaction_type:
+            transactions = [t for t in transactions if t.type == transaction_type]
         if status:
             transactions = [t for t in transactions if t.status == status]
 

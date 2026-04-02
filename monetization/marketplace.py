@@ -716,9 +716,7 @@ class MarketplaceAPI:
         performance_metrics: dict[str, float],
     ) -> StrategyListing:
         """List new strategy on marketplace"""
-        import uuid
-
-        strategy_id = str(uuid.uuid4())
+        strategy_id = str(_uuid.uuid4())
 
         strategy = StrategyListing(
             strategy_id=strategy_id,
@@ -836,11 +834,6 @@ class PurchaseStatus(_enum.Enum):
     EXPIRED = "expired"
     CANCELLED = "cancelled"
     REFUNDED = "refunded"
-
-
-# Dataclass-style aliases
-from dataclasses import dataclass
-from datetime import datetime
 
 
 @dataclass

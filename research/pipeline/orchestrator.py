@@ -391,7 +391,7 @@ class PipelineOrchestrator:
         self.synthesizer = synth
 
         # Augment the rarest regime (highest vol = index n_regimes-1)
-        X_aug, labels_aug = synth.augment_rare_regimes(
+        X_aug, _ = synth.augment_rare_regimes(
             X_train.values,
             regime_labels,
             target_regime=cfg.n_regimes - 1,
@@ -524,7 +524,7 @@ class PipelineOrchestrator:
         train_df, val_df, test_df = self._split(feat_df)
 
         # 4. Arrays
-        X_train_df, y_train, y_train_ret = self._prepare_arrays(train_df)
+        X_train_df, y_train, _ = self._prepare_arrays(train_df)
         X_val_df, y_val, y_val_ret = self._prepare_arrays(val_df)
         X_test_df, y_test, y_test_ret = self._prepare_arrays(test_df)
 

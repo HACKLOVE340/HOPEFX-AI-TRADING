@@ -308,7 +308,7 @@ class RandomForestTradingClassifier(BaseMLModel):
 
         # Calculate metrics
         accuracy = accuracy_score(y_test_encoded, predictions)
-        precision, recall, f1, support = precision_recall_fscore_support(
+        precision, recall, f1, _ = precision_recall_fscore_support(
             y_test_encoded,
             predictions,
             average="weighted",

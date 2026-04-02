@@ -452,7 +452,7 @@ class RLAgent:
 
         while True:
             action, _ = self._model.predict(obs, deterministic=True)
-            obs, reward, done, _, info = env.step(int(action))
+            obs, _, done, _, info = env.step(int(action))
             eq = info.get("equity", prev_equity)
             equity_curve.append(eq)
             if eq > prev_equity:

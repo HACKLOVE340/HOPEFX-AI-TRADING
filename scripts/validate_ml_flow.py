@@ -594,13 +594,12 @@ def stage_position_accounting() -> str:
 
 def stage_kill_switch_gate() -> str:
     import tempfile
-    from pathlib import Path as _Path
     from brain.hopefx_brain import HOPEFXBrain
     from kill_switch import KillSwitch
 
     _ensure_ohlcv()
     with tempfile.TemporaryDirectory() as tmp:
-        flag_file = _Path(tmp) / "ks.flag"
+        flag_file = Path(tmp) / "ks.flag"
         ks = KillSwitch(flag_file=flag_file, deactivation_token="test-token")
 
         # Activate the kill switch
