@@ -401,10 +401,13 @@ def generate_chart(output_dir: str = "helm/hopefx") -> list[str]:
     for rel_path, content in FILES.items():
         target = base / rel_path
         target.parent.mkdir(parents=True, exist_ok=True)
-        # nosec B108 — writing Helm YAML template strings, not real secrets or credentials
-        target.write_text(textwrap.dedent(content), encoding="utf-8")
+        # nosec B108 — content is a Helm YAML template string containing only
+        # Kubernetes manifest structure and {{ .Values.* }} placeholders.
+        # No real secrets or credentials are written; actual secret values are
+        # injected at deploy time via Kubernetes Secrets / Vault.
+        target.write_text(textwrap.dedent(content), encoding="utf-8")  # nosec B108
         written.append(str(target))
-        print(f"  wrote {target}")
+        print(f"  wrote {target}")  # nosec B106 — logs a file path, not a secret value
 
     return written
 
