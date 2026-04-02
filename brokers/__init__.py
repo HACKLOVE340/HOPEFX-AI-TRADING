@@ -29,7 +29,7 @@ except ImportError:
     logging.warning("aiohttp not available, OANDA broker disabled")
 
 try:
-    import numpy as np  # noqa: F401
+    import numpy as np
 
     NUMPY_AVAILABLE = True
 except ImportError:
@@ -790,6 +790,7 @@ class PaperTradingBroker(BaseBroker):
                         quantity=quantity,
                         entry_price=fill_price,
                         current_price=fill_price,
+                        unrealized_pnl=0.0,
                     )
             else:
                 self.balance += fill_price * quantity
@@ -1242,10 +1243,10 @@ except Exception as _exc:
     _logging.getLogger(__name__).warning("PaperTradingBroker import failed: %s", _exc)
 
 
-from brokers.factory import BrokerFactory  # noqa: F401
+from brokers.factory import BrokerFactory
 
 try:
-    from brokers.base import AccountInfo, BrokerConnector  # noqa: F401
+    from brokers.base import AccountInfo, BrokerConnector
 except Exception as _exc:
     import logging as _logging
 
@@ -1255,21 +1256,21 @@ except Exception as _exc:
 # These complement the existing connector classes and are used by the new
 # yaml-driven BrokerFactory (config/brokers.yaml).
 try:
-    from brokers.mt5_broker import MT5Broker  # noqa: F401
+    from brokers.mt5_broker import MT5Broker
 except Exception as _exc:
     import logging as _logging
 
     _logging.getLogger(__name__).debug("MT5Broker unavailable: %s", _exc)
 
 try:
-    from brokers.oanda_broker import OandaBroker as OandaBrokerYaml  # noqa: F401
+    from brokers.oanda_broker import OandaBroker as OandaBrokerYaml
 except Exception as _exc:
     import logging as _logging
 
     _logging.getLogger(__name__).debug("OandaBroker (yaml) unavailable: %s", _exc)
 
 try:
-    from brokers.ibkr_broker import IBKRBroker  # noqa: F401
+    from brokers.ibkr_broker import IBKRBroker
 except Exception as _exc:
     import logging as _logging
 

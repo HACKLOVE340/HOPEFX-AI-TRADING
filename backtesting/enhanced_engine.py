@@ -54,8 +54,8 @@ import warnings
 
 # Performance libraries
 try:
-    import numba  # noqa: F401
-    from numba import jit, prange, njit, cuda  # noqa: F401
+    import numba
+    from numba import jit, prange, njit, cuda
 
     NUMBA_AVAILABLE = True
 except ImportError:
@@ -63,16 +63,16 @@ except ImportError:
     warnings.warn("Numba unavailable - performance degraded", stacklevel=2)
 
 try:
-    import cupy as cp  # noqa: F401
-    from cupy.cuda import Device  # noqa: F401
+    import cupy as cp
+    from cupy.cuda import Device
 
     CUDA_AVAILABLE = True
 except ImportError:
     CUDA_AVAILABLE = False
 
 try:
-    from scipy import stats, optimize, interpolate  # noqa: F401
-    from scipy.optimize import minimize, differential_evolution  # noqa: F401
+    from scipy import stats, optimize, interpolate
+    from scipy.optimize import minimize, differential_evolution
 
     SCIPY_AVAILABLE = True
 except ImportError:
