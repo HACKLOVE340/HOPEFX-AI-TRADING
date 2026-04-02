@@ -148,8 +148,8 @@ class Settings(BaseSettings):
     def validate_paths(self) -> Settings:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.ml.model_path.mkdir(parents=True, exist_ok=True)
-        self.ml.feature_store_path.mkdir(parents=True, exist_ok=True)
+        self.ml.model_path.mkdir(parents=True, exist_ok=True)  # pylint: disable=no-member
+        self.ml.feature_store_path.mkdir(parents=True, exist_ok=True)  # pylint: disable=no-member
         return self
 
 
