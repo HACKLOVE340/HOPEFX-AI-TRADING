@@ -528,14 +528,13 @@ class TestNewsProvider:
             def get_news(self, **kwargs):
                 return []
 
-            def format_article(self, raw_article):
-                from datetime import datetime, timezone
+            def format_article(self, raw_article, **kwargs):
                 return NewsArticle(
                     title="",
                     description="",
                     source="",
                     url="",
-                    published_at=datetime.now(timezone.utc),
+                    published_at=datetime.now(UTC),
                     symbols=[],
                 )
 

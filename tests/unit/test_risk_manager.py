@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 
-from risk.manager import RiskManager, RiskLevel
+from risk.manager import RiskManager, RiskConfig, RiskLevel
 from risk.advanced_analytics import RiskAnalytics
 from database.models import Trade, Position, Account
 
@@ -183,7 +183,6 @@ class TestRiskAnalytics:
 Integration tests for broker connectivity and order execution
 """
 
-import pytest
 from unittest.mock import Mock, patch
 
 from brokers.oanda import OandaBroker
@@ -244,7 +243,6 @@ class TestOandaIntegration:
 End-to-end trading workflow tests
 """
 
-import pytest
 
 
 class TestTradingWorkflow:
@@ -264,7 +262,6 @@ class TestTradingWorkflow:
         """
         # Verify the core trading cycle using real components:
         # RiskManager → position sizing → kill-switch integration
-        from risk.manager import RiskManager, RiskConfig
         from execution import PaperExecutor, Order
 
         # Use a $1M account so position sizing produces a non-trivial lot count
