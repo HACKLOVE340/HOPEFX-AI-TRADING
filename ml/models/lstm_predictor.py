@@ -12,8 +12,11 @@ Advanced LSTM Neural Network for Price Prediction
 - Walk-forward validation
 """
 
+from __future__ import annotations
+
 import warnings
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -34,6 +37,12 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
+    # Provide stub so type annotations resolve at class-body parse time
+    # when TensorFlow is absent.  The __init__ guard raises ImportError
+    # before any method that uses these is called.
+    Model = Any  # type: ignore[assignment,misc]
+    Sequential = Any  # type: ignore[assignment,misc]
+    MinMaxScaler = Any  # type: ignore[assignment,misc]
 
 
 @dataclass
