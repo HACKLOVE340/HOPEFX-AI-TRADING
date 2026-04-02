@@ -772,9 +772,7 @@ class MobileAPI:
                     total_value = float(getattr(broker, "equity", balance))
                     data_source = "broker"
             except Exception as exc:
-                import logging as _logging
-
-                _logging.getLogger(__name__).warning("MobileAPI.get_portfolio_mobile: broker data error: %s", exc)
+                logging.getLogger(__name__).warning("MobileAPI.get_portfolio_mobile: broker data error: %s", exc)
 
             try:
                 if hasattr(broker, "get_positions"):
@@ -782,9 +780,7 @@ class MobileAPI:
                     if raw:
                         positions = [p.__dict__ if hasattr(p, "__dict__") else p for p in raw]
             except Exception as exc:
-                import logging as _logging
-
-                _logging.getLogger(__name__).warning("MobileAPI.get_portfolio_mobile: positions error: %s", exc)
+                logging.getLogger(__name__).warning("MobileAPI.get_portfolio_mobile: positions error: %s", exc)
 
         return {
             "user_id": user_id,

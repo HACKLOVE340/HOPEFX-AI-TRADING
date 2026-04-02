@@ -174,10 +174,8 @@ class MobileAPIServer:
         rate_limiter=None,
     ):
         """Initialize mobile API"""
-        import os
-
-        resolved_secret = jwt_secret or os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET")
-        if not resolved_secret or len(resolved_secret) < 32:
+        resolved_secret = jwt_secret or _os.getenv("SECURITY_JWT_SECRET") or _os.getenv("JWT_SECRET")
+        if not resolved_secret or len(resolved_secret) < 32:  # noqa: PLR2004
             raise ValueError(
                 "jwt_secret must be >= 32 characters. "
                 "Set SECURITY_JWT_SECRET env var or pass jwt_secret= explicitly. "

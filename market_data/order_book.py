@@ -460,9 +460,7 @@ class MockL2Feed:
     """
 
     def __init__(self) -> None:
-        import os as _os
-
-        _env = _os.getenv("APP_ENV", "production").lower()
+        _env = os.getenv("APP_ENV", "production").lower()
         if _env in ("production", "staging"):
             raise RuntimeError(
                 f"MockL2Feed cannot be used in {_env} (APP_ENV={_env}). "

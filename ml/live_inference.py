@@ -275,9 +275,7 @@ class AdvancedModelPredictor:
 
                 dl_features = orchestrator.get_ml_features()
                 if dl_features:
-                    import pandas as _pd
-
-                    dl_row = _pd.DataFrame([dl_features], index=result.index)
+                    dl_row = pd.DataFrame([dl_features], index=result.index)
                     # Only add columns not already present
                     new_cols = [c for c in dl_row.columns if c not in result.columns]
                     if new_cols:

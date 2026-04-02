@@ -217,9 +217,7 @@ class FeatureEngineer:
                     lookback=lookback_window,
                 )
             except Exception as _macro_exc:
-                import logging as _log
-
-                _log.getLogger(__name__).warning(
+                logging.getLogger(__name__).warning(
                     "Macro feature injection failed (continuing without): %s",
                     _macro_exc,
                 )
@@ -229,9 +227,7 @@ class FeatureEngineer:
             try:
                 data = add_regime_features(data, lookback=lookback_window * 3)
             except Exception as _reg_exc:
-                import logging as _log
-
-                _log.getLogger(__name__).warning(
+                logging.getLogger(__name__).warning(
                     "Regime feature injection failed (continuing without): %s",
                     _reg_exc,
                 )
