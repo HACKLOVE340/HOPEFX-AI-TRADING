@@ -95,7 +95,7 @@ def _load_persisted_risk_settings() -> dict[str, Any]:
     try:
         if not _RISK_SETTINGS_FILE.exists():
             return {}
-        return json.loads(_RISK_SETTINGS_FILE.read_text())
+        return json.loads(_RISK_SETTINGS_FILE.read_text(encoding="utf-8"))
     except Exception as exc:
         logger.warning("_load_persisted_risk_settings: %s", exc)
         return {}
@@ -123,7 +123,7 @@ def _save_risk_settings(settings: dict[str, Any], changed_by: str = "system") ->
 
     try:
         _RISK_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _RISK_SETTINGS_FILE.write_text(json.dumps(settings, indent=2))
+        _RISK_SETTINGS_FILE.write_text(json.dumps(settings, indent=2), encoding="utf-8")
         return True
     except Exception as file_exc:
         logger.error("_save_risk_settings fallback failed: %s", file_exc)
@@ -145,7 +145,7 @@ def apply_persisted_risk_settings() -> None:
 
         if _RISK_SETTINGS_FILE.exists() and config_store.get(_RISK_SETTINGS_KEY) is None:
             try:
-                legacy = json.loads(_RISK_SETTINGS_FILE.read_text())
+                legacy = json.loads(_RISK_SETTINGS_FILE.read_text(encoding="utf-8"))
                 if legacy:
                     config_store.set(_RISK_SETTINGS_KEY, legacy, changed_by="migration")
                     logger.info(

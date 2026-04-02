@@ -52,10 +52,10 @@ import json
 import gzip
 import warnings
 
-# Performance libraries
+# Performance libraries — imported for availability checks; used conditionally
 try:
-    import numba
-    from numba import jit, prange, njit, cuda
+    import numba  # pylint: disable=unused-import  # noqa: F401
+    from numba import jit, prange, njit, cuda  # pylint: disable=unused-import  # noqa: F401
 
     NUMBA_AVAILABLE = True
 except ImportError:
@@ -63,16 +63,16 @@ except ImportError:
     warnings.warn("Numba unavailable - performance degraded", stacklevel=2)
 
 try:
-    import cupy as cp
-    from cupy.cuda import Device
+    import cupy as cp  # pylint: disable=unused-import  # noqa: F401
+    from cupy.cuda import Device  # pylint: disable=unused-import  # noqa: F401
 
     CUDA_AVAILABLE = True
 except ImportError:
     CUDA_AVAILABLE = False
 
 try:
-    from scipy import stats, optimize, interpolate
-    from scipy.optimize import minimize, differential_evolution
+    from scipy import stats, optimize, interpolate  # pylint: disable=unused-import  # noqa: F401
+    from scipy.optimize import minimize, differential_evolution  # pylint: disable=unused-import  # noqa: F401
 
     SCIPY_AVAILABLE = True
 except ImportError:
@@ -461,10 +461,8 @@ class TransactionCostModel:
         If fewer than min_samples are provided, returns the current parameters
         unchanged with a warning.
         """
-        import warnings as _w
-
         if len(executions) < min_samples:
-            _w.warn(
+            warnings.warn(
                 f"calibrate_from_executions: only {len(executions)} samples "
                 f"(need >= {min_samples}). Parameters unchanged.",
                 RuntimeWarning,
@@ -481,12 +479,11 @@ class TransactionCostModel:
             }
 
         try:
-            import numpy as _np
             from scipy.optimize import curve_fit as _curve_fit
 
-            x_arr = _np.array([e["participation_rate"] for e in executions])
-            s_arr = _np.array([e["daily_volatility"] for e in executions])
-            y_arr = _np.array([e["observed_impact_bps"] for e in executions]) / 10000  # → fraction
+            x_arr = np.array([e["participation_rate"] for e in executions])
+            s_arr = np.array([e["daily_volatility"] for e in executions])
+            y_arr = np.array([e["observed_impact_bps"] for e in executions]) / 10000  # → fraction
 
             def _model(X, eta, gamma, beta):
                 x, s = X
@@ -505,12 +502,12 @@ class TransactionCostModel:
                 maxfev=5000,
             )
             eta_fit, gamma_fit, beta_fit = popt
-            perr = _np.sqrt(_np.diag(pcov))
+            perr = np.sqrt(np.diag(pcov))
 
             # Goodness of fit
             y_pred = _model((x_arr, s_arr), *popt)
-            ss_res = _np.sum((y_arr - y_pred) ** 2)
-            ss_tot = _np.sum((y_arr - _np.mean(y_arr)) ** 2)
+            ss_res = np.sum((y_arr - y_pred) ** 2)
+            ss_tot = np.sum((y_arr - np.mean(y_arr)) ** 2)
             r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
             self.temporary_impact_coefficient = float(eta_fit)
@@ -1651,7 +1648,7 @@ class EnhancedBacktestEngine:
         current_price = history[-1]
 
         # Pre-trade risk check
-        allowed, reason, risk_meta = self.risk_manager.check_pre_trade_risk(symbol, side, size, current_price, {})
+        allowed, reason, _ = self.risk_manager.check_pre_trade_risk(symbol, side, size, current_price, {})
 
         if not allowed:
             return False, reason, None
@@ -1959,7 +1956,7 @@ class EnhancedBacktestEngine:
 
         # Equity curve analysis
         equity_values = [e[1] for e in self.equity_curve]
-        [e[0] for e in self.equity_curve]
+        _equity_timestamps = [e[0] for e in self.equity_curve]  # available for time-series analysis
 
         # Calculate returns
         equity_returns = np.diff(equity_values) / equity_values[:-1] if len(equity_values) > 1 else np.array([])
@@ -2168,7 +2165,7 @@ class EnhancedBacktestEngine:
             with gzip.open(filepath, "wt") as f:
                 json.dump(state, f, default=str, indent=2)
         else:
-            with open(filepath, "w") as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(state, f, default=str, indent=2)
 
         logger.info(f"State saved to {filepath} ({'compressed' if compress else 'raw'})")

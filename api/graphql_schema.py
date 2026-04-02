@@ -605,7 +605,7 @@ class Query:
 
             prop_cfg = {}
             try:
-                with open(Path(__file__).parent.parent / "prop_firm_mode.json") as f:
+                with open(Path(__file__).parent.parent / "prop_firm_mode.json", encoding="utf-8") as f:
                     prop_cfg = _json.load(f)
             except (ImportError, AttributeError, RuntimeError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)

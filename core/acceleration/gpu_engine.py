@@ -282,7 +282,6 @@ class RealTimeRiskMonitor:
 import logging as _logging
 from pathlib import Path as _Path
 
-import numpy as _np
 
 _gpu_logger = _logging.getLogger(__name__)
 
@@ -415,7 +414,7 @@ class GPUInferenceEngine:
 
     # ── inference ─────────────────────────────────────────────────────────────
 
-    def predict(self, features: _np.ndarray) -> _np.ndarray:
+    def predict(self, features: np.ndarray) -> np.ndarray:
         """
         Run inference on *features* and return predictions as a numpy array.
 
@@ -437,11 +436,11 @@ class GPUInferenceEngine:
             was found at init time and ``load_model()`` has not been called).
         """
         if features.ndim == 1:
-            features = features[_np.newaxis, :]
+            features = features[np.newaxis, :]
 
         # ── ONNX Runtime path ─────────────────────────────────────────────────
         if self._ort_session is not None:
-            inputs = {self._input_name: features.astype(_np.float32)}
+            inputs = {self._input_name: features.astype(np.float32)}
             outputs = self._ort_session.run(None, inputs)
             return outputs[0]
 
@@ -459,7 +458,7 @@ class GPUInferenceEngine:
             f"Default search paths checked: {self._DEFAULT_ONNX}, {self._DEFAULT_PT}"
         )
 
-    def batch_predict(self, feature_batches: list[_np.ndarray]) -> list[_np.ndarray]:
+    def batch_predict(self, feature_batches: list[np.ndarray]) -> list[np.ndarray]:
         """Run predict() on each batch and return a list of output arrays."""
         return [self.predict(b) for b in feature_batches]
 
@@ -474,19 +473,19 @@ class GPUFeatureEngine:
         self.device = "cuda" if _HAS_CUDA else "cpu"
         _gpu_logger.info("GPUFeatureEngine initialised on device=%s", self.device)
 
-    def compute_features(self, prices: _np.ndarray) -> _np.ndarray:
+    def compute_features(self, prices: np.ndarray) -> np.ndarray:
         """Compute technical features from a price array."""
         if len(prices) < 2:
             return prices
-        returns = _np.diff(prices) / prices[:-1]
+        returns = np.diff(prices) / prices[:-1]
         # Simple feature set: returns, rolling mean, rolling std
         window = min(20, len(returns))
-        rolling_mean = _np.convolve(returns, _np.ones(window) / window, mode="valid")
-        rolling_std = _np.array(
+        rolling_mean = np.convolve(returns, np.ones(window) / window, mode="valid")
+        rolling_std = np.array(
             [returns[i : i + window].std() for i in range(len(returns) - window + 1)],
         )
         min_len = min(len(returns), len(rolling_mean), len(rolling_std))
-        return _np.column_stack(
+        return np.column_stack(
             [
                 returns[-min_len:],
                 rolling_mean[-min_len:],

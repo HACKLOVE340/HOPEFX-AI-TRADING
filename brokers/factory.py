@@ -257,5 +257,5 @@ class BrokerFactory:
         if not config_path.exists():
             logger.error("Broker config not found: %s", config_path.resolve())
             return None
-        with config_path.open("r") as fh:
+        with config_path.open("r", encoding="utf-8") as fh:
             return yaml.safe_load(fh)

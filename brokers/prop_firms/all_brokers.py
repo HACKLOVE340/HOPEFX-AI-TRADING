@@ -1251,7 +1251,7 @@ async def example_usage():
         logger.info("Daily P&L: %s", metrics.profit_loss)
 
         # Check risk
-        is_violated, reason = await broker.check_risk_violations()
+        is_violated, _ = await broker.check_risk_violations()
         if not is_violated:
             # Place order
             result = await broker.place_order(

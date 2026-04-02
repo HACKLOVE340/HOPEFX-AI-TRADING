@@ -192,7 +192,6 @@ async def create_payment_intent(
     Supported currencies: USD, EUR, GBP, AED, NGN, JPY, CHF, CAD, AUD, SGD.
     Returns client_secret for frontend Stripe.js confirmation.
     """
-    from decimal import Decimal
     from monetization.stripe_live import get_stripe_client
 
     client = get_stripe_client()

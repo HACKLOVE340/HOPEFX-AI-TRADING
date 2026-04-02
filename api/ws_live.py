@@ -847,8 +847,6 @@ async def ws_live(websocket: WebSocket) -> None:
         logger.error("WS live error [%s]: %s", cid, exc)
         _manager.disconnect(cid)
     finally:
-        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
-
         await get_ws_limiter().release(get_client_ip(websocket))
 
 

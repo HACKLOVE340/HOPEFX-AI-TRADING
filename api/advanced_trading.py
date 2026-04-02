@@ -280,9 +280,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_market_data"):
             raw = broker.get_market_data(sym_key.replace("_", ""), "1h", periods + 50)
-            if raw and len(raw) >= 20:
-                import pandas as pd
-
+            if raw and len(raw) >= 20:  # noqa: PLR2004
                 df = pd.DataFrame(raw)
                 return {
                     "close": df["close"].tolist(),

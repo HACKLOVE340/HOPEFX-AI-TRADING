@@ -320,7 +320,6 @@ class MarketReplayEngine:
         Returns a pd.DataFrame with OHLCV + all ML features, or None on error.
         """
         try:
-            from data_layer.normalization.pipeline import normalization_pipeline
             from ml.features_extended import build_extended_features_with_data_layer
 
             logger.info(
@@ -395,7 +394,6 @@ class MarketReplayEngine:
         import inspect
 
         try:
-            from data_layer.normalization.pipeline import normalization_pipeline
 
             ohlcv = await self.build_ohlcv_dataframe(
                 symbol=symbol,

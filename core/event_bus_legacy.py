@@ -150,7 +150,7 @@ class MemoryMappedEventStore:
             header = f.read(19)
             if len(header) < 19:
                 return None
-            seq, ts, evt_type = struct.unpack(">QQH", header[:18])
+            _, ts, evt_type = struct.unpack(">QQH", header[:18])
             src_len = header[18]
             src = f.read(src_len).decode()
             payload_len = struct.unpack(">I", f.read(4))[0]
@@ -198,7 +198,7 @@ class EventBus:
         self._running = True
         while self._running:
             try:
-                priority, ts, event = await asyncio.wait_for(
+                _, _, event = await asyncio.wait_for(
                     self._queue.get(),
                     timeout=1.0,
                 )
