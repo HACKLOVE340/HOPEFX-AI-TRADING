@@ -101,6 +101,7 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
         )
         engine = BacktestEngine(config=config)
         import asyncio
+
         result = asyncio.get_event_loop().run_until_complete(engine.run())
         return {
             "strategy": strategy_name,
@@ -303,6 +304,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
 # Indicator math helpers (module-level so they are independently testable)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _ind_sma(data: list[float], n: int) -> list[float | None]:
     """Simple moving average over *data* with window *n*."""
     result: list[float | None] = [None] * (n - 1)
@@ -346,9 +348,7 @@ def _ind_rsi(data: list[float], n: int = 14) -> list[float | None]:
 
 import ast as _ast
 
-_FORMULA_ALLOWED_NAMES: frozenset[str] = frozenset(
-    {"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"}
-)
+_FORMULA_ALLOWED_NAMES: frozenset[str] = frozenset({"EMA", "SMA", "RSI", "close", "open", "high", "low", "volume"})
 _FORMULA_ALLOWED_NODES = (
     _ast.Module,
     _ast.Expr,
@@ -385,9 +385,7 @@ def _validate_formula_ast(node: _ast.AST) -> None:
             "Only arithmetic and EMA/SMA/RSI calls are permitted."
         )
     if isinstance(node, _ast.Name) and node.id not in _FORMULA_ALLOWED_NAMES:
-        raise ValueError(
-            f"Unknown name '{node.id}'. Allowed: {', '.join(sorted(_FORMULA_ALLOWED_NAMES))}"
-        )
+        raise ValueError(f"Unknown name '{node.id}'. Allowed: {', '.join(sorted(_FORMULA_ALLOWED_NAMES))}")
     if isinstance(node, _ast.Call):
         if not isinstance(node.func, _ast.Name):
             raise ValueError("Only direct function calls are allowed (e.g. EMA(...))")
@@ -451,10 +449,7 @@ def _broadcast_binop(
 ) -> list | float:
     """Apply *op* element-wise, broadcasting scalars against lists."""
     if isinstance(left, list) and isinstance(right, list):
-        return [
-            _apply_binop(op, a, b)
-            for a, b in zip(left, right, strict=False)
-        ]
+        return [_apply_binop(op, a, b) for a, b in zip(left, right, strict=False)]
     if isinstance(left, list):
         return [_apply_binop(op, a, right) for a in left]
     if isinstance(right, list):
@@ -490,6 +485,7 @@ def _interp_node(node: _ast.expr, name_map: dict) -> list | float:  # type: igno
 # Public entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     """Evaluate *formula* against real OHLCV data for *symbol*.
 
@@ -521,11 +517,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
     if isinstance(result, (int, float)):
         result = [result] * len(closes)
 
-    return [
-        {"index": i, "value": round(float(val), 5)}
-        for i, val in enumerate(result[-periods:])
-        if val is not None
-    ]
+    return [{"index": i, "value": round(float(val), 5)} for i, val in enumerate(result[-periods:]) if val is not None]
 
 
 @router.post("/api/indicators/preview")

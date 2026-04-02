@@ -433,7 +433,7 @@ class SklearnOnlineLearner:
                 dl_extra[1] = float(feats.get("micro_ofi", 0.0))
                 dl_extra[2] = float(feats.get("macro_impact_score_now", 0.0))
                 dl_extra[3] = float(feats.get("macro_is_blackout", 0.0))
-            except Exception as _exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception as _exc:  # pylint: disable=broad-exception-caught
                 logger.debug("SklearnOnlineLearner: data layer injection skipped: %s", _exc)
 
             flat = np.concatenate([flat, dl_extra])
@@ -447,7 +447,7 @@ class SklearnOnlineLearner:
             # Replace inf/nan
             flat = np.where(np.isfinite(flat), flat, 0.0)
             return flat.reshape(1, -1)
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.debug("SklearnOnlineLearner._extract_features: %s", exc)
             return None
 
@@ -456,7 +456,7 @@ class SklearnOnlineLearner:
         try:
             closes = bars["close"].values
             return np.array([1 if closes[-1] > closes[0] else 0])
-        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception:  # pylint: disable=broad-exception-caught
             return None
 
     def _update_ewc_anchor(self) -> None:
@@ -476,7 +476,7 @@ class SklearnOnlineLearner:
                 self.symbol,
                 self._update_count,
             )
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.debug("EWC anchor update failed: %s", exc)
 
     def _apply_ewc_penalty(self) -> None:
@@ -501,7 +501,7 @@ class SklearnOnlineLearner:
             new_alpha = self._base_alpha * (1.0 + self.ewc_lambda * drift * 100.0)
             new_alpha = float(np.clip(new_alpha, self._base_alpha, self._base_alpha * 100))
             self._model.alpha = new_alpha
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.debug("EWC penalty application failed: %s", exc)
 
     def _check_drift(self, prob: float) -> bool:
@@ -534,7 +534,7 @@ class SklearnOnlineLearner:
                     p_value,
                 )
                 return True
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.debug("Drift check failed: %s", exc)
 
         return False
@@ -600,7 +600,7 @@ class SklearnOnlineLearner:
                 self._correct_window.append(correct)
                 if len(self._correct_window) >= 10:  # noqa: PLR2004
                     self._rolling_accuracy = float(np.mean(self._correct_window))
-            except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # nosec B110
+            except Exception:  # pylint: disable=broad-exception-caught  # nosec B110
                 pass
 
             # EWC anchor snapshot
@@ -615,7 +615,7 @@ class SklearnOnlineLearner:
                 prob = float(self._model.predict_proba(X_scaled)[0, 1])
                 if self._check_drift(prob):
                     self._reset_for_new_regime()
-            except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # nosec B110
+            except Exception:  # pylint: disable=broad-exception-caught  # nosec B110
                 pass
 
             if self.persist_path:
@@ -629,7 +629,7 @@ class SklearnOnlineLearner:
                 self._reset_count,
             )
             return True
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.warning("SklearnOnlineLearner[%s] partial_fit failed: %s", self.symbol, exc)
             return False
 
@@ -649,7 +649,7 @@ class SklearnOnlineLearner:
             X_scaled = self._scaler.transform(X)
             proba = self._model.predict_proba(X_scaled)
             return float(proba[0, 1])
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.debug("SklearnOnlineLearner.predict_proba failed: %s", exc)
             return None
 
@@ -705,12 +705,10 @@ class SklearnOnlineLearner:
 
 # Canonical root for all persisted model files.  Any load/save outside this
 # directory is rejected to prevent path-traversal / arbitrary-pickle attacks.
-_MODEL_ROOT = (
-    __import__("pathlib").Path(__file__).resolve().parent / "saved_models"
-)
+_MODEL_ROOT = __import__("pathlib").Path(__file__).resolve().parent / "saved_models"
 
 
-def _assert_safe_model_path(path: "__import__('pathlib').Path") -> None:  # type: ignore[name-defined]
+def _assert_safe_model_path(path: __import__("pathlib").Path) -> None:  # type: ignore[name-defined]
     """Raise ValueError if *path* escapes the allowed model directory."""
     import pathlib as _pl
 
@@ -719,8 +717,7 @@ def _assert_safe_model_path(path: "__import__('pathlib').Path") -> None:  # type
         resolved.relative_to(_MODEL_ROOT)
     except ValueError as exc:
         raise ValueError(
-            f"Model path '{resolved}' is outside the permitted directory "
-            f"'{_MODEL_ROOT}'. Refusing to load/save."
+            f"Model path '{resolved}' is outside the permitted directory '{_MODEL_ROOT}'. Refusing to load/save."
         ) from exc
 
 
@@ -731,6 +728,7 @@ _learner_registry: dict[str, SklearnOnlineLearner] = {}
 # Characters allowed in a symbol name used to build a model filename.
 # Restricts to alphanumeric, underscore, and hyphen — no path separators.
 import re as _re
+
 _SYMBOL_RE = _re.compile(r"^[A-Za-z0-9_\-]{1,32}$")
 
 
@@ -777,7 +775,7 @@ def get_online_learner(
             try:
                 learner = SklearnOnlineLearner.load(str(p))
                 logger.info("Loaded persisted OnlineLearner for %s from %s", symbol, p)
-            except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            except Exception:  # pylint: disable=broad-exception-caught
                 learner = SklearnOnlineLearner(symbol=symbol, persist_path=str(p))
         else:
             learner = SklearnOnlineLearner(symbol=symbol, persist_path=str(p))
@@ -826,7 +824,8 @@ class XGBoostOnlineModel:
         random_state: int = 42,
     ) -> None:
         try:
-            import xgboost as xgb  # noqa: PLC0415
+            import xgboost as xgb
+
             self._xgb = xgb  # retain reference; used in fit/predict
         except ImportError as exc:
             raise ImportError("xgboost is required for XGBoostOnlineModel. Install with: pip install xgboost") from exc

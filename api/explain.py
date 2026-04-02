@@ -219,8 +219,7 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
                 confidence=explanation.confidence,
                 regime=getattr(signal, "regime", "unknown"),
                 top_features=features,
-                plain_english=explanation.natural_language
-                or _template_summary(features, explanation.prediction_class),
+                plain_english=explanation.natural_language or _template_summary(features, explanation.prediction_class),
                 timestamp=explanation.timestamp.isoformat(),
             )
     except Exception as exc:
