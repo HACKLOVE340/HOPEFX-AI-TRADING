@@ -681,7 +681,7 @@ class DataManager:
     def _is_forex(self, symbol: str) -> bool:
         """Check if symbol is forex pair using cached normalized set."""
         normalized = symbol.replace("/", "")
-        return self._NORMALIZED_FOREX_PAIRS is not None and normalized in self._NORMALIZED_FOREX_PAIRS
+        return self._NORMALIZED_FOREX_PAIRS is not None and normalized in self._NORMALIZED_FOREX_PAIRS  # pylint: disable=unsupported-membership-test
 
     def _get_crypto_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Get cryptocurrency data."""

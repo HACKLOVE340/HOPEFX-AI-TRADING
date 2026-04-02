@@ -340,7 +340,7 @@ def mock_strategy():
             def generate_signal(self, analysis):
                 return None
 
-        return _MockStrategy(config=config)
+        return _MockStrategy(config_or_name=config)
 
     return _factory
 

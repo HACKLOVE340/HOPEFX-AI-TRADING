@@ -189,7 +189,7 @@ class TestOrderFlowDashboard:
 
         result = dashboard.get_complete_analysis("XAUUSD")
         assert result["dom"] is not None
-        assert "spread" in result["dom"]
+        assert "spread" in result["dom"]  # pylint: disable=unsupported-membership-test
 
     def test_dashboard_handles_service_errors_gracefully(self):
         """Dashboard should not crash if a subsystem raises."""

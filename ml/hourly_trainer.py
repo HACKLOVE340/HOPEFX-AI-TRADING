@@ -253,9 +253,11 @@ class HourlyTrainer:
     async def _reload_live_inference(self, symbol: str) -> None:
         """Reload the live inference model after a full retrain."""
         try:
+            from pathlib import Path
             from ml.live_inference import AdvancedModelPredictor
 
-            infer = AdvancedModelPredictor(symbol=symbol, model_dir=self.model_dir)
+            model_path = Path(self.model_dir) / f"{symbol}_advanced_oos.pkl"
+            infer = AdvancedModelPredictor(model_path=model_path if model_path.exists() else None)
             infer._load()  # pylint: disable=protected-access
             logger.info("LiveInference reloaded for %s", symbol)
         except Exception as exc:

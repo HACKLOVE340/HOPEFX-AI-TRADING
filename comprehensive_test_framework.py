@@ -4,6 +4,7 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 # comprehensive_test_framework.py
+# pylint: disable=abstract-class-instantiated
 """
 Comprehensive Testing Framework v3.0
 Unit | Integration | E2E | Performance | Chaos Engineering
@@ -109,6 +110,7 @@ class TestDataGenerator:
             ticks.append(
                 TickData(
                     timestamp=datetime(2024, 1, 1) + timedelta(minutes=i),
+                    symbol="XAUUSD",
                     bid=price - half_spread,
                     ask=price + half_spread,
                     bid_size=np.random.exponential(10),
@@ -171,6 +173,7 @@ class UnitTests:
         # Valid tick
         tick = TickData(
             timestamp=datetime.now(UTC),
+            symbol="XAUUSD",
             bid=1950.0,
             ask=1950.05,
             bid_size=10.0,
@@ -183,6 +186,7 @@ class UnitTests:
         try:
             TickData(
                 timestamp=datetime.now(UTC),
+                symbol="XAUUSD",
                 bid=1950.0,
                 ask=1949.0,  # Invalid: ask < bid
                 bid_size=10.0,
@@ -308,7 +312,7 @@ class IntegrationTests:
         ticks = TestDataGenerator.generate_ticks(n=500)
 
         # Initialize engine
-        engine = EnhancedBacktestEngine(initial_capital=100000, cost_model=TransactionCostModel(), parallel=False)
+        engine = EnhancedBacktestEngine(initial_capital=100000, cost_model=TransactionCostModel(), parallel_workers=1)
 
         # Run simple strategy
         position = 0

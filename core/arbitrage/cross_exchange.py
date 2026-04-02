@@ -142,9 +142,9 @@ class ArbitrageDetector:
         best_ask = None
 
         for ex_name, data in prices.items():
-            if not best_bid or data["bid"] > best_bid["price"]:
+            if not best_bid or data["bid"] > best_bid["price"]:  # pylint: disable=unsubscriptable-object
                 best_bid = {"exchange": ex_name, "price": data["bid"]}
-            if not best_ask or data["ask"] < best_ask["price"]:
+            if not best_ask or data["ask"] < best_ask["price"]:  # pylint: disable=unsubscriptable-object
                 best_ask = {"exchange": ex_name, "price": data["ask"]}
 
         if not best_bid or not best_ask:

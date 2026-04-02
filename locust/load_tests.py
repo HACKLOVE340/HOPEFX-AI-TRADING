@@ -51,8 +51,8 @@ from __future__ import annotations
 import os
 import random
 
-from locust import HttpUser, between, events, task
-from locust.exception import StopUser
+from locust import HttpUser, between, events, task  # pylint: disable=no-name-in-module
+from locust.exception import StopUser  # pylint: disable=no-name-in-module
 
 _AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")
 _THINK_TIME = float(os.getenv("THINK_TIME", "1.0"))

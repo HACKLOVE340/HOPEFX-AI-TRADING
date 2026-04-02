@@ -482,20 +482,20 @@ class DeepPredictor:
             min_lr=1e-6,
         )
         if self.task == "binary":
-            self.criterion = _LabelSmoothBCE(smoothing=self.label_smoothing, pos_weight=self.pos_weight)
+            self.criterion = _LabelSmoothBCE(smoothing=self.label_smoothing, pos_weight=self.pos_weight)  # pylint: disable=possibly-used-before-assignment
         else:
             self.criterion = nn.MSELoss()
 
     def _build_model(self, n_features: int, seq_len: int, **kwargs) -> nn.Module:
         arch = self.architecture.lower()
         if arch == "lstm":
-            return _LSTMNet(n_features, **kwargs)
+            return _LSTMNet(n_features, **kwargs)  # pylint: disable=possibly-used-before-assignment
         elif arch == "transformer":
-            return _TransformerNet(n_features, seq_len=seq_len, **kwargs)
+            return _TransformerNet(n_features, seq_len=seq_len, **kwargs)  # pylint: disable=possibly-used-before-assignment
         elif arch == "tcn":
-            return _TCNNet(n_features, **kwargs)
+            return _TCNNet(n_features, **kwargs)  # pylint: disable=possibly-used-before-assignment
         elif arch == "hybrid":
-            return _HybridNet(n_features, **kwargs)
+            return _HybridNet(n_features, **kwargs)  # pylint: disable=possibly-used-before-assignment
         else:
             raise ValueError(f"Unknown architecture '{arch}'. Choose from: {list(self.ARCHITECTURES)}")
 

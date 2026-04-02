@@ -50,6 +50,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +110,6 @@ def label_regimes(
 # ─────────────────────────────────────────────────────────────────────────────
 
 if TORCH_AVAILABLE:
-    import pandas as pd  # only needed when torch is present
-
     class _Embedder(nn.Module):
         """Maps real sequences to a fixed-size latent space."""
 
@@ -242,10 +241,10 @@ class RegimeSynthesizer:
         else:
             self.device = torch.device(device)
 
-        self.E = _Embedder(n_features, hidden, latent, seq_len).to(self.device)
-        self.R = _Recovery(latent, hidden, n_features).to(self.device)
-        self.G = _Generator(noise_dim, n_regimes, hidden, latent).to(self.device)
-        self.D = _Discriminator(latent, n_regimes, hidden).to(self.device)
+        self.E = _Embedder(n_features, hidden, latent, seq_len).to(self.device)  # pylint: disable=possibly-used-before-assignment
+        self.R = _Recovery(latent, hidden, n_features).to(self.device)  # pylint: disable=possibly-used-before-assignment
+        self.G = _Generator(noise_dim, n_regimes, hidden, latent).to(self.device)  # pylint: disable=possibly-used-before-assignment
+        self.D = _Discriminator(latent, n_regimes, hidden).to(self.device)  # pylint: disable=possibly-used-before-assignment
 
         self._feature_mean: np.ndarray | None = None
         self._feature_std: np.ndarray | None = None

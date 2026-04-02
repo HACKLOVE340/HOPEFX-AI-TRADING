@@ -570,16 +570,26 @@ class MTFFusionStore:
                 "bootstrap_error": self._bootstrap_error,
             }
 
-    def get(self, symbol: str, default: dict | None = None) -> dict:
-        """Return the latest fused features for *symbol*, or *default* if unavailable."""
+    def get(self, symbol: str, default: dict | None = None) -> dict:  # noqa: ARG002
+        """Return the latest fused regime features, or *default* if unavailable.
+
+        The *symbol* parameter is accepted for API compatibility but the store
+        is bootstrapped for a single symbol at construction time.
+        """
         if default is None:
             default = {}
         try:
-            aligned = self.align_to_h1(symbol=symbol)
-            if aligned is None or aligned.empty:
+            with self._lock:
+                d1 = self._d1_df
+                h4 = self._h4_df
+            if d1 is None and h4 is None:
                 return default
-            row = aligned.iloc[-1]
-            return row.to_dict()
+            result: dict = {}
+            if d1 is not None and not d1.empty:
+                result.update({f"d_{k}": v for k, v in d1.iloc[-1].to_dict().items()})
+            if h4 is not None and not h4.empty:
+                result.update({f"h_{k}": v for k, v in h4.iloc[-1].to_dict().items()})
+            return result if result else default
         except Exception:  # pylint: disable=broad-exception-caught
             return default
 

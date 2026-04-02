@@ -56,7 +56,7 @@ def make_concrete(cls, **params):
 
     with patch.object(BaseStrategy, "__init__", _base_init):
         s = Concrete.__new__(Concrete)
-        Concrete.__init__(s, "TestStrategy", "XAUUSD", MagicMock(), **params)
+        Concrete.__init__(s, "TestStrategy", "XAUUSD", MagicMock(), **params)  # pylint: disable=no-value-for-parameter
 
     return s
 
