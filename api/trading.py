@@ -484,7 +484,7 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
             ORDERS_TOTAL.labels(symbol=order.symbol, side=order.side, status="error").inc()
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Order submission failed — check server logs") from None
 
 
 async def _broadcast_fill_ws(order: "OrderRequest", result: Any) -> None:
@@ -1495,4 +1495,4 @@ async def run_stress_test(
         )
     except Exception as exc:
         _logger.error("Stress test failed: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Stress test error: {exc}") from None
+        raise HTTPException(status_code=500, detail="Stress test failed — check server logs") from None
