@@ -210,6 +210,9 @@ class SmartRouter:
         # orders flow through the same broker selection logic.
         self._algo.set_broker_submit_fn(self._submit_child_order)
 
+        # Pending algo orders: algo_id → order_request
+        self._pending_algo_orders: dict[str, Any] = {}
+
     def add_broker(self, broker_id: str, broker_instance: Any) -> None:
         """Register a broker. Broker must implement place_order(order_dict)."""
         self._brokers[broker_id] = broker_instance
@@ -322,7 +325,6 @@ class SmartRouter:
         )
 
         # Store the original order context so child fills can reference it
-        self._pending_algo_orders = getattr(self, "_pending_algo_orders", {})
 
         algo_id = await self._algo.submit_auto(
             symbol=symbol,

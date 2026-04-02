@@ -215,7 +215,7 @@ def load_regime_manifest() -> dict[str, list[RegimePerformance]]:
     if not _MANIFEST_PATH.exists():
         return {}
     try:
-        with open(_MANIFEST_PATH) as f:
+        with open(_MANIFEST_PATH, encoding="utf-8") as f:
             raw = json.load(f)
         result: dict[str, list[RegimePerformance]] = {}
         for regime, entries in raw.items():
@@ -232,7 +232,7 @@ def save_regime_manifest(manifest: dict[str, list[RegimePerformance]]) -> None:
     """Persist regime performance manifest to disk."""
     _MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
     raw = {regime: [vars(p) for p in perfs] for regime, perfs in manifest.items()}
-    with open(_MANIFEST_PATH, "w") as f:
+    with open(_MANIFEST_PATH, "w", encoding="utf-8") as f:
         json.dump(raw, f, indent=2)
     logger.info("Regime manifest saved: %s", _MANIFEST_PATH)
 

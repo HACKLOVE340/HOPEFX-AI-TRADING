@@ -305,7 +305,6 @@ def _run_backtest(
     """
     try:
         import numpy as np
-        import pandas as pd  # noqa: F401
         from strategies.base import SignalType
     except ImportError as exc:
         return BacktestResult(0, 0, 0, 0, 0, error=str(exc))
@@ -759,9 +758,7 @@ def create_agent(
             "Create a mean-reversion strategy on XAUUSD using Bollinger Bands"
         )
     """
-    import logging as _logging
-
-    _log = _logging.getLogger(__name__)
+    _log = logging.getLogger(__name__)
 
     # Resolve deprecated alias.
     if candle_source is None and oanda_stream is not None:
