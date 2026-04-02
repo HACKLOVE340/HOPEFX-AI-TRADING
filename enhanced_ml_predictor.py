@@ -39,7 +39,7 @@ import warnings
 # ML/DL Libraries
 try:
     import tensorflow as tf
-    from tensorflow.keras.models import Model, Sequential, load_model
+    from tensorflow.keras.models import Model, load_model
     from tensorflow.keras.layers import (
         LSTM,
         GRU,
@@ -60,7 +60,7 @@ try:
         ModelCheckpoint,
         TerminateOnNaN,
     )
-    from tensorflow.keras.optimizers import Adam, AdamW
+    from tensorflow.keras.optimizers import AdamW
     from tensorflow.keras.regularizers import l1_l2
 
     TENSORFLOW_AVAILABLE = True

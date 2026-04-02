@@ -50,7 +50,6 @@ logger = logging.getLogger(__name__)
 # ── Import config ─────────────────────────────────────────────────────────────
 try:
     from rate_limiting_configuration import (
-        GLOBAL_DEFAULT_RATE,
         AUTH_RATE,
         TRADING_RATE,
         MARKET_DATA_RATE,
@@ -60,10 +59,8 @@ try:
         WITHDRAWAL_RATE,
         REDIS_URL,
         KEY_PREFIX,
-        ENDPOINT_RATES,
     )
 except ImportError:
-    GLOBAL_DEFAULT_RATE = "120 per minute"
     AUTH_RATE = "10 per minute"
     TRADING_RATE = "60 per minute"
     MARKET_DATA_RATE = "300 per minute"
@@ -73,7 +70,7 @@ except ImportError:
     WITHDRAWAL_RATE = "5 per minute"
     REDIS_URL = "redis://localhost:6379/1"
     KEY_PREFIX = "hopefx:rl:"
-    ENDPOINT_RATES = {"default": GLOBAL_DEFAULT_RATE}
+
 
 
 # ── Parse a rate string into (count, window_seconds) ─────────────────────────

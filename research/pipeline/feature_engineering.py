@@ -38,7 +38,7 @@ import numpy as np
 import pandas as pd
 
 try:
-    from scipy.fft import rfft, rfftfreq  # noqa: F401
+    from scipy.fft import rfft
 
     _SCIPY_AVAILABLE = True
 except ImportError:

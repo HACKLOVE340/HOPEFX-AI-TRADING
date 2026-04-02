@@ -128,7 +128,6 @@ def main():
 
     if args.password is None:
         import secrets
-        import stat
         import string
 
         alphabet = string.ascii_letters + string.digits + "!@#$%"
