@@ -221,7 +221,7 @@ class PerformanceAnalytics:
 
         # Record equity point
         drawdown = self.high_water_mark - self.current_equity
-        drawdown / self.high_water_mark if self.high_water_mark > 0 else 0
+        drawdown_pct = drawdown / self.high_water_mark if self.high_water_mark > 0 else 0
 
         self._record_equity_point(
             self.current_equity,
