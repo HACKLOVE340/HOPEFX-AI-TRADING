@@ -50,9 +50,7 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 try:
-    import zmq
-    import zmq.asyncio  # noqa: F401
-
+    import zmq  # pylint: disable=unused-import
     ZMQ_AVAILABLE = True
 except ImportError:
     ZMQ_AVAILABLE = False

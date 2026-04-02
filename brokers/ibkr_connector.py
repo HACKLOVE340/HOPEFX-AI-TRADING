@@ -68,7 +68,7 @@ try:
         MarketOrder,
         StopOrder,
         Trade,
-        util,  # pylint: disable=unused-import  # noqa: F401
+
     )
 
     IB_AVAILABLE = True

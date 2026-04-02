@@ -50,7 +50,7 @@ except ImportError:
 
 # Optional Redis
 try:
-    import redis  # type: ignore[import]  # noqa: F401
+    import redis  # type: ignore[import]  # pylint: disable=unused-import
 
     _REDIS_AVAILABLE = True
 except ImportError:
