@@ -151,9 +151,9 @@ class ArbitrageDetector:
             return opportunities
 
         # Check profitability
-        if best_bid["price"] > best_ask["price"]:
+        if best_bid["price"] > best_ask["price"]:  # pylint: disable=unsubscriptable-object
             gross_profit_bps = float(
-                (best_bid["price"] - best_ask["price"]) / best_ask["price"] * 10000,
+                (best_bid["price"] - best_ask["price"]) / best_ask["price"] * 10000,  # pylint: disable=unsubscriptable-object
             )
 
             if gross_profit_bps > self.min_profit_bps:

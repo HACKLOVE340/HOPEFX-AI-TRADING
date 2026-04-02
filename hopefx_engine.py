@@ -401,7 +401,7 @@ class HopeFXEngine:
                     account.balance,
                     account.equity,
                 )
-                self._risk_manager.update_equity(account.equity, account.balance)
+                self._risk_manager.update_equity(account.equity)
                 self._trade_logger.log_equity(
                     equity=account.equity,
                     balance=account.balance,
@@ -426,7 +426,7 @@ class HopeFXEngine:
                     acct.get("equity", 0),
                     acct.get("server", "?"),
                 )
-                self._risk_manager.update_equity(acct.get("equity", 0), acct.get("balance", 0))
+                self._risk_manager.update_equity(acct.get("equity", 0))
             else:
                 logger.warning("MT5 connect failed — running in signal-export mode")
             logger.info("MT5Bridge ready")
@@ -852,7 +852,7 @@ class HopeFXEngine:
                 equity = float(info.get("equity", 0))
                 balance = float(info.get("balance", equity))
             if equity > 0:
-                self._risk_manager.update_equity(equity, balance)
+                self._risk_manager.update_equity(equity)
                 self._trade_logger.log_equity(
                     equity=equity,
                     balance=balance,

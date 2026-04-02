@@ -569,3 +569,35 @@ class MTFFusionStore:
                 "data_dir": self.data_dir,
                 "bootstrap_error": self._bootstrap_error,
             }
+
+    def get(self, symbol: str, default: dict | None = None) -> dict:
+        """Return the latest fused features for *symbol*, or *default* if unavailable."""
+        if default is None:
+            default = {}
+        try:
+            aligned = self.align_to_h1(symbol=symbol)
+            if aligned is None or aligned.empty:
+                return default
+            row = aligned.iloc[-1]
+            return row.to_dict()
+        except Exception:  # pylint: disable=broad-exception-caught
+            return default
+
+
+# Module-level singleton — shared across the process
+_mtf_store_instance: MTFFusionStore | None = None
+
+
+def get_mtf_store(symbol: str = "XAU_USD", data_dir: str = "data/historical") -> MTFFusionStore | None:
+    """
+    Return the process-level MTFFusionStore singleton, creating it on first call.
+
+    Returns None when the store cannot be initialised (missing data, import error).
+    """
+    global _mtf_store_instance  # pylint: disable=global-statement
+    if _mtf_store_instance is None:
+        try:
+            _mtf_store_instance = MTFFusionStore(symbol=symbol, data_dir=data_dir)
+        except Exception:  # pylint: disable=broad-exception-caught
+            return None
+    return _mtf_store_instance

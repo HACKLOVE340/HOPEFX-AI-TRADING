@@ -599,7 +599,7 @@ class DataManager:
     ]
 
     # Pre-computed normalized forex pairs for efficient lookup
-    _NORMALIZED_FOREX_PAIRS = None
+    _NORMALIZED_FOREX_PAIRS: set | None = None
 
     def __init__(self, alpha_vantage_key: str = None, cache_dir: str = None):
         """
@@ -681,7 +681,7 @@ class DataManager:
     def _is_forex(self, symbol: str) -> bool:
         """Check if symbol is forex pair using cached normalized set."""
         normalized = symbol.replace("/", "")
-        return normalized in self._NORMALIZED_FOREX_PAIRS
+        return self._NORMALIZED_FOREX_PAIRS is not None and normalized in self._NORMALIZED_FOREX_PAIRS
 
     def _get_crypto_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Get cryptocurrency data."""

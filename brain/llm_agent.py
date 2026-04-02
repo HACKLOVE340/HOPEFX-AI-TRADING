@@ -278,7 +278,7 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
         cls = getattr(module, "GeneratedStrategy", None)
         if cls is None:
             return None, "No class named 'GeneratedStrategy' found"
-        instance = cls()
+        instance = cls()  # pylint: disable=not-callable
         return instance, None
     except (ImportError, AttributeError, SyntaxError, RuntimeError) as exc:
         return None, f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
@@ -768,15 +768,17 @@ def create_agent(
         _log.warning("create_agent: 'oanda_stream' parameter is deprecated — use 'candle_source' instead.")
         candle_source = oanda_stream
 
-    fetcher = None
+    candle_fetcher = None
     if candle_source is not None:
 
-        async def fetcher(symbol: str, timeframe: str, count: int) -> list[dict]:
+        async def _fetcher(symbol: str, timeframe: str, count: int) -> list[dict]:
             return await candle_source.get_candles(symbol, timeframe, count)
+
+        candle_fetcher = _fetcher
 
     return LLMAgent(
         api_key=api_key,
         model=model,
-        candle_fetcher=fetcher,
+        candle_fetcher=candle_fetcher,
         **kwargs,
     )

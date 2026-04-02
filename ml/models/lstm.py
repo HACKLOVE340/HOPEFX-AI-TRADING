@@ -196,7 +196,7 @@ class LSTMPricePredictor(BaseMLModel):
             )
 
             # Reshape for LSTM [samples, time steps, features]
-            X_seq = X_seq.reshape(X_seq.shape[0], X_seq.shape[1], 1)
+            X_seq = X_seq.reshape(X_seq.shape[0], X_seq.shape[1], 1)  # pylint: disable=too-many-function-args
 
             # Prepare validation data if provided
             validation_data = None
@@ -205,7 +205,7 @@ class LSTMPricePredictor(BaseMLModel):
                 X_val_seq, y_val_seq = self._prepare_sequences(
                     np.concatenate([X_val_scaled, y_val_scaled.reshape(-1, 1)], axis=1),
                 )
-                X_val_seq = X_val_seq.reshape(X_val_seq.shape[0], X_val_seq.shape[1], 1)
+                X_val_seq = X_val_seq.reshape(X_val_seq.shape[0], X_val_seq.shape[1], 1)  # pylint: disable=too-many-function-args
                 validation_data = (X_val_seq, y_val_seq)
 
             # Train model
@@ -275,7 +275,7 @@ class LSTMPricePredictor(BaseMLModel):
                 X_seq.append(X_scaled[i - self.sequence_length : i, 0])
 
             X_seq = np.array(X_seq)
-            X_seq = X_seq.reshape(X_seq.shape[0], X_seq.shape[1], 1)
+            X_seq = X_seq.reshape(X_seq.shape[0], X_seq.shape[1], 1)  # pylint: disable=too-many-function-args
 
             # Predict
             predictions_scaled = self.model.predict(X_seq, verbose=0)

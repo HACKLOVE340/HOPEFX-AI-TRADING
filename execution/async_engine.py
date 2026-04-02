@@ -107,6 +107,7 @@ class AsyncExecutionEngine:
         self.order_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self.pending_orders: set[str] = set()
         self.position_cache: dict[str, dict] = {}
+        self._position_cache_time: float = 0.0
 
         # Performance tracking
         self.latency_stats: dict[str, list[float]] = defaultdict(list)
@@ -256,6 +257,7 @@ class AsyncExecutionEngine:
 
             # Create new
             new_order = Order(
+                id=str(uuid.uuid4()),
                 symbol=old_order.symbol,
                 side=old_order.side,
                 quantity=new_qty or old_order.remaining_qty,
@@ -287,6 +289,7 @@ class AsyncExecutionEngine:
             close_side = "sell" if pos["quantity"] > 0 else "buy"
 
             order = Order(
+                id=str(uuid.uuid4()),
                 symbol=pos["symbol"],
                 side=close_side,
                 quantity=abs(pos["quantity"]),
@@ -304,7 +307,7 @@ class AsyncExecutionEngine:
     async def get_positions(self) -> list[dict]:
         """Get current positions with caching"""
         # Return cached if recent
-        if hasattr(self, "_position_cache_time") and time.time() - self._position_cache_time < 1.0:  # 1 second cache
+        if time.time() - self._position_cache_time < 1.0:  # 1 second cache
             return list(self.position_cache.values())
 
         # Fetch fresh
@@ -377,6 +380,7 @@ class AsyncExecutionEngine:
 
         slippage = self._rng.normal(0, volatility * size_factor)
 
+        fill_price = base_price * (1 + slippage)  # default: market fill
         if order.order_type == OrderType.MARKET:
             fill_price = base_price * (1 + slippage)
         elif order.order_type == OrderType.LIMIT:

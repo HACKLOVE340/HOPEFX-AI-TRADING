@@ -698,7 +698,7 @@ def generate_pre_trade_report(
         logger.info(
             "PRE-TRADE RISK REPORT: APPROVED | symbol=%s side=%s qty=%.4f "
             "notional=%.2f var95=%.4f es99=%.4f slip_p99=%.1fbps "
-            "drift=%.2f sharpe=%.2f mdd=%.2%%",
+            "drift=%.2f sharpe=%.2f mdd=%.2f%%",
             symbol,
             side,
             quantity,

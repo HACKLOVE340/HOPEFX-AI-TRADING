@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from enum import Enum
 import numpy as np
 import pandas as pd
-from scipy.ndimage import argrelextrema
+from scipy.signal import argrelextrema
 
 logger = logging.getLogger(__name__)
 

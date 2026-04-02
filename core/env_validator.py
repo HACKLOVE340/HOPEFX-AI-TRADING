@@ -228,7 +228,7 @@ def validate_environment(strict: bool = False) -> ValidationResult:
     is_production = app_env == "production"
 
     for var in REQUIRED_VARS:
-        val = os.getenv(var.name)
+        val = os.getenv(var.name)  # pylint: disable=invalid-envvar-value
         if not val:
             result.errors.append(
                 f"Missing required env var: {var.name} — {var.description}",
@@ -255,7 +255,7 @@ def validate_environment(strict: bool = False) -> ValidationResult:
                 )
 
     for var in RECOMMENDED_VARS:
-        val = os.getenv(var.name)
+        val = os.getenv(var.name)  # pylint: disable=invalid-envvar-value
         if not val:
             msg = f"Env var not set: {var.name} — {var.description}"
             if var.default:

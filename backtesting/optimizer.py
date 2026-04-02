@@ -69,9 +69,11 @@ class ParameterOptimizer:
                 strategy = self.strategy_class(**params)
 
                 # Run backtest
-                engine = BacktestEngine(self.data_handler, strategy, self.initial_capital)
+                engine = BacktestEngine(initial_capital=self.initial_capital)
 
-                backtest_results = engine.run()
+                start_dt = self.data_handler.start_date if hasattr(self.data_handler, "start_date") else None
+                end_dt = self.data_handler.end_date if hasattr(self.data_handler, "end_date") else None
+                backtest_results = engine.run(start_date=start_dt, end_date=end_dt)
                 score = backtest_results["metrics"].get(metric, 0)
 
                 results.append(
