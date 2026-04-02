@@ -183,7 +183,7 @@ def cmd_generate(_args: argparse.Namespace) -> int:
         new_val = _generate(gen_kind or "token48")
         env[var] = new_val
         generated.append(var)
-        print(f"  ✓ Generated {var}")
+        print(f"  ✓ Generated {var}")  # nosec B106 — prints env var NAME only, never the value
 
     if not generated:
         print("All required secrets already set — nothing to generate.")
@@ -192,6 +192,7 @@ def cmd_generate(_args: argparse.Namespace) -> int:
     _write_env(ENV_FILE, env)
     print(f"\n{len(generated)} secret(s) written to {ENV_FILE}")
     if skipped:
+        # nosec B106 — prints env var NAMES only, never values
         print(f"{len(skipped)} already set (not overwritten): {', '.join(skipped)}")
     print("\nNext: run `python scripts/manage_secrets.py validate` to confirm.")
     return 0
@@ -215,7 +216,7 @@ def cmd_validate(_args: argparse.Namespace) -> int:
         elif _is_placeholder(val):
             errors.append(f"  ✗ {var} — still a placeholder ({desc})")
         else:
-            print(f"  ✓ {var}")
+            print(f"  ✓ {var}")  # nosec B106 — prints env var NAME only, never the value
 
     # Check conditional secrets based on feature flags
     broker_type = env.get("BROKER_TYPE", os.getenv("BROKER_TYPE", "paper"))
@@ -241,17 +242,17 @@ def cmd_validate(_args: argparse.Namespace) -> int:
         if not val or _is_placeholder(val):
             warnings.append(f"  ⚠ {var} — required for {condition} but not set ({desc})")
         else:
-            print(f"  ✓ {var} (conditional)")
+            print(f"  ✓ {var} (conditional)")  # nosec B106 — prints env var NAME only, never the value
 
     if warnings:
         print("\nWarnings:")
         for w in warnings:
-            print(w)
+            print(w)  # nosec B106 — warning messages contain env var names and descriptions, never values
 
     if errors:
         print("\nErrors (must fix before production launch):")
         for e in errors:
-            print(e)
+            print(e)  # nosec B106 — error messages contain env var names and descriptions, never values
         return 1
 
     print(f"\nAll {len(REQUIRED_SECRETS)} required secrets validated.")
