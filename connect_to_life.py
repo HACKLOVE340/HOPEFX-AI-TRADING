@@ -322,6 +322,21 @@ class LifeSupervisor:
         except Exception as _brain_exc:
             logger.warning("HOPEFXBrain failed to start (non-fatal): %s", _brain_exc)
 
+        # Start SelfHealer — code integrity monitor + auto-patch applier
+        try:
+            from security.self_healer import start_healer as _start_healer
+
+            try:
+                from app import app as _fastapi_app_heal
+                await _start_healer(_fastapi_app_heal)
+            except ImportError:
+                from fastapi import FastAPI as _FastAPI
+                _minimal_heal_app = _FastAPI(title="SelfHealer-CLI")
+                await _start_healer(_minimal_heal_app)
+            logger.info("SelfHealer code integrity monitor started")
+        except Exception as _heal_exc:
+            logger.warning("SelfHealer failed to start (non-fatal): %s", _heal_exc)
+
         # Send startup Telegram notification
         nuclear_status = "RL-supervisor=ON" if self._nuclear_supervisor is not None else "RL-supervisor=OFF"
         await _telegram(
