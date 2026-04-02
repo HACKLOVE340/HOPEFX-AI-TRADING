@@ -2051,3 +2051,40 @@ def run_startup_stress_tests(risk_manager) -> None:
                 )
     except Exception as exc:
         logger.warning("Startup stress tests could not run: %s", exc)
+
+
+# ── Singleton accessor for broker manager ─────────────────────────────────────
+
+
+def get_broker_manager():
+    """Return a :class:`brokers.manager.BrokerManager` backed by the AppState
+    singleton broker, or ``None`` when no broker is wired.
+
+    This is used by :meth:`core.mcc.master_control.MasterControlCore._execute_signal`
+    and ``trigger_kill_switch`` to route orders without creating a circular
+    import at module level.
+
+    The function constructs a lightweight :class:`~brokers.manager.BrokerManager`
+    on demand the first time it is called after startup, then caches the result
+    for subsequent calls so the overhead is O(1) on the hot path.
+    """
+    try:
+        from core.app_state import app_state  # type: ignore[import]
+
+        broker = getattr(app_state, "broker", None)
+        if broker is None:
+            return None
+
+        # Return cached manager if already built for this broker instance
+        cached_mgr = getattr(app_state, "_mcc_broker_manager", None)
+        if cached_mgr is not None and getattr(cached_mgr, "_primary_broker", None) is broker:
+            return cached_mgr
+
+        from brokers.manager import BrokerManager
+
+        mgr = BrokerManager(primary=broker)
+        app_state._mcc_broker_manager = mgr  # type: ignore[attr-defined]
+        return mgr
+    except Exception as _exc:  # pylint: disable=broad-exception-caught
+        logger.debug("get_broker_manager: %s", _exc)
+        return None
