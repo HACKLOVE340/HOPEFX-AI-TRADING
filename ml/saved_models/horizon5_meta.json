@@ -1,0 +1,19 @@
+{
+  "horizon": 5,
+  "hold_period_bars": 5,
+  "years": 50,
+  "oos_years": 8.0,
+  "symbol": "GC=F",
+  "macro_features": true,
+  "stacking": false,
+  "trained_at": "2026-04-02T15:10:56.779888+00:00",
+  "note": "Model trained with horizon=5 to match execution engine hold period. Fixes accuracy/P&L disconnect from horizon=1 training.",
+  "oos_accuracy": 0.5992,
+  "oos_f1": 0.6885,
+  "oos_auc": 0.6077,
+  "oos_p_value": 0.0,
+  "oos_significant": true,
+  "feature_count": 222,
+  "sample_count": 5710,
+  "cv_accuracy": 0.5626
+}
