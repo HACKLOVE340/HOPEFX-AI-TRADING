@@ -131,7 +131,7 @@ async def _serve(host: str, port: int) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="HOPEFX dev SMTP sink")
-    parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
+    parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=2525, help="Bind port (default: 2525)")
     args = parser.parse_args()
 

@@ -9,9 +9,11 @@ Performance Metrics Calculator
 Calculates comprehensive trading performance metrics.
 """
 
-import pandas as pd
-import numpy as np
+import contextlib
 import logging
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -237,12 +239,10 @@ class PerformanceMetrics:
         if self.trade_history.empty:
             return 0.0
         if "entry_time" in self.trade_history.columns and "exit_time" in self.trade_history.columns:
-            try:
+            with contextlib.suppress(Exception):
                 durations = (
                     pd.to_datetime(self.trade_history["exit_time"])
                     - pd.to_datetime(self.trade_history["entry_time"])
                 )
                 return float(durations.dt.total_seconds().mean() / 86400)
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
         return 0.0

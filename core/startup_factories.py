@@ -32,8 +32,10 @@ logger = logging.getLogger(__name__)
 
 
 # ── Known dev-only placeholder values — rejected in production ────────────────
-_DEV_JWT_SECRET = "dev-jwt-secret-minimum-32-characters-long!!"
-_DEV_ENCRYPTION_KEY = "dev-key-minimum-32-characters-long-for-testing"
+# nosec B105 — these are intentional dev-only placeholders, not real secrets.
+# Production startup aborts if either value is still set (see init_env below).
+_DEV_JWT_SECRET = "dev-jwt-secret-minimum-32-characters-long!!"  # nosec B105
+_DEV_ENCRYPTION_KEY = "dev-key-minimum-32-characters-long-for-testing"  # nosec B105
 
 # ── Environment / config ──────────────────────────────────────────────────────
 

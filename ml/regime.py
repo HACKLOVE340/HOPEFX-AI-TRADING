@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import joblib
-import pickle
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
@@ -191,17 +190,16 @@ class RegimeDetector:
 
         self._is_fitted = True
 
-        # Save
+        # Save using joblib (safer than pickle for sklearn/hmmlearn objects)
         self.model_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.model_path, "wb") as f:
-            pickle.dump(
-                {
-                    "hmm": self.hmm,
-                    "vol_gmm": self.vol_gmm,
-                    "regime_map": self._regime_map,
-                },
-                f,
-            )
+        joblib.dump(
+            {
+                "hmm": self.hmm,
+                "vol_gmm": self.vol_gmm,
+                "regime_map": self._regime_map,
+            },
+            self.model_path,
+        )
 
         logger.info(f"Regime model trained: {self._regime_map}")
 

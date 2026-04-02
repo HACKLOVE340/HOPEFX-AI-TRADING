@@ -36,6 +36,7 @@ On any breach
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import time
@@ -494,10 +495,9 @@ class Gatekeeper:
         """
         # Orchestrator is authoritative — check first when available.
         if getattr(self, "_orch", None) is not None:
-            try:
+            with contextlib.suppress(Exception):
                 return self._orch.is_blackout_window()
-            except Exception:
-                pass  # fall through to local calendar
+            # fall through to local calendar
 
         # Local calendar fallback (tests / standalone mode)
         cal = getattr(self, "_calendar", None)

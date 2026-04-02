@@ -344,7 +344,8 @@ rule SuspiciousImport {
                 self._clamd = cd
                 logger.info("AV: ClamAV connected (%s)", type(cd).__name__)
                 return
-            except Exception:
+            except Exception as exc:
+                logger.debug("AV: ClamAV connection attempt failed: %s", exc)
                 continue
         logger.info("AV: ClamAV daemon not reachable — ClamAV layer disabled")
 

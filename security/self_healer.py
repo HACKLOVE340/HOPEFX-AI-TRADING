@@ -43,7 +43,7 @@ import json
 import logging
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404 — used only for git rollback with a fixed command list
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -152,10 +152,8 @@ def _build_manifest() -> dict[str, str]:
 
 def _load_manifest() -> dict[str, str]:
     if MANIFEST_PATH.exists():
-        try:
+        with contextlib.suppress(Exception):
             return json.loads(MANIFEST_PATH.read_text())
-        except Exception:
-            pass
     return {}
 
 
@@ -454,11 +452,9 @@ class SelfHealer:
                 logger.warning("SelfHealer: patch rejected for %s: %s", endpoint, msg)
 
             # Push result to Redis
-            try:
+            with contextlib.suppress(Exception):
                 await redis.rpush("heal:patch_history", json.dumps(record))
                 await redis.ltrim("heal:patch_history", -200, -1)
-            except Exception:
-                pass
 
         # Remove applied entries from the queue
         for raw in applied:

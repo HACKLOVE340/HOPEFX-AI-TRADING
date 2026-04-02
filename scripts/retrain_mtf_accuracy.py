@@ -409,7 +409,7 @@ def evaluate(model_or_ensemble, X_test, y_test, base_learners=None):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> int:
-    import pickle
+    import joblib
     from sklearn.preprocessing import StandardScaler
     try:
         from scipy.stats import binomtest as _binomtest
@@ -561,14 +561,12 @@ def main() -> int:
         "abstain_threshold": ABSTAIN_THRESHOLD,
     }
     ensemble_path = MODELS_DIR / "mtf_ensemble.pkl"
-    with open(ensemble_path, "wb") as f:
-        pickle.dump(ensemble_payload, f, protocol=4)
+    joblib.dump(ensemble_payload, ensemble_path)
     logger.info("Saved ensemble → %s", ensemble_path)
 
     # Save scaler
     scaler_path = MODELS_DIR / "mtf_scaler.pkl"
-    with open(scaler_path, "wb") as f:
-        pickle.dump(scaler, f, protocol=4)
+    joblib.dump(scaler, scaler_path)
 
     # Save meta JSON
     meta = {

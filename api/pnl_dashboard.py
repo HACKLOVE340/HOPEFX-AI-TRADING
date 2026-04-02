@@ -22,6 +22,7 @@ GET /api/pnl/open-positions   — current open positions with unrealised P&L
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import math
 from datetime import datetime, timezone
@@ -263,13 +264,11 @@ async def pnl_summary(
     post = getattr(engine, "_post_analyzer", None)
     win_rate: float | None = None
     if post is not None and hasattr(post, "rolling_stats"):
-        try:
+        with contextlib.suppress(Exception):
             stats = post.rolling_stats()
             wr = stats.get("win_rate")
             if wr is not None and len(fills) >= _MIN_FILLS_FOR_SHARPE:
                 win_rate = round(float(wr) * 100, 2)
-        except Exception:
-            pass
 
     avg_slip = sum(f.slippage_bps for f in fills) / len(fills) if fills else 0.0
     avg_lat = sum(f.latency_ms for f in fills) / len(fills) if fills else 0.0
