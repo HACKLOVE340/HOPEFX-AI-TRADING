@@ -56,7 +56,7 @@ except ImportError:
     logger.error("xgboost not installed. Install: pip install xgboost>=2.0.0")
 
 try:
-    from sklearn.metrics import accuracy_score, classification_report, roc_auc_score  # noqa: F401
+    from sklearn.metrics import accuracy_score, roc_auc_score
     from sklearn.preprocessing import StandardScaler
 
     _SKLEARN = True
@@ -737,7 +737,7 @@ class MLPipeline:
     def _save_report(self, report: ValidationReport) -> None:
         self._model_dir.mkdir(parents=True, exist_ok=True)
         path = self._model_dir / "validation_report.json"
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(report.to_dict(), f, indent=2)
         logger.info("MLPipeline: validation report saved to %s", path)
 

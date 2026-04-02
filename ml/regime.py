@@ -110,7 +110,7 @@ class RegimeDetector:
             return MarketRegime.UNKNOWN, 0.0
 
         # Decode hidden state
-        logprob, state = self.hmm.decode(obs, algorithm="viterbi")
+        _logprob, state = self.hmm.decode(obs, algorithm="viterbi")
 
         # Update history
         self._state_history.append(state[0])

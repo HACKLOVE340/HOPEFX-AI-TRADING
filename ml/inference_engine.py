@@ -963,7 +963,6 @@ class InferenceEngine:
         """
         try:
             import hashlib
-            import json
             import uuid
 
             # Access lineage store via orchestrator — single entry point rule.

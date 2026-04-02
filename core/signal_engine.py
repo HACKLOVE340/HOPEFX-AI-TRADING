@@ -285,7 +285,7 @@ def _build_ohlcv_df(data: dict[str, Any]) -> "pd.DataFrame":
     The broker feed provides up to 100 bars. The advanced predictor needs
     >= 100 bars for reliable rolling-window feature computation.
     """
-    import pandas as pd
+
 
     prices = data.get("prices", [data["close"]])
     highs = data.get("highs", [data["high"]])
@@ -330,7 +330,7 @@ def _fetch_macro_df(
     Returns a DataFrame of macro features or None if both stages fail.
     None is safe — the predictor falls back to OHLCV-only features.
     """
-    import pandas as pd
+
 
     _store = _get_macro_store()
     if _store is None or len(_store) == 0:
@@ -513,8 +513,6 @@ def _predict_advanced(
     calibration thresholds remain valid.  Anomaly weighting, online blend,
     and deep ensemble blend all receive the same daily-resampled DataFrame.
     """
-    import pandas as _pd
-
     ohlcv_df = _build_ohlcv_df(data)
 
     # ── Timeframe alignment: resample H1 → daily before model inference ───────
@@ -524,11 +522,9 @@ def _predict_advanced(
 
         if needs_resampling(ohlcv_df):
             # Assign a proper DatetimeIndex so the resampler can work
-            if not isinstance(ohlcv_df.index, _pd.DatetimeIndex):
-                from datetime import datetime, timezone as _tz
-
-                idx = _pd.date_range(
-                    end=datetime.now(_tz.utc),
+            if not isinstance(ohlcv_df.index, pd.DatetimeIndex):
+                idx = pd.date_range(
+                    end=datetime.now(UTC),
                     periods=len(ohlcv_df),
                     freq="1h",
                     tz="UTC",
@@ -592,7 +588,7 @@ def _predict_basic(
 
     Returns (prob, model_ver).
     """
-    import pandas as pd
+
 
     prices = data.get("prices", [data["close"]])
     closes = pd.Series(prices)
@@ -968,13 +964,13 @@ async def _execute_if_approved(
                 # Build a minimal OHLCV-like object from data dict for regime gate
                 _ohlcv_proxy = None
                 try:
-                    import pandas as _pd
+                    
 
                     _prices = data.get("prices", [])
                     _highs = data.get("highs", [])
                     _lows = data.get("lows", [])
                     if _prices and _highs and _lows:
-                        _ohlcv_proxy = _pd.DataFrame(
+                        _ohlcv_proxy = pd.DataFrame(
                             {
                                 "close": _prices,
                                 "high": _highs,
@@ -1075,14 +1071,14 @@ async def _execute_if_approved(
 
             try:
                 from ml.position_sizer import get_position_sizer
-                import pandas as _pd_sz
+                
 
                 _ohlcv_sz = None
                 _prices_sz = (data or {}).get("prices", [])
                 _highs_sz = (data or {}).get("highs", [])
                 _lows_sz = (data or {}).get("lows", [])
                 if _prices_sz and _highs_sz and _lows_sz:
-                    _ohlcv_sz = _pd_sz.DataFrame(
+                    _ohlcv_sz = pd.DataFrame(
                         {
                             "close": _prices_sz,
                             "high": _highs_sz,
@@ -1196,10 +1192,10 @@ async def _execute_if_approved(
         # Online learner feedback — notify Phase-3 store of the confirmed fill.
         # label=1 (trade was approved by risk + ML gates, so it's a positive sample).
         try:
-            import pandas as _pd
+            
 
             _fill_price = order.average_fill_price or signal_payload["entry_price"]
-            _features = _pd.DataFrame(
+            _features = pd.DataFrame(
                 [
                     {
                         "symbol": symbol,

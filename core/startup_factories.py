@@ -23,7 +23,7 @@ import logging
 import os
 import sys
 from typing import TYPE_CHECKING, Any
-from datetime import timezone
+from datetime import datetime, timezone
 
 UTC = timezone.utc
 
@@ -170,8 +170,6 @@ async def init_model_registry(s: Any) -> bool:
 
 
 async def init_config(s: Any) -> Any:
-    import os as _os
-
     from config import initialize_config
 
     _raw = initialize_config()
@@ -544,7 +542,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
 
     if stamp_path.exists():
         try:
-            existing = json.loads(stamp_path.read_text())
+            existing = json.loads(stamp_path.read_text(encoding="utf-8"))
         except Exception:
             existing = {}
 
@@ -567,9 +565,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     now = datetime.now(UTC)
     if started_utc_str:
         try:
-            from datetime import datetime as _dt
-
-            started_utc = _dt.fromisoformat(started_utc_str)
+            started_utc = datetime.fromisoformat(started_utc_str)
         except Exception:
             started_utc = now
     else:
@@ -591,7 +587,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
             "Do not delete this file — it tracks the run start time."
         ),
     }
-    stamp_path.write_text(json.dumps(payload, indent=2))
+    stamp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     logger.info(
         "OANDA paper trading clock stamped — account=%s… target: 30 days from %s, gate opens %s",
         account_id[:8],

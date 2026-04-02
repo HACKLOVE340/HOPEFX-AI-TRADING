@@ -67,7 +67,7 @@ class PropFirmConfig:
         if not p.exists():
             logger.warning("prop_firm_mode.json not found — using defaults")
             return cls()
-        with p.open() as fh:
+        with p.open(encoding="utf-8") as fh:
             data = json.load(fh)
         return cls(
             daily_dd=data.get("daily_dd", 0.05),

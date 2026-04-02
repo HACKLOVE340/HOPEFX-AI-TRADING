@@ -1180,7 +1180,8 @@ class RiskManager:
                         "persisted_at": datetime.now(UTC).isoformat(),
                     },
                     indent=2,
-                )
+                ),
+                encoding="utf-8",
             )
         except OSError as exc:
             logger.warning("RiskManager: could not persist halt state: %s", exc)
@@ -1190,7 +1191,7 @@ class RiskManager:
         if self._halt_state_file is None or not self._halt_state_file.exists():
             return
         try:
-            data = json.loads(self._halt_state_file.read_text())
+            data = json.loads(self._halt_state_file.read_text(encoding="utf-8"))
             # Accept both "halt" and "halted" keys for forward/backward compat.
             is_halted = data.get("halt") or data.get("halted")
             if is_halted:

@@ -509,14 +509,12 @@ class SignalFilter:
         # Fall back to OHLCV-based regime
         if ohlcv is not None:
             try:
-                import numpy as _np
-
-                closes = _np.array(ohlcv["close"].values[-50:], dtype=float)
+                closes = np.array(ohlcv["close"].values[-50:], dtype=float)
                 if len(closes) >= 20:  # noqa: PLR2004
                     hurst = self._hurst_exponent(closes)
-                    log_ret = _np.diff(_np.log(closes))
-                    rv_14 = float(_np.std(log_ret[-14:])) if len(log_ret) >= 14 else 0.0  # noqa: PLR2004
-                    rv_90 = float(_np.std(log_ret)) if len(log_ret) >= 20 else rv_14  # noqa: PLR2004
+                    log_ret = np.diff(np.log(closes))
+                    rv_14 = float(np.std(log_ret[-14:])) if len(log_ret) >= 14 else 0.0  # noqa: PLR2004
+                    rv_90 = float(np.std(log_ret)) if len(log_ret) >= 20 else rv_14  # noqa: PLR2004
                     if rv_90 > 0 and rv_14 > 2.0 * rv_90:
                         return "HIGH_VOL"
                     if hurst < 0.45:  # noqa: PLR2004

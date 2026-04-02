@@ -184,7 +184,7 @@ class TradingEnv(gym.Env if _GYM_AVAILABLE else object):  # type: ignore[misc]
         self._equity *= 1 + pnl - total_cost
 
         # Update position after costs are assessed on the OLD position
-        self._position = new_position
+        self._position = new_position  # pylint: disable=attribute-defined-outside-init
 
         self._step += 1
         done = self._step >= self._n - 1
@@ -545,7 +545,10 @@ class OnlineRetrainer:
 
         if df is not None and len(df) >= self.buffer_size:
             threading.Thread(
+                target=self._retrain_async,
+                args=(df,),
                 name=f"OnlineRetrain-{self._retrain_count}",
+                daemon=True,
             ).start()
 
     def _retrain_async(self, df: pd.DataFrame) -> None:

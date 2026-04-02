@@ -253,7 +253,6 @@ class HourlyTrainer:
     async def _reload_live_inference(self, symbol: str) -> None:
         """Reload the live inference model after a full retrain."""
         try:
-            from pathlib import Path
             from ml.live_inference import AdvancedModelPredictor
 
             model_path = Path(self.model_dir) / f"{symbol}_advanced_oos.pkl"
@@ -319,12 +318,12 @@ if __name__ == "__main__":
     parser.add_argument("--full-retrain", action="store_true", help="Force a full retrain now")
     args = parser.parse_args()
 
-    symbols = [args.symbol] if args.symbol else _SYMBOLS
-    trainer = HourlyTrainer(enabled=True, symbols=symbols)
+    _run_symbols = [args.symbol] if args.symbol else _SYMBOLS
+    trainer = HourlyTrainer(enabled=True, symbols=_run_symbols)
 
     async def _main():
         if args.full_retrain:
-            for sym in symbols:
+            for sym in _run_symbols:
                 await trainer._full_retrain(sym)
         elif args.once:
             await trainer._run_cycle()

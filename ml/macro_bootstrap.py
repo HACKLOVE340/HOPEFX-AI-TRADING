@@ -64,7 +64,6 @@ def _fetch_series(ticker: str, years: int = _HISTORY_YEARS) -> pd.DataFrame | No
     """Fetch `years` of daily close data for `ticker` via yfinance."""
     try:
         import yfinance as yf
-        import pandas as pd
 
         end = datetime.now(UTC)
         start = end - timedelta(days=years * 365)
