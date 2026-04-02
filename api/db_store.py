@@ -38,6 +38,16 @@ def _get_session():
         return None
 
 
+def _key_hint(key: str) -> str:
+    """Return a non-sensitive log token for a config key.
+
+    Config keys are internal identifiers (e.g. ``notification_settings:42``),
+    not secrets, but we truncate them in log output to avoid leaking user IDs
+    or other structured data into log aggregators.
+    """
+    return key[:32] + "…" if len(key) > 32 else key  # noqa: RUF001
+
+
 def db_get(key: str) -> Any | None:
     """
     Retrieve a JSON-decoded value from the configurations table.
@@ -53,7 +63,8 @@ def db_get(key: str) -> Any | None:
         if record and record.config_value:
             return json.loads(record.config_value)
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-        logger.debug("db_get(%s) failed: %s", key, exc)
+        # Log only a truncated key hint and the exception type — never the value.
+        logger.debug("db_get(%s) failed: %s", _key_hint(key), type(exc).__name__)
     return None
 
 
@@ -86,7 +97,8 @@ def db_set(key: str, value: Any, changed_by: str = "system") -> bool:
         session.commit()
         return True
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-        logger.debug("db_set(%s) failed: %s", key, exc)
+        # Log only a truncated key hint and the exception type — never the value.
+        logger.debug("db_set(%s) failed: %s", _key_hint(key), type(exc).__name__)
         return False
 
 
@@ -102,7 +114,8 @@ def db_delete(key: str) -> bool:
         session.commit()
         return True
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-        logger.debug("db_delete(%s) failed: %s", key, exc)
+        # Log only a truncated key hint and the exception type — never the value.
+        logger.debug("db_delete(%s) failed: %s", _key_hint(key), type(exc).__name__)
         return False
 
 
