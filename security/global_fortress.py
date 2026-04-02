@@ -592,7 +592,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
             )
         except Exception as exc:
             logger.error("HOPEFXBrain: PR publisher error for %s: %s", endpoint, exc)
-            pr_result = {"status": "error", "error": str(exc)}
+            pr_result = {"status": "error", "error": "PR publish failed — check server logs"}
 
         # Persist approved record with PR metadata
         approved_record = {

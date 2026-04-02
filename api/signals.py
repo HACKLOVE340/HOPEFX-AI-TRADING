@@ -921,7 +921,8 @@ def create_signals_router():
             )
             return {"alert_id": alert.id, "status": "created"}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Alert creation failed: {e}") from e
+            logger.error("Alert creation failed: %s", e)
+            raise HTTPException(status_code=500, detail="Alert creation failed — check server logs") from e
 
     @signals_router.get("/alerts")
     async def list_alerts(symbol: str | None = None):
@@ -972,7 +973,8 @@ def create_signals_router():
 
             engine_status = get_signal_engine_status()
         except Exception as exc:
-            engine_status = {"error": str(exc)}
+            logger.warning("get_signal_engine_status failed: %s", exc)
+            engine_status = {"error": "Signal engine unavailable — check server logs"}
 
         # Pull the last 10 engine-generated signals from the ring buffer
         svc = _get_signal_service()

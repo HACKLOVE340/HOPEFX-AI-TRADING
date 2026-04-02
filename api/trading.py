@@ -1448,7 +1448,7 @@ async def get_regime_status():
             "confidence": 0.0,
             "selected_strategy": "TrendFollowing",
             "manifest_entries": {},
-            "error": str(exc),
+            "error": "Regime router unavailable — check server logs",
         }
 
 
@@ -1463,7 +1463,8 @@ async def get_regime_history(limit: int = 20):
             return {"history": []}
         return {"history": regime_router.regime_history(limit=limit)}
     except Exception as exc:
-        return {"history": [], "error": str(exc)}
+        logger.warning("get_regime_history failed: %s", exc)
+        return {"history": [], "error": "Regime history unavailable — check server logs"}
 
 
 # ── Stress test endpoint ──────────────────────────────────────────────────────

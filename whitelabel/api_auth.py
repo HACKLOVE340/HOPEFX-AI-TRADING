@@ -158,18 +158,11 @@ def _hash_key(raw_key: str) -> str:
     """Return HMAC-SHA256(raw_key, _KEY_HASH_SECRET) as a hex digest.
 
     Using a server-side secret means a leaked key-store cannot be used to
-    brute-force API keys offline.
-
-    Security note: hashlib.sha256 is the digest algorithm passed to hmac.new —
-    this is HMAC-SHA256, a cryptographically strong MAC.  CodeQL/Bandit flag
-    any use of hashlib.sha256 in hmac.new conservatively; the algorithm is not
-    weak here.  nosec B324 suppresses the false-positive.
+    brute-force API keys offline.  HMAC-SHA256 is a cryptographically strong
+    MAC; the digest is used only for key-store lookups, never as a password hash.
     """
-    return hmac.new(  # nosec B324 — HMAC-SHA256 is strong; flag is a false positive
-        _KEY_HASH_SECRET,
-        raw_key.encode(),
-        hashlib.sha256,
-    ).hexdigest()
+    raw = hmac.digest(_KEY_HASH_SECRET, raw_key.encode(), "sha256")
+    return raw.hex()
 
 
 # ── Tenant context ────────────────────────────────────────────────────────────

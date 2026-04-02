@@ -297,7 +297,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             return await trading_app.broker.get_account_info()
         except Exception as exc:
             logger.error("Error getting account info: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=500, detail="Failed to retrieve account info — check server logs") from exc
 
     @app.get("/api/v1/positions")
     async def get_positions(user=Depends(get_current_user)):

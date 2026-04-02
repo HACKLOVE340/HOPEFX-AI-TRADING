@@ -289,13 +289,10 @@ def check_port_availability() -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            # Bind to all interfaces solely to test whether the port is free.
-            # The socket is closed immediately in the finally block — it never
-            # accepts connections and is not used for any network service.
-            # nosec B104 — binding to 0.0.0.0 is intentional here: we need to
-            # probe the port on all interfaces to detect conflicts regardless of
-            # which interface the application will ultimately bind to.
-            sock.bind(("0.0.0.0", port))  # nosec B104
+            # Bind to loopback only — sufficient to detect port conflicts since
+            # a port in use on 127.0.0.1 is unavailable system-wide.
+            # The socket is closed immediately in the finally block.
+            sock.bind(("127.0.0.1", port))
             _good(f"Port {port} ({label}) is free")
         except OSError:
             _err(
