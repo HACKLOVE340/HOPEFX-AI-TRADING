@@ -208,7 +208,8 @@ def _check_rate_limit(key_hash: str, tier_config: TierConfig) -> None:
 
 def _check_rate_limit_redis(key_hash: str, tier_config: TierConfig) -> None:
     """Redis sliding-window rate limiter."""
-    assert _redis_client is not None
+    if _redis_client is None:
+        raise RuntimeError("Redis client is not initialised")
     pipe = _redis_client.pipeline()
 
     min_key = f"rl:min:{key_hash}"

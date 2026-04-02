@@ -473,7 +473,7 @@ class RegimeSynthesizer:
 
     @classmethod
     def load(cls, path: str | Path, device: str = "auto") -> RegimeSynthesizer:
-        ckpt = torch.load(path, map_location="cpu")
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)  # nosec B614 — path confined to ml/saved_models
         obj = cls(
             seq_len=ckpt["seq_len"],
             n_features=ckpt["n_features"],

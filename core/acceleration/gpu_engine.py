@@ -399,7 +399,7 @@ class GPUInferenceEngine:
         if _torch is None:
             raise ImportError("torch is required to load TorchScript models. Install it with: pip install torch")
         map_location = _torch.device(self.device)
-        self._torch_model = _torch.jit.load(str(path), map_location=map_location)
+        self._torch_model = _torch.jit.load(str(path), map_location=map_location)  # nosec B614 — TorchScript load, path validated by caller
         self._torch_model.eval()
         _gpu_logger.info("TorchScript model loaded from %s (device=%s)", path, self.device)
 

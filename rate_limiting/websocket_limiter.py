@@ -243,11 +243,9 @@ class WebSocketConnectionLimiter:
         Must be called in the finally block of every WebSocket handler.
         """
         if self._redis is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await self._redis_release(client_ip)
                 return
-            except Exception:
-                pass
         await self._local_release(client_ip)
 
     def stats(self) -> dict:
@@ -275,11 +273,9 @@ def get_client_ip(websocket) -> str:
     trusted = {ip.strip() for ip in trusted_raw.split(",") if ip.strip()}
 
     direct_ip = ""
-    try:
+    with contextlib.suppress(Exception):
         if websocket.client:
             direct_ip = websocket.client.host or ""
-    except Exception:
-        pass
 
     if direct_ip in trusted:
         # Connection is from a trusted proxy — honour X-Forwarded-For

@@ -42,7 +42,7 @@ DEFAULT_ADMIN_EMAIL = "admin@hopefx.io"
 DEFAULT_ADMIN_USERNAME = "admin"
 # Password is generated once at bootstrap time and written to .env.
 # Never hardcoded — read back from .env after generation.
-_ADMIN_PASSWORD_KEY = "BOOTSTRAP_ADMIN_PASSWORD"
+_ADMIN_PASSWORD_KEY = "BOOTSTRAP_ADMIN_PASSWORD"  # nosec B105 — env var key name, not a password
 
 
 def _generate_env() -> bool:
