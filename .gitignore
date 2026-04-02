@@ -95,8 +95,14 @@ yarn-error.log*
 ml/saved_models/*.pkl
 !ml/saved_models/current.pkl
 ml/saved_models/*.joblib
+ml/saved_models/*_training_report.json
+ml/saved_models/*_meta.json
 # model_checksums.json is machine-generated at deploy time
 ml/saved_models/model_checksums.json
+
+# Runtime-generated data files
+backtest/results/
+data/paper_trading_gate.json
 # registry.json is tracked in git as the seed manifest; updated by ModelRegistry at runtime
 *.h5
 *.pt
