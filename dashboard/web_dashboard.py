@@ -27,9 +27,7 @@ except ImportError:
     AIOHTTP_AVAILABLE = False
 
 try:
-    import plotly  # noqa: F401
-    import plotly.graph_objs as go  # noqa: F401
-
+    import plotly  # type: ignore[import]  # noqa: F401
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False

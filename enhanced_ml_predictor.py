@@ -39,8 +39,7 @@ import warnings
 # ML/DL Libraries
 try:
     import tensorflow as tf
-    from tensorflow import keras  # noqa: F401
-    from tensorflow.keras.models import Model, Sequential, load_model  # noqa: F401
+    from tensorflow.keras.models import Model, Sequential, load_model
     from tensorflow.keras.layers import (
         LSTM,
         GRU,
@@ -48,10 +47,7 @@ try:
         Dropout,
         BatchNormalization,
         Input,
-        Concatenate,  # noqa: F401
-        Multiply,  # noqa: F401
         Add,
-        Attention,  # noqa: F401
         Conv1D,
         MaxPooling1D,
         GlobalAveragePooling1D,
@@ -62,12 +58,10 @@ try:
         EarlyStopping,
         ReduceLROnPlateau,
         ModelCheckpoint,
-        TensorBoard,  # noqa: F401
         TerminateOnNaN,
     )
-    from tensorflow.keras.optimizers import Adam, AdamW  # noqa: F401
+    from tensorflow.keras.optimizers import Adam, AdamW
     from tensorflow.keras.regularizers import l1_l2
-    from tensorflow.keras.losses import Huber  # noqa: F401
 
     TENSORFLOW_AVAILABLE = True
 except ImportError:
@@ -75,12 +69,7 @@ except ImportError:
     warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
 
 try:
-    import torch  # noqa: F401
-    from torch import nn  # noqa: F401
-    from torch.utils.data import DataLoader, Dataset, TensorDataset  # noqa: F401
-    from torch.optim import AdamW as TorchAdamW  # noqa: F401
-    from torch.optim.lr_scheduler import ReduceLROnPlateau as TorchReduceLROnPlateau  # noqa: F401
-
+    import torch  # pylint: disable=unused-import
     PYTORCH_AVAILABLE = True
 except ImportError:
     PYTORCH_AVAILABLE = False
@@ -88,22 +77,9 @@ except ImportError:
 try:
     from sklearn.ensemble import (
         RandomForestClassifier,
-        GradientBoostingClassifier,  # noqa: F401
-        ExtraTreesClassifier,  # noqa: F401
-        VotingClassifier,  # noqa: F401
-        StackingClassifier,  # noqa: F401
     )
-    from sklearn.preprocessing import RobustScaler, StandardScaler, QuantileTransformer  # noqa: F401
-    from sklearn.model_selection import TimeSeriesSplit, cross_val_score  # noqa: F401
-    from sklearn.metrics import (
-        accuracy_score,  # noqa: F401
-        precision_recall_fscore_support,  # noqa: F401
-        log_loss,  # noqa: F401
-        brier_score_loss,  # noqa: F401
-        roc_auc_score,  # noqa: F401
-        mean_squared_error,  # noqa: F401
-        mean_absolute_error,  # noqa: F401
-    )
+    from sklearn.preprocessing import RobustScaler
+    from sklearn.model_selection import TimeSeriesSplit
     from sklearn.calibration import CalibratedClassifierCV
     from sklearn.feature_selection import SelectFromModel, mutual_info_classif
 
@@ -126,15 +102,13 @@ except ImportError:
     LIGHTGBM_AVAILABLE = False
 
 try:
-    import optuna  # noqa: F401
-
+    import optuna  # pylint: disable=unused-import
     OPTUNA_AVAILABLE = True
 except ImportError:
     OPTUNA_AVAILABLE = False
 
 try:
-    import shap  # noqa: F401
-
+    import shap  # pylint: disable=unused-import
     SHAP_AVAILABLE = True
 except ImportError:
     SHAP_AVAILABLE = False

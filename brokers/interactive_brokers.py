@@ -23,7 +23,7 @@ try:
         Future,
         LimitOrder,
         MarketOrder,
-        Option,  # pylint: disable=unused-import  # noqa: F401
+
         Stock,
         StopOrder,
     )
