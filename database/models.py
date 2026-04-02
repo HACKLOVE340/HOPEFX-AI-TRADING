@@ -694,13 +694,6 @@ class OrderStatus(enum.Enum):
     REJECTED = "rejected"
 
 
-class OrderType(enum.Enum):
-    MARKET = "market"
-    LIMIT = "limit"
-    STOP = "stop"
-    STOP_LIMIT = "stop_limit"
-
-
 class PositionStatus(enum.Enum):
     OPEN = "open"
     CLOSING = "closing"
