@@ -74,7 +74,8 @@ class ParamSpace:
         return _Param("categorical", choices=choices)
 
     @staticmethod
-    def bool() -> _Param:
+    def boolean() -> _Param:
+        """Return a boolean parameter space (True/False categorical)."""
         return _Param("categorical", choices=[True, False])
 
 

@@ -611,16 +611,14 @@ class GeopoliticalRiskProvider:
                     ts = datetime.now(UTC)
 
                 event = GeopoliticalEvent(
-                    event_id=f"gdelt_{hash(url_str) & 0xFFFFFFFF:08x}",
                     event_type=GeopoliticalEventType.POLITICAL_UNREST,
                     title=title,
-                    description=f"Source: {domain}",
+                    description=f"Source: {domain} | {url_str}",
                     severity=RiskSeverity.MEDIUM,
                     region="Global",
                     countries=[],
                     timestamp=ts,
                     source="GDELT",
-                    url=url_str,
                 )
                 events.append(event)
             logger.debug("GDELT returned %d articles", len(events))

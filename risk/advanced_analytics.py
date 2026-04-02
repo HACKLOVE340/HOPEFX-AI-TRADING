@@ -645,7 +645,7 @@ class AdvancedRiskAnalytics:
                 [np.sum(returns[i : i + time_horizon]) for i in range(len(returns) - time_horizon + 1)],
             )
 
-        var_percentile = np.percentile(multiday_returns, (1 - confidence_level) * 100)
+        var_percentile = np.percentile(multiday_returns, (1 - confidence_level) * 100)  # pylint: disable=possibly-used-before-assignment
         val = abs(var_percentile * portfolio_value) if portfolio_value else abs(var_percentile)
 
         return VaRResult(

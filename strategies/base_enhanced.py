@@ -115,7 +115,7 @@ class EnhancedStrategy(ABC):
 
         # Report to MCC if connected
         if signal and signal.is_valid() and self.mcc_callback:
-            self.mcc_callback(self.config.name, signal)
+            self.mcc_callback(self.config.name, signal)  # pylint: disable=not-callable
 
         return signal
 

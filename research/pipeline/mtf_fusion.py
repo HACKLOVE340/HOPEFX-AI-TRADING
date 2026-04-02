@@ -569,3 +569,45 @@ class MTFFusionStore:
                 "data_dir": self.data_dir,
                 "bootstrap_error": self._bootstrap_error,
             }
+
+    def get(self, symbol: str, default: dict | None = None) -> dict:  # noqa: ARG002
+        """Return the latest fused regime features, or *default* if unavailable.
+
+        The *symbol* parameter is accepted for API compatibility but the store
+        is bootstrapped for a single symbol at construction time.
+        """
+        if default is None:
+            default = {}
+        try:
+            with self._lock:
+                d1 = self._d1_df
+                h4 = self._h4_df
+            if d1 is None and h4 is None:
+                return default
+            result: dict = {}
+            if d1 is not None and not d1.empty:
+                result.update({f"d_{k}": v for k, v in d1.iloc[-1].to_dict().items()})
+            if h4 is not None and not h4.empty:
+                result.update({f"h_{k}": v for k, v in h4.iloc[-1].to_dict().items()})
+            return result if result else default
+        except Exception:  # pylint: disable=broad-exception-caught
+            return default
+
+
+# Module-level singleton — shared across the process
+_mtf_store_instance: MTFFusionStore | None = None
+
+
+def get_mtf_store(symbol: str = "XAU_USD", data_dir: str = "data/historical") -> MTFFusionStore | None:
+    """
+    Return the process-level MTFFusionStore singleton, creating it on first call.
+
+    Returns None when the store cannot be initialised (missing data, import error).
+    """
+    global _mtf_store_instance  # pylint: disable=global-statement
+    if _mtf_store_instance is None:
+        try:
+            _mtf_store_instance = MTFFusionStore(symbol=symbol, data_dir=data_dir)
+        except Exception:  # pylint: disable=broad-exception-caught
+            return None
+    return _mtf_store_instance

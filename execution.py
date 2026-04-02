@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from validation import OrderValidator, Order
+from validation import OrderValidator, Order  # pylint: disable=no-name-in-module
 
 logger = logging.getLogger("execution")
 

@@ -322,7 +322,7 @@ class EnsemblePredictor(BaseMLModel):
         for i in range(self.sequence_length, len(data)):
             X.append(data[i - self.sequence_length : i])
             y.append(data[i])
-        return np.array(X).reshape(-1, self.sequence_length, 1), np.array(y)
+        return np.array(X).reshape(-1, self.sequence_length, 1), np.array(y)  # pylint: disable=too-many-function-args
 
     def train(
         self,

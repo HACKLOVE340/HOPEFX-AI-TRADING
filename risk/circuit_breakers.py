@@ -369,7 +369,7 @@ class CircuitBreaker:
             # In half-open state, reduce size
             if self.state == CircuitState.HALF_OPEN:
                 order["size"] = order.get("size", 0) * 0.5
-                logger.info("Half-open state: reduced order size by 50%")
+                logger.info("Half-open state: reduced order size by 50%%")
 
             return True, None
 

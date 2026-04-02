@@ -762,20 +762,19 @@ class PaperTradingBroker(BaseBroker):
                 f"Insufficient balance: need {cost:.2f}, have {self.balance:.2f}",
             )
 
+        order_id = f"PAPER-{len(self._orders) + 1:06d}"
         order = Order(
-            order_id=f"PAPER-{len(self._orders) + 1:06d}",
+            id=order_id,
             symbol=symbol,
             side=side,
-            order_type=order_type,
+            type=order_type,
             quantity=quantity,
             price=price,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
             status=_OSt.FILLED if order_type == _OT.MARKET else _OSt.PENDING,
             filled_quantity=quantity if order_type == _OT.MARKET else 0.0,
-            average_fill_price=fill_price if order_type == _OT.MARKET else None,
+            average_fill_price=fill_price if order_type == _OT.MARKET else 0.0,
         )
-        self._orders[order.order_id] = order
+        self._orders[order.id] = order
 
         if order_type == _OT.MARKET:
             # Update balance and positions
@@ -786,9 +785,9 @@ class PaperTradingBroker(BaseBroker):
                     self._positions[pos_key].quantity += quantity
                 else:
                     self._positions[pos_key] = Position(
-                        position_id=pos_key,
+                        id=pos_key,
                         symbol=symbol,
-                        side="LONG",
+                        side=_OS.BUY,
                         quantity=quantity,
                         entry_price=fill_price,
                         current_price=fill_price,
@@ -1245,6 +1244,13 @@ except Exception as _exc:
 
 
 from brokers.factory import BrokerFactory  # noqa: F401
+
+try:
+    from brokers.base import AccountInfo, BrokerConnector  # noqa: F401
+except Exception as _exc:
+    import logging as _logging
+
+    _logging.getLogger(__name__).debug("BrokerConnector base unavailable: %s", _exc)
 
 # ── YAML-config-based broker implementations ──────────────────────────────────
 # These complement the existing connector classes and are used by the new

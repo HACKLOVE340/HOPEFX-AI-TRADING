@@ -714,7 +714,7 @@ class FIXAdapter:
         """
         import socket as _socket
 
-        if pyfixmsg is None or FixMessage is None:
+        if pyfixmsg is None or FixMessage is None:  # pylint: disable=possibly-used-before-assignment
             raise RuntimeError("pyfixmsg is not installed. Run: pip install pyfixmsg")
 
         sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)

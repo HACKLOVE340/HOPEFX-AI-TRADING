@@ -495,7 +495,7 @@ class TestNewsProvider:
         from news.providers import NewsProvider
 
         with pytest.raises(TypeError):
-            NewsProvider(api_key="test_key")  # type: ignore[abstract]
+            NewsProvider(api_key="test_key")  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated
 
     def test_incomplete_subclass_missing_both_raises_type_error(self):
         """A subclass missing both abstract methods raises TypeError."""
@@ -505,7 +505,7 @@ class TestNewsProvider:
             pass  # get_news and format_article not implemented
 
         with pytest.raises(TypeError):
-            IncompleteProvider()  # type: ignore[abstract]
+            IncompleteProvider()  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated
 
     def test_incomplete_subclass_missing_one_raises_type_error(self):
         """A subclass missing one abstract method still raises TypeError."""
@@ -518,7 +518,7 @@ class TestNewsProvider:
             # format_article not implemented
 
         with pytest.raises(TypeError):
-            PartialProvider()  # type: ignore[abstract]
+            PartialProvider()  # type: ignore[abstract]  # pylint: disable=abstract-class-instantiated
 
     def test_concrete_subclass_stores_api_key(self):
         """A fully implemented subclass stores api_key correctly."""
@@ -529,14 +529,13 @@ class TestNewsProvider:
                 return []
 
             def format_article(self, raw_article):
+                from datetime import datetime, timezone
                 return NewsArticle(
                     title="",
-                    content="",
+                    description="",
                     source="",
                     url="",
-                    published_at=None,
-                    sentiment_score=0.0,
-                    relevance_score=0.0,
+                    published_at=datetime.now(timezone.utc),
                     symbols=[],
                 )
 

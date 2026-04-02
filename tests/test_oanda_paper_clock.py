@@ -268,7 +268,7 @@ class TestInitBrokerSelection:
         MockPaperClass = MagicMock(return_value=mock_paper_instance)
 
         _INJECTED = ("api.admin", "brokers.paper_trading", "core.startup_factories")
-        with MagicMock() as mock_admin:
+        with MagicMock() as mock_admin:  # pylint: disable=not-context-manager
             mock_admin.log_activity = MagicMock()
             # Snapshot only the keys we will mutate — never clear sys.modules
             # globally as that drops all cached modules and breaks subsequent tests.
@@ -306,7 +306,7 @@ class TestInitBrokerSelection:
         MockPaperClass = MagicMock(return_value=mock_paper_instance)
 
         _INJECTED = ("api.admin", "brokers.paper_trading", "core.startup_factories")
-        with MagicMock() as mock_admin:
+        with MagicMock() as mock_admin:  # pylint: disable=not-context-manager
             mock_admin.log_activity = MagicMock()
             _saved = {k: sys.modules.get(k) for k in _INJECTED}
             sys.modules["api.admin"] = mock_admin

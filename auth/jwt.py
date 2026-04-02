@@ -81,13 +81,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES = _get_access_token_expire_minutes()
 # even though our pre-hash always produces a 44-char ASCII string.  The root
 # cause is passlib calling bcrypt.checkpw with the raw bytes before our hook
 # runs.  We bypass passlib entirely and call bcrypt directly.
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 try:
     import bcrypt as _bcrypt_lib
 
     _BCRYPT_DIRECT = True
 except ImportError:
     _BCRYPT_DIRECT = False
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _prepare_password(password: str) -> bytes:

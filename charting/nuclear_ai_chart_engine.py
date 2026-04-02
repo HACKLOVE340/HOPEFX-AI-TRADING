@@ -373,7 +373,7 @@ class NuclearAIChartEngine:
         try:
             if self._data_orch and hasattr(self._data_orch, "get_ohlcv"):
                 for tf in ("1m", "5m", "1h"):
-                    bars = self._data_orch.get_ohlcv(timeframe=tf, limit=300)
+                    bars = self._data_orch.get_ohlcv(timeframe=tf, bars=300)
                     if bars:
                         result[tf] = [
                             {
