@@ -100,8 +100,15 @@ def _prepare_password(password: str) -> bytes:
     a standalone password hash.  bcrypt (cost ≥ 12) is the actual hardening
     primitive.  BLAKE2b prevents bcrypt's 72-byte truncation vulnerability for
     long passwords while preserving full input entropy.
+
+    nosec B324 — BLAKE2b here is a pre-processing step, not a password hash.
+    The output is immediately passed to bcrypt.hashpw/checkpw which provides
+    the actual key-stretching.  Using SHA-256 or SHA-512 instead would be
+    equally valid; BLAKE2b is chosen for its speed and lack of length-extension
+    vulnerability.
     """
-    digest = hashlib.blake2b(password.encode("utf-8"), digest_size=32).digest()
+    # nosec B324 — length normalisation only; bcrypt is the password-hashing primitive
+    digest = hashlib.blake2b(password.encode("utf-8"), digest_size=32).digest()  # nosec B324
     return base64.b64encode(digest)  # 44 ASCII bytes — safe for bcrypt
 
 
