@@ -5,8 +5,12 @@
 # No commercial use without explicit permission.
 """replay/router.py — FastAPI router for chart replay endpoints."""
 
+import logging
+
 from replay.engine import ChartReplayEngine
 from replay.models import ReplaySpeed
+
+logger = logging.getLogger(__name__)
 
 
 def create_replay_router(engine: "ChartReplayEngine"):
@@ -50,7 +54,8 @@ def create_replay_router(engine: "ChartReplayEngine"):
             start = datetime.fromisoformat(req.start_date)
             end = datetime.fromisoformat(req.end_date)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=f"Invalid date format: {exc}") from exc
+            logger.warning("Invalid date format in replay request: %s", exc)
+            raise HTTPException(status_code=400, detail="Invalid date format — use ISO 8601 (e.g. 2024-01-15T00:00:00)") from None
         session = engine.create_session(
             symbol=req.symbol,
             timeframe=req.timeframe,

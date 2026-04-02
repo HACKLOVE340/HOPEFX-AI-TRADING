@@ -113,13 +113,14 @@ class ChaosController:
                     result.detail,
                 )
             except Exception as exc:
+                logger.error("Chaos scenario '%s' raised exception: %s", scenario_fn.__name__, exc)
                 self._results.append(
                     ScenarioResult(
                         scenario=scenario_fn.__name__,
                         passed=False,
                         duration_s=0.0,
                         sla_s=0.0,
-                        detail=f"EXCEPTION: {exc}",
+                        detail="EXCEPTION — check server logs",
                     )
                 )
             finally:

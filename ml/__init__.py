@@ -435,7 +435,8 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         try:
             features_df = feature_engineer.create_features(df)
         except Exception as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            _ml_logger.error("Feature engineering failed: %s", exc)
+            raise HTTPException(status_code=422, detail="Feature engineering failed — check server logs") from None
         return {
             "rows": len(features_df),
             "feature_count": len(feature_engineer.feature_names),

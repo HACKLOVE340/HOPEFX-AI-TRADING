@@ -569,7 +569,8 @@ rule SuspiciousImport {
             threat["quarantine_path"] = str(dest.relative_to(PROJECT_ROOT))
             logger.warning("AV: quarantined %s → %s", src, dest)
         except OSError as exc:
-            raise RuntimeError(f"Quarantine failed: {exc}") from exc
+            logger.error("Quarantine failed for threat %s: %s", threat.get("id"), exc)
+            raise RuntimeError("Quarantine failed — check server logs") from None
         return threat
 
     # ── FastAPI router ────────────────────────────────────────────────────────
@@ -643,9 +644,11 @@ rule SuspiciousImport {
                 result = scanner.quarantine_threat(body.threat_id)
                 return result
             except ValueError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
+                logger.warning("Quarantine threat not found: %s", exc)
+                raise HTTPException(status_code=404, detail="Threat not found") from None
             except RuntimeError as exc:
-                raise HTTPException(status_code=500, detail=str(exc)) from exc
+                logger.error("Quarantine operation failed: %s", exc)
+                raise HTTPException(status_code=500, detail="Quarantine failed — check server logs") from None
 
         return router
 
@@ -662,7 +665,8 @@ def _require_auth(request: Request) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        logger.warning("Antivirus auth token decode failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
 
 
 def _require_admin(request: Request) -> dict[str, Any]:
