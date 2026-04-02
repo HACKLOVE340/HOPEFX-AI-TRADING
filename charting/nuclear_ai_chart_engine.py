@@ -76,6 +76,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections import deque
 from collections.abc import Callable
@@ -83,7 +84,7 @@ from collections.abc import Callable
 logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-TICK_INTERVAL_S: float = float(__import__("os").environ.get("CHART_TICK_INTERVAL", "1.0"))
+TICK_INTERVAL_S: float = float(os.environ.get("CHART_TICK_INTERVAL", "1.0"))
 MAX_BARS: int = 500
 MAX_EQUITY_PTS: int = 500
 MAX_SIGNALS: int = 50

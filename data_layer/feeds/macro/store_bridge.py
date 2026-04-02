@@ -24,20 +24,21 @@ in data/macro/ (the original MacroStore.load_defaults() path).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
 
 from data_layer.feeds.macro.fred import FREDFeed, FRED_SERIES, fred_feed
 from data_layer.feeds.macro.wgc import WGCFeed, wgc_feed
-import contextlib
 
 logger = logging.getLogger(__name__)
 
 # Startup retry config
-_STARTUP_MAX_RETRIES = int(__import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
-_STARTUP_RETRY_DELAY = float(__import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
+_STARTUP_MAX_RETRIES = int(os.getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
+_STARTUP_RETRY_DELAY = float(os.getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
 
 
 class MacroStoreBridge:

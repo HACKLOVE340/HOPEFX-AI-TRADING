@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 
 UTC = timezone.utc
@@ -132,7 +133,7 @@ class Order(BaseModel):
 
     model_config = {"use_enum_values": False}
 
-    id: OrderId = Field(default_factory=lambda: str(__import__("uuid").uuid4()))
+    id: OrderId = Field(default_factory=lambda: str(uuid.uuid4()))
     symbol: Symbol
     side: Side
     order_type: OrderType

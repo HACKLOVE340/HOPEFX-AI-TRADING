@@ -197,9 +197,10 @@ class DatabaseManager:
             try:
                 session = self._session_factory()
 
-                # Set query timeout
+                # Set query timeout — value is int-coerced, no user input
                 if "postgresql" in self.connection_string:
-                    session.execute(text(f"SET statement_timeout = '{int(self.query_timeout * 1000)}ms'"))
+                    timeout_ms = int(self.query_timeout * 1000)
+                    session.execute(text(f"SET statement_timeout = '{timeout_ms}ms'"))  # nosec S608
 
                 yield session
 

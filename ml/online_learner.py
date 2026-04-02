@@ -12,6 +12,7 @@ Continuously adapts to market regime changes without catastrophic forgetting
 from __future__ import annotations
 
 import logging
+import pathlib
 
 try:
     import torch
@@ -705,12 +706,10 @@ class SklearnOnlineLearner:
 
 # Canonical root for all persisted model files.  Any load/save outside this
 # directory is rejected to prevent path-traversal / arbitrary-pickle attacks.
-_MODEL_ROOT = (
-    __import__("pathlib").Path(__file__).resolve().parent / "saved_models"
-)
+_MODEL_ROOT = pathlib.Path(__file__).resolve().parent / "saved_models"
 
 
-def _assert_safe_model_path(path: __import__("pathlib").Path) -> None:  # type: ignore[name-defined]
+def _assert_safe_model_path(path: pathlib.Path) -> None:
     """Raise ValueError if *path* escapes the allowed model directory."""
     import pathlib as _pl
 

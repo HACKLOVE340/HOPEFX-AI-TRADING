@@ -10,6 +10,7 @@ Complete SQLAlchemy models for all entities
 
 import enum
 import logging
+import uuid
 from datetime import datetime, timezone
 
 UTC = timezone.utc
@@ -462,7 +463,7 @@ class Position(Base):
 
     __tablename__ = "positions"
 
-    id = Column(String(50), primary_key=True, default=lambda: str(__import__("uuid").uuid4()))
+    id = Column(String(50), primary_key=True, default=lambda: str(uuid.uuid4()))
     account_id = Column(Integer, nullable=True, index=True)
     symbol = Column(String(20), nullable=False, index=True)
     side = Column(String(10), nullable=True)
