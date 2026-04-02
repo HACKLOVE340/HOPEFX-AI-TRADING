@@ -74,16 +74,15 @@ class BollingerBandsStrategy(BaseStrategy):
             "prev_lower": float(lower.iloc[-2]) if len(lower) > 1 else None,
         }
 
-    def generate_signal(self, data) -> Any:
+    def generate_signal(self, analysis) -> Any:
         """
         Dual-dispatch: accepts either a dict (from analyze()) or a DataFrame.
         - dict  → returns Optional[Signal]  (BaseStrategy contract)
         - DataFrame → returns dict signal   (legacy backtesting / test contract)
         """
-        if isinstance(data, pd.DataFrame):
-            return self._generate_dict_signal(data)
+        if isinstance(analysis, pd.DataFrame):
+            return self._generate_dict_signal(analysis)
         # dict path — BaseStrategy abstract method contract
-        analysis = data
         upper = analysis.get("upper")
         lower = analysis.get("lower")
         price = analysis.get("price")

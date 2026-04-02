@@ -70,11 +70,11 @@ class MACDStrategy(BaseStrategy):
             "price": float(series.iloc[-1]),
         }
 
-    def generate_signal(self, data) -> Any:
+    def generate_signal(self, analysis) -> Any:
         """Dual-dispatch: DataFrame → dict signal, dict → Optional[Signal]."""
-        if isinstance(data, pd.DataFrame):
-            return self._generate_dict_signal(data)
-        analysis = data
+        if isinstance(analysis, pd.DataFrame):
+            return self._generate_dict_signal(analysis)
+        # dict path — BaseStrategy abstract method contract
         macd = analysis.get("macd")
         sig = analysis.get("signal_line")
         prev_macd = analysis.get("prev_macd")

@@ -232,8 +232,17 @@ class PerformanceMetrics:
         losing_trades = self.trade_history[self.trade_history["pnl"] < 0]["pnl"]
         return losing_trades.min() if len(losing_trades) > 0 else 0.0
 
-    def calculate_avg_trade_duration(self) -> float | None:
+    def calculate_avg_trade_duration(self) -> float:
         """Calculate average trade duration in days."""
-        # This would require entry/exit timestamps in trade history
-        # Simplified implementation
-        return None
+        if self.trade_history.empty:
+            return 0.0
+        if "entry_time" in self.trade_history.columns and "exit_time" in self.trade_history.columns:
+            try:
+                durations = (
+                    pd.to_datetime(self.trade_history["exit_time"])
+                    - pd.to_datetime(self.trade_history["entry_time"])
+                )
+                return float(durations.dt.total_seconds().mean() / 86400)
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+        return 0.0

@@ -62,8 +62,8 @@ def initialize_database(db_url: str | None = None) -> None:
     alembic_ini = os.path.join(os.path.dirname(__file__), "alembic.ini")
     if os.path.exists(alembic_ini):
         try:
-            from alembic import command
-            from alembic.config import Config
+            from alembic import command  # pylint: disable=no-name-in-module
+            from alembic.config import Config  # pylint: disable=no-name-in-module
 
             alembic_cfg = Config(alembic_ini)
             with engine.begin() as connection:

@@ -203,7 +203,7 @@ def create_news_router():
         Defaults to 24 hours. Only CRITICAL and HIGH importance events are returned.
         """
         try:
-            from datetime import datetime, timezone, timedelta
+            from datetime import datetime, timedelta
 
             calendar = EconomicCalendar()
             now = datetime.now(UTC)

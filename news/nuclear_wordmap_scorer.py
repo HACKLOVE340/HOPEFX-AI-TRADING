@@ -375,7 +375,7 @@ class NuclearWordMapScorer:
             return keywords
 
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             nuclear_section = data.get("nuclear_risk", {})
             if nuclear_section:
                 for category, terms in nuclear_section.items():

@@ -83,7 +83,8 @@ class StochasticStrategy(BaseStrategy):
 
         return k_percent, d_percent
 
-    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
+        market_data = analysis
         """
         Generate trading signal based on Stochastic Oscillator.
 

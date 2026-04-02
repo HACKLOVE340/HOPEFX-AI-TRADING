@@ -417,7 +417,7 @@ class TCAEngine:
         )
 
         # Market impact estimate with real context
-        temp_impact, perm_impact = self.impact_model.calculate(
+        temp_impact, _perm_impact = self.impact_model.calculate(
             order_size=total_qty,
             avg_daily_volume=Decimal(str(adv)),
             volatility=vol,

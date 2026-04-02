@@ -78,11 +78,11 @@ class NewsProvider(abc.ABC):
         self.logger = logging.getLogger(self.__class__.__name__)
 
     @abc.abstractmethod
-    def get_news(self, **kwargs) -> list[NewsArticle]:
+    def get_news(self, *args, **kwargs) -> list[NewsArticle]:
         """Fetch and return a list of NewsArticle objects."""
 
     @abc.abstractmethod
-    def format_article(self, raw_article: dict[str, Any]) -> NewsArticle:
+    def format_article(self, *args, **kwargs) -> NewsArticle:
         """Convert a raw provider response dict into a NewsArticle."""
 
 

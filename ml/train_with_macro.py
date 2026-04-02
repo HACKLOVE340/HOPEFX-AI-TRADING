@@ -160,7 +160,7 @@ def build_features(
         include_regime=True,
         macro_df=macro_df,
     )
-    X, y_class, y_reg, _ = fe.create_features(
+    X, y_class, _y_reg, _ = fe.create_features(
         ohlcv,
         target_col="close",
         prediction_horizon=prediction_horizon,
@@ -271,7 +271,7 @@ def walk_forward_eval(
 
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
-        (model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else preds)
+        _proba = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else preds
 
         acc = accuracy_score(y_test, preds)
         f1 = f1_score(y_test, preds, zero_division=0)
@@ -676,7 +676,7 @@ def main():
 
     # ── Save report ───────────────────────────────────────────────────────────
     report_path = MODEL_DIR / "training_report.json"
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     logger.info("Training report saved to %s", report_path)
 
