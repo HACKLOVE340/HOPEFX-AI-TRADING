@@ -43,8 +43,6 @@ class NewsFilterIntegration:
             return []
 
     def filter_events(self, events):
-        import logging
-
         log = logging.getLogger(__name__)
         now = datetime.now(UTC)
         upcoming_events = []

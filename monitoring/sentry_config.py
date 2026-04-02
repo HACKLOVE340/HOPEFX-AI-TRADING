@@ -226,14 +226,12 @@ def _before_send_transaction(event: dict[str, Any], hint: dict[str, Any]) -> dic
 
 def _build_sentry_integrations() -> list:
     """Auto-detect and return available Sentry SDK integrations."""
-    import logging as _logging
-
     from sentry_sdk.integrations.logging import LoggingIntegration
 
     integrations: list = [
         LoggingIntegration(
-            level=_logging.WARNING,  # breadcrumb level
-            event_level=_logging.ERROR,  # issue level
+            level=logging.WARNING,  # breadcrumb level
+            event_level=logging.ERROR,  # issue level
         )
     ]
 

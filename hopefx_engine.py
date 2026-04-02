@@ -814,9 +814,8 @@ class HopeFXEngine:
                 # Online learner feedback — notify Phase-3 store of the fill.
                 try:
                     from core.signal_engine import notify_fill as _notify_fill
-                    import pandas as _pd
 
-                    _features = _pd.DataFrame(
+                    _features = pd.DataFrame(
                         [
                             {
                                 "symbol": symbol,
