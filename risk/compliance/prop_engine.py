@@ -319,9 +319,10 @@ class PropComplianceEngine:
         chat_id = self.cfg.telegram_chat_id
         if not token or not chat_id:
             return
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        # URL is constructed from a server-side config token — not user input.
+        url = f"https://api.telegram.org/bot{token}/sendMessage"  # nosec B310
         try:
-            requests.post(url, json={"chat_id": chat_id, "text": message}, timeout=5)
+            requests.post(url, json={"chat_id": chat_id, "text": message}, timeout=5)  # nosec B113
         except Exception as exc:
             logger.warning("Telegram alert failed: %s", exc)
 

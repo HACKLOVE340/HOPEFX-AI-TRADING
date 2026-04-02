@@ -147,8 +147,9 @@ class StrategyPurchaseRequest(BaseModel):
 
     buyer_id: str
     strategy_id: str
-    # Stripe customer ID — required to create a PaymentIntent
-    stripe_customer_id: str
+    # Stripe customer ID — created server-side when absent; callers may
+    # supply an existing ID to reuse a Stripe customer record.
+    stripe_customer_id: str | None = None
     # Presentment currency (ISO 4217, e.g. "USD", "EUR", "NGN")
     currency: str = "USD"
 
@@ -536,10 +537,13 @@ async def list_strategy(request: StrategyListRequest):
         description=request.description,
         category=category,
         price=Decimal(str(request.price)),
-        license_type=license_type,
-        min_tier=min_tier,
         tags=request.tags,
     )
+    # Attach license_type and min_tier to the returned listing if it supports them
+    if hasattr(strategy, "license_type"):
+        strategy.license_type = license_type
+    if hasattr(strategy, "min_tier"):
+        strategy.min_tier = min_tier
 
     return {
         "success": True,

@@ -46,6 +46,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
@@ -174,10 +175,7 @@ def _fetch_rates_fixer() -> dict[str, float] | None:
         if usd_per_eur == 0:
             return None
         # Convert EUR-base to USD-base
-        usd_rates: dict[str, float] = {
-            ccy: rate / usd_per_eur
-            for ccy, rate in eur_rates.items()
-        }
+        usd_rates: dict[str, float] = {ccy: rate / usd_per_eur for ccy, rate in eur_rates.items()}
         usd_rates["USD"] = 1.0
         logger.debug("FX rates refreshed from Fixer.io")
         return usd_rates
@@ -361,7 +359,7 @@ class StripeProductionClient:
 
     def create_payment_intent(
         self,
-        customer_id: str,
+        customer_id: str | None,
         amount_usd: Decimal,
         currency: str = "USD",
         description: str = "HopeFX subscription",
@@ -411,9 +409,7 @@ class StripeProductionClient:
                 amount_cents=amount_cents,
                 currency=currency,
                 error_code="amount_too_small",
-                error_message=(
-                    f"Amount {amount_cents} {currency} is below Stripe minimum {min_amount}"
-                ),
+                error_message=(f"Amount {amount_cents} {currency} is below Stripe minimum {min_amount}"),
             )
 
         if not self._stripe_available:
@@ -421,9 +417,7 @@ class StripeProductionClient:
             import uuid
 
             pi_id = f"pi_sim_{uuid.uuid4().hex[:20]}"
-            logger.info(
-                "Stripe simulation: PI %s amount=%d %s", pi_id, amount_cents, currency
-            )
+            logger.info("Stripe simulation: PI %s amount=%d %s", pi_id, amount_cents, currency)
             return PaymentResult(
                 success=True,
                 payment_intent_id=pi_id,
@@ -439,7 +433,6 @@ class StripeProductionClient:
             pi_params: dict[str, Any] = {
                 "amount": amount_cents,
                 "currency": currency.lower(),
-                "customer": customer_id,
                 "description": description,
                 "payment_method_types": ["card"],
                 # Radar: request 3DS for card payments
@@ -454,6 +447,8 @@ class StripeProductionClient:
                     **(metadata or {}),
                 },
             }
+            if customer_id:
+                pi_params["customer"] = customer_id
 
             # Radar: pass IP + user agent for risk scoring
             if user_ip or user_agent:
@@ -494,9 +489,7 @@ class StripeProductionClient:
                 error_message=str(exc),
             )
 
-    def verify_webhook(
-        self, payload: bytes, sig_header: str
-    ) -> dict[str, Any] | None:
+    def verify_webhook(self, payload: bytes, sig_header: str) -> dict[str, Any] | None:
         """
         Verify a Stripe webhook signature and return the event dict.
 
@@ -508,9 +501,7 @@ class StripeProductionClient:
             Parsed event dict, or None if signature verification fails.
         """
         if not self._webhook_secret:
-            logger.warning(
-                "STRIPE_WEBHOOK_SECRET not set — skipping signature verification"
-            )
+            logger.warning("STRIPE_WEBHOOK_SECRET not set — skipping signature verification")
             import json
 
             try:
@@ -529,9 +520,7 @@ class StripeProductionClient:
         try:
             import stripe
 
-            event = stripe.Webhook.construct_event(
-                payload, sig_header, self._webhook_secret
-            )
+            event = stripe.Webhook.construct_event(payload, sig_header, self._webhook_secret)
             return dict(event)
         except Exception as exc:
             logger.warning("Stripe webhook verification failed: %s", exc)
@@ -581,18 +570,14 @@ class StripeProductionClient:
     def _on_payment_failed(self, data: dict) -> dict:
         pi_id = data.get("id", "")
         error = data.get("last_payment_error", {})
-        logger.warning(
-            "Payment failed: PI=%s error=%s", pi_id, error.get("message", "")
-        )
+        logger.warning("Payment failed: PI=%s error=%s", pi_id, error.get("message", ""))
         return {"handled": True, "action": "payment_failed", "pi_id": pi_id}
 
     def _on_subscription_created(self, data: dict) -> dict:
         sub_id = data.get("id", "")
         customer = data.get("customer", "")
         status = data.get("status", "")
-        logger.info(
-            "Subscription created: %s customer=%s status=%s", sub_id, customer, status
-        )
+        logger.info("Subscription created: %s customer=%s status=%s", sub_id, customer, status)
         return {"handled": True, "action": "subscription_created", "sub_id": sub_id}
 
     def _on_subscription_updated(self, data: dict) -> dict:

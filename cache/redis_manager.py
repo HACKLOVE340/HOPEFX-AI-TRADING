@@ -3,6 +3,7 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
+# pylint: disable=broad-exception-caught
 # cache/redis_manager.py
 """
 Redis cache manager with JSON serialization and TTL.

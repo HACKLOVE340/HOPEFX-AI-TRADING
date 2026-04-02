@@ -158,7 +158,7 @@ class TestMetricsRegistryIntegration:
         before_count = hist.get_count()
         hist.observe(42.0)
         assert hist.get_count() == before_count + 1
-        assert hist.get_sum() >= 42.0  # noqa: PLR2004
+        assert hist.get_sum() >= 42.0
 
     def test_prometheus_export_contains_metric_names(self):
         output = self.registry.export_prometheus()
@@ -283,9 +283,7 @@ try:
 except ImportError:
     _FASTAPI_AVAILABLE = False
 
-_skip_no_fastapi = pytest.mark.skipif(
-    not _FASTAPI_AVAILABLE, reason="fastapi not installed in this environment"
-)
+_skip_no_fastapi = pytest.mark.skipif(not _FASTAPI_AVAILABLE, reason="fastapi not installed in this environment")
 
 
 class TestPrometheusMonitoringIntegration:

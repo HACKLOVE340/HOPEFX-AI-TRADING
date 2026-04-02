@@ -11,6 +11,7 @@ Market Data Validation - FIA 3.1 Market Data Reasonability Checks
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from dataclasses import dataclass
 from enum import Enum
@@ -175,9 +176,7 @@ class MarketDataValidator:
         # Log critical issues
         critical_issues = [i for i in issues if i["severity"] == "critical"]
         if critical_issues:
-            logger.critical(
-                f"Critical data quality issues for {symbol}: {critical_issues}"
-            )
+            logger.critical(f"Critical data quality issues for {symbol}: {critical_issues}")
 
         return result
 
@@ -253,9 +252,6 @@ class MarketDataValidator:
             "total_validations": len(self.quality_history),
             "average_quality_score": np.mean([r.quality_score for r in recent]),
             "valid_rate": np.mean([r.is_valid for r in recent]),
-            "critical_issues_count": sum(
-                len([i for i in r.issues if i["severity"] == "critical"])
-                for r in recent
-            ),
+            "critical_issues_count": sum(len([i for i in r.issues if i["severity"] == "critical"]) for r in recent),
             "last_updated": datetime.now(UTC).isoformat(),
         }

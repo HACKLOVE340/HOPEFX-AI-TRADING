@@ -6,92 +6,19 @@
 """
 auth/dependencies.py
 ====================
-FastAPI dependency helpers for authentication and authorisation.
+Compatibility re-export module.
 
-Usage::
+The canonical FastAPI dependency functions live in api/auth.py.
+This module re-exports them so that code using the older import path
+``from auth.dependencies import get_current_user, require_role``
+continues to work without modification.
 
-    from auth.dependencies import get_current_user, require_role
-
-    @router.get("/me")
-    async def me(user=Depends(get_current_user)):
-        return user
+New code should import directly from api.auth:
+    from api.auth import get_current_user, require_role, TokenPayload
 """
 
 from __future__ import annotations
 
-import logging
-from typing import Any
+from api.auth import TokenPayload, get_current_user, require_role
 
-import jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
-from auth.service import _get_secret
-
-logger = logging.getLogger(__name__)
-
-_bearer = HTTPBearer(auto_error=False)
-
-
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-) -> dict[str, Any]:
-    """
-    Decode and validate the JWT access token from the Authorization header.
-
-    Returns the full token payload dict (at minimum ``{"sub": "<user_id>", ...}``).
-    Raises HTTP 401 if the token is missing, expired, or invalid.
-    """
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    try:
-        secret = _get_secret()
-        payload: dict[str, Any] = jwt.decode(
-            credentials.credentials,
-            secret,
-            algorithms=["HS256"],
-            options={"require": ["sub", "exp"]},
-        )
-        if payload.get("type") != "access":
-            raise ValueError("Not an access token")
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
-    except (jwt.InvalidTokenError, ValueError, RuntimeError) as exc:
-        logger.warning("JWT validation failed: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
-
-
-def require_role(required_role: str):
-    """
-    Return a FastAPI dependency that checks the user has the given role.
-
-    Usage::
-
-        @router.get("/admin", dependencies=[Depends(require_role("admin"))])
-        async def admin_only():
-            ...
-    """
-
-    async def _check(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
-        user_role = user.get("role", "user")
-        if user_role != required_role:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Role '{required_role}' required",
-            )
-        return user
-
-    return _check
+__all__ = ["TokenPayload", "get_current_user", "require_role"]

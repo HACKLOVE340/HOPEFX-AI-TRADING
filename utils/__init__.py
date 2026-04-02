@@ -18,6 +18,7 @@ import secrets
 import time
 from collections import deque
 from datetime import datetime, timedelta, timezone  # noqa: F401
+
 UTC = timezone.utc
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, Generic, List, Optional, TypeVar  # noqa: F401
@@ -80,9 +81,7 @@ class RetryWithExponentialBackoff:
                         raise
 
                     delay = self.base_delay * (2**attempt)
-                    logger.warning(
-                        f"{func.__name__} failed (attempt {attempt + 1}), retrying in {delay}s: {e}"
-                    )
+                    logger.warning(f"{func.__name__} failed (attempt {attempt + 1}), retrying in {delay}s: {e}")
 
                     if self.on_retry:
                         self.on_retry(attempt, e)
@@ -101,9 +100,7 @@ class RetryWithExponentialBackoff:
                         raise
 
                     delay = self.base_delay * (2**attempt)
-                    logger.warning(
-                        f"{func.__name__} failed (attempt {attempt + 1}), retrying in {delay}s: {e}"
-                    )
+                    logger.warning(f"{func.__name__} failed (attempt {attempt + 1}), retrying in {delay}s: {e}")
 
                     if self.on_retry:
                         self.on_retry(attempt, e)
@@ -141,9 +138,7 @@ class CircuitBreaker:
 
         if self.failure_count >= self.failure_threshold:
             self.is_open = True
-            logger.critical(
-                f"Circuit breaker OPENED after {self.failure_count} failures"
-            )
+            logger.critical(f"Circuit breaker OPENED after {self.failure_count} failures")
             return True
         return False
 
@@ -153,9 +148,7 @@ class CircuitBreaker:
             return True
 
         # Check if recovery timeout passed
-        if self.last_failure_time and (
-            time.monotonic() - self.last_failure_time > self.recovery_timeout
-        ):
+        if self.last_failure_time and (time.monotonic() - self.last_failure_time > self.recovery_timeout):
             self._half_open = True
             return True
 
@@ -211,7 +204,7 @@ def timeit(func: Callable) -> Callable:
             return await func(*args, **kwargs)
         finally:
             elapsed = time.perf_counter() - start
-            logger.debug(f"{func.__name__} took {elapsed*1000:.2f}ms")
+            logger.debug(f"{func.__name__} took {elapsed * 1000:.2f}ms")
 
     @functools.wraps(func)
     def sync_wrapper(*args, **kwargs):
@@ -220,7 +213,7 @@ def timeit(func: Callable) -> Callable:
             return func(*args, **kwargs)
         finally:
             elapsed = time.perf_counter() - start
-            logger.debug(f"{func.__name__} took {elapsed*1000:.2f}ms")
+            logger.debug(f"{func.__name__} took {elapsed * 1000:.2f}ms")
 
     return async_wrapper if inspect.iscoroutinefunction(func) else sync_wrapper
 
@@ -347,12 +340,8 @@ def get_all_component_statuses(app=None) -> dict[str, Any]:
 
     if app:
         statuses["components"]["brain"] = app.brain.get_health() if app.brain else None
-        statuses["components"]["broker"] = {
-            "connected": app.broker.connected if app.broker else False
-        }
-        statuses["components"]["price_engine"] = (
-            app.price_engine.get_status() if app.price_engine else None
-        )
+        statuses["components"]["broker"] = {"connected": app.broker.connected if app.broker else False}
+        statuses["components"]["price_engine"] = app.price_engine.get_status() if app.price_engine else None
 
     return statuses
 

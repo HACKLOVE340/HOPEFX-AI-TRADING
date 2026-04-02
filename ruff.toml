@@ -42,7 +42,6 @@ ignore = [
     "UP035",
     "UP006",
     "UP042",
-    "UP045",
     "UP036",
     # Noisy / low-value rules deferred to separate passes
     "RUF001", "RUF002", "RUF003",
@@ -103,9 +102,10 @@ ignore = [
 ]
 
 [lint.per-file-ignores]
-"tests/**"             = ["S105", "S106", "S107", "S108", "S110", "S112", "S301", "S311"]
-"tests/unit/**"        = ["S105", "S106", "S107", "S108", "S110", "S112", "S301", "S311"]
-"tests/integration/**" = ["S105", "S106", "S107", "S108", "S110", "S112"]
+# PLR2004: HTTP status codes and small numeric literals are acceptable in tests
+"tests/**"             = ["S105", "S106", "S107", "S108", "S110", "S112", "S301", "S311", "PLR2004"]
+"tests/unit/**"        = ["S105", "S106", "S107", "S108", "S110", "S112", "S301", "S311", "PLR2004"]
+"tests/integration/**" = ["S105", "S106", "S107", "S108", "S110", "S112", "PLR2004"]
 "scripts/**"           = ["E402"]
 "locust/**"            = ["S311"]
 "deployment/**"        = ["S105"]

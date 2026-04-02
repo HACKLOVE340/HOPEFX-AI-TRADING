@@ -130,8 +130,8 @@ class TestPropEnforcer:
         from risk.compliance.prop_enforcer import PropConfig
 
         cfg = PropConfig.from_file(Path("/nonexistent/path.json"))
-        assert cfg.daily_dd == 0.05  # noqa: PLR2004
-        assert cfg.max_dd == 0.10  # noqa: PLR2004
+        assert cfg.daily_dd == 0.05
+        assert cfg.max_dd == 0.10
 
 
 # ── EX5SignalExporter ─────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ class TestEX5SignalExporter:
             assert data["symbol"] == "XAUUSD"
             assert data["side"] == "BUY"
             assert data["status"] == "PENDING"
-            assert data["stop_loss"] == 1900.0  # noqa: PLR2004
+            assert data["stop_loss"] == 1900.0
 
     def test_poll_fill_returns_result_on_filled(self):
         from brokers.mt5_bridge import (
@@ -177,8 +177,8 @@ class TestEX5SignalExporter:
             path.write_text(json.dumps(data))
             fill = exp.poll_fill(path, timeout_sec=2.0)
             assert fill.status == FillStatus.FILLED
-            assert fill.fill_price == 1950.0  # noqa: PLR2004
-            assert fill.ticket == 12345  # noqa: PLR2004
+            assert fill.fill_price == 1950.0
+            assert fill.ticket == 12345
 
     def test_poll_fill_raises_on_rejected(self):
         from brokers.mt5_bridge import EX5SignalExporter, MT5Order, OrderSide
@@ -258,7 +258,7 @@ class TestPaperTradingHelpers:
             pts.STATUS_JSON = Path(d) / "status.json"
             write_status({"complete": False, "trade_count": 5})
             data = json.loads(pts.STATUS_JSON.read_text())
-            assert data["trade_count"] == 5  # noqa: PLR2004
+            assert data["trade_count"] == 5
             assert "updated_at" in data
             pts.STATUS_JSON = orig
 
@@ -307,7 +307,7 @@ class TestVolumeBacktest:
         result = monte_carlo(trades_df, n_runs=50, seed=0)
         assert "worst_case_dd_pct" in result
         assert "p95_dd_pct" in result
-        assert result["n_runs"] == 50  # noqa: PLR2004
+        assert result["n_runs"] == 50
         assert result["worst_case_dd_pct"] >= 0
 
     def test_monte_carlo_empty_returns_empty(self):

@@ -7,6 +7,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 
@@ -65,9 +66,7 @@ class CopyTradingEngine:
                 result[copy_id] = rel.follower_id
         return result
 
-    def get_active_relationships(
-        self, user_id: str, as_follower: bool = True
-    ) -> list[CopyRelationship]:
+    def get_active_relationships(self, user_id: str, as_follower: bool = True) -> list[CopyRelationship]:
         out = []
         for rel in self.relationships.values():
             if not rel.is_active:
@@ -79,7 +78,6 @@ class CopyTradingEngine:
 
 class RiskLimitExceededError(Exception):
     """Raised when a copy trade would exceed risk limits."""
-
 
 
 # Patch CopyTradingEngine with the methods tests expect
@@ -115,9 +113,7 @@ async def _copy_trade(
     max_qty_by_risk = (follower_balance * max_pos_size) / price if price and price > 0 else leader_qty * max_pos_size
 
     if raw_qty > max_qty_by_risk:
-        raise RiskLimitExceededError(
-            f"Copied quantity {raw_qty:.4f} exceeds max allowed {max_qty_by_risk:.4f}"
-        )
+        raise RiskLimitExceededError(f"Copied quantity {raw_qty:.4f} exceeds max allowed {max_qty_by_risk:.4f}")
 
     return {
         "symbol": leader_trade["symbol"],
@@ -134,9 +130,7 @@ def _calculate_leaderboard(self, traders: list) -> list:
 
     scored = []
     for t in traders:
-        score = (
-            t.get("return", 0) * t.get("sharpe", 1) * math.log1p(t.get("followers", 0))
-        )
+        score = t.get("return", 0) * t.get("sharpe", 1) * math.log1p(t.get("followers", 0))
         scored.append({**t, "score": score})
     scored.sort(key=lambda x: x["score"], reverse=True)
     for i, t in enumerate(scored):

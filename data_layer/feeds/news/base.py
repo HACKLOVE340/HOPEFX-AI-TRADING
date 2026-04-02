@@ -121,9 +121,7 @@ class NewsFeedBase(ABC):
                 async with session.get(url, params=params, headers=headers) as resp:
                     if resp.status == 429:  # noqa: PLR2004
                         wait = backoff + random.uniform(0, 1.0)  # nosec B311 - rate-limit retry jitter, not cryptographic
-                        logger.warning(
-                            "%s rate-limited — sleeping %.1fs", self.name.value, wait
-                        )
+                        logger.warning("%s rate-limited — sleeping %.1fs", self.name.value, wait)
                         await asyncio.sleep(wait)
                         backoff = min(backoff * 2, 120.0)
                         continue

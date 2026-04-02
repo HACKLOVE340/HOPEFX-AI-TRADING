@@ -13,6 +13,7 @@ import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from collections.abc import Callable
 
@@ -83,9 +84,7 @@ class MetricsCollector:
                 lines.append(f"{name}_count {len(values)}")
                 lines.append(f"{name}_sum {sum(values)}")
                 for p in [50, 90, 99]:
-                    lines.append(
-                        f'{name}_bucket{{le="{p}"}} {np.percentile(values, p)}'
-                    )
+                    lines.append(f'{name}_bucket{{le="{p}"}} {np.percentile(values, p)}')
 
         for metric in self.metrics[-100:]:  # Last 100 gauges
             labels = ",".join([f'{k}="{v}"' for k, v in metric.labels.items()])
@@ -191,9 +190,7 @@ class AlertManager:
         """Add notification channel (email, slack, sms, etc.)"""
         self.channels[name] = handler
 
-    def add_rule(
-        self, condition: Callable, message: str, severity: int, channels: list[str]
-    ):
+    def add_rule(self, condition: Callable, message: str, severity: int, channels: list[str]):
         """Add alert rule"""
         self.rules.append(
             {

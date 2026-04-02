@@ -40,8 +40,11 @@ MANIFEST
 # Node
 node_modules/
 dashboard/node_modules/
+# Ignore root-level lockfile (Python project root) but track frontend lockfile for CI caching
 /package-lock.json
 dashboard/package-lock.json
+# Explicitly track frontend lockfile
+!frontend/package-lock.json
 
 # Virtual environments
 venv/
@@ -175,3 +178,6 @@ frontend/coverage/
 data/lineage/
 data/dukascopy_cache/
 data/macro/*.csv
+-e 
+# Admin bootstrap credential file (create_admin.py)
+admin_password.txt

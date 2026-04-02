@@ -514,9 +514,7 @@ def print_component_status_report() -> None:
             ComponentHealth.UNKNOWN: "⚪",
         }.get(status.health, "⚪")
 
-        print(
-            f"{health_icon} {icon} {name:15} v{status.version:8} - {status.health.value}"
-        )
+        print(f"{health_icon} {icon} {name:15} v{status.version:8} - {status.health.value}")
 
         if status.features:
             print(f"     Features: {', '.join(status.features[:3])}")

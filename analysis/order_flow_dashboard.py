@@ -18,6 +18,7 @@ Provides a single get_complete_analysis() method for a full snapshot.
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from analysis.order_flow import OrderFlowAnalyzer, get_order_flow_analyzer
@@ -131,9 +132,7 @@ class OrderFlowDashboard:
         # --- Institutional flow ---
         try:
             signals = self._inst.analyze_flow(symbol, lookback_minutes=lookback_minutes)
-            smart = self._inst.get_smart_money_direction(
-                symbol, lookback_minutes=lookback_minutes
-            )
+            smart = self._inst.get_smart_money_direction(symbol, lookback_minutes=lookback_minutes)
             inst_dict = {
                 "signals": [s.to_dict() for s in signals],
                 "smart_money_direction": smart.to_dict() if smart else None,
@@ -146,19 +145,11 @@ class OrderFlowDashboard:
 
         # --- Advanced metrics ---
         try:
-            aggression = self._adv.get_aggression_metrics(
-                symbol, lookback_minutes=lookback_minutes
-            )
-            clusters = self._adv.get_volume_clusters(
-                symbol, lookback_minutes=lookback_minutes * 4
-            )
-            divergence = self._adv.detect_delta_divergence(
-                symbol, lookback_minutes=lookback_minutes
-            )
+            aggression = self._adv.get_aggression_metrics(symbol, lookback_minutes=lookback_minutes)
+            clusters = self._adv.get_volume_clusters(symbol, lookback_minutes=lookback_minutes * 4)
+            divergence = self._adv.detect_delta_divergence(symbol, lookback_minutes=lookback_minutes)
             oscillator = self._adv.get_order_flow_oscillator(symbol)
-            stacked = self._adv.get_stacked_imbalances(
-                symbol, lookback_minutes=lookback_minutes
-            )
+            stacked = self._adv.get_stacked_imbalances(symbol, lookback_minutes=lookback_minutes)
             pressure = self._adv.get_pressure_gauges(symbol)
 
             adv_dict = {
@@ -177,13 +168,9 @@ class OrderFlowDashboard:
 
         # --- Time & Sales ---
         try:
-            ts_stats = self._ts.get_trade_statistics(
-                symbol, lookback_minutes=lookback_minutes
-            )
+            ts_stats = self._ts.get_trade_statistics(symbol, lookback_minutes=lookback_minutes)
             velocity = self._ts.get_trade_velocity(symbol)
-            aggressor = self._ts.get_aggressor_stats(
-                symbol, lookback_minutes=lookback_minutes
-            )
+            aggressor = self._ts.get_aggressor_stats(symbol, lookback_minutes=lookback_minutes)
             ts_dict = {
                 "statistics": ts_stats,
                 "velocity": velocity.to_dict() if velocity else None,
@@ -363,11 +350,7 @@ class OrderFlowDashboard:
             try:
                 dom_analysis = self._dom.get_order_book_analysis(symbol)
                 if dom_analysis:
-                    dom_dict = (
-                        dom_analysis.to_dict()
-                        if hasattr(dom_analysis, "to_dict")
-                        else {}
-                    )
+                    dom_dict = dom_analysis.to_dict() if hasattr(dom_analysis, "to_dict") else {}
                     result["dom_imbalance"] = dom_dict.get("imbalance_ratio")
                     result["spread"] = dom_dict.get("spread")
             except Exception as exc:
@@ -376,13 +359,9 @@ class OrderFlowDashboard:
         # Order flow data
         if self._ofa is not None:
             try:
-                of_analysis = self._ofa.analyze(
-                    symbol, lookback_minutes=lookback_minutes
-                )
+                of_analysis = self._ofa.analyze(symbol, lookback_minutes=lookback_minutes)
                 if of_analysis:
-                    of_dict = (
-                        of_analysis.to_dict() if hasattr(of_analysis, "to_dict") else {}
-                    )
+                    of_dict = of_analysis.to_dict() if hasattr(of_analysis, "to_dict") else {}
                     result["cumulative_delta"] = of_dict.get("cumulative_delta")
                     result["buy_pressure"] = of_dict.get("buy_volume")
                     result["sell_pressure"] = of_dict.get("sell_volume")
@@ -392,9 +371,7 @@ class OrderFlowDashboard:
         # Institutional data
         if self._inst is not None:
             try:
-                smart = self._inst.get_smart_money_direction(
-                    symbol, lookback_minutes=lookback_minutes
-                )
+                smart = self._inst.get_smart_money_direction(symbol, lookback_minutes=lookback_minutes)
                 if smart is not None:
                     if hasattr(smart, "to_dict"):
                         direction = smart.to_dict().get("direction")
@@ -409,9 +386,7 @@ class OrderFlowDashboard:
         # Advanced data
         if self._adv is not None:
             try:
-                stacked = self._adv.get_stacked_imbalances(
-                    symbol, lookback_minutes=lookback_minutes
-                )
+                stacked = self._adv.get_stacked_imbalances(symbol, lookback_minutes=lookback_minutes)
                 result["large_order_count"] = len(stacked) if stacked else 0
             except Exception as exc:
                 logger.warning("Advanced summary error for %s: %s", symbol, exc)
@@ -468,11 +443,7 @@ class OrderFlowDashboard:
             try:
                 direction = self._inst.get_smart_money_direction(symbol)
                 if direction is not None:
-                    dir_str = (
-                        direction.direction
-                        if hasattr(direction, "direction")
-                        else direction
-                    )
+                    dir_str = direction.direction if hasattr(direction, "direction") else direction
                     if dir_str in ("bullish", "bearish"):
                         votes.append(dir_str)
             except Exception as exc:

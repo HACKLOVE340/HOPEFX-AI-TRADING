@@ -83,9 +83,7 @@ class AdvancedPatternDetector:
         self.min_pattern_bars = min_pattern_bars
         self.harmonic_tolerance = harmonic_tolerance
 
-    def detect_all_patterns(
-        self, df: pd.DataFrame, min_confidence: float = 0.7
-    ) -> list[PatternSignal]:
+    def detect_all_patterns(self, df: pd.DataFrame, min_confidence: float = 0.7) -> list[PatternSignal]:
         """
         Detect all patterns in price data
 
@@ -151,8 +149,7 @@ class AdvancedPatternDetector:
             if (
                 left_shoulder_height < head_height * 0.95
                 and right_shoulder_height < head_height * 0.95
-                and abs(left_shoulder_height - right_shoulder_height)
-                < head_height * 0.05
+                and abs(left_shoulder_height - right_shoulder_height) < head_height * 0.05
             ):
                 # Calculate neckline
                 neckline = np.mean([low[left_trough], low[right_trough]])
@@ -178,8 +175,7 @@ class AdvancedPatternDetector:
                     pattern_start_idx=left_peak_idx,
                     pattern_end_idx=right_peak_idx,
                     formation_bars=right_peak_idx - left_peak_idx,
-                    risk_reward_ratio=(entry_price - target)
-                    / (stop_loss - entry_price),
+                    risk_reward_ratio=(entry_price - target) / (stop_loss - entry_price),
                     timestamp=index[right_trough],
                     additional_data={
                         "neckline": float(neckline),
@@ -225,8 +221,7 @@ class AdvancedPatternDetector:
                     pattern_start_idx=idx1,
                     pattern_end_idx=idx2,
                     formation_bars=idx2 - idx1,
-                    risk_reward_ratio=(entry_price - target)
-                    / (stop_loss - entry_price),
+                    risk_reward_ratio=(entry_price - target) / (stop_loss - entry_price),
                     timestamp=index[idx2],
                     additional_data={"peak_height": float(peak1)},
                 )
@@ -297,9 +292,7 @@ class AdvancedPatternDetector:
 
                 pattern = PatternSignal(
                     pattern_type=PatternType.GARTLEY,
-                    direction=PatternDirection.BULLISH
-                    if x_price > a_price
-                    else PatternDirection.BEARISH,
+                    direction=PatternDirection.BULLISH if x_price > a_price else PatternDirection.BEARISH,
                     entry_price=c_price,
                     target_price=cd_target,
                     stop_loss=x_price,
@@ -309,9 +302,7 @@ class AdvancedPatternDetector:
                     formation_bars=c_idx - x_idx,
                     risk_reward_ratio=abs(cd_target - c_price) / abs(x_price - c_price),
                     timestamp=index[c_idx],
-                    additional_data={
-                        "pattern_ratios": {"ab": ab_ratio, "bc": bc_ratio}
-                    },
+                    additional_data={"pattern_ratios": {"ab": ab_ratio, "bc": bc_ratio}},
                 )
                 patterns.append(pattern)
 
@@ -323,9 +314,7 @@ class AdvancedPatternDetector:
         """Identify key support and resistance levels"""
         return []  # Implementation
 
-    def _calculate_pattern_confidence(
-        self, actual_ratio: float, expected_ratio: float, tolerance: float
-    ) -> float:
+    def _calculate_pattern_confidence(self, actual_ratio: float, expected_ratio: float, tolerance: float) -> float:
         """Calculate confidence score for pattern"""
         deviation = abs(actual_ratio - expected_ratio) / expected_ratio
         confidence = max(0, 1 - (deviation / tolerance))

@@ -14,6 +14,7 @@ Trading capital is managed directly by brokers/prop firms.
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 import logging
@@ -178,9 +179,7 @@ class WalletManager:
         self._wallets[wallet_id] = wallet
         self._transaction_history[user_id] = []
 
-        logger.info(
-            f"Created wallet {wallet_id} for user {user_id} (balance={starting_balance})"
-        )
+        logger.info(f"Created wallet {wallet_id} for user {user_id} (balance={starting_balance})")
         return wallet
 
     def get_wallet(self, user_id: str) -> Wallet | None:
@@ -233,9 +232,7 @@ class WalletManager:
             return {
                 "subscription_balance": float(wallet.subscription_balance),
                 "commission_balance": float(wallet.commission_balance),
-                "total_balance": float(
-                    wallet.subscription_balance + wallet.commission_balance
-                ),
+                "total_balance": float(wallet.subscription_balance + wallet.commission_balance),
                 "currency": wallet.currency,
             }
 
@@ -291,9 +288,7 @@ class WalletManager:
             "method": method,
             "reference": reference,
             "balance_after": float(
-                wallet.subscription_balance
-                if wallet_type == WalletType.SUBSCRIPTION
-                else wallet.commission_balance
+                wallet.subscription_balance if wallet_type == WalletType.SUBSCRIPTION else wallet.commission_balance
             ),
             "status": "completed",
             "created_at": datetime.now(UTC).isoformat(),
@@ -381,9 +376,7 @@ class WalletManager:
             "amount": float(amount),
             "reference": reference,
             "balance_after": float(
-                wallet.subscription_balance
-                if wallet_type == WalletType.SUBSCRIPTION
-                else wallet.commission_balance
+                wallet.subscription_balance if wallet_type == WalletType.SUBSCRIPTION else wallet.commission_balance
             ),
             "status": "completed",
             "created_at": datetime.now(UTC).isoformat(),
@@ -419,9 +412,7 @@ class WalletManager:
             return False, "Cannot transfer to same wallet"
 
         # Debit from source
-        success, message, _ = self.debit_wallet(
-            user_id, amount, from_wallet, "transfer", f"Transfer to {to_wallet}"
-        )
+        success, message, _ = self.debit_wallet(user_id, amount, from_wallet, "transfer", f"Transfer to {to_wallet}")
 
         if not success:
             return False, message
@@ -448,9 +439,7 @@ class WalletManager:
             )
             return False, f"Transfer failed: {message}"
 
-        logger.info(
-            f"Transferred {amount} from {from_wallet} to {to_wallet} for user {user_id}"
-        )
+        logger.info(f"Transferred {amount} from {from_wallet} to {to_wallet} for user {user_id}")
         return True, "Transfer successful"
 
     def freeze_wallet(self, user_id: str) -> tuple[bool, str]:

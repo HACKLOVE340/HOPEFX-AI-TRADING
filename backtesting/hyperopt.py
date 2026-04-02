@@ -245,13 +245,9 @@ class HyperoptEngine:
                 )
             elif spec.kind == "float":
                 if spec.step:
-                    params[name] = trial.suggest_float(
-                        name, spec.low, spec.high, step=spec.step
-                    )
+                    params[name] = trial.suggest_float(name, spec.low, spec.high, step=spec.step)
                 else:
-                    params[name] = trial.suggest_float(
-                        name, spec.low, spec.high, log=spec.log
-                    )
+                    params[name] = trial.suggest_float(name, spec.low, spec.high, log=spec.log)
             elif spec.kind == "categorical":
                 params[name] = trial.suggest_categorical(name, spec.choices)
         return params
@@ -268,9 +264,7 @@ class HyperoptEngine:
 
             cfg = StrategyConfig(
                 name=self.strategy_class.__name__,
-                symbol=self.market_data.get("symbol", ["XAUUSD"])[0]
-                if hasattr(self.market_data, "get")
-                else "XAUUSD",
+                symbol=self.market_data.get("symbol", ["XAUUSD"])[0] if hasattr(self.market_data, "get") else "XAUUSD",
                 timeframe="1h",
                 parameters=params,
             )
@@ -340,19 +334,11 @@ class HyperoptEngine:
         for i, sig in enumerate(signals[:-1]):
             ret = returns[i]
             if sig == "BUY" and position <= 0:
-                cost = (
-                    abs(position)
-                    * close[offset + i]
-                    * (self.commission + self.slippage)
-                )
+                cost = abs(position) * close[offset + i] * (self.commission + self.slippage)
                 current -= cost
                 position = 1.0
             elif sig == "SELL" and position >= 0:
-                cost = (
-                    abs(position)
-                    * close[offset + i]
-                    * (self.commission + self.slippage)
-                )
+                cost = abs(position) * close[offset + i] * (self.commission + self.slippage)
                 current -= cost
                 position = -1.0
 
@@ -393,9 +379,7 @@ class HyperoptEngine:
         if self.metric == "max_drawdown":
             peak = np.maximum.accumulate(equity)
             drawdown = (peak - equity) / peak
-            return float(
-                -np.max(drawdown)
-            )  # negative so "maximize" = minimize drawdown
+            return float(-np.max(drawdown))  # negative so "maximize" = minimize drawdown
 
         return float(total_return)
 
@@ -515,13 +499,9 @@ def create_hyperopt_router():
                 for name, spec in req.param_space.items():
                     kind = spec.get("kind", "int")
                     if kind == "int":
-                        space[name] = ParamSpace.int(
-                            spec["low"], spec["high"], spec.get("step", 1)
-                        )
+                        space[name] = ParamSpace.int(spec["low"], spec["high"], spec.get("step", 1))
                     elif kind == "float":
-                        space[name] = ParamSpace.float(
-                            spec["low"], spec["high"], spec.get("step")
-                        )
+                        space[name] = ParamSpace.float(spec["low"], spec["high"], spec.get("step"))
                     elif kind == "categorical":
                         space[name] = ParamSpace.categorical(spec["choices"])
 

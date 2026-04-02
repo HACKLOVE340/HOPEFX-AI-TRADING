@@ -223,24 +223,21 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
     try:
         broker = getattr(app_state, "broker", None)
         components["broker"] = broker is not None
-    except Exception as exc:  # nosec B110 — health-check resilience
-        logger.debug("Health check: broker probe failed: %s", exc)
+    except Exception:
         components["broker"] = False
 
     # Risk manager
     try:
         rm = getattr(app_state, "risk_manager", None)
         components["risk_manager"] = rm is not None
-    except Exception as exc:  # nosec B110 — health-check resilience
-        logger.debug("Health check: risk_manager probe failed: %s", exc)
+    except Exception:
         components["risk_manager"] = False
 
     # Brain / strategy brain
     try:
         brain = getattr(app_state, "strategy_brain", None) or getattr(app_state, "brain", None)
         components["brain"] = brain is not None
-    except Exception as exc:  # nosec B110 — health-check resilience
-        logger.debug("Health check: brain probe failed: %s", exc)
+    except Exception:
         components["brain"] = False
 
     # Signal engine
@@ -249,16 +246,14 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
 
         se_status = get_signal_engine_status()
         components["signal_engine"] = se_status.get("ml_available", False)
-    except Exception as exc:  # nosec B110 — health-check resilience
-        logger.debug("Health check: signal_engine probe failed: %s", exc)
+    except Exception:
         components["signal_engine"] = False
 
     # Hourly trainer
     try:
         ht = getattr(app_state, "hourly_trainer", None)
         components["hourly_trainer"] = ht is not None
-    except Exception as exc:  # nosec B110 — health-check resilience
-        logger.debug("Health check: hourly_trainer probe failed: %s", exc)
+    except Exception:
         components["hourly_trainer"] = False
 
     # Online learner (Phase 3)
@@ -267,8 +262,7 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
 
         learners = list_online_learners()
         components["online_learner"] = len(learners) > 0
-    except Exception as exc:  # nosec B110 — health-check resilience
-        logger.debug("Health check: online_learner probe failed: %s", exc)
+    except Exception:
         components["online_learner"] = False
 
     # Data feed — NuclearStreamer (primary) or RealTimePriceEngine (fallback)
@@ -281,8 +275,7 @@ async def admin_status(user: TokenPayload = Depends(require_role("admin"))):
             components["data_feed"] = df_engine is not None and (
                 getattr(df_engine, "active", False) or getattr(df_engine, "is_running", False)
             )
-    except Exception as exc:  # nosec B110 — health-check resilience
-        logger.debug("Health check: data_feed probe failed: %s", exc)
+    except Exception:
         components["data_feed"] = False
 
     return {"components": components}
@@ -376,7 +369,7 @@ async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
 
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             pending = session.query(User).filter(User.kyc_status.in_(["pending", "submitted", "under_review"])).all()
             return {
                 "count": len(pending),
@@ -421,7 +414,7 @@ async def decide_kyc(
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
 
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             target = session.query(User).filter_by(id=body.user_id).first()
             if not target:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -445,7 +438,7 @@ async def decide_kyc(
             from core.email_service import _send
             from database.user_models import User as _User
 
-            with _state.db_session_factory() as session:
+            with _state.db_session_factory() as session:  # pylint: disable=not-callable
                 target = session.query(_User).filter_by(id=body.user_id).first()
                 if target:
                     subject_map = {
@@ -490,7 +483,7 @@ async def get_kyc_status(
 
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             target = session.query(User).filter_by(id=user_id).first()
             if not target:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -569,7 +562,7 @@ def save_settings(
             return {"status": "error", "detail": "Config store write failed"}
     except Exception as exc:
         logger.error("save_settings failed: %s", exc, exc_info=True)
-        return {"status": "error", "detail": str(exc)}
+        return {"status": "error", "detail": "Settings save failed — check server logs"}
 
 
 @router.get("/activity")
@@ -626,9 +619,9 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
 
     # Trade logger stats
     try:
-        from core.trade_logger import TradeLogger
+        from monitoring.trade_logger import get_trade_logger
 
-        tl = TradeLogger.get_trade_logger()
+        tl = get_trade_logger()
         tl_stats = tl.get_stats() if hasattr(tl, "get_stats") else {}
         trading_stats["total_trades"] = tl_stats.get("total_fills", 0)
     except Exception as exc:

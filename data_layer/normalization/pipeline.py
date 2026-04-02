@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timezone
+
 UTC = timezone.utc
 
 import numpy as np
@@ -182,10 +183,8 @@ class NormalizationPipeline:
                 # Last resort: try converting the existing index
                 try:
                     d.index = pd.to_datetime(d.index, utc=True)
-                except (ValueError, TypeError):
-                    logger.warning(
-                        "NormalizationPipeline: cannot parse timestamp index"
-                    )
+                except Exception:
+                    logger.warning("NormalizationPipeline: cannot parse timestamp index")
                     return pd.DataFrame()
 
         # Ensure UTC
@@ -228,9 +227,7 @@ class NormalizationPipeline:
         prev_close = d["close"].shift(1)
         gap_pct = (d["open"] - prev_close).abs() / prev_close.replace(0, np.nan)
         rolling_gap_mean = gap_pct.rolling(_GAP_WINDOW, min_periods=3).mean()
-        d["gap_flag"] = (
-            (gap_pct > rolling_gap_mean * _GAP_MULTIPLIER) & gap_pct.notna()
-        ).astype(int)
+        d["gap_flag"] = ((gap_pct > rolling_gap_mean * _GAP_MULTIPLIER) & gap_pct.notna()).astype(int)
         d["gap_flag"] = d["gap_flag"].fillna(0).astype(int)
 
         # ── 9. Log returns (causal — uses shift(1)) ────────────────────────
@@ -240,9 +237,7 @@ class NormalizationPipeline:
         # ── 10. OHLCV validity flag ────────────────────────────────────────
         ohlcv_cols = ["open", "high", "low", "close"]
         d["ohlcv_valid"] = (
-            d[ohlcv_cols].notna().all(axis=1)
-            & (d[ohlcv_cols] > 0).all(axis=1)
-            & np.isfinite(d[ohlcv_cols]).all(axis=1)
+            d[ohlcv_cols].notna().all(axis=1) & (d[ohlcv_cols] > 0).all(axis=1) & np.isfinite(d[ohlcv_cols]).all(axis=1)
         ).astype(int)
 
         # ── 11. Final NaN/inf cleanup ──────────────────────────────────────
@@ -295,14 +290,7 @@ class NormalizationPipeline:
         v = float(out.get("volume", 0.0))
 
         # Sanity checks
-        valid = (
-            c > 0.0
-            and o > 0.0
-            and h >= max(o, c)
-            and lo <= min(o, c)
-            and lo > 0.0
-            and v >= 0.0
-        )
+        valid = c > 0.0 and o > 0.0 and h >= max(o, c) and lo <= min(o, c) and lo > 0.0 and v >= 0.0
         out["ohlcv_valid"] = 1 if valid else 0
 
         # log_volume
@@ -446,12 +434,7 @@ class NormalizationPipeline:
 
         Returns a boolean Series aligned to df.index (True = gap bar).
         """
-        if (
-            df is None
-            or df.empty
-            or "open" not in df.columns
-            or "close" not in df.columns
-        ):
+        if df is None or df.empty or "open" not in df.columns or "close" not in df.columns:
             return pd.Series(False, index=df.index if df is not None else [])
 
         prev_close = df["close"].shift(1)

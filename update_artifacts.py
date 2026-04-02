@@ -258,12 +258,8 @@ def _git_push(output: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate HOPEFX repo cover image.")
-    parser.add_argument(
-        "--push", action="store_true", help="Commit and push after generating."
-    )
-    parser.add_argument(
-        "--check", action="store_true", help="Check Pillow is available."
-    )
+    parser.add_argument("--push", action="store_true", help="Commit and push after generating.")
+    parser.add_argument("--check", action="store_true", help="Check Pillow is available.")
     parser.add_argument("--output", default=str(OUTPUT_PATH), help="Output path.")
     args = parser.parse_args()
 

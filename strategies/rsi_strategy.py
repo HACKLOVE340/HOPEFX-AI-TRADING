@@ -51,6 +51,7 @@ class RSIStrategy(BaseStrategy):
         self.period = period
         self.oversold = oversold
         self.overbought = overbought
+        self.position: str | None = None  # tracks current position side: "LONG", "SHORT", or None
         logger.info(
             f"RSI Strategy initialized: period={period}, oversold={oversold}, overbought={overbought}",
         )

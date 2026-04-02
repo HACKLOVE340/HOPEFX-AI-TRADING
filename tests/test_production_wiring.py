@@ -89,7 +89,7 @@ class TestFeaturesExtended:
 
         df = _make_ohlcv(600)
         X, y = build_extended_features(df, use_filtered_target=False, min_move_atr=0.0)
-        assert X.shape[1] >= 150, f"Expected >=150 features, got {X.shape[1]}"  # noqa: PLR2004
+        assert X.shape[1] >= 150, f"Expected >=150 features, got {X.shape[1]}"
         assert len(X) > 0
 
     def test_no_nan_or_inf(self):
@@ -112,7 +112,7 @@ class TestSharpeGate:
 
         result = sharpe_gate_check(n_trades=48, sharpe=1.52, target_n=600)
         assert result["gate_passed"] is False
-        assert result["se"] > 0.10  # noqa: PLR2004
+        assert result["se"] > 0.10
         assert "BLOCKED" in result["message"]
 
     def test_n600_passed(self):
@@ -120,7 +120,7 @@ class TestSharpeGate:
 
         result = sharpe_gate_check(n_trades=600, sharpe=1.52, target_n=600)
         assert result["gate_passed"] is True
-        assert result["se"] <= 0.10  # noqa: PLR2004
+        assert result["se"] <= 0.10
         assert "PASSED" in result["message"]
 
     def test_se_formula(self):
@@ -128,7 +128,7 @@ class TestSharpeGate:
 
         # SE(SR=1.52, N=48) ≈ 0.212
         se = _sharpe_se(48, sr_est=1.52)
-        assert 0.18 < se < 0.25, f"SE={se} out of expected range"  # noqa: PLR2004
+        assert 0.18 < se < 0.25, f"SE={se} out of expected range"
         # SE decreases with more trades
         assert _sharpe_se(600, 1.52) < _sharpe_se(48, 1.52)
 
@@ -295,7 +295,7 @@ class TestInferenceEngine:
         df = _make_ohlcv(50)  # below _MIN_BARS=100
         result = engine.predict(df)
         assert result["direction"] == "neutral"
-        assert result["probability"] == 0.5  # noqa: PLR2004
+        assert result["probability"] == 0.5
 
     def test_predict_direction_valid(self):
         from ml.inference_engine import InferenceEngine
@@ -328,9 +328,7 @@ class TestInferenceEngine:
         engine = InferenceEngine()
         # Point predictor at non-existent model
         engine._predictor = None
-        with patch(
-            "ml.inference_engine.InferenceEngine._get_predictor", return_value=None
-        ):
+        with patch("ml.inference_engine.InferenceEngine._get_predictor", return_value=None):
             df = _make_ohlcv(150)
             result = engine.predict(df)
         # Should not raise; fallback or neutral
@@ -357,7 +355,7 @@ class TestMultiSymbolBacktest:
         trades = [{"pnl_pct": 0.001 + np.random.randn() * 0.01} for _ in range(600)]
         results = [{"symbol": "XAU/USD", "n_trades": 600, "trades": trades}]
         result = compute_pooled_metrics(results, target_n=600)
-        assert result["n_total_trades"] == 600  # noqa: PLR2004
+        assert result["n_total_trades"] == 600
         assert result["sharpe_gate_passed"] is True
 
     def test_max_drawdown_known_series(self):
@@ -366,7 +364,7 @@ class TestMultiSymbolBacktest:
         # Series: +1, +1, -3, +1 → cumsum: 1, 2, -1, 0 → max DD = 3
         pnls = np.array([1.0, 1.0, -3.0, 1.0])
         dd = _max_drawdown(pnls)
-        assert abs(dd - 3.0) < 1e-9  # noqa: PLR2004
+        assert abs(dd - 3.0) < 1e-9
 
     def test_smoke_run_saves_report(self):
         from backtest.multi_symbol_backtest import run_backtest
@@ -375,7 +373,7 @@ class TestMultiSymbolBacktest:
         report = run_backtest(smoke=True)
         assert "pooled" in report
         assert "symbols" in report
-        assert len(report["symbols"]) == 3  # noqa: PLR2004
+        assert len(report["symbols"]) == 3
         assert report["pooled"]["n_total_trades"] >= 0
 
 
@@ -392,7 +390,7 @@ class TestLiveTradingGate:
         with patch.dict(os.environ, {"FEATURE_LIVE_TRADING": ""}, clear=False):
             result = gate.check()
         assert result.allowed is False
-        assert len(result.checks) == 5  # noqa: PLR2004
+        assert len(result.checks) == 5
 
     def test_kill_switch_check_passes_when_inactive(self):
         from core.live_trading_gate import LiveTradingGate
@@ -439,9 +437,7 @@ class TestLiveTradingGate:
 class TestStatusEndpoints:
     @pytest.fixture
     def client(self):
-        os.environ.setdefault(
-            "SECURITY_JWT_SECRET", "test-secret-key-32chars-minimum!!"
-        )
+        os.environ.setdefault("SECURITY_JWT_SECRET", "test-secret-key-32chars-minimum!!")
         os.environ.setdefault("APP_ENV", "development")
         from fastapi.testclient import TestClient
         from api.status import router
@@ -453,7 +449,7 @@ class TestStatusEndpoints:
 
     def test_live_trading_gate_endpoint_200(self, client):
         resp = client.get("/api/status/live-trading/gate")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         data = resp.json()
         assert "allowed" in data
         assert data["allowed"] is False  # no .env set
@@ -461,7 +457,7 @@ class TestStatusEndpoints:
 
     def test_paper_trading_status_endpoint_200(self, client):
         resp = client.get("/api/status/paper-trading")
-        assert resp.status_code == 200  # noqa: PLR2004
+        assert resp.status_code == 200
         data = resp.json()
         assert "started" in data
         assert "elapsed_days" in data

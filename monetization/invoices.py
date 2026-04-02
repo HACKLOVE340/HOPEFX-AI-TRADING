@@ -12,6 +12,7 @@ Invoices include access codes and are sent to users upon payment confirmation.
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum
@@ -164,11 +165,7 @@ class InvoiceGenerator:
         )
 
         # Add subscription as line item
-        tier_name = (
-            pricing_manager.get_tier(tier).name
-            if pricing_manager.get_tier(tier)
-            else tier.value
-        )
+        tier_name = pricing_manager.get_tier(tier).name if pricing_manager.get_tier(tier) else tier.value
         invoice.add_item(
             description=f"{tier_name} Subscription ({duration_months} month{'s' if duration_months > 1 else ''})",
             amount=tier_price,
@@ -177,18 +174,14 @@ class InvoiceGenerator:
 
         # Add access code to notes
         if access_code:
-            invoice.notes = (
-                f"Access Code: {access_code}\nValid for {30 * duration_months} days"
-            )
+            invoice.notes = f"Access Code: {access_code}\nValid for {30 * duration_months} days"
 
         self._invoices[invoice_id] = invoice
 
         logger.info(f"Created invoice {invoice_number} for ${amount} ({tier.value})")
         return invoice
 
-    def create_commission_invoice(
-        self, user_id: str, commission_amount: Decimal, period: str = "Monthly"
-    ) -> Invoice:
+    def create_commission_invoice(self, user_id: str, commission_amount: Decimal, period: str = "Monthly") -> Invoice:
         """Create invoice for commissions"""
         import uuid
 
@@ -214,9 +207,7 @@ class InvoiceGenerator:
 
         self._invoices[invoice_id] = invoice
 
-        logger.info(
-            f"Created commission invoice {invoice_number} for ${commission_amount}"
-        )
+        logger.info(f"Created commission invoice {invoice_number} for ${commission_amount}")
         return invoice
 
     def get_invoice(self, invoice_id: str) -> Invoice | None:
@@ -292,12 +283,8 @@ class InvoiceGenerator:
         overdue = len([inv for inv in invoices if inv.is_overdue()])
 
         total_amount = sum(inv.amount for inv in invoices)
-        paid_amount = sum(
-            inv.amount for inv in invoices if inv.status == InvoiceStatus.PAID
-        )
-        pending_amount = sum(
-            inv.amount for inv in invoices if inv.status == InvoiceStatus.PENDING
-        )
+        paid_amount = sum(inv.amount for inv in invoices if inv.status == InvoiceStatus.PAID)
+        pending_amount = sum(inv.amount for inv in invoices if inv.status == InvoiceStatus.PENDING)
 
         return {
             "total_invoices": total,
@@ -367,9 +354,7 @@ class InvoiceGenerator:
                 ]
 
                 if invoice.paid_at:
-                    header_data.append(
-                        ["Paid At:", invoice.paid_at.strftime("%Y-%m-%d %H:%M:%S")]
-                    )
+                    header_data.append(["Paid At:", invoice.paid_at.strftime("%Y-%m-%d %H:%M:%S")])
 
                 header_table = Table(header_data, colWidths=[2 * inch, 4 * inch])
                 header_table.setStyle(
@@ -446,9 +431,7 @@ class InvoiceGenerator:
                 pdf_bytes = buffer.getvalue()
                 buffer.close()
 
-                logger.info(
-                    f"Generated PDF for invoice {invoice.invoice_number} ({len(pdf_bytes)} bytes)"
-                )
+                logger.info(f"Generated PDF for invoice {invoice.invoice_number} ({len(pdf_bytes)} bytes)")
                 return pdf_bytes
 
             except ImportError:
@@ -460,13 +443,11 @@ INVOICE
 
 Invoice Number: {invoice.invoice_number}
 Invoice ID: {invoice.invoice_id}
-Date: {invoice.created_at.strftime('%Y-%m-%d %H:%M:%S')}
+Date: {invoice.created_at.strftime("%Y-%m-%d %H:%M:%S")}
 Status: {invoice.status.value.upper()}
 """
                 if invoice.paid_at:
-                    pdf_content += (
-                        f"Paid At: {invoice.paid_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    )
+                    pdf_content += f"Paid At: {invoice.paid_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
 
                 pdf_content += f"""
 Description: {invoice.tier.value.upper()} Subscription
@@ -481,9 +462,7 @@ Amount: ${invoice.amount:.2f} {invoice.currency}
                 return pdf_content.encode("utf-8")
 
         except Exception as e:
-            logger.error(
-                f"Error generating PDF for invoice {invoice.invoice_number}: {e}"
-            )
+            logger.error(f"Error generating PDF for invoice {invoice.invoice_number}: {e}")
             return None
 
 

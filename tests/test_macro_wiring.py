@@ -49,7 +49,7 @@ def test_macro_store_align_to_hourly():
 
     aligned = store.align_to_hourly(ohlcv)
     assert "dxy" in aligned.columns
-    assert aligned.shape[0] == 48  # noqa: PLR2004
+    assert aligned.shape[0] == 48
     # First 24 bars should be 102.5 (Jan 2 value forward-filled)
     assert aligned["dxy"].iloc[0] == pytest.approx(102.5)
     # After Jan 3 00:00 UTC the value should be 103.0
@@ -90,7 +90,7 @@ def test_push_snapshot_to_store():
             "cpi_latest": 314.0,
         }
         n = _push_snapshot_to_store(snapshot)
-        assert n == 5  # noqa: PLR2004
+        assert n == 5
         snap = _ms.macro_store.snapshot()
         assert snap["dxy"]["value"] == pytest.approx(102.3)
         assert snap["us10y"]["value"] == pytest.approx(4.25)
@@ -113,7 +113,7 @@ def client():
 
 def test_macro_store_endpoint_returns_ok(client):
     resp = client.get("/api/macro/store")
-    assert resp.status_code == 200  # noqa: PLR2004
+    assert resp.status_code == 200
     data = resp.json()
     assert "status" in data
     assert "total_series" in data
@@ -124,7 +124,7 @@ def test_macro_store_update_endpoint(client):
         "/api/macro/store/update",
         json={"series_name": "vix", "date": "2026-03-26", "value": 18.5},
     )
-    assert resp.status_code == 200  # noqa: PLR2004
+    assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "updated"
     assert data["series"] == "vix"
@@ -138,7 +138,7 @@ def test_macro_features_returns_dict(client):
         json={"series_name": "dxy", "date": "2026-03-26", "value": 104.1},
     )
     resp = client.get("/api/macro/features")
-    assert resp.status_code == 200  # noqa: PLR2004
+    assert resp.status_code == 200
     data = resp.json()
     # At least one macro_ key should be present
     assert any(k.startswith("macro_") for k in data)

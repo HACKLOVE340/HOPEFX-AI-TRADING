@@ -7,6 +7,7 @@
 
 from typing import Any
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 import logging
 import statistics
@@ -101,19 +102,13 @@ class ExecutionTransparencyEngine:
         slippage = executed_price - requested_price if side == "BUY" else requested_price - executed_price
 
         # Convert slippage to pips using appropriate multiplier
-        slippage_pips = (
-            slippage * FOREX_PIP_MULTIPLIER
-            if "USD" in symbol
-            else slippage * METAL_PIP_MULTIPLIER
-        )
+        slippage_pips = slippage * FOREX_PIP_MULTIPLIER if "USD" in symbol else slippage * METAL_PIP_MULTIPLIER
 
         # Calculate slippage cost
         slippage_cost = slippage * executed_size
 
         # Calculate fill ratio
-        fill_ratio = (
-            (executed_size / requested_size * 100) if requested_size > 0 else 100
-        )
+        fill_ratio = (executed_size / requested_size * 100) if requested_size > 0 else 100
 
         execution = ExecutionRecord(
             execution_id=f"exec_{len(self.executions) + 1}_{int(datetime.now(UTC).timestamp())}",
@@ -134,9 +129,7 @@ class ExecutionTransparencyEngine:
         )
 
         self.executions.append(execution)
-        logger.info(
-            f"Recorded execution {execution.execution_id}: slippage={slippage_pips:.2f} pips"
-        )
+        logger.info(f"Recorded execution {execution.execution_id}: slippage={slippage_pips:.2f} pips")
         return execution
 
     def generate_report(
@@ -172,9 +165,7 @@ class ExecutionTransparencyEngine:
             return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
         # Filter executions
-        filtered = [
-            e for e in self.executions if period_start <= _ts(e.timestamp) <= period_end
-        ]
+        filtered = [e for e in self.executions if period_start <= _ts(e.timestamp) <= period_end]
 
         if symbol:
             filtered = [e for e in filtered if e.symbol == symbol]
@@ -244,14 +235,10 @@ class ExecutionTransparencyEngine:
         )
 
         self.reports[report.report_id] = report
-        logger.info(
-            f"Generated report {report.report_id}: {len(filtered)} executions analyzed"
-        )
+        logger.info(f"Generated report {report.report_id}: {len(filtered)} executions analyzed")
         return report
 
-    def _calculate_quality(
-        self, avg_slippage: float, avg_latency: float, avg_fill_ratio: float
-    ) -> ExecutionQuality:
+    def _calculate_quality(self, avg_slippage: float, avg_latency: float, avg_fill_ratio: float) -> ExecutionQuality:
         """Calculate overall execution quality rating."""
         score = 100
 
@@ -292,9 +279,7 @@ class ExecutionTransparencyEngine:
         else:
             return ExecutionQuality.VERY_POOR
 
-    def _compare_brokers(
-        self, executions: list[ExecutionRecord]
-    ) -> dict[str, dict[str, float]]:
+    def _compare_brokers(self, executions: list[ExecutionRecord]) -> dict[str, dict[str, float]]:
         """Compare execution quality across brokers."""
         broker_data: dict[str, list[ExecutionRecord]] = {}
 
@@ -329,9 +314,7 @@ class ExecutionTransparencyEngine:
         period_end = period_end or datetime.now(UTC)
         period_start = period_start or (period_end - timedelta(days=30))
 
-        filtered = [
-            e for e in self.executions if period_start <= e.timestamp <= period_end
-        ]
+        filtered = [e for e in self.executions if period_start <= e.timestamp <= period_end]
 
         if not filtered:
             return {"buckets": [], "counts": []}
@@ -395,14 +378,10 @@ class ExecutionTransparencyEngine:
         return {
             "dates": dates,
             "latencies": avg_latencies,
-            "trend": "improving"
-            if len(avg_latencies) > 1 and avg_latencies[-1] < avg_latencies[0]
-            else "stable",
+            "trend": "improving" if len(avg_latencies) > 1 and avg_latencies[-1] < avg_latencies[0] else "stable",
         }
 
-    def get_execution_audit_trail(
-        self, order_id: str | None = None, limit: int = 100
-    ) -> list[dict[str, Any]]:
+    def get_execution_audit_trail(self, order_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         """Get execution audit trail."""
         filtered = [e for e in self.executions if e.order_id == order_id] if order_id else self.executions[-limit:]
 

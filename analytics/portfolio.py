@@ -11,6 +11,7 @@ Multi-asset backtesting, portfolio optimization, correlation analysis, risk metr
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 from pathlib import Path
@@ -44,13 +45,6 @@ class PortfolioAnalytics:
     Comprehensive portfolio analytics for multi-asset strategies
     """
 
-    # ── Portfolio thresholds ──────────────────────────────────────────────────
-    MIN_TRADE_SIZE = 0.01
-    MIN_OBSERVATIONS_OPTIMISE = 10
-    MIN_OBSERVATIONS_FRONTIER = 5
-    MIN_ASSETS_FOR_OPTIMISATION = 2
-    TRADING_DAYS_PER_YEAR = 252
-
     def __init__(self, risk_free_rate: float = 0.02):
         self.risk_free_rate = risk_free_rate
         self.returns_data: pd.DataFrame | None = None
@@ -61,13 +55,9 @@ class PortfolioAnalytics:
         """Load historical returns data for analysis"""
         self.returns_data = returns_df.dropna()
         self.assets = list(returns_df.columns)
-        print(
-            f"Loaded returns data: {len(self.returns_data)} periods, {len(self.assets)} assets"
-        )
+        print(f"Loaded returns data: {len(self.returns_data)} periods, {len(self.assets)} assets")
 
-    def calculate_correlation_matrix(
-        self, save_path: str | None = None
-    ) -> pd.DataFrame:
+    def calculate_correlation_matrix(self, save_path: str | None = None) -> pd.DataFrame:
         """Calculate and visualize correlation matrix"""
         if self.returns_data is None:
             raise ValueError("No returns data loaded")
@@ -166,9 +156,7 @@ class PortfolioAnalytics:
         n_assets = len(self.assets)
 
         # Constraints
-        constraints = [
-            {"type": "eq", "fun": lambda x: np.sum(x) - 1}
-        ]  # Sum of weights = 1
+        constraints = [{"type": "eq", "fun": lambda x: np.sum(x) - 1}]  # Sum of weights = 1
 
         if target_return is not None:
             constraints.append(
@@ -226,16 +214,12 @@ class PortfolioAnalytics:
                 "expected_return": ret,
                 "volatility": vol,
                 "sharpe_ratio": sharpe,
-                "allocation": pd.Series(optimal_weights, index=self.assets).sort_values(
-                    ascending=False
-                ),
+                "allocation": pd.Series(optimal_weights, index=self.assets).sort_values(ascending=False),
             }
         else:
             return {"success": False, "message": result.message}
 
-    def generate_efficient_frontier(
-        self, n_portfolios: int = 100, save_path: str | None = None
-    ) -> pd.DataFrame:
+    def generate_efficient_frontier(self, n_portfolios: int = 100, save_path: str | None = None) -> pd.DataFrame:
         """
         Generate efficient frontier by simulating random portfolios
 
@@ -354,22 +338,12 @@ class PortfolioAnalytics:
         volatility = portfolio_returns.std() * np.sqrt(252)
 
         # Sharpe ratio
-        sharpe = (
-            (annualized_return - self.risk_free_rate) / volatility
-            if volatility > 0
-            else 0
-        )
+        sharpe = (annualized_return - self.risk_free_rate) / volatility if volatility > 0 else 0
 
         # Sortino ratio (downside deviation)
         downside_returns = portfolio_returns[portfolio_returns < 0]
-        downside_std = (
-            downside_returns.std() * np.sqrt(252) if len(downside_returns) > 0 else 0
-        )
-        sortino = (
-            (annualized_return - self.risk_free_rate) / downside_std
-            if downside_std > 0
-            else 0
-        )
+        downside_std = downside_returns.std() * np.sqrt(252) if len(downside_returns) > 0 else 0
+        sortino = (annualized_return - self.risk_free_rate) / downside_std if downside_std > 0 else 0
 
         # Maximum drawdown
         cumulative = (1 + portfolio_returns).cumprod()
@@ -402,9 +376,7 @@ class PortfolioAnalytics:
         benchmark_returns = self.returns_data.mean(axis=1)
         active_returns = portfolio_returns - benchmark_returns
         tracking_error = active_returns.std() * np.sqrt(252)
-        information_ratio = (
-            active_returns.mean() * 252 / tracking_error if tracking_error > 0 else 0
-        )
+        information_ratio = active_returns.mean() * 252 / tracking_error if tracking_error > 0 else 0
 
         return {
             "total_return": total_return,
@@ -424,9 +396,7 @@ class PortfolioAnalytics:
             "downside_deviation": downside_std,
         }
 
-    def generate_report(
-        self, weights: np.ndarray, output_dir: str = "analytics/outputs"
-    ) -> str:
+    def generate_report(self, weights: np.ndarray, output_dir: str = "analytics/outputs") -> str:
         """Generate comprehensive portfolio report"""
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -482,9 +452,7 @@ class MultiAssetBacktester:
     Event-driven backtester for multi-asset portfolios
     """
 
-    def __init__(
-        self, initial_capital: float = 100000.0, commission_rate: float = 0.001
-    ):
+    def __init__(self, initial_capital: float = 100000.0, commission_rate: float = 0.001):
         self.initial_capital = initial_capital
         self.commission_rate = commission_rate
 
@@ -556,12 +524,8 @@ class MultiAssetBacktester:
 
         print("\nBacktest complete:")
         print(f"  Final equity: ${equity_df['equity'].iloc[-1]:,.2f}")
-        print(
-            f"  Total return: {(equity_df['equity'].iloc[-1] / self.initial_capital - 1):.2%}"
-        )
-        print(
-            f"  Sharpe ratio: {(returns.mean() * 252) / (returns.std() * np.sqrt(252)):.2f}"
-        )
+        print(f"  Total return: {(equity_df['equity'].iloc[-1] / self.initial_capital - 1):.2%}")
+        print(f"  Sharpe ratio: {(returns.mean() * 252) / (returns.std() * np.sqrt(252)):.2f}")
 
         return equity_df
 
@@ -574,19 +538,14 @@ class MultiAssetBacktester:
         target_values = current_value * target_weights
 
         # Calculate current dollar values
-        current_values = pd.Series(
-            {
-                asset: self.positions.get(asset, 0) * prices[asset]
-                for asset in prices.index
-            }
-        )
+        current_values = pd.Series({asset: self.positions.get(asset, 0) * prices[asset] for asset in prices.index})
 
         # Calculate trades needed
         trades = target_values - current_values
 
         # Execute trades
         for asset, trade_value in trades.items():
-            if abs(trade_value) > PortfolioAnalytics.MIN_TRADE_SIZE:  # Minimum trade size
+            if abs(trade_value) > 0.01:  # Minimum trade size  # noqa: PLR2004
                 trade_quantity = trade_value / prices[asset]
                 commission = abs(trade_value) * self.commission_rate
 
@@ -611,9 +570,7 @@ class MultiAssetBacktester:
 
     def _calculate_portfolio_value(self, prices: pd.Series) -> float:
         """Calculate total portfolio value"""
-        position_value = sum(
-            self.positions.get(asset, 0) * price for asset, price in prices.items()
-        )
+        position_value = sum(self.positions.get(asset, 0) * price for asset, price in prices.items())
         return self.cash + position_value
 
     def save_results(self, output_dir: str = "analytics/outputs"):
@@ -658,9 +615,7 @@ class RiskAnalyzer:
         for col in drawdown.columns:
             plt.plot(drawdown.index, drawdown[col], label=col, alpha=0.7)
 
-        plt.fill_between(
-            drawdown.index, drawdown.min(axis=1), 0, alpha=0.3, color="red"
-        )
+        plt.fill_between(drawdown.index, drawdown.min(axis=1), 0, alpha=0.3, color="red")
         plt.axhline(y=0, color="black", linestyle="-", linewidth=0.5)
 
         plt.title("Portfolio Drawdowns", fontsize=14, fontweight="bold")
@@ -713,10 +668,7 @@ class RiskAnalyzer:
             # Calculate metrics under stress
             total_return = (1 + shocked_returns).prod() - 1
             volatility = shocked_returns.std() * np.sqrt(252)
-            max_dd = (
-                (1 + shocked_returns).cumprod()
-                - (1 + shocked_returns).cumprod().expanding().max()
-            ).min()
+            max_dd = ((1 + shocked_returns).cumprod() - (1 + shocked_returns).cumprod().expanding().max()).min()
 
             results.append(
                 {
@@ -800,9 +752,7 @@ if __name__ == "__main__":
     print("  - Stress testing")
     print("  - Rolling performance metrics")
     print("\nUsage:")
-    print(
-        "  from analytics.portfolio import PortfolioAnalytics, create_portfolio_report"
-    )
+    print("  from analytics.portfolio import PortfolioAnalytics, create_portfolio_report")
     print("  report = create_portfolio_report(returns_df)")
 
 
@@ -811,14 +761,6 @@ class PortfolioOptimizer:
     Test-friendly portfolio optimizer.
     Accepts (assets, returns_matrix) calling convention.
     """
-
-    # ── Portfolio thresholds (mirror PortfolioAnalytics) ──────────────────────
-    _NDIM_2D = 2
-    MIN_TRADE_SIZE = PortfolioAnalytics.MIN_TRADE_SIZE
-    MIN_OBSERVATIONS_OPTIMISE = PortfolioAnalytics.MIN_OBSERVATIONS_OPTIMISE
-    MIN_OBSERVATIONS_FRONTIER = PortfolioAnalytics.MIN_OBSERVATIONS_FRONTIER
-    MIN_ASSETS_FOR_OPTIMISATION = PortfolioAnalytics.MIN_ASSETS_FOR_OPTIMISATION
-    TRADING_DAYS_PER_YEAR = PortfolioAnalytics.TRADING_DAYS_PER_YEAR
 
     def __init__(self, risk_free_rate: float = 0.02):
         self.risk_free_rate = risk_free_rate
@@ -837,14 +779,15 @@ class PortfolioOptimizer:
         import numpy as np
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == self._NDIM_2D else len(assets)
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)  # noqa: PLR2004
 
-        if method == "equal_weight" or returns.shape[0] < self.MIN_OBSERVATIONS_OPTIMISE:
+        if method == "equal_weight" or returns.shape[0] < 10:  # noqa: PLR2004
             w = np.ones(n) / n
         else:
             # Maximise Sharpe via SLSQP (deterministic, no random search)
-            mu = np.mean(returns, axis=0) * self.TRADING_DAYS_PER_YEAR
-            cov = np.cov(returns.T) * self.TRADING_DAYS_PER_YEAR if n > 1 else np.array([[np.var(returns) * self.TRADING_DAYS_PER_YEAR]])
+            mu = np.mean(returns, axis=0) * 252
+            cov = np.cov(returns.T) * 252 if n > 1 else np.array([[np.var(returns) * 252]])
+            self.risk_free_rate / 252
 
             def neg_sharpe(weights: np.ndarray) -> float:
                 port_ret = float(np.dot(weights, mu))
@@ -856,9 +799,13 @@ class PortfolioOptimizer:
             bounds = [(0.0, 1.0)] * n
             w0 = np.full(n, 1.0 / n)
             from scipy.optimize import minimize as _minimize
+
             res = _minimize(
-                neg_sharpe, w0, method="SLSQP",
-                bounds=bounds, constraints=constraints,
+                neg_sharpe,
+                w0,
+                method="SLSQP",
+                bounds=bounds,
+                constraints=constraints,
                 options={"ftol": 1e-9, "maxiter": 1000},
             )
             if res.success:
@@ -867,8 +814,8 @@ class PortfolioOptimizer:
             else:
                 w = w0
 
-        port_ret = float(np.mean(returns @ w) * self.TRADING_DAYS_PER_YEAR)
-        port_vol = float(np.std(returns @ w) * (self.TRADING_DAYS_PER_YEAR**0.5))
+        port_ret = float(np.mean(returns @ w) * 252)
+        port_vol = float(np.std(returns @ w) * (252**0.5))
         sharpe = (port_ret - self.risk_free_rate) / (port_vol + 1e-9)
 
         return {
@@ -890,17 +837,16 @@ class PortfolioOptimizer:
         from scipy.optimize import minimize as _minimize
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == self.MIN_ASSETS_FOR_OPTIMISATION else len(assets)
-        if returns.shape[0] < self.MIN_OBSERVATIONS_FRONTIER or n < self.MIN_ASSETS_FOR_OPTIMISATION:
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)  # noqa: PLR2004
+        if returns.shape[0] < 5 or n < 2:  # noqa: PLR2004
             # Insufficient data — return equal-weight single point
             w = np.full(n, 1.0 / n)
-            port_ret = float(np.mean(returns @ w) * self.TRADING_DAYS_PER_YEAR)
-            port_vol = float(np.std(returns @ w) * (self.TRADING_DAYS_PER_YEAR ** 0.5))
-            return [{"risk": port_vol, "return": port_ret,
-                     "weights": {a: float(w[i]) for i, a in enumerate(assets)}}]
+            port_ret = float(np.mean(returns @ w) * 252)
+            port_vol = float(np.std(returns @ w) * (252**0.5))
+            return [{"risk": port_vol, "return": port_ret, "weights": {a: float(w[i]) for i, a in enumerate(assets)}}]
 
-        mu = np.mean(returns, axis=0) * self.TRADING_DAYS_PER_YEAR
-        cov = np.cov(returns.T) * self.TRADING_DAYS_PER_YEAR
+        mu = np.mean(returns, axis=0) * 252
+        cov = np.cov(returns.T) * 252
         mu_min, mu_max = float(mu.min()), float(mu.max())
         target_returns = np.linspace(mu_min, mu_max, num_portfolios)
 
@@ -914,21 +860,25 @@ class PortfolioOptimizer:
             bounds = [(0.0, 1.0)] * n
             res = _minimize(
                 lambda w: float(w @ cov @ w),
-                w0, method="SLSQP",
-                bounds=bounds, constraints=constraints,
+                w0,
+                method="SLSQP",
+                bounds=bounds,
+                constraints=constraints,
                 options={"ftol": 1e-9, "maxiter": 500},
             )
             w = res.x if res.success else w0
             w = np.maximum(w, 0.0)
             s = w.sum()
             w = w / s if s > 0 else w0
-            port_ret = float(np.mean(returns @ w) * self.TRADING_DAYS_PER_YEAR)
-            port_vol = float(np.std(returns @ w) * (self.TRADING_DAYS_PER_YEAR ** 0.5))
-            frontier.append({
-                "risk": port_vol,
-                "return": port_ret,
-                "weights": {a: float(w[i]) for i, a in enumerate(assets)},
-            })
+            port_ret = float(np.mean(returns @ w) * 252)
+            port_vol = float(np.std(returns @ w) * (252**0.5))
+            frontier.append(
+                {
+                    "risk": port_vol,
+                    "return": port_ret,
+                    "weights": {a: float(w[i]) for i, a in enumerate(assets)},
+                }
+            )
         return frontier
 
 
@@ -969,19 +919,22 @@ def _pa_optimize(
     constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
     bounds = [(0.0, 1.0)] * n
 
-    if method == "equal_weight" or n < PortfolioAnalytics.MIN_ASSETS_FOR_OPTIMISATION:
+    if method == "equal_weight" or n < 2:  # noqa: PLR2004
         w = w0
     elif method == "min_variance":
         res = _minimize(
             lambda w: float(w @ C @ w),
-            w0, method="SLSQP",
-            bounds=bounds, constraints=constraints,
+            w0,
+            method="SLSQP",
+            bounds=bounds,
+            constraints=constraints,
             options={"ftol": 1e-10, "maxiter": 1000},
         )
         w = np.maximum(res.x, 0.0) if res.success else w0
         s = w.sum()
         w = w / s if s > 0 else w0
     else:  # max_sharpe
+
         def neg_sharpe(ww: np.ndarray) -> float:
             port_ret = float(np.dot(ww, mu))
             port_var = float(ww @ C @ ww)
@@ -989,8 +942,11 @@ def _pa_optimize(
             return -(port_ret - risk_free_rate) / port_vol
 
         res = _minimize(
-            neg_sharpe, w0, method="SLSQP",
-            bounds=bounds, constraints=constraints,
+            neg_sharpe,
+            w0,
+            method="SLSQP",
+            bounds=bounds,
+            constraints=constraints,
             options={"ftol": 1e-10, "maxiter": 1000},
         )
         w = np.maximum(res.x, 0.0) if res.success else w0

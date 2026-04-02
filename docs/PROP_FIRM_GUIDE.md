@@ -1,7 +1,7 @@
 # Prop Firm Guide
 
 > How to use HOPEFX to pass prop firm challenges and manage funded accounts.
-> Last updated: 2026-07-14
+> Last updated: 2026-04-01
 
 ---
 
@@ -311,4 +311,4 @@ This means a position moved against you beyond the limit. Post-mortem:
 
 ---
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-04-01*

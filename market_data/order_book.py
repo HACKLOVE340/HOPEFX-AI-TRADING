@@ -52,6 +52,7 @@ import os
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -132,19 +133,13 @@ class OrderBookSnapshot:
         best_ask_vol = self.asks[0].size if self.asks else 0
         total_top = best_bid_vol + best_ask_vol
         if total_top > 0 and self.bids and self.asks:
-            self.weighted_mid = (
-                self.bids[0].price * best_ask_vol + self.asks[0].price * best_bid_vol
-            ) / total_top
+            self.weighted_mid = (self.bids[0].price * best_ask_vol + self.asks[0].price * best_bid_vol) / total_top
         else:
             self.weighted_mid = mid
 
         # ── Depth within N bps ────────────────────────────────────────────────
-        self.bid_depth = sum(
-            b.size for b in self.bids if mid - b.price <= depth_threshold
-        )
-        self.ask_depth = sum(
-            a.size for a in self.asks if a.price - mid <= depth_threshold
-        )
+        self.bid_depth = sum(b.size for b in self.bids if mid - b.price <= depth_threshold)
+        self.ask_depth = sum(a.size for a in self.asks if a.price - mid <= depth_threshold)
         if self.ask_depth > 0:
             self.depth_ratio = self.bid_depth / self.ask_depth
         else:
@@ -163,24 +158,16 @@ class OrderBookSnapshot:
         return {
             "micro_obi": float(np.clip(self.obi, -1.0, 1.0)),
             "micro_weighted_mid_dev": float(
-                (self.weighted_mid - self.mid_price) / self.mid_price
-                if self.mid_price > 0
-                else 0.0
+                (self.weighted_mid - self.mid_price) / self.mid_price if self.mid_price > 0 else 0.0
             ),
             "micro_bid_depth": float(self.bid_depth),
             "micro_ask_depth": float(self.ask_depth),
             "micro_depth_ratio": float(np.clip(self.depth_ratio, 0.0, 10.0)),
             "micro_depth_imbalance": float(np.clip(self.obi, -1.0, 1.0)),
-            "micro_price_pressure": float(
-                np.clip(self.price_pressure / 100, -1.0, 1.0)
-            ),
-            "micro_spread": float(self.asks[0].price - self.bids[0].price)
-            if self.bids and self.asks
-            else 0.0,
+            "micro_price_pressure": float(np.clip(self.price_pressure / 100, -1.0, 1.0)),
+            "micro_spread": float(self.asks[0].price - self.bids[0].price) if self.bids and self.asks else 0.0,
             "micro_spread_bps": float(self.spread_bps),
-            "micro_cumulative_delta": float(
-                np.clip(self.cumulative_delta / 10_000, -1.0, 1.0)
-            ),
+            "micro_cumulative_delta": float(np.clip(self.cumulative_delta / 10_000, -1.0, 1.0)),
         }
 
 
@@ -423,9 +410,7 @@ class IBKROrderBookFeed:
 
         try:
             self._ib = IB()
-            await self._ib.connectAsync(
-                self._host, self._port, clientId=self._client_id
-            )
+            await self._ib.connectAsync(self._host, self._port, clientId=self._client_id)
             logger.info("IBKR L2 feed connected to %s:%d", self._host, self._port)
 
             for symbol in symbols:
@@ -436,9 +421,7 @@ class IBKROrderBookFeed:
                     contract = Forex(parts[0] + parts[1])
                     await self._ib.qualifyContractsAsync(contract)
                     ticker = self._ib.reqMktDepth(contract, numRows=L2_DEPTH_LEVELS)
-                    ticker.updateEvent += lambda t, sym=symbol: self._on_depth_update(
-                        t, sym
-                    )
+                    ticker.updateEvent += lambda t, sym=symbol: self._on_depth_update(t, sym)
                     self._tickers[symbol] = ticker
                     logger.info("IBKR L2 subscribed to %s", symbol)
         except Exception as exc:
@@ -522,12 +505,10 @@ class MockL2Feed:
 
                 # Generate 10 levels each side with exponentially decaying size
                 bids = [
-                    (mid - spread / 2 - i * 0.10, rng.exponential(100) * (1 + i * 0.1))
-                    for i in range(L2_DEPTH_LEVELS)
+                    (mid - spread / 2 - i * 0.10, rng.exponential(100) * (1 + i * 0.1)) for i in range(L2_DEPTH_LEVELS)
                 ]
                 asks = [
-                    (mid + spread / 2 + i * 0.10, rng.exponential(100) * (1 + i * 0.1))
-                    for i in range(L2_DEPTH_LEVELS)
+                    (mid + spread / 2 + i * 0.10, rng.exponential(100) * (1 + i * 0.1)) for i in range(L2_DEPTH_LEVELS)
                 ]
                 book.apply_snapshot(bids, asks)
             except asyncio.CancelledError:
@@ -564,8 +545,7 @@ class OrderBookFeed:
         elif self._provider_name == "mock":
             # MockL2Feed raises RuntimeError in APP_ENV=production.
             logger.warning(
-                "L2 feed using MockL2Feed (L2_PROVIDER=mock). "
-                "This is only permitted in non-production environments."
+                "L2 feed using MockL2Feed (L2_PROVIDER=mock). This is only permitted in non-production environments."
             )
             self._provider = MockL2Feed()
         else:

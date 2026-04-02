@@ -100,7 +100,7 @@ class TestOrderBlockingUnderLoad:
         try:
             with pytest.raises(HTTPException) as exc_info:
                 trading_mod._check_kill_switch()
-            assert exc_info.value.status_code == 503  # noqa: PLR2004
+            assert exc_info.value.status_code == 503
             assert "kill switch" in exc_info.value.detail.lower()
         finally:
             trading_mod._set_kill_switch(None)
@@ -142,8 +142,8 @@ class TestOrderBlockingUnderLoad:
         finally:
             trading_mod._set_kill_switch(None)
 
-        assert all(r == 503 for r in results), f"Some orders slipped through: {results}"  # noqa: PLR2004
-        assert len(results) == 50  # noqa: PLR2004
+        assert all(r == 503 for r in results), f"Some orders slipped through: {results}"
+        assert len(results) == 50
 
 
 # ===========================================================================
@@ -291,9 +291,7 @@ class TestFileFlagPolling:
         from kill_switch import KillSwitch
 
         flag = tmp_path / "ks.flag"
-        ks = KillSwitch(
-            flag_file=flag, poll_interval_sec=0.05, deactivation_token="tok"
-        )
+        ks = KillSwitch(flag_file=flag, poll_interval_sec=0.05, deactivation_token="tok")
 
         await ks.start()
         try:

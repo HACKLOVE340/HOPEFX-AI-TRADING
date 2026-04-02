@@ -545,8 +545,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     if stamp_path.exists():
         try:
             existing = json.loads(stamp_path.read_text())
-        except Exception as exc:
-            logger.debug("Failed to parse OANDA stamp file: %s, using empty config", exc)
+        except Exception:
             existing = {}
 
         # If a real account is already stamped, preserve the clock start time.
@@ -571,8 +570,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
             from datetime import datetime as _dt
 
             started_utc = _dt.fromisoformat(started_utc_str)
-        except Exception as exc:
-            logger.warning("Failed to parse started_utc timestamp '%s': %s, using now", started_utc_str, exc)
+        except Exception:
             started_utc = now
     else:
         started_utc = now
@@ -709,7 +707,7 @@ async def init_prop_enforcer(s: Any) -> Any:
         ks = getattr(s, "kill_switch", None)
         if ks is not None:
 
-            def kill_fn(reason: str) -> None:
+            def kill_fn(reason: str) -> None:  # pylint: disable=function-redefined
                 ks.activate(reason)
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
@@ -991,7 +989,7 @@ async def init_inference_engine(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except ImportError:
+    except Exception:
 
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
@@ -1068,7 +1066,7 @@ async def init_anomaly_store(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except ImportError:
+    except Exception:
 
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
@@ -1079,7 +1077,7 @@ async def init_anomaly_store(s: Any) -> Any:
         if not getattr(flags, "ANOMALY_WEIGHTING", False):
             logger.info("AnomalyWeightStore: disabled by FEATURE_ANOMALY_WEIGHTING=false")
             return None
-    except (ImportError, AttributeError):
+    except Exception:
         return None
 
     try:
@@ -1126,7 +1124,7 @@ async def init_online_learner_store(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except ImportError:
+    except Exception:
 
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
@@ -1137,7 +1135,7 @@ async def init_online_learner_store(s: Any) -> Any:
         if not getattr(flags, "ONLINE_LEARNING", False):
             logger.info("OnlineLearnerStore: disabled by FEATURE_ONLINE_LEARNING=false")
             return None
-    except (ImportError, AttributeError):
+    except Exception:
         return None
 
     try:
@@ -1188,7 +1186,7 @@ async def init_deep_ensemble_store(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except ImportError:
+    except Exception:
 
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
@@ -1199,7 +1197,7 @@ async def init_deep_ensemble_store(s: Any) -> Any:
         if not getattr(flags, "DEEP_ENSEMBLE", False):
             logger.info("DeepEnsembleStore: disabled by FEATURE_DEEP_ENSEMBLE=false")
             return None
-    except (ImportError, AttributeError):
+    except Exception:
         return None
 
     try:
@@ -1435,7 +1433,7 @@ async def init_daily_online_learner(s: Any) -> Any:
 
     try:
         from api.admin import log_activity
-    except ImportError:
+    except Exception:
 
         def log_activity(msg: str) -> None:  # type: ignore[misc]
             logger.info(msg)
@@ -1545,7 +1543,7 @@ async def init_daily_online_learner(s: Any) -> Any:
                 return "ranging"
             else:
                 return "trending"
-        except (ImportError, AttributeError):
+        except Exception:
             return None
 
     t = asyncio.create_task(_daily_ewc_loop())
@@ -1856,7 +1854,7 @@ async def init_tick_feed(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except ImportError:
+    except Exception:
 
         def log_activity(msg: str) -> None:
             logger.info(msg)
@@ -1920,7 +1918,7 @@ async def init_factor_engine(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except ImportError:
+    except Exception:
 
         def log_activity(msg: str) -> None:
             logger.info(msg)
@@ -1959,7 +1957,7 @@ async def init_portfolio_rebalancer(s: Any) -> Any:
     """
     try:
         from api.admin import log_activity
-    except ImportError:
+    except Exception:
 
         def log_activity(msg: str) -> None:
             logger.info(msg)

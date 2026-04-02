@@ -35,9 +35,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 # Logger must be defined before any module-level try/except blocks that use it.
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, HTTPException, status
@@ -182,8 +180,7 @@ try:
     logger.info("KillSwitch wired to Redis EventBus for cross-pod propagation")
 except Exception as _ks_bus_err:
     logger.warning(
-        "KillSwitch: could not wire Redis EventBus (%s) — "
-        "kill switch will only work within this pod",
+        "KillSwitch: could not wire Redis EventBus (%s) — kill switch will only work within this pod",
         _ks_bus_err,
     )
     kill_switch = KillSwitch()
@@ -200,9 +197,7 @@ try:
 except Exception as _nuclear_err:
     import logging as _logging
 
-    _logging.getLogger(__name__).warning(
-        "Nuclear router failed to register: %s", _nuclear_err
-    )
+    _logging.getLogger(__name__).warning("Nuclear router failed to register: %s", _nuclear_err)
 
 # Data layer REST endpoints
 try:
@@ -212,9 +207,7 @@ try:
 except Exception as _dl_router_err:
     import logging as _logging
 
-    _logging.getLogger(__name__).warning(
-        "Data layer router failed to register: %s", _dl_router_err
-    )
+    _logging.getLogger(__name__).warning("Data layer router failed to register: %s", _dl_router_err)
 
 # KYC/AML endpoints (Sumsub/Onfido + sanctions screening)
 try:
@@ -224,9 +217,27 @@ try:
 except Exception as _kyc_router_err:
     import logging as _logging
 
-    _logging.getLogger(__name__).warning(
-        "KYC router failed to register: %s", _kyc_router_err
-    )
+    _logging.getLogger(__name__).warning("KYC router failed to register: %s", _kyc_router_err)
+
+# TCA endpoints (slippage stats, fill quality, alerts)
+try:
+    from api.tca import router as _tca_router
+
+    app.include_router(_tca_router, prefix="/api")
+except Exception as _tca_router_err:
+    import logging as _logging
+
+    _logging.getLogger(__name__).warning("TCA router failed to register: %s", _tca_router_err)
+
+# Live P&L dashboard — auditable trade log, equity curve, Sharpe, drawdown
+try:
+    from api.pnl_dashboard import router as _pnl_router
+
+    app.include_router(_pnl_router)
+except Exception as _pnl_router_err:
+    import logging as _logging
+
+    _logging.getLogger(__name__).warning("P&L dashboard router failed to register: %s", _pnl_router_err)
 
 # Chaos engineering + mutation testing endpoints
 try:
@@ -236,9 +247,7 @@ try:
 except Exception as _chaos_router_err:
     import logging as _logging
 
-    _logging.getLogger(__name__).warning(
-        "Chaos router failed to register: %s", _chaos_router_err
-    )
+    _logging.getLogger(__name__).warning("Chaos router failed to register: %s", _chaos_router_err)
 
 # Prometheus /metrics endpoint + background sync to MetricsRegistry
 try:
@@ -248,9 +257,7 @@ try:
 except Exception as _prom_err:
     import logging as _logging
 
-    _logging.getLogger(__name__).warning(
-        "Prometheus monitoring setup failed: %s", _prom_err
-    )
+    _logging.getLogger(__name__).warning("Prometheus monitoring setup failed: %s", _prom_err)
 
 # OpenTelemetry distributed tracing — instruments FastAPI, SQLAlchemy, Redis,
 # aiohttp and enables W3C trace context propagation through Redis messages.
@@ -504,9 +511,7 @@ def _start_sharpe_circuit_breaker(state) -> None:
 def _start_nuclear_price_bridge(state) -> None:
     """Start NuclearStreamer price bridge background task (non-fatal)."""
     try:
-        _bridge_task = asyncio.create_task(
-            _nuclear_price_bridge(state), name="nuclear_price_bridge"
-        )
+        _bridge_task = asyncio.create_task(_nuclear_price_bridge(state), name="nuclear_price_bridge")
         if hasattr(state, "background_tasks"):
             state.background_tasks.append(_bridge_task)
         logger.info("nuclear_price_bridge task started")

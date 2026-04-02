@@ -59,6 +59,7 @@ import os
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -67,18 +68,14 @@ logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 _JURISDICTION = os.getenv("REGULATORY_JURISDICTION", "US").upper()
-_REPORTING_ENABLED = (
-    os.getenv("REGULATORY_REPORTING_ENABLED", "false").lower() == "true"
-)
+_REPORTING_ENABLED = os.getenv("REGULATORY_REPORTING_ENABLED", "false").lower() == "true"
 _PROP_FIRM_MODE = os.getenv("PROP_FIRM_MODE", "false").lower() == "true"
 _DLQ_PATH = Path(os.getenv("REGULATORY_DLQ_PATH", "data/regulatory_dlq"))
 _RETRY_MAX = int(os.getenv("REGULATORY_RETRY_MAX", "5"))
 _TIMEOUT_S = float(os.getenv("REGULATORY_TIMEOUT_S", "10.0"))
 
 # CFTC SDR (DTCC GTR)
-_DTCC_GTR_ENDPOINT = os.getenv(
-    "DTCC_GTR_ENDPOINT", "https://gtr.dtcc.com/gtr/api/trade/report"
-)
+_DTCC_GTR_ENDPOINT = os.getenv("DTCC_GTR_ENDPOINT", "https://gtr.dtcc.com/gtr/api/trade/report")
 _DTCC_GTR_API_KEY = os.getenv("DTCC_GTR_API_KEY", "")
 _DTCC_GTR_CERT_PATH = os.getenv("DTCC_GTR_CERT_PATH", "")
 
@@ -88,9 +85,7 @@ _CAT_API_KEY = os.getenv("CAT_API_KEY", "")
 _CAT_FIRM_ID = os.getenv("CAT_FIRM_ID", "")
 
 # MiFID II
-_ESMA_ENDPOINT = os.getenv(
-    "ESMA_ENDPOINT", "https://api.esma.europa.eu/mifid/transaction"
-)
+_ESMA_ENDPOINT = os.getenv("ESMA_ENDPOINT", "https://api.esma.europa.eu/mifid/transaction")
 _ESMA_API_KEY = os.getenv("ESMA_API_KEY", "")
 _ESMA_LEI = os.getenv("ESMA_LEI", "")
 
@@ -103,9 +98,7 @@ try:
         "Regulatory reports submitted",
         ["jurisdiction"],
     )
-    _prom_failed = Counter(
-        "hopefx_regulatory_failed_total", "Regulatory report failures", ["jurisdiction"]
-    )
+    _prom_failed = Counter("hopefx_regulatory_failed_total", "Regulatory report failures", ["jurisdiction"])
     _prom_dlq_size = Gauge("hopefx_regulatory_dlq_size", "Dead-letter queue depth")
     _PROM_OK = True
 except Exception:  # nosec B110 — Prometheus metrics optional
@@ -142,9 +135,7 @@ class DeadLetterQueue:
 
     def enqueue(self, record: ReportRecord) -> None:
         """Persist a failed report to the DLQ."""
-        filename = (
-            self._path / f"dlq_{datetime.now(UTC).strftime('%Y-%m')}.jsonl"
-        )
+        filename = self._path / f"dlq_{datetime.now(UTC).strftime('%Y-%m')}.jsonl"
         entry = (
             json.dumps(
                 {
@@ -171,9 +162,7 @@ class DeadLetterQueue:
                 record.trade_id,
             )
         except Exception as exc:
-            logger.critical(
-                "RegulatoryReporter: DLQ write FAILED — report LOST: %s", exc
-            )
+            logger.critical("RegulatoryReporter: DLQ write FAILED — report LOST: %s", exc)
 
     def drain(self) -> list[dict]:
         """Return all DLQ entries and clear the queue files."""
@@ -329,9 +318,7 @@ class RegulatoryReporter:
 
     # ── CFTC SDR (DTCC GTR) ───────────────────────────────────────────────────
 
-    async def _submit_cftc_sdr(
-        self, trade: dict, report_id: str, trade_id: str
-    ) -> ReportRecord:
+    async def _submit_cftc_sdr(self, trade: dict, report_id: str, trade_id: str) -> ReportRecord:
         """Submit to DTCC GTR (CFTC Swap Data Repository)."""
         payload = self._build_cftc_payload(trade, report_id)
         headers = {
@@ -376,12 +363,8 @@ class RegulatoryReporter:
             "reportType": "NEW",
             "assetClass": "CO",  # Commodity (gold)
             "productType": "SPOT",
-            "tradeDate": trade.get("filled_at", datetime.now(UTC).isoformat())[
-                :10
-            ],
-            "effectiveDate": trade.get(
-                "filled_at", datetime.now(UTC).isoformat()
-            )[:10],
+            "tradeDate": trade.get("filled_at", datetime.now(UTC).isoformat())[:10],
+            "effectiveDate": trade.get("filled_at", datetime.now(UTC).isoformat())[:10],
             "notionalAmount": trade.get("notional_usd", 0.0),
             "notionalCurrency": "USD",
             "price": trade.get("fill_price", 0.0),
@@ -399,9 +382,7 @@ class RegulatoryReporter:
 
     # ── SEC CAT ───────────────────────────────────────────────────────────────
 
-    async def _submit_sec_cat(
-        self, trade: dict, report_id: str, trade_id: str
-    ) -> ReportRecord:
+    async def _submit_sec_cat(self, trade: dict, report_id: str, trade_id: str) -> ReportRecord:
         """Submit to SEC Consolidated Audit Trail."""
         payload = self._build_cat_payload(trade, report_id)
         headers = {
@@ -443,9 +424,7 @@ class RegulatoryReporter:
         return {
             "catReportId": report_id,
             "firmId": _CAT_FIRM_ID or "HOPEFX",
-            "eventTimestamp": trade.get(
-                "filled_at", datetime.now(UTC).isoformat()
-            ),
+            "eventTimestamp": trade.get("filled_at", datetime.now(UTC).isoformat()),
             "eventType": "MENO",  # Manual Entry New Order
             "symbol": trade.get("symbol", "XAUUSD"),
             "side": "B" if trade.get("direction") == "long" else "S",
@@ -458,9 +437,7 @@ class RegulatoryReporter:
 
     # ── MiFID II ──────────────────────────────────────────────────────────────
 
-    async def _submit_mifid_ii(
-        self, trade: dict, report_id: str, trade_id: str
-    ) -> ReportRecord:
+    async def _submit_mifid_ii(self, trade: dict, report_id: str, trade_id: str) -> ReportRecord:
         """Submit to ESMA MiFID II transaction reporting endpoint."""
         payload = self._build_mifid_payload(trade, report_id)
         headers = {
@@ -504,9 +481,7 @@ class RegulatoryReporter:
             "tradingVenueTransactionId": trade.get("fill_id", report_id),
             "executingEntityId": _ESMA_LEI or "HOPEFX_LEI",
             "investmentFirmId": _ESMA_LEI or "HOPEFX_LEI",
-            "tradingDateTime": trade.get(
-                "filled_at", datetime.now(UTC).isoformat()
-            ),
+            "tradingDateTime": trade.get("filled_at", datetime.now(UTC).isoformat()),
             "tradingCapacity": "DEAL",  # Dealing on own account
             "quantity": trade.get("quantity", 0.0),
             "quantityUnit": "UNIT",
@@ -587,13 +562,16 @@ class RegulatoryReporter:
         try:
             import aiohttp
 
-            async with aiohttp.ClientSession() as session, session.post(
-                endpoint,
-                json=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=_TIMEOUT_S),
-                ssl=True,
-            ) as resp:
+            async with (
+                aiohttp.ClientSession() as session,
+                session.post(
+                    endpoint,
+                    json=payload,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=_TIMEOUT_S),
+                    ssl=True,
+                ) as resp,
+            ):
                 if resp.status in (200, 201, 202):
                     return True, resp.status, None
                 body = await resp.text()
@@ -606,6 +584,7 @@ class RegulatoryReporter:
 
             def _sync_post():
                 from urllib.parse import urlparse as _urlparse
+
                 _parsed = _urlparse(endpoint)
                 if _parsed.scheme not in ("http", "https"):
                     raise ValueError(f"Regulatory endpoint must use http/https, got {_parsed.scheme!r}")

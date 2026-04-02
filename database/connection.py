@@ -12,8 +12,10 @@ import logging
 import time
 import threading
 from collections.abc import Callable
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 try:
     from sqlalchemy import create_engine, event, text
@@ -29,6 +31,7 @@ try:
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     SQLALCHEMY_AVAILABLE = False
+    Session = None  # type: ignore[assignment,misc]
     logging.warning("SQLAlchemy not available, database features disabled")
 
 logger = logging.getLogger(__name__)
@@ -128,8 +131,7 @@ class DatabaseManager:
                 conn.execute(text("SELECT 1"))
 
             logger.info(
-                f"Database initialized | Pool: {self.pool_size}/{self.max_overflow} | "
-                f"Engine: {self._engine.name}"
+                f"Database initialized | Pool: {self.pool_size}/{self.max_overflow} | Engine: {self._engine.name}"
             )
 
         except Exception as e:
@@ -157,9 +159,7 @@ class DatabaseManager:
             return True
 
         # Try recovery
-        if self._last_failure_time and (
-            time.time() - self._last_failure_time > self._circuit_recovery_time
-        ):
+        if self._last_failure_time and (time.time() - self._last_failure_time > self._circuit_recovery_time):
             self._circuit_open = False
             self._failure_count = 0
             logger.info("Database circuit breaker recovered")
@@ -178,12 +178,10 @@ class DatabaseManager:
 
         if self._failure_count >= self._circuit_threshold:
             self._circuit_open = True
-            logger.critical(
-                f"Database circuit breaker OPENED after {self._failure_count} failures"
-            )
+            logger.critical(f"Database circuit breaker OPENED after {self._failure_count} failures")
 
     @contextmanager
-    def session(self):
+    def session(self) -> "Generator[Session, None, None]":
         """
         Get database session with automatic cleanup and retry logic
 
@@ -203,11 +201,7 @@ class DatabaseManager:
 
                 # Set query timeout
                 if "postgresql" in self.connection_string:
-                    session.execute(
-                        text(
-                            f"SET statement_timeout = '{int(self.query_timeout * 1000)}ms'"
-                        )
-                    )
+                    session.execute(text(f"SET statement_timeout = '{int(self.query_timeout * 1000)}ms'"))
 
                 yield session
 
@@ -226,9 +220,7 @@ class DatabaseManager:
                 if session:
                     session.rollback()
 
-                logger.warning(
-                    f"Database operational error (attempt {attempt + 1}): {e}"
-                )
+                logger.warning(f"Database operational error (attempt {attempt + 1}): {e}")
 
                 if attempt < self.max_retries - 1:
                     wait_time = 2**attempt  # Exponential backoff
@@ -275,9 +267,7 @@ class DatabaseManager:
             except OperationalError as e:
                 if attempt < self.max_retries - 1:
                     wait_time = 2**attempt
-                    logger.warning(
-                        f"DB retry {attempt + 1}/{self.max_retries} in {wait_time}s: {e}"
-                    )
+                    logger.warning(f"DB retry {attempt + 1}/{self.max_retries} in {wait_time}s: {e}")
                     time.sleep(wait_time)
                 else:
                     raise
@@ -470,6 +460,4 @@ else:
     SessionLocal = None  # type: ignore[assignment]
 
     def get_db():  # type: ignore[misc]
-        raise RuntimeError(
-            "SQLAlchemy is not installed — database features unavailable."
-        )
+        raise RuntimeError("SQLAlchemy is not installed — database features unavailable.")

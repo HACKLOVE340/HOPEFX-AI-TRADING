@@ -38,6 +38,7 @@ import logging
 import os
 from collections import deque
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -92,16 +93,12 @@ class ProductionDataEngine:
         # State
         self.current_price: float | None = None
         self.last_update: datetime | None = None
-        self.price_history: deque = deque(
-            maxlen=int(self._cfg.get("history_size", 5000))
-        )
+        self.price_history: deque = deque(maxlen=int(self._cfg.get("history_size", 5000)))
         self.subscribers: list[Any] = []
         self.is_running: bool = True
 
         # Provider management
-        self._fallback_order: list[str] = self._cfg.get(
-            "fallback_order", ["goldapi", "metalpriceapi", "mt5_demo"]
-        )
+        self._fallback_order: list[str] = self._cfg.get("fallback_order", ["goldapi", "metalpriceapi", "mt5_demo"])
         self.active_provider: str = self._cfg.get("primary", self._fallback_order[0])
 
         # Per-provider failure counters and circuit-breaker open timestamps.
@@ -124,13 +121,9 @@ class ProductionDataEngine:
 
     async def start(self) -> None:
         """Open the HTTP session and start the polling + health-monitor loops."""
-        timeout = aiohttp.ClientTimeout(
-            total=float(self._cfg.get("timeout_seconds", 4))
-        )
+        timeout = aiohttp.ClientTimeout(total=float(self._cfg.get("timeout_seconds", 4)))
         self._session = aiohttp.ClientSession(timeout=timeout)
-        logger.info(
-            "ProductionDataEngine started — primary provider: %s", self.active_provider
-        )
+        logger.info("ProductionDataEngine started — primary provider: %s", self.active_provider)
         try:
             await asyncio.gather(
                 self._continuous_stream(),
@@ -207,10 +200,7 @@ class ProductionDataEngine:
             idx = -1
         for candidate in self._fallback_order[idx + 1 :] + self._fallback_order[:idx]:
             open_at = self._circuit_open_at.get(candidate)
-            if (
-                open_at is None
-                or (now - open_at).total_seconds() >= _CIRCUIT_BREAKER_COOLDOWN
-            ):
+            if open_at is None or (now - open_at).total_seconds() >= _CIRCUIT_BREAKER_COOLDOWN:
                 return candidate
         return current  # No healthy alternative found.
 
@@ -230,9 +220,7 @@ class ProductionDataEngine:
                     self._fail_count[provider] = 0
                     await self._broadcast(price)
                     return True
-                logger.debug(
-                    "Provider '%s' returned out-of-range price: %s", provider, price
-                )
+                logger.debug("Provider '%s' returned out-of-range price: %s", provider, price)
             except TimeoutError:
                 logger.warning(
                     "Provider '%s' timed out (attempt %d/%d)",
@@ -333,9 +321,7 @@ class ProductionDataEngine:
             if self.last_update is not None:
                 age = (datetime.now(tz=UTC) - self.last_update).total_seconds()
                 if age > 30:  # noqa: PLR2004
-                    logger.warning(
-                        "Data feed stale (%.0f s) — forcing provider rotation", age
-                    )
+                    logger.warning("Data feed stale (%.0f s) — forcing provider rotation", age)
                     self.active_provider = self._get_next_provider(self.active_provider)
 
     # ── Config loading ────────────────────────────────────────────────────────
@@ -344,9 +330,7 @@ class ProductionDataEngine:
     def _load_config(path: str) -> dict:
         config_path = Path(path)
         if not config_path.exists():
-            raise FileNotFoundError(
-                f"Data feed config not found: {config_path.resolve()}"
-            )
+            raise FileNotFoundError(f"Data feed config not found: {config_path.resolve()}")
         with config_path.open("r") as fh:
             return yaml.safe_load(fh)
 
@@ -360,10 +344,7 @@ class ProductionDataEngine:
             "last_update": self.last_update.isoformat() if self.last_update else None,
             "history_size": len(self.price_history),
             "fail_counts": dict(self._fail_count),
-            "circuit_breakers": {
-                p: (ts.isoformat() if ts else None)
-                for p, ts in self._circuit_open_at.items()
-            },
+            "circuit_breakers": {p: (ts.isoformat() if ts else None) for p, ts in self._circuit_open_at.items()},
             "subscriber_count": len(self.subscribers),
             "is_running": self.is_running,
         }

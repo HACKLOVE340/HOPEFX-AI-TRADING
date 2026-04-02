@@ -530,7 +530,7 @@ class IBKRConnector(BrokerConnector):
                 try:
                     ticker = self._ib.reqTicker(pos.contract)
                     current_price = float(ticker.marketPrice()) if ticker and ticker.marketPrice() else 0.0
-                except Exception:  # nosec B110 — fallback to zero on ticker error
+                except Exception:
                     current_price = 0.0
 
                 avg_cost = pos.avgCost

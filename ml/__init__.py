@@ -146,7 +146,7 @@ def _try_load(path: _Path) -> _Any | None:
     try:
         import joblib as _joblib
 
-        return _joblib.load(path)
+        return _joblib.load(path)  # nosec B301 - path is always from ml/saved_models (internal)
     except Exception as _jl_exc:
         _ml_logger.debug("joblib.load failed for %s (%s) — trying pickle", path.name, _jl_exc)
         try:

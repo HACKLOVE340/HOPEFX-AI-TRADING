@@ -26,34 +26,45 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 from data_layer.feeds.macro.fred import FREDFeed, FRED_SERIES, fred_feed
+from data_layer.feeds.macro.wgc import WGCFeed, wgc_feed
+import contextlib
 
 logger = logging.getLogger(__name__)
 
 # Startup retry config
 _STARTUP_MAX_RETRIES = int(__import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
-_STARTUP_RETRY_DELAY = float(
-    __import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0")
-)
+_STARTUP_RETRY_DELAY = float(__import__("os").getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
 
 
 class MacroStoreBridge:
     """
-    Bridges FRED data into ml.macro_store.MacroStore.
+    Bridges FRED and WGC data into ml.macro_store.MacroStore.
+
+    Loads FRED macro series (DXY, yields, CPI, VIX, M2) and WGC gold demand
+    series (total demand, investment, central bank, jewellery, ETF flow) into
+    the MacroStore singleton at startup and refreshes them daily.
 
     Usage:
         bridge = MacroStoreBridge()
-        await bridge.start()   # loads FRED data + starts daily refresh
+        await bridge.start()   # loads FRED + WGC data + starts daily refresh
     """
 
-    def __init__(self, fred: FREDFeed | None = None) -> None:
+    def __init__(
+        self,
+        fred: FREDFeed | None = None,
+        wgc: WGCFeed | None = None,
+    ) -> None:
         self._fred = fred or fred_feed
+        self._wgc = wgc or wgc_feed
         self._loaded = False
         self._running = False
         self._last_refresh: datetime | None = None
         self._series_loaded: int = 0
+        self._wgc_series_loaded: int = 0
 
         # Prometheus
         self._prom_series_count = None
@@ -83,10 +94,14 @@ class MacroStoreBridge:
 
     async def start(self) -> None:
         """
-        Load FRED data into MacroStore and start daily refresh.
+        Load FRED and WGC data into MacroStore and start daily refresh.
 
-        Retries up to MACRO_BRIDGE_STARTUP_RETRIES times with exponential
-        backoff before giving up and falling back to CSV files.
+        FRED: retries up to MACRO_BRIDGE_STARTUP_RETRIES times with exponential
+        backoff before falling back to CSV files in data/macro/.
+
+        WGC: single attempt at startup (quarterly data changes slowly).
+        Failures are non-fatal — WGC series will be zero-filled until the
+        next daily refresh succeeds.
         """
         self._running = True
 
@@ -98,8 +113,7 @@ class MacroStoreBridge:
             if attempt < _STARTUP_MAX_RETRIES:
                 wait = _STARTUP_RETRY_DELAY * (2 ** (attempt - 1))
                 logger.warning(
-                    "MacroStoreBridge: FRED load attempt %d/%d failed — "
-                    "retrying in %.1fs",
+                    "MacroStoreBridge: FRED load attempt %d/%d failed — retrying in %.1fs",
                     attempt,
                     _STARTUP_MAX_RETRIES,
                     wait,
@@ -107,15 +121,15 @@ class MacroStoreBridge:
                 await asyncio.sleep(wait)
             else:
                 logger.warning(
-                    "MacroStoreBridge: all %d FRED load attempts failed — "
-                    "falling back to CSV files in data/macro/",
+                    "MacroStoreBridge: all %d FRED load attempts failed — falling back to CSV files in data/macro/",
                     _STARTUP_MAX_RETRIES,
                 )
                 self._load_csv_fallback()
 
-        asyncio.create_task(
-            self._daily_refresh_loop(), name="macro_store_bridge_refresh"
-        )
+        # Load WGC demand data (non-blocking — failure is non-fatal)
+        await self._load_wgc_into_store()
+
+        asyncio.create_task(self._daily_refresh_loop(), name="macro_store_bridge_refresh")
 
     async def stop(self) -> None:
         """Close FRED HTTP session and stop refresh loop."""
@@ -154,14 +168,38 @@ class MacroStoreBridge:
         except Exception as exc:
             logger.warning("MacroStoreBridge._load_csv_fallback error: %s", exc)
 
+    async def _load_wgc_into_store(self) -> None:
+        """Fetch all WGC series and inject into MacroStore singleton."""
+        try:
+            logger.info("MacroStoreBridge: fetching WGC gold demand data...")
+            series = await self._wgc.fetch_all()
+            injected = self._wgc.inject_into_macro_store(series)
+            self._wgc_series_loaded = injected
+
+            if self._prom_series_count and injected > 0:
+                # Increment total series count to include WGC
+                with contextlib.suppress(Exception):
+                    self._prom_series_count.set(self._series_loaded + injected)
+
+            if injected > 0:
+                logger.info(
+                    "MacroStoreBridge: WGC injected %d series into MacroStore",
+                    injected,
+                )
+            else:
+                logger.warning(
+                    "MacroStoreBridge: WGC returned no series — place CSV files in %s or check WGC_CACHE_DIR",
+                    "data/wgc_cache",
+                )
+        except Exception as exc:
+            logger.warning("MacroStoreBridge._load_wgc_into_store error: %s", exc)
+
     async def _load_fred_into_store(self) -> None:
         """Fetch all FRED series and load into MacroStore singleton."""
         try:
             from ml.macro_store import macro_store
 
-            logger.info(
-                "MacroStoreBridge: fetching %d FRED series...", len(FRED_SERIES)
-            )
+            logger.info("MacroStoreBridge: fetching %d FRED series...", len(FRED_SERIES))
             all_series = await self._fred.fetch_all()
 
             loaded = 0
@@ -194,15 +232,19 @@ class MacroStoreBridge:
             )
 
         except ImportError:
-            logger.warning(
-                "MacroStoreBridge: ml.macro_store not available — "
-                "macro features will use CSV fallback"
-            )
+            logger.warning("MacroStoreBridge: ml.macro_store not available — macro features will use CSV fallback")
         except Exception as exc:
             logger.error("MacroStoreBridge load error: %s", exc)
 
     async def _daily_refresh_loop(self) -> None:
-        """Refresh FRED data daily at 18:00 UTC (after US market close)."""
+        """
+        Refresh FRED and WGC data daily at 18:00 UTC (after US market close).
+
+        FRED: refreshed every day — yields, DXY, and CPI update daily/monthly.
+        WGC: refreshed every day — ETF flows update monthly, demand quarterly.
+             The WGC feed's own cache TTL (WGC_REFRESH_INTERVAL) prevents
+             redundant HTTP requests when data hasn't changed.
+        """
         while self._running:
             now = datetime.now(UTC)
             target = now.replace(hour=18, minute=0, second=0, microsecond=0)
@@ -210,11 +252,16 @@ class MacroStoreBridge:
                 target = target + timedelta(days=1)
             wait_s = (target - now).total_seconds()
             logger.debug(
-                "MacroStoreBridge: next FRED refresh in %.1f hours",
+                "MacroStoreBridge: next FRED+WGC refresh in %.1f hours",
                 wait_s / 3600.0,
             )
             await asyncio.sleep(wait_s)
-            await self._load_fred_into_store()
+            # Run FRED and WGC refreshes concurrently
+            await asyncio.gather(
+                self._load_fred_into_store(),
+                self._load_wgc_into_store(),
+                return_exceptions=True,
+            )
 
     def get_ml_features(self) -> dict[str, float]:
         """
@@ -268,9 +315,7 @@ class MacroStoreBridge:
             "series": series_detail,
             "series_count": len(series_detail),
             "loaded": self._loaded,
-            "last_refresh": self._last_refresh.isoformat()
-            if self._last_refresh
-            else None,
+            "last_refresh": self._last_refresh.isoformat() if self._last_refresh else None,
         }
 
     def force_refresh(self) -> None:
@@ -306,13 +351,11 @@ class MacroStoreBridge:
         return {
             "loaded": self._loaded,
             "series_loaded": self._series_loaded,
-            "last_refresh": self._last_refresh.isoformat()
-            if self._last_refresh
-            else None,
+            "wgc_series_loaded": self._wgc_series_loaded,
+            "last_refresh": self._last_refresh.isoformat() if self._last_refresh else None,
             "series_count": len(snap),
-            "series": {
-                name: info.get("date") if info else None for name, info in snap.items()
-            },
+            "wgc_health": self._wgc.health(),
+            "series": {name: info.get("date") if info else None for name, info in snap.items()},
         }
 
 

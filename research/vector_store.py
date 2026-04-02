@@ -81,11 +81,7 @@ def _compute_features(df) -> np.ndarray | None:
         bb = ta.volatility.BollingerBands(c, window=20)
         bb_pct = bb.bollinger_pband().iloc[-1]
         bb_width = bb.bollinger_wband().iloc[-1]
-        atr = (
-            ta.volatility.AverageTrueRange(h, l, c, window=14)
-            .average_true_range()
-            .iloc[-1]
-        )
+        atr = ta.volatility.AverageTrueRange(h, l, c, window=14).average_true_range().iloc[-1]
 
         # ── volume ────────────────────────────────────────────────────────────
         vol_mean = v.rolling(20).mean().iloc[-1]
@@ -112,9 +108,7 @@ def _compute_features(df) -> np.ndarray | None:
 
         # ── higher-timeframe momentum (5-bar, 10-bar slopes) ──────────────────
         slope5 = float(np.polyfit(range(5), c.iloc[-5:].values, 1)[0]) / (last + 1e-9)
-        slope10 = float(np.polyfit(range(10), c.iloc[-10:].values, 1)[0]) / (
-            last + 1e-9
-        )
+        slope10 = float(np.polyfit(range(10), c.iloc[-10:].values, 1)[0]) / (last + 1e-9)
 
         vec = np.array(
             [
@@ -286,17 +280,12 @@ class MarketVectorStore:
             if vec is None:
                 continue
 
-            next_ret = float(
-                (next_bar["close"] - window.iloc[-1]["close"])
-                / (window.iloc[-1]["close"] + 1e-9)
-            )
+            next_ret = float((next_bar["close"] - window.iloc[-1]["close"]) / (window.iloc[-1]["close"] + 1e-9))
             regime = _regime_label(window)
             ts = str(window.iloc[-1]["timestamp"])
 
             # deterministic ID based on content
-            uid = hashlib.md5(
-                f"{symbol}:{timeframe}:{ts}".encode(), usedforsecurity=False
-            ).hexdigest()
+            uid = hashlib.md5(f"{symbol}:{timeframe}:{ts}".encode(), usedforsecurity=False).hexdigest()
 
             ids.append(uid)
             embeddings.append(vec.tolist())
@@ -429,10 +418,7 @@ class MarketVectorStore:
 
         avg = float(np.mean(returns))
         sign = "+" if avg >= 0 else ""
-        lines.append(
-            f"\nAverage next-bar return across {len(windows)} similar regimes: "
-            f"{sign}{avg * 100:.2f}%"
-        )
+        lines.append(f"\nAverage next-bar return across {len(windows)} similar regimes: {sign}{avg * 100:.2f}%")
         return "\n".join(lines)
 
     # ── stats ─────────────────────────────────────────────────────────────────

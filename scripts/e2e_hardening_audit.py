@@ -33,6 +33,7 @@ import pathlib
 import re
 import sys
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 # Ensure repo root is on sys.path so data_layer imports work when the
@@ -237,13 +238,9 @@ else:
     fail("MicrostructureEngine: missing inject_l2_depth() method")
 
 if "self._reset_session_unlocked()" in micro:
-    ok(
-        "MicrostructureEngine: _process_tick calls _reset_session_unlocked (not reset_session)"
-    )
+    ok("MicrostructureEngine: _process_tick calls _reset_session_unlocked (not reset_session)")
 else:
-    fail(
-        "MicrostructureEngine: _process_tick still calls reset_session() — deadlock risk"
-    )
+    fail("MicrostructureEngine: _process_tick still calls reset_session() — deadlock risk")
 
 try:
     ast.parse(micro)
@@ -362,10 +359,7 @@ if "ts >= ts_end" in replay:
 else:
     fail("MarketReplayEngine: missing causal hard stop — end tick could leak")
 
-if (
-    "ts_start = pd.Timestamp(start" in replay
-    and "ts_end   = pd.Timestamp(end" in replay
-):
+if "ts_start = pd.Timestamp(start" in replay and "ts_end   = pd.Timestamp(end" in replay:
     ok("MarketReplayEngine: Timestamp bounds pre-computed outside loop")
 else:
     fail("MarketReplayEngine: Timestamp bounds still computed inside loop")
@@ -419,9 +413,7 @@ else:
 if "await _dl_orch.start()" in engine:
     ok("hopefx_engine: orchestrator.start() called in engine.start()")
 else:
-    fail(
-        "hopefx_engine: orchestrator.start() NOT called — data layer never starts standalone"
-    )
+    fail("hopefx_engine: orchestrator.start() NOT called — data layer never starts standalone")
 
 if "await self._dl_orchestrator.stop()" in engine:
     ok("hopefx_engine: orchestrator.stop() called in engine.stop()")
@@ -681,13 +673,9 @@ try:
     ema1, ema2, seen_count = asyncio.run(_test_dedup())
 
     if ema1 == ema2:
-        ok(
-            f"NewsSentimentEngine: duplicate article correctly skipped (EMA unchanged: {ema1:.4f})"
-        )
+        ok(f"NewsSentimentEngine: duplicate article correctly skipped (EMA unchanged: {ema1:.4f})")
     else:
-        fail(
-            f"NewsSentimentEngine: duplicate article NOT skipped (EMA changed: {ema1:.4f} → {ema2:.4f})"
-        )
+        fail(f"NewsSentimentEngine: duplicate article NOT skipped (EMA changed: {ema1:.4f} → {ema2:.4f})")
 
     if seen_count == 1:
         ok("NewsSentimentEngine: _seen_urls has exactly 1 entry (dedup working)")
@@ -771,17 +759,11 @@ try:
         # After log1p normalisation, log1p(20) ≈ 3.04
         # If spread*1000 was used, volume would be ~500
         if raw_volume is not None and raw_volume < 100:  # noqa: PLR2004
-            ok(
-                f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} (unit-based, not spread*1000)"
-            )
+            ok(f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} (unit-based, not spread*1000)")
         elif raw_volume is not None:
-            fail(
-                f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} — suspiciously large (spread*1000?)"
-            )
+            fail(f"NormalizationPipeline: tick_to_ohlcv volume={raw_volume:.2f} — suspiciously large (spread*1000?)")
         else:
-            ok(
-                "NormalizationPipeline: tick_to_ohlcv returned DataFrame (volume col not present after norm)"
-            )
+            ok("NormalizationPipeline: tick_to_ohlcv returned DataFrame (volume col not present after norm)")
     else:
         fail("NormalizationPipeline: tick_to_ohlcv returned empty DataFrame")
 
@@ -792,12 +774,12 @@ except Exception as e:
 # =============================================================================
 # SUMMARY
 # =============================================================================
-print(f"\n{BOLD}{'='*60}{RESET}")
+print(f"\n{BOLD}{'=' * 60}{RESET}")
 print(f"{BOLD}HARDENING AUDIT SUMMARY{RESET}")
 print(f"  {GREEN}Passed:   {len(passed)}{RESET}")
 print(f"  {YELLOW}Warnings: {len(warned)}{RESET}")
 print(f"  {RED}Failed:   {len(failed)}{RESET}")
-print(f"{BOLD}{'='*60}{RESET}")
+print(f"{BOLD}{'=' * 60}{RESET}")
 
 if failed:
     print(f"\n{RED}FAILED CHECKS:{RESET}")

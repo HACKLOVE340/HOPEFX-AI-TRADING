@@ -41,6 +41,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -137,9 +138,7 @@ class ChaosController:
         t0 = time.monotonic()
         rejected_before = self._get_dqe_rejected_count()
 
-        self._inj.inject(
-            FaultType.PRICE_SPIKE, duration_s=5.0, magnitude=0.03, direction="up"
-        )
+        self._inj.inject(FaultType.PRICE_SPIKE, duration_s=5.0, magnitude=0.03, direction="up")
         await asyncio.sleep(3.0)
         self._inj.clear(FaultType.PRICE_SPIKE)
 
@@ -180,11 +179,7 @@ class ChaosController:
             passed=detected,
             duration_s=duration,
             sla_s=_STALE_DETECT_SLA,
-            detail=(
-                f"stale_delta={stale_after - stale_before}"
-                if detected
-                else "DQE did not detect stale feed"
-            ),
+            detail=(f"stale_delta={stale_after - stale_before}" if detected else "DQE did not detect stale feed"),
         )
 
     async def _scenario_spread_gate(self) -> ScenarioResult:
@@ -249,9 +244,7 @@ class ChaosController:
         t0 = time.monotonic()
         rejected_before = self._get_dqe_rejected_count()
 
-        self._inj.inject(
-            FaultType.CLOCK_SKEW, duration_s=5.0, magnitude=120.0, direction_sign=1
-        )
+        self._inj.inject(FaultType.CLOCK_SKEW, duration_s=5.0, magnitude=120.0, direction_sign=1)
         await asyncio.sleep(4.0)
         self._inj.clear(FaultType.CLOCK_SKEW)
 
@@ -298,11 +291,7 @@ class ChaosController:
             passed=recovered,
             duration_s=duration,
             sla_s=_FAILOVER_SLA_S + 8.0,
-            detail=(
-                "orchestrator still running after feed drop"
-                if recovered
-                else "orchestrator stopped — CRITICAL"
-            ),
+            detail=("orchestrator still running after feed drop" if recovered else "orchestrator stopped — CRITICAL"),
         )
 
     # ── Helpers ───────────────────────────────────────────────────────────────
@@ -349,11 +338,7 @@ class ChaosController:
         ]
         for r in self._results:
             icon = "✓" if r.passed else "✗"
-            sla = (
-                "within SLA"
-                if r.within_sla
-                else f"EXCEEDED SLA ({r.duration_s:.1f}s > {r.sla_s:.1f}s)"
-            )
+            sla = "within SLA" if r.within_sla else f"EXCEEDED SLA ({r.duration_s:.1f}s > {r.sla_s:.1f}s)"
             lines.append(f"  [{icon}] {r.scenario:<35} {sla}")
             lines.append(f"       {r.detail}")
         return "\n".join(lines)

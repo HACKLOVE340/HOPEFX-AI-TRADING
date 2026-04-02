@@ -79,8 +79,7 @@ except ImportError:
     _TDClient = None  # type: ignore
     _TWELVE_AVAILABLE = False
     logger.warning(
-        "twelvedata package not installed — Twelve Data stream will be skipped. "
-        "Install with: pip install twelvedata"
+        "twelvedata package not installed — Twelve Data stream will be skipped. Install with: pip install twelvedata"
     )
 
 try:
@@ -90,10 +89,7 @@ try:
 except ImportError:
     _aioredis = None  # type: ignore
     _REDIS_AVAILABLE = False
-    logger.warning(
-        "redis package not installed — Redis publishing will be skipped. "
-        "Install with: pip install redis"
-    )
+    logger.warning("redis package not installed — Redis publishing will be skipped. Install with: pip install redis")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -225,9 +221,7 @@ class NuclearStreamer:
                 )
             except OSError:
                 # Port already bound (e.g. multiple instances in tests).
-                logger.debug(
-                    "Prometheus port %d already in use — skipping", self.prometheus_port
-                )
+                logger.debug("Prometheus port %d already in use — skipping", self.prometheus_port)
 
         if _REDIS_AVAILABLE:
             self._redis = _aioredis.Redis(
@@ -245,29 +239,17 @@ class NuclearStreamer:
 
         tasks = []
         if self._finnhub_key:
-            tasks.append(
-                asyncio.create_task(
-                    self._run_with_backoff("finnhub", self._finnhub_stream)
-                )
-            )
+            tasks.append(asyncio.create_task(self._run_with_backoff("finnhub", self._finnhub_stream)))
         else:
             logger.warning("FINNHUB_API_KEY not set — Finnhub stream disabled")
 
         if self._twelve_key and _TWELVE_AVAILABLE:
-            tasks.append(
-                asyncio.create_task(
-                    self._run_with_backoff("twelvedata", self._twelve_stream)
-                )
-            )
+            tasks.append(asyncio.create_task(self._run_with_backoff("twelvedata", self._twelve_stream)))
         elif not self._twelve_key:
             logger.warning("TWELVE_API_KEY not set — Twelve Data stream disabled")
 
         if self._polygon_key:
-            tasks.append(
-                asyncio.create_task(
-                    self._run_with_backoff("polygon", self._polygon_stream)
-                )
-            )
+            tasks.append(asyncio.create_task(self._run_with_backoff("polygon", self._polygon_stream)))
         else:
             logger.warning("POLYGON_API_KEY not set — Polygon stream disabled")
 
@@ -381,12 +363,8 @@ class NuclearStreamer:
             if self._last_price is not None:
                 pct_change = abs((price - self._last_price) / self._last_price) * 100.0
                 if pct_change > self.anomaly_jump_pct:
-                    self._anomaly_counts[source] = (
-                        self._anomaly_counts.get(source, 0) + 1
-                    )
-                    _ANOMALY_COUNTER_GAUGE.labels(source=source).set(
-                        self._anomaly_counts[source]
-                    )
+                    self._anomaly_counts[source] = self._anomaly_counts.get(source, 0) + 1
+                    _ANOMALY_COUNTER_GAUGE.labels(source=source).set(self._anomaly_counts[source])
                     logger.warning(
                         "ANOMALY ALERT [%s]: %.2f%% jump (%.4f → %.4f) — tick discarded",
                         source,
@@ -431,9 +409,7 @@ class NuclearStreamer:
         if not self._subscribers:
             return
         tasks = [
-            asyncio.create_task(sub.on_new_price(price))
-            for sub in self._subscribers
-            if hasattr(sub, "on_new_price")
+            asyncio.create_task(sub.on_new_price(price)) for sub in self._subscribers if hasattr(sub, "on_new_price")
         ]
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -567,9 +543,7 @@ class NuclearStreamer:
 
                 elif event == "error":
                     logger.error("Twelve Data error: %s", data)
-                    raise RuntimeError(
-                        f"Twelve Data server error: {data.get('message')}"
-                    )
+                    raise RuntimeError(f"Twelve Data server error: {data.get('message')}")
 
     # ── Polygon stream ─────────────────────────────────────────────────────────
 
@@ -656,10 +630,7 @@ class NuclearStreamer:
                         "open_at": self._circuit_open_at.get(src),
                         "cooldown_remaining": max(
                             0,
-                            self.circuit_breaker_cooldown
-                            - (
-                                time.monotonic() - (self._circuit_open_at.get(src) or 0)
-                            ),
+                            self.circuit_breaker_cooldown - (time.monotonic() - (self._circuit_open_at.get(src) or 0)),
                         ),
                     }
                     if self._circuit_open_at.get(src)

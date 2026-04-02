@@ -75,7 +75,7 @@ try:
 
     sys.path.insert(0, str(_P(__file__).resolve().parents[2]))
     DEEP_ONLINE_AVAILABLE = True
-except (ImportError, OSError):
+except Exception:
     DEEP_ONLINE_AVAILABLE = False
 
 
@@ -98,9 +98,7 @@ class DriftDetector:
     alpha     : Forgetting factor for running mean (0 = no forgetting)
     """
 
-    def __init__(
-        self, delta: float = 0.005, threshold: float = 50.0, alpha: float = 0.01
-    ):
+    def __init__(self, delta: float = 0.005, threshold: float = 50.0, alpha: float = 0.01):
         self.delta = delta
         self.threshold = threshold
         self.alpha = alpha
@@ -343,17 +341,11 @@ class AdaptiveBlendWeights:
 
         # Shift weight toward the better model
         if primary_acc > online_acc:
-            target = self._primary_weight + self.learning_rate * (
-                primary_acc - online_acc
-            )
+            target = self._primary_weight + self.learning_rate * (primary_acc - online_acc)
         else:
-            target = self._primary_weight - self.learning_rate * (
-                online_acc - primary_acc
-            )
+            target = self._primary_weight - self.learning_rate * (online_acc - primary_acc)
 
-        self._primary_weight = float(
-            np.clip(target, self.min_primary, self.max_primary)
-        )
+        self._primary_weight = float(np.clip(target, self.min_primary, self.max_primary))
 
     @property
     def primary_weight(self) -> float:
@@ -371,9 +363,7 @@ class AdaptiveBlendWeights:
                 float(np.mean(self._primary_correct)) if self._primary_correct else 0.0,
                 4,
             ),
-            "online_acc": round(
-                float(np.mean(self._online_correct)) if self._online_correct else 0.0, 4
-            ),
+            "online_acc": round(float(np.mean(self._online_correct)) if self._online_correct else 0.0, 4),
             "n_samples": len(self._primary_correct),
         }
 
@@ -488,9 +478,7 @@ class IncrementalXGBoost:
         X_combined = np.vstack([X_sc, X_replay])
         y_combined = np.concatenate([y, y_replay])
 
-        dtrain = xgb.DMatrix(
-            X_combined, label=y_combined, feature_names=self._feature_cols
-        )
+        dtrain = xgb.DMatrix(X_combined, label=y_combined, feature_names=self._feature_cols)
         self._booster = xgb.train(
             self.xgb_params,
             dtrain,
@@ -527,9 +515,7 @@ class IncrementalXGBoost:
         Full re-train on a recent window (called after drift detection).
         Preserves the scaler fit from the original training data.
         """
-        logger.info(
-            "IncrementalXGBoost: full re-train on %d samples after drift", len(y)
-        )
+        logger.info("IncrementalXGBoost: full re-train on %d samples after drift", len(y))
         X_sc = self._scaler.transform(X[self._feature_cols])
         dtrain = xgb.DMatrix(X_sc, label=y, feature_names=self._feature_cols)
         self._booster = xgb.train(
@@ -556,8 +542,8 @@ class IncrementalXGBoost:
     @classmethod
     def load(cls, path: str | Path) -> IncrementalXGBoost:
         try:
-            obj = joblib.load(path)
-        except (ValueError, OSError, ModuleNotFoundError):
+            obj = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
+        except Exception:
             with open(path, "rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         logger.info("IncrementalXGBoost loaded ← %s", path)
@@ -644,9 +630,7 @@ class OnlineEnsemble:
         # Update blend weights based on recent accuracy
         xgb_prob = self.xgb.predict_proba(X)
         xgb_acc = float(((xgb_prob > 0.5).astype(int) == y).mean())  # noqa: PLR2004
-        self._xgb_acc_ema = (
-            1 - self.ema_alpha
-        ) * self._xgb_acc_ema + self.ema_alpha * xgb_acc
+        self._xgb_acc_ema = (1 - self.ema_alpha) * self._xgb_acc_ema + self.ema_alpha * xgb_acc
 
         total = self._xgb_acc_ema + self._deep_acc_ema
         self.w_xgb = self._xgb_acc_ema / total if total > 0 else 0.5
@@ -964,17 +948,13 @@ class OnlineLearnerStore:
             "ready": self.is_ready,
             "fill_count": self._fill_count,
             "ph_drift_count": self._ph_detector.drift_count,
-            "adwin_drift_count": self._adwin_detector.drift_count
-            if self._adwin_detector
-            else 0,
+            "adwin_drift_count": self._adwin_detector.drift_count if self._adwin_detector else 0,
             "recent_error": self._ph_detector.recent_error,
             "primary_weight": round(self._effective_primary_weight, 4),
             "online_weight": round(self._effective_online_weight, 4),
             "adaptive_weights": self.adaptive_weights,
             "blend_weights": blend_status,
-            "adwin_window": self._adwin_detector.window_size
-            if self._adwin_detector
-            else 0,
+            "adwin_window": self._adwin_detector.window_size if self._adwin_detector else 0,
         }
 
 
@@ -1031,9 +1011,7 @@ def get_online_learner(
                 persist_path=persist_path,
             )
             _store_registry[key] = store
-            logger.info(
-                "OnlineLearnerStore created for symbol=%s persist=%s", key, persist_path
-            )
+            logger.info("OnlineLearnerStore created for symbol=%s persist=%s", key, persist_path)
         return _store_registry[key]
 
 

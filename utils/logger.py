@@ -14,6 +14,7 @@ import logging
 import logging.handlers
 import json
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 import os
 
@@ -45,9 +46,7 @@ class Logger:
     _configured = False
 
     @classmethod
-    def configure(
-        cls, log_dir: str = "logs", log_level: str = "INFO", json_output: bool = True
-    ):
+    def configure(cls, log_dir: str = "logs", log_level: str = "INFO", json_output: bool = True):
         """
         Configure logging system
 
@@ -94,9 +93,7 @@ class Logger:
         if cls._json_output:
             formatter = JSONFormatter()
         else:
-            formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            )
+            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
@@ -122,8 +119,6 @@ def get_logger(name: str) -> logging.Logger:
     return Logger.get_logger(name)
 
 
-def configure_logging(
-    log_dir: str = "logs", log_level: str = "INFO", json_output: bool = True
-):
+def configure_logging(log_dir: str = "logs", log_level: str = "INFO", json_output: bool = True):
     """Configure logging system"""
     Logger.configure(log_dir, log_level, json_output)

@@ -14,6 +14,7 @@ Usage:
 
 import logging
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -67,7 +68,5 @@ def render_email(template_name: str, **context: Any) -> str:
         logger.error("Failed to render email template %s: %s", template_name, exc)
         # Return minimal fallback so the send still proceeds
         return (
-            f"<p><strong>HOPEFX Notification</strong></p>"
-            f"<p>Template rendering failed ({exc}). "
-            f"Context: {context}</p>"
+            f"<p><strong>HOPEFX Notification</strong></p><p>Template rendering failed ({exc}). Context: {context}</p>"
         )

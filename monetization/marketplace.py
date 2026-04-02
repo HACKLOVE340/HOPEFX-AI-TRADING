@@ -11,6 +11,7 @@ Strategy listings, pricing engine, subscription management, license validation
 import json
 import secrets
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from typing import Any
 from pathlib import Path
@@ -380,20 +381,14 @@ class PricingEngine:
             "base_price": base_price,
             "discount_amount": discount,
             "final_price": final_price,
-            "savings_percentage": (discount / base_price * 100)
-            if base_price > 0
-            else 0,
+            "savings_percentage": (discount / base_price * 100) if base_price > 0 else 0,
         }
 
-    def add_coupon(
-        self, code: str, discount_percent: float, expires_at: datetime | None = None
-    ):
+    def add_coupon(self, code: str, discount_percent: float, expires_at: datetime | None = None):
         """Add coupon code"""
         self.discounts[code] = discount_percent / 100
 
-    def get_recommended_tier(
-        self, trading_volume: float, account_balance: float
-    ) -> SubscriptionTier:
+    def get_recommended_tier(self, trading_volume: float, account_balance: float) -> SubscriptionTier:
         """Recommend subscription tier based on user profile"""
         if account_balance < 1000:  # noqa: PLR2004
             return SubscriptionTier.FREE
@@ -465,9 +460,7 @@ class LicenseManager:
 
         return license_key
 
-    def validate_license(
-        self, key: str, user_id: str | None = None
-    ) -> dict[str, Any]:
+    def validate_license(self, key: str, user_id: str | None = None) -> dict[str, Any]:
         """
         Validate license key
 
@@ -594,11 +587,7 @@ class SubscriptionManager:
             return None
 
         # Calculate price
-        base_price = (
-            strategy.price_monthly
-            if billing_cycle == "monthly"
-            else strategy.price_yearly
-        )
+        base_price = strategy.price_monthly if billing_cycle == "monthly" else strategy.price_yearly
         self.pricing.calculate_price(base_price, tier, billing_cycle)
 
         # Create subscription
@@ -640,9 +629,7 @@ class SubscriptionManager:
                 int(subscription.is_active),
                 int(subscription.auto_renew),
                 subscription.payment_method,
-                subscription.next_payment_date.isoformat()
-                if subscription.next_payment_date
-                else None,
+                subscription.next_payment_date.isoformat() if subscription.next_payment_date else None,
                 int(subscription.cancel_at_period_end),
             ),
         )
@@ -650,9 +637,7 @@ class SubscriptionManager:
         conn.close()
 
         # Generate license key
-        license_key = self.licenses.generate_license_key(
-            user_id, strategy_id, subscription_id, end_date
-        )
+        license_key = self.licenses.generate_license_key(user_id, strategy_id, subscription_id, end_date)
 
         # Update strategy subscriber count
         strategy.subscriber_count += 1
@@ -663,9 +648,7 @@ class SubscriptionManager:
 
         return subscription
 
-    def cancel_subscription(
-        self, subscription_id: str, immediate: bool = False
-    ) -> bool:
+    def cancel_subscription(self, subscription_id: str, immediate: bool = False) -> bool:
         """Cancel subscription"""
         conn = sqlite3.connect(self.db.db_path)
         cursor = conn.cursor()
@@ -948,6 +931,16 @@ class _Review:
     title: str
     content: str
 
+    def to_dict(self) -> dict:
+        return {
+            "review_id": self.review_id,
+            "user_id": self.user_id,
+            "strategy_id": self.strategy_id,
+            "rating": self.rating,
+            "title": self.title,
+            "content": self.content,
+        }
+
 
 class StrategyMarketplace:
     """In-memory strategy marketplace — full API used by tests."""
@@ -997,10 +990,7 @@ class StrategyMarketplace:
     ) -> _Purchase | None:
         # Handle reversed positional call: purchase_strategy(strategy_id, buyer_id)
         if (buyer_id and not strategy_id and buyer_id in self._strategies) or (
-            buyer_id
-            and strategy_id
-            and buyer_id in self._strategies
-            and strategy_id not in self._strategies
+            buyer_id and strategy_id and buyer_id in self._strategies and strategy_id not in self._strategies
         ):
             buyer_id, strategy_id = strategy_id, buyer_id
         s = self._strategies.get(strategy_id)
@@ -1033,9 +1023,7 @@ class StrategyMarketplace:
     def has_strategy_license(self, buyer_id: str, strategy_id: str) -> bool:
         return strategy_id in self._licenses.get(buyer_id, set())
 
-    def add_review(
-        self, user_id: str, strategy_id: str, rating: int, title: str, content: str
-    ) -> _Review | None:
+    def add_review(self, user_id: str, strategy_id: str, rating: int, title: str, content: str) -> _Review | None:
         s = self._strategies.get(strategy_id)
         if not s:
             return None
@@ -1064,14 +1052,10 @@ class StrategyMarketplace:
         limit: int = 20,
         offset: int = 0,
     ) -> list:
-        results = [
-            s for s in self._strategies.values() if s.status == StrategyStatus.APPROVED
-        ]
+        results = [s for s in self._strategies.values() if s.status == StrategyStatus.APPROVED]
         if query:
             q = query.lower()
-            results = [
-                s for s in results if q in s.name.lower() or q in s.description.lower()
-            ]
+            results = [s for s in results if q in s.name.lower() or q in s.description.lower()]
         if category is not None:
             results = [s for s in results if s.category == category]
         if min_price is not None:
@@ -1084,9 +1068,7 @@ class StrategyMarketplace:
 
     def get_featured_strategies(self, limit: int = 10) -> list:
         """Return top-rated approved strategies."""
-        results = [
-            s for s in self._strategies.values() if s.status == StrategyStatus.APPROVED
-        ]
+        results = [s for s in self._strategies.values() if s.status == StrategyStatus.APPROVED]
         results.sort(key=lambda s: getattr(s, "rating", 0), reverse=True)
         return results[:limit]
 
@@ -1149,6 +1131,15 @@ class StrategyMarketplace:
         )
         self._strategies[sid] = s
         return s
+
+    def get_strategy(self, strategy_id: str) -> "_StrategyListing | None":
+        """Return a strategy listing by ID, or None if not found."""
+        return self._strategies.get(strategy_id)
+
+    def get_strategy_reviews(self, strategy_id: str, limit: int = 10) -> list:
+        """Return reviews for a strategy, newest first, up to limit."""
+        reviews = [r for r in self._reviews.values() if r.strategy_id == strategy_id]
+        return reviews[:limit]
 
     def get_all_listings(self) -> dict:
         """Return all strategy IDs mapped to their listing objects."""

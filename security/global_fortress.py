@@ -35,6 +35,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -47,9 +48,7 @@ logger = logging.getLogger(__name__)
 # ── Config ────────────────────────────────────────────────────────────────────
 SCAN_INTERVAL: int = int(os.getenv("BRAIN_SCAN_INTERVAL", "30"))  # seconds
 HEAL_INTERVAL: int = int(os.getenv("BRAIN_HEAL_INTERVAL", "1800"))  # 30 min
-FLASHPOINT_API: str = os.getenv(
-    "FLASHPOINT_API_URL", "https://api.flashpoint.io/v1/iocs"
-)
+FLASHPOINT_API: str = os.getenv("FLASHPOINT_API_URL", "https://api.flashpoint.io/v1/iocs")
 FLASHPOINT_KEY: str = os.getenv("FLASHPOINT_API_KEY", "")
 ARGOCD_WEBHOOK: str = os.getenv("ARGOCD_ROLLBACK_WEBHOOK", "")
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -218,20 +217,14 @@ class HOPEFXBrain:
             if not path or path in ("/health", "/ready", "/metrics"):
                 continue
             # Mark trader/broker/data routes as high-priority
-            priority = (
-                "high"
-                if any(k in path for k in ("trader", "broker", "data", "order"))
-                else "normal"
-            )
+            priority = "high" if any(k in path for k in ("trader", "broker", "data", "order")) else "normal"
             if priority == "high":
                 flagged.append(path)
 
         if redis and flagged:
             await redis.set(
                 "brain:scanned_routes",
-                json.dumps(
-                    {"ts": datetime.now(UTC).isoformat(), "routes": flagged}
-                ),
+                json.dumps({"ts": datetime.now(UTC).isoformat(), "routes": flagged}),
                 ex=120,
             )
 
@@ -273,9 +266,7 @@ class HOPEFXBrain:
 
             # Persist to Redis for dashboard polling
             if redis:
-                await redis.hset(
-                    "brain:attack_log", ip, json.dumps(self.attack_log[ip])
-                )
+                await redis.hset("brain:attack_log", ip, json.dumps(self.attack_log[ip]))
                 await redis.expire("brain:attack_log", 86400)  # 24 h TTL
 
             # RL decision
@@ -286,9 +277,7 @@ class HOPEFXBrain:
         """Geo-locate an IP via ip-api.com (free, no key required)."""
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(
-                    f"http://ip-api.com/json/{ip}?fields=country,city,lat,lon,isp,org"
-                )
+                resp = await client.get(f"http://ip-api.com/json/{ip}?fields=country,city,lat,lon,isp,org")
                 if resp.status_code == 200:  # noqa: PLR2004
                     return resp.json()
         except Exception as exc:
@@ -352,9 +341,7 @@ class HOPEFXBrain:
     async def _execute_action(self, action: int, ip: str) -> None:
         """Execute the chosen action for *ip*."""
         redis = await _get_redis()
-        action_name = {0: "monitor", 1: "rate_limit", 2: "block", 3: "nuclear"}.get(
-            action, "monitor"
-        )
+        action_name = {0: "monitor", 1: "rate_limit", 2: "block", 3: "nuclear"}.get(action, "monitor")
         logger.info("HOPEFXBrain: action=%s ip=%s", action_name, ip)
 
         if redis:
@@ -429,9 +416,7 @@ class HOPEFXBrain:
             rule = entry.get("rule", "unknown")
 
             if not code:
-                logger.debug(
-                    "HOPEFXBrain: empty code snippet for %s — skipping", endpoint
-                )
+                logger.debug("HOPEFXBrain: empty code snippet for %s — skipping", endpoint)
                 continue
 
             try:
@@ -458,9 +443,7 @@ class HOPEFXBrain:
                         rule,
                     )
             except Exception as exc:
-                logger.warning(
-                    "HOPEFXBrain: auto-heal failed for %s: %s", endpoint, exc
-                )
+                logger.warning("HOPEFXBrain: auto-heal failed for %s: %s", endpoint, exc)
 
     # ── Flashpoint IOC sync ───────────────────────────────────────────────────
 
@@ -579,10 +562,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
             for _i, raw in enumerate(raw_list):
                 try:
                     rec = json.loads(raw)
-                    if (
-                        rec.get("endpoint") == endpoint
-                        and rec.get("status") == "pending"
-                    ):
+                    if rec.get("endpoint") == endpoint and rec.get("status") == "pending":
                         fix_record = rec
                         # Remove this entry from the queue
                         await redis.lrem("fixes:queue", 1, raw)
@@ -612,7 +592,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
             )
         except Exception as exc:
             logger.error("HOPEFXBrain: PR publisher error for %s: %s", endpoint, exc)
-            pr_result = {"status": "error", "error": str(exc)}
+            pr_result = {"status": "error", "error": "PR publish failed — check server logs"}
 
         # Persist approved record with PR metadata
         approved_record = {
@@ -663,10 +643,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
             for raw in raw_list:
                 try:
                     rec = json.loads(raw)
-                    if (
-                        rec.get("endpoint") == endpoint
-                        and rec.get("status") == "pending"
-                    ):
+                    if rec.get("endpoint") == endpoint and rec.get("status") == "pending":
                         await redis.lrem("fixes:queue", 1, raw)
                         declined_record = {
                             **rec,
@@ -680,9 +657,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
                 except json.JSONDecodeError:
                     continue
 
-        logger.info(
-            "HOPEFXBrain: fix declined endpoint=%s by=%s", endpoint, declined_by
-        )
+        logger.info("HOPEFXBrain: fix declined endpoint=%s by=%s", endpoint, declined_by)
         return {"status": "declined", "endpoint": endpoint}
 
     @router.get("/fixes/approved")

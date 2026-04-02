@@ -55,6 +55,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from typing import Any
@@ -106,9 +107,7 @@ class MutationReport:
     duration_s: float
     engine: str  # "mutmut" | "builtin_ast"
     mutants: list[MutantResult] = field(default_factory=list)
-    generated_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    generated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def summary(self) -> str:
         icon = "✓" if self.passed else "✗"
@@ -147,10 +146,7 @@ class MutationTestRunner:
         if self._mutmut_available():
             report = await self._run_mutmut()
         else:
-            logger.warning(
-                "mutmut not installed — using built-in AST mutator. "
-                "Install with: pip install mutmut"
-            )
+            logger.warning("mutmut not installed — using built-in AST mutator. Install with: pip install mutmut")
             report = await self._run_builtin_ast()
 
         report.duration_s = time.monotonic() - t0
@@ -166,8 +162,7 @@ class MutationTestRunner:
         logger.info(report.summary())
         if not report.passed:
             logger.warning(
-                "Mutation score %.1f%% below minimum %.1f%% — "
-                "add tests to cover surviving mutants",
+                "Mutation score %.1f%% below minimum %.1f%% — add tests to cover surviving mutants",
                 report.score * 100,
                 self._min_score * 100,
             )
@@ -215,9 +210,7 @@ class MutationTestRunner:
                 stderr=asyncio.subprocess.PIPE,
             )
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=self._timeout_s
-                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout_s)
             except TimeoutError:
                 proc.kill()
                 logger.error("mutmut timed out after %.0fs", self._timeout_s)
@@ -384,16 +377,16 @@ class MutationTestRunner:
 
             # Off-by-one on small integer literals
             elif isinstance(node, ast.Constant) and isinstance(node.value, int) and 0 < abs(node.value) <= 100:  # noqa: PLR2004
-                    mutants.append(
-                        {
-                            "line": node.lineno,
-                            "op": f"const_{node.value}_to_{node.value + 1}",
-                            "node_type": "Constant",
-                            "original": node.value,
-                            "replacement": node.value + 1,
-                            "description": f"line {node.lineno}: {node.value} → {node.value + 1}",
-                        }
-                    )
+                mutants.append(
+                    {
+                        "line": node.lineno,
+                        "op": f"const_{node.value}_to_{node.value + 1}",
+                        "node_type": "Constant",
+                        "original": node.value,
+                        "replacement": node.value + 1,
+                        "description": f"line {node.lineno}: {node.value} → {node.value + 1}",
+                    }
+                )
 
         # Cap per-file mutants to avoid combinatorial explosion
         return mutants[:20]

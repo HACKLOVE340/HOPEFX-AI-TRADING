@@ -76,12 +76,14 @@ def _get_gateway():
 def _require_auth(request: Request) -> dict[str, Any]:
     """Minimal auth check — delegates to existing JWT middleware."""
     try:
-        from auth.jwt_handler import decode_token
+        from auth.jwt_handler import verify_token as decode_token
 
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Missing token")
-        return decode_token(token)
+        from fastapi import HTTPException as _HTTPException
+        _creds_exc = _HTTPException(status_code=401, detail="Invalid token")
+        return decode_token(token, _creds_exc)
     except HTTPException:
         raise
     except Exception as exc:

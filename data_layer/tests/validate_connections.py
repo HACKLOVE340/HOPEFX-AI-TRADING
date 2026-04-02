@@ -53,6 +53,7 @@ import sys
 import time
 import traceback
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
@@ -80,9 +81,7 @@ def _head(msg: str) -> str:
 
 
 class ValidationResult:
-    def __init__(
-        self, name: str, passed: bool, detail: str = "", critical: bool = True
-    ):
+    def __init__(self, name: str, passed: bool, detail: str = "", critical: bool = True):
         self.name = name
         self.passed = passed
         self.detail = detail
@@ -92,9 +91,7 @@ class ValidationResult:
         if self.passed:
             return _ok(f"{self.name}" + (f" — {self.detail}" if self.detail else ""))
         tag = "[CRITICAL]" if self.critical else "[WARN]"
-        return _fail(
-            f"{self.name} {tag}" + (f" — {self.detail}" if self.detail else "")
-        )
+        return _fail(f"{self.name} {tag}" + (f" — {self.detail}" if self.detail else ""))
 
 
 # ── Individual checks ─────────────────────────────────────────────────────────
@@ -140,9 +137,7 @@ def check_types() -> ValidationResult:
             trade_pressure=0.0,
         )
         assert abs(snap.mid - 1980.5) < 1e-6, f"Expected mid=1980.5, got {snap.mid}"  # nosec B101  # noqa: PLR2004
-        return ValidationResult(
-            "Types module", True, "GoldTick/MicrostructureSnapshot/MacroEvent"
-        )
+        return ValidationResult("Types module", True, "GoldTick/MicrostructureSnapshot/MacroEvent")
     except Exception as exc:
         return ValidationResult("Types module", False, str(exc))
 
@@ -210,9 +205,7 @@ def check_normalization() -> ValidationResult:
         assert "log_volume" in cleaned.columns  # nosec B101
         assert "ohlcv_valid" in cleaned.columns  # nosec B101
         assert (cleaned["high"] >= cleaned["close"]).all()  # nosec B101
-        return ValidationResult(
-            "NormalizationPipeline", True, f"{len(cleaned)} bars cleaned"
-        )
+        return ValidationResult("NormalizationPipeline", True, f"{len(cleaned)} bars cleaned")
     except Exception as exc:
         return ValidationResult("NormalizationPipeline", False, str(exc))
 
@@ -249,9 +242,7 @@ def check_microstructure() -> ValidationResult:
         assert (  # nosec B101
             "micro_tick_count" in zero
         ), "micro_tick_count missing from _zero_features()"
-        return ValidationResult(
-            "MicrostructureEngine", True, f"{len(features)} features computed"
-        )
+        return ValidationResult("MicrostructureEngine", True, f"{len(features)} features computed")
     except Exception as exc:
         return ValidationResult("MicrostructureEngine", False, str(exc))
 
@@ -380,9 +371,7 @@ async def check_fred_reachable() -> ValidationResult:
                 "key present but empty response — check FRED_API_KEY validity",
                 critical=False,
             )
-        return ValidationResult(
-            "FRED reachability", True, f"VIX latest: {series.iloc[-1]:.2f}"
-        )
+        return ValidationResult("FRED reachability", True, f"VIX latest: {series.iloc[-1]:.2f}")
     except Exception as exc:
         return ValidationResult("FRED reachability", False, str(exc), critical=False)
 
@@ -471,9 +460,7 @@ def check_dukascopy_logic() -> ValidationResult:
         assert "/00/" in url, f"Expected 0-based month /00/ in URL: {url}"  # nosec B101
         path = fetcher._cache_path("XAUUSD", hour)
         assert "XAUUSD" in str(path), f"XAUUSD not in cache path: {path}"  # nosec B101
-        return ValidationResult(
-            "DukascopyFetcher", True, "URL format OK (0-based months)"
-        )
+        return ValidationResult("DukascopyFetcher", True, "URL format OK (0-based months)")
     except Exception as exc:
         return ValidationResult("DukascopyFetcher", False, str(exc))
 
@@ -488,9 +475,7 @@ def check_macro_calendar() -> ValidationResult:
         assert "macro_hours_to_next_high" in features  # nosec B101
         assert "macro_is_blackout" in features  # nosec B101
         assert len(features) == 6  # nosec B101  # noqa: PLR2004
-        return ValidationResult(
-            "MacroCalendarEngine", True, f"{len(features)} ML features"
-        )
+        return ValidationResult("MacroCalendarEngine", True, f"{len(features)} ML features")
     except Exception as exc:
         return ValidationResult("MacroCalendarEngine", False, str(exc))
 
@@ -520,9 +505,7 @@ def check_api_router() -> ValidationResult:
 
         routes = [r.path for r in router.routes]
         assert len(routes) >= 8  # nosec B101  # noqa: PLR2004
-        return ValidationResult(
-            "API router", True, f"{len(routes)} endpoints registered"
-        )
+        return ValidationResult("API router", True, f"{len(routes)} endpoints registered")
     except Exception as exc:
         return ValidationResult("API router", False, str(exc))
 
@@ -536,9 +519,7 @@ def check_ml_wiring() -> ValidationResult:
         assert hasattr(engine, "_last_macro_impact")  # nosec B101
         assert hasattr(engine, "_get_data_layer_nudge")  # nosec B101
         assert hasattr(engine, "_record_signal_lineage")  # nosec B101
-        return ValidationResult(
-            "ML inference_engine wiring", True, "data layer hooks present"
-        )
+        return ValidationResult("ML inference_engine wiring", True, "data layer hooks present")
     except Exception as exc:
         return ValidationResult("ML inference_engine wiring", False, str(exc))
 
@@ -555,9 +536,7 @@ def check_risk_wiring() -> ValidationResult:
         impact = rm.get_macro_impact_score()
         assert price is None or isinstance(price, float)  # nosec B101
         assert isinstance(impact, float)  # nosec B101
-        return ValidationResult(
-            "Risk manager wiring", True, "data layer methods present"
-        )
+        return ValidationResult("Risk manager wiring", True, "data layer methods present")
     except Exception as exc:
         return ValidationResult("Risk manager wiring", False, str(exc))
 
@@ -584,9 +563,7 @@ def check_live_inference_wiring() -> ValidationResult:
 
         src = inspect.getsource(pred._build_features)
         assert "data_layer.orchestrator" in src  # nosec B101
-        return ValidationResult(
-            "live_inference data layer injection", True, "injection code present"
-        )
+        return ValidationResult("live_inference data layer injection", True, "injection code present")
     except Exception as exc:
         return ValidationResult("live_inference data layer injection", False, str(exc))
 
@@ -603,10 +580,10 @@ def check_vader_sentiment() -> ValidationResult:
         from data_layer.sentiment.scorer import GoldSentimentScorer
 
         scorer = GoldSentimentScorer()
-        assert scorer.vader_available, "GoldSentimentScorer.vader_available=False even though vaderSentiment is installed"  # nosec B101
-        return ValidationResult(
-            "vaderSentiment", True, "installed, scorer.vader_available=True"
-        )
+        assert scorer.vader_available, (
+            "GoldSentimentScorer.vader_available=False even though vaderSentiment is installed"
+        )  # nosec B101
+        return ValidationResult("vaderSentiment", True, "installed, scorer.vader_available=True")
     except ImportError:
         return ValidationResult(
             "vaderSentiment",
@@ -649,9 +626,7 @@ def check_lineage_flush() -> ValidationResult:
 
             store.stop()
 
-        return ValidationResult(
-            "DataLineageStore.flush()", True, "synchronous drain OK"
-        )
+        return ValidationResult("DataLineageStore.flush()", True, "synchronous drain OK")
     except Exception as exc:
         return ValidationResult("DataLineageStore.flush()", False, str(exc))
 
@@ -675,9 +650,7 @@ def check_redis_auto_connect() -> ValidationResult:
         result = store.get_tick("XAU_USD_TEST")
         assert result is not None and result["mid"] == 2000.0  # nosec B101  # noqa: PLR2004
 
-        return ValidationResult(
-            "Redis auto-connect", True, "singleton auto-connects on init"
-        )
+        return ValidationResult("Redis auto-connect", True, "singleton auto-connects on init")
     except Exception as exc:
         return ValidationResult("Redis auto-connect", False, str(exc), critical=False)
 
@@ -723,9 +696,7 @@ def check_dqe_mahalanobis() -> ValidationResult:
             "latency_report OK, reset_source OK",
         )
     except Exception as exc:
-        return ValidationResult(
-            "DataQualityEngine Mahalanobis + reset", False, str(exc)
-        )
+        return ValidationResult("DataQualityEngine Mahalanobis + reset", False, str(exc))
 
 
 # ── Runner ────────────────────────────────────────────────────────────────────
@@ -1066,8 +1037,7 @@ def check_macro_store_bridge_retry_config() -> ValidationResult:
         return ValidationResult(
             "MacroStoreBridge startup retry",
             True,
-            f"retries={_STARTUP_MAX_RETRIES}, delay={_STARTUP_RETRY_DELAY}s, "
-            "_load_csv_fallback present",
+            f"retries={_STARTUP_MAX_RETRIES}, delay={_STARTUP_RETRY_DELAY}s, _load_csv_fallback present",
         )
     except Exception as exc:
         return ValidationResult(
@@ -1119,9 +1089,7 @@ def check_orchestrator_subscribe_ticks() -> ValidationResult:
         assert "_test_sub" in orchestrator._tick_callbacks, "subscriber not registered"  # nosec B101
         orchestrator.unsubscribe_ticks("_test_sub")
         assert "_test_sub" not in orchestrator._tick_callbacks, "subscriber not removed"  # nosec B101
-        return ValidationResult(
-            "Orchestrator.subscribe_ticks", True, "subscribe/unsubscribe roundtrip OK"
-        )
+        return ValidationResult("Orchestrator.subscribe_ticks", True, "subscribe/unsubscribe roundtrip OK")
     except Exception as exc:
         return ValidationResult("Orchestrator.subscribe_ticks", False, str(exc))
 
@@ -1333,22 +1301,16 @@ async def run_all(verbose: bool = False) -> tuple[int, int]:
         print(f"  {_YELLOW}Warnings:  {warnings}{_RESET}")
 
     if critical == 0:
-        print(
-            f"\n  {_GREEN}{_BOLD}All critical checks passed. Data layer is ready.{_RESET}"
-        )
+        print(f"\n  {_GREEN}{_BOLD}All critical checks passed. Data layer is ready.{_RESET}")
     else:
-        print(
-            f"\n  {_RED}{_BOLD}{critical} critical check(s) failed. Fix before starting.{_RESET}"
-        )
+        print(f"\n  {_RED}{_BOLD}{critical} critical check(s) failed. Fix before starting.{_RESET}")
 
     # Return (passed, critical_failures) — warnings do not count as failures
     return passed, critical
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Validate HOPEFX data layer connections"
-    )
+    parser = argparse.ArgumentParser(description="Validate HOPEFX data layer connections")
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument(
         "--strict",

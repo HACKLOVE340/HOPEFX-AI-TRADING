@@ -259,10 +259,7 @@ def _sync_trading_gauges() -> None:
                 dd_gauge.set(getattr(rm, "current_drawdown", 0.0))
             if max_dd_gauge is not None:
                 max_dd_gauge.set(getattr(rm.config, "max_drawdown_pct", 0.10))
-            if (
-                daily_loss_gauge is not None
-                and getattr(rm, "daily_starting_equity", 0) > 0
-            ):
+            if daily_loss_gauge is not None and getattr(rm, "daily_starting_equity", 0) > 0:
                 daily_loss_pct = abs(rm.daily_pnl) / rm.daily_starting_equity
                 daily_loss_gauge.set(daily_loss_pct)
             if daily_limit_gauge is not None:
@@ -318,8 +315,7 @@ def setup_prometheus_monitoring(app: FastAPI) -> None:
                 return Response(content=body, media_type="text/plain; version=0.0.4")
 
             logger.info(
-                "Prometheus monitoring active — /metrics ready "
-                "(fallback exporter, prometheus_client not installed)"
+                "Prometheus monitoring active — /metrics ready (fallback exporter, prometheus_client not installed)"
             )
 
     app.state._prometheus_monitoring_active = True

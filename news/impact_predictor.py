@@ -262,14 +262,10 @@ class ImpactPredictor:
 
         return EventCategory.OTHER
 
-    def _calculate_impact_level(
-        self, text: str, category: EventCategory
-    ) -> ImpactLevel:
+    def _calculate_impact_level(self, text: str, category: EventCategory) -> ImpactLevel:
         """Calculate impact level based on keywords and category"""
         # Count high-impact keywords
-        high_impact_count = sum(
-            1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text
-        )
+        high_impact_count = sum(1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text)
 
         # Category-based base impact
         category_impact = {
@@ -298,9 +294,7 @@ class ImpactPredictor:
         else:
             return ImpactLevel.VERY_LOW
 
-    def _calculate_confidence(
-        self, text: str, category: EventCategory, sentiment_score: float | None
-    ) -> float:
+    def _calculate_confidence(self, text: str, category: EventCategory, sentiment_score: float | None) -> float:
         """Calculate confidence in prediction"""
         confidence = 0.5  # Base confidence
 
@@ -313,16 +307,12 @@ class ImpactPredictor:
             confidence += 0.1
 
         # Increase confidence if high-impact keywords present
-        keyword_count = sum(
-            1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text
-        )
+        keyword_count = sum(1 for keyword in self.HIGH_IMPACT_KEYWORDS if keyword in text)
         confidence += min(keyword_count * 0.1, 0.2)
 
         return min(confidence, 1.0)
 
-    def _estimate_volatility(
-        self, impact_level: ImpactLevel, category: EventCategory
-    ) -> float:
+    def _estimate_volatility(self, impact_level: ImpactLevel, category: EventCategory) -> float:
         """Estimate expected volatility (as percentage)"""
         # Base volatility by impact level
         volatility_map = {
@@ -389,9 +379,7 @@ class ImpactPredictor:
 
         return impacts
 
-    def get_high_impact_events(
-        self, articles: list[dict], min_level: ImpactLevel = ImpactLevel.HIGH
-    ) -> list[dict]:
+    def get_high_impact_events(self, articles: list[dict], min_level: ImpactLevel = ImpactLevel.HIGH) -> list[dict]:
         """Filter articles for high-impact events"""
         high_impact = []
 

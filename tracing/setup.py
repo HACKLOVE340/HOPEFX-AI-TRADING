@@ -164,8 +164,7 @@ def _build_exporter():
         pass
 
     logger.warning(
-        "OTel: no exporter available — install opentelemetry-exporter-otlp-proto-grpc. "
-        "Spans will not be exported."
+        "OTel: no exporter available — install opentelemetry-exporter-otlp-proto-grpc. Spans will not be exported."
     )
     return None
 
@@ -174,9 +173,7 @@ def _instrument_fastapi(app) -> None:
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-        FastAPIInstrumentor.instrument_app(
-            app, excluded_urls="/health,/metrics,/favicon.ico"
-        )
+        FastAPIInstrumentor.instrument_app(app, excluded_urls="/health,/metrics,/favicon.ico")
         logger.info("OTel: FastAPI instrumented")
     except ImportError:
         logger.debug("OTel: FastAPI instrumentation not available")

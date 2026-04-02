@@ -64,9 +64,7 @@ class SimulationEngine:
         # Add legacy keys for backward compatibility
         summary["mean_return"] = result.original_cagr
         summary["std_dev"] = (
-            float(np.std(result.final_equity_distribution))
-            if result.final_equity_distribution
-            else 0.0
+            float(np.std(result.final_equity_distribution)) if result.final_equity_distribution else 0.0
         )
         summary["var_95"] = result.final_equity_ci_95[0]
         summary["var_99"] = result.sharpe_ci_99[0]
@@ -127,8 +125,7 @@ class SimulationEngine:
             rng = np.random.default_rng(42)
             for _ in range(population_size * generations):
                 candidate = {
-                    k: v * rng.uniform(0.5, 2.0) if isinstance(v, int | float) else v
-                    for k, v in parameters.items()
+                    k: v * rng.uniform(0.5, 2.0) if isinstance(v, int | float) else v for k, v in parameters.items()
                 }
                 fitness = fitness_function(candidate)
                 if fitness > best_fitness:

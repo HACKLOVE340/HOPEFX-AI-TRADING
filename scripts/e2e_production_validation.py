@@ -46,6 +46,7 @@ import sys
 import time
 import traceback
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 import contextlib
@@ -176,9 +177,7 @@ def check_orchestrator() -> str:
     # Test all call signatures
     f1 = orchestrator.get_ml_features()
     f2 = orchestrator.get_ml_features(symbol="XAU_USD")
-    f3 = orchestrator.get_ml_features(
-        as_of=datetime.now(UTC), symbol="XAU_USD"
-    )
+    f3 = orchestrator.get_ml_features(as_of=datetime.now(UTC), symbol="XAU_USD")
     assert isinstance(f1, dict), "get_ml_features() must return dict"
     assert len(f1) >= 20, f"Expected >=20 features, got {len(f1)}"  # noqa: PLR2004
     assert len(f1) == len(f2) == len(f3), "All call signatures must return same count"
@@ -225,7 +224,7 @@ def check_single_entry_point() -> str:
         if name == "_gold_feed":
             continue  # None before start() — OK
         assert comp is not None, f"orchestrator.{name} is None"
-    return f"{len(components)-1} components accessible via orchestrator"
+    return f"{len(components) - 1} components accessible via orchestrator"
 
 
 # ── Check 5: Redis connectivity ───────────────────────────────────────────────
@@ -403,9 +402,7 @@ def check_sentiment_scorer() -> str:
     ), f"Gold relevance too low: {scored.gold_relevance}"
     assert -1.0 <= scored.sentiment_score <= 1.0
     return (
-        f"relevance={scored.gold_relevance:.2f} "
-        f"sentiment={scored.sentiment_score:.2f} "
-        f"label={scored.sentiment_label}"
+        f"relevance={scored.gold_relevance:.2f} sentiment={scored.sentiment_score:.2f} label={scored.sentiment_label}"
     )
 
 
@@ -463,9 +460,7 @@ def check_replay() -> str:
     # Timeframe aliases
     for alias, expected in [("H1", 60), ("M5", 5), ("D1", 1440), ("4h", 240)]:
         result = _parse_timeframe(alias)
-        assert (
-            result == expected
-        ), f"_parse_timeframe({alias!r}) = {result}, expected {expected}"
+        assert result == expected, f"_parse_timeframe({alias!r}) = {result}, expected {expected}"
     return "URL format OK, 4 timeframe aliases verified"
 
 
@@ -500,16 +495,12 @@ def check_risk() -> str:
     rm = RiskManager(orchestrator=orchestrator, lineage_store=orchestrator._lineage)
     # RiskManager stores orchestrator as _orch (see risk/manager.py)
     assert hasattr(rm, "_orch"), "RiskManager missing _orch (orchestrator reference)"
-    assert (
-        rm._orch is orchestrator
-    ), "RiskManager._orch must be the orchestrator singleton"
+    assert rm._orch is orchestrator, "RiskManager._orch must be the orchestrator singleton"
     assert hasattr(rm, "_lineage"), "RiskManager missing _lineage"
 
     assert gatekeeper is not None
     # Gatekeeper stores orchestrator as _orch (see risk/gatekeeper.py)
-    assert hasattr(
-        gatekeeper, "_orch"
-    ), "Gatekeeper missing _orch (orchestrator reference)"
+    assert hasattr(gatekeeper, "_orch"), "Gatekeeper missing _orch (orchestrator reference)"
 
     # Verify no direct sub-module imports in gatekeeper
     with open("risk/gatekeeper.py") as _fh:
@@ -572,8 +563,7 @@ def check_kill_switch() -> str:
     assert isinstance(active, bool), "is_active() must return bool"
     if active:
         raise AssertionError(
-            f"Kill switch is ACTIVE at startup (reason={kill_switch.reason!r}). "
-            "Deactivate before live trading."
+            f"Kill switch is ACTIVE at startup (reason={kill_switch.reason!r}). Deactivate before live trading."
         )
     return f"is_active={active}"
 
@@ -623,9 +613,7 @@ def check_forward_test_no_mocks() -> str:
     ]
     found = [f for f in forbidden if f in src]
     assert not found, f"Mock classes still present: {found}"
-    assert (
-        "DukascopyFetcher" in src or "MarketReplayEngine" in src
-    ), "forward_test.py must use real Dukascopy replay"
+    assert "DukascopyFetcher" in src or "MarketReplayEngine" in src, "forward_test.py must use real Dukascopy replay"
     return "No mock data, uses real Dukascopy replay"
 
 
@@ -637,9 +625,7 @@ def check_order_flow_no_mocks() -> str:
     with open("examples/order_flow_example.py") as _fh:
         src = _fh.read()
     assert "MockDataSource" not in src, "MockDataSource still present"
-    assert (
-        "orchestrator" in src or "MarketReplayEngine" in src
-    ), "Must use real orchestrator or replay engine"
+    assert "orchestrator" in src or "MarketReplayEngine" in src, "Must use real orchestrator or replay engine"
     return "No MockDataSource, uses real data sources"
 
 
@@ -722,13 +708,9 @@ async def run_all(verbose: bool = False) -> tuple[int, int]:
         print(f"  {WARN}Warnings:  {warnings}")
 
     if failed_c == 0:
-        print(
-            f"\n  {PASS}{BOLD}All critical checks passed. System is production-ready.{RESET}\n"
-        )
+        print(f"\n  {PASS}{BOLD}All critical checks passed. System is production-ready.{RESET}\n")
     else:
-        print(
-            f"\n  {FAIL}{BOLD}{failed_c} critical check(s) failed. Fix before deploying.{RESET}\n"
-        )
+        print(f"\n  {FAIL}{BOLD}{failed_c} critical check(s) failed. Fix before deploying.{RESET}\n")
         if verbose:
             print(f"{BOLD}Failed checks:{RESET}")
             for name, passed, critical, detail in results:
@@ -739,9 +721,7 @@ async def run_all(verbose: bool = False) -> tuple[int, int]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="HOPEFX End-to-End Production Validation"
-    )
+    parser = argparse.ArgumentParser(description="HOPEFX End-to-End Production Validation")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
     passed, failed = asyncio.run(run_all(verbose=args.verbose))

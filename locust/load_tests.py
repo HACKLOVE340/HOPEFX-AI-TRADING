@@ -95,9 +95,7 @@ class PublicUser(HttpUser):
 
     @task(3)
     def public_status(self):
-        with self.client.get(
-            "/api/status", catch_response=True, name="/api/status"
-        ) as r:
+        with self.client.get("/api/status", catch_response=True, name="/api/status") as r:
             _check(r, "status", (200, 404))
 
     @task(4)
@@ -314,9 +312,7 @@ def on_test_stop(environment, **kwargs):
     stats = environment.stats.total
     p95 = stats.get_response_time_percentile(0.95) or 0
     p99 = stats.get_response_time_percentile(0.99) or 0
-    failure_rate = (
-        stats.num_failures / stats.num_requests * 100 if stats.num_requests > 0 else 0
-    )
+    failure_rate = stats.num_failures / stats.num_requests * 100 if stats.num_requests > 0 else 0
     print(
         f"[locust] Test complete — "
         f"requests={stats.num_requests} "

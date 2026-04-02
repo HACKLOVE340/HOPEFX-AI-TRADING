@@ -49,6 +49,7 @@ class MeanReversionStrategy(BaseStrategy):
         super().__init__(name, symbol, config)
         self.period = period
         self.std_dev = std_dev
+        self.position: str | None = None  # tracks current position side: "LONG", "SHORT", or None
         self.logger.info(
             f"Mean Reversion Strategy initialized: period={period}, std_dev={std_dev}",
         )

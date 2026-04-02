@@ -582,7 +582,7 @@ async def paper_trading_gate_status():
     except Exception as exc:
         logger.warning("paper_trading_gate_status failed: %s", exc)
         return {
-            "error": str(exc),
+            "error": "Gate unavailable — check server logs for details",
             "phase2_ready": False,
             "phase3_ready": False,
             "note": "Gate unavailable — check research/pipeline/paper_trading_gate.py",
@@ -615,7 +615,7 @@ async def live_trading_gate_status():
         logger.warning("live_trading_gate_status failed: %s", exc)
         return {
             "allowed": False,
-            "reason": f"Gate unavailable: {exc}",
+            "reason": "Gate unavailable — check server logs for details",
             "checks": {},
             "checked_at": datetime.now(UTC).isoformat(),
         }
@@ -666,7 +666,7 @@ async def sharpe_progress():
             "target_se": 0.045,
             "pct_complete": 0.0,
             "sharpe": 0.0,
-            "error": str(exc),
+            "error": "Unavailable — check server logs for details",
         }
 
 
@@ -696,4 +696,4 @@ async def paper_trading_gate_record_fill(pnl: float = 0.0):
         logger.warning("paper_trading_gate_record_fill failed: %s", exc)
         from fastapi import HTTPException
 
-        raise HTTPException(status_code=503, detail=str(exc)) from None
+        raise HTTPException(status_code=503, detail="Gate unavailable — check server logs") from None

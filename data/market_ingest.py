@@ -29,6 +29,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 # ccxt.pro for async WebSocket streaming
@@ -45,6 +46,13 @@ except ImportError:
 from core.event_bus import bus
 
 logger = logging.getLogger(__name__)
+
+# ── singleton guard ───────────────────────────────────────────────────────────
+# Prevents two MarketIngest instances from running in the same process.
+# The orchestrator's GoldFeedManager is a separate pipeline (different APIs),
+# but two MarketIngest instances would open duplicate OANDA WebSocket connections
+# and publish duplicate ticks to hopefx:tick, corrupting downstream consumers.
+_INGEST_RUNNING: bool = False
 
 # ── config ────────────────────────────────────────────────────────────────────
 SYMBOL: str = os.environ.get("INGEST_SYMBOL", "XAU/USD")
@@ -72,9 +80,7 @@ def _validate_tick(bid: float, ask: float, symbol: str) -> bool:
     - spread does not exceed MAX_SPREAD_USD (catches bad data / flash crashes)
     """
     if bid <= 0 or ask <= 0:
-        logger.warning(
-            "Tick rejected: non-positive bid/ask  bid=%.5f ask=%.5f", bid, ask
-        )
+        logger.warning("Tick rejected: non-positive bid/ask  bid=%.5f ask=%.5f", bid, ask)
         return False
     if ask <= bid:
         logger.warning("Tick rejected: inverted spread  bid=%.5f ask=%.5f", bid, ask)
@@ -148,30 +154,50 @@ class MarketIngest:
 
         # Credentials from env
         self._api_key = os.environ.get("OANDA_API_KEY", "")
-        self._api_secret = os.environ.get(
-            "OANDA_API_SECRET", os.environ.get("OANDA_API_KEY", "")
-        )
+        self._api_secret = os.environ.get("OANDA_API_SECRET", os.environ.get("OANDA_API_KEY", ""))
         self._account_id = os.environ.get("OANDA_ACCOUNT_ID", "")
         self._practice = os.environ.get("OANDA_PRACTICE", "true").lower() != "false"
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
-        """Connect to EventBus and begin streaming ticks."""
+        """Connect to EventBus and begin streaming ticks.
+
+        Raises RuntimeError if another MarketIngest instance is already running
+        in this process.  Two instances would open duplicate OANDA WebSocket
+        connections and publish duplicate ticks to hopefx:tick.
+
+        Note: MarketIngest (ccxt.pro → OANDA/bitfinex) and the orchestrator's
+        GoldFeedManager (REST gold price APIs) are separate pipelines that fetch
+        from different sources.  Running both simultaneously is intentional and
+        correct — they do NOT double-write lineage because MarketIngest only
+        publishes to the EventBus; lineage writes happen exclusively inside the
+        orchestrator's _on_tick() path.
+        """
+        global _INGEST_RUNNING
+        if _INGEST_RUNNING:
+            raise RuntimeError(
+                "MarketIngest is already running in this process. "
+                "Only one instance may run at a time to avoid duplicate "
+                "OANDA WebSocket connections and duplicate tick events."
+            )
+        _INGEST_RUNNING = True
+
         await bus.connect()
         self._running = True
-        logger.info(
-            "MarketIngest starting — symbol=%s exchange=%s", SYMBOL, EXCHANGE_ID
-        )
+        logger.info("MarketIngest starting — symbol=%s exchange=%s", SYMBOL, EXCHANGE_ID)
 
         # Run staleness checker in background
         asyncio.create_task(self._staleness_loop())
 
-        if CCXT_PRO_AVAILABLE:
-            await self._ws_loop()
-        else:
-            logger.warning("ccxt.pro not available — falling back to REST polling.")
-            await self._rest_loop()
+        try:
+            if CCXT_PRO_AVAILABLE:
+                await self._ws_loop()
+            else:
+                logger.warning("ccxt.pro not available — falling back to REST polling.")
+                await self._rest_loop()
+        finally:
+            _INGEST_RUNNING = False
 
     async def stop(self) -> None:
         """Graceful shutdown."""
@@ -204,9 +230,7 @@ class MarketIngest:
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                logger.error(
-                    "MarketIngest WS error: %s — reconnecting in %.1f s", exc, backoff
-                )
+                logger.error("MarketIngest WS error: %s — reconnecting in %.1f s", exc, backoff)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, WS_RECONNECT_MAX)
                 # Close stale exchange object before reconnecting
@@ -276,9 +300,7 @@ class MarketIngest:
             },
         )
 
-    async def _emit_tick(
-        self, bid: float, ask: float, extra: dict | None = None
-    ) -> None:
+    async def _emit_tick(self, bid: float, ask: float, extra: dict | None = None) -> None:
         """Validate, record staleness, and publish a tick to the EventBus."""
         if not _validate_tick(bid, ask, SYMBOL):
             return

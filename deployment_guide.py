@@ -62,8 +62,7 @@ def check_python_version() -> None:
         _err(f"Python {major}.{minor} detected — 3.10+ required")
     elif (major, minor) > (3, 11):
         _warn(
-            f"Python {major}.{minor} detected — Dockerfile uses 3.10. "
-            "Serialised ML models (.pkl) may be incompatible."
+            f"Python {major}.{minor} detected — Dockerfile uses 3.10. Serialised ML models (.pkl) may be incompatible."
         )
     else:
         _good(f"Python {major}.{minor}")
@@ -136,8 +135,8 @@ def check_ml_model() -> None:
         try:
             import joblib
 
-            model = joblib.load(model_path)
-        except (ValueError, OSError, ModuleNotFoundError):
+            model = joblib.load(model_path)  # nosec B301 - model_path is hardcoded to ml/saved_models
+        except Exception:
             import pickle  # nosec B403
 
             with open(model_path, "rb") as fh:
@@ -216,7 +215,7 @@ def check_docker() -> None:
                 cmd, stderr=subprocess.DEVNULL, text=True
             ).strip()
             _good(out[:60])
-        except (OSError, subprocess.SubprocessError):
+        except Exception:
             _warn(f"{' '.join(cmd)} not available")
 
 
@@ -275,9 +274,7 @@ def check_redis_connectivity() -> None:
         host = parsed.hostname or "localhost"
         port = parsed.port or 6379
         with socket.create_connection((host, port), timeout=5):
-            _good(
-                f"TCP connection to Redis {host}:{port} succeeded (redis-py not installed)"
-            )
+            _good(f"TCP connection to Redis {host}:{port} succeeded (redis-py not installed)")
     except OSError as exc:
         _err(f"Cannot reach Redis at {host}:{port} — {exc}")
 
@@ -292,7 +289,10 @@ def check_port_availability() -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            sock.bind(("0.0.0.0", port))  # nosec B104 - port availability check only, socket closed immediately
+            # Bind to loopback only — sufficient to detect port conflicts since
+            # a port in use on 127.0.0.1 is unavailable system-wide.
+            # The socket is closed immediately in the finally block.
+            sock.bind(("127.0.0.1", port))
             _good(f"Port {port} ({label}) is free")
         except OSError:
             _err(
@@ -316,13 +316,9 @@ def check_disk_space() -> None:
         free_gb = free / (1024**3)
         total_gb = total / (1024**3)
         if free_gb < 5:  # noqa: PLR2004
-            _err(
-                f"Only {free_gb:.1f} GB free of {total_gb:.1f} GB — minimum 20 GB recommended"
-            )
+            _err(f"Only {free_gb:.1f} GB free of {total_gb:.1f} GB — minimum 20 GB recommended")
         elif free_gb < 20:  # noqa: PLR2004
-            _warn(
-                f"{free_gb:.1f} GB free of {total_gb:.1f} GB — 20 GB recommended for ML training"
-            )
+            _warn(f"{free_gb:.1f} GB free of {total_gb:.1f} GB — 20 GB recommended for ML training")
         else:
             _good(f"{free_gb:.1f} GB free of {total_gb:.1f} GB")
     except Exception as exc:
@@ -351,17 +347,11 @@ def check_env_file() -> None:
                 continue
             key, _, val = line.partition("=")
             val = val.strip().strip('"').strip("'")
-            if any(
-                marker in val
-                for marker in ("CHANGE_ME", "CHANGEME", "your_", "<", "TODO")
-            ):
+            if any(marker in val for marker in ("CHANGE_ME", "CHANGEME", "your_", "<", "TODO")):
                 placeholders.append(f"  line {lineno}: {key.strip()}")
 
     if placeholders:
-        _err(
-            f".env contains {len(placeholders)} unresolved placeholder(s):\n"
-            + "\n".join(placeholders)
-        )
+        _err(f".env contains {len(placeholders)} unresolved placeholder(s):\n" + "\n".join(placeholders))
     else:
         _good(".env has no placeholder values")
 
@@ -371,9 +361,7 @@ def check_env_file() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="HOPEFX pre-flight deployment checker")
-    parser.add_argument(
-        "--strict", action="store_true", help="Exit 1 on any warning (not just errors)"
-    )
+    parser.add_argument("--strict", action="store_true", help="Exit 1 on any warning (not just errors)")
     args = parser.parse_args()
 
     # Load .env if present
@@ -403,9 +391,7 @@ def main() -> int:
     check_docker()
 
     print("\n" + "=" * 60)
-    print(
-        f"  Results: {len(_ok)} OK  |  {len(_warnings)} warnings  |  {len(_errors)} errors"
-    )
+    print(f"  Results: {len(_ok)} OK  |  {len(_warnings)} warnings  |  {len(_errors)} errors")
     print("=" * 60)
 
     if _errors:

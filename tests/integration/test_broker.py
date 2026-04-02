@@ -198,7 +198,7 @@ class TestPnLCalculation:
 
         final = broker.get_account_info().balance
         # Balance should be very close to initial (only commission difference)
-        assert abs(final - initial) < 100.0  # noqa: PLR2004
+        assert abs(final - initial) < 100.0
         await broker.disconnect()
 
 

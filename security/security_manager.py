@@ -18,6 +18,7 @@ import secrets
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -81,9 +82,7 @@ class SecurityManager:
 
         # Remove old requests
         cutoff = now - timedelta(seconds=self.rate_limit_window)
-        self.request_log[user_id] = [
-            req_time for req_time in self.request_log[user_id] if req_time > cutoff
-        ]
+        self.request_log[user_id] = [req_time for req_time in self.request_log[user_id] if req_time > cutoff]
 
         if len(self.request_log[user_id]) >= self.rate_limit_requests:
             logger.warning(f"Rate limit exceeded for {user_id}")
@@ -140,10 +139,6 @@ class SecurityManager:
     def _evict_expired_csrf(self) -> None:
         """Remove expired CSRF tokens (called under _csrf_lock)."""
         now = time.monotonic()
-        expired = [
-            uid
-            for uid, (_, issued_at) in self._csrf_store.items()
-            if now - issued_at > _CSRF_TOKEN_TTL
-        ]
+        expired = [uid for uid, (_, issued_at) in self._csrf_store.items() if now - issued_at > _CSRF_TOKEN_TTL]
         for uid in expired:
             del self._csrf_store[uid]

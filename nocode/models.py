@@ -117,9 +117,7 @@ class Condition:
             return op_func(left_value, right_value)
         return False
 
-    def _get_value(
-        self, indicator: Indicator, data: dict[str, float]
-    ) -> float | None:
+    def _get_value(self, indicator: Indicator, data: dict[str, float]) -> float | None:
         """Get indicator value from data."""
         key = indicator.get_id()
         return data.get(key)

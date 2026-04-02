@@ -10,6 +10,7 @@ import { Leaderboard }      from './pages/Leaderboard'
 import { Wallet }           from './pages/Wallet'
 import { Settings }         from './pages/Settings'
 import { Performance }      from './pages/Performance'
+import { PnLDashboard }    from './pages/PnLDashboard'
 import PropFirmTracker      from './pages/PropFirmTracker'
 import Onboarding           from './pages/Onboarding'
 import LandingPage          from './pages/LandingPage'
@@ -79,6 +80,7 @@ function App() {
         <Route path="/copy-trading" element={<AuthGuard><Layout><ErrorBoundary label="Copy Trading"><CopyTrading /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/wallet"       element={<AuthGuard><Layout><ErrorBoundary label="Wallet"><Wallet /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/performance"  element={<AuthGuard><Layout><ErrorBoundary label="Performance"><Performance /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/pnl"          element={<AuthGuard><Layout><ErrorBoundary label="P&L Dashboard"><PnLDashboard /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/settings"     element={<AuthGuard><Layout><ErrorBoundary label="Settings"><Settings /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/ai-strategy"  element={<AuthGuard><Layout><ErrorBoundary label="AI Strategy"><AIStrategyGenerator /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/2fa-setup"    element={<AuthGuard><Layout><ErrorBoundary label="2FA Setup"><TwoFactorSetup /></ErrorBoundary></Layout></AuthGuard>} />

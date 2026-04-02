@@ -56,9 +56,7 @@ class ChartGenerator:
 
     @staticmethod
     def generate_volume_chart(symbol: str, data: list[dict]):
-        fig = go.Figure(
-            data=[go.Bar(x=[d["date"] for d in data], y=[d["volume"] for d in data])]
-        )
+        fig = go.Figure(data=[go.Bar(x=[d["date"] for d in data], y=[d["volume"] for d in data])])
         fig.update_layout(title=f"Volume chart for {symbol}")
         return fig.to_html(full_html=False)
 

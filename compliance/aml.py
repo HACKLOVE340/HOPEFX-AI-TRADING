@@ -23,6 +23,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 
@@ -93,9 +94,7 @@ class AMLGate:
         # ── DB-dependent rules ────────────────────────────────────────────────
         if self._sf:
             try:
-                decision = self._check_db_rules(
-                    user_id, amount, currency, flags, risk_score
-                )
+                decision = self._check_db_rules(user_id, amount, currency, flags, risk_score)
                 if decision:
                     return decision
             except Exception as exc:
@@ -167,9 +166,7 @@ class AMLGate:
                 currency,
             )
 
-        return AMLDecision(
-            allowed=True, reason="Approved", risk_score=risk_score, flags=flags
-        )
+        return AMLDecision(allowed=True, reason="Approved", risk_score=risk_score, flags=flags)
 
     def _emit_block_event(
         self,
