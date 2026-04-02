@@ -95,7 +95,7 @@ class TestDrawdownTracker:
     def test_check_modify_blocks_on_breach(self, dd_tracker):
         # Force a daily breach
         dd_tracker.update(equity=94_000)  # 6% daily DD > 5% limit
-        ok, _ = dd_tracker.check_modify(
+        ok, reason = dd_tracker.check_modify(
             current_equity=94_000,
             new_stop_loss_distance=0.001,
             lots=0.1,
@@ -105,7 +105,7 @@ class TestDrawdownTracker:
         assert "breach" in reason.lower()
 
     def test_check_modify_allows_small_risk(self, dd_tracker):
-        ok, _ = dd_tracker.check_modify(
+        ok, reason = dd_tracker.check_modify(
             current_equity=99_000,
             new_stop_loss_distance=0.0005,
             lots=0.01,

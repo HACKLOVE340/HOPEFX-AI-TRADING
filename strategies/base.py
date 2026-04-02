@@ -99,7 +99,7 @@ class BaseStrategy(ABC):
         self.status = StrategyStatus.IDLE
         self.positions = []
         self.signals_history = []
-        self.logger = logging.getLogger(f"{__name__}.{config.name}")
+        self.logger = logging.getLogger(f"{__name__}.{self.config.name}")
         self.performance_metrics = {
             "total_signals": 0,
             "winning_signals": 0,
@@ -110,7 +110,7 @@ class BaseStrategy(ABC):
             "win_rate": 0.0,
         }
 
-        logger.info(f"Initialized strategy: {config.name} for {config.symbol}")
+        logger.info("Initialized strategy: %s for %s", self.config.name, self.config.symbol)
 
     @property
     def name(self) -> str:

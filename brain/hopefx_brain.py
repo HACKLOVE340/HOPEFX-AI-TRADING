@@ -598,6 +598,23 @@ class HOPEFXBrain:
                 latency_ms=(time.perf_counter() - t0) * 1000,
             )
 
+        # ── Risk-manager halt check ───────────────────────────────────────────
+        if self._risk_manager is not None and getattr(self._risk_manager, "_trading_halted", False):
+            return BrainDecision(
+                action="hold",
+                confidence=0.0,
+                regime=Regime.UNKNOWN.value,
+                strategy="none",
+                ml_probability=0.5,
+                ml_confidence=0.0,
+                ml_abstain=True,
+                strategy_signal="neutral",
+                strategy_confidence=0.0,
+                reason="risk_halted",
+                symbol=symbol,
+                latency_ms=(time.perf_counter() - t0) * 1000,
+            )
+
         # ── Regime detection ──────────────────────────────────────────────────
         regime = self.detect_regime(ohlcv, symbol=symbol)
 

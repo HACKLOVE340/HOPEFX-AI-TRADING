@@ -137,8 +137,8 @@ class BinanceConnector(BrokerConnector):
         self,
         symbol: str,
         side: OrderSide,
-        order_type: OrderType = OrderType.MARKET,
         quantity: float = 0.0,
+        order_type: OrderType = OrderType.MARKET,
         price: float | None = None,
         stop_price: float | None = None,
     ) -> Order | None:

@@ -499,14 +499,14 @@ def stage_order_execution() -> str:
     broker.market_prices["XAUUSD"] = mid
 
     # Market buy
-    order_buy = broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, quantity=0.1)
+    order_buy = broker.place_order("XAUUSD", OrderSide.BUY, 0.1, OrderType.MARKET)
     if order_buy.status != OrderStatus.FILLED:
         raise RuntimeError(f"Market buy not filled: {order_buy.status}")
     if order_buy.average_price <= 0:
         raise ValueError(f"Fill price not set: {order_buy.average_price}")
 
     # Market sell
-    order_sell = broker.place_order("XAUUSD", OrderSide.SELL, OrderType.MARKET, quantity=0.1)
+    order_sell = broker.place_order("XAUUSD", OrderSide.SELL, 0.1, OrderType.MARKET)
     if order_sell.status != OrderStatus.FILLED:
         raise RuntimeError(f"Market sell not filled: {order_sell.status}")
 
@@ -549,7 +549,7 @@ def stage_position_accounting() -> str:
     broker.market_prices["XAUUSD"] = mid
 
     # Open a long position
-    buy_order = broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, quantity=1.0)
+    buy_order = broker.place_order("XAUUSD", OrderSide.BUY, 1.0, OrderType.MARKET)
     if buy_order.status.name != "FILLED":
         raise RuntimeError(f"Buy order not filled: {buy_order.status}")
 
