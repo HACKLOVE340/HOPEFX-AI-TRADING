@@ -92,7 +92,7 @@ class LicenseValidator:
                 return cache_entry["has_access"]
 
         # Validate subscription
-        result, message = self.validate_subscription(user_id)
+        result, _ = self.validate_subscription(user_id)
         if result != ValidationResult.VALID:
             self._update_cache(cache_key, False)
             return False

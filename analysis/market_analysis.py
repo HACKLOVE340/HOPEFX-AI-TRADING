@@ -254,7 +254,6 @@ class MarketRegimeDetector:
         """Calculate Average Directional Index."""
         high = prices["high"]
         low = prices["low"]
-        close = prices["close"]
 
         # Calculate +DM and -DM
         plus_dm = high.diff()
@@ -546,8 +545,6 @@ class MultiTimeframeAnalyzer:
     def _analyze_single_timeframe(self, tf: str, data: pd.DataFrame) -> TimeframeAnalysis:
         """Analyze a single timeframe."""
         close = data["close"]
-        high = data["high"]
-        low = data["low"]
 
         # Calculate trend
         sma_fast = close.rolling(10).mean()

@@ -312,7 +312,7 @@ def check_disk_space() -> None:
         usage = pathlib.Path(".").resolve()
         import shutil
 
-        total, used, free = shutil.disk_usage(usage)
+        total, _, free = shutil.disk_usage(usage)
         free_gb = free / (1024**3)
         total_gb = total / (1024**3)
         if free_gb < 5:  # noqa: PLR2004

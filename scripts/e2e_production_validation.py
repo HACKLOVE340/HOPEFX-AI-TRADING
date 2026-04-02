@@ -233,7 +233,6 @@ def check_single_entry_point() -> str:
 @check("Redis: ping, set, get, TTL, pub/sub")
 def check_redis() -> str:
     import redis as redis_lib
-    import os
 
     url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     r = redis_lib.from_url(url, decode_responses=True)
@@ -724,7 +723,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="HOPEFX End-to-End Production Validation")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
-    passed, failed = asyncio.run(run_all(verbose=args.verbose))
+    _, failed = asyncio.run(run_all(verbose=args.verbose))
     sys.exit(0 if failed == 0 else 1)
 
 
