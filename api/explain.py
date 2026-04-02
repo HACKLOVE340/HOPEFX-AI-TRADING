@@ -307,10 +307,11 @@ async def explain_signal(
     try:
         return _build_explanation(signal_id)
     except (RuntimeError, ValueError, KeyError, AttributeError) as exc:
+        logger.warning("Explanation unavailable for signal %s: %s", signal_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Explanation unavailable: {exc}",
-        ) from exc
+            detail="Explanation unavailable — check server logs",
+        ) from None
 
 
 @router.get(

@@ -128,5 +128,5 @@ async def prop_firm_status(user: TokenPayload = Depends(get_current_user)):
         logger.error("prop_firm_status error: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Prop firm status unavailable: {exc}",
-        ) from exc
+            detail="Prop firm status unavailable — check server logs",
+        ) from None

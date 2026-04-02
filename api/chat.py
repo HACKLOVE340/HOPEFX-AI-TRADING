@@ -64,10 +64,11 @@ def _get_agent(session_id: str | None = None):
     try:
         from brain.llm_agent import LLMAgent
     except ImportError as exc:
+        logger.error("LLM agent module unavailable: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"LLM agent module unavailable: {exc}",
-        ) from exc
+            detail="LLM agent module unavailable — check server logs",
+        ) from None
 
     key = session_id or "__default__"
     if key not in _agents:
@@ -114,8 +115,8 @@ async def ai_chat(
         logger.error("LLM chat error: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"AI response failed: {exc}",
-        ) from exc
+            detail="AI response failed — check server logs",
+        ) from None
 
     return ChatResponse(response=response_text, session_id=key)
 
