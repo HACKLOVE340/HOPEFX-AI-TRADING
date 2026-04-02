@@ -393,9 +393,10 @@ async def broker_status():
                     "note": "NuclearStreamer not active — no streaming API keys set",
                 }
             except Exception as exc:
+                logger.warning("broker_status: price engine status failed: %s", exc)
                 data_feed = {
                     "active": False,
-                    "error": str(exc),
+                    "error": "Price engine unavailable — check server logs",
                     "source": "RealTimePriceEngine",
                 }
         elif price_engine is not None:
@@ -435,7 +436,10 @@ async def broker_status():
                 "pipeline": h.get("pipeline", {}),
             }
         except Exception as ml_exc:
-            ml_engine["error"] = str(ml_exc)
+            # Log the full exception server-side; return a generic message to
+            # avoid leaking internal ML engine details to API callers.
+            logger.warning("broker_status: ML engine health check failed: %s", ml_exc)
+            ml_engine["error"] = "ML engine unavailable — check server logs"
 
         return {
             "broker": broker_section,
@@ -472,7 +476,13 @@ async def paper_clock_status():
     try:
         from brokers.oanda_paper_clock import get_clock
 
-        return get_clock().status()
+        clock_data: dict = get_clock().status()
+        # Mask the account_id before returning — expose only the last 4 chars.
+        _raw_id: str = str(clock_data.get("account_id") or "")
+        clock_data["account_id"] = (
+            ("..." + _raw_id[-4:]) if len(_raw_id) > 4 else ("****" if _raw_id else None)
+        )
+        return clock_data
     except Exception as exc:
         logger.warning("paper_clock_status: %s", exc)
         from datetime import datetime
