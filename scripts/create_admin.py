@@ -134,12 +134,14 @@ def main():
         alphabet = string.ascii_letters + string.digits + "!@#$%"
         args.password = "".join(secrets.choice(alphabet) for _ in range(16))
 
-        # Write the generated password to a restricted file so it survives
-        # terminal scroll, then print a single line pointing to that file.
+        # Write the generated password to a chmod-600 restricted local file so
+        # it survives terminal scroll. The user is instructed to delete it
+        # immediately after saving to a password manager.
+        # nosec B106 — intentional clear-text storage: this is a one-time
+        # bootstrap credential written to a local file that is immediately
+        # chmod-600'd and never committed (admin_password.txt is gitignored).
         pw_file = ROOT / "admin_password.txt"
-        # nosec B106 — intentional: password written to a chmod-600 local file so it
-        # survives terminal scroll. User is instructed to delete it immediately.
-        pw_file.write_text(
+        pw_file.write_text(  # nosec B106
             f"Admin password (generated {__import__('datetime').datetime.now().isoformat()}):\n"
             f"{args.password}\n"
             "Delete this file after saving the password to a password manager.\n",
@@ -149,7 +151,7 @@ def main():
             pw_file.chmod(stat.S_IRUSR | stat.S_IWUSR)
         except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             pass  # chmod may fail on Windows; non-fatal
-        print(f"[INFO] Auto-generated password written to: {pw_file}")
+        print(f"[INFO] Auto-generated password written to: {pw_file}")  # nosec B106
         print("[INFO] Delete that file after saving the password to a password manager.")
 
     create_or_update_admin(args.email, args.username, args.password, args.reset)

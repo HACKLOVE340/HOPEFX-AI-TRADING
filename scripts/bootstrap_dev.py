@@ -84,8 +84,11 @@ BROKER_TYPE=paper
 # SENTRY_DSN=
 """
     # Write with owner-read-write only (0o600) so the generated secrets are
-    # not world-readable.  nosec: writing secrets to a local .env file is the
-    # intended behaviour of this dev-bootstrap script; the file is gitignored.
+    # not world-readable. Writing secrets to a local .env file is the
+    # intended behaviour of this dev-bootstrap script; the file is gitignored
+    # and never committed to source control.
+    # nosec B106 — intentional: dev-only bootstrap writes generated secrets to
+    # a gitignored .env file that is immediately chmod-600'd.
     ENV_PATH.write_text(content, encoding="utf-8")  # nosec B106
     try:
         import stat
@@ -172,9 +175,9 @@ def bootstrap(verbose: bool = True) -> None:
             print("  ✅  Admin user seeded")
             print(f"      Email    : {DEFAULT_ADMIN_EMAIL}")
             print(f"      Username : {DEFAULT_ADMIN_USERNAME}")
-            # Do not echo the password to stdout — it is stored in .env under
-            # BOOTSTRAP_ADMIN_PASSWORD and is only readable by the local user.
-            print(f"      Password : see {ENV_PATH} → {_ADMIN_PASSWORD_KEY}")
+            # Print only the file path and env-var NAME — never the password value.
+            # nosec B106 — outputs a file path and key name, not a secret value.
+            print(f"      Password : see {ENV_PATH} → {_ADMIN_PASSWORD_KEY}")  # nosec B106
             print("─" * 58)
             print("  Start the server:  python app.py")
             print("  Login at:          http://localhost:8000/login")
