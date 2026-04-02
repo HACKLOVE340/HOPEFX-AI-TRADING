@@ -308,7 +308,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             return {"positions": [p.to_dict() for p in positions], "count": len(positions)}
         except Exception as exc:
             logger.error("Error getting positions: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=500, detail="Failed to retrieve positions — check server logs") from None
 
     @app.post("/api/v1/orders", status_code=201)
     async def place_order(
@@ -350,7 +350,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             }
         except Exception as exc:
             logger.error("Order error for user=%s: %s", user.sub, exc)
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=400, detail="Order failed — check server logs") from None
 
     @app.delete("/api/v1/positions/{position_id}")
     async def close_position(position_id: str, user=Depends(require_trader)):
@@ -366,7 +366,7 @@ def _register_trading_routes(app, trading_app, get_current_user, require_trader,
             raise
         except Exception as exc:
             logger.error("Error closing position: %s", exc)
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=500, detail="Failed to close position — check server logs") from None
 
 
 def _register_brain_routes(app, trading_app, get_current_user, require_admin):
