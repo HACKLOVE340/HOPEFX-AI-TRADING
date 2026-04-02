@@ -264,13 +264,16 @@ async def status_page():
             "degraded": "#fbbf24",
             "unhealthy": "#f87171",
         }.get(status, "#94a3b8")
-        message = info.get("message", "")
+        import html as _html_mod  # noqa: PLC0415
+        message = _html_mod.escape(str(info.get("message", "")))
+        safe_name = _html_mod.escape(name.replace("_", " ").title())
+        safe_status = _html_mod.escape(str(status))
         rows_html += f"""
         <div class="component-row">
-          <div class="component-name">{name.replace("_", " ").title()}</div>
+          <div class="component-name">{safe_name}</div>
           <div class="component-status">
             <span class="dot" style="background:{dot_color}"></span>
-            <span style="color:{label_color};font-weight:600;text-transform:capitalize">{status}</span>
+            <span style="color:{label_color};font-weight:600;text-transform:capitalize">{safe_status}</span>
           </div>
           <div class="component-msg">{message}</div>
         </div>"""
@@ -456,12 +459,13 @@ async def _run_checks() -> dict[str, Any]:
             }
         return result
     except Exception as exc:
+        # Log the full exception server-side; return a generic message to callers
+        # to avoid leaking internal error details through the status endpoint.
         logger.warning("Health checker unavailable: %s", exc)
-        # Return degraded status reflecting the actual failure — no synthetic data.
         return {
             "api": {
                 "status": "degraded",
-                "message": f"Health checker error: {exc}",
+                "message": "Health checker unavailable — check server logs",
             },
         }
 
@@ -530,6 +534,13 @@ async def paper_trading_status():
     except Exception as exc:
         logger.warning("paper_trading_status: clock unavailable: %s", exc)
 
+    # Mask the account ID before returning — expose only the last 4 characters
+    # so the full OANDA account identifier never reaches API consumers.
+    _raw_account_id: str = str(clock_status.get("account_id") or "")
+    _account_id_hint: str | None = (
+        ("..." + _raw_account_id[-4:]) if len(_raw_account_id) > 4 else ("****" if _raw_account_id else None)
+    )
+
     # Merge — starter_status takes precedence for overlapping keys
     merged = {
         "started": clock_status.get("started", bool(starter_status)),
@@ -542,7 +553,7 @@ async def paper_trading_status():
         "target_days": 30,
         "complete": starter_status.get("complete", clock_status.get("complete", False)),
         "environment": clock_status.get("environment"),
-        "account_id": clock_status.get("account_id"),
+        "account_id": _account_id_hint,  # masked — last 4 chars only
         "current_balance": starter_status.get("current_balance"),
         "start_balance": starter_status.get("start_balance"),
         "drawdown_pct": starter_status.get("drawdown_pct"),
