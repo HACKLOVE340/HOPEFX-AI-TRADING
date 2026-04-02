@@ -577,7 +577,6 @@ class MarketDataOrchestrator:
         # Check at least one feed alive
         if self._gold_feed and not self._gold_feed.active_sources():
             # No active sources — but only block if we've been running > 30s
-            import time
 
             if self._started and (time.time() - self._start_ts) > 30.0:  # noqa: PLR2004
                 return False
@@ -689,8 +688,6 @@ class MarketDataOrchestrator:
             if len(raw_ticks) < 2:  # noqa: PLR2004
                 return None
 
-            from datetime import datetime
-            from data_layer.types import FeedSource, TickQuality
 
             ticks = []
             for r in raw_ticks:

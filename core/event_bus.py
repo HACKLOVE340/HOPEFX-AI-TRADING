@@ -196,7 +196,7 @@ class MemoryMappedEventStore:
             header = f.read(19)
             if len(header) < 19:  # noqa: PLR2004
                 return None
-            seq, ts, evt_type = struct.unpack(">QQH", header[:18])
+            _, ts, evt_type = struct.unpack(">QQH", header[:18])
             src_len = header[18]
             src = f.read(src_len).decode()
             payload_len = struct.unpack(">I", f.read(4))[0]

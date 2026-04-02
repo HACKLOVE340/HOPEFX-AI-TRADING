@@ -138,7 +138,6 @@ class DataLayerRedisStore:
           REDIS_SENTINEL_MASTER=mymaster
           REDIS_PASSWORD=secret
         """
-        import os
 
         sentinel_hosts_raw = os.getenv("REDIS_SENTINEL_HOSTS", "")
         sentinel_master = os.getenv("REDIS_SENTINEL_MASTER", "mymaster")
@@ -459,11 +458,10 @@ class DataLayerRedisStore:
 
         Extends stats() with ping latency, key count, and memory info.
         """
-        import time as _time
 
-        t0 = _time.monotonic()
+        t0 = time.monotonic()
         alive = self.ping()
-        ping_ms = round((_time.monotonic() - t0) * 1000, 2)
+        ping_ms = round((time.monotonic() - t0) * 1000, 2)
         h = self.stats()
         h.update(
             {
@@ -500,8 +498,6 @@ class DataLayerRedisStore:
         if not self._r or not items:
             return 0
         try:
-            import json
-
             pipe = self._r.pipeline(transaction=False)
             for suffix, value in items.items():
                 full_key = self._key(suffix)
@@ -531,8 +527,6 @@ class DataLayerRedisStore:
         if not self._r or not keys:
             return {}
         try:
-            import json
-
             full_keys = [self._key(k) for k in keys]
             pipe = self._r.pipeline(transaction=False)
             for fk in full_keys:
