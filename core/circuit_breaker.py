@@ -63,9 +63,7 @@ except Exception as _prom_exc:
     _CB_STATE_GAUGE = None
     _PROM_AVAILABLE = False
     # prometheus_client is optional — circuit breaker works without it
-    import logging as _log
-
-    _log.getLogger(__name__).debug("prometheus_client unavailable — CB metrics disabled: %s", _prom_exc)
+    logger.debug("prometheus_client unavailable — CB metrics disabled: %s", _prom_exc)
 
 
 class CBState(IntEnum):

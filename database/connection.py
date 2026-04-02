@@ -15,7 +15,6 @@ from collections.abc import Callable
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 try:
     from sqlalchemy import create_engine, event, text
@@ -23,7 +22,7 @@ try:
     from sqlalchemy.orm import sessionmaker, Session
     from sqlalchemy.pool import QueuePool
     from sqlalchemy.exc import (
-        SQLAlchemyError,  # noqa: F401
+        SQLAlchemyError,  # pylint: disable=unused-import  # noqa: F401
         OperationalError,
         TimeoutError as SATimeoutError,
     )
@@ -372,7 +371,6 @@ _db_manager: DatabaseManager | None = None
 
 def get_db_manager() -> DatabaseManager | None:
     """Get global database manager"""
-    global _db_manager  # noqa: PLW0602
     return _db_manager
 
 

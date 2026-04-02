@@ -36,7 +36,7 @@ try:
         Text,
         Index,
         UniqueConstraint,
-        create_engine,
+        create_engine,  # pylint: disable=unused-import
     )
     from sqlalchemy.sql import func
 
@@ -44,7 +44,7 @@ try:
         from sqlalchemy.orm import declarative_base
     except ImportError:
         from sqlalchemy.ext.declarative import declarative_base  # SQLAlchemy < 2.0
-    from sqlalchemy.orm import relationship, sessionmaker
+    from sqlalchemy.orm import relationship, sessionmaker  # pylint: disable=unused-import
 
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
@@ -726,7 +726,7 @@ class MarketDataType(enum.Enum):
 # `from database.models import User` keeps working, and so SQLAlchemy resolves
 # the "User" string reference in Account.user without a second class definition.
 try:
-    from database.user_models import User
+    from database.user_models import User  # pylint: disable=unused-import
 except Exception:
     # Fallback stub so imports never fail when user_models has a dep issue
     class User:  # type: ignore[no-redef]

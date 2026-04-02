@@ -23,7 +23,7 @@ import logging
 import os
 import sys
 from typing import TYPE_CHECKING, Any
-from datetime import datetime, timezone
+from datetime import timezone
 
 UTC = timezone.utc
 
@@ -535,7 +535,7 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     """
     import json
     import pathlib
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta  # local use
 
     stamp_path = pathlib.Path("data/oanda_paper_start.json")
     stamp_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1465,7 +1465,7 @@ async def init_daily_online_learner(s: Any) -> Any:
         OnlineLearner.adapt_to_regime() to adjust EWC lambda and learning
         rate.  Best-effort — failures are logged but never propagate.
         """
-        from datetime import datetime as _dt
+        from datetime import datetime as _dt  # local use
 
         while True:
             try:

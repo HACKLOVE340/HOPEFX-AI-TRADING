@@ -29,7 +29,7 @@ import time
 try:
     from prometheus_client import (
         CONTENT_TYPE_LATEST,
-        CollectorRegistry,  # noqa: F401
+        CollectorRegistry,  # pylint: disable=unused-import  # noqa: F401
         Counter,
         Gauge,
         Histogram,
