@@ -345,7 +345,6 @@ class FTMOBroker:
 # MT5-based FTMOConnector (used by tests and BrokerFactory)
 # ---------------------------------------------------------------------------
 
-from typing import Any as _Any
 
 try:
     from brokers.mt5 import MT5Connector as _MT5Connector
@@ -358,7 +357,7 @@ try:
             "live": ["FTMO-Live", "FTMO-Live2"],
         }
 
-        def __init__(self, config: dict[str, _Any]):
+        def __init__(self, config: dict[str, Any]):
             cfg = dict(config)
             self.challenge_type = cfg.get("challenge_type", "demo")
             if "server" not in cfg:
@@ -372,7 +371,7 @@ try:
                 f"FTMOConnector initialized: {self.challenge_type} / {self.server}",
             )
 
-        def get_ftmo_rules(self) -> dict[str, _Any]:
+        def get_ftmo_rules(self) -> dict[str, Any]:
             return {
                 "max_daily_loss": "5%",
                 "max_total_drawdown": "10%",
@@ -382,7 +381,7 @@ try:
                 "scaling": "up to $2M",
             }
 
-        def check_ftmo_compliance(self) -> dict[str, _Any]:
+        def check_ftmo_compliance(self) -> dict[str, Any]:
             info = self.get_account_info()
             if info is None:
                 return {"compliant": False, "reason": "not connected"}

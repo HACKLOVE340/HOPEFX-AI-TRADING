@@ -172,7 +172,6 @@ _order_rl_cache: dict = {}  # in-memory fallback: {user_id: [timestamps]}
 
 def _reset_order_rl_cache() -> None:
     """Clear the in-memory rate-limit cache. Used by tests to prevent bleed."""
-    global _order_rl_cache  # noqa: PLW0602
     _order_rl_cache.clear()
 
 

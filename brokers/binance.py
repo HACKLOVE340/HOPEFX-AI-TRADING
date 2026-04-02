@@ -133,12 +133,12 @@ class BinanceConnector(BrokerConnector):
             logger.error(f"Error disconnecting from Binance: {e}")
             return False
 
-    def place_order(
+    def place_order(  # pylint: disable=arguments-differ
         self,
         symbol: str,
         side: OrderSide,
-        quantity: float,
         order_type: OrderType = OrderType.MARKET,
+        quantity: float = 0.0,
         price: float | None = None,
         stop_price: float | None = None,
     ) -> Order | None:

@@ -124,12 +124,12 @@ class AlpacaConnector(BrokerConnector):
             logger.error(f"Error disconnecting from Alpaca: {e}")
             return False
 
-    def place_order(
+    def place_order(  # pylint: disable=arguments-differ
         self,
         symbol: str,
         side: OrderSide,
-        quantity: float,
         order_type: OrderType = OrderType.MARKET,
+        quantity: float = 0.0,
         price: float | None = None,
         stop_price: float | None = None,
         time_in_force: str = "day",

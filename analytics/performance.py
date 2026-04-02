@@ -221,8 +221,6 @@ class PerformanceAnalytics:
 
         # Record equity point
         drawdown = self.high_water_mark - self.current_equity
-        drawdown_pct = drawdown / self.high_water_mark if self.high_water_mark > 0 else 0
-
         self._record_equity_point(
             self.current_equity,
             0,  # Open PnL would be tracked separately

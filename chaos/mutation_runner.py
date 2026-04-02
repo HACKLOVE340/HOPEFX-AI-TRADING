@@ -210,7 +210,7 @@ class MutationTestRunner:
                 stderr=asyncio.subprocess.PIPE,
             )
             try:
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self._timeout_s)
+                _, _ = await asyncio.wait_for(proc.communicate(), timeout=self._timeout_s)
             except TimeoutError:
                 proc.kill()
                 logger.error("mutmut timed out after %.0fs", self._timeout_s)
@@ -510,7 +510,7 @@ class MutationTestRunner:
                     for m in report.mutants
                 ],
             }
-            self._report_path.write_text(json.dumps(data, indent=2))
+            self._report_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
             logger.info("Mutation report saved to %s", self._report_path)
         except Exception as exc:
             logger.error("Failed to save mutation report: %s", exc)

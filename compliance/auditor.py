@@ -144,7 +144,7 @@ class ImmutableAuditLog:
             + "\n"
         )
         try:
-            with open(filename, "a") as fh:
+            with open(filename, "a", encoding="utf-8") as fh:
                 fh.write(line)
         except Exception as exc:
             logger.error("Audit sync write failed: %s", exc)
