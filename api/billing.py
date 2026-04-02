@@ -345,7 +345,7 @@ async def flutterwave_init(
         }
     except Exception as exc:
         logger.error("Flutterwave init error: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Payment init failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Payment init failed — check server logs") from None
 
 
 @router.post("/payments/flutterwave/verify")
@@ -366,7 +366,7 @@ async def flutterwave_verify(
         }
     except Exception as exc:
         logger.error("Flutterwave verify error: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Verification failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Verification failed — check server logs") from None
 
 
 @router.get("/payments/flutterwave/status")
