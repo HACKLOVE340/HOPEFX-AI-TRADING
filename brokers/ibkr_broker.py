@@ -305,8 +305,8 @@ class IBKRBroker:
                 "comment": "OK",
             }
         except Exception as exc:
-            logger.error("IBKRBroker.place_order failed: %s", exc)
-            return {"success": False, "order_id": 0, "comment": str(exc)}
+            logger.error("IBKRBroker.place_order failed: %s", exc, exc_info=True)
+            return {"success": False, "order_id": 0, "comment": "Order failed — check server logs"}
 
     async def cancel_order(self, order_id: int) -> dict:
         """Cancel a pending order by order ID."""
@@ -325,7 +325,8 @@ class IBKRBroker:
             logger.info("IBKR order cancelled | order_id=%s", order_id)
             return {"success": True, "comment": "OK"}
         except Exception as exc:
-            return {"success": False, "comment": str(exc)}
+            logger.error("IBKRBroker.cancel_order failed: %s", exc, exc_info=True)
+            return {"success": False, "comment": "Cancel failed — check server logs"}
 
     async def close_position(
         self,

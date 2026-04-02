@@ -382,8 +382,8 @@ class RevenueSplitEngine:
             )
         except Exception as exc:
             payout.status = PayoutStatus.FAILED
-            payout.failure_reason = str(exc)
-            logger.error("Stripe transfer failed: creator=%s error=%s", payout.creator_id, exc)
+            payout.failure_reason = "Transfer failed — check server logs"
+            logger.error("Stripe transfer failed: creator=%s error=%s", payout.creator_id, exc, exc_info=True)
 
         return payout
 

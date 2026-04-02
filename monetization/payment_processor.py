@@ -310,11 +310,12 @@ class PaymentProcessor:
             return True
 
         except Exception as exc:
-            payment.mark_failed(str(exc))
+            logger.error("Payment processing failed for %s: %s", payment_id, exc, exc_info=True)
+            payment.mark_failed("Payment processing error — check server logs")
             self._handle_payment_failed(
                 {
                     "payment_id": payment_id,
-                    "error": str(exc),
+                    "error": "Payment processing error — check server logs",
                     "user_id": payment.user_id,
                     "subscription_id": payment.subscription_id,
                 }

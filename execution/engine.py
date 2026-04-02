@@ -556,7 +556,7 @@ class ExecutionEngine:
                 request_id=request.request_id,
                 status=ExecutionStatus.ERROR,
                 latency_ms=latency_ms,
-                message=f"[BROKER_ERROR] {exc}",
+                message="[BROKER_ERROR] Order submission failed — check server logs",
             )
 
         # ── 6. Post-fill processing ───────────────────────────────────────────

@@ -307,7 +307,8 @@ def _run_backtest(
         import numpy as np
         from strategies.base import SignalType
     except ImportError as exc:
-        return BacktestResult(0, 0, 0, 0, 0, error=str(exc))
+        logger.error("Backtest dependency missing: %s", exc)
+        return BacktestResult(0, 0, 0, 0, 0, error="Missing dependency — check server logs")
 
     if len(candles) < 60:  # noqa: PLR2004
         return BacktestResult(0, 0, 0, 0, 0, error="Not enough candle data")

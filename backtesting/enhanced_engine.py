@@ -536,7 +536,7 @@ class TransactionCostModel:
 
         except (ValueError, RuntimeError, TypeError) as exc:
             logger.warning("calibrate_from_executions failed: %s", exc)
-            return {"calibrated": False, "error": str(exc)}
+            return {"calibrated": False, "error": "Calibration failed — check server logs"}
 
     def total_cost(self, order_size: float, price: float, is_maker: bool = False, **kwargs) -> dict[str, float]:
         """Calculate all-in transaction cost"""
@@ -1813,7 +1813,8 @@ class EnhancedBacktestEngine:
             else:
                 return False, {"error": "Invalid order type"}
         except ValueError as exc:
-            return False, {"error": str(exc), "status": "pending"}
+            logger.warning("Order fill resolution failed: %s", exc)
+            return False, {"error": "Invalid order parameters", "status": "pending"}
 
         # ── Calculate transaction costs ────────────────────────────────────
         costs = self.cost_model.total_cost(

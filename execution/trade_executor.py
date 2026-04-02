@@ -310,7 +310,7 @@ class TradeExecutor:
                 average_price=0,
                 commission=0,
                 status=OrderStatus.REJECTED,
-                message=f"[RISK_MANAGER_ERROR] {exc}",
+                message="[RISK_MANAGER_ERROR] Order blocked — check server logs",
                 latency_ms=0,
             )
 

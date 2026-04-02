@@ -823,8 +823,8 @@ class RiskManager:
                 "engine_status": engine.status(),
             }
         except Exception as exc:
-            logger.warning("get_factor_risk_report failed: %s", exc)
-            return {"available": False, "reason": str(exc)}
+            logger.warning("get_factor_risk_report failed: %s", exc, exc_info=True)
+            return {"available": False, "reason": "Risk report unavailable — check server logs"}
 
     # ── Convenience public API (used by tests and downstream callers) ─────────
 

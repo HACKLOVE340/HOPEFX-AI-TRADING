@@ -898,10 +898,11 @@ def create_signals_router():
         except HTTPException:
             raise
         except Exception as e:
+            logger.error("Signal generation failed: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=500,
-                detail=f"Signal generation failed: {e}",
-            ) from e
+                detail="Signal generation failed",
+            ) from None
 
     @signals_router.get("/analytics")
     async def get_signal_analytics():
