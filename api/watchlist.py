@@ -120,7 +120,7 @@ def _db_add(user_id: str, symbol: str) -> bool:
         session.rollback()
         exc_str = str(exc).lower()
         if "unique" in exc_str or "duplicate" in exc_str:
-            raise HTTPException(status_code=409, detail=f"{symbol} already in watchlist") from exc
+            raise HTTPException(status_code=409, detail=f"{symbol} already in watchlist") from None
         logger.debug("watchlist: DB add failed for %s/%s: %s", user_id, symbol, exc)
         return False
     finally:

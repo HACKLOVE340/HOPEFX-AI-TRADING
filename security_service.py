@@ -148,7 +148,9 @@ class SecurityService:
         except _jwt.ExpiredSignatureError:
             raise ValueError("Token has expired") from None
         except _jwt.InvalidTokenError as exc:
-            raise ValueError(f"Invalid token: {exc}") from exc
+            # Log the specific JWT error server-side; surface only a generic
+            # message to callers to avoid leaking token structure details.
+            raise ValueError("Invalid token") from None
 
         if payload.get("type") != expected_type:
             raise ValueError(f"Token type mismatch: expected '{expected_type}', got '{payload.get('type')}'")
