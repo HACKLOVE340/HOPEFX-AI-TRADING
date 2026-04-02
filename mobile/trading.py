@@ -140,7 +140,7 @@ class MobileTradingEngine:
             return {
                 "order_id": None,
                 "status": "error",
-                "error": str(exc),
+                "error": "Operation failed — check server logs",
                 "user_id": user_id,
                 "symbol": symbol,
             }
@@ -187,7 +187,7 @@ class MobileTradingEngine:
                 return {
                     "order_id": None,
                     "status": "error",
-                    "error": str(exc),
+                    "error": "Operation failed — check server logs",
                     "preset_id": preset_id,
                 }
         else:
@@ -258,7 +258,7 @@ class MobileTradingEngine:
             }
         except Exception as exc:
             logger.error("MobileTradingEngine.close_position_async: %s", exc, exc_info=True)
-            return {"status": "error", "error": str(exc), "position_id": position_id}
+            return {"status": "error", "error": "Operation failed — check server logs", "position_id": position_id}
 
     async def close_all_positions_async(
         self,
@@ -331,7 +331,7 @@ class MobileTradingEngine:
                 "action": "close_all",
                 "user_id": user_id,
                 "status": "error",
-                "error": str(exc),
+                "error": "Operation failed — check server logs",
                 "positions_closed": 0,
             }
 
@@ -364,7 +364,7 @@ class MobileTradingEngine:
             }
         except Exception as exc:
             logger.error("MobileTradingEngine.cancel_order_async: %s", exc, exc_info=True)
-            return {"status": "error", "error": str(exc), "order_id": order_id}
+            return {"status": "error", "error": "Operation failed — check server logs", "order_id": order_id}
 
     # ── Position / order queries ──────────────────────────────────────────────
 
