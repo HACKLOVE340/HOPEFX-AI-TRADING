@@ -736,10 +736,10 @@ def create_portfolio_report(
 
     logger.info("Portfolio report complete: %s", report_path)
     logger.info(
-        "Key metrics — Sharpe: %.2f | Sortino: %.2f | MaxDD: %.2%% | Calmar: %.2f",
+        "Key metrics — Sharpe: %.2f | Sortino: %.2f | MaxDD: %.2f%% | Calmar: %.2f",
         metrics["sharpe_ratio"],
         metrics["sortino_ratio"],
-        metrics["max_drawdown"],
+        metrics["max_drawdown"] * 100,
         metrics["calmar_ratio"],
     )
 

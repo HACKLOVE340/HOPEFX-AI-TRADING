@@ -472,6 +472,8 @@ class Gatekeeper:
         except Exception as _dq_exc:
             logger.debug("Data quality check failed (%s) — defaulting to 1.0", _dq_exc)
             return 1.0
+
+    def _get_blackout(self) -> bool:
         """Return True when a news/macro blackout is active.
 
         Priority
