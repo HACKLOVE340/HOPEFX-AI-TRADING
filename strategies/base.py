@@ -80,17 +80,26 @@ class BaseStrategy(ABC):
     - on_bar(): Process new bar data
     """
 
-    def __init__(self, config: StrategyConfig):
+    def __init__(self, config_or_name, symbol: str | None = None, config: "StrategyConfig | None" = None):
         """
         Initialize strategy.
 
-        Args:
-            config: Strategy configuration
+        Accepts two call signatures:
+          - BaseStrategy(config)                  — single StrategyConfig object
+          - BaseStrategy(name, symbol, config)    — legacy 3-arg form used by some subclasses
         """
-        self.config = config
+        if isinstance(config_or_name, str):
+            # 3-arg form: (name, symbol, config)
+            if config is None:
+                raise ValueError("config must be provided when using 3-arg form")
+            self.config = config
+        else:
+            # 1-arg form: (config,)
+            self.config = config_or_name
         self.status = StrategyStatus.IDLE
         self.positions = []
         self.signals_history = []
+        self.logger = logging.getLogger(f"{__name__}.{config.name}")
         self.performance_metrics = {
             "total_signals": 0,
             "winning_signals": 0,
