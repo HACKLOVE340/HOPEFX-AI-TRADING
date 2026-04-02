@@ -136,8 +136,8 @@ def create_news_router():
                 signal["direction"] = signal["direction"].upper()
             return signal
         except Exception as exc:
-            logger.error(f"Geopolitical signal error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Geopolitical signal unavailable: {exc}") from exc
+            logger.error("Geopolitical signal error: %s", exc)
+            raise HTTPException(status_code=500, detail="Geopolitical signal unavailable — check server logs") from None
 
     @news_router.get("/geopolitical/events")
     async def get_geopolitical_events(force_refresh: bool = Query(False)):
@@ -159,8 +159,8 @@ def create_news_router():
                 "count": len(events),
             }
         except Exception as exc:
-            logger.error(f"Geopolitical events error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Events unavailable: {exc}") from exc
+            logger.error("Geopolitical events error: %s", exc)
+            raise HTTPException(status_code=500, detail="Events unavailable — check server logs") from None
 
     @news_router.get("/geopolitical/assessment")
     async def get_risk_assessment():
@@ -173,8 +173,8 @@ def create_news_router():
             assessment = provider.get_risk_assessment()
             return assessment.to_dict()
         except Exception as exc:
-            logger.error(f"Risk assessment error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Assessment unavailable: {exc}") from exc
+            logger.error("Risk assessment error: %s", exc)
+            raise HTTPException(status_code=500, detail="Assessment unavailable — check server logs") from None
 
     @news_router.get("/geopolitical/world-monitor")
     async def get_world_monitor_urls():
@@ -190,8 +190,8 @@ def create_news_router():
                 "base_url": "https://worldmonitor.app",
             }
         except Exception as exc:
-            logger.error(f"World Monitor URLs error: {exc}")
-            raise HTTPException(status_code=500, detail=f"World Monitor integration error: {exc}") from exc
+            logger.error("World Monitor URLs error: %s", exc)
+            raise HTTPException(status_code=500, detail="World Monitor integration unavailable — check server logs") from None
 
     # ── Economic calendar endpoint ─────────────────────────────────────────
 
@@ -236,8 +236,8 @@ def create_news_router():
                 "hours_ahead": hours_ahead,
             }
         except Exception as exc:
-            logger.error(f"Economic calendar error: {exc}")
-            raise HTTPException(status_code=500, detail=f"Economic calendar unavailable: {exc}") from exc
+            logger.error("Economic calendar error: %s", exc)
+            raise HTTPException(status_code=500, detail="Economic calendar unavailable — check server logs") from None
 
     # ── Sentiment endpoint ──────────────────────────────────────────────────
 
@@ -269,8 +269,8 @@ def create_news_router():
                 else ("bullish" if score > 0 else "bearish" if score < 0 else "neutral"),
             }
         except Exception as exc:
-            logger.error(f"Sentiment analysis error for {symbol}: {exc}")
-            raise HTTPException(status_code=500, detail=f"Sentiment unavailable: {exc}") from exc
+            logger.error("Sentiment analysis error for %s: %s", symbol, exc)
+            raise HTTPException(status_code=500, detail="Sentiment unavailable — check server logs") from None
 
     return news_router
 
