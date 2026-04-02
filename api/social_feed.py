@@ -284,9 +284,7 @@ async def get_leaderboard(
     """
     # ── 1. Persisted leaderboard snapshot ────────────────────────────────────
     try:
-        from api.db_store import db_get as _db_get
-
-        stored = _db_get("leaderboard") or {}
+        stored = db_get("leaderboard") or {}
         entries = stored.get(period, [])
         if entries:
             return entries[:limit]

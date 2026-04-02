@@ -403,7 +403,7 @@ class AuthService:
 
             # Issue tokens
             access_token = self._create_access_token(user)
-            raw_refresh, session_row = self._create_refresh_session(
+            raw_refresh, _ = self._create_refresh_session(
                 user,
                 ip_address,
                 device_info,

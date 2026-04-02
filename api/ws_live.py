@@ -648,7 +648,6 @@ async def _heartbeat_broadcaster() -> None:
 
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
-    global _broadcast_task  # noqa: PLW0602
     loop = asyncio.get_event_loop()
     loop.create_task(_price_broadcaster())
     loop.create_task(_heartbeat_broadcaster())
@@ -848,8 +847,6 @@ async def ws_live(websocket: WebSocket) -> None:
         logger.error("WS live error [%s]: %s", cid, exc)
         _manager.disconnect(cid)
     finally:
-        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
-
         await get_ws_limiter().release(get_client_ip(websocket))
 
 
