@@ -671,7 +671,7 @@ class CandlestickPatternDetector:
         Returns:
             List of detected CandlestickPattern objects.
         """
-        opens, _, _, closes = self._get_ohlc(df)
+        opens, highs, lows, closes = self._get_ohlc(df)
         if opens is None:
             return []
 
@@ -889,7 +889,7 @@ class CandlestickPatternDetector:
         Returns:
             List of detected CandlestickPattern objects.
         """
-        opens, _, _, closes = self._get_ohlc(df)
+        opens, highs, lows, closes = self._get_ohlc(df)
         if opens is None:
             return []
         return self.detect(opens, highs, lows, closes)

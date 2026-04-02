@@ -170,6 +170,8 @@ class MT5Connector(BrokerConnector):
         quantity: float = 0.0,
         price: float | None = None,
         stop_price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
         **kwargs,
     ) -> Order | None:
         """
@@ -451,7 +453,7 @@ class MT5Connector(BrokerConnector):
             mt5_timeframe = timeframe_map.get(timeframe.upper(), mt5.TIMEFRAME_H1)
 
             # Get candles
-            rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, count)
+            rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, limit)
             if rates is None:
                 return None
 

@@ -85,7 +85,7 @@ from data_layer.normalization.pipeline import (
 from data_layer.quality.engine import DataQualityEngine, dqe
 from data_layer.replay.engine import MarketReplayEngine, market_replay_engine
 from data_layer.sentiment.engine import NewsSentimentEngine, news_sentiment_engine
-from data_layer.types import GoldTick, QualityReport, TickQuality
+from data_layer.types import FeedSource, GoldTick, QualityReport, TickQuality
 import contextlib
 
 logger = logging.getLogger(__name__)
@@ -362,8 +362,6 @@ class MarketDataOrchestrator:
             cached = self._redis_store.get_tick(symbol)
             if cached:
                 try:
-                    from data_layer.types import FeedSource
-
                     # Require source to be present and a known FeedSource value.
                     # Missing or unrecognised source → fall through to live feed
                     # rather than labelling the tick with a fabricated origin.
