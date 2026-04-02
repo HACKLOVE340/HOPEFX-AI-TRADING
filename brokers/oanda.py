@@ -194,11 +194,10 @@ class OANDABroker:
             async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}") as resp:
                 resp.raise_for_status()
             self.connected = True
-            logger.info(
-                "OANDABroker: connected to %s account=%s",
-                self._base_url,
-                self._account_id,  # nosec B105 — account ID is a non-secret identifier
-            )
+            # Log only the last 4 chars of the account ID to avoid leaking the
+            # full identifier into log aggregators while still aiding debugging.
+            _acct_hint = f"...{self._account_id[-4:]}" if len(self._account_id) > 4 else "****"
+            logger.info("OANDABroker: connected to %s account=%s", self._base_url, _acct_hint)
             return True
         except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.error("OANDABroker: connect failed: %s", exc)
