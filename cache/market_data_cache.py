@@ -3,6 +3,7 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
+# pylint: disable=broad-exception-caught,logging-fstring-interpolation
 """
 Market Data Cache Module - PRODUCTION VERSION
 Fixed: Thread safety, proper Redis connection management, circuit breaker
@@ -23,7 +24,7 @@ from enum import Enum
 try:
     import redis
     from redis import Redis
-    from redis.exceptions import ConnectionError, TimeoutError as RedisTimeoutError  # noqa: F401
+    from redis.exceptions import TimeoutError as RedisTimeoutError  # pylint: disable=unused-import  # re-exported
 
     REDIS_AVAILABLE = True
 except ImportError:
@@ -173,11 +174,11 @@ class _InMemoryStore:
 
     def scan(
         self,
-        cursor: int = 0,
+        cursor: int = 0,  # pylint: disable=unused-argument
         match: str | None = None,
-        count: int = 100,
+        count: int = 100,  # pylint: disable=unused-argument
     ) -> tuple[int, list[str]]:
-        """Single-pass SCAN (always returns cursor=0, all matching keys)."""
+        """Single-pass SCAN (always returns cursor=0, all matching keys). cursor/count unused in memory impl."""
         import fnmatch
 
         with self._lock:
@@ -189,7 +190,7 @@ class _InMemoryStore:
 
             return 0, all_keys
 
-    def info(self, section: str = "all") -> dict[str, Any]:
+    def info(self, section: str = "all") -> dict[str, Any]:  # pylint: disable=unused-argument
         with self._lock:
             return {"used_memory": sum(len(v) for v in self._data.values() if isinstance(v, str | bytes))}
 
