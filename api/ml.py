@@ -24,13 +24,13 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
-
-UTC = timezone.utc
 from typing import Any
 
 import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+
+UTC = timezone.utc
 
 from api.auth import TokenPayload, get_current_user, require_role
 
@@ -140,8 +140,6 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
     """
     import pathlib
 
-    import pandas as pd
-
     symbol_upper = symbol.upper().replace("-", "/").replace("/", "_")
     # Normalise: XAU/USD → XAU_USD, XAUUSD → XAU_USD
     if "_" not in symbol_upper and len(symbol_upper) == 6:
@@ -204,7 +202,7 @@ def _compute_atr_sl_tp(
     direction: str,
     sl_atr_mult: float = 1.5,
     tp_atr_mult: float = 3.0,
-) -> tuple:
+) -> tuple[float, float]:
     """
     Compute ATR(14)-based stop-loss and take-profit from an OHLCV DataFrame.
 
@@ -214,11 +212,10 @@ def _compute_atr_sl_tp(
 
     Returns (stop_loss, take_profit) rounded to 5 decimal places.
     """
-    import os as _os
     import numpy as _np
 
-    sl_mult = float(_os.getenv("SL_ATR_MULT", str(sl_atr_mult)))
-    tp_mult = float(_os.getenv("TP_ATR_MULT", str(tp_atr_mult)))
+    sl_mult = float(os.getenv("SL_ATR_MULT", str(sl_atr_mult)))
+    tp_mult = float(os.getenv("TP_ATR_MULT", str(tp_atr_mult)))
 
     atr: float | None = None
 
@@ -535,10 +532,8 @@ async def predict(
             sub = subscription_manager.get_user_subscription(user.sub)
             user_plan = sub.tier.value if (sub and sub.is_active() and hasattr(sub.tier, "value")) else "free"
             if not plan_gate("professional", user_plan):
-                from fastapi import HTTPException as _HTTPException, status as _status
-
-                raise _HTTPException(
-                    status_code=_status.HTTP_403_FORBIDDEN,
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
                     detail={
                         "error": "PLAN_LIMIT_EXCEEDED",
                         "required_plan": "professional",
@@ -1049,10 +1044,8 @@ async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
 
 # ── RL Agent endpoints ────────────────────────────────────────────────────────
 
-from pydantic import BaseModel as _BaseModel
 
-
-class RLTrainRequest(_BaseModel):
+class RLTrainRequest(BaseModel):
     symbol: str = "XAU_USD"
     timeframe: str = "H1"
     candles: int = 2000
@@ -1170,7 +1163,6 @@ async def rl_walk_forward(
 @router.get("/rl/status", tags=["ML Models"])
 async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
     """Return saved RL model files and their sizes."""
-    import os
     from ml.rl_agent import _MODEL_DIR
 
     models = []

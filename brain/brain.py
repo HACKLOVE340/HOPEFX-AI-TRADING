@@ -517,12 +517,12 @@ class HOPEFXBrain:
         returns = np.diff(closes_arr) / closes_arr[:-1]
 
         # Volatility (annualized)
-        np.std(returns) * np.sqrt(252 * 24)
+        _annualized_vol = np.std(returns) * np.sqrt(252 * 24)
 
         # Trend using linear regression
         x = np.arange(len(closes_arr[-20:]))
         y = closes_arr[-20:]
-        slope, intercept = np.polyfit(x, y, 1)
+        slope, _intercept = np.polyfit(x, y, 1)
         normalized_slope = slope / closes_arr[-1] if closes_arr[-1] > 0 else 0
 
         # ATR calculation
@@ -562,7 +562,7 @@ class HOPEFXBrain:
         trend = (second_half - first_half) / first_half if first_half > 0 else 0
 
         # Volatility
-        (std_close / mean_close) * 100 if mean_close > 0 else 0
+        _volatility_pct = (std_close / mean_close) * 100 if mean_close > 0 else 0
 
         # ATR approximation
         atr = sum(h - l for h, l in zip(highs[-14:], lows[-14:], strict=False)) / 14

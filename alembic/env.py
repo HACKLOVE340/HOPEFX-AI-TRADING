@@ -26,7 +26,9 @@ from database.models import Base
 logger = logging.getLogger(__name__)
 
 try:
-    from database.user_models import User, UserSession, LoginAttempt
+    # Import user models so their metadata is registered on Base for autogenerate
+    import database.user_models as _user_models  # noqa: F401
+    _ = _user_models  # ensure the module is loaded
 except Exception as _exc:
     logger.debug("Suppressed exception: %s", _exc)
 

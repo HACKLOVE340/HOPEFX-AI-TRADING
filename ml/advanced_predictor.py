@@ -293,7 +293,7 @@ class AdvancedPredictor:
     def _load_meta(self) -> None:
         try:
             if _META_FILE.exists():
-                with open(_META_FILE) as f:
+                with open(_META_FILE, encoding="utf-8") as f:
                     self._meta = json.load(f)
                 logger.debug(
                     "Model meta loaded: OOS accuracy=%.4f, AUC=%.4f",
@@ -719,7 +719,7 @@ class HybridEnsemblePredictor:
     def _check_components(self) -> None:
         """Probe which components are available without loading models."""
         try:
-            import xgboost
+            import xgboost  # noqa: F401  # pylint: disable=unused-import
 
             self._has_xgb = True
         except ImportError:
@@ -727,7 +727,7 @@ class HybridEnsemblePredictor:
             logger.warning("HybridEnsemble: xgboost not available")
 
         try:
-            import torch
+            import torch  # noqa: F401  # pylint: disable=unused-import
 
             self._has_lstm = True
         except ImportError:
@@ -735,7 +735,7 @@ class HybridEnsemblePredictor:
             logger.debug("HybridEnsemble: torch not available — LSTM disabled")
 
         try:
-            import stable_baselines3
+            import stable_baselines3  # noqa: F401  # pylint: disable=unused-import
 
             self._has_rl = True
         except ImportError:

@@ -624,8 +624,8 @@ class AsyncExecutionEngine:
 
             self.last_request_time[venue] = time.time()
 
-            # Execute
-            self.brokers[venue]
+            # Execute via the registered broker for this venue
+            _broker = self.brokers[venue]
             if method == "get_positions":
                 return []  # Implement actual API call
             elif method == "cancel":

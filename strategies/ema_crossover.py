@@ -52,7 +52,8 @@ class EMAcrossoverStrategy(BaseStrategy):
             f"EMA Crossover Strategy initialized: fast={fast_period}, slow={slow_period}",
         )
 
-    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
+        market_data = analysis
         """
         Generate trading signal based on EMA crossover.
 

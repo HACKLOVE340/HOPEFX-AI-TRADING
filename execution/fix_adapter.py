@@ -513,7 +513,12 @@ class FIXAdapter:
 
         # Heartbeat thread
         self._hb_thread: threading.Thread | None = None
+        self._hb_stop_event: threading.Event | None = None
         self._running = False
+
+        # pyfixmsg socket state (set in _connect_pyfixmsg)
+        self._pyfixmsg_sock: Any = None
+        self._pyfixmsg_seq: int = 1
 
     # ------------------------------------------------------------------
     # Credential validation
@@ -650,8 +655,6 @@ class FIXAdapter:
             password=self._password,
         )
 
-        import os
-
         if os.path.exists(self.config_file):
             settings = fix.SessionSettings(self.config_file)
         else:
@@ -673,7 +676,6 @@ class FIXAdapter:
                 f"SocketConnectHost={self.host}\n"
                 f"SocketConnectPort={self.port}\n"
             )
-            import os
             import tempfile
 
             with tempfile.NamedTemporaryFile(mode="w", suffix=".cfg", delete=False) as tmp:
@@ -750,11 +752,9 @@ class FIXAdapter:
 
     def _build_pyfixmsg_logon(self) -> bytes:
         """Build a minimal FIX 4.4 Logon message as raw bytes."""
-        import time as _time
-
         seq = self._pyfixmsg_seq
         self._pyfixmsg_seq += 1
-        sending_time = _time.strftime("%Y%m%d-%H:%M:%S", _time.gmtime())
+        sending_time = time.strftime("%Y%m%d-%H:%M:%S", time.gmtime())
 
         fields = [
             ("8", "FIX.4.4"),
@@ -970,11 +970,9 @@ class FIXAdapter:
                 "fix_adapter._send_pyfixmsg: socket not connected — call start() first",
             )
 
-        import time as _time
-
         seq = self._pyfixmsg_seq
         self._pyfixmsg_seq += 1
-        sending_time = _time.strftime("%Y%m%d-%H:%M:%S", _time.gmtime())
+        sending_time = time.strftime("%Y%m%d-%H:%M:%S", time.gmtime())
 
         fields = [
             ("8", "FIX.4.4"),

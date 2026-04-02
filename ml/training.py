@@ -12,9 +12,11 @@ import json
 import logging
 import warnings
 from datetime import datetime, timezone
+from pathlib import Path
 
 UTC = timezone.utc
-from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import Any
 
 import joblib
@@ -59,11 +61,8 @@ except ImportError:
 # Enhanced macro + regime features (DXY, VIX, yields, SPX cross-asset)
 try:
     from ml.macro_features import (
-        MACRO_COLUMNS,
         add_macro_features,
         add_regime_features,
-        build_enhanced_feature_matrix,
-        fetch_macro_history,
     )
 
     ENHANCED_MACRO_AVAILABLE = True
@@ -72,14 +71,13 @@ except ImportError:
 
 # TensorFlow/Keras
 try:
-    import tensorflow as tf
     from tensorflow.keras.callbacks import (
         EarlyStopping,
         ModelCheckpoint,
         ReduceLROnPlateau,
     )
-    from tensorflow.keras.layers import GRU, LSTM, Bidirectional, Dense, Dropout
-    from tensorflow.keras.models import Sequential, load_model, save_model
+    from tensorflow.keras.layers import LSTM, Dense, Dropout
+    from tensorflow.keras.models import Sequential, load_model
     from tensorflow.keras.optimizers import Adam
 
     TENSORFLOW_AVAILABLE = True
@@ -509,7 +507,7 @@ class LSTMModel:
             ".keras",
             "_config.json",
         )
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         logger.info("LSTM model saved: %s", filepath)
@@ -525,7 +523,7 @@ class LSTMModel:
             "_config.json",
         )
         if Path(config_path).exists():
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 config = json.load(f)
                 self.sequence_length = config.get(
                     "sequence_length",
@@ -708,7 +706,7 @@ class XGBoostModel:
             ".pkl",
             "_config.json",
         )
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         # Save feature importance if available
@@ -879,7 +877,7 @@ class RandomForestModel:
         }
 
         config_path = filepath.replace(".pkl", "_config.json")
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         # Save feature importance
@@ -985,7 +983,7 @@ class EnsembleModel:
             "models": list(self.models.keys()),
         }
 
-        with open(f"{base_dir}/ensemble_config.json", "w") as f:
+        with open(f"{base_dir}/ensemble_config.json", "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         return saved_paths
@@ -1101,7 +1099,7 @@ class HyperparameterTuner:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         # Save best params
-        with open(f"{output_dir}/best_params_{self.model_type}.json", "w") as f:
+        with open(f"{output_dir}/best_params_{self.model_type}.json", "w", encoding="utf-8") as f:
             json.dump(self.best_params, f, indent=2)
 
         # Save CV results
@@ -1144,7 +1142,7 @@ class MLEvaluationReport:
             },
         }
 
-        with open(report_path, "w") as f:
+        with open(report_path, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, default=str)
 
         # Save feature importance
@@ -1274,21 +1272,18 @@ def train_ml_pipeline(
     # every training bar gets the macro values that were available on that date.
     if ENHANCED_MACRO_AVAILABLE:
         try:
-            import logging as _log
-
             from ml.macro_features import fetch_macro_history
 
-            _macro_logger = _log.getLogger(__name__)
+            _macro_logger = logger
             # Determine date range from the full df (train + test)
             _idx = df.index if hasattr(df.index, "min") else pd.RangeIndex(len(df))
             if hasattr(_idx, "min") and hasattr(_idx[0], "year"):
                 _start = pd.Timestamp(_idx.min()).to_pydatetime().replace(tzinfo=UTC)
                 _end = pd.Timestamp(_idx.max()).to_pydatetime().replace(tzinfo=UTC)
             else:
-                from datetime import datetime as _dt
                 from datetime import timedelta as _td
 
-                _end = _dt.now(UTC)
+                _end = datetime.now(UTC)
                 _start = _end - _td(days=len(df) + 30)
 
             macro_hist = fetch_macro_history(_start, _end, interval="1d")
@@ -1321,9 +1316,7 @@ def train_ml_pipeline(
     elif MACRO_AVAILABLE:
         # Fallback: point-in-time broadcast (introduces look-ahead bias for
         # historical training data — acceptable only for live inference).
-        import warnings as _w
-
-        _w.warn(
+        warnings.warn(
             "MacroFeed().as_ml_features() broadcasts today's macro values to all "
             "training rows. This introduces look-ahead bias for historical data. "
             "Install yfinance for bias-free historical macro features.",

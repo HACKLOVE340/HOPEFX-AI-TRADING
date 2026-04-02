@@ -219,7 +219,7 @@ class AlgoOrder(ABC):
     @abstractmethod
     async def run(self) -> AlgoFillReport:
         """Execute the algorithm. Returns when complete or cancelled."""
-        ...
+        ...  # pylint: disable=unnecessary-ellipsis
 
     async def _submit_child(self, quantity: float) -> ChildOrder | None:
         """Submit a single child order to the broker."""
