@@ -172,6 +172,8 @@ kill_switch.state.json
 
 # Downloaded OHLCV cache files (yfinance, large data)
 data/*Y.csv
+!data/XAUUSD_50Y.csv
+!data/XAUUSD_40Y.csv
 data/*_H1.csv
 frontend/coverage/
 
