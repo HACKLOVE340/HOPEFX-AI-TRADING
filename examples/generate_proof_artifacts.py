@@ -77,7 +77,7 @@ def fetch_real_xauusd(years: int = 40) -> pd.DataFrame:
     Provides enough test bars for ≥300 trades (SE ≤ ±0.3 on Sharpe).
     """
     import yfinance as yf
-    from datetime import timezone
+
 
     end = datetime.now(UTC)
     start = end - timedelta(days=years * 365)

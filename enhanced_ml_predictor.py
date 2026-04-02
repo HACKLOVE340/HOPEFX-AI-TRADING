@@ -39,7 +39,6 @@ import warnings
 # ML/DL Libraries
 try:
     import tensorflow as tf
-    from tensorflow import keras
     from tensorflow.keras.models import Model, Sequential, load_model
     from tensorflow.keras.layers import (
         LSTM,
@@ -48,10 +47,7 @@ try:
         Dropout,
         BatchNormalization,
         Input,
-        Concatenate,
-        Multiply,
         Add,
-        Attention,
         Conv1D,
         MaxPooling1D,
         GlobalAveragePooling1D,
@@ -62,12 +58,10 @@ try:
         EarlyStopping,
         ReduceLROnPlateau,
         ModelCheckpoint,
-        TensorBoard,
         TerminateOnNaN,
     )
     from tensorflow.keras.optimizers import Adam, AdamW
     from tensorflow.keras.regularizers import l1_l2
-    from tensorflow.keras.losses import Huber
 
     TENSORFLOW_AVAILABLE = True
 except ImportError:
@@ -75,12 +69,7 @@ except ImportError:
     warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
 
 try:
-    import torch
-    from torch import nn
-    from torch.utils.data import DataLoader, Dataset, TensorDataset
-    from torch.optim import AdamW as TorchAdamW
-    from torch.optim.lr_scheduler import ReduceLROnPlateau as TorchReduceLROnPlateau
-
+    import torch  # pylint: disable=unused-import
     PYTORCH_AVAILABLE = True
 except ImportError:
     PYTORCH_AVAILABLE = False
@@ -88,22 +77,9 @@ except ImportError:
 try:
     from sklearn.ensemble import (
         RandomForestClassifier,
-        GradientBoostingClassifier,
-        ExtraTreesClassifier,
-        VotingClassifier,
-        StackingClassifier,
     )
-    from sklearn.preprocessing import RobustScaler, StandardScaler, QuantileTransformer
-    from sklearn.model_selection import TimeSeriesSplit, cross_val_score
-    from sklearn.metrics import (
-        accuracy_score,
-        precision_recall_fscore_support,
-        log_loss,
-        brier_score_loss,
-        roc_auc_score,
-        mean_squared_error,
-        mean_absolute_error,
-    )
+    from sklearn.preprocessing import RobustScaler
+    from sklearn.model_selection import TimeSeriesSplit
     from sklearn.calibration import CalibratedClassifierCV
     from sklearn.feature_selection import SelectFromModel, mutual_info_classif
 
@@ -126,15 +102,13 @@ except ImportError:
     LIGHTGBM_AVAILABLE = False
 
 try:
-    import optuna
-
+    import optuna  # pylint: disable=unused-import
     OPTUNA_AVAILABLE = True
 except ImportError:
     OPTUNA_AVAILABLE = False
 
 try:
-    import shap
-
+    import shap  # pylint: disable=unused-import
     SHAP_AVAILABLE = True
 except ImportError:
     SHAP_AVAILABLE = False

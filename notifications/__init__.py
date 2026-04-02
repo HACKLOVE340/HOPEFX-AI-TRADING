@@ -243,7 +243,7 @@ class NotificationManager:
 
     def _format_timestamp(self, timestamp: float) -> str:
         """Format timestamp for Discord"""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         dt = datetime.fromtimestamp(timestamp, tz=UTC)
         return dt.isoformat()

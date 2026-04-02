@@ -26,7 +26,7 @@ from enum import Enum
 import socket
 
 try:
-    from pythonjsonlogger import jsonlogger
+    from pythonjsonlogger import jsonlogger  # pylint: disable=unused-import
 
     JSON_LOGGER_AVAILABLE = True
 except ImportError:

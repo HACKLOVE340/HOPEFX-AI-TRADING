@@ -30,7 +30,7 @@ try:
         TickData,
         TransactionCostModel,
     )
-    from enhanced_realtime_engine import MultiSourceAggregator, MarketTick, MockProvider
+    from enhanced_realtime_engine import MultiSourceAggregator, MockProvider
     from enhanced_ml_predictor import EnhancedMLPredictor, FeatureEngineering
     from enhanced_smart_router import SmartOrderRouter, Order, OrderSide, OrderType
 
