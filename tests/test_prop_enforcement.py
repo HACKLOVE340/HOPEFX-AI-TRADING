@@ -95,7 +95,7 @@ class TestDrawdownTracker:
     def test_check_modify_blocks_on_breach(self, dd_tracker):
         # Force a daily breach
         dd_tracker.update(equity=94_000)  # 6% daily DD > 5% limit
-        ok, reason = dd_tracker.check_modify(
+        ok, _ = dd_tracker.check_modify(
             current_equity=94_000,
             new_stop_loss_distance=0.001,
             lots=0.1,
@@ -105,7 +105,7 @@ class TestDrawdownTracker:
         assert "breach" in reason.lower()
 
     def test_check_modify_allows_small_risk(self, dd_tracker):
-        ok, reason = dd_tracker.check_modify(
+        ok, _ = dd_tracker.check_modify(
             current_equity=99_000,
             new_stop_loss_distance=0.0005,
             lots=0.01,
@@ -117,7 +117,7 @@ class TestDrawdownTracker:
     def test_check_modify_blocks_large_risk(self, dd_tracker):
         # risk = SL_distance * lots * pip_value / balance
         # 0.10 * 100 * 1000 / 100_000 = 10% >> 5% max
-        ok, reason = dd_tracker.check_modify(
+        ok, _ = dd_tracker.check_modify(
             current_equity=99_000,
             new_stop_loss_distance=0.10,  # 10% SL distance
             lots=100.0,  # 100 lots
@@ -147,7 +147,7 @@ class TestRiskManagerPropEnforcement:
         assert risk_manager._dd_tracker.daily_realised_pnl == -350
 
     def test_check_modify_order_delegates_to_tracker(self, risk_manager):
-        ok, reason = risk_manager.check_modify_order(
+        ok, _ = risk_manager.check_modify_order(
             current_equity=99_000,
             new_stop_loss_distance=0.0005,
             lots=0.01,
@@ -233,13 +233,13 @@ class TestPropFirmConfig:
     def test_prop_firm_mode_json_enabled(self):
         cfg_path = Path(__file__).parent.parent / "prop_firm_mode.json"
         assert cfg_path.exists(), "prop_firm_mode.json must exist"
-        with open(cfg_path) as f:
+        with open(cfg_path, encoding="utf-8") as f:
             cfg = json.load(f)
         assert cfg.get("enabled") is True, "enabled must be true for testing"
 
     def test_prop_firm_has_enforcement_block(self):
         cfg_path = Path(__file__).parent.parent / "prop_firm_mode.json"
-        with open(cfg_path) as f:
+        with open(cfg_path, encoding="utf-8") as f:
             cfg = json.load(f)
         enforcement = cfg.get("enforcement", {})
         assert enforcement.get("halt_on_daily_drawdown_breach") is True
@@ -248,7 +248,7 @@ class TestPropFirmConfig:
 
     def test_ftmo_standard_drawdown_limits(self):
         cfg_path = Path(__file__).parent.parent / "prop_firm_mode.json"
-        with open(cfg_path) as f:
+        with open(cfg_path, encoding="utf-8") as f:
             cfg = json.load(f)
         ftmo = cfg["firms"]["ftmo_standard"]["drawdown"]
         assert ftmo["max_total_drawdown_pct"] == 10.0
@@ -257,7 +257,7 @@ class TestPropFirmConfig:
 
     def test_goat_funded_uses_balance_mode(self):
         cfg_path = Path(__file__).parent.parent / "prop_firm_mode.json"
-        with open(cfg_path) as f:
+        with open(cfg_path, encoding="utf-8") as f:
             cfg = json.load(f)
         goat = cfg["firms"]["goat_funded_standard"]["drawdown"]
         assert goat["drawdown_mode"] == "balance"

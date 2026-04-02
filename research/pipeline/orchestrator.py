@@ -391,7 +391,7 @@ class PipelineOrchestrator:
         self.synthesizer = synth
 
         # Augment the rarest regime (highest vol = index n_regimes-1)
-        X_aug, labels_aug = synth.augment_rare_regimes(
+        X_aug, _ = synth.augment_rare_regimes(
             X_train.values,
             regime_labels,
             target_regime=cfg.n_regimes - 1,
@@ -524,7 +524,7 @@ class PipelineOrchestrator:
         train_df, val_df, test_df = self._split(feat_df)
 
         # 4. Arrays
-        X_train_df, y_train, y_train_ret = self._prepare_arrays(train_df)
+        X_train_df, y_train, _ = self._prepare_arrays(train_df)
         X_val_df, y_val, y_val_ret = self._prepare_arrays(val_df)
         X_test_df, y_test, y_test_ret = self._prepare_arrays(test_df)
 
@@ -602,7 +602,7 @@ class PipelineOrchestrator:
             "val_report": {k: v for k, v in val_report.items() if k != "classification_report"},
             "test_report": {k: v for k, v in test_report.items() if k != "classification_report"},
         }
-        with open(run_dir / "run_meta.json", "w") as f:
+        with open(run_dir / "run_meta.json", "w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2, default=str)
 
         logger.info("Artefacts saved → %s", run_dir)

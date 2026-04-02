@@ -169,7 +169,7 @@ class DeadLetterQueue:
         entries = []
         for dlq_file in sorted(self._path.glob("dlq_*.jsonl")):
             try:
-                with open(dlq_file) as fh:
+                with open(dlq_file, encoding="utf-8") as fh:
                     for _line in fh:
                         line = _line.strip()
                         if line:
@@ -186,7 +186,7 @@ class DeadLetterQueue:
         count = 0
         for dlq_file in self._path.glob("dlq_*.jsonl"):
             try:
-                with open(dlq_file) as fh:
+                with open(dlq_file, encoding="utf-8") as fh:
                     count += sum(1 for line in fh if line.strip())
             except Exception:  # nosec B110 - file read failure is non-fatal for DLQ depth
                 pass

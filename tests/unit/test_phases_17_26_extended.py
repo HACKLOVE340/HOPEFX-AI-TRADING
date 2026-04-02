@@ -644,7 +644,6 @@ class TestResearchNotebooksExtended:
         if create_features is None:
             pytest.skip("create_features not exported")
         import pandas as pd
-        import numpy as np
 
         dates = pd.date_range("2024-01-01", periods=50, freq="h")
         df = pd.DataFrame(
@@ -762,7 +761,6 @@ class TestExecutionTransparencyExtended:
 
     def test_slippage_distribution_by_symbol(self, engine, sample_executions):
         # No symbol filter in API; use period instead
-        from datetime import datetime, timedelta
 
         dist = engine.get_slippage_distribution(
             period_start=datetime.now(UTC) - timedelta(hours=1),
@@ -781,7 +779,6 @@ class TestExecutionTransparencyExtended:
         assert trend is not None
 
     def test_latency_trend_with_limit(self, engine, sample_executions):
-        from datetime import datetime, timedelta
 
         trend = engine.get_latency_trend(
             period_start=datetime.now(UTC) - timedelta(hours=1),

@@ -87,16 +87,18 @@ class TestRedisPackage:
 
     def test_redis_exceptions_importable(self) -> None:
         """Verify common exception types are accessible."""
-        from redis.exceptions import ConnectionError, TimeoutError, AuthenticationError
+        from redis.exceptions import (
+            ConnectionError as RedisConnError,
+            TimeoutError as RedisTimeoutError,
+            AuthenticationError,
+        )
 
-        assert ConnectionError
-        assert TimeoutError
+        assert RedisConnError
+        assert RedisTimeoutError
         assert AuthenticationError
 
     def test_connection_refused_raises(self) -> None:
         """Connecting to a closed port raises a Redis ConnectionError."""
-        from redis.exceptions import ConnectionError as RedisConnectionError
-
         r = redis_lib.Redis(host="localhost", port=19999, socket_connect_timeout=0.2)
         with pytest.raises((RedisConnectionError, ConnectionError, OSError)):
             r.ping()

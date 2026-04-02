@@ -410,9 +410,7 @@ class SubscriptionManager:
         stripe_customer_id: str | None = None,
     ) -> "Subscription":
         """Create a new subscription (overrides base to add Stripe fields)."""
-        import uuid as _uuid
-
-        subscription_id = f"SUB-{_uuid.uuid4().hex[:12].upper()}"
+        subscription_id = f"SUB-{uuid.uuid4().hex[:12].upper()}"
         start_date = datetime.now(UTC)
         end_date = start_date + timedelta(days=duration_days)
 

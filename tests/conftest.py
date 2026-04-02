@@ -334,7 +334,7 @@ def mock_strategy():
         )
 
         class _MockStrategy(BaseStrategy):
-            def analyze(self, market_data):
+            def analyze(self, data):
                 return {}
 
             def generate_signal(self, analysis):
@@ -349,7 +349,6 @@ def mock_strategy():
 def sample_market_data():
     """Multi-asset OHLCV dict for portfolio tests."""
     import pandas as pd
-    import numpy as np
 
     rng = np.random.default_rng(42)
     dates = pd.date_range("2023-01-01", periods=252, freq="B")

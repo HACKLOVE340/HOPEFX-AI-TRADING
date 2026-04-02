@@ -126,7 +126,7 @@ def check_architecture() -> str:
     violations = []
     for path in EXTERNAL_FILES:
         try:
-            with open(path) as _fh:
+            with open(path, encoding="utf-8") as _fh:
                 src = _fh.read()
             for b in FORBIDDEN:
                 if b in src:
@@ -233,7 +233,6 @@ def check_single_entry_point() -> str:
 @check("Redis: ping, set, get, TTL, pub/sub")
 def check_redis() -> str:
     import redis as redis_lib
-    import os
 
     url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     r = redis_lib.from_url(url, decode_responses=True)
@@ -474,7 +473,7 @@ def check_inference() -> str:
     assert hasattr(engine, "get_data_layer_features"), "get_data_layer_features missing"
     assert hasattr(engine, "_get_data_layer_nudge"), "_get_data_layer_nudge missing"
     # Verify no direct sub-module imports remain
-    with open("ml/inference_engine.py") as _fh:
+    with open("ml/inference_engine.py", encoding="utf-8") as _fh:
         src = _fh.read()
     assert "from data_layer.feeds.macro.store_bridge" not in src
     assert "from data_layer.lineage.store" not in src
@@ -501,7 +500,7 @@ def check_risk() -> str:
     assert hasattr(gatekeeper, "_orch"), "Gatekeeper missing _orch (orchestrator reference)"
 
     # Verify no direct sub-module imports in gatekeeper
-    with open("risk/gatekeeper.py") as _fh:
+    with open("risk/gatekeeper.py", encoding="utf-8") as _fh:
         src = _fh.read()
     assert "from data_layer.lineage.store" not in src
     return "RiskManager + Gatekeeper wired, no forbidden imports"
@@ -512,7 +511,7 @@ def check_risk() -> str:
 
 @check("Execution: ExecutionEngine imports cleanly, no forbidden imports")
 def check_execution() -> str:
-    with open("execution/execution.py") as _fh:
+    with open("execution/execution.py", encoding="utf-8") as _fh:
         src = _fh.read()
     assert "from data_layer.lineage.store" not in src
     return "execution.execution OK, no forbidden imports"
@@ -523,7 +522,7 @@ def check_execution() -> str:
 
 @check("API: data_layer router importable, no forbidden imports")
 def check_api() -> str:
-    with open("api/data_layer.py") as _fh:
+    with open("api/data_layer.py", encoding="utf-8") as _fh:
         src = _fh.read()
     forbidden = [
         "from data_layer.sentiment.engine",
@@ -597,7 +596,7 @@ def check_prometheus() -> str:
 @check("forward_test.py: no MockPriceFeed / MockRiskManager / MockTick")
 def check_forward_test_no_mocks() -> str:
     # Strip comments before checking — "No GBM" in a docstring is fine
-    with open("forward_test.py") as _fh:
+    with open("forward_test.py", encoding="utf-8") as _fh:
         lines = _fh.readlines()
     code_lines = [ln for ln in lines if not ln.lstrip().startswith("#")]
     src = "".join(code_lines)
@@ -620,7 +619,7 @@ def check_forward_test_no_mocks() -> str:
 
 @check("examples/order_flow_example.py: no MockDataSource")
 def check_order_flow_no_mocks() -> str:
-    with open("examples/order_flow_example.py") as _fh:
+    with open("examples/order_flow_example.py", encoding="utf-8") as _fh:
         src = _fh.read()
     assert "MockDataSource" not in src, "MockDataSource still present"
     assert "orchestrator" in src or "MarketReplayEngine" in src, "Must use real orchestrator or replay engine"
@@ -722,7 +721,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="HOPEFX End-to-End Production Validation")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
-    passed, failed = asyncio.run(run_all(verbose=args.verbose))
+    _, failed = asyncio.run(run_all(verbose=args.verbose))
     sys.exit(0 if failed == 0 else 1)
 
 

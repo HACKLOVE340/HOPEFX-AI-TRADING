@@ -73,7 +73,7 @@ async def test_buy_signal_to_fill(broker, risk, metrics):
     broker.update_market_price("XAUUSD", 2050.0)
 
     risk.update_equity(100_000.0)
-    allowed, reason = risk.validate_trade("XAUUSD", 0.1, "buy")
+    allowed, _ = risk.validate_trade("XAUUSD", 0.1, "buy")
     assert isinstance(allowed, bool)
 
     order = broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1)

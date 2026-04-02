@@ -272,7 +272,7 @@ class TestMLPredictorFallback:
 
         import pandas as pd
 
-        direction, confidence = pred.predict(pd.DataFrame(), ema_cross=-0.5, symbol="XAU/USD")
+        direction, _ = pred.predict(pd.DataFrame(), ema_cross=-0.5, symbol="XAU/USD")
         assert direction == "SELL"
 
     def test_hold_when_cross_zero(self):
@@ -517,7 +517,6 @@ class TestNewsCalendarFeed:
     @pytest.mark.asyncio
     async def test_write_redis_calls_pipeline(self):
         from data.news_calendar_feed import NewsCalendarFeed
-        from datetime import datetime
 
         feed = NewsCalendarFeed()
         events = [datetime.now(UTC) + timedelta(hours=i) for i in range(3)]

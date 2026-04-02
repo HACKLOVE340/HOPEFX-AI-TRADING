@@ -14,8 +14,8 @@ import aiohttp
 from typing import Dict, List, Optional
 from enum import Enum
 from dataclasses import dataclass
-import json
-from datetime import timezone
+import json  # noqa: F401
+from datetime import datetime, timezone
 
 UTC = timezone.utc
 

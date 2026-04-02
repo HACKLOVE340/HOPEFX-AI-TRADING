@@ -79,9 +79,8 @@ class WalkForwardEngine:
             test_start = purge_end
             test_end = test_start + self.test_size
 
-            # Extract data
+            # Extract data (purge_start:purge_end is the embargo gap between train and test)
             train_data = data.iloc[train_start:train_end]
-            data.iloc[purge_start:purge_end]  # Not used (embargo)
             test_data = data.iloc[test_start:test_end]
 
             logger.info(

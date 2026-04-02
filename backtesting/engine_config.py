@@ -1113,7 +1113,7 @@ NOTE: Sharpe is trade-level (corrected). Bar-level Sharpe is inflated
             "trades": self.results.trades,
         }
 
-        with open(filepath, "w") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
 
         logger.info(f"Backtest results exported to {filepath}")

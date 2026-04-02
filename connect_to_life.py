@@ -626,7 +626,7 @@ class LifeSupervisor:
         }
         try:
             pathlib.Path(CHECKPOINT_FILE).parent.mkdir(parents=True, exist_ok=True)
-            with open(CHECKPOINT_FILE, "w") as fh:
+            with open(CHECKPOINT_FILE, "w", encoding="utf-8") as fh:
                 json.dump(state, fh, indent=2)
             logger.info("Checkpoint saved → %s", CHECKPOINT_FILE)
         except OSError as exc:
