@@ -319,7 +319,7 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error("Registration failed: %s", exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Registration failed") from exc
+                raise HTTPException(status_code=500, detail="Registration failed") from None
 
         @self.app.post("/api/v2/auth/login", response_model=AuthToken, tags=["Auth"])
         async def login(email: str, password: str):
@@ -341,7 +341,7 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error("Login failed: %s", exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Login failed") from exc
+                raise HTTPException(status_code=500, detail="Login failed") from None
 
         @self.app.post("/api/v2/auth/refresh", response_model=AuthToken, tags=["Auth"])
         async def refresh_token(refresh_token: str):
@@ -386,7 +386,7 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error("Failed to fetch account for %s: %s", user_id, exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Failed to fetch account") from exc
+                raise HTTPException(status_code=500, detail="Failed to fetch account") from None
 
     # ── Trading ──────────────────────────────────────────────────────────────
 
@@ -410,7 +410,7 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error("Failed to fetch quote for %s: %s", symbol, exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Failed to fetch quote") from exc
+                raise HTTPException(status_code=500, detail="Failed to fetch quote") from None
 
         @self.app.post("/api/v2/orders", response_model=dict[str, Any], tags=["Trading"])
         async def place_order(
@@ -479,7 +479,7 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error("Order placement failed for %s: %s", user_id, exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Order placement failed") from exc
+                raise HTTPException(status_code=500, detail="Order placement failed") from None
 
         @self.app.get("/api/v2/trades", response_model=list[TradeData], tags=["Trading"])
         async def get_open_trades(user_id: str = Depends(self._verify_token)):
@@ -509,7 +509,7 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error("Failed to fetch trades for %s: %s", user_id, exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Failed to fetch trades") from exc
+                raise HTTPException(status_code=500, detail="Failed to fetch trades") from None
 
         @self.app.post("/api/v2/trades/{trade_id}/close", tags=["Trading"])
         async def close_trade(
@@ -539,7 +539,7 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error("Failed to close trade %s: %s", trade_id, exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Failed to close trade") from exc
+                raise HTTPException(status_code=500, detail="Failed to close trade") from None
 
     # ── Performance ──────────────────────────────────────────────────────────
 
@@ -567,7 +567,7 @@ class MobileAPIServer:
                     exc,
                     exc_info=True,
                 )
-                raise HTTPException(status_code=500, detail="Failed to fetch performance") from exc
+                raise HTTPException(status_code=500, detail="Failed to fetch performance") from None
 
     # ── News ─────────────────────────────────────────────────────────────────
 
@@ -581,7 +581,7 @@ class MobileAPIServer:
                 return []
             except Exception as exc:
                 logger.error("Failed to fetch news: %s", exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Failed to fetch news") from exc
+                raise HTTPException(status_code=500, detail="Failed to fetch news") from None
 
     # ── Notifications ────────────────────────────────────────────────────────
 
@@ -599,7 +599,7 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error("Failed to fetch prefs for %s: %s", user_id, exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Failed to fetch preferences") from exc
+                raise HTTPException(status_code=500, detail="Failed to fetch preferences") from None
 
         @self.app.post("/api/v2/notifications/preferences", tags=["Notifications"])
         async def update_notification_preferences(
@@ -614,7 +614,7 @@ class MobileAPIServer:
                 raise
             except Exception as exc:
                 logger.error("Failed to update prefs for %s: %s", user_id, exc, exc_info=True)
-                raise HTTPException(status_code=500, detail="Failed to update preferences") from exc
+                raise HTTPException(status_code=500, detail="Failed to update preferences") from None
 
     # ── WebSocket ────────────────────────────────────────────────────────────
 
