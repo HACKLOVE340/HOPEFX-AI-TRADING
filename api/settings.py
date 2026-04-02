@@ -191,7 +191,8 @@ def _db_save(user_id: str, data: dict) -> bool:
         mgr = get_db_manager()
         if not mgr:
             return False
-        session = mgr.get_session()
+        ctx = mgr.session()
+        session = ctx.__enter__()
         if not session:
             return False
 
@@ -226,7 +227,8 @@ def _db_load(user_id: str) -> dict | None:
         mgr = get_db_manager()
         if not mgr:
             return None
-        session = mgr.get_session()
+        ctx = mgr.session()
+        session = ctx.__enter__()
         if not session:
             return None
 

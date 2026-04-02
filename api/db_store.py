@@ -25,14 +25,15 @@ logger = logging.getLogger(__name__)
 
 
 def _get_session():
-    """Return a SQLAlchemy session or None if DB unavailable."""
+    """Return a live SQLAlchemy Session, or None when the DB is unavailable."""
     try:
         from database.connection import get_db_manager
 
         mgr = get_db_manager()
         if not mgr:
             return None
-        return mgr.get_session()
+        ctx = mgr.session()
+        return ctx.__enter__()  # caller closes/rolls back in finally block
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         logger.debug("db_store: could not obtain DB session: %s", exc)  # nosec B105 - logs exception type, no secrets
         return None

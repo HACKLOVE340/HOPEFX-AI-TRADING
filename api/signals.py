@@ -913,11 +913,14 @@ def create_signals_router():
         """Create a price / signal alert for a symbol."""
         try:
             svc = _get_signal_service()
+            notify_channels = ["web"]
+            if req.notify_webhook:
+                notify_channels.append(req.notify_webhook)
             alert = svc.create_alert(
                 symbol=req.symbol,
                 direction=req.direction,
                 min_confidence=req.min_confidence,
-                notify_webhook=req.notify_webhook,
+                notify_channels=notify_channels,
             )
             return {"alert_id": alert.id, "status": "created"}
         except Exception as e:

@@ -524,8 +524,12 @@ def _resolve_user_email(user_id: str) -> str:
     """Look up the authenticated user's email address from the DB."""
     try:
         from auth.service import AuthService
+        from core.app_state import app_state
 
-        db_user = AuthService().get_user_by_id(user_id)
+        session_factory = app_state.db_session_factory
+        if session_factory is None:
+            return ""
+        db_user = AuthService(session_factory=session_factory).get_user_by_id(user_id)
         return getattr(db_user, "email", "") or ""
     except Exception as exc:
         logger.debug("Could not resolve user email for fill notification: %s", exc)
@@ -982,7 +986,7 @@ def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> 
 
         if not _state or not _state.db_session_factory:
             return []
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             q = session.query(Trade).filter(Trade.user_id == user_id)
             if symbol:
                 q = q.filter(Trade.symbol == symbol.upper())

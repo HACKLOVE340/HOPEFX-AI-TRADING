@@ -87,24 +87,30 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
     Raises ValueError when the strategy is not registered or data is unavailable.
     """
     try:
-        from backtesting.engine_config import BacktestEngine
+        from datetime import timedelta
 
-        engine = BacktestEngine()
-        result = engine.run(
-            strategy=strategy_name,
-            symbol=symbol,
-            days=duration_days,
+        from backtesting.engine_config import BacktestConfig, BacktestEngine
+
+        end_dt = datetime.now(UTC)
+        start_dt = end_dt - timedelta(days=duration_days)
+        config = BacktestConfig(
+            start_date=start_dt,
+            end_date=end_dt,
+            symbols=[symbol],
             initial_capital=initial_capital,
         )
+        engine = BacktestEngine(config=config)
+        import asyncio
+        result = asyncio.get_event_loop().run_until_complete(engine.run())
         return {
             "strategy": strategy_name,
-            "final_equity": round(float(result.get("final_equity", initial_capital)), 2),
-            "total_return": round(float(result.get("total_return_pct", 0.0)), 2),
-            "sharpe_ratio": round(float(result.get("sharpe_ratio", 0.0)), 3),
-            "max_drawdown": round(float(result.get("max_drawdown_pct", 0.0)), 2),
-            "total_trades": int(result.get("total_trades", 0)),
-            "win_rate": round(float(result.get("win_rate_pct", 0.0)), 2),
-            "equity_curve": result.get("equity_curve", []),
+            "final_equity": round(float(initial_capital * (1 + result.total_return)), 2),
+            "total_return": round(float(result.total_return * 100), 2),
+            "sharpe_ratio": round(float(result.sharpe_ratio), 3),
+            "max_drawdown": round(float(result.max_drawdown * 100), 2),
+            "total_trades": int(result.total_trades),
+            "win_rate": round(float(result.win_rate * 100), 2),
+            "equity_curve": result.equity_curve,
         }
     except ImportError:
         raise ValueError(

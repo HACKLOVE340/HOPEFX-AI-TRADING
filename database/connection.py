@@ -12,8 +12,10 @@ import logging
 import time
 import threading
 from collections.abc import Callable
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 try:
     from sqlalchemy import create_engine, event, text
@@ -29,6 +31,7 @@ try:
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     SQLALCHEMY_AVAILABLE = False
+    Session = None  # type: ignore[assignment,misc]
     logging.warning("SQLAlchemy not available, database features disabled")
 
 logger = logging.getLogger(__name__)
@@ -178,7 +181,7 @@ class DatabaseManager:
             logger.critical(f"Database circuit breaker OPENED after {self._failure_count} failures")
 
     @contextmanager
-    def session(self):
+    def session(self) -> "Generator[Session, None, None]":
         """
         Get database session with automatic cleanup and retry logic
 
