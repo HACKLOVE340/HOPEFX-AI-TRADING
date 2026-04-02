@@ -512,7 +512,7 @@ class LSTMModel:
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
 
-        logger.info(f"LSTM model saved: {filepath}")
+        logger.info("LSTM model saved: %s", filepath)
         return filepath
 
     def load(self, filepath: str):
@@ -534,7 +534,7 @@ class LSTMModel:
                 self.n_features = config.get("n_features", self.n_features)
                 self.lstm_units = config.get("lstm_units", self.lstm_units)
 
-        logger.info(f"LSTM model loaded: {filepath}")
+        logger.info("LSTM model loaded: %s", filepath)
 
     def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]:
         """Evaluate model performance"""
@@ -719,7 +719,7 @@ class XGBoostModel:
             )
             self.feature_importance.to_csv(importance_path, index=False)
 
-        logger.info(f"XGBoost model saved: {filepath}")
+        logger.info("XGBoost model saved: %s", filepath)
         return filepath
 
     def load(self, filepath: str):
@@ -731,7 +731,7 @@ class XGBoostModel:
         else:
             self.model = joblib.load(filepath)  # nosec B301 - filepath set by caller from saved_models
 
-        logger.info(f"XGBoost model loaded: {filepath}")
+        logger.info("XGBoost model loaded: %s", filepath)
 
     def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]:
         """Evaluate model performance"""
@@ -887,14 +887,14 @@ class RandomForestModel:
             importance_path = filepath.replace(".pkl", "_importance.csv")
             self.feature_importance.to_csv(importance_path, index=False)
 
-        logger.info(f"Random Forest model saved: {filepath}")
+        logger.info("Random Forest model saved: %s", filepath)
         return filepath
 
     def load(self, filepath: str):
         """Load model from disk"""
         self.model = joblib.load(filepath)  # nosec B301 - filepath set by caller from saved_models
 
-        logger.info(f"Random Forest model loaded: {filepath}")
+        logger.info("Random Forest model loaded: %s", filepath)
 
     def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]:
         """Evaluate model performance"""
@@ -1111,7 +1111,7 @@ class HyperparameterTuner:
                 index=False,
             )
 
-        logger.info(f"Tuning results saved to {output_dir}/")
+        logger.info("Tuning results saved to %s/", output_dir)
 
 
 class MLEvaluationReport:
@@ -1157,7 +1157,7 @@ class MLEvaluationReport:
         pred_path = self.output_dir / f"{model_name}_predictions_{report_time}.csv"
         pred_df.to_csv(pred_path, index=False)
 
-        logger.info(f"Evaluation report saved: {report_path}")
+        logger.info("Evaluation report saved: %s", report_path)
         return str(report_path)
 
     def plot_confusion_matrix(self, cm: np.ndarray, model_name: str, save: bool = True):
@@ -1174,7 +1174,7 @@ class MLEvaluationReport:
         if save:
             plot_path = self.output_dir / f"{model_name}_confusion_matrix.png"
             plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-            logger.info(f"Confusion matrix saved: {plot_path}")
+            logger.info("Confusion matrix saved: %s", plot_path)
 
         plt.show()
 
@@ -1202,7 +1202,7 @@ class MLEvaluationReport:
         if save:
             plot_path = self.output_dir / f"{model_name}_feature_importance.png"
             plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-            logger.info(f"Feature importance plot saved: {plot_path}")
+            logger.info("Feature importance plot saved: %s", plot_path)
 
         plt.show()
 
@@ -1309,13 +1309,15 @@ def train_ml_pipeline(
                     df_test_raw,
                     prediction_horizon=prediction_horizon,
                 )
-                logger.info(f"Historical macro features merged: {macro_hist.shape[1]} series, {len(macro_hist)} bars")
+                logger.info(
+                    "Historical macro features merged: %d series, %d bars", macro_hist.shape[1], len(macro_hist)
+                )
             else:
                 _macro_logger.warning(
                     "Historical macro fetch returned empty — skipping macro features",
                 )
         except Exception as _macro_exc:
-            logger.info(f"Historical macro features unavailable: {_macro_exc} — skipping")
+            logger.info("Historical macro features unavailable: %s — skipping", _macro_exc)
     elif MACRO_AVAILABLE:
         # Fallback: point-in-time broadcast (introduces look-ahead bias for
         # historical training data — acceptable only for live inference).
@@ -1338,12 +1340,12 @@ def train_ml_pipeline(
                     f"Point-in-time macro features merged (look-ahead bias warning): {list(macro_features.keys())}"
                 )
         except Exception as _macro_exc:
-            logger.info(f"Macro features unavailable (FRED unreachable?): {_macro_exc} — skipping")
+            logger.warning("Macro features unavailable (FRED unreachable?): %s — skipping", _macro_exc)
 
     # Scale: fit on train, transform both — never fit on test data
     X_train_scaled, X_test_scaled = fe.scale_features(X_train, X_test)
 
-    logger.info(f"Train: {len(X_train)} bars | Test: {len(X_test)} bars | Features: {X_train.shape[1]}")
+    logger.info("Train: %d bars | Test: %d bars | Features: %d", len(X_train), len(X_test), X_train.shape[1])
 
     evaluator = MLEvaluationReport()
 
@@ -1395,7 +1397,7 @@ def train_ml_pipeline(
             "report_path": report_path,
         }
 
-        logger.info(f"LSTM RMSE: {metrics['rmse']:.4f}")
+        logger.info("LSTM RMSE: %.4f", metrics["rmse"])
 
     # Train XGBoost
     if "xgboost" in model_types and XGBOOST_AVAILABLE:
@@ -1435,7 +1437,7 @@ def train_ml_pipeline(
             "report_path": report_path,
         }
 
-        logger.info(f"XGBoost Accuracy: {metrics['accuracy']:.4f}, F1: {metrics['f1']:.4f}")
+        logger.info("XGBoost Accuracy: %.4f, F1: %.4f", metrics["accuracy"], metrics["f1"])
 
     # Train Random Forest
     if "random_forest" in model_types:
@@ -1473,12 +1475,12 @@ def train_ml_pipeline(
             "report_path": report_path,
         }
 
-        logger.info(f"Random Forest Accuracy: {metrics['accuracy']:.4f}, F1: {metrics['f1']:.4f}")
+        logger.info("Random Forest Accuracy: %.4f, F1: %.4f", metrics["accuracy"], metrics["f1"])
 
     # Save feature engineer
     fe.save_scaler(f"{model_dir}/feature_scaler.pkl")
 
-    logger.info(f"\nPipeline complete. Models saved to {model_dir}/")
+    logger.info("Pipeline complete. Models saved to %s/", model_dir)
     return results
 
 
