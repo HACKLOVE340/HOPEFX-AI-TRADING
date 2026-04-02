@@ -436,8 +436,10 @@ def _register_system_routes(app, trading_app, require_admin):
                     parsed.append({"message": line})
             return {"logs": parsed, "source": str(log_path), "total_returned": len(parsed)}
         except OSError as exc:
+            # Log the full exception server-side; return a generic message to
+            # the caller to avoid leaking internal filesystem paths or OS errors.
             logger.warning("get_recent_logs: could not read %s: %s", log_path, exc)
-            return {"logs": [], "source": str(log_path), "error": str(exc)}
+            return {"logs": [], "source": str(log_path), "error": "Log file unavailable — check server logs"}
 
     @app.post("/api/v1/system/shutdown")
     async def shutdown_system(background_tasks: BackgroundTasks, user=Depends(require_admin)):
