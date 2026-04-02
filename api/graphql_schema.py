@@ -188,6 +188,7 @@ class AccountInfo:
     realized_pnl_today: float
     open_positions: int
     currency: str
+    broker_connected: bool = False
 
 
 @strawberry.type
@@ -323,27 +324,30 @@ def _live_account() -> AccountInfo:
         try:
             info = state.broker.get_account_info()
             return AccountInfo(
-                balance=float(info.get("balance", 10000)),
-                equity=float(info.get("equity", 10000)),
-                margin=float(info.get("margin", 0)),
-                free_margin=float(info.get("free_margin", 10000)),
-                margin_level=float(info.get("margin_level", 0)),
-                unrealized_pnl=float(info.get("unrealized_pnl", 0)),
-                realized_pnl_today=float(info.get("realized_pnl_today", 0)),
+                balance=float(info.get("balance", 0.0)),
+                equity=float(info.get("equity", 0.0)),
+                margin=float(info.get("margin", 0.0)),
+                free_margin=float(info.get("free_margin", 0.0)),
+                margin_level=float(info.get("margin_level", 0.0)),
+                unrealized_pnl=float(info.get("unrealized_pnl", 0.0)),
+                realized_pnl_today=float(info.get("realized_pnl_today", 0.0)),
                 open_positions=int(info.get("open_positions", 0)),
                 currency=str(info.get("currency", "USD")),
+                broker_connected=True,
             )
         except (RuntimeError, ValueError, OSError, AttributeError) as exc:
             logger.debug("Live account fetch failed: %s", exc)
+    # Broker unavailable — return zeroed struct so the frontend shows
+    # "disconnected" state rather than misleading fake values.
     return AccountInfo(
-        balance=10000,
-        equity=10420,
-        margin=200,
-        free_margin=9820,
-        margin_level=5210,
-        unrealized_pnl=420,
-        realized_pnl_today=120,
-        open_positions=1,
+        balance=0.0,
+        equity=0.0,
+        margin=0.0,
+        free_margin=0.0,
+        margin_level=0.0,
+        unrealized_pnl=0.0,
+        realized_pnl_today=0.0,
+        open_positions=0,
         currency="USD",
     )
 
