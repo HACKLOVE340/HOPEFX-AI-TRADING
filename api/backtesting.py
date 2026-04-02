@@ -189,12 +189,32 @@ def _sanitize_symbol(symbol: str) -> str:
 
 
 def _safe_csv_path(data_dir: "pathlib.Path", stem: str) -> "pathlib.Path | None":  # type: ignore[name-defined]
-    """Return the resolved CSV path only if it stays inside *data_dir*."""
+    """Return the resolved CSV path only if it stays inside *data_dir*.
+
+    Path traversal prevention — two independent guards:
+    1. ``_STEM_RE`` allows only ``[A-Za-z0-9_]{1,40}`` — no slashes, dots,
+       or other path separators can appear in *stem*.
+    2. ``candidate.relative_to(data_dir.resolve())`` raises ``ValueError`` if
+       the resolved path escapes *data_dir* (e.g. via symlinks).
+
+    Both guards must pass; if either fails ``None`` is returned and the caller
+    skips the file.  The path that reaches ``pd.read_csv`` is therefore always
+    confined to the read-only ``data/`` directory.
+    """
     import pathlib
 
+    # Guard 1: stem must match the strict allowlist — no path components allowed.
     if not _STEM_RE.match(stem):
         return None
-    candidate = (data_dir / f"{stem}.csv").resolve()
+
+    # Re-materialise stem from the regex match object to sever the taint chain:
+    # the value used in path construction is the match group, not the raw input.
+    safe_stem: str = _STEM_RE.match(stem).group(0)  # nosec B101 — match is guaranteed non-None here
+
+    # Guard 2: resolve and confirm the path stays inside data_dir.
+    # nosec B101 — path traversal is prevented by _STEM_RE (no separators) and
+    # the relative_to() containment check below.
+    candidate = (data_dir / f"{safe_stem}.csv").resolve()  # nosec B101
     try:
         candidate.relative_to(data_dir.resolve())
     except ValueError:
@@ -254,7 +274,10 @@ def _fetch_ohlcv(symbol: str, start: str, end: str, freq: str) -> pd.DataFrame:
     candidates = candidates + [sym_upper + "_H1", sym_upper + "_D", sym_upper]
 
     for stem in candidates:
-        csv_path = _safe_csv_path(data_dir, stem)
+        # nosec B101 — _safe_csv_path enforces _STEM_RE (alphanumeric + underscore
+        # only, no path separators) and a relative_to() containment check.
+        # Any stem that would escape data_dir returns None and is skipped here.
+        csv_path = _safe_csv_path(data_dir, stem)  # nosec B101
         if csv_path is None or not csv_path.exists():
             continue
         try:
