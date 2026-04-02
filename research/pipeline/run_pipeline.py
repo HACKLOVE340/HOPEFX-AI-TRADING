@@ -167,7 +167,7 @@ def main() -> None:
                 all_reports[ticker] = {"error": str(exc)}
 
         if args.output:
-            with open(args.output, "w") as f:
+            with open(args.output, "w", encoding="utf-8") as f:
                 json.dump(all_reports, f, indent=2, default=str)
             logger.info("Batch report → %s", args.output)
 
@@ -176,7 +176,7 @@ def main() -> None:
         _print_report(report, args.ticker)
 
         if args.output:
-            with open(args.output, "w") as f:
+            with open(args.output, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2, default=str)
             logger.info("Report → %s", args.output)
 

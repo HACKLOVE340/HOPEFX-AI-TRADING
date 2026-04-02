@@ -14,4 +14,4 @@ New code should import from backtesting.enhanced_engine directly:
     from backtesting.enhanced_engine import EnhancedBacktestEngine
 """
 
-from backtesting.enhanced_engine import *
+from backtesting.enhanced_engine import *  # noqa: F401,F403  # pylint: disable=wildcard-import,unused-wildcard-import

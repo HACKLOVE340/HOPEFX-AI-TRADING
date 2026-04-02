@@ -254,7 +254,7 @@ def _load_predictions_csv(csv_dir: Path, symbol: str) -> np.ndarray | None:
         try:
             import csv as _csv
 
-            with open(csv_path, newline="") as f:
+            with open(csv_path, newline="", encoding="utf-8") as f:
                 reader = _csv.DictReader(f)
                 rows = list(reader)
             if not rows:

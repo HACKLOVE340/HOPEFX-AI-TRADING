@@ -115,7 +115,7 @@ class PriceTickEvent(BaseModel):
     volume: float | None = None
     spread_pips: float | None = None
 
-    def model_post_init(self, __context: Any) -> None:
+    def model_post_init(self, context: Any) -> None:
         if self.mid is None:
             object.__setattr__(self, "mid", (self.bid + self.ask) / 2)
 

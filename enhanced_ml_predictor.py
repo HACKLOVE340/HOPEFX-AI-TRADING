@@ -1043,7 +1043,7 @@ class DeepLearningModel:
                 "dropout_rate": self.config.dropout_rate,
             }
 
-            with open(f"{filepath}/config.json", "w") as f:
+            with open(f"{filepath}/config.json", "w", encoding="utf-8") as f:
                 json.dump(config_dict, f, indent=2)
 
             logger.info(f"Model saved to {filepath}")
@@ -1053,7 +1053,7 @@ class DeepLearningModel:
         if TENSORFLOW_AVAILABLE:
             self.model = load_model(f"{filepath}/model.h5")
 
-            with open(f"{filepath}/config.json") as f:
+            with open(f"{filepath}/config.json", encoding="utf-8") as f:
                 config_dict = json.load(f)
                 self.config.architecture = ModelArchitecture(config_dict["architecture"])
                 self.n_features = config_dict["n_features"]
@@ -1925,7 +1925,6 @@ def generate_synthetic_data(n_samples: int = 5000, trend: float = 0.0001, volati
     Raises RuntimeError if called in APP_ENV=production.
     """
     import os as _os
-    import warnings
 
     if _os.getenv("APP_ENV", "production").lower() == "production":
         raise RuntimeError(
