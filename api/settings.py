@@ -310,8 +310,8 @@ async def test_notification(body: TestNotificationRequest):
         logger.warning("Test notification failed for %s: %s", channel, exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Channel delivery failed: {exc}",
-        ) from exc
+            detail="Channel delivery failed — check server logs",
+        ) from None
 
     return {"status": "delivered", "channel": channel}
 

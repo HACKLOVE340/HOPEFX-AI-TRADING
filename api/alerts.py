@@ -90,10 +90,11 @@ def _get_engine(request: Request):
             _fallback_engine = AlertEngine(config={})
             logger.info("AlertEngine: lazy-initialised fallback instance")
         except Exception as exc:
+            logger.error("Alert engine unavailable: %s", exc)
             raise HTTPException(
                 status_code=503,
-                detail=f"Alert engine unavailable: {exc}",
-            ) from exc
+                detail="Alert engine unavailable — check server logs",
+            ) from None
     return _fallback_engine
 
 
@@ -148,7 +149,9 @@ async def create_alert(
         condition_type = AlertConditionType(first.type)
         priority = AlertPriority(body.priority)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # ValueError from AlertConditionType/AlertPriority is a controlled enum
+        # validation message — safe to surface as it describes invalid input.
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
     alert = engine.create_alert(
         name=body.name,
