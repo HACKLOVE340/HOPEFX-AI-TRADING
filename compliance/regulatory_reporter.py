@@ -152,7 +152,7 @@ class DeadLetterQueue:
             + "\n"
         )
         try:
-            with open(filename, "a") as fh:
+            with open(filename, "a", encoding="utf-8") as fh:
                 fh.write(entry)
             if _PROM_OK:
                 _prom_dlq_size.inc()

@@ -162,15 +162,14 @@ class MT5Connector(BrokerConnector):
             logger.error(f"MT5 disconnect error: {e}")
             return False
 
-    def place_order(
+    def place_order(  # pylint: disable=arguments-differ
         self,
         symbol: str,
         side: OrderSide,
-        quantity: float,
         order_type: OrderType = OrderType.MARKET,
+        quantity: float = 0.0,
         price: float | None = None,
-        stop_loss: float | None = None,
-        take_profit: float | None = None,
+        stop_price: float | None = None,
         **kwargs,
     ) -> Order | None:
         """
@@ -415,11 +414,11 @@ class MT5Connector(BrokerConnector):
             logger.error(f"Get account info error: {e}")
             return None
 
-    def get_market_data(
+    def get_market_data(  # pylint: disable=arguments-differ
         self,
         symbol: str,
         timeframe: str = "H1",
-        count: int = 100,
+        limit: int = 100,
     ) -> list[dict[str, Any]] | None:
         """
         Get historical market data.

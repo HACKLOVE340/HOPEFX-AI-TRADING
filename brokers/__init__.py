@@ -651,9 +651,6 @@ class PaperTradingBroker(BaseBroker):
         if not self._session_factory:
             return
         try:
-            import uuid as _uuid
-            from datetime import datetime, timezone  # noqa: F401
-
             from database.models import OrderSide as DBOrderSide
             from database.models import Trade, TradeStatus
 
@@ -672,7 +669,7 @@ class PaperTradingBroker(BaseBroker):
             realized_pnl = float(record.get("realized_pnl", 0))
 
             trade = Trade(
-                trade_id=str(_uuid.uuid4()),
+                trade_id=str(uuid.uuid4()),
                 symbol=record.get("symbol", ""),
                 side=side_enum,
                 entry_price=float(record.get("entry_price", 0)),
@@ -737,7 +734,6 @@ class PaperTradingBroker(BaseBroker):
         take_profit: float = None,
     ) -> "Order":
         """Synchronous order placement for unit tests."""
-        import asyncio as _asyncio  # noqa: F401
 
         from brokers.base import OrderSide as _OS
         from brokers.base import OrderStatus as _OSt
@@ -1238,9 +1234,7 @@ def create_broker(broker_type: str, config: dict) -> BaseBroker:
 try:
     from brokers.paper_trading import PaperTradingBroker
 except Exception as _exc:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("PaperTradingBroker import failed: %s", _exc)
+    logger.warning("PaperTradingBroker import failed: %s", _exc)
 
 
 from brokers.factory import BrokerFactory  # noqa: F401
@@ -1248,9 +1242,7 @@ from brokers.factory import BrokerFactory  # noqa: F401
 try:
     from brokers.base import AccountInfo, BrokerConnector  # noqa: F401
 except Exception as _exc:
-    import logging as _logging
-
-    _logging.getLogger(__name__).debug("BrokerConnector base unavailable: %s", _exc)
+    logger.debug("BrokerConnector base unavailable: %s", _exc)
 
 # ── YAML-config-based broker implementations ──────────────────────────────────
 # These complement the existing connector classes and are used by the new
@@ -1258,22 +1250,16 @@ except Exception as _exc:
 try:
     from brokers.mt5_broker import MT5Broker  # noqa: F401
 except Exception as _exc:
-    import logging as _logging
-
-    _logging.getLogger(__name__).debug("MT5Broker unavailable: %s", _exc)
+    logger.debug("MT5Broker unavailable: %s", _exc)
 
 try:
     from brokers.oanda_broker import OandaBroker as OandaBrokerYaml  # noqa: F401
 except Exception as _exc:
-    import logging as _logging
-
-    _logging.getLogger(__name__).debug("OandaBroker (yaml) unavailable: %s", _exc)
+    logger.debug("OandaBroker (yaml) unavailable: %s", _exc)
 
 try:
     from brokers.ibkr_broker import IBKRBroker  # noqa: F401
 except Exception as _exc:
-    import logging as _logging
-
-    _logging.getLogger(__name__).debug("IBKRBroker unavailable: %s", _exc)
+    logger.debug("IBKRBroker unavailable: %s", _exc)
 
 __version__ = "1.0.0"

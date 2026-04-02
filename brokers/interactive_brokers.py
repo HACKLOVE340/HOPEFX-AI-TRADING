@@ -23,7 +23,7 @@ try:
         Future,
         LimitOrder,
         MarketOrder,
-        Option,  # noqa: F401
+        Option,  # pylint: disable=unused-import  # noqa: F401
         Stock,
         StopOrder,
     )
@@ -131,15 +131,14 @@ class InteractiveBrokersConnector(BrokerConnector):
             logger.error(f"IB disconnect error: {e}")
             return False
 
-    def place_order(
+    def place_order(  # pylint: disable=arguments-differ
         self,
         symbol: str,
         side: OrderSide,
-        quantity: float,
         order_type: OrderType = OrderType.MARKET,
+        quantity: float = 0.0,
         price: float | None = None,
-        stop_loss: float | None = None,
-        take_profit: float | None = None,
+        stop_price: float | None = None,
         **kwargs,
     ) -> Order | None:
         """
@@ -356,11 +355,11 @@ class InteractiveBrokersConnector(BrokerConnector):
             logger.error(f"IB get account info error: {e}")
             return None
 
-    def get_market_data(
+    def get_market_data(  # pylint: disable=arguments-differ
         self,
         symbol: str,
         timeframe: str = "1 hour",
-        count: int = 100,
+        limit: int = 100,
     ) -> list[dict[str, Any]] | None:
         """Get historical market data."""
         if not self.connected:
@@ -372,7 +371,7 @@ class InteractiveBrokersConnector(BrokerConnector):
             self.ib.qualifyContracts(contract)
 
             # Request historical data
-            duration = f"{count} D"  # Simplified
+            duration = f"{limit} D"  # Simplified
             bars = self.ib.reqHistoricalData(
                 contract,
                 endDateTime="",

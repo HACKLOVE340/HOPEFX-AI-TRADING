@@ -200,7 +200,7 @@ class SmartOrderRouter:
                     continue
 
             # All failed
-            raise Exception("All brokers failed to execute order") from None
+            raise RuntimeError("All brokers failed to execute order") from None
 
     async def _execute_with_timeout(
         self,

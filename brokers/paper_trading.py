@@ -430,9 +430,9 @@ class PaperTradingBroker(BrokerConnector):
         """Get all open positions."""
         return self._get_positions_sync()
 
-    def close_position(self, symbol_or_id: str) -> bool:
+    def close_position(self, symbol: str) -> bool:  # pylint: disable=arguments-differ
         """Close a position by symbol or position id."""
-        symbol = symbol_or_id
+        symbol_or_id = symbol
         if symbol_or_id not in self.positions:
             for sym, pos in self.positions.items():
                 if getattr(pos, "id", sym) == symbol_or_id:
