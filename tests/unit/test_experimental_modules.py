@@ -518,7 +518,7 @@ class TestFeatureFlagIntegration:
     def test_app_state_has_experimental_attributes(self):
         """app.AppState must declare slots for all experimental engines."""
         import sys
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         # Stub heavy optional deps so app.py can be imported in a test environment
         stubs = {mod: MagicMock() for mod in ("uvicorn", "sqlalchemy", "sqlalchemy.orm") if mod not in sys.modules}

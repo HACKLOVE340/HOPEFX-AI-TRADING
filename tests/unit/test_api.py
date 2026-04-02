@@ -1298,15 +1298,11 @@ class TestWebSocketManager:
         assert resp["action"] == "pong"
 
     async def test_handle_message_auth(self):
-        import os
-        import time
-        import jwt as _jwt_mod
-
         # Build a valid signed JWT using the same secret _decode_token reads.
-        secret = os.environ.get("SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!")
-        os.environ.setdefault("SECURITY_JWT_SECRET", secret)
-        now = int(time.time())
-        token = _jwt_mod.encode(
+        secret = _os.environ.get("SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!")
+        _os.environ.setdefault("SECURITY_JWT_SECRET", secret)
+        now = int(_time.time())
+        token = _jwt.encode(
             {"sub": "ws-test-user", "role": "trader", "iat": now, "exp": now + 3600},
             secret,
             algorithm="HS256",

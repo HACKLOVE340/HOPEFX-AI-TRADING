@@ -88,7 +88,7 @@ class TestFeaturesExtended:
         from ml.features_extended import build_extended_features
 
         df = _make_ohlcv(600)
-        X, y = build_extended_features(df, use_filtered_target=False, min_move_atr=0.0)
+        X, _ = build_extended_features(df, use_filtered_target=False, min_move_atr=0.0)
         assert X.shape[1] >= 150, f"Expected >=150 features, got {X.shape[1]}"
         assert len(X) > 0
 
@@ -96,7 +96,7 @@ class TestFeaturesExtended:
         from ml.features_extended import build_extended_features
 
         df = _make_ohlcv(600)
-        X, y = build_extended_features(df, use_filtered_target=False, min_move_atr=0.0)
+        X, _ = build_extended_features(df, use_filtered_target=False, min_move_atr=0.0)
         assert not X.isnull().any().any(), "NaN values in feature matrix"
         assert not np.isinf(X.values).any(), "Inf values in feature matrix"
 
@@ -405,7 +405,7 @@ class TestLiveTradingGate:
 
         gate = LiveTradingGate()
         with patch.dict(os.environ, {"FEATURE_LIVE_TRADING": "false"}, clear=False):
-            passed, msg = gate._check_feature_flag()
+            passed, _ = gate._check_feature_flag()
         assert passed is False
         assert "FEATURE_LIVE_TRADING" in msg
 
@@ -414,7 +414,7 @@ class TestLiveTradingGate:
 
         gate = LiveTradingGate()
         with patch.dict(os.environ, {"FEATURE_LIVE_TRADING": "true"}, clear=False):
-            passed, msg = gate._check_feature_flag()
+            passed, _ = gate._check_feature_flag()
         assert passed is True
 
     def test_status_dict_has_required_keys(self):

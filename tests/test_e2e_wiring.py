@@ -376,8 +376,6 @@ class TestCORSSafety:
         from fastapi.middleware.cors import CORSMiddleware
 
         # Simulate what app.py does
-        import os
-
         raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
         allowed = [o.strip() for o in raw.split(",") if o.strip()]
         assert "*" not in allowed, "Wildcard origin must not be used with allow_credentials=True"

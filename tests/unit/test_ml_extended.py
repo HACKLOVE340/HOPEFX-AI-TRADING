@@ -133,7 +133,7 @@ class TestRandomForestClassifierExtended:
     # --- predict ---
 
     def test_predict_integer_labels(self, trained_rf, training_data):
-        X, y = training_data
+        X, _ = training_data
         predictions = trained_rf.predict(X[:10])
         assert len(predictions) == 10
 
@@ -155,7 +155,7 @@ class TestRandomForestClassifierExtended:
             rf.predict(np.random.randn(5, 10))
 
     def test_predict_proba(self, trained_rf, training_data):
-        X, y = training_data
+        X, _ = training_data
         proba = trained_rf.predict_proba(X[:10])
         assert proba.shape[0] == 10
         assert proba.shape[1] >= 2
@@ -170,7 +170,7 @@ class TestRandomForestClassifierExtended:
             rf.predict_proba(np.random.randn(5, 10))
 
     def test_predict_with_confidence(self, trained_rf, training_data):
-        X, y = training_data
+        X, _ = training_data
         predictions, confidences = trained_rf.predict_with_confidence(X[:20])
         assert len(predictions) == 20
         assert len(confidences) == 20
@@ -179,7 +179,7 @@ class TestRandomForestClassifierExtended:
     # --- feature importance ---
 
     def test_get_feature_importance_dict(self, trained_rf, training_data):
-        X, y = training_data
+        X, _ = training_data
         importance = trained_rf.get_feature_importance_dict()
         assert len(importance) == X.shape[1]
         assert all(v >= 0 for v in importance.values())
@@ -409,7 +409,7 @@ class TestLSTMPricePredictorExtended:
     def test_scale_data_fit(self, lstm):
         X = np.random.randn(100)
         y = np.random.randn(100)
-        X_scaled, y_scaled = lstm._scale_data(X, y, fit=True)
+        X_scaled, _ = lstm._scale_data(X, y, fit=True)
         assert lstm.scaler_X is not None
         assert lstm.scaler_y is not None
         # Scaled values should be in [0, 1]
@@ -428,7 +428,7 @@ class TestLSTMPricePredictorExtended:
         lstm._scale_data(X, y, fit=True)
         X_val = np.random.randn(20)
         y_val = np.random.randn(20)
-        X_scaled, y_scaled = lstm._scale_data(X_val, y_val, fit=False)
+        X_scaled, _ = lstm._scale_data(X_val, y_val, fit=False)
         assert X_scaled.shape[0] == 20
 
     def test_predict_raises_if_not_trained(self, lstm):
