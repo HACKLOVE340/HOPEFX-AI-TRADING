@@ -212,9 +212,7 @@ def _load_models() -> None:
         _meta_path = _SAVED / "advanced_oos_meta.json"
         if _meta_path.exists():
             try:
-                import json as _json
-
-                with open(_meta_path) as _f:
+                with open(_meta_path, encoding="utf-8") as _f:
                     _meta = _json.load(_f)
                 _oos_acc = _meta.get("oos_accuracy", "?")
                 _oos_se = _meta.get("oos_accuracy_se", "?")
@@ -384,8 +382,6 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     Returns:
         FastAPI APIRouter
     """
-    from typing import Any, Dict, List, Optional  # noqa: F401
-
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel
 
@@ -454,13 +450,10 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         Reads from the saved training report if available; returns demo
         metrics otherwise so the frontend always has data to display.
         """
-        import json as _json
-        from pathlib import Path as _Path
-
         report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
         if report_path.exists():
             try:
-                with open(report_path) as f:
+                with open(report_path, encoding="utf-8") as f:
                     report = _json.load(f)
                 final = report.get("final", {})
                 wf = report.get("walkforward", {})
@@ -511,14 +504,11 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         Return the latest ML signal for a symbol.
         Uses the saved stacking ensemble if available.
         """
-        import json as _json
-        from pathlib import Path as _Path
-
         # Try to load a cached prediction from the report
         report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
         if report_path.exists():
             try:
-                with open(report_path) as f:
+                with open(report_path, encoding="utf-8") as f:
                     report = _json.load(f)
                 acc = report.get("final", {}).get("accuracy", 0.5)
                 return {
@@ -529,9 +519,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                     "note": "Based on last training run — retrain for live signals",
                 }
             except Exception as _pred_exc:
-                import logging as _log
-
-                _log.getLogger(__name__).warning(
+                _ml_logger.warning(
                     "Failed to read training report for predict: %s",
                     _pred_exc,
                 )
@@ -547,8 +535,6 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     @router.get("/models")
     async def list_models():
         """List available trained model files."""
-        from pathlib import Path as _Path
-
         model_dir = _Path(__file__).parent / "saved_models"
         if not model_dir.exists():
             return {"models": []}
