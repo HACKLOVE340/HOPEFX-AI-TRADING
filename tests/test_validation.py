@@ -101,7 +101,7 @@ class TestPropFirmValidator:
 
     def test_within_limits(self):
         """Test validation within limits."""
-        valid, msg = self.validator.check_limits(current_equity=100000.0)
+        valid, _ = self.validator.check_limits(current_equity=100000.0)
         assert valid is True
 
     def test_drawdown_violation(self):
@@ -117,7 +117,7 @@ class TestPropFirmValidator:
     def test_daily_loss_tracking(self):
         """Test daily loss accumulation."""
         self.validator.record_pnl(-2000)  # $2k loss
-        valid, msg = self.validator.check_limits(current_equity=100000.0)
+        valid, _ = self.validator.check_limits(current_equity=100000.0)
         assert valid is True  # 2% is within 5% daily limit
 
         # Add more losses
