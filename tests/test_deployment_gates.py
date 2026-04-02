@@ -79,7 +79,7 @@ class TestKillSwitchGate:
         try:
             with pytest.raises(HTTPException) as exc_info:
                 trading_mod._check_kill_switch()
-            assert exc_info.value.status_code == 503  # noqa: PLR2004
+            assert exc_info.value.status_code == 503
             assert "kill switch" in exc_info.value.detail.lower()
             assert "drawdown exceeded" in exc_info.value.detail
         finally:
@@ -109,7 +109,7 @@ class TestKillSwitchGate:
             # Even with a fresh user (no rate-limit history) the kill switch fires
             with pytest.raises(HTTPException) as exc_info:
                 trading_mod._check_kill_switch()
-            assert exc_info.value.status_code == 503  # noqa: PLR2004
+            assert exc_info.value.status_code == 503
         finally:
             trading_mod._set_kill_switch(None)
 
@@ -139,7 +139,7 @@ class TestSharpeGate:
             trading_mod._deployment_gate_cache.clear()
             with pytest.raises(HTTPException) as exc_info:
                 trading_mod._check_live_deployment_gates()
-        assert exc_info.value.status_code == 503  # noqa: PLR2004
+        assert exc_info.value.status_code == 503
         assert "Sharpe gate" in exc_info.value.detail
 
     def test_gate_passed_allows_live_orders(self, tmp_path, monkeypatch):
@@ -166,7 +166,7 @@ class TestSharpeGate:
             trading_mod._deployment_gate_cache.clear()
             with pytest.raises(HTTPException) as exc_info:
                 trading_mod._check_live_deployment_gates()
-        assert exc_info.value.status_code == 503  # noqa: PLR2004
+        assert exc_info.value.status_code == 503
 
     def test_gate_detail_includes_trade_count(self, tmp_path, monkeypatch):
         """Error detail must tell the operator how many trades they have."""
@@ -205,14 +205,12 @@ class TestCIModelGuard:
         monkeypatch.setenv("APP_ENV", "production")
 
         # Gate passed but ci_mode=True — model is a CI stub
-        meta_path = self._patch_meta(
-            tmp_path, _meta(gate_passed=True, n_trades=650, ci_mode=True)
-        )
+        meta_path = self._patch_meta(tmp_path, _meta(gate_passed=True, n_trades=650, ci_mode=True))
         with patch.object(trading_mod, "_OOS_META_PATH", meta_path):
             trading_mod._deployment_gate_cache.clear()
             with pytest.raises(HTTPException) as exc_info:
                 trading_mod._check_live_deployment_gates()
-        assert exc_info.value.status_code == 503  # noqa: PLR2004
+        assert exc_info.value.status_code == 503
         assert "HOPEFX_CI=1" in exc_info.value.detail
 
     def test_production_model_allows_live_orders(self, tmp_path, monkeypatch):
@@ -221,9 +219,7 @@ class TestCIModelGuard:
         monkeypatch.setenv("BROKER_TYPE", "live")
         monkeypatch.setenv("APP_ENV", "production")
 
-        meta_path = self._patch_meta(
-            tmp_path, _meta(gate_passed=True, n_trades=650, ci_mode=False)
-        )
+        meta_path = self._patch_meta(tmp_path, _meta(gate_passed=True, n_trades=650, ci_mode=False))
         with patch.object(trading_mod, "_OOS_META_PATH", meta_path):
             trading_mod._deployment_gate_cache.clear()
             trading_mod._check_live_deployment_gates()  # must not raise

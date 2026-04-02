@@ -94,6 +94,5 @@ class MultiTimeframeAnalyzer:
         """Aggregate indicators across timeframes."""
         return {
             "avg_rsi": np.mean([s["rsi"] for s in signals.values()]),
-            "trend_alignment": sum(1 for s in signals.values() if s["trend"] == "up")
-            / len(signals),
+            "trend_alignment": sum(1 for s in signals.values() if s["trend"] == "up") / len(signals),
         }

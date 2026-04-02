@@ -58,18 +58,14 @@ class SecureVault:
 
         if not self._master_key:
             logger.warning("No master key provided, generating temporary key")
-            self._master_key = base64.urlsafe_b64encode(
-                secrets.token_bytes(32)
-            ).decode()
+            self._master_key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
 
         self._initialize_cipher()
 
     def _initialize_cipher(self):
         """Initialize encryption cipher"""
         if not CRYPTO_AVAILABLE:
-            logger.warning(
-                "Using base64 obfuscation (install cryptography for real encryption)"
-            )
+            logger.warning("Using base64 obfuscation (install cryptography for real encryption)")
             return
 
         # Derive salt from environment or generate new
@@ -82,9 +78,7 @@ class SecureVault:
                 self._salt = secrets.token_bytes(16)
         else:
             self._salt = secrets.token_bytes(16)
-            logger.warning(
-                f"Generated new salt: {self._salt.hex()[:16]}... (set HOPEFX_SALT for persistence)"
-            )
+            logger.warning(f"Generated new salt: {self._salt.hex()[:16]}... (set HOPEFX_SALT for persistence)")
 
         # Derive key using PBKDF2
         kdf = PBKDF2HMAC(
@@ -115,9 +109,7 @@ class SecureVault:
                 logger.error(f"Encryption failed: {e}")
 
         # Fallback to base64
-        return EncryptedCredential(
-            ciphertext=base64.b64encode(plaintext.encode()).decode(), salt="", version=0
-        )
+        return EncryptedCredential(ciphertext=base64.b64encode(plaintext.encode()).decode(), salt="", version=0)
 
     def decrypt(self, credential: EncryptedCredential) -> str:
         """
@@ -171,9 +163,7 @@ class APICredentialManager:
         self._cache: dict[str, str] = {}  # Decrypted cache (short-lived)
         self._credential_file = Path("config/credentials.enc")
 
-    def store_credential(
-        self, service: str, key_name: str, value: str, persist: bool = True
-    ) -> bool:
+    def store_credential(self, service: str, key_name: str, value: str, persist: bool = True) -> bool:
         """
         Store encrypted credential
         """
@@ -209,17 +199,11 @@ class APICredentialManager:
             return self._cache[cache_key]
 
         # Load from memory
-        if (
-            service not in self._credentials
-            or key_name not in self._credentials[service]
-        ):
+        if service not in self._credentials or key_name not in self._credentials[service]:
             # Try loading from disk
             self._load_from_disk()
 
-            if (
-                service not in self._credentials
-                or key_name not in self._credentials[service]
-            ):
+            if service not in self._credentials or key_name not in self._credentials[service]:
                 return None
 
         # Decrypt
@@ -320,9 +304,7 @@ def hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
         salt = secrets.token_hex(16)
 
     # Use 100,000 iterations
-    key = hashlib.pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000
-    )
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000)
 
     return key.hex(), salt
 

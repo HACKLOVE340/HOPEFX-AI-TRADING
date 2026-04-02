@@ -33,6 +33,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 
@@ -177,15 +178,15 @@ class GoldFeedBase(ABC):
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
         if self._consecutive_errors >= _CB_OPEN_AFTER_ERRORS and self._cb_state != CircuitState.OPEN:
-                self._cb_state = CircuitState.OPEN
-                self._cb_opened_at = time.monotonic()
-                logger.error(
-                    "%s circuit: OPEN after %d consecutive errors",
-                    self.name.value,
-                    self._consecutive_errors,
-                )
-                if self._prom_cb_state:
-                    self._prom_cb_state.set(1)
+            self._cb_state = CircuitState.OPEN
+            self._cb_opened_at = time.monotonic()
+            logger.error(
+                "%s circuit: OPEN after %d consecutive errors",
+                self.name.value,
+                self._consecutive_errors,
+            )
+            if self._prom_cb_state:
+                self._prom_cb_state.set(1)
 
     # ── Rate limiting ─────────────────────────────────────────────────────────
 
@@ -205,9 +206,7 @@ class GoldFeedBase(ABC):
     ) -> dict:
         """Authenticated GET with exponential backoff and circuit breaker."""
         if not self._check_circuit():
-            raise RuntimeError(
-                f"{self.name.value} circuit breaker OPEN — skipping call"
-            )
+            raise RuntimeError(f"{self.name.value} circuit breaker OPEN — skipping call")
 
         await self._rate_limit()
         session = await self._get_session()
@@ -279,9 +278,7 @@ class GoldFeedBase(ABC):
         """Fetch the current XAU/USD price. Must return a GoldTick."""
         ...
 
-    async def fetch_ohlcv(
-        self, timeframe: str = "1h", limit: int = 200
-    ) -> list[OHLCVBar]:
+    async def fetch_ohlcv(self, timeframe: str = "1h", limit: int = 200) -> list[OHLCVBar]:
         """Fetch historical OHLCV bars. Override in adapters that support it."""
         return []
 

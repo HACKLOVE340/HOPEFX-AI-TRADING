@@ -14,6 +14,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -297,11 +298,7 @@ class HealthChecker:
                     status=HealthStatus.HEALTHY,
                     response_time_ms=(time.time() - start) * 1000,
                     message="Cache connection OK",
-                    details={
-                        "using_fallback": getattr(
-                            self.app.cache, "_using_fallback", False
-                        )
-                    },
+                    details={"using_fallback": getattr(self.app.cache, "_using_fallback", False)},
                 )
             else:
                 return HealthCheck(
@@ -340,9 +337,7 @@ class HealthChecker:
                 )
 
             # Try to get account info
-            account = await asyncio.wait_for(
-                self.app.broker.get_account_info(), timeout=5.0
-            )
+            account = await asyncio.wait_for(self.app.broker.get_account_info(), timeout=5.0)
 
             return HealthCheck(
                 name="broker",
@@ -444,9 +439,7 @@ class HealthChecker:
                     status=HealthStatus.DEGRADED,
                     response_time_ms=0,
                     message="Circuit breaker open",
-                    details={
-                        "failure_count": health["circuit_breaker"]["failure_count"]
-                    },
+                    details={"failure_count": health["circuit_breaker"]["failure_count"]},
                 )
 
             return HealthCheck(
@@ -484,9 +477,7 @@ class HealthChecker:
                     logger.warning(f"Health check: {health.status.value}")
                     for check in health.checks:
                         if check.status != HealthStatus.HEALTHY:
-                            logger.warning(
-                                f"  {check.name}: {check.status.value} - {check.message}"
-                            )
+                            logger.warning(f"  {check.name}: {check.status.value} - {check.message}")
 
                 # Wait for next check
                 await asyncio.sleep(self._check_interval)
@@ -502,7 +493,9 @@ class HealthChecker:
 
 # HTTP Server for health checks
 async def start_health_server(
-    host: str = "0.0.0.0", port: int = 8080, checker: HealthChecker | None = None  # nosec B104 - host configurable via parameter
+    host: str = "0.0.0.0",
+    port: int = 8080,
+    checker: HealthChecker | None = None,  # nosec B104 - host configurable via parameter
 ):
     """Start HTTP health check server"""
     if not AIOHTTP_AVAILABLE:
@@ -545,16 +538,12 @@ async def start_health_server(
         metrics.append("# HELP hopefx_health Overall health status")
         metrics.append("# TYPE hopefx_health gauge")
         status_value = 1 if health.status == HealthStatus.HEALTHY else 0
-        metrics.append(
-            f'hopefx_health{{status="{health.status.value}"}} {status_value}'
-        )
+        metrics.append(f'hopefx_health{{status="{health.status.value}"}} {status_value}')
 
         for check in health.checks:
             check_value = 1 if check.status == HealthStatus.HEALTHY else 0
             metrics.append(f'hopefx_check_health{{name="{check.name}"}} {check_value}')
-            metrics.append(
-                f'hopefx_check_response_time{{name="{check.name}"}} {check.response_time_ms}'
-            )
+            metrics.append(f'hopefx_check_response_time{{name="{check.name}"}} {check.response_time_ms}')
 
         return web.Response(text="\n".join(metrics), content_type="text/plain")
 

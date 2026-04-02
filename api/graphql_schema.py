@@ -597,10 +597,8 @@ class Query:
             rm = RiskManager()
             acct = _live_account()
             assessment = rm.assess_risk(
-                account_balance=acct.balance,
-                account_equity=acct.equity,
-                open_positions={},
-                daily_pnl=acct.realized_pnl_today,
+                account_info={"balance": acct.balance, "equity": acct.equity},
+                positions=[],
             )
             import json as _json
             from pathlib import Path

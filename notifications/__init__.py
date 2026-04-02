@@ -16,6 +16,7 @@ from enum import Enum
 from dataclasses import dataclass
 import json  # noqa: F401
 from datetime import timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -75,9 +76,7 @@ class NotificationManager:
 
     async def send_alert(self, level: str, message: str, data: dict = None):
         """Quick send method"""
-        notification = Notification(
-            level=NotificationLevel(level.lower()), message=message, data=data
-        )
+        notification = Notification(level=NotificationLevel(level.lower()), message=message, data=data)
         await self.send(notification)
 
     async def _process_queue(self):
@@ -105,10 +104,33 @@ class NotificationManager:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
+    @staticmethod
+    def _validate_discord_url(url: str) -> bool:
+        """Return True only if *url* is an HTTPS discord.com webhook."""
+        from urllib.parse import urlparse
+        try:
+            p = urlparse(url)
+            host = (p.hostname or "").lower()
+            return p.scheme == "https" and host in ("discord.com", "discordapp.com")
+        except Exception:
+            return False
+
+    @staticmethod
+    def _validate_https_url(url: str) -> bool:
+        """Return True only if *url* uses HTTPS."""
+        from urllib.parse import urlparse
+        try:
+            return urlparse(url).scheme == "https"
+        except Exception:
+            return False
+
     async def _send_discord(self, notification: Notification):
         """Send to Discord webhook"""
         webhook_url = self.config.get("discord_webhook")
         if not webhook_url:
+            return
+        if not self._validate_discord_url(webhook_url):
+            logger.warning("Discord webhook URL is not a valid HTTPS discord.com URL — skipping")
             return
 
         color_map = {
@@ -128,9 +150,7 @@ class NotificationManager:
 
         if notification.data:
             for key, value in notification.data.items():
-                embed["fields"].append(
-                    {"name": key, "value": str(value)[:1000], "inline": True}
-                )
+                embed["fields"].append({"name": key, "value": str(value)[:1000], "inline": True})
 
         payload = {"embeds": [embed]}
 
@@ -203,6 +223,9 @@ class NotificationManager:
         webhook_url = self.config.get("webhook_url")
         if not webhook_url:
             return
+        if not self._validate_https_url(webhook_url):
+            logger.warning("Custom webhook URL must use HTTPS — skipping")
+            return
 
         payload = {
             "source": "HOPEFX",
@@ -227,9 +250,7 @@ class NotificationManager:
 # Simple alert function for compatibility
 async def send_alert(level: str, message: str, **kwargs):
     """Global alert function"""
-    logger.log(
-        getattr(logging, level.upper(), logging.INFO), f"ALERT [{level}]: {message}"
-    )
+    logger.log(getattr(logging, level.upper(), logging.INFO), f"ALERT [{level}]: {message}")
 
 
 # Compatibility alias

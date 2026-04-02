@@ -101,32 +101,22 @@ class TestTickValidator:
 
 class TestTickProperties:
     def test_mid_price(self):
-        tick = Tick(
-            "XAUUSD", bid=1949.0, ask=1951.0, last=1950.0, timestamp=time.time()
-        )
+        tick = Tick("XAUUSD", bid=1949.0, ask=1951.0, last=1950.0, timestamp=time.time())
         assert tick.mid == pytest.approx(1950.0)
 
     def test_spread(self):
-        tick = Tick(
-            "XAUUSD", bid=1949.0, ask=1951.0, last=1950.0, timestamp=time.time()
-        )
+        tick = Tick("XAUUSD", bid=1949.0, ask=1951.0, last=1950.0, timestamp=time.time())
         assert tick.spread == pytest.approx(2.0)
 
     def test_spread_bps(self):
-        tick = Tick(
-            "XAUUSD", bid=1949.0, ask=1951.0, last=1950.0, timestamp=time.time()
-        )
+        tick = Tick("XAUUSD", bid=1949.0, ask=1951.0, last=1950.0, timestamp=time.time())
         # spread=2, mid=1950 → 2/1950 * 10000 ≈ 10.26 bps
         assert tick.spread_bps == pytest.approx(10.26, rel=0.01)
 
     def test_to_dict_keys(self):
-        tick = Tick(
-            "XAUUSD", bid=1949.0, ask=1951.0, last=1950.0, timestamp=time.time()
-        )
+        tick = Tick("XAUUSD", bid=1949.0, ask=1951.0, last=1950.0, timestamp=time.time())
         d = tick.to_dict()
-        assert {"symbol", "bid", "ask", "last", "mid", "spread", "timestamp"}.issubset(
-            d.keys()
-        )
+        assert {"symbol", "bid", "ask", "last", "mid", "spread", "timestamp"}.issubset(d.keys())
 
 
 # ---------------------------------------------------------------------------

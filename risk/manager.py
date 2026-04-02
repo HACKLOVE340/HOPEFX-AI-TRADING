@@ -1670,7 +1670,7 @@ class RiskManager:
             return RiskLevel.MEDIUM
         return RiskLevel.LOW
 
-    def check_drawdown(  # noqa: F811
+    def check_drawdown(  # noqa: F811  # pylint: disable=function-redefined
         self,
         equity_curve: Any = None,
         max_dd: float = None,
@@ -1975,7 +1975,7 @@ class RiskManager:
 
     # ── Extended validate_trade ───────────────────────────────────────────────
 
-    def validate_trade(  # type: ignore[override]  # noqa: F811
+    def validate_trade(  # type: ignore[override]  # noqa: F811  # pylint: disable=function-redefined
         self,
         symbol: str,
         quantity: float = 0.0,
@@ -2016,7 +2016,7 @@ class RiskManager:
 
     # ── Extended check_risk_limits (returns violations list) ─────────────────
 
-    def check_risk_limits(self) -> tuple[bool, list[str]]:  # type: ignore[override]  # noqa: F811
+    def check_risk_limits(self) -> tuple[bool, list[str]]:  # type: ignore[override]  # noqa: F811  # pylint: disable=function-redefined
         """Return (within_limits: bool, violations: List[str]).
 
         Evaluates drawdown, daily loss, open-position count, and halt state.
@@ -2049,7 +2049,7 @@ class RiskManager:
 
     # ── can_open_position (extended — human-readable reasons) ─────────────────
 
-    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]  # noqa: F811
+    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]  # noqa: F811  # pylint: disable=function-redefined
         """Return (True, 'approved') or (False, human-readable reason)."""
         if self._halt or self._trading_halted:
             return False, f"halted:{self._halt_reason}"

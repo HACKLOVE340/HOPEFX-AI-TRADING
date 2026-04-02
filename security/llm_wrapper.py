@@ -99,10 +99,7 @@ async def _call_openai(prompt: str) -> str:
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "You are a cybersecurity analyst for a trading platform. "
-                    "Be concise and technical."
-                ),
+                "content": ("You are a cybersecurity analyst for a trading platform. Be concise and technical."),
             },
             {"role": "user", "content": prompt},
         ],

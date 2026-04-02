@@ -577,6 +577,22 @@ class StrategyManager:
                 logger.warning("strategy.price_data_error symbol=%s: %s", symbol, exc)
                 continue
 
+            # Guard: verify the last bar has a real price before passing to
+            # strategies. A zero or missing close price would produce zero-price
+            # signals that reach the execution engine as zero-price orders.
+            try:
+                last_close = float(getattr(ohlcv[-1], "close", 0) or 0)
+            except (TypeError, ValueError, IndexError):
+                last_close = 0.0
+            if last_close <= 0:
+                logger.error(
+                    "strategy.skip_zero_price symbol=%s last_close=%.6f — "
+                    "price_engine returned bars with no valid close price",
+                    symbol,
+                    last_close,
+                )
+                continue
+
             for strategy in self.strategies.values():
                 if not self._strategy_enabled(strategy):
                     continue
@@ -603,7 +619,17 @@ class StrategyManager:
                         price_data=ohlcv,
                         market_regime=regime_value,
                     )
-                    all_signals.extend(s.to_dict() for s in signals)
+                    # Filter zero-price signals — a strategy returning
+                    # entry_price=0 would produce a zero-price broker order.
+                    valid = [s for s in signals if s.entry_price > 0]
+                    if len(valid) < len(signals):
+                        logger.error(
+                            "strategy.zero_price_signal name=%s symbol=%s count=%d — discarded",
+                            strategy.name,
+                            symbol,
+                            len(signals) - len(valid),
+                        )
+                    all_signals.extend(s.to_dict() for s in valid)
                 except Exception as exc:
                     logger.error(
                         "strategy.error name=%s symbol=%s: %s",

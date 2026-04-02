@@ -67,7 +67,6 @@ _OOS_MIN_ACC = float(os.getenv("LIVE_GATE_OOS_MIN_ACC", "0.60"))
 _OOS_MAX_PVAL = float(os.getenv("LIVE_GATE_OOS_MAX_PVAL", "0.05"))
 _MIN_TRADES = int(os.getenv("LIVE_GATE_MIN_TRADES", "600"))
 _PAPER_DAYS = int(os.getenv("LIVE_GATE_PAPER_DAYS", "30"))
-_MAX_SHARPE_SE = float(os.getenv("LIVE_GATE_MAX_SHARPE_SE", "0.10"))
 
 
 @dataclass
@@ -256,7 +255,7 @@ class LiveTradingGate:
                     gate_passed = bool(mse.get("sharpe_gate_passed", False))
                     n = int(mse.get("pooled_n_trades", 0))
                     se = float(mse.get("pooled_sharpe_se", 999.0))
-                    if gate_passed and se <= _MAX_SHARPE_SE:
+                    if gate_passed and se <= 0.10:  # noqa: PLR2004
                         return True, (f"Sharpe gate passed (extended backtest): N={n}, SE={se:.3f}")
                     return False, (f"Sharpe gate BLOCKED (extended backtest): N={n}, SE={se:.3f}. Need SE<=0.10.")
 

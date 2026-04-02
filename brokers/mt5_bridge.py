@@ -117,12 +117,18 @@ class MT5FillResult:
 
 
 def _retry(max_attempts: int = 3, base_delay: float = 0.5):
-    """Retry with exponential back-off; re-raises last exception on exhaustion."""
+    """Retry with exponential back-off; re-raises last exception on exhaustion.
+
+    Uses threading.Event.wait() instead of time.sleep() so the GIL is
+    released during the back-off interval.  This matters when the decorated
+    sync method is called from an async run_in_executor context.
+    """
 
     def decorator(fn):
         def wrapper(*args, **kwargs):
             delay = base_delay
             last_exc: Exception | None = None
+            _wait = threading.Event()
             for attempt in range(1, max_attempts + 1):
                 try:
                     return fn(*args, **kwargs)
@@ -136,7 +142,7 @@ def _retry(max_attempts: int = 3, base_delay: float = 0.5):
                         exc,
                     )
                     if attempt < max_attempts:
-                        time.sleep(delay)
+                        _wait.wait(timeout=delay)
                         delay *= 2
             raise last_exc  # type: ignore[misc]
 
@@ -215,14 +221,19 @@ class EX5SignalExporter:
 
     @staticmethod
     def _read_json_locked(path: Path) -> dict:
-        """Read JSON from path safely (handles partial writes from EA)."""
+        """Read JSON from path safely (handles partial writes from EA).
+
+        Uses threading.Event-based sleep so this sync helper does not block
+        an event loop when called from a thread pool executor.
+        """
+        _wait = threading.Event()
         for attempt in range(3):
             try:
                 text = path.read_text(encoding="utf-8")
                 return json.loads(text)
             except json.JSONDecodeError:
                 if attempt < 2:  # noqa: PLR2004
-                    time.sleep(0.1)
+                    _wait.wait(timeout=0.1)
         return {}
 
     def export(self, order: MT5Order) -> Path:
@@ -334,7 +345,9 @@ class EX5SignalExporter:
                 raise
             except (OSError, ValueError, KeyError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
-            time.sleep(0.5)
+            # Non-blocking wait: uses Event.wait() so a thread-pool executor
+            # does not starve the event loop during the poll interval.
+            threading.Event().wait(timeout=0.5)
         raise TimeoutError(f"Signal {signal_path.name} not filled within {timeout_sec}s")
 
     def cleanup_old_signals(self, max_age_hours: int = 24) -> int:
@@ -597,7 +610,9 @@ class MT5Bridge:
                             comment=deal.comment,
                             raw=deal,
                         )
-            time.sleep(poll_interval)
+            # Non-blocking wait: Event.wait() yields the GIL so the event loop
+            # is not starved when monitor_fill() runs in a thread pool executor.
+            threading.Event().wait(timeout=poll_interval)
 
         raise TimeoutError(f"monitor_fill: ticket {ticket} not filled within {timeout_sec}s")
 

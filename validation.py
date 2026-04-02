@@ -41,15 +41,13 @@ class ValidationResult:
 class ValidatorConfig:
     """Configuration for OrderValidator — replaces 9-parameter __init__."""
 
-    max_position_risk_pct: float = 0.02   # 2% max risk per trade
-    max_daily_risk_pct: float = 0.05      # 5% max daily risk
-    min_qty: float = 0.01                 # Minimum lot size
-    max_qty: float = 10.0                 # Maximum lot size
-    max_spread_pct: float = 0.001         # 0.1% max spread
-    max_leverage: float = 30.0            # Max leverage
-    allowed_symbols: list = field(
-        default_factory=lambda: ["XAUUSD", "EURUSD", "GBPUSD"]
-    )
+    max_position_risk_pct: float = 0.02  # 2% max risk per trade
+    max_daily_risk_pct: float = 0.05  # 5% max daily risk
+    min_qty: float = 0.01  # Minimum lot size
+    max_qty: float = 10.0  # Maximum lot size
+    max_spread_pct: float = 0.001  # 0.1% max spread
+    max_leverage: float = 30.0  # Max leverage
+    allowed_symbols: list = field(default_factory=lambda: ["XAUUSD", "EURUSD", "GBPUSD"])
 
 
 # Price sanity bounds per symbol (min, max).
@@ -77,9 +75,7 @@ class OrderValidator:
 
     def _check_symbol(self, order: Order) -> ValidationResult | None:
         if order.symbol not in self.allowed_symbols:
-            return ValidationResult(
-                valid=False, reason=f"Symbol {order.symbol} not in allowed list"
-            )
+            return ValidationResult(valid=False, reason=f"Symbol {order.symbol} not in allowed list")
         return None
 
     def _check_side(self, order: Order) -> ValidationResult | None:
@@ -100,9 +96,7 @@ class OrderValidator:
             )
         return None
 
-    def _check_price_sanity(
-        self, order: Order, current_price: float
-    ) -> ValidationResult | None:
+    def _check_price_sanity(self, order: Order, current_price: float) -> ValidationResult | None:
         if current_price <= 0:
             return ValidationResult(valid=False, reason="Invalid current price")
         bounds = _PRICE_BOUNDS.get(order.symbol)
@@ -122,10 +116,7 @@ class OrderValidator:
             return (
                 ValidationResult(
                     valid=False,
-                    reason=(
-                        f"Position risk {risk_pct:.2%} exceeds max "
-                        f"{self.max_position_risk:.2%}"
-                    ),
+                    reason=(f"Position risk {risk_pct:.2%} exceeds max {self.max_position_risk:.2%}"),
                 ),
                 risk_pct,
             )
@@ -135,16 +126,11 @@ class OrderValidator:
         if self.daily_risk_used + risk_pct > self.max_daily_risk:
             return ValidationResult(
                 valid=False,
-                reason=(
-                    f"Daily risk limit would be exceeded "
-                    f"({self.daily_risk_used:.2%} used)"
-                ),
+                reason=(f"Daily risk limit would be exceeded ({self.daily_risk_used:.2%} used)"),
             )
         return None
 
-    def _check_stop_loss(
-        self, order: Order, current_price: float
-    ) -> ValidationResult | None:
+    def _check_stop_loss(self, order: Order, current_price: float) -> ValidationResult | None:
         if order.stop_loss is None:
             logger.warning(
                 "Order %s %s has no stop loss - using default 2%%",
@@ -171,14 +157,10 @@ class OrderValidator:
                 reason="Stop loss too tight (< 0.1%) - will be hit by noise",
             )
         if stop_distance_pct > 0.05:  # noqa: PLR2004
-            return ValidationResult(
-                valid=False, reason="Stop loss too wide (> 5%) - excessive risk"
-            )
+            return ValidationResult(valid=False, reason="Stop loss too wide (> 5%) - excessive risk")
         return None
 
-    def _check_take_profit(
-        self, order: Order, current_price: float
-    ) -> ValidationResult | None:
+    def _check_take_profit(self, order: Order, current_price: float) -> ValidationResult | None:
         if order.take_profit is None:
             return None
         if order.side == "buy" and order.take_profit <= current_price:
@@ -193,9 +175,7 @@ class OrderValidator:
             )
         return None
 
-    def _check_duplicate_position(
-        self, order: Order, open_positions: list
-    ) -> ValidationResult | None:
+    def _check_duplicate_position(self, order: Order, open_positions: list) -> ValidationResult | None:
         for pos in open_positions:
             if pos.get("symbol") == order.symbol and pos.get("side") == order.side:
                 return ValidationResult(
@@ -204,9 +184,7 @@ class OrderValidator:
                 )
         return None
 
-    def _check_leverage(
-        self, order: Order, current_price: float, account_balance: float
-    ) -> ValidationResult | None:
+    def _check_leverage(self, order: Order, current_price: float, account_balance: float) -> ValidationResult | None:
         if account_balance <= 0:
             return None
         effective_leverage = (order.qty * current_price) / account_balance
@@ -242,9 +220,7 @@ class OrderValidator:
             if result is not None:
                 return result
 
-        rejection, risk_pct = self._check_position_risk(
-            order, current_price, account_balance
-        )
+        rejection, risk_pct = self._check_position_risk(order, current_price, account_balance)
         if rejection is not None:
             return rejection
 
@@ -349,9 +325,7 @@ class PropFirmValidator:
             rules = self._FIRM_RULES["ftmo"]
         return rules
 
-    def check_limits(
-        self, current_equity: float, open_pnl: float = 0.0
-    ) -> tuple[bool, str]:
+    def check_limits(self, current_equity: float, open_pnl: float = 0.0) -> tuple[bool, str]:
         total_equity = current_equity + open_pnl
         denominator = self.initial_balance if self.initial_balance > 0 else current_equity
 
@@ -416,9 +390,7 @@ class PropFirmValidator:
         within_limits, limit_reason = self.check_limits(current_equity)
         target_met, profit_pct = self.check_profit_target(current_equity)
         days_met, days_traded = self.check_min_trading_days()
-        denominator = (
-            self.initial_balance if self.initial_balance > 0 else current_equity or 1.0
-        )
+        denominator = self.initial_balance if self.initial_balance > 0 else current_equity or 1.0
         return {
             "firm": self.firm,
             "within_limits": within_limits,
@@ -447,9 +419,7 @@ def validate_order_safe(
 ) -> bool:
     """Simple validation function for quick use."""
     validator = OrderValidator()
-    order = Order(
-        symbol=symbol, side=side, qty=qty, stop_loss=stop_loss, take_profit=take_profit
-    )
+    order = Order(symbol=symbol, side=side, qty=qty, stop_loss=stop_loss, take_profit=take_profit)
     result = validator.validate_order(order, current_price, account_balance)
 
     if not result.valid:
@@ -467,21 +437,15 @@ if __name__ == "__main__":
     validator = OrderValidator()
 
     order = Order(symbol="XAUUSD", side="buy", qty=0.01, stop_loss=1950.0)
-    result = validator.validate_order(
-        order, current_price=2000.0, account_balance=10000.0
-    )
+    result = validator.validate_order(order, current_price=2000.0, account_balance=10000.0)
     print(f"\nValid order test: {result.valid} (risk: {result.risk_pct:.2%})")
 
     big_order = Order(symbol="XAUUSD", side="buy", qty=1.0)
-    result = validator.validate_order(
-        big_order, current_price=2000.0, account_balance=10000.0
-    )
+    result = validator.validate_order(big_order, current_price=2000.0, account_balance=10000.0)
     print(f"Oversized order test: {result.valid} - {result.reason}")
 
     bad_order = Order(symbol="INVALID", side="buy", qty=0.01)
-    result = validator.validate_order(
-        bad_order, current_price=100.0, account_balance=10000.0
-    )
+    result = validator.validate_order(bad_order, current_price=100.0, account_balance=10000.0)
     print(f"Invalid symbol test: {result.valid} - {result.reason}")
 
     print("\n" + "=" * 60)

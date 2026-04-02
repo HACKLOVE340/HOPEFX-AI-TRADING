@@ -56,6 +56,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -135,12 +136,12 @@ def _build_signal_embed(payload: dict[str, Any]) -> dict[str, Any]:
         {"name": "Symbol", "value": f"`{symbol}`", "inline": True},
         {
             "name": "ML Confidence",
-            "value": f"`{conf_bar}` {ml_prob*100:.1f}%",
+            "value": f"`{conf_bar}` {ml_prob * 100:.1f}%",
             "inline": False,
         },
         {
             "name": "Strategy Confidence",
-            "value": f"{confidence*100:.1f}%",
+            "value": f"{confidence * 100:.1f}%",
             "inline": True,
         },
         {"name": "Model", "value": f"`{model_ver}`", "inline": True},
@@ -245,9 +246,7 @@ class DiscordSignalBot:
     def _mark_posted(self, symbol: str) -> None:
         self._last_post[symbol] = time.monotonic()
 
-    async def _post_async(
-        self, webhook_url: str, payload: dict[str, Any], retries: int = 3
-    ) -> bool:
+    async def _post_async(self, webhook_url: str, payload: dict[str, Any], retries: int = 3) -> bool:
         """POST payload to webhook URL with retry on 429."""
         if not webhook_url:
             logger.debug("Discord webhook URL not configured — skipping post")
@@ -256,20 +255,19 @@ class DiscordSignalBot:
             import aiohttp
 
             for _attempt in range(retries):
-                async with aiohttp.ClientSession() as session, session.post(
-                    webhook_url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
+                async with (
+                    aiohttp.ClientSession() as session,
+                    session.post(
+                        webhook_url,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp,
+                ):
                     if resp.status in (200, 204):
                         return True
                     if resp.status == 429:  # noqa: PLR2004
-                        retry_after = float(
-                            (await resp.json()).get("retry_after", 1.0)
-                        )
-                        logger.debug(
-                            "Discord rate limited — retrying in %.1f s", retry_after
-                        )
+                        retry_after = float((await resp.json()).get("retry_after", 1.0))
+                        logger.debug("Discord rate limited — retrying in %.1f s", retry_after)
                         await asyncio.sleep(retry_after)
                         continue
                     logger.warning(
@@ -285,9 +283,22 @@ class DiscordSignalBot:
             return False
         return False
 
+    @staticmethod
+    def _is_valid_discord_url(url: str) -> bool:
+        from urllib.parse import urlparse
+        try:
+            p = urlparse(url)
+            host = (p.hostname or "").lower()
+            return p.scheme == "https" and host in ("discord.com", "discordapp.com")
+        except Exception:
+            return False
+
     def _post_sync(self, webhook_url: str, payload: dict[str, Any]) -> bool:
         """Synchronous fallback using requests."""
         if not webhook_url:
+            return False
+        if not self._is_valid_discord_url(webhook_url):
+            logger.warning("Discord webhook URL is not a valid HTTPS discord.com URL — skipping")
             return False
         try:
             import requests
@@ -381,14 +392,14 @@ class DiscordSignalBot:
         return await self.post_alert(
             message=(
                 f"**ML Fallback Activated** — advanced_oos.pkl unavailable.\n"
-                f"Running on `{fallback_model}` ({fallback_accuracy*100:.1f}% OOS accuracy).\n"
+                f"Running on `{fallback_model}` ({fallback_accuracy * 100:.1f}% OOS accuracy).\n"
                 f"**No demonstrated edge above chance. Do not trade live capital.**"
             ),
             level="critical",
             details={
                 "Reason": reason,
                 "Fallback Model": fallback_model,
-                "Fallback OOS Accuracy": f"{fallback_accuracy*100:.1f}%",
+                "Fallback OOS Accuracy": f"{fallback_accuracy * 100:.1f}%",
                 "Production Model": "advanced_oos.pkl (68.0% OOS, p=0.0000)",
                 "Remediation": (
                     "Ensure advanced_oos.pkl exists in ml/saved_models/ and "

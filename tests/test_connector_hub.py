@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -50,7 +51,7 @@ class TestDrawdownMonitor:
         dd = self._make(100_000)
         dd.update(100_000)  # peak = 100k
         result = dd.update(97_000)
-        assert abs(result - 0.03) < 1e-6  # noqa: PLR2004
+        assert abs(result - 0.03) < 1e-6
 
     def test_peak_updates_on_new_high(self):
         dd = self._make(100_000)
@@ -62,7 +63,7 @@ class TestDrawdownMonitor:
         dd = self._make(100_000)
         dd.update(100_000)
         dd.update(95_000)
-        assert abs(dd.daily_drawdown - 0.05) < 1e-6  # noqa: PLR2004
+        assert abs(dd.daily_drawdown - 0.05) < 1e-6
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -91,7 +92,7 @@ class TestEventBus:
         # Give the local bus a moment to deliver
         await asyncio.sleep(0.01)
         assert len(received) == 1
-        assert received[0]["bid"] == 1920.0  # noqa: PLR2004
+        assert received[0]["bid"] == 1920.0
 
     @pytest.mark.asyncio
     async def test_publish_retries_then_falls_back(self):
@@ -223,9 +224,9 @@ class TestOHLCVBuffer:
         for p in prices:
             buf.push(p, 0.5, "2025-01-01T00:00:00Z")
         df = buf.to_dataframe()
-        assert df.iloc[0]["open"] == 1900.0  # noqa: PLR2004
-        assert df.iloc[0]["high"] == 1950.0  # noqa: PLR2004
-        assert df.iloc[0]["low"] == 1880.0  # noqa: PLR2004
+        assert df.iloc[0]["open"] == 1900.0
+        assert df.iloc[0]["high"] == 1950.0
+        assert df.iloc[0]["low"] == 1880.0
         assert df.iloc[0]["close"] == prices[-1]
 
     def test_not_ready_below_min_bars(self):
@@ -260,7 +261,7 @@ class TestMLPredictorFallback:
         df = pd.DataFrame()  # empty — won't be used
         direction, confidence = pred.predict(df, ema_cross=0.5, symbol="XAU/USD")
         assert direction == "BUY"
-        assert confidence == 0.60  # noqa: PLR2004
+        assert confidence == 0.60
 
     def test_ema_sell_when_cross_negative(self):
         from strategy.engine import _MLPredictor
@@ -271,9 +272,7 @@ class TestMLPredictorFallback:
 
         import pandas as pd
 
-        direction, confidence = pred.predict(
-            pd.DataFrame(), ema_cross=-0.5, symbol="XAU/USD"
-        )
+        direction, confidence = pred.predict(pd.DataFrame(), ema_cross=-0.5, symbol="XAU/USD")
         assert direction == "SELL"
 
     def test_hold_when_cross_zero(self):
@@ -446,9 +445,7 @@ class TestFaultGuard:
         from utils.fault_guard import HEARTBEAT_TIMEOUT_S
 
         fg = self._make()
-        fg._modules["test_module"].last_heartbeat = (
-            time.monotonic() - HEARTBEAT_TIMEOUT_S - 1
-        )
+        fg._modules["test_module"].last_heartbeat = time.monotonic() - HEARTBEAT_TIMEOUT_S - 1
 
         with patch("utils.fault_guard.bus") as mock_bus:
             mock_bus.publish_breach = AsyncMock()
@@ -534,12 +531,10 @@ class TestNewsCalendarFeed:
         mock_redis.pipeline = MagicMock(return_value=mock_pipe)
         mock_redis.aclose = AsyncMock()
 
-        with patch(
-            "data.news_calendar_feed.aioredis.from_url", return_value=mock_redis
-        ):
+        with patch("data.news_calendar_feed.aioredis.from_url", return_value=mock_redis):
             count = await feed._write_redis(events)
 
-        assert count == 3  # noqa: PLR2004
+        assert count == 3
         mock_pipe.delete.assert_called_once()
         mock_pipe.rpush.assert_called_once()
         mock_pipe.expire.assert_called_once()
@@ -564,9 +559,7 @@ class TestFIXRouter:
         router._fallback = MagicMock()
 
         # Should return without calling fallback
-        await router._route(
-            {"type": "order_request", "symbol": "XAU/USD", "direction": "BUY"}
-        )
+        await router._route({"type": "order_request", "symbol": "XAU/USD", "direction": "BUY"})
         router._fallback.send.assert_not_called()
 
     @pytest.mark.asyncio

@@ -31,6 +31,7 @@ import logging
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any, Generic, TypeVar
 from collections.abc import Callable
@@ -214,9 +215,7 @@ def subscribe(event_type: type[BaseModel], callback: Callable) -> None:
     """
     key = event_type.__name__
     _subscribers[key].append(callback)
-    logger.debug(
-        "Subscribed %s to %s", getattr(callback, "__name__", repr(callback)), key
-    )
+    logger.debug("Subscribed %s to %s", getattr(callback, "__name__", repr(callback)), key)
 
 
 def unsubscribe(event_type: type[BaseModel], callback: Callable) -> None:

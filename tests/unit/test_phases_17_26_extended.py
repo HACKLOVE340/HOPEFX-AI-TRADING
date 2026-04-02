@@ -15,6 +15,7 @@ Comprehensive tests for Phases 17-26 modules:
 
 import pytest
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from unittest.mock import MagicMock
 import numpy as np
@@ -126,20 +127,16 @@ class TestChartReplayExtended:
     # --- place_practice_order ---
 
     def test_place_market_buy_order(self, engine, session):
-        trade = engine.place_practice_order(
-            "BUY", 1.0, "MARKET", session_id=session.session_id
-        )
+        trade = engine.place_practice_order("BUY", 1.0, "MARKET", session_id=session.session_id)
         assert trade is not None
         assert trade["side"] == "BUY"
         assert trade["size"] == 1.0
         assert trade["status"] == "FILLED"
 
     def test_place_limit_order_with_price(self, engine, session):
-        trade = engine.place_practice_order(
-            "SELL", 0.5, "LIMIT", price=1960.0, session_id=session.session_id
-        )
+        trade = engine.place_practice_order("SELL", 0.5, "LIMIT", price=1960.0, session_id=session.session_id)
         assert trade is not None
-        assert trade["price"] == 1960.0  # noqa: PLR2004
+        assert trade["price"] == 1960.0
 
     def test_place_order_invalid_session(self, engine):
         trade = engine.place_practice_order("BUY", 1.0, session_id="bad_id")
@@ -148,7 +145,7 @@ class TestChartReplayExtended:
     def test_place_multiple_orders_tracks_trades(self, engine, session):
         engine.place_practice_order("BUY", 1.0, session_id=session.session_id)
         engine.place_practice_order("BUY", 0.5, session_id=session.session_id)
-        assert len(session.trades) == 2  # noqa: PLR2004
+        assert len(session.trades) == 2
 
     def test_place_opposing_order_closes_position(self, engine, session):
         """Selling closes an existing buy position."""
@@ -240,9 +237,7 @@ class TestNoCodeBuilderExtended:
         assert rule.action.action_type.value == "BUY"
 
     def test_add_rule_invalid_strategy(self, builder):
-        rule = builder.add_rule(
-            "bad_id", "Test Rule", [], action={"type": "BUY", "size": 1.0}
-        )
+        rule = builder.add_rule("bad_id", "Test Rule", [], action={"type": "BUY", "size": 1.0})
         assert rule is None
 
     # --- parse_plain_english ---
@@ -253,9 +248,7 @@ class TestNoCodeBuilderExtended:
         assert result is None or hasattr(result, "strategy_id")
 
     def test_parse_plain_english_sell(self, builder):
-        result = builder.parse_plain_english(
-            "sell when macd crosses below signal", "XAUUSD", "1H"
-        )
+        result = builder.parse_plain_english("sell when macd crosses below signal", "XAUUSD", "1H")
         assert result is None or hasattr(result, "strategy_id")
 
     def test_parse_plain_english_empty(self, builder):
@@ -268,9 +261,7 @@ class TestNoCodeBuilderExtended:
     # --- export_to_python ---
 
     def test_export_to_python(self, builder):
-        strategy = builder.create_strategy(
-            "ExportTest", "Test strategy", "XAUUSD", "1H"
-        )
+        strategy = builder.create_strategy("ExportTest", "Test strategy", "XAUUSD", "1H")
         code = builder.export_to_python(strategy.strategy_id)
         assert isinstance(code, str)
         assert "class" in code or "def" in code or "strategy" in code.lower()
@@ -304,9 +295,7 @@ class TestNoCodeBuilderExtended:
         if templates:
             t = templates[0]
             template_id = t.get("template_id", t.get("id", ""))
-            result = builder.create_from_template(
-                template_id, "FromTemplate", "XAUUSD", "1H"
-            )
+            result = builder.create_from_template(template_id, "FromTemplate", "XAUUSD", "1H")
             # Should succeed or return None if template_id not matching
             assert result is None or hasattr(result, "strategy_id")
 
@@ -326,7 +315,7 @@ class TestNoCodeBuilderExtended:
         strategy = builder.create_strategy("JsonTest", "Test", "XAUUSD", "1H")
         j = strategy.to_json()
         assert isinstance(j, str)
-        assert len(j) > 2  # Not empty JSON  # noqa: PLR2004
+        assert len(j) > 2  # Not empty JSON
 
     # --- _parse_operator ---
 
@@ -339,12 +328,8 @@ class TestNoCodeBuilderExtended:
         assert builder._parse_operator("<=") == ConditionOperator.LESS_EQUAL
         assert builder._parse_operator("==") == ConditionOperator.EQUAL
         assert builder._parse_operator("!=") == ConditionOperator.NOT_EQUAL
-        assert (
-            builder._parse_operator("crosses_above") == ConditionOperator.CROSSES_ABOVE
-        )
-        assert (
-            builder._parse_operator("crosses_below") == ConditionOperator.CROSSES_BELOW
-        )
+        assert builder._parse_operator("crosses_above") == ConditionOperator.CROSSES_ABOVE
+        assert builder._parse_operator("crosses_below") == ConditionOperator.CROSSES_BELOW
 
     def test_parse_operator_unknown_defaults(self, builder):
         from nocode import ConditionOperator
@@ -399,9 +384,7 @@ class TestAIExplainabilityExtended:
 
     # --- explain_prediction ---
 
-    def test_explain_prediction_returns_explanation(
-        self, explainer, sample_features, mock_model
-    ):
+    def test_explain_prediction_returns_explanation(self, explainer, sample_features, mock_model):
         explanation = explainer.explain_prediction(
             model=mock_model,
             features=sample_features,
@@ -412,9 +395,7 @@ class TestAIExplainabilityExtended:
         assert hasattr(explanation, "prediction_class")
         assert explanation.prediction_class in ("BUY", "SELL", "HOLD")
 
-    def test_explain_prediction_stores_history(
-        self, explainer, sample_features, mock_model
-    ):
+    def test_explain_prediction_stores_history(self, explainer, sample_features, mock_model):
         before = len(explainer.get_explanation_history())
         explainer.explain_prediction(
             model=mock_model,
@@ -432,9 +413,7 @@ class TestAIExplainabilityExtended:
         result = explainer.get_model_performance_explanation("UnknownModel")
         assert result is not None
 
-    def test_get_model_performance_after_prediction(
-        self, explainer, sample_features, mock_model
-    ):
+    def test_get_model_performance_after_prediction(self, explainer, sample_features, mock_model):
         explainer.explain_prediction(
             model=mock_model,
             features=sample_features,
@@ -448,9 +427,7 @@ class TestAIExplainabilityExtended:
 
     # --- compare_explanations ---
 
-    def test_compare_explanations_empty_ids(
-        self, explainer, sample_features, mock_model
-    ):
+    def test_compare_explanations_empty_ids(self, explainer, sample_features, mock_model):
         """compare_explanations takes 2 Explanation objects."""
         e1 = explainer.explain_prediction(mock_model, sample_features, 1950.0, "BUY")
         e2 = explainer.explain_prediction(mock_model, sample_features, 1940.0, "SELL")
@@ -479,12 +456,8 @@ class TestAIExplainabilityExtended:
 
     # --- get_feature_importance_chart_data ---
 
-    def test_get_feature_importance_chart_data(
-        self, explainer, sample_features, mock_model
-    ):
-        explanation = explainer.explain_prediction(
-            mock_model, sample_features, 1950.0, "BUY"
-        )
+    def test_get_feature_importance_chart_data(self, explainer, sample_features, mock_model):
+        explanation = explainer.explain_prediction(mock_model, sample_features, 1950.0, "BUY")
         if explanation:
             data = explainer.get_feature_importance_chart_data(explanation)
             assert isinstance(data, dict)
@@ -496,13 +469,11 @@ class TestAIExplainabilityExtended:
         hist = explainer.get_explanation_history()
         assert isinstance(hist, list)
 
-    def test_get_explanation_history_limit(
-        self, explainer, sample_features, mock_model
-    ):
+    def test_get_explanation_history_limit(self, explainer, sample_features, mock_model):
         for _ in range(5):
             explainer.explain_prediction(mock_model, sample_features, 1950.0, "BUY")
         hist = explainer.get_explanation_history(limit=3)
-        assert len(hist) <= 3  # noqa: PLR2004
+        assert len(hist) <= 3
 
 
 # ===========================================================================
@@ -582,7 +553,7 @@ class TestResearchNotebooksExtended:
         engine.add_cell(nb.notebook_id, CellType.CODE, "b = 2")
         results = engine.execute_all(nb.notebook_id)
         assert isinstance(results, list)
-        assert len(results) == 2  # noqa: PLR2004
+        assert len(results) == 2
 
     def test_execute_all_invalid_notebook(self, engine):
         results = engine.execute_all("bad_id")
@@ -836,7 +807,7 @@ class TestExecutionTransparencyExtended:
     def test_audit_trail_limit(self, engine, sample_executions):
         trail = engine.get_execution_audit_trail(limit=3)
         if isinstance(trail, list):
-            assert len(trail) <= 3  # noqa: PLR2004
+            assert len(trail) <= 3
 
 
 # ===========================================================================
@@ -856,9 +827,7 @@ class TestTeamsExtended:
 
     @pytest.fixture
     def team_with_owner(self, manager):
-        team = manager.create_team(
-            "Alpha Team", "owner1@test.com", "Owner One", owner_id="owner1"
-        )
+        team = manager.create_team("Alpha Team", "owner1@test.com", "Owner One", owner_id="owner1")
         return team
 
     # --- invite_member ---
@@ -886,27 +855,19 @@ class TestTeamsExtended:
         from teams import UserRole
 
         # viewer role cannot invite
-        viewer_inv = manager.invite_member(
-            team_with_owner.team_id, "viewer@x.com", UserRole.VIEWER, "owner1"
-        )
+        viewer_inv = manager.invite_member(team_with_owner.team_id, "viewer@x.com", UserRole.VIEWER, "owner1")
         manager.accept_invitation(viewer_inv.token, "viewer1", "Viewer One")
-        result = manager.invite_member(
-            team_with_owner.team_id, "new@x.com", UserRole.TRADER, "viewer1"
-        )
+        result = manager.invite_member(team_with_owner.team_id, "new@x.com", UserRole.TRADER, "viewer1")
         assert result is None
 
     def test_invite_member_team_at_capacity(self, manager):
         from teams import TeamManager, UserRole
 
         mgr = TeamManager()
-        team = mgr.create_team(
-            "Small Team", "owner2@test.com", "Owner", owner_id="owner2"
-        )
+        team = mgr.create_team("Small Team", "owner2@test.com", "Owner", owner_id="owner2")
         # Set max_members to force limit
         team.max_members = 1  # Only owner
-        result = mgr.invite_member(
-            team.team_id, "extra@x.com", UserRole.TRADER, "owner2"
-        )
+        result = mgr.invite_member(team.team_id, "extra@x.com", UserRole.TRADER, "owner2")
         assert result is None
 
     # --- accept_invitation ---
@@ -914,9 +875,7 @@ class TestTeamsExtended:
     def test_accept_invitation_success(self, manager, team_with_owner):
         from teams import UserRole
 
-        inv = manager.invite_member(
-            team_with_owner.team_id, "new@x.com", UserRole.ANALYST, "owner1"
-        )
+        inv = manager.invite_member(team_with_owner.team_id, "new@x.com", UserRole.ANALYST, "owner1")
         member = manager.accept_invitation(inv.token, "user2", "New User")
         assert member is not None
         assert "user2" in team_with_owner.members
@@ -928,9 +887,7 @@ class TestTeamsExtended:
     def test_accept_invitation_expired(self, manager, team_with_owner):
         from teams import UserRole
 
-        inv = manager.invite_member(
-            team_with_owner.team_id, "exp@x.com", UserRole.VIEWER, "owner1"
-        )
+        inv = manager.invite_member(team_with_owner.team_id, "exp@x.com", UserRole.VIEWER, "owner1")
         # Force expiry
         inv.expires_at = datetime.now(UTC) - timedelta(hours=1)
         result = manager.accept_invitation(inv.token, "user4", "User 4")
@@ -939,9 +896,7 @@ class TestTeamsExtended:
     def test_accept_already_accepted_invitation(self, manager, team_with_owner):
         from teams import UserRole
 
-        inv = manager.invite_member(
-            team_with_owner.team_id, "dup@x.com", UserRole.VIEWER, "owner1"
-        )
+        inv = manager.invite_member(team_with_owner.team_id, "dup@x.com", UserRole.VIEWER, "owner1")
         manager.accept_invitation(inv.token, "user5", "User 5")
         # Accepting again should fail (token used)
         result = manager.accept_invitation(inv.token, "user6", "User 6")
@@ -952,9 +907,7 @@ class TestTeamsExtended:
     def test_remove_member_success(self, manager, team_with_owner):
         from teams import UserRole
 
-        inv = manager.invite_member(
-            team_with_owner.team_id, "rem@x.com", UserRole.TRADER, "owner1"
-        )
+        inv = manager.invite_member(team_with_owner.team_id, "rem@x.com", UserRole.TRADER, "owner1")
         manager.accept_invitation(inv.token, "user7", "User 7")
         result = manager.remove_member(team_with_owner.team_id, "user7", "owner1")
         assert result is True
@@ -977,13 +930,9 @@ class TestTeamsExtended:
     def test_change_role_success(self, manager, team_with_owner):
         from teams import UserRole
 
-        inv = manager.invite_member(
-            team_with_owner.team_id, "role@x.com", UserRole.TRADER, "owner1"
-        )
+        inv = manager.invite_member(team_with_owner.team_id, "role@x.com", UserRole.TRADER, "owner1")
         manager.accept_invitation(inv.token, "user8", "User 8")
-        result = manager.change_role(
-            team_with_owner.team_id, "user8", UserRole.ANALYST, "owner1"
-        )
+        result = manager.change_role(team_with_owner.team_id, "user8", UserRole.ANALYST, "owner1")
         assert result is True
         assert team_with_owner.members["user8"].role == UserRole.ANALYST
 
@@ -1004,21 +953,15 @@ class TestTeamsExtended:
     def test_nonexistent_user_has_no_permissions(self, manager, team_with_owner):
         from teams import Permission
 
-        result = manager.has_permission(
-            team_with_owner.team_id, "ghost", Permission.TRADE_EXECUTE
-        )
+        result = manager.has_permission(team_with_owner.team_id, "ghost", Permission.TRADE_EXECUTE)
         assert result is False
 
     def test_viewer_cannot_execute_trades(self, manager, team_with_owner):
         from teams import UserRole, Permission
 
-        inv = manager.invite_member(
-            team_with_owner.team_id, "view@x.com", UserRole.VIEWER, "owner1"
-        )
+        inv = manager.invite_member(team_with_owner.team_id, "view@x.com", UserRole.VIEWER, "owner1")
         manager.accept_invitation(inv.token, "viewer2", "View 2")
-        result = manager.has_permission(
-            team_with_owner.team_id, "viewer2", Permission.TRADE_EXECUTE
-        )
+        result = manager.has_permission(team_with_owner.team_id, "viewer2", Permission.TRADE_EXECUTE)
         assert result is False
 
     # --- get_user_permissions ---
@@ -1057,7 +1000,7 @@ class TestTeamsExtended:
         # Returns a dict with the key info
         assert result is not None
         assert "key" in result
-        assert len(result["key"]) > 10  # noqa: PLR2004
+        assert len(result["key"]) > 10
 
     def test_verify_valid_api_key(self, manager, team_with_owner):
         result = manager.generate_api_key(team_with_owner.team_id, "owner1")
@@ -1077,9 +1020,7 @@ class TestTeamsExtended:
     def test_activity_log_populated_on_operations(self, manager, team_with_owner):
         from teams import UserRole
 
-        manager.invite_member(
-            team_with_owner.team_id, "log@x.com", UserRole.TRADER, "owner1"
-        )
+        manager.invite_member(team_with_owner.team_id, "log@x.com", UserRole.TRADER, "owner1")
         log = manager.get_activity_log(team_with_owner.team_id)
         assert isinstance(log, list)
         assert len(log) > 0

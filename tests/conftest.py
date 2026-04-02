@@ -25,6 +25,7 @@ import pytest
 import asyncio
 import numpy as np
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 # Import core components for testing
@@ -74,7 +75,7 @@ def _restore_critical_env_vars():
         else:
             os.environ[k] = v
     # Always guarantee a valid JWT secret after teardown
-    if len(os.environ.get("SECURITY_JWT_SECRET", "")) < 32:  # noqa: PLR2004
+    if len(os.environ.get("SECURITY_JWT_SECRET", "")) < 32:
         os.environ["SECURITY_JWT_SECRET"] = _CANONICAL_JWT_SECRET
 
 
@@ -216,8 +217,7 @@ def generate_ohlcv_from_close(closes: list) -> list:
 
         ohlcv.append(
             OHLCV(
-                timestamp=datetime.now(UTC).timestamp()
-                - (len(closes) - i) * 3600,
+                timestamp=datetime.now(UTC).timestamp() - (len(closes) - i) * 3600,
                 open=open_price,
                 high=high,
                 low=low,

@@ -20,6 +20,7 @@ Inspired by: Bookmap, Sierra Chart, OrderFlow.pro
 
 import logging
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from dataclasses import dataclass
 from collections import defaultdict
@@ -452,9 +453,7 @@ class OrderFlowAnalyzer:
         max_level = max(levels, key=lambda x: x.total_volume)
         return max_level.price
 
-    def _calculate_value_area(
-        self, levels: list[VolumeProfileLevel], poc_price: float
-    ) -> tuple[float, float]:
+    def _calculate_value_area(self, levels: list[VolumeProfileLevel], poc_price: float) -> tuple[float, float]:
         """
         Calculate Value Area High and Low.
 
@@ -481,16 +480,10 @@ class OrderFlowAnalyzer:
         low_idx = poc_idx
         high_idx = poc_idx
 
-        while va_volume < target_volume and (
-            low_idx > 0 or high_idx < len(sorted_levels) - 1
-        ):
+        while va_volume < target_volume and (low_idx > 0 or high_idx < len(sorted_levels) - 1):
             # Check which direction has more volume
             low_vol = sorted_levels[low_idx - 1].total_volume if low_idx > 0 else 0
-            high_vol = (
-                sorted_levels[high_idx + 1].total_volume
-                if high_idx < len(sorted_levels) - 1
-                else 0
-            )
+            high_vol = sorted_levels[high_idx + 1].total_volume if high_idx < len(sorted_levels) - 1 else 0
 
             if low_vol >= high_vol and low_idx > 0:
                 low_idx -= 1
@@ -507,9 +500,7 @@ class OrderFlowAnalyzer:
     # ORDER FLOW ANALYSIS
     # ================================================================
 
-    def analyze(
-        self, symbol: str, lookback_minutes: int = 60
-    ) -> OrderFlowAnalysis | None:
+    def analyze(self, symbol: str, lookback_minutes: int = 60) -> OrderFlowAnalysis | None:
         """
         Perform comprehensive order flow analysis.
 
@@ -551,17 +542,13 @@ class OrderFlowAnalyzer:
             imbalance_strength = "weak"
 
         # Get volume profile for key levels
-        profile = self.get_volume_profile(
-            symbol, price_buckets=20, start_time=start_time
-        )
+        profile = self.get_volume_profile(symbol, price_buckets=20, start_time=start_time)
 
         # High volume nodes
         high_volume_nodes = []
         low_volume_nodes = []
         if profile:
-            avg_volume = (
-                profile.total_volume / len(profile.levels) if profile.levels else 0
-            )
+            avg_volume = profile.total_volume / len(profile.levels) if profile.levels else 0
             for level in profile.levels:
                 if level.total_volume > avg_volume * 1.5:
                     high_volume_nodes.append(
@@ -585,9 +572,7 @@ class OrderFlowAnalyzer:
 
         # Calculate pressures
         buying_pressure = (buy_volume / total_volume * 100) if total_volume > 0 else 50
-        selling_pressure = (
-            (sell_volume / total_volume * 100) if total_volume > 0 else 50
-        )
+        selling_pressure = (sell_volume / total_volume * 100) if total_volume > 0 else 50
 
         # Signal
         if imbalance_ratio > 0.3:  # noqa: PLR2004
@@ -689,9 +674,7 @@ class OrderFlowAnalyzer:
     # FOOTPRINT CHARTS
     # ================================================================
 
-    def get_footprint(
-        self, symbol: str, timeframe: str = "5m", bars: int = 20
-    ) -> list[Footprint]:
+    def get_footprint(self, symbol: str, timeframe: str = "5m", bars: int = 20) -> list[Footprint]:
         """
         Generate footprint chart data.
 
@@ -742,9 +725,7 @@ class OrderFlowAnalyzer:
 
         # Last bar
         if bar_trades:
-            fp, _ = self._create_footprint(
-                symbol, timeframe, current_bar_start, bar_trades, cumulative_delta
-            )
+            fp, _ = self._create_footprint(symbol, timeframe, current_bar_start, bar_trades, cumulative_delta)
             footprints.append(fp)
 
         return footprints[-bars:]
@@ -767,9 +748,7 @@ class OrderFlowAnalyzer:
         close_price = trades[-1].price
 
         # Volume by price level
-        levels: dict[float, dict] = defaultdict(
-            lambda: {"buy_vol": 0, "sell_vol": 0, "delta": 0}
-        )
+        levels: dict[float, dict] = defaultdict(lambda: {"buy_vol": 0, "sell_vol": 0, "delta": 0})
 
         bar_delta = 0
         for trade in trades:
@@ -815,9 +794,7 @@ class OrderFlowAnalyzer:
 
     def _floor_timestamp(self, ts: datetime, minutes: int) -> datetime:
         """Floor timestamp to timeframe boundary."""
-        return ts.replace(
-            minute=(ts.minute // minutes) * minutes, second=0, microsecond=0
-        )
+        return ts.replace(minute=(ts.minute // minutes) * minutes, second=0, microsecond=0)
 
     # ================================================================
     # KEY LEVELS
@@ -839,11 +816,7 @@ class OrderFlowAnalyzer:
 
         # High volume nodes are S/R
         hvns = sorted(
-            [
-                l
-                for l in profile.levels
-                if l.total_volume > profile.total_volume / len(profile.levels) * 1.3
-            ],
+            [l for l in profile.levels if l.total_volume > profile.total_volume / len(profile.levels) * 1.3],
             key=lambda x: -x.total_volume,
         )[:5]
 
@@ -851,16 +824,10 @@ class OrderFlowAnalyzer:
         trades = self._trades.get(symbol, [])
         current_price = trades[-1].price if trades else poc
 
-        support = [
-            {"price": l.price, "volume": l.total_volume, "type": "HVN"}
-            for l in hvns
-            if l.price < current_price
-        ]
+        support = [{"price": l.price, "volume": l.total_volume, "type": "HVN"} for l in hvns if l.price < current_price]
 
         resistance = [
-            {"price": l.price, "volume": l.total_volume, "type": "HVN"}
-            for l in hvns
-            if l.price > current_price
+            {"price": l.price, "volume": l.total_volume, "type": "HVN"} for l in hvns if l.price > current_price
         ]
 
         # Add value area levels

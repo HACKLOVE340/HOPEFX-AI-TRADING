@@ -63,6 +63,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -134,9 +135,7 @@ class BrainDecision:
     strategy_confidence: float  # strategy confidence
     reason: str  # human-readable explanation
     symbol: str
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     latency_ms: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
@@ -202,8 +201,7 @@ class HOPEFXBrain:
         self._hold_count: int = 0
 
         logger.info(
-            "HOPEFXBrain initialised — ml_weight=%.2f strategy_weight=%.2f "
-            "min_confidence=%.2f",
+            "HOPEFXBrain initialised — ml_weight=%.2f strategy_weight=%.2f min_confidence=%.2f",
             _ML_WEIGHT,
             _STRATEGY_WEIGHT,
             _MIN_CONFIDENCE,
@@ -461,9 +459,7 @@ class HOPEFXBrain:
 
         if self._strategy_manager is not None:
             try:
-                available = set(
-                    getattr(self._strategy_manager, "list_strategies", list)()
-                )
+                available = set(getattr(self._strategy_manager, "list_strategies", list)())
                 for name in candidates:
                     if name in available:
                         return name
@@ -487,9 +483,7 @@ class HOPEFXBrain:
             return "neutral", 0.0
 
         try:
-            strategy = getattr(self._strategy_manager, "get_strategy", lambda n: None)(
-                strategy_name
-            )
+            strategy = getattr(self._strategy_manager, "get_strategy", lambda n: None)(strategy_name)
             if strategy is None:
                 return "neutral", 0.0
 
@@ -553,8 +547,7 @@ class HOPEFXBrain:
             # Agreement — boost confidence
             combined = min(
                 1.0,
-                (_ML_WEIGHT * ml_confidence + _STRATEGY_WEIGHT * strategy_confidence)
-                * 1.1,
+                (_ML_WEIGHT * ml_confidence + _STRATEGY_WEIGHT * strategy_confidence) * 1.1,
             )
             return ml_direction, combined, "ml_strategy_agree"
 
@@ -642,9 +635,7 @@ class HOPEFXBrain:
                     LSTM_ABSTAIN_HIGH,
                 )
 
-                lstm_result = lstm_layer.predict(
-                    ohlcv, macro_df=macro_df, symbol=symbol
-                )
+                lstm_result = lstm_layer.predict(ohlcv, macro_df=macro_df, symbol=symbol)
                 lstm_prob = float(lstm_result.get("probability", 0.5))
                 lstm_abstain = bool(lstm_result.get("abstain", True))
 
@@ -653,9 +644,7 @@ class HOPEFXBrain:
                     w = float(LSTM_SIGNAL_WEIGHT)
                     blended_prob = (1.0 - w) * ml_prob + w * lstm_prob
                     blended_conf = abs(blended_prob - 0.5) * 2.0
-                    blended_abstain = (
-                        LSTM_ABSTAIN_LOW <= blended_prob <= LSTM_ABSTAIN_HIGH
-                    )
+                    blended_abstain = LSTM_ABSTAIN_LOW <= blended_prob <= LSTM_ABSTAIN_HIGH
 
                     if not blended_abstain:
                         ml_prob = blended_prob
@@ -681,9 +670,7 @@ class HOPEFXBrain:
 
         # ── Strategy routing ──────────────────────────────────────────────────
         strategy_name = self._route_strategy(regime)
-        str_direction, str_confidence = self._get_strategy_signal(
-            strategy_name, ohlcv, symbol
-        )
+        str_direction, str_confidence = self._get_strategy_signal(strategy_name, ohlcv, symbol)
 
         # ── Signal aggregation ────────────────────────────────────────────────
         final_direction, final_confidence, reason = self._aggregate_signals(
@@ -697,7 +684,9 @@ class HOPEFXBrain:
         alignment = mtf.get("mtf_alignment", "unknown")
         if alignment.startswith("aligned_"):
             aligned_dir = alignment.replace("aligned_", "")
-            if (aligned_dir == "trending_up" and final_direction == "long") or (aligned_dir == "trending_down" and final_direction == "short"):
+            if (aligned_dir == "trending_up" and final_direction == "long") or (
+                aligned_dir == "trending_down" and final_direction == "short"
+            ):
                 final_confidence = min(1.0, final_confidence * 1.15)
                 reason += "+mtf_aligned"
         elif alignment == "divergent" and final_direction != "hold":
@@ -767,9 +756,7 @@ class HOPEFXBrain:
             "bar_count": self._bar_count,
             "signal_count": self._signal_count,
             "hold_count": self._hold_count,
-            "signal_rate": (
-                self._signal_count / self._bar_count if self._bar_count > 0 else 0.0
-            ),
+            "signal_rate": (self._signal_count / self._bar_count if self._bar_count > 0 else 0.0),
             "regimes": {k: v.value for k, v in self._regimes.items()},
             "killed": self._killed,
             "kill_reason": self._kill_reason,

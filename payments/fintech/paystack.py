@@ -11,6 +11,7 @@ Handles payments via Paystack (Nigeria) - Bank transfer, Cards, USSD.
 
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 import logging
@@ -27,16 +28,11 @@ class PaystackClient:
 
     def __init__(self, secret_key: str | None = None):
         if not secret_key:
-            raise ValueError(
-                "PaystackClient requires a secret key. "
-                "Set the PAYSTACK_SECRET_KEY environment variable."
-            )
+            raise ValueError("PaystackClient requires a secret key. Set the PAYSTACK_SECRET_KEY environment variable.")
         self.secret_key = secret_key
         self.payments = {}
 
-    def initialize_payment(
-        self, user_id: str, amount: Decimal, currency: str = "USD", email: str = None
-    ) -> dict:
+    def initialize_payment(self, user_id: str, amount: Decimal, currency: str = "USD", email: str = None) -> dict:
         """Initialize Paystack payment"""
         try:
             reference = f"PSK-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
@@ -74,9 +70,7 @@ class PaystackClient:
             logger.info(f"Paystack payment verified: {reference}")
         return payment or {"status": "not_found"}
 
-    def initiate_transfer(
-        self, user_id: str, amount: Decimal, bank_code: str, account_number: str
-    ) -> dict:
+    def initiate_transfer(self, user_id: str, amount: Decimal, bank_code: str, account_number: str) -> dict:
         """Initiate bank transfer"""
         try:
             transfer_code = f"TRF-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
@@ -98,6 +92,4 @@ class PaystackClient:
 # importing this module in environments without payment credentials does not
 # raise at import time. Callers must check for None before using.
 _paystack_secret = os.getenv("PAYSTACK_SECRET_KEY")
-paystack_client: PaystackClient | None = (
-    PaystackClient(_paystack_secret) if _paystack_secret else None
-)
+paystack_client: PaystackClient | None = PaystackClient(_paystack_secret) if _paystack_secret else None

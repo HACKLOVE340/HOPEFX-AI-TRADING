@@ -22,6 +22,7 @@ Key components:
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any, Dict, List, Optional  # noqa: F401
@@ -167,12 +168,7 @@ class BrandTheme:
 
     def to_css_variables(self) -> str:
         """Generate a CSS string containing custom properties for this theme."""
-        css = (
-            ":root {\n"
-            f"    --color-primary: {self.primary_color};\n"
-            f"    --font-family: {self.font_family};\n"
-            "}\n"
-        )
+        css = f":root {{\n    --color-primary: {self.primary_color};\n    --font-family: {self.font_family};\n}}\n"
         if self.custom_css:
             css += self.custom_css
         return css
@@ -215,9 +211,7 @@ class Tenant:
 
     def is_active(self) -> bool:
         """Return True if the tenant is currently active or in trial (and not expired)."""
-        if self.expires_at is not None and self.expires_at <= datetime.now(
-            UTC
-        ):
+        if self.expires_at is not None and self.expires_at <= datetime.now(UTC):
             return False
         return self.status in (TenantStatus.ACTIVE, TenantStatus.TRIAL)
 
@@ -254,15 +248,9 @@ class Reseller:
         self.company_name = company_name
         self.contact_email = contact_email
         self.tier = tier
-        self.commission_rate = (
-            commission_rate
-            if commission_rate is not None
-            else TIER_COMMISSION_RATES[tier]
-        )
+        self.commission_rate = commission_rate if commission_rate is not None else TIER_COMMISSION_RATES[tier]
         self.is_active = is_active
-        self.referral_code = (
-            referral_code if referral_code is not None else _generate_referral_code()
-        )
+        self.referral_code = referral_code if referral_code is not None else _generate_referral_code()
         self.total_revenue = total_revenue
         self.total_tenants = total_tenants
 
@@ -328,9 +316,7 @@ class WhiteLabelManager:
         tenant_id = _generate_id("WL")
         if trial_days > 0:
             status = TenantStatus.TRIAL
-            expires_at: datetime | None = datetime.now(UTC) + timedelta(
-                days=trial_days
-            )
+            expires_at: datetime | None = datetime.now(UTC) + timedelta(days=trial_days)
         else:
             status = TenantStatus.ACTIVE
             expires_at = None
@@ -597,9 +583,7 @@ class WhiteLabelManager:
         tenants = list(self._tenants.values())
         return {
             "total_tenants": len(tenants),
-            "active_tenants": sum(
-                1 for t in tenants if t.status == TenantStatus.ACTIVE
-            ),
+            "active_tenants": sum(1 for t in tenants if t.status == TenantStatus.ACTIVE),
             "trial_tenants": sum(1 for t in tenants if t.status == TenantStatus.TRIAL),
             "total_resellers": len(self._resellers),
             "total_users": sum(t.user_count for t in tenants),

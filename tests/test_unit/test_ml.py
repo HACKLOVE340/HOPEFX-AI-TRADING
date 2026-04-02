@@ -43,7 +43,7 @@ def test_xgboost_training():
 
     assert model._is_trained
     assert model.metadata is not None
-    assert model.metadata.val_score > 0.5  # noqa: PLR2004
+    assert model.metadata.val_score > 0.5
 
 
 def test_drift_detection():
@@ -74,11 +74,7 @@ def test_feature_store_consistency():
     """Property-based test for feature store."""
     from hypothesis import given, strategies as st
 
-    @given(
-        st.lists(
-            st.floats(allow_nan=False, allow_infinity=False), min_size=10, max_size=100
-        )
-    )
+    @given(st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=10, max_size=100))
     def features_computed_correctly(prices):
         # Property: features should be deterministic given same inputs
         pass

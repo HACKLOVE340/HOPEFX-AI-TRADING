@@ -182,13 +182,13 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
     so the UI always has something to show.
     """
     try:
-        from core.signal_engine import SignalEngine
+        import core.signal_engine as _signal_engine_mod  # module, not a class
         from explainability.explainer import AIExplainer
 
         explainer = AIExplainer()
-        # Attempt to fetch the signal from the signal engine
-        engine = SignalEngine()
-        signal = engine.get_signal(signal_id) if hasattr(engine, "get_signal") else None
+        # Attempt to fetch the signal from the signal engine module
+        _get_signal = getattr(_signal_engine_mod, "get_signal", None)
+        signal = _get_signal(signal_id) if _get_signal is not None else None
 
         if signal and hasattr(signal, "features") and hasattr(signal, "model"):
             explanation = explainer.explain_prediction(
@@ -216,10 +216,10 @@ def _build_explanation(signal_id: str) -> SignalExplanation:
                 signal_id=signal_id,
                 symbol=getattr(signal, "symbol", "XAUUSD"),
                 direction=explanation.prediction_class,
-                confidence=explanation.confidence_score,
+                confidence=explanation.confidence,
                 regime=getattr(signal, "regime", "unknown"),
                 top_features=features,
-                plain_english=explanation.natural_language_explanation
+                plain_english=explanation.natural_language
                 or _template_summary(features, explanation.prediction_class),
                 timestamp=explanation.timestamp.isoformat(),
             )

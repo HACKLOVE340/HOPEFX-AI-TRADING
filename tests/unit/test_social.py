@@ -19,13 +19,11 @@ class TestCopyRelationship:
 
     def test_copy_relationship_creation(self):
         """Test creating a copy relationship."""
-        relationship = CopyRelationship(
-            follower_id="user_1", leader_id="user_2", copy_ratio=0.5
-        )
+        relationship = CopyRelationship(follower_id="user_1", leader_id="user_2", copy_ratio=0.5)
 
         assert relationship.follower_id == "user_1"
         assert relationship.leader_id == "user_2"
-        assert relationship.copy_ratio == 0.5  # noqa: PLR2004
+        assert relationship.copy_ratio == 0.5
         assert relationship.is_active is True
         assert relationship.started_at is not None
 
@@ -52,14 +50,12 @@ class TestCopyTradingEngine:
         """Test starting copy relationship."""
         engine = CopyTradingEngine()
 
-        relationship = engine.start_copying(
-            follower_id="follower_1", leader_id="leader_1", copy_ratio=0.75
-        )
+        relationship = engine.start_copying(follower_id="follower_1", leader_id="leader_1", copy_ratio=0.75)
 
         assert relationship is not None
         assert relationship.follower_id == "follower_1"
         assert relationship.leader_id == "leader_1"
-        assert relationship.copy_ratio == 0.75  # noqa: PLR2004
+        assert relationship.copy_ratio == 0.75
         assert "follower_1_leader_1" in engine.relationships
 
     def test_start_copying_with_limits(self):
@@ -105,7 +101,7 @@ class TestCopyTradingEngine:
 
         copied_trades = engine.sync_trade("trade_123", "l1")
 
-        assert len(copied_trades) == 2  # noqa: PLR2004
+        assert len(copied_trades) == 2
         assert "COPY_trade_123_f1" in copied_trades
         assert "COPY_trade_123_f2" in copied_trades
 
@@ -130,7 +126,7 @@ class TestCopyTradingEngine:
 
         relationships = engine.get_active_relationships("f1", as_follower=True)
 
-        assert len(relationships) == 2  # noqa: PLR2004
+        assert len(relationships) == 2
 
     def test_get_active_relationships_as_leader(self):
         """Test getting active relationships as leader."""
@@ -142,7 +138,7 @@ class TestCopyTradingEngine:
 
         relationships = engine.get_active_relationships("l1", as_follower=False)
 
-        assert len(relationships) == 2  # noqa: PLR2004
+        assert len(relationships) == 2
 
 
 class TestLeaderboardEntry:
@@ -195,9 +191,9 @@ class TestLeaderboardManager:
         assert leaderboard[0].user_id == "user_b"
         assert leaderboard[0].rank == 1
         assert leaderboard[1].user_id == "user_c"
-        assert leaderboard[1].rank == 2  # noqa: PLR2004
+        assert leaderboard[1].rank == 2
         assert leaderboard[2].user_id == "user_a"
-        assert leaderboard[2].rank == 3  # noqa: PLR2004
+        assert leaderboard[2].rank == 3
 
     def test_update_existing_entry(self):
         """Test updating existing entry."""
@@ -220,7 +216,7 @@ class TestLeaderboardManager:
 
         top_5 = manager.get_leaderboard("pnl", limit=5)
 
-        assert len(top_5) == 5  # noqa: PLR2004
+        assert len(top_5) == 5
         assert top_5[0].score == Decimal("900")  # Highest score
 
     def test_get_leaderboard_nonexistent(self):
@@ -241,7 +237,7 @@ class TestLeaderboardManager:
 
         rank = manager.get_user_rank("pnl", "user_3")
 
-        assert rank == 2  # noqa: PLR2004
+        assert rank == 2
 
     def test_get_user_rank_not_found(self):
         """Test getting rank for user not in leaderboard."""
@@ -297,7 +293,7 @@ class TestPerformanceTracker:
 
         metric = tracker.get_performance("user_1")
 
-        assert metric.total_trades == 3  # noqa: PLR2004
+        assert metric.total_trades == 3
         assert metric.total_return == Decimal("250")
 
     def test_get_performance_nonexistent(self):

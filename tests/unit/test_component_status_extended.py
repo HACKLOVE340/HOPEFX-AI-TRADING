@@ -234,7 +234,7 @@ class TestComponentStatusErrors:
         )
         d = status.to_dict()
         assert d["health"] == "degraded"
-        assert len(d["dependencies"]) == 2  # noqa: PLR2004
+        assert len(d["dependencies"]) == 2
 
     def test_unknown_component_check(self):
         """Test getting status for unknown component."""
@@ -283,5 +283,5 @@ class TestComponentStatusErrors:
             features=["feature_a", "feature_b", "feature_c"],
         )
         d = status.to_dict()
-        assert len(d["features"]) == 3  # noqa: PLR2004
+        assert len(d["features"]) == 3
         assert "feature_a" in d["features"]

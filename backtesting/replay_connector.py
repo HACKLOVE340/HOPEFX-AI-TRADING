@@ -60,6 +60,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 from collections.abc import Callable, Iterator
@@ -332,32 +333,18 @@ class StressReport:
     regimes_passed: int
     regimes_failed: int
     results: list[RegimeResult]
-    generated_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    generated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def worst_drawdown(self) -> float:
-        dds = [
-            getattr(r.metrics, "max_drawdown", 0.0)
-            for r in self.results
-            if r.metrics is not None
-        ]
+        dds = [getattr(r.metrics, "max_drawdown", 0.0) for r in self.results if r.metrics is not None]
         return max(dds) if dds else 0.0
 
     def best_sharpe(self) -> float:
-        sharpes = [
-            getattr(r.metrics, "sharpe_ratio", 0.0)
-            for r in self.results
-            if r.metrics is not None
-        ]
+        sharpes = [getattr(r.metrics, "sharpe_ratio", 0.0) for r in self.results if r.metrics is not None]
         return max(sharpes) if sharpes else 0.0
 
     def worst_sharpe(self) -> float:
-        sharpes = [
-            getattr(r.metrics, "sharpe_ratio", 0.0)
-            for r in self.results
-            if r.metrics is not None
-        ]
+        sharpes = [getattr(r.metrics, "sharpe_ratio", 0.0) for r in self.results if r.metrics is not None]
         return min(sharpes) if sharpes else 0.0
 
 
@@ -426,8 +413,7 @@ class RegimeShiftStressTester:
             results=results,
         )
         logger.info(
-            "RegimeShiftStressTester: %d/%d regimes passed "
-            "worst_dd=%.1f%% best_sharpe=%.2f worst_sharpe=%.2f",
+            "RegimeShiftStressTester: %d/%d regimes passed worst_dd=%.1f%% best_sharpe=%.2f worst_sharpe=%.2f",
             passed,
             len(results),
             report.worst_drawdown() * 100,
@@ -474,9 +460,7 @@ class RegimeShiftStressTester:
         lines = [
             f"REGIME-SHIFT STRESS TEST — {report.strategy_name}",
             f"Generated: {report.generated_at}",
-            f"Regimes: {report.regimes_run}  "
-            f"Passed: {report.regimes_passed}  "
-            f"Failed: {report.regimes_failed}",
+            f"Regimes: {report.regimes_run}  Passed: {report.regimes_passed}  Failed: {report.regimes_failed}",
             f"Worst drawdown: {report.worst_drawdown():.1%}  "
             f"Sharpe range: [{report.worst_sharpe():.2f}, {report.best_sharpe():.2f}]",
             "",

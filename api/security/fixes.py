@@ -56,12 +56,14 @@ router = APIRouter(prefix="/api/security/fixes", tags=["security-fixes"])
 def _require_auth(request: Request) -> dict[str, Any]:
     """Require any authenticated user."""
     try:
-        from auth.jwt_handler import decode_token
+        from auth.jwt_handler import verify_token as decode_token
 
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not token:
             raise HTTPException(status_code=401, detail="Missing token")
-        return decode_token(token)
+        from fastapi import HTTPException as _HTTPException
+        _creds_exc = _HTTPException(status_code=401, detail="Invalid token")
+        return decode_token(token, _creds_exc)
     except HTTPException:
         raise
     except Exception as exc:
@@ -261,7 +263,7 @@ async def approve_fix(
         )
     except Exception as exc:
         logger.error("fixes router: PR publisher error for %s: %s", endpoint, exc)
-        pr_result = {"status": "error", "error": str(exc)}
+        pr_result = {"status": "error", "error": "PR publish failed — check server logs"}
 
     # Archive approved record
     approved_record = {

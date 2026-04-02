@@ -64,6 +64,7 @@ from .geopolitical_risk import (
     get_custom_layer_config,
 )
 from datetime import timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -112,9 +113,7 @@ def create_news_router():
         logger.warning("FastAPI not available; news router not created.")
         return None
 
-    news_router = APIRouter(
-        prefix="/api/news", tags=["News & Geopolitical Intelligence"]
-    )
+    news_router = APIRouter(prefix="/api/news", tags=["News & Geopolitical Intelligence"])
 
     # ── Geopolitical endpoints ──────────────────────────────────────────────
 
@@ -138,9 +137,7 @@ def create_news_router():
             return signal
         except Exception as exc:
             logger.error(f"Geopolitical signal error: {exc}")
-            raise HTTPException(
-                status_code=500, detail=f"Geopolitical signal unavailable: {exc}"
-            ) from exc
+            raise HTTPException(status_code=500, detail=f"Geopolitical signal unavailable: {exc}") from exc
 
     @news_router.get("/geopolitical/events")
     async def get_geopolitical_events(force_refresh: bool = Query(False)):
@@ -177,9 +174,7 @@ def create_news_router():
             return assessment.to_dict()
         except Exception as exc:
             logger.error(f"Risk assessment error: {exc}")
-            raise HTTPException(
-                status_code=500, detail=f"Assessment unavailable: {exc}"
-            ) from exc
+            raise HTTPException(status_code=500, detail=f"Assessment unavailable: {exc}") from exc
 
     @news_router.get("/geopolitical/world-monitor")
     async def get_world_monitor_urls():
@@ -196,9 +191,7 @@ def create_news_router():
             }
         except Exception as exc:
             logger.error(f"World Monitor URLs error: {exc}")
-            raise HTTPException(
-                status_code=500, detail=f"World Monitor integration error: {exc}"
-            ) from exc
+            raise HTTPException(status_code=500, detail=f"World Monitor integration error: {exc}") from exc
 
     # ── Economic calendar endpoint ─────────────────────────────────────────
 
@@ -244,9 +237,7 @@ def create_news_router():
             }
         except Exception as exc:
             logger.error(f"Economic calendar error: {exc}")
-            raise HTTPException(
-                status_code=500, detail=f"Economic calendar unavailable: {exc}"
-            ) from exc
+            raise HTTPException(status_code=500, detail=f"Economic calendar unavailable: {exc}") from exc
 
     # ── Sentiment endpoint ──────────────────────────────────────────────────
 
@@ -272,14 +263,10 @@ def create_news_router():
             score = analyzer.analyze_batch(terms)
             return {
                 "symbol": symbol.upper(),
-                "sentiment_score": score.score
-                if hasattr(score, "score")
-                else float(score),
+                "sentiment_score": score.score if hasattr(score, "score") else float(score),
                 "label": score.label
                 if hasattr(score, "label")
-                else (
-                    "bullish" if score > 0 else "bearish" if score < 0 else "neutral"
-                ),
+                else ("bullish" if score > 0 else "bearish" if score < 0 else "neutral"),
             }
         except Exception as exc:
             logger.error(f"Sentiment analysis error for {symbol}: {exc}")

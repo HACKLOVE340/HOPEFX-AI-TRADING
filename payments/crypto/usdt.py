@@ -10,6 +10,7 @@ Handles USDT deposits and withdrawals on TRC20 (TRON) and ERC20 (Ethereum) netwo
 """
 
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum
@@ -37,9 +38,7 @@ class USDTClient:
         self.addresses: dict[str, dict] = {}
         self.transactions: dict[str, dict] = {}
 
-    def generate_deposit_address(
-        self, user_id: str, network: USDTNetwork = USDTNetwork.TRC20
-    ) -> dict:
+    def generate_deposit_address(self, user_id: str, network: USDTNetwork = USDTNetwork.TRC20) -> dict:
         """Generate USDT deposit address"""
         try:
             # Generate network-specific address
@@ -97,18 +96,14 @@ class USDTClient:
             }
 
             self.transactions[tx_hash] = transaction
-            logger.info(
-                f"USDT deposit processed: {tx_hash} - {amount} USDT on {network.value}"
-            )
+            logger.info(f"USDT deposit processed: {tx_hash} - {amount} USDT on {network.value}")
 
             return transaction
         except Exception as e:
             logger.error(f"Error processing USDT deposit: {e}")
             return None
 
-    def process_withdrawal(
-        self, user_id: str, amount: Decimal, destination: str, network: USDTNetwork
-    ) -> dict:
+    def process_withdrawal(self, user_id: str, amount: Decimal, destination: str, network: USDTNetwork) -> dict:
         """Process USDT withdrawal"""
         try:
             total_fee = self.NETWORK_FEE
@@ -117,9 +112,7 @@ class USDTClient:
             if net_amount <= 0:
                 raise ValueError("Amount too small after fees")
 
-            tx_hash = hashlib.sha256(
-                f"USDT{user_id}{amount}{destination}".encode()
-            ).hexdigest()
+            tx_hash = hashlib.sha256(f"USDT{user_id}{amount}{destination}".encode()).hexdigest()
 
             return {
                 "tx_hash": tx_hash,

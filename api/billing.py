@@ -288,10 +288,9 @@ async def activate_free_tier(body: FreeTierBody):
     if body.ref_code:
         try:
             aff_mgr = _get_affiliate_manager()
-            aff_mgr.track_referral(
+            aff_mgr.create_referral(
                 affiliate_code=body.ref_code,
                 referred_user_id=body.user_id,
-                conversion_value=Decimal("0"),
             )
         except Exception as exc:
             logger.debug("Referral tracking skipped: %s", exc)

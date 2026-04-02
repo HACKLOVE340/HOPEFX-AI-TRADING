@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import sys
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -123,7 +124,7 @@ def test_elapsed_days_zero_when_not_started(gate):
 def test_elapsed_days_correct(gate):
     past = datetime.now(UTC) - timedelta(days=15)
     gate.set_run_start(past)
-    assert 14 <= gate.elapsed_days <= 16  # noqa: PLR2004
+    assert 14 <= gate.elapsed_days <= 16
 
 
 # ── unit: record_fill ─────────────────────────────────────────────────────────
@@ -132,8 +133,8 @@ def test_elapsed_days_correct(gate):
 def test_record_fill_increments_counter(gate):
     gate.set_run_start()
     assert gate.record_fill(pnl=5.0) == 1
-    assert gate.record_fill(pnl=-2.0) == 2  # noqa: PLR2004
-    assert gate.fill_count == 2  # noqa: PLR2004
+    assert gate.record_fill(pnl=-2.0) == 2
+    assert gate.fill_count == 2
 
 
 def test_record_fill_persists(tmp_path):
@@ -144,7 +145,7 @@ def test_record_fill_persists(tmp_path):
     g1.record_fill(pnl=20.0)
 
     g2 = PaperTradingGate(state_path=path)
-    assert g2.fill_count == 2  # noqa: PLR2004
+    assert g2.fill_count == 2
 
 
 # ── unit: phase2_ready ────────────────────────────────────────────────────────
@@ -244,7 +245,7 @@ def api_client(tmp_path_factory):
 
 def test_gate_endpoint_returns_200(api_client):
     resp = api_client.get("/api/status/paper-trading/gate")
-    assert resp.status_code == 200  # noqa: PLR2004
+    assert resp.status_code == 200
     data = resp.json()
     assert "phase2_ready" in data
     assert "phase3_ready" in data
@@ -259,7 +260,7 @@ def test_gate_fill_endpoint_records_fill(api_client, monkeypatch, tmp_path):
     monkeypatch.setattr(_ptg, "_gate", fresh_gate)
 
     resp = api_client.post("/api/status/paper-trading/gate/fill?pnl=15.5")
-    assert resp.status_code == 200  # noqa: PLR2004
+    assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "recorded"
     assert data["fill_count"] == 1
@@ -268,7 +269,7 @@ def test_gate_fill_endpoint_records_fill(api_client, monkeypatch, tmp_path):
 
 def test_paper_trading_status_endpoint(api_client):
     resp = api_client.get("/api/status/paper-trading")
-    assert resp.status_code == 200  # noqa: PLR2004
+    assert resp.status_code == 200
     data = resp.json()
     assert "started" in data
     assert "elapsed_days" in data
@@ -283,8 +284,4 @@ def test_validate_oanda_gate_flag_runs(capsys):
 
     validate_gate()  # should not raise
     captured = capsys.readouterr()
-    assert (
-        "Phase" in captured.out
-        or "Gate" in captured.out
-        or "gate" in captured.out.lower()
-    )
+    assert "Phase" in captured.out or "Gate" in captured.out or "gate" in captured.out.lower()

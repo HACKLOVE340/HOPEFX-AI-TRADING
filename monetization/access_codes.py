@@ -16,6 +16,7 @@ import hashlib
 import secrets
 import string
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from enum import Enum
 
@@ -100,9 +101,7 @@ class AccessCode:
             "is_valid": self.is_valid(),
             "created_at": self.created_at.isoformat(),
             "expires_at": self.expires_at.isoformat(),
-            "activated_at": self.activated_at.isoformat()
-            if self.activated_at
-            else None,
+            "activated_at": self.activated_at.isoformat() if self.activated_at else None,
             "used_at": self.used_at.isoformat() if self.used_at else None,
         }
 
@@ -131,9 +130,7 @@ class AccessCodeGenerator:
         hash_obj = hashlib.sha256(data)
         return hash_obj.hexdigest()[:4].upper()
 
-    def generate_code(
-        self, tier: SubscriptionTier, duration_days: int = 30
-    ) -> AccessCode:
+    def generate_code(self, tier: SubscriptionTier, duration_days: int = 30) -> AccessCode:
         """Generate a new access code"""
         tier_prefix = self._tier_prefixes.get(tier, "UNK")
         random_part = self._generate_random_string(8)
@@ -202,27 +199,15 @@ class AccessCodeGenerator:
 
     def get_active_codes(self) -> list:
         """Get all active access codes"""
-        return [
-            code
-            for code in self._codes.values()
-            if code.status == AccessCodeStatus.ACTIVE and code.is_valid()
-        ]
+        return [code for code in self._codes.values() if code.status == AccessCodeStatus.ACTIVE and code.is_valid()]
 
     def get_used_codes(self) -> list:
         """Get all used access codes"""
-        return [
-            code
-            for code in self._codes.values()
-            if code.status == AccessCodeStatus.USED
-        ]
+        return [code for code in self._codes.values() if code.status == AccessCodeStatus.USED]
 
     def get_expired_codes(self) -> list:
         """Get all expired access codes"""
-        return [
-            code
-            for code in self._codes.values()
-            if code.status == AccessCodeStatus.EXPIRED or not code.is_valid()
-        ]
+        return [code for code in self._codes.values() if code.status == AccessCodeStatus.EXPIRED or not code.is_valid()]
 
     def get_tier_from_code(self, code: str) -> SubscriptionTier | None:
         """Extract tier from code"""
@@ -239,9 +224,7 @@ class AccessCodeGenerator:
             logger.error(f"Error extracting tier from code {code}: {e}")
             return None
 
-    def generate_batch_codes(
-        self, tier: SubscriptionTier, count: int, duration_days: int = 30
-    ) -> list:
+    def generate_batch_codes(self, tier: SubscriptionTier, count: int, duration_days: int = 30) -> list:
         """Generate multiple access codes"""
         codes = []
         for _ in range(count):
@@ -263,12 +246,8 @@ class AccessCodeGenerator:
             tier_codes = [c for c in self._codes.values() if c.tier == tier]
             tier_breakdown[tier.value] = {
                 "total": len(tier_codes),
-                "active": len(
-                    [c for c in tier_codes if c.status == AccessCodeStatus.ACTIVE]
-                ),
-                "used": len(
-                    [c for c in tier_codes if c.status == AccessCodeStatus.USED]
-                ),
+                "active": len([c for c in tier_codes if c.status == AccessCodeStatus.ACTIVE]),
+                "used": len([c for c in tier_codes if c.status == AccessCodeStatus.USED]),
             }
 
         return {

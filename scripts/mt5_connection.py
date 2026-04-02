@@ -44,9 +44,7 @@ def connect_to_account():
             logging.info("Connected to account successfully")
             return True
         else:
-            logging.warning(
-                f"Connection attempt {attempt + 1} failed: {mt5.last_error()}"
-            )
+            logging.warning(f"Connection attempt {attempt + 1} failed: {mt5.last_error()}")
             time.sleep(2**attempt)  # Exponential backoff
     logging.error("All connection attempts failed")
     return False
@@ -55,17 +53,13 @@ def connect_to_account():
 def get_symbol_info(symbol):
     info = mt5.symbol_info(symbol)
     if info is None:
-        logging.error(
-            f"Failed to retrieve symbol info for {symbol}: {mt5.last_error()}"
-        )
+        logging.error(f"Failed to retrieve symbol info for {symbol}: {mt5.last_error()}")
         return None
     return info
 
 
 def fetch_last_ticks(symbol, num_ticks):
-    ticks = mt5.copy_ticks_from(
-        symbol, mt5.symbol_info_tick(symbol).time, num_ticks, mt5.COPY_TICKS_ALL
-    )
+    ticks = mt5.copy_ticks_from(symbol, mt5.symbol_info_tick(symbol).time, num_ticks, mt5.COPY_TICKS_ALL)
     if ticks is None:
         logging.error(f"Failed to fetch ticks for {symbol}: {mt5.last_error()}")
         return []

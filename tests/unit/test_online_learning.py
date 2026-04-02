@@ -132,9 +132,7 @@ class TestIncrementalXGBoost:
         path = tmp_path / "ixgb.pkl"
         model.save(path)
         loaded = self._cls.load(path)
-        np.testing.assert_allclose(
-            model.predict_proba(X), loaded.predict_proba(X), rtol=1e-5
-        )
+        np.testing.assert_allclose(model.predict_proba(X), loaded.predict_proba(X), rtol=1e-5)
 
 
 # ── OnlineLearnerStore ────────────────────────────────────────────────────────
@@ -164,7 +162,7 @@ class TestOnlineLearnerStore:
         store = self._cls(min_fills=100)
         X = _make_features(1, 8)
         result = store.blend(0.75, X)
-        assert result == 0.75  # noqa: PLR2004
+        assert result == 0.75
 
     def test_blend_returns_float_in_range(self):
         store = self._cls(min_fills=5)
@@ -190,7 +188,7 @@ class TestOnlineLearnerStore:
         X = _make_features(1, 8)
         for _ in range(5):
             store.on_fill(X, label=1)
-        assert store.fill_count == 5  # noqa: PLR2004
+        assert store.fill_count == 5
 
     def test_status_returns_dict(self):
         store = self._cls(min_fills=100)
@@ -268,12 +266,12 @@ class TestOnlineLearningSignalEngine:
         adv_prob = 0.8
         online_prob = 0.6
         expected = 0.7 * adv_prob + 0.3 * online_prob
-        assert abs(expected - 0.74) < 1e-9  # noqa: PLR2004
+        assert abs(expected - 0.74) < 1e-9
 
     def test_blend_neutral_when_online_is_neutral(self):
         """When online_prob=0.5, blend should be closer to advanced_prob."""
         adv_prob = 0.8
         online_prob = 0.5
         blended = 0.7 * adv_prob + 0.3 * online_prob
-        assert blended > 0.5  # noqa: PLR2004
+        assert blended > 0.5
         assert blended < adv_prob

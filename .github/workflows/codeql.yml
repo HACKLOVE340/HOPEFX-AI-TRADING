@@ -2,7 +2,7 @@
 # Runs on push/PR to main and on a weekly schedule.
 # continue-on-error is set on both init and analyze steps so that
 # repositories without GitHub Advanced Security (private repos / forks)
-# do not block CI — results are still uploaded when permissions allow.
+# do not block CI - results are still uploaded when permissions allow.
 name: "CodeQL Advanced"
 
 on:

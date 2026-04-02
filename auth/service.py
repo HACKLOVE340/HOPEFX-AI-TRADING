@@ -68,7 +68,7 @@ class _TokenBlacklist:
             )
             self._redis.ping()
             logger.info("Token blacklist: Redis connected at %s:%s", host, port)
-        except Exception:  # nosec B110 — Redis optional, in-memory fallback
+        except Exception:
             logger.warning(
                 "Token blacklist: Redis unavailable — using in-memory fallback (not suitable for multi-process)",
             )
@@ -150,8 +150,7 @@ def _get_fernet():
         key_bytes = hashlib.sha256(raw_key.encode()).digest()
         fernet_key = base64.urlsafe_b64encode(key_bytes)
         return Fernet(fernet_key)
-    except Exception as exc:
-        logger.warning("Fernet initialization failed: %s", exc)
+    except Exception:
         return None
 
 
@@ -169,9 +168,8 @@ def decrypt_totp_secret(stored: str) -> str:
     if f:
         try:
             return f.decrypt(stored.encode()).decode()
-        except Exception as exc:
+        except Exception:
             # May already be plain (migration case)
-            logger.info("TOTP secret decryption failed (likely plaintext fallback): %s", exc)
             return stored
     return stored
 
@@ -518,10 +516,8 @@ class AuthService:
                 if jti:
                     ttl = max(0, exp - int(_now().timestamp()))
                     revoke_access_token(jti, ttl + 60)  # +60s buffer
-            except jwt.InvalidTokenError as _exc:
-                logger.debug(
-                    "Access token blacklist skipped (invalid/expired): %s", _exc
-                )  # expired or invalid — no need to blacklist
+            except Exception as _exc:
+                logger.debug("Suppressed exception: %s", _exc)  # expired or invalid — no need to blacklist
 
         return True, "Logged out successfully"
 

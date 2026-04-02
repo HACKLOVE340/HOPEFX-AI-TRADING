@@ -79,9 +79,7 @@ class Portfolio:
         # Selling - check if closing position
         elif new_position == 0:
             # Position closed
-            pnl = (
-                fill.fill_price - self.avg_prices.get(fill.symbol, fill.fill_price)
-            ) * fill.quantity
+            pnl = (fill.fill_price - self.avg_prices.get(fill.symbol, fill.fill_price)) * fill.quantity
             self._record_trade(fill, pnl)
             if fill.symbol in self.avg_prices:
                 del self.avg_prices[fill.symbol]
@@ -94,9 +92,7 @@ class Portfolio:
         # Update equity
         self._update_equity(current_prices)
 
-        logger.debug(
-            f"Updated portfolio: {fill.direction} {fill.quantity} {fill.symbol} @ {fill.fill_price:.4f}"
-        )
+        logger.debug(f"Updated portfolio: {fill.direction} {fill.quantity} {fill.symbol} @ {fill.fill_price:.4f}")
 
     def _record_trade(self, fill: FillEvent, pnl: float):
         """Record completed trade."""

@@ -13,6 +13,7 @@ for collaborative trading environments.
 from typing import Dict, List, Optional, Any, Set  # noqa: F401
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from enum import Enum
 import logging
@@ -236,9 +237,7 @@ class TeamManager:
         Returns:
             New team object
         """
-        team_id = (
-            f"team_{len(self.teams) + 1}_{int(datetime.now(UTC).timestamp())}"
-        )
+        team_id = f"team_{len(self.teams) + 1}_{int(datetime.now(UTC).timestamp())}"
         owner_id = owner_id or f"user_{int(datetime.now(UTC).timestamp())}"
 
         # Create owner as first member
@@ -265,16 +264,12 @@ class TeamManager:
         )
 
         self.teams[team_id] = team
-        self._log_activity(
-            team_id, owner_id, "create_team", "team", team_id, {"name": name}
-        )
+        self._log_activity(team_id, owner_id, "create_team", "team", team_id, {"name": name})
 
         logger.info(f"Created team: {name} (ID: {team_id})")
         return team
 
-    def invite_member(
-        self, team_id: str, email: str, role: UserRole, invited_by: str
-    ) -> TeamInvitation | None:
+    def invite_member(self, team_id: str, email: str, role: UserRole, invited_by: str) -> TeamInvitation | None:
         """
         Send an invitation to join a team.
 
@@ -294,9 +289,7 @@ class TeamManager:
 
         # Check if inviter has permission
         inviter = team.members.get(invited_by)
-        if not inviter or not self.has_permission(
-            team_id, invited_by, Permission.USER_INVITE
-        ):
+        if not inviter or not self.has_permission(team_id, invited_by, Permission.USER_INVITE):
             logger.error(f"User {invited_by} does not have invite permission")
             return None
 
@@ -330,9 +323,7 @@ class TeamManager:
         logger.info(f"Created invitation for {email} to team {team_id}")
         return invitation
 
-    def accept_invitation(
-        self, invitation_token: str, user_id: str, display_name: str
-    ) -> TeamMember | None:
+    def accept_invitation(self, invitation_token: str, user_id: str, display_name: str) -> TeamMember | None:
         """
         Accept a team invitation.
 
@@ -417,17 +408,13 @@ class TeamManager:
 
         if user_id in team.members:
             del team.members[user_id]
-            self._log_activity(
-                team_id, removed_by, "remove_member", "user", user_id, {}
-            )
+            self._log_activity(team_id, removed_by, "remove_member", "user", user_id, {})
             logger.info(f"Removed user {user_id} from team {team_id}")
             return True
 
         return False
 
-    def change_role(
-        self, team_id: str, user_id: str, new_role: UserRole, changed_by: str
-    ) -> bool:
+    def change_role(self, team_id: str, user_id: str, new_role: UserRole, changed_by: str) -> bool:
         """
         Change a member's role.
 
@@ -473,9 +460,7 @@ class TeamManager:
         logger.info(f"Changed role for {user_id} from {old_role} to {new_role}")
         return True
 
-    def has_permission(
-        self, team_id: str, user_id: str, permission: Permission
-    ) -> bool:
+    def has_permission(self, team_id: str, user_id: str, permission: Permission) -> bool:
         """
         Check if a user has a specific permission.
 
@@ -528,9 +513,7 @@ class TeamManager:
 
         if strategy_id not in team.shared_strategies:
             team.shared_strategies.append(strategy_id)
-            self._log_activity(
-                team_id, shared_by, "share_strategy", "strategy", strategy_id, {}
-            )
+            self._log_activity(team_id, shared_by, "share_strategy", "strategy", strategy_id, {})
             logger.info(f"Strategy {strategy_id} shared with team {team_id}")
             return True
 
@@ -547,17 +530,13 @@ class TeamManager:
 
         if portfolio_id not in team.shared_portfolios:
             team.shared_portfolios.append(portfolio_id)
-            self._log_activity(
-                team_id, shared_by, "share_portfolio", "portfolio", portfolio_id, {}
-            )
+            self._log_activity(team_id, shared_by, "share_portfolio", "portfolio", portfolio_id, {})
             logger.info(f"Portfolio {portfolio_id} shared with team {team_id}")
             return True
 
         return False
 
-    def generate_api_key(
-        self, team_id: str, generated_by: str, name: str = "API Key"
-    ) -> dict[str, str] | None:
+    def generate_api_key(self, team_id: str, generated_by: str, name: str = "API Key") -> dict[str, str] | None:
         """Generate an API key for the team."""
         team = self.teams.get(team_id)
         if not team:
@@ -571,9 +550,7 @@ class TeamManager:
         # Generate a random 32-byte salt per NIST recommendations
         salt = secrets.token_bytes(32)
         # Use PBKDF2 with SHA-256, 600000 iterations per OWASP 2023 recommendations
-        api_key_hash = hashlib.pbkdf2_hmac(
-            "sha256", api_key.encode(), salt, 600000
-        ).hex()
+        api_key_hash = hashlib.pbkdf2_hmac("sha256", api_key.encode(), salt, 600000).hex()
         # Store salt:hash format for later verification
         api_key_stored = f"{salt.hex()}:{api_key_hash}"
 
@@ -616,9 +593,7 @@ class TeamManager:
                 # New format: salt:hash (PBKDF2)
                 salt_hex, stored_hash = stored_key.split(":", 1)
                 salt = bytes.fromhex(salt_hex)
-                computed_hash = hashlib.pbkdf2_hmac(
-                    "sha256", api_key.encode(), salt, 600000
-                ).hex()
+                computed_hash = hashlib.pbkdf2_hmac("sha256", api_key.encode(), salt, 600000).hex()
                 if hmac.compare_digest(computed_hash, stored_hash):
                     return True
             else:
@@ -650,9 +625,7 @@ class TeamManager:
         )
         self.activity_logs.append(log)
 
-    def get_activity_log(
-        self, team_id: str, user_id: str | None = None, limit: int = 100
-    ) -> list[dict[str, Any]]:
+    def get_activity_log(self, team_id: str, user_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         """Get team activity log."""
         logs = [log for log in self.activity_logs if log.team_id == team_id]
 
@@ -793,9 +766,7 @@ def create_teams_router(manager: "TeamManager"):
             display_name=req.display_name,
         )
         if not member:
-            raise HTTPException(
-                status_code=400, detail="Invalid or expired invitation token"
-            )
+            raise HTTPException(status_code=400, detail="Invalid or expired invitation token")
         return {
             "status": "accepted",
             "user_id": member.user_id,
@@ -816,9 +787,7 @@ def create_teams_router(manager: "TeamManager"):
         try:
             new_role = UserRole(req.new_role)
         except ValueError:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid role '{req.new_role}'"
-            ) from None
+            raise HTTPException(status_code=400, detail=f"Invalid role '{req.new_role}'") from None
         success = manager.change_role(team_id, user_id, new_role, req.changed_by)
         if not success:
             raise HTTPException(status_code=404, detail="Team or member not found")
@@ -837,9 +806,7 @@ def create_teams_router(manager: "TeamManager"):
         }
 
     @router.get("/{team_id}/activity")
-    async def get_activity(
-        team_id: str, user_id: str | None = None, limit: int = 50
-    ):
+    async def get_activity(team_id: str, user_id: str | None = None, limit: int = 50):
         """Get team activity log."""
         return manager.get_activity_log(team_id, user_id=user_id, limit=limit)
 

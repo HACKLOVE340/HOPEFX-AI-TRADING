@@ -90,8 +90,8 @@ jobs:
           --timeout=120 \
           --junitxml=test-results.xml
 
-    # ── Critical-path coverage gates (90% branch coverage required) ──────────
-    - name: Coverage gate — risk/ (90%)
+    # -- Critical-path coverage gates (90% branch coverage required) ----------
+    - name: Coverage gate - risk/ (90%)
       env:
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
@@ -104,7 +104,7 @@ jobs:
           --asyncio-mode=auto \
           --timeout=120
 
-    - name: Coverage gate — execution/ (90%)
+    - name: Coverage gate - execution/ (90%)
       env:
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
@@ -117,7 +117,7 @@ jobs:
           --asyncio-mode=auto \
           --timeout=120
 
-    - name: Coverage gate — kill_switch.py (90%)
+    - name: Coverage gate - kill_switch.py (90%)
       env:
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
@@ -130,7 +130,7 @@ jobs:
           --asyncio-mode=auto \
           --timeout=120
 
-    - name: Coverage gate — brokers/ (90%)
+    - name: Coverage gate - brokers/ (90%)
       env:
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
@@ -146,7 +146,7 @@ jobs:
           --asyncio-mode=auto \
           --timeout=120
 
-    - name: Coverage gate — compliance/ (90%)
+    - name: Coverage gate - compliance/ (90%)
       env:
         REDIS_URL: redis://localhost:6379/15
         ENVIRONMENT: testing
@@ -269,12 +269,12 @@ jobs:
             const pct = parseFloat(coverage);
             const gate = 70;
             const passed = pct >= gate;
-            const icon = passed ? '✅' : '❌';
+            const icon = passed ? 'PASS' : 'FAIL';
             const status = passed ? 'PASSED' : 'FAILED';
             const color = passed ? '4c1' : 'e05d44';
 
             const body = [
-              `## ${icon} Coverage Gate — ${status}`,
+              `## ${icon} Coverage Gate - ${status}`,
               '',
               `| Metric | Value |`,
               `|--------|-------|`,
@@ -285,8 +285,8 @@ jobs:
               `![Coverage](https://img.shields.io/badge/coverage-${coverage}%25-${color})`,
               '',
               passed
-                ? `Coverage meets the ${gate}% gate. ✅`
-                : `⚠️ Coverage is below the ${gate}% gate. Add tests to the modules shown in the \`term-missing\` report above.`,
+                ? `Coverage meets the ${gate}% gate. PASS`
+                : `WARN Coverage is below the ${gate}% gate. Add tests to the modules shown in the \`term-missing\` report above.`,
             ].join('\n');
 
             const { data: comments } = await github.rest.issues.listComments({

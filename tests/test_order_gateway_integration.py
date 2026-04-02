@@ -46,9 +46,7 @@ def _make_order(
     return o
 
 
-def _filled_result(
-    order_id: str = "ORD-001", qty: float = 0.1, price: float = 3300.0
-) -> ExecutionResult:
+def _filled_result(order_id: str = "ORD-001", qty: float = 0.1, price: float = 3300.0) -> ExecutionResult:
     return ExecutionResult(
         success=True,
         order_id=order_id,
@@ -61,9 +59,7 @@ def _filled_result(
     )
 
 
-def _rejected_result(
-    order_id: str = "ORD-001", reason: str = "Insufficient margin"
-) -> ExecutionResult:
+def _rejected_result(order_id: str = "ORD-001", reason: str = "Insufficient margin") -> ExecutionResult:
     return ExecutionResult(
         success=False,
         order_id=order_id,
@@ -76,9 +72,7 @@ def _rejected_result(
     )
 
 
-def _partial_result(
-    order_id: str = "ORD-001", filled: float = 0.05, price: float = 3300.0
-) -> ExecutionResult:
+def _partial_result(order_id: str = "ORD-001", filled: float = 0.05, price: float = 3300.0) -> ExecutionResult:
     return ExecutionResult(
         success=True,
         order_id=order_id,
@@ -164,9 +158,7 @@ class TestBrokerException:
     def test_broker_timeout_returns_error_result(self, gateway, mock_executor):
         """When TradeExecutor raises asyncio.TimeoutError, send_order returns ERROR."""
         order = _make_order()
-        mock_executor.execute_signal.side_effect = TimeoutError(
-            "broker timeout"
-        )
+        mock_executor.execute_signal.side_effect = TimeoutError("broker timeout")
 
         result = gateway.send_order(order)
 
@@ -179,9 +171,7 @@ class TestBrokerException:
     def test_broker_connection_error_returns_error_result(self, gateway, mock_executor):
         """When TradeExecutor raises ConnectionError, send_order returns ERROR."""
         order = _make_order()
-        mock_executor.execute_signal.side_effect = ConnectionError(
-            "broker disconnected"
-        )
+        mock_executor.execute_signal.side_effect = ConnectionError("broker disconnected")
 
         result = gateway.send_order(order)
 
@@ -189,14 +179,10 @@ class TestBrokerException:
         assert result.status == OrderStatus.ERROR
         assert order.is_rejected is True
 
-    def test_broker_generic_exception_returns_error_result(
-        self, gateway, mock_executor
-    ):
+    def test_broker_generic_exception_returns_error_result(self, gateway, mock_executor):
         """Any unexpected exception from TradeExecutor returns ERROR, never raises."""
         order = _make_order()
-        mock_executor.execute_signal.side_effect = RuntimeError(
-            "unexpected broker error"
-        )
+        mock_executor.execute_signal.side_effect = RuntimeError("unexpected broker error")
 
         result = gateway.send_order(order)
 
@@ -205,9 +191,7 @@ class TestBrokerException:
         assert "unexpected broker error" in result.message
 
     @pytest.mark.asyncio
-    async def test_async_broker_timeout_returns_error_result(
-        self, gateway, mock_executor
-    ):
+    async def test_async_broker_timeout_returns_error_result(self, gateway, mock_executor):
         """send_order_async() handles broker timeout without raising."""
         order = _make_order()
         mock_executor.execute_signal.side_effect = TimeoutError("async timeout")
@@ -306,9 +290,7 @@ class TestOrderRejection:
     def test_broker_rejection_marks_order_rejected(self, gateway, mock_executor):
         """Broker REJECTED result marks order.is_rejected and records reason."""
         order = _make_order()
-        mock_executor.execute_signal.return_value = _rejected_result(
-            reason="Insufficient margin"
-        )
+        mock_executor.execute_signal.return_value = _rejected_result(reason="Insufficient margin")
 
         result = gateway.send_order(order)
 
@@ -336,9 +318,7 @@ class TestOrderRejection:
     async def test_async_rejection(self, gateway, mock_executor):
         """send_order_async() handles REJECTED result correctly."""
         order = _make_order()
-        mock_executor.execute_signal.return_value = _rejected_result(
-            reason="[KILL_SWITCH] Trading halted"
-        )
+        mock_executor.execute_signal.return_value = _rejected_result(reason="[KILL_SWITCH] Trading halted")
 
         result = await gateway.send_order_async(order)
 
@@ -417,9 +397,7 @@ class TestKillSwitchActive:
     def test_kill_switch_exception_from_executor_handled(self, gateway, mock_executor):
         """If TradeExecutor raises due to kill switch, gateway returns ERROR."""
         order = _make_order()
-        mock_executor.execute_signal.side_effect = RuntimeError(
-            "KillSwitch is active — all trading halted"
-        )
+        mock_executor.execute_signal.side_effect = RuntimeError("KillSwitch is active — all trading halted")
 
         result = gateway.send_order(order)
 
@@ -427,9 +405,7 @@ class TestKillSwitchActive:
         assert result.status == OrderStatus.ERROR
         assert order.is_rejected is True
 
-    def test_multiple_orders_all_blocked_when_kill_switch_active(
-        self, gateway, mock_executor
-    ):
+    def test_multiple_orders_all_blocked_when_kill_switch_active(self, gateway, mock_executor):
         """All orders are blocked when kill switch is active — no partial execution."""
         mock_executor.execute_signal.return_value = ExecutionResult(
             success=False,
@@ -447,7 +423,7 @@ class TestKillSwitchActive:
 
         assert all(not r.success for r in results)
         assert all(o.is_rejected for o in orders)
-        assert mock_executor.execute_signal.call_count == 5  # noqa: PLR2004
+        assert mock_executor.execute_signal.call_count == 5
 
 
 # ─────────────────────────────────────────────────────────────────────────────

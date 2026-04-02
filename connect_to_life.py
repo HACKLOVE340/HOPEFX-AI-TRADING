@@ -63,6 +63,7 @@ import signal
 import sys
 import time
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -104,9 +105,7 @@ CHECKPOINT_FILE: str = "state/connect_to_life_checkpoint.json"
 _SUPPRESSED_EXC_MSG = "Suppressed exception: %s"
 
 # Nuclear supervisor — controls whether it is active
-NUCLEAR_SUPERVISOR_ENABLED: bool = (
-    os.environ.get("NUCLEAR_SUPERVISOR_ENABLED", "1") != "0"
-)
+NUCLEAR_SUPERVISOR_ENABLED: bool = os.environ.get("NUCLEAR_SUPERVISOR_ENABLED", "1") != "0"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -287,9 +286,7 @@ class LifeSupervisor:
 
         # Start engine as a background task
         self._engine = HopeFXEngine()
-        self._engine_task = asyncio.create_task(
-            self._engine.start(), name="hopefx-engine"
-        )
+        self._engine_task = asyncio.create_task(self._engine.start(), name="hopefx-engine")
         self._engine_task.add_done_callback(self._on_engine_done)
 
         logger.info("HopeFXEngine task started — supervising")
@@ -321,23 +318,16 @@ class LifeSupervisor:
 
                 _minimal_app = _FastAPI(title="HOPEFXBrain-CLI")
                 await _start_brain(_minimal_app)
-                logger.info(
-                    "HOPEFXBrain started in CLI mode (minimal FastAPI instance)"
-                )
+                logger.info("HOPEFXBrain started in CLI mode (minimal FastAPI instance)")
         except Exception as _brain_exc:
             logger.warning("HOPEFXBrain failed to start (non-fatal): %s", _brain_exc)
 
         # Send startup Telegram notification
-        nuclear_status = (
-            "RL-supervisor=ON"
-            if self._nuclear_supervisor is not None
-            else "RL-supervisor=OFF"
-        )
+        nuclear_status = "RL-supervisor=ON" if self._nuclear_supervisor is not None else "RL-supervisor=OFF"
         await _telegram(
             self._tg_token,
             self._tg_chat,
-            f"🟢 HOPEFX started — mode={self._trading_mode} "
-            f"DD_limit={DD_HARD_STOP_PCT*100:.0f}% {nuclear_status}",
+            f"🟢 HOPEFX started — mode={self._trading_mode} DD_limit={DD_HARD_STOP_PCT * 100:.0f}% {nuclear_status}",
         )
 
         # Supervision loop
@@ -368,14 +358,10 @@ class LifeSupervisor:
                 logger.info("Nuclear supervisor wired via register_news_callback")
                 return
             except Exception as exc:
-                logger.warning(
-                    "register_news_callback failed: %s — using poll mode", exc
-                )
+                logger.warning("register_news_callback failed: %s — using poll mode", exc)
 
         # Fallback: polling mode — _supervise will call _poll_news_events()
-        logger.info(
-            "Nuclear supervisor in poll mode (no register_news_callback on engine)"
-        )
+        logger.info("Nuclear supervisor in poll mode (no register_news_callback on engine)")
 
     async def on_news_event(self, event: dict[str, Any]) -> None:
         """
@@ -395,10 +381,8 @@ class LifeSupervisor:
             try:
                 from risk.orchestrator import risk_orchestrator
 
-                event[
-                    "current_exposure"
-                ] = await risk_orchestrator.get_current_exposure()
-            except Exception:  # nosec B110
+                event["current_exposure"] = await risk_orchestrator.get_current_exposure()
+            except Exception:
                 event["current_exposure"] = 0.5
 
         try:
@@ -414,15 +398,11 @@ class LifeSupervisor:
                         sentiment=event.get("sentiment", 0.0),
                     )
                 except Exception as _exc:
-                    logger.debug(
-                        _SUPPRESSED_EXC_MSG, _exc
-                    )  # chart engine errors must never crash the supervisor
+                    logger.debug(_SUPPRESSED_EXC_MSG, _exc)  # chart engine errors must never crash the supervisor
 
             # If nuclear mode was triggered, enforce DD stop immediately
             if action == "nuclear":
-                logger.critical(
-                    "Nuclear mode triggered by event — initiating emergency shutdown"
-                )
+                logger.critical("Nuclear mode triggered by event — initiating emergency shutdown")
                 self._exit_code = 1
                 self._shutdown_event.set()
         except Exception as exc:
@@ -444,7 +424,7 @@ class LifeSupervisor:
             try:
                 event = queue.get_nowait()
                 await self.on_news_event(event)
-            except Exception:  # nosec B110
+            except Exception:
                 break
 
     # ── supervision loop ──────────────────────────────────────────────────────
@@ -476,11 +456,7 @@ class LifeSupervisor:
 
     def _handle_engine_done(self) -> None:
         """Handle an unexpectedly finished engine task."""
-        exc = (
-            self._engine_task.exception()
-            if not self._engine_task.cancelled()
-            else None
-        )
+        exc = self._engine_task.exception() if not self._engine_task.cancelled() else None
         if exc:
             logger.critical("Engine task died with exception: %s", exc)
             self._exit_code = 1
@@ -518,15 +494,12 @@ class LifeSupervisor:
             f" rl={'on' if ns['rl_agent_loaded'] else 'off'}"
         )
 
-    def _maybe_log_heartbeat(
-        self, status: dict, dd_pct: float, heartbeat_ts: float
-    ) -> float:
+    def _maybe_log_heartbeat(self, status: dict, dd_pct: float, heartbeat_ts: float) -> float:
         """Log a heartbeat if 60 s have elapsed; return updated timestamp."""
         if time.monotonic() - heartbeat_ts < 60:  # noqa: PLR2004
             return heartbeat_ts
         logger.info(
-            "HEARTBEAT  equity=%.2f balance=%.2f daily_pnl=%+.2f "
-            "dd=%.2f%% fills=%d broker=%s%s",
+            "HEARTBEAT  equity=%.2f balance=%.2f daily_pnl=%+.2f dd=%.2f%% fills=%d broker=%s%s",
             status.get("equity", 0),
             status.get("balance", 0),
             status.get("daily_pnl", 0),
@@ -616,8 +589,8 @@ class LifeSupervisor:
         """Hard stop triggered by daily drawdown exceeding the limit."""
         msg = (
             f"🚨 HOPEFX AUTO-STOP\n"
-            f"Daily drawdown {dd_frac*100:.2f}% exceeded "
-            f"{DD_HARD_STOP_PCT*100:.0f}% limit.\n"
+            f"Daily drawdown {dd_frac * 100:.2f}% exceeded "
+            f"{DD_HARD_STOP_PCT * 100:.0f}% limit.\n"
             f"All trading halted. Manual review required."
         )
         logger.critical(
@@ -670,19 +643,14 @@ async def _main() -> None:
     load_dotenv(override=False)
 
     # Validate mandatory credentials
-    missing = [
-        k for k in ("OANDA_API_KEY", "OANDA_ACCOUNT_ID") if not os.environ.get(k)
-    ]
+    missing = [k for k in ("OANDA_API_KEY", "OANDA_ACCOUNT_ID") if not os.environ.get(k)]
     if missing:
         logger.critical("Missing required env vars: %s — aborting.", missing)
         sys.exit(1)
 
     # Warn if running in live mode without explicit confirmation
     if os.environ.get("TRADING_MODE", "paper").lower() == "live":
-        logger.warning(
-            "TRADING_MODE=live — real orders will be placed. "
-            "Set TRADING_MODE=paper to use paper trading."
-        )
+        logger.warning("TRADING_MODE=live — real orders will be placed. Set TRADING_MODE=paper to use paper trading.")
 
     supervisor = LifeSupervisor()
     exit_code = await supervisor.run()

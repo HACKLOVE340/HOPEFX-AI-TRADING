@@ -212,8 +212,8 @@ class BacktestResult:
         if self.error:
             return f"Backtest failed: {self.error}"
         return (
-            f"Sharpe={self.sharpe:.3f}  Return={self.total_return*100:.2f}%  "
-            f"MaxDD={self.max_drawdown*100:.2f}%  WinRate={self.win_rate*100:.1f}%  "
+            f"Sharpe={self.sharpe:.3f}  Return={self.total_return * 100:.2f}%  "
+            f"MaxDD={self.max_drawdown * 100:.2f}%  WinRate={self.win_rate * 100:.1f}%  "
             f"Trades={self.trades}"
         )
 
@@ -337,15 +337,15 @@ def _run_backtest(
         if position != 0 and (
             (position > 0 and sig_type == SignalType.SELL) or (position < 0 and sig_type == SignalType.BUY)
         ):
-                pnl = position * (price - entry_price)
-                pnl -= abs(position) * price * commission
-                balance += pnl
-                if pnl > 0:
-                    wins += 1
-                else:
-                    losses += 1
-                position = 0.0
-                entry_price = 0.0
+            pnl = position * (price - entry_price)
+            pnl -= abs(position) * price * commission
+            balance += pnl
+            if pnl > 0:
+                wins += 1
+            else:
+                losses += 1
+            position = 0.0
+            entry_price = 0.0
 
         # open new position
         if position == 0 and sig_type in (SignalType.BUY, SignalType.SELL):
@@ -408,10 +408,7 @@ class LLMAgent:
     ):
         key = api_key or os.environ.get("OPENAI_API_KEY", "")
         if not key:
-            raise ValueError(
-                "OpenAI API key required — set OPENAI_API_KEY env var "
-                "or pass api_key= to LLMAgent()"
-            )
+            raise ValueError("OpenAI API key required — set OPENAI_API_KEY env var or pass api_key= to LLMAgent()")
         self._client = openai.AsyncOpenAI(api_key=key)
         self.model = model
         self.max_iterations = max_iterations
@@ -447,9 +444,7 @@ class LLMAgent:
         if self.candle_fetcher:
             try:
                 candles = await self.candle_fetcher(symbol, timeframe, candle_count)
-                logger.info(
-                    "Fetched %d candles for %s %s", len(candles), symbol, timeframe
-                )
+                logger.info("Fetched %d candles for %s %s", len(candles), symbol, timeframe)
             except (OSError, ValueError, RuntimeError, AttributeError) as exc:
                 logger.warning("Candle fetch failed: %s — backtesting disabled", exc)
 
@@ -496,8 +491,7 @@ class LLMAgent:
                 bt = None
 
             result = AgentResult(
-                success=bt is None
-                or (bt.error is None and bt.sharpe >= self.target_sharpe),
+                success=bt is None or (bt.error is None and bt.sharpe >= self.target_sharpe),
                 strategy_code=code,
                 strategy_name="GeneratedStrategy",
                 backtest=bt,
@@ -506,9 +500,7 @@ class LLMAgent:
             )
 
             # track best so far
-            if best_result is None or (
-                bt and best_result.backtest and bt.sharpe > best_result.backtest.sharpe
-            ):
+            if best_result is None or (bt and best_result.backtest and bt.sharpe > best_result.backtest.sharpe):
                 best_result = result
 
             if result.success:
@@ -578,9 +570,7 @@ class LLMAgent:
                 {"role": "system", "content": ephemeral_msg},
                 {"role": "user", "content": message},
             ]
-            response_text, error = await self._call_llm_with_messages(
-                messages_with_context
-            )
+            response_text, error = await self._call_llm_with_messages(messages_with_context)
             if not error:
                 # Persist the exchange without the ephemeral context
                 self._history.append({"role": "user", "content": message})
@@ -623,9 +613,9 @@ class LLMAgent:
                 if engine is not None:
                     h = engine.health()
                     lines.append(
-                        f"\nML Engine: model={h.get('model_version','?')} "
-                        f"predictions={h.get('predict_count',0)} "
-                        f"fallbacks={h.get('fallback_count',0)}"
+                        f"\nML Engine: model={h.get('model_version', '?')} "
+                        f"predictions={h.get('predict_count', 0)} "
+                        f"fallbacks={h.get('fallback_count', 0)}"
                     )
             except (AttributeError, RuntimeError) as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
@@ -684,9 +674,7 @@ class LLMAgent:
 
     # ── internals ─────────────────────────────────────────────────────────────
 
-    async def _call_llm_with_messages(
-        self, messages: list[dict[str, str]]
-    ) -> tuple[str, str | None]:
+    async def _call_llm_with_messages(self, messages: list[dict[str, str]]) -> tuple[str, str | None]:
         """Call GPT-4 with an explicit message list (used for RAG injection)."""
         try:
             response = await self._client.chat.completions.create(
@@ -777,10 +765,7 @@ def create_agent(
 
     # Resolve deprecated alias.
     if candle_source is None and oanda_stream is not None:
-        _log.warning(
-            "create_agent: 'oanda_stream' parameter is deprecated — "
-            "use 'candle_source' instead."
-        )
+        _log.warning("create_agent: 'oanda_stream' parameter is deprecated — use 'candle_source' instead.")
         candle_source = oanda_stream
 
     fetcher = None

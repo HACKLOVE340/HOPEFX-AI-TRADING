@@ -531,9 +531,64 @@ class HopeFXEngine:
             return
 
         latency_ms = (time.monotonic() - t0) * 1000
+        status = fill.get("status", "rejected")
 
-        if fill.get("status") == "filled":
+        if status == "filled":
             await self._on_fill(signal, order_request, fill, latency_ms)
+
+        elif status == "partial":
+            # Partial fill: broker filled less than the requested quantity.
+            # Accept the partial fill — record it as a real fill with the
+            # actual filled quantity, then log the unfilled remainder.
+            # We do NOT re-submit the remainder automatically because:
+            #   1. OANDA FOK orders either fill fully or cancel — a "partial"
+            #      here means the broker adapter normalised a partial trade.
+            #   2. Re-submitting the remainder risks doubling position size
+            #      if the original order is still pending on the broker side.
+            filled_qty = float(fill.get("quantity", fill.get("filled_qty", 0)))
+            requested_qty = float(order_request.get("quantity", 0))
+            unfilled_qty = max(0.0, requested_qty - filled_qty)
+            logger.warning(
+                "PARTIAL FILL signal_id=%s filled=%.4f requested=%.4f unfilled=%.4f broker=%s",
+                signal.signal_id,
+                filled_qty,
+                requested_qty,
+                unfilled_qty,
+                fill.get("broker", "?"),
+            )
+            if filled_qty > 0:
+                # Treat the partial as a real fill with the actual quantity.
+                partial_fill = {**fill, "status": "filled", "quantity": filled_qty}
+                await self._on_fill(signal, order_request, partial_fill, latency_ms)
+            else:
+                # Zero-quantity partial — treat as rejection.
+                self._reject_count += 1
+                self._record_rejection(signal, "partial_fill_zero_qty")
+
+        elif status == "pending":
+            # Limit order accepted by broker but not yet filled.
+            # Track the pending order so we can monitor it for fill/cancel.
+            order_id = fill.get("order_id", order_request.get("order_id", ""))
+            logger.info(
+                "PENDING ORDER signal_id=%s order_id=%s broker=%s — awaiting fill",
+                signal.signal_id,
+                order_id,
+                fill.get("broker", "?"),
+            )
+            # Record in lineage so the audit trail shows the pending state.
+            try:
+                self._lineage.record_signal(
+                    direction=f"PENDING:{signal.direction}",
+                    confidence=signal.confidence,
+                    probability=signal.probability,
+                    features_hash=signal.features_hash,
+                    model_version=f"pending@{fill.get('broker', '?')}",
+                    lineage_id=signal.lineage_id,
+                    symbol=signal.symbol,
+                )
+            except Exception as _exc:
+                logger.debug("lineage record_signal (pending) error: %s", _exc)
+
         else:
             self._reject_count += 1
             self._record_rejection(signal, fill.get("reason", "broker_reject"))
@@ -547,14 +602,42 @@ class HopeFXEngine:
     ) -> None:
         """Handle confirmed fill: lineage, position tracking, orchestrator notify."""
         fill_price = float(fill.get("fill_price", signal.tick_mid))
-        quantity = float(fill.get("quantity", order["quantity"]))
         broker = fill.get("broker", "unknown")
 
-        # Slippage in bps
-        if signal.direction == "long":
-            slippage_bps = (fill_price - signal.tick_ask) / signal.tick_ask * 10000
+        # ── OANDA XAUUSD unit normalisation ───────────────────────────────
+        # OANDA returns quantity in units (troy oz for XAU_USD).
+        # 1 standard lot = 100 oz.  The engine tracks quantity in lots so
+        # that slippage bps and position sizing are consistent across brokers.
+        # If the broker returned units > 10 and the requested quantity was
+        # in lots (< 10), convert units → lots.
+        raw_qty = float(fill.get("quantity", order.get("quantity", 0)))
+        requested_qty = float(order.get("quantity", raw_qty))
+        symbol = signal.symbol.upper().replace("/", "_")
+        if broker == "oanda" and "XAU" in symbol:
+            # OANDA XAU_USD: 1 lot = 100 units (oz).
+            # If the fill quantity looks like units (>> requested lots),
+            # convert to lots.
+            if raw_qty > requested_qty * 10 and requested_qty < 100:  # noqa: PLR2004
+                quantity = raw_qty / 100.0
+                logger.debug(
+                    "OANDA XAU_USD unit→lot conversion: %.0f units → %.4f lots",
+                    raw_qty,
+                    quantity,
+                )
+            else:
+                quantity = raw_qty
         else:
-            slippage_bps = (signal.tick_bid - fill_price) / signal.tick_bid * 10000
+            quantity = raw_qty
+
+        # ── Slippage in bps ────────────────────────────────────────────────
+        # Guard against zero bid/ask (e.g. first tick before feed is live).
+        # Use tick_mid as fallback reference price.
+        if signal.direction == "long":
+            ref_price = signal.tick_ask if signal.tick_ask > 0 else signal.tick_mid
+            slippage_bps = (fill_price - ref_price) / ref_price * 10_000 if ref_price > 0 else 0.0
+        else:
+            ref_price = signal.tick_bid if signal.tick_bid > 0 else signal.tick_mid
+            slippage_bps = (ref_price - fill_price) / ref_price * 10_000 if ref_price > 0 else 0.0
 
         fill_record = FillRecord(
             fill_id=str(uuid.uuid4()),

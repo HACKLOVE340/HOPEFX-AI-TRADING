@@ -29,9 +29,7 @@ def _validate_hex(value: str, field_name: str) -> str:
     """Validate and normalise a CSS hex colour. Raises ValueError on bad input."""
     v = value.strip()
     if not _HEX_RE.match(v):
-        raise ValueError(
-            f"{field_name} must be a valid CSS hex colour (e.g. #3b82f6), got: {v!r}"
-        )
+        raise ValueError(f"{field_name} must be a valid CSS hex colour (e.g. #3b82f6), got: {v!r}")
     # Expand 3-digit shorthand to 6-digit
     if len(v) == 4:  # noqa: PLR2004
         v = "#" + "".join(c * 2 for c in v[1:])

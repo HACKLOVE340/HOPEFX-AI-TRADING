@@ -93,9 +93,7 @@ try:
 except ImportError:
     PPO = None  # type: ignore
     _SB3_AVAILABLE = False
-    logger.warning(
-        "stable-baselines3 not installed — RL agent disabled, using rule-based fallback"
-    )
+    logger.warning("stable-baselines3 not installed — RL agent disabled, using rule-based fallback")
 
 # ── Internal imports ──────────────────────────────────────────────────────────
 from news.nuclear_wordmap_scorer import NuclearWordMapScorer
@@ -195,9 +193,7 @@ class NuclearHopeFXSupervisor:
     ) -> None:
         self.nuclear_level: int = 0  # 0=normal 1=pause 2=hedge 3=nuclear
         self.trading_paused: bool = False
-        self._monitoring_only: bool = (
-            False  # True when in nuclear monitoring-only state
-        )
+        self._monitoring_only: bool = False  # True when in nuclear monitoring-only state
         self._monitoring_task_running: bool = False
         self._cooldown_seconds = cooldown_seconds
         self._auto_resume_seconds = auto_resume_seconds
@@ -233,8 +229,7 @@ class NuclearHopeFXSupervisor:
 
         if not self._model_path.exists():
             logger.warning(
-                "RL model not found at %s — falling back to rule-based. "
-                "Train with: python ml/train_rl_nuclear.py",
+                "RL model not found at %s — falling back to rule-based. Train with: python ml/train_rl_nuclear.py",
                 self._model_path,
             )
             return None
@@ -244,9 +239,7 @@ class NuclearHopeFXSupervisor:
             logger.info("RL agent loaded from %s", self._model_path)
             return agent
         except Exception as exc:
-            logger.warning(
-                "RL agent load failed (%s) — falling back to rule-based", exc
-            )
+            logger.warning("RL agent load failed (%s) — falling back to rule-based", exc)
             return None
 
     def _load_vec_normalize(self) -> Any | None:
@@ -278,12 +271,8 @@ class NuclearHopeFXSupervisor:
                 """Minimal env matching the 7-dim observation space of the RL agent."""
 
                 observation_space = spaces.Box(
-                    low=np.array(
-                        [0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32
-                    ),
-                    high=np.array(
-                        [1.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32
-                    ),
+                    low=np.array([0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32),
+                    high=np.array([1.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32),
                     dtype=np.float32,
                 )
                 action_space = spaces.Discrete(4)  # NORMAL / PAUSE / HEDGE / NUCLEAR
@@ -380,9 +369,7 @@ class NuclearHopeFXSupervisor:
         current_exposure = float(event.get("current_exposure", 0.5))
 
         # ── Step 1: WORDMAP scoring ───────────────────────────────────────────
-        severity, base_action, score, meta = self.scorer.score_event(
-            news_text, vol, sentiment
-        )
+        severity, base_action, score, meta = self.scorer.score_event(news_text, vol, sentiment)
 
         # ── Step 2: Auto-resume check ─────────────────────────────────────────
         await self._maybe_auto_resume()
@@ -396,9 +383,7 @@ class NuclearHopeFXSupervisor:
         action_taken: str = "normal"
 
         if self.rl_agent is not None:
-            obs = self._build_rl_observation(
-                severity, vol, sentiment, meta, current_exposure
-            )
+            obs = self._build_rl_observation(severity, vol, sentiment, meta, current_exposure)
             obs = self._normalize_obs(obs)  # apply VecNormalize if available
             raw_action, _ = self.rl_agent.predict(obs, deterministic=True)
             rl_action = int(raw_action)
@@ -422,9 +407,7 @@ class NuclearHopeFXSupervisor:
             "severity": severity,
             "score": score,
             "base_action": base_action,
-            "rl_action": _ACTION_NAMES.get(rl_action, "N/A")
-            if rl_action is not None
-            else "N/A",
+            "rl_action": _ACTION_NAMES.get(rl_action, "N/A") if rl_action is not None else "N/A",
             "action_taken": action_taken,
             "nuclear_level": self.nuclear_level,
             "trading_paused": self.trading_paused,
@@ -438,8 +421,7 @@ class NuclearHopeFXSupervisor:
             self._event_history.pop(0)
 
         logger.info(
-            "NuclearSupervisor | severity=%d score=%.3f rl=%s action=%s "
-            "nuclear_level=%d paused=%s",
+            "NuclearSupervisor | severity=%d score=%.3f rl=%s action=%s nuclear_level=%d paused=%s",
             severity,
             score,
             _ACTION_NAMES.get(rl_action, "N/A") if rl_action is not None else "rule",
@@ -462,9 +444,7 @@ class NuclearHopeFXSupervisor:
 
     # ── Action executor ───────────────────────────────────────────────────────
 
-    async def _execute_action(
-        self, rl_action: int, severity: int, in_cooldown: bool
-    ) -> str:
+    async def _execute_action(self, rl_action: int, severity: int, in_cooldown: bool) -> str:
         """Execute the RL-chosen action. Returns the action name string."""
         if rl_action == ACTION_NUCLEAR:
             if not in_cooldown or severity >= 9:  # noqa: PLR2004
@@ -478,9 +458,7 @@ class NuclearHopeFXSupervisor:
                 await self.trigger_full_nuclear_mode()
                 return "nuclear"
             else:
-                logger.info(
-                    "Nuclear action suppressed by cooldown (severity=%d)", severity
-                )
+                logger.info("Nuclear action suppressed by cooldown (severity=%d)", severity)
                 return "nuclear_cooldown_suppressed"
 
         elif rl_action == ACTION_HEDGE:
@@ -506,9 +484,7 @@ class NuclearHopeFXSupervisor:
                 self.nuclear_level = max(0, self.nuclear_level - 1)
                 if self.nuclear_level == 0:
                     self.trading_paused = False
-            logger.debug(
-                "RL NORMAL | severity=%d nuclear_level=%d", severity, self.nuclear_level
-            )
+            logger.debug("RL NORMAL | severity=%d nuclear_level=%d", severity, self.nuclear_level)
             return "normal"
 
     async def _rule_based_fallback(self, severity: int, in_cooldown: bool) -> str:
@@ -532,9 +508,7 @@ class NuclearHopeFXSupervisor:
                 await self.trigger_hedge_mode()
                 return "hedge"
             else:
-                logger.info(
-                    "Hedge action suppressed by cooldown (severity=%d)", severity
-                )
+                logger.info("Hedge action suppressed by cooldown (severity=%d)", severity)
                 return "hedge_cooldown_suppressed"
         elif severity >= 5:  # noqa: PLR2004
             self.nuclear_level = max(self.nuclear_level, 1)
@@ -570,9 +544,7 @@ class NuclearHopeFXSupervisor:
                 self._pause_since_ts = 0.0
                 notif = _get_notifications()
                 if notif:
-                    await notif.send_critical_alert(
-                        "✅ HOPEFX: Trading auto-resumed after pause period"
-                    )
+                    await notif.send_critical_alert("✅ HOPEFX: Trading auto-resumed after pause period")
 
     # ── Nuclear mode triggers ─────────────────────────────────────────────────
 
@@ -598,15 +570,11 @@ class NuclearHopeFXSupervisor:
         if ks is not None:
             try:
                 ks.activate("RL nuclear supervisor: nuclear event detected")
-                logger.critical(
-                    "☢️ KillSwitch activated — process stays alive in monitoring mode"
-                )
+                logger.critical("☢️ KillSwitch activated — process stays alive in monitoring mode")
             except Exception as exc:
                 logger.error("kill_switch.activate failed: %s", exc)
         else:
-            logger.critical(
-                "☢️ NUCLEAR MODE — kill_switch unavailable, manual intervention required"
-            )
+            logger.critical("☢️ NUCLEAR MODE — kill_switch unavailable, manual intervention required")
 
         # 2. Zero out risk budget (belt-and-suspenders)
         ro = _get_risk_orchestrator()
@@ -660,8 +628,7 @@ class NuclearHopeFXSupervisor:
                 ks = _get_kill_switch()
                 ks_active = ks.is_active() if ks else False
                 logger.critical(
-                    "☢️ NUCLEAR MONITORING | nuclear_level=%d paused=%s "
-                    "kill_switch=%s — awaiting manual_resume()",
+                    "☢️ NUCLEAR MONITORING | nuclear_level=%d paused=%s kill_switch=%s — awaiting manual_resume()",
                     self.nuclear_level,
                     self.trading_paused,
                     ks_active,
@@ -679,9 +646,7 @@ class NuclearHopeFXSupervisor:
                         logger.debug("Suppressed exception: %s", _exc)
         finally:
             self._monitoring_task_running = False
-            logger.info(
-                "Nuclear monitoring loop exited (nuclear_level=%d)", self.nuclear_level
-            )
+            logger.info("Nuclear monitoring loop exited (nuclear_level=%d)", self.nuclear_level)
 
     async def trigger_hedge_mode(self) -> None:
         """
@@ -701,8 +666,7 @@ class NuclearHopeFXSupervisor:
         if notif is not None:
             try:
                 await notif.send_critical_alert(
-                    "⚠️ HOPEFX HEDGE MODE ACTIVATED\n"
-                    "Max risk reduced to 15%. Inverse hedges opened on XAU_USD."
+                    "⚠️ HOPEFX HEDGE MODE ACTIVATED\nMax risk reduced to 15%. Inverse hedges opened on XAU_USD."
                 )
             except Exception as exc:
                 logger.error("Notification send failed: %s", exc)
@@ -736,13 +700,10 @@ class NuclearHopeFXSupervisor:
         if ks is not None and ks.is_active():
             try:
                 ks.deactivate(token=deactivation_token)
-                logger.info(
-                    "KillSwitch deactivated by nuclear supervisor manual_resume"
-                )
+                logger.info("KillSwitch deactivated by nuclear supervisor manual_resume")
             except PermissionError as exc:
                 logger.error(
-                    "KillSwitch deactivation refused (%s) — "
-                    "provide HOPEFX_KILL_SWITCH_TOKEN to resume trading",
+                    "KillSwitch deactivation refused (%s) — provide HOPEFX_KILL_SWITCH_TOKEN to resume trading",
                     exc,
                 )
                 # Don't proceed with resume if kill switch can't be cleared
@@ -761,9 +722,7 @@ class NuclearHopeFXSupervisor:
         notif = _get_notifications()
         if notif is not None:
             try:
-                await notif.send_info(
-                    "✅ HOPEFX nuclear mode cleared — trading resumed by operator"
-                )
+                await notif.send_info("✅ HOPEFX nuclear mode cleared — trading resumed by operator")
             except Exception as _exc:
                 logger.debug("Suppressed exception: %s", _exc)
 
@@ -786,11 +745,7 @@ class NuclearHopeFXSupervisor:
                 0.0,
                 self._cooldown_seconds - (time.monotonic() - self._last_trigger_ts),
             ),
-            "pause_elapsed": (
-                time.monotonic() - self._pause_since_ts
-                if self._pause_since_ts > 0
-                else 0.0
-            ),
+            "pause_elapsed": (time.monotonic() - self._pause_since_ts if self._pause_since_ts > 0 else 0.0),
             "event_history_count": len(self._event_history),
             "last_event": self._event_history[-1] if self._event_history else None,
         }

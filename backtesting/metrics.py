@@ -75,14 +75,10 @@ class PerformanceMetrics:
 
         # Portfolio metrics
         metrics["final_equity"] = (
-            self.equity_curve["equity"].iloc[-1]
-            if not self.equity_curve.empty
-            else self.initial_capital
+            self.equity_curve["equity"].iloc[-1] if not self.equity_curve.empty else self.initial_capital
         )
         metrics["peak_equity"] = (
-            self.equity_curve["equity"].max()
-            if not self.equity_curve.empty
-            else self.initial_capital
+            self.equity_curve["equity"].max() if not self.equity_curve.empty else self.initial_capital
         )
 
         return metrics

@@ -8,6 +8,7 @@ Tests for Advanced Order Flow Analyzer (analysis/advanced_order_flow.py)
 """
 
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 
@@ -29,7 +30,7 @@ class TestAggressionMetrics:
 
         d = m.to_dict()
         assert d["symbol"] == "XAUUSD"
-        assert d["buy_aggression"] == 60.0  # noqa: PLR2004
+        assert d["buy_aggression"] == 60.0
         assert d["dominant_side"] == "buyers"
 
 
@@ -50,7 +51,7 @@ class TestVolumeCluster:
         )
 
         d = cluster.to_dict()
-        assert d["price_level"] == 1950.0  # noqa: PLR2004
+        assert d["price_level"] == 1950.0
         assert d["cluster_type"] == "support"
 
 
@@ -91,7 +92,7 @@ class TestAdvancedOrderFlowAnalyzer:
         analyzer.add_trade("XAUUSD", 1950.0, 100.0, "buy")
 
         assert len(analyzer._trades["XAUUSD"]) == 1
-        assert analyzer._cumulative_delta["XAUUSD"] == 100.0  # noqa: PLR2004
+        assert analyzer._cumulative_delta["XAUUSD"] == 100.0
 
     def test_add_sell_trade_delta(self):
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
@@ -100,7 +101,7 @@ class TestAdvancedOrderFlowAnalyzer:
         analyzer.add_trade("XAUUSD", 1950.0, 100.0, "buy")
         analyzer.add_trade("XAUUSD", 1950.0, 60.0, "sell")
 
-        assert analyzer._cumulative_delta["XAUUSD"] == 40.0  # noqa: PLR2004
+        assert analyzer._cumulative_delta["XAUUSD"] == 40.0
 
     def test_max_trades_trim(self):
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
@@ -109,7 +110,7 @@ class TestAdvancedOrderFlowAnalyzer:
         for _i in range(10):
             analyzer.add_trade("XAUUSD", 1950.0, 10.0, "buy")
 
-        assert len(analyzer._trades["XAUUSD"]) == 5  # noqa: PLR2004
+        assert len(analyzer._trades["XAUUSD"]) == 5
 
     def test_get_aggression_metrics_no_data(self):
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
@@ -123,19 +124,15 @@ class TestAdvancedOrderFlowAnalyzer:
         analyzer = AdvancedOrderFlowAnalyzer()
         now = datetime.now(UTC)
         for _ in range(8):
-            analyzer.add_trade(
-                "XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5)
-            )
+            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5))
         for _ in range(2):
-            analyzer.add_trade(
-                "XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5)
-            )
+            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5))
 
         metrics = analyzer.get_aggression_metrics("XAUUSD")
         assert metrics is not None
-        assert metrics.buy_aggression == 80.0  # noqa: PLR2004
+        assert metrics.buy_aggression == 80.0
         assert metrics.dominant_side == "buyers"
-        assert metrics.aggression_score == 60.0  # noqa: PLR2004
+        assert metrics.aggression_score == 60.0
 
     def test_get_aggression_metrics_bearish(self):
         from analysis.advanced_order_flow import AdvancedOrderFlowAnalyzer
@@ -143,13 +140,9 @@ class TestAdvancedOrderFlowAnalyzer:
         analyzer = AdvancedOrderFlowAnalyzer()
         now = datetime.now(UTC)
         for _ in range(2):
-            analyzer.add_trade(
-                "XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5)
-            )
+            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5))
         for _ in range(8):
-            analyzer.add_trade(
-                "XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5)
-            )
+            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5))
 
         metrics = analyzer.get_aggression_metrics("XAUUSD")
         assert metrics.dominant_side == "sellers"
@@ -202,9 +195,7 @@ class TestAdvancedOrderFlowAnalyzer:
                 timestamp=now - timedelta(minutes=5),
             )
 
-        stacked = analyzer.get_stacked_imbalances(
-            "XAUUSD", price_bins=10, min_stack_size=2
-        )
+        stacked = analyzer.get_stacked_imbalances("XAUUSD", price_bins=10, min_stack_size=2)
         assert isinstance(stacked, list)
 
     def test_detect_delta_divergence_not_enough_data(self):
@@ -253,13 +244,9 @@ class TestAdvancedOrderFlowAnalyzer:
 
         # Concentrated volume at one price
         for _ in range(20):
-            analyzer.add_trade(
-                "XAUUSD", 1950.0, 500.0, "buy", timestamp=now - timedelta(hours=2)
-            )
+            analyzer.add_trade("XAUUSD", 1950.0, 500.0, "buy", timestamp=now - timedelta(hours=2))
         for i in range(5):
-            analyzer.add_trade(
-                "XAUUSD", 1960.0 + i, 50.0, "sell", timestamp=now - timedelta(hours=2)
-            )
+            analyzer.add_trade("XAUUSD", 1960.0 + i, 50.0, "sell", timestamp=now - timedelta(hours=2))
 
         clusters = analyzer.get_volume_clusters("XAUUSD")
         assert isinstance(clusters, list)
@@ -283,7 +270,7 @@ class TestAdvancedOrderFlowAnalyzer:
 
         osc = analyzer.get_order_flow_oscillator("XAUUSD")
         assert osc is not None
-        assert osc.value == 60.0  # noqa: PLR2004
+        assert osc.value == 60.0
         assert osc.signal == "bullish"
         assert osc.overbought is False
         assert osc.oversold is False
@@ -294,18 +281,14 @@ class TestAdvancedOrderFlowAnalyzer:
         analyzer = AdvancedOrderFlowAnalyzer()
         now = datetime.now(UTC)
         for _ in range(6):
-            analyzer.add_trade(
-                "XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5)
-            )
+            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "buy", timestamp=now - timedelta(minutes=5))
         for _ in range(4):
-            analyzer.add_trade(
-                "XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5)
-            )
+            analyzer.add_trade("XAUUSD", 1950.0, 100.0, "sell", timestamp=now - timedelta(minutes=5))
 
         pressure = analyzer.get_pressure_gauges("XAUUSD")
         assert pressure is not None
-        assert pressure["buy_pressure"] == 60.0  # noqa: PLR2004
-        assert pressure["sell_pressure"] == 40.0  # noqa: PLR2004
+        assert pressure["buy_pressure"] == 60.0
+        assert pressure["sell_pressure"] == 40.0
         assert pressure["dominant"] == "buyers"
 
     def test_get_pressure_gauges_no_data(self):

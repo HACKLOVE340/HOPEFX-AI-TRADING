@@ -25,6 +25,7 @@ import logging
 import threading
 from collections import defaultdict
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from typing import Any
 
@@ -241,9 +242,7 @@ class MobileAnalytics:
         db = self._get_db()
         if db is None:
             # No DB wired — events are discarded after buffer clear
-            logger.debug(
-                "MobileAnalytics: no DB wired, %d events discarded", len(events)
-            )
+            logger.debug("MobileAnalytics: no DB wired, %d events discarded", len(events))
             return len(events)
 
         try:

@@ -19,6 +19,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,9 @@ class EventType(Enum):
     INFLATION = "inflation"
     RETAIL_SALES = "retail_sales"
     PMI = "pmi"
+    CENTRAL_BANK = "central_bank"
     CENTRAL_BANK_SPEECH = "central_bank_speech"
+    CONSUMER_CONFIDENCE = "consumer_confidence"
     EARNINGS = "earnings"
     POLITICAL = "political"
     OTHER = "other"
@@ -148,9 +151,7 @@ class EconomicCalendar:
         now = datetime.now(UTC)
         cutoff = now + timedelta(hours=hours_ahead)
 
-        upcoming = [
-            event for event in self.events if now <= event.scheduled_time <= cutoff
-        ]
+        upcoming = [event for event in self.events if now <= event.scheduled_time <= cutoff]
 
         # Filter by importance if specified
         if min_importance:
@@ -161,32 +162,20 @@ class EconomicCalendar:
                 EventImportance.CRITICAL: 4,
             }
             min_value = importance_values[min_importance]
-            upcoming = [
-                event
-                for event in upcoming
-                if importance_values[event.importance] >= min_value
-            ]
+            upcoming = [event for event in upcoming if importance_values[event.importance] >= min_value]
 
         return upcoming
 
-    def get_events_by_currency(
-        self, currency: str, days_ahead: int = 7
-    ) -> list[EconomicEvent]:
+    def get_events_by_currency(self, currency: str, days_ahead: int = 7) -> list[EconomicEvent]:
         """Get events for a specific currency"""
         now = datetime.now(UTC)
         cutoff = now + timedelta(days=days_ahead)
 
-        return [
-            event
-            for event in self.events
-            if event.currency == currency and now <= event.scheduled_time <= cutoff
-        ]
+        return [event for event in self.events if event.currency == currency and now <= event.scheduled_time <= cutoff]
 
     def get_high_impact_events(self, hours_ahead: int = 24) -> list[EconomicEvent]:
         """Get high and critical importance events"""
-        return self.get_upcoming_events(
-            hours_ahead=hours_ahead, min_importance=EventImportance.HIGH
-        )
+        return self.get_upcoming_events(hours_ahead=hours_ahead, min_importance=EventImportance.HIGH)
 
     def check_upcoming_events(self, warning_hours: int = 2) -> dict:
         """
@@ -295,15 +284,13 @@ class EconomicCalendar:
         self.logger.info(f"Created {len(sample_events)} sample events")
         return sample_events
 
-    def update_event_actual(
-        self, title: str, actual: float, scheduled_time: datetime | None = None
-    ):
+    def update_event_actual(self, title: str, actual: float, scheduled_time: datetime | None = None):
         """Update actual value for an event after it occurs"""
         for event in self.events:
             if event.title == title and (scheduled_time is None or event.scheduled_time == scheduled_time):
-                    event.actual = actual
-                    self.logger.info(f"Updated {title}: actual={actual}")
-                    return event
+                event.actual = actual
+                self.logger.info(f"Updated {title}: actual={actual}")
+                return event
 
         self.logger.warning(f"Event not found: {title}")
         return None
@@ -314,24 +301,19 @@ class EconomicCalendar:
 
         # Count by importance
         importance_counts = {
-            importance: sum(1 for e in upcoming if e.importance == importance)
-            for importance in EventImportance
+            importance: sum(1 for e in upcoming if e.importance == importance) for importance in EventImportance
         }
 
         # Count by type
         type_counts = {}
         for event in upcoming:
-            type_counts[event.event_type.value] = (
-                type_counts.get(event.event_type.value, 0) + 1
-            )
+            type_counts[event.event_type.value] = type_counts.get(event.event_type.value, 0) + 1
 
         # Count by currency
         currency_counts = {}
         for event in upcoming:
             if event.currency:
-                currency_counts[event.currency] = (
-                    currency_counts.get(event.currency, 0) + 1
-                )
+                currency_counts[event.currency] = currency_counts.get(event.currency, 0) + 1
 
         return {
             "total_events": len(upcoming),
@@ -339,8 +321,7 @@ class EconomicCalendar:
             "by_type": type_counts,
             "by_currency": currency_counts,
             "critical_events": importance_counts[EventImportance.CRITICAL],
-            "high_impact_events": importance_counts[EventImportance.HIGH]
-            + importance_counts[EventImportance.CRITICAL],
+            "high_impact_events": importance_counts[EventImportance.HIGH] + importance_counts[EventImportance.CRITICAL],
         }
 
 

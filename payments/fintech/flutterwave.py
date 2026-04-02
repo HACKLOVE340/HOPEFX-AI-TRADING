@@ -11,6 +11,7 @@ Handles payments via Flutterwave (Nigeria) - Cards, Bank, Mobile Money.
 
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 import logging
@@ -26,15 +27,12 @@ class FlutterwaveClient:
     def __init__(self, secret_key: str = None):
         if not secret_key:
             raise ValueError(
-                "FlutterwaveClient requires a secret key. "
-                "Set the FLUTTERWAVE_SECRET_KEY environment variable."
+                "FlutterwaveClient requires a secret key. Set the FLUTTERWAVE_SECRET_KEY environment variable."
             )
         self.secret_key = secret_key
         self.payments = {}
 
-    def initialize_payment(
-        self, user_id: str, amount: Decimal, currency: str = "USD"
-    ) -> dict:
+    def initialize_payment(self, user_id: str, amount: Decimal, currency: str = "USD") -> dict:
         """Initialize Flutterwave payment"""
         try:
             tx_ref = f"FLW-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
@@ -66,14 +64,10 @@ class FlutterwaveClient:
             logger.info(f"Flutterwave payment verified: {tx_ref}")
         return payment or {"status": "not_found"}
 
-    def initiate_payout(
-        self, user_id: str, amount: Decimal, bank_code: str, account_number: str
-    ) -> dict:
+    def initiate_payout(self, user_id: str, amount: Decimal, bank_code: str, account_number: str) -> dict:
         """Initiate bank payout"""
         try:
-            transfer_ref = (
-                f"PAYOUT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
-            )
+            transfer_ref = f"PAYOUT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
 
             return {
                 "transfer_ref": transfer_ref,
@@ -91,6 +85,4 @@ class FlutterwaveClient:
 # importing this module in environments without payment credentials does not
 # raise at import time. Callers must check for None before using.
 _flw_secret = os.getenv("FLUTTERWAVE_SECRET_KEY")
-flutterwave_client: FlutterwaveClient | None = (
-    FlutterwaveClient(_flw_secret) if _flw_secret else None
-)
+flutterwave_client: FlutterwaveClient | None = FlutterwaveClient(_flw_secret) if _flw_secret else None

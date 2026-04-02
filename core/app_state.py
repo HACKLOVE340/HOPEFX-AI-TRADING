@@ -16,14 +16,16 @@ Import the singleton via:
 
 from __future__ import annotations
 
+from typing import Any, Callable, Optional
+
 
 class AppState:
     """Shared application state — populated during startup by ComponentRegistry."""
 
     def __init__(self) -> None:
-        self.config = None
-        self.db_engine = None
-        self.db_session_factory = None
+        self.config: Optional[Any] = None
+        self.db_engine: Optional[Any] = None
+        self.db_session_factory: Optional[Callable[..., Any]] = None
         self.cache = None
         self.initialized = False
         # Core trading components

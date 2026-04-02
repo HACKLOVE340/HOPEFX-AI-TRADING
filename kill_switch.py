@@ -30,6 +30,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 from collections.abc import Callable
@@ -102,9 +103,7 @@ class KillSwitch:
         # HOPEFX_KILL_SWITCH_TOKEN env var when not supplied directly.
         # If neither is set, deactivation is disabled until a token is
         # configured — this prevents accidental or unauthenticated resumption.
-        self._deactivation_token: str | None = deactivation_token or os.environ.get(
-            "HOPEFX_KILL_SWITCH_TOKEN"
-        )
+        self._deactivation_token: str | None = deactivation_token or os.environ.get("HOPEFX_KILL_SWITCH_TOKEN")
 
         self._active: bool = False
         self._reason: str = ""
@@ -236,16 +235,12 @@ class KillSwitch:
                 logger.warning("Could not subscribe to event bus: %s", exc)
 
         # Start Redis breach subscription for cross-pod kill propagation
-        self._redis_sub_task = asyncio.create_task(
-            self._redis_breach_listener(), name="kill_switch_redis_sub"
-        )
+        self._redis_sub_task = asyncio.create_task(self._redis_breach_listener(), name="kill_switch_redis_sub")
 
         # Start K8s ConfigMap watcher as fallback when Redis is unreachable.
         # When Redis pub/sub is down, the ConfigMap write+watch path ensures
         # all pods in the cluster see the kill switch activation.
-        self._k8s_watch_task = asyncio.create_task(
-            self._k8s_configmap_watcher(), name="kill_switch_k8s_watch"
-        )
+        self._k8s_watch_task = asyncio.create_task(self._k8s_configmap_watcher(), name="kill_switch_k8s_watch")
 
         self._task = asyncio.create_task(self._poll_loop(), name="kill_switch_poll")
         logger.info(
@@ -269,9 +264,7 @@ class KillSwitch:
         return {
             "active": self._active,
             "reason": self._reason,
-            "activated_at": self._activated_at.isoformat()
-            if self._activated_at
-            else None,
+            "activated_at": self._activated_at.isoformat() if self._activated_at else None,
             "flag_file": str(self._flag_file),
             "flag_file_exists": self._flag_file.exists(),
             "state_file": str(self._state_file),
@@ -316,9 +309,7 @@ class KillSwitch:
 
         # Write the flag file so that sibling processes can also detect it
         try:
-            self._flag_file.write_text(
-                f"activated_at={self._activated_at.isoformat()}\nreason={reason}\n"
-            )
+            self._flag_file.write_text(f"activated_at={self._activated_at.isoformat()}\nreason={reason}\n")
         except OSError as exc:
             logger.warning("Could not write kill switch flag file: %s", exc)
 
@@ -358,9 +349,7 @@ class KillSwitch:
         state = {
             "active": self._active,
             "reason": self._reason,
-            "activated_at": self._activated_at.isoformat()
-            if self._activated_at
-            else None,
+            "activated_at": self._activated_at.isoformat() if self._activated_at else None,
         }
         try:
             self._state_file.write_text(_json.dumps(state, indent=2))
@@ -403,11 +392,7 @@ class KillSwitch:
                 if data.get("active"):
                     reason = data.get("reason", "persisted state from previous session")
                     activated_at_str = data.get("activated_at")
-                    activated_at = (
-                        datetime.fromisoformat(activated_at_str)
-                        if activated_at_str
-                        else None
-                    )
+                    activated_at = datetime.fromisoformat(activated_at_str) if activated_at_str else None
 
                     if not _is_production and _is_stale(activated_at):
                         logger.warning(
@@ -425,8 +410,7 @@ class KillSwitch:
                     self._reason = reason
                     self._activated_at = activated_at or datetime.now(UTC)
                     logger.critical(
-                        "Kill switch restored from persisted state — reason: %s | "
-                        "originally activated: %s",
+                        "Kill switch restored from persisted state — reason: %s | originally activated: %s",
                         reason,
                         self._activated_at.isoformat(),
                     )
@@ -568,9 +552,7 @@ class KillSwitch:
                     if _inspect.iscoroutine(result):
                         result.close()
             except Exception as exc:
-                logger.warning(
-                    "Could not publish kill-switch event (fallback): %s", exc
-                )
+                logger.warning("Could not publish kill-switch event (fallback): %s", exc)
 
         # ── Step 4: K8s ConfigMap write — ensures cross-pod propagation ───────
         # When Redis is down, all pods watch the ConfigMap and will activate
@@ -590,9 +572,7 @@ class KillSwitch:
         try:
             from core.event_bus import bus as _redis_bus, CH_BREACH
         except ImportError:
-            logger.warning(
-                "Kill switch: could not import Redis EventBus — cross-pod propagation disabled"
-            )
+            logger.warning("Kill switch: could not import Redis EventBus — cross-pod propagation disabled")
             return
 
         # Ensure the bus is connected before subscribing
@@ -624,15 +604,11 @@ class KillSwitch:
                         # we are already in the activated state from the remote pod.
                         self._activate_internal(f"[remote] {reason}")
                 except Exception as exc:
-                    logger.warning(
-                        "Kill switch: error processing breach message: %s", exc
-                    )
+                    logger.warning("Kill switch: error processing breach message: %s", exc)
         except asyncio.CancelledError:
             pass
         except Exception as exc:
-            logger.error(
-                "Kill switch: Redis breach listener exited unexpectedly: %s", exc
-            )
+            logger.error("Kill switch: Redis breach listener exited unexpectedly: %s", exc)
 
     # ── K8s ConfigMap fallback ────────────────────────────────────────────────
 
@@ -668,8 +644,7 @@ class KillSwitch:
         # Only run inside a Kubernetes pod
         if not os.getenv("KUBERNETES_SERVICE_HOST"):
             logger.debug(
-                "Kill switch K8s watcher: not running inside a pod "
-                "(KUBERNETES_SERVICE_HOST not set) — skipping"
+                "Kill switch K8s watcher: not running inside a pod (KUBERNETES_SERVICE_HOST not set) — skipping"
             )
             return
 
@@ -686,15 +661,13 @@ class KillSwitch:
             return
         except Exception as exc:
             logger.warning(
-                "Kill switch K8s watcher: failed to load in-cluster config (%s) — "
-                "ConfigMap fallback disabled",
+                "Kill switch K8s watcher: failed to load in-cluster config (%s) — ConfigMap fallback disabled",
                 exc,
             )
             return
 
         logger.info(
-            "Kill switch K8s ConfigMap watcher started "
-            "(namespace=%s, configmap=%s, interval=%.0fs)",
+            "Kill switch K8s ConfigMap watcher started (namespace=%s, configmap=%s, interval=%.0fs)",
             namespace,
             cm_name,
             poll_interval,
@@ -709,8 +682,7 @@ class KillSwitch:
 
                 if active_flag == "true" and not self._active:
                     logger.critical(
-                        "Kill switch K8s watcher: ConfigMap flag set — activating. "
-                        "Reason: %s",
+                        "Kill switch K8s watcher: ConfigMap flag set — activating. Reason: %s",
                         reason,
                     )
                     self._activate_internal(f"[k8s-configmap] {reason}")
@@ -769,8 +741,7 @@ class KillSwitch:
                 )
             except Exception as exc:
                 logger.error(
-                    "Kill switch: K8s ConfigMap patch failed (%s) — "
-                    "pods without Redis will not see this activation",
+                    "Kill switch: K8s ConfigMap patch failed (%s) — pods without Redis will not see this activation",
                     exc,
                 )
 
@@ -839,10 +810,7 @@ class KillSwitch:
                     self._activate_internal(f"[file] {reason}")
 
                 # Env-var check (supports runtime injection)
-                if (
-                    os.environ.get("HOPEFX_KILL_SWITCH", "0") == "1"
-                    and not self._active
-                ):
+                if os.environ.get("HOPEFX_KILL_SWITCH", "0") == "1" and not self._active:
                     self._activate_internal("[env] HOPEFX_KILL_SWITCH=1")
 
             except Exception as exc:
@@ -899,8 +867,7 @@ def create_kill_switch_router(ks: KillSwitch):
         except Exception as exc:
             # Misconfigured auth service — log at critical so it is never silent.
             logger.critical(
-                "Kill switch auth dependency raised unexpected error: %s — "
-                "denying access (fail closed)",
+                "Kill switch auth dependency raised unexpected error: %s — denying access (fail closed)",
                 exc,
             )
             raise HTTPException(
@@ -948,9 +915,7 @@ def create_kill_switch_router(ks: KillSwitch):
         _ks_attempt_times[user_id].append(now)
 
     @router.post("/activate")
-    async def activate(
-        req: _KSActivateRequest, request: _FastAPIRequest, user=Depends(_require_admin)
-    ):
+    async def activate(req: _KSActivateRequest, request: _FastAPIRequest, user=Depends(_require_admin)):
         """
         Halt all trading immediately.
 
@@ -962,9 +927,7 @@ def create_kill_switch_router(ks: KillSwitch):
         _check_rate_limit(user_id)
 
         if ks.is_active():
-            logger.info(
-                "Kill switch activate called but already active (user=%s)", user_id
-            )
+            logger.info("Kill switch activate called but already active (user=%s)", user_id)
             return {"status": "already_active", "reason": ks.reason}
 
         reason = f"[api:{user_id}] {req.reason}"
@@ -998,9 +961,7 @@ def create_kill_switch_router(ks: KillSwitch):
         _check_rate_limit(user_id)
 
         if not ks.is_active():
-            logger.info(
-                "Kill switch deactivate called but already inactive (user=%s)", user_id
-            )
+            logger.info("Kill switch deactivate called but already inactive (user=%s)", user_id)
             return {"status": "already_inactive"}
 
         try:

@@ -52,18 +52,18 @@ def dd_tracker():
 class TestDrawdownTracker:
     def test_trailing_hwm_rises_with_equity(self, dd_tracker):
         dd_tracker.update(equity=105_000)
-        assert dd_tracker.total_hwm == 105_000  # noqa: PLR2004
+        assert dd_tracker.total_hwm == 105_000
 
     def test_trailing_hwm_never_decreases(self, dd_tracker):
         dd_tracker.update(equity=105_000)
         dd_tracker.update(equity=95_000)
-        assert dd_tracker.total_hwm == 105_000  # noqa: PLR2004
+        assert dd_tracker.total_hwm == 105_000
 
     def test_total_drawdown_from_hwm(self, dd_tracker):
         dd_tracker.update(equity=105_000)
         result = dd_tracker.update(equity=95_000)
         # (105k - 95k) / 105k ≈ 9.52%
-        assert abs(result.total_drawdown_pct - 0.0952) < 0.001  # noqa: PLR2004
+        assert abs(result.total_drawdown_pct - 0.0952) < 0.001
 
     def test_total_breach_at_10pct(self, dd_tracker):
         dd_tracker.update(equity=105_000)
@@ -81,7 +81,7 @@ class TestDrawdownTracker:
     def test_daily_drawdown_from_open(self, dd_tracker):
         result = dd_tracker.update(equity=96_000)
         # (100k - 96k) / 100k = 4%
-        assert abs(result.daily_drawdown_pct - 0.04) < 0.001  # noqa: PLR2004
+        assert abs(result.daily_drawdown_pct - 0.04) < 0.001
 
     def test_daily_breach_at_5pct(self, dd_tracker):
         result = dd_tracker.update(equity=95_000)
@@ -90,7 +90,7 @@ class TestDrawdownTracker:
     def test_partial_fill_accumulates(self, dd_tracker):
         dd_tracker.record_fill(pnl=-500)
         dd_tracker.record_fill(pnl=-300)
-        assert dd_tracker.daily_realised_pnl == -800  # noqa: PLR2004
+        assert dd_tracker.daily_realised_pnl == -800
 
     def test_check_modify_blocks_on_breach(self, dd_tracker):
         # Force a daily breach
@@ -138,13 +138,13 @@ class TestRiskManagerPropEnforcement:
         risk_manager.update_equity(105_000)
         risk_manager.update_equity(96_000)
         # current_drawdown should reflect trailing HWM
-        assert risk_manager.current_drawdown > 0.085  # ~8.57%  # noqa: PLR2004
+        assert risk_manager.current_drawdown > 0.085  # ~8.57%
 
     def test_record_partial_fill_updates_daily_pnl(self, risk_manager):
         risk_manager.record_partial_fill(pnl=-200)
         risk_manager.record_partial_fill(pnl=-150)
         # daily_pnl should include the fills
-        assert risk_manager._dd_tracker.daily_realised_pnl == -350  # noqa: PLR2004
+        assert risk_manager._dd_tracker.daily_realised_pnl == -350
 
     def test_check_modify_order_delegates_to_tracker(self, risk_manager):
         ok, reason = risk_manager.check_modify_order(
@@ -160,7 +160,7 @@ class TestRiskManagerPropEnforcement:
         status = risk_manager.get_drawdown_status()
         assert "total_hwm" in status
         assert "daily_drawdown_pct" in status
-        assert status["total_hwm"] == 102_000  # noqa: PLR2004
+        assert status["total_hwm"] == 102_000
 
 
 # ── HOPEFXBrain respects risk halt ────────────────────────────────────────────
@@ -251,8 +251,8 @@ class TestPropFirmConfig:
         with open(cfg_path) as f:
             cfg = json.load(f)
         ftmo = cfg["firms"]["ftmo_standard"]["drawdown"]
-        assert ftmo["max_total_drawdown_pct"] == 10.0  # noqa: PLR2004
-        assert ftmo["max_daily_drawdown_pct"] == 5.0  # noqa: PLR2004
+        assert ftmo["max_total_drawdown_pct"] == 10.0
+        assert ftmo["max_daily_drawdown_pct"] == 5.0
         assert ftmo["drawdown_mode"] == "equity"
 
     def test_goat_funded_uses_balance_mode(self):

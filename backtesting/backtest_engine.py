@@ -61,15 +61,11 @@ class BacktestEngine:
         self.position_size_pct = position_size_pct
         self.commission_pct = commission_pct
         self.overnight_rate_annual = (
-            overnight_rate_annual
-            if overnight_rate_annual is not None
-            else self.OVERNIGHT_RATE_ANNUAL
+            overnight_rate_annual if overnight_rate_annual is not None else self.OVERNIGHT_RATE_ANNUAL
         )
         self.bars_per_day = bars_per_day
         # Daily rate derived from annual rate
-        self._overnight_rate_per_bar = (
-            self.overnight_rate_annual / 365 / self.bars_per_day
-        )
+        self._overnight_rate_per_bar = self.overnight_rate_annual / 365 / self.bars_per_day
         self.trades: list[dict] = []
         self.equity_curve: list[float] = [initial_balance]
 
@@ -171,11 +167,7 @@ class BacktestEngine:
         total_return = (eq[-1] - eq[0]) / eq[0]
 
         daily_ret = np.diff(eq) / eq[:-1]
-        sharpe = (
-            float(np.mean(daily_ret) / np.std(daily_ret) * np.sqrt(252))
-            if np.std(daily_ret) > 0
-            else 0.0
-        )
+        sharpe = float(np.mean(daily_ret) / np.std(daily_ret) * np.sqrt(252)) if np.std(daily_ret) > 0 else 0.0
 
         roll_max = np.maximum.accumulate(eq)
         drawdowns = (eq - roll_max) / roll_max

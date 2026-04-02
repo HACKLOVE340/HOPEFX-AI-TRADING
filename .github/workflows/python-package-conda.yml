@@ -17,8 +17,8 @@ jobs:
       - name: Check for environment.yml
         run: |
           if [ ! -f environment.yml ]; then
-            echo "No environment.yml found — conda build not applicable for this project."
+            echo "No environment.yml found - conda build not applicable for this project."
             exit 0
           fi
-          echo "environment.yml found — running conda build."
+          echo "environment.yml found - running conda build."
           conda env create -f environment.yml

@@ -18,6 +18,7 @@ import threading
 import traceback
 from typing import Any, Optional
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -81,9 +82,7 @@ class StructuredLogFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_dict = {
-            "timestamp": datetime.fromtimestamp(
-                record.created, tz=UTC
-            ).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -107,11 +106,7 @@ class StructuredLogFormatter(logging.Formatter):
 
         # Add extra fields
         if hasattr(record, "context"):
-            log_dict["context"] = (
-                record.context.to_dict()
-                if isinstance(record.context, LogContext)
-                else record.context
-            )
+            log_dict["context"] = record.context.to_dict() if isinstance(record.context, LogContext) else record.context
 
         # Add any custom attributes
         for key, value in record.__dict__.items():
@@ -292,9 +287,7 @@ class HOPEFXLogger:
             file_handler.setFormatter(StructuredLogFormatter())
         else:
             file_handler.setFormatter(
-                logging.Formatter(
-                    "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s"
-                )
+                logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s")
             )
 
         if async_mode:
@@ -339,10 +332,7 @@ class HOPEFXLogger:
         self._audit_logger.addHandler(audit_handler)
         self._audit_logger.setLevel(logging.INFO)
 
-        logger.info(
-            f"Logging initialized: level={level}, json={json_format}, "
-            f"async={async_mode}, dir={log_path}"
-        )
+        logger.info(f"Logging initialized: level={level}, json={json_format}, async={async_mode}, dir={log_path}")
 
     def set_context(self, context: LogContext):
         """Set logging context for current thread"""
@@ -378,9 +368,7 @@ class HOPEFXLogger:
     def get_metrics(self) -> dict:
         """Get logging metrics"""
         metrics = self._metrics.copy()
-        metrics["async_handlers"] = [
-            handler.get_stats() for handler in self._async_handlers
-        ]
+        metrics["async_handlers"] = [handler.get_stats() for handler in self._async_handlers]
         return metrics
 
     def shutdown(self):

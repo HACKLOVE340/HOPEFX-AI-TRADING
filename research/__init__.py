@@ -13,6 +13,7 @@ strategy development, and data analysis.
 from typing import Dict, List, Optional, Any  # noqa: F401
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 import logging
@@ -284,9 +285,7 @@ print("Feature engineering functions ready")
 
         logger.info(f"Created {len(self.templates)} notebook templates")
 
-    def create_notebook(
-        self, title: str, description: str, author: str, is_template: bool = False
-    ) -> ResearchNotebook:
+    def create_notebook(self, title: str, description: str, author: str, is_template: bool = False) -> ResearchNotebook:
         """
         Create a new research notebook.
 
@@ -316,9 +315,7 @@ print("Feature engineering functions ready")
         logger.info(f"Created notebook: {title}")
         return notebook
 
-    def add_cell(
-        self, notebook_id: str, cell_type: CellType, content: str
-    ) -> NotebookCell | None:
+    def add_cell(self, notebook_id: str, cell_type: CellType, content: str) -> NotebookCell | None:
         """
         Add a cell to a notebook.
 
@@ -444,17 +441,13 @@ print("Feature engineering functions ready")
 
         return results
 
-    def create_from_template(
-        self, template_id: str, title: str, author: str
-    ) -> ResearchNotebook | None:
+    def create_from_template(self, template_id: str, title: str, author: str) -> ResearchNotebook | None:
         """Create a notebook from a template."""
         template = self.templates.get(template_id)
         if not template:
             return None
 
-        notebook = self.create_notebook(
-            title=title, description=template.description, author=author
-        )
+        notebook = self.create_notebook(title=title, description=template.description, author=author)
 
         # Copy cells from template
         for cell in template.cells:
@@ -618,14 +611,10 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         try:
             cell_type = CellType(req.cell_type)
         except ValueError:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid cell_type '{req.cell_type}'"
-            ) from None
+            raise HTTPException(status_code=400, detail=f"Invalid cell_type '{req.cell_type}'") from None
         cell = engine.add_cell(notebook_id, cell_type, req.content)
         if not cell:
-            raise HTTPException(
-                status_code=404, detail=f"Notebook {notebook_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
         return {"cell_id": cell.cell_id, "status": cell.status.value}
 
     @router.post("/notebooks/{notebook_id}/cells/{cell_id}/execute")
@@ -654,9 +643,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         """Export a notebook as JSON or Python script."""
         exported = engine.export_notebook(notebook_id, format)
         if exported is None:
-            raise HTTPException(
-                status_code=404, detail=f"Notebook {notebook_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
         return {"notebook_id": notebook_id, "format": format, "content": exported}
 
     @router.get("/templates")
@@ -669,9 +656,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         """Create a notebook from a template."""
         nb = engine.create_from_template(template_id, req.title, req.author)
         if nb is None:
-            raise HTTPException(
-                status_code=404, detail=f"Template {template_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
         return {"notebook_id": nb.notebook_id, "title": nb.title}
 
     return router

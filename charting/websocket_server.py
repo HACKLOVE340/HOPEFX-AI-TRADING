@@ -155,10 +155,7 @@ async def _async_broadcast(state: dict) -> None:
 
     # Also send an immediate nuclear_alert if severity is high
     nuclear = state.get("nuclear", {})
-    if (
-        nuclear.get("alert_active")
-        and nuclear.get("severity", 0) >= NUCLEAR_ALERT_SEVERITY
-    ):
+    if nuclear.get("alert_active") and nuclear.get("severity", 0) >= NUCLEAR_ALERT_SEVERITY:
         alert = {
             "type": "nuclear_alert",
             "ts": state.get("ts"),
@@ -177,9 +174,7 @@ async def _async_broadcast(state: dict) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def mount_nuclear_routes(
-    app: Any, engine: NuclearAIChartEngine | None = None
-) -> None:
+def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -> None:
     """
     Mount nuclear dashboard routes onto an existing FastAPI app.
 
@@ -222,15 +217,11 @@ def mount_nuclear_routes(
                     await _handle_client_message(ws, msg, chart_engine)
                 except TimeoutError:
                     # Client silent for 60s — send ping
-                    await _manager.send_to(
-                        ws, {"type": "ping", "ts": int(time.time() * 1000)}
-                    )
+                    await _manager.send_to(ws, {"type": "ping", "ts": int(time.time() * 1000)})
                 except WebSocketDisconnect:
                     break
                 except json.JSONDecodeError:
-                    await _manager.send_to(
-                        ws, {"type": "error", "message": "Invalid JSON"}
-                    )
+                    await _manager.send_to(ws, {"type": "error", "message": "Invalid JSON"})
         finally:
             heartbeat_task.cancel()
             await _manager.disconnect(ws)
@@ -274,7 +265,8 @@ def mount_nuclear_routes(
             )
             return JSONResponse({"status": "resumed"})
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            logger.error("nuclear resume failed: %s", exc)
+            raise HTTPException(status_code=500, detail="Operation failed — check server logs") from exc
 
     @app.get("/api/nuclear/history")
     async def nuclear_history(n: int = 20):
@@ -286,7 +278,8 @@ def mount_nuclear_routes(
             history = sup.get_event_history(n)
             return JSONResponse({"events": history})
         except Exception as exc:
-            return JSONResponse({"events": [], "error": str(exc)})
+            logger.warning("nuclear_history failed: %s", exc)
+            return JSONResponse({"events": [], "error": "History unavailable — check server logs"})
 
     @app.get("/api/nuclear/status")
     async def nuclear_status():
@@ -314,9 +307,7 @@ def mount_nuclear_routes(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-async def _handle_client_message(
-    ws: WebSocket, msg: dict, engine: NuclearAIChartEngine
-) -> None:
+async def _handle_client_message(ws: WebSocket, msg: dict, engine: NuclearAIChartEngine) -> None:
     msg_type = msg.get("type", "")
 
     if msg_type == "ping":

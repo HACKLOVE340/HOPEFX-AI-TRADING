@@ -7,6 +7,7 @@
 
 from typing import Any
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 import logging
 import re
@@ -66,9 +67,7 @@ class NoCodeStrategyBuilder:
         self.add_rule(
             rsi_strategy.strategy_id,
             name="Buy on RSI Oversold",
-            conditions=[
-                {"left": {"type": "RSI", "period": 14}, "operator": "<", "right": 30}
-            ],
+            conditions=[{"left": {"type": "RSI", "period": 14}, "operator": "<", "right": 30}],
             action={"type": "BUY", "position_size": 1.0},
         )
 
@@ -76,9 +75,7 @@ class NoCodeStrategyBuilder:
         self.add_rule(
             rsi_strategy.strategy_id,
             name="Sell on RSI Overbought",
-            conditions=[
-                {"left": {"type": "RSI", "period": 14}, "operator": ">", "right": 70}
-            ],
+            conditions=[{"left": {"type": "RSI", "period": 14}, "operator": ">", "right": 70}],
             action={"type": "SELL", "position_size": 1.0},
         )
 
@@ -109,9 +106,7 @@ class NoCodeStrategyBuilder:
 
         logger.info(f"Created {len(self.templates)} strategy templates")
 
-    def create_strategy(
-        self, name: str, description: str, symbol: str, timeframe: str
-    ) -> NoCodeStrategy:
+    def create_strategy(self, name: str, description: str, symbol: str, timeframe: str) -> NoCodeStrategy:
         """
         Create a new no-code strategy.
 
@@ -187,9 +182,7 @@ class NoCodeStrategyBuilder:
             )
 
         # Create condition group
-        condition_group = ConditionGroup(
-            conditions=parsed_conditions, logic=LogicOperator[logic]
-        )
+        condition_group = ConditionGroup(conditions=parsed_conditions, logic=LogicOperator[logic])
 
         # Parse action
         trading_action = TradingAction(
@@ -238,9 +231,7 @@ class NoCodeStrategyBuilder:
         }
         return op_map.get(op_str, ConditionOperator.GREATER_THAN)
 
-    def parse_plain_english(
-        self, description: str, symbol: str, timeframe: str
-    ) -> NoCodeStrategy | None:
+    def parse_plain_english(self, description: str, symbol: str, timeframe: str) -> NoCodeStrategy | None:
         """
         Parse a plain English strategy description.
 
@@ -454,9 +445,7 @@ class {self._to_class_name(strategy.name)}(BaseStrategy):
             for tid, t in self.templates.items()
         ]
 
-    def create_from_template(
-        self, template_id: str, name: str, symbol: str, timeframe: str
-    ) -> NoCodeStrategy | None:
+    def create_from_template(self, template_id: str, name: str, symbol: str, timeframe: str) -> NoCodeStrategy | None:
         """Create a new strategy from a template."""
         template = self.templates.get(template_id)
         if not template:

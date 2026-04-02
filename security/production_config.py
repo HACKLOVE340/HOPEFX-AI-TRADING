@@ -21,7 +21,6 @@ class SecureConfigError(Exception):
     """Raised when secure configuration cannot be established"""
 
 
-
 class ProductionConfigManager:
     """
     Configuration manager that FAILS SECURE
@@ -57,9 +56,7 @@ class ProductionConfigManager:
         try:
             key_bytes = bytes.fromhex(key)
             if len(key_bytes) < 32:  # noqa: PLR2004
-                raise SecureConfigError(
-                    f"Encryption key must be 32+ bytes, got {len(key_bytes)}"
-                )
+                raise SecureConfigError(f"Encryption key must be 32+ bytes, got {len(key_bytes)}")
         except ValueError:
             raise SecureConfigError("Encryption key must be valid hexadecimal") from None
 
@@ -69,16 +66,13 @@ class ProductionConfigManager:
         salt = os.getenv("HOPEFX_SALT")
         if not salt:
             raise SecureConfigError(
-                "CRITICAL: HOPEFX_SALT not set. "
-                'Generate with: python -c "import secrets; print(secrets.token_hex(16))"'
+                'CRITICAL: HOPEFX_SALT not set. Generate with: python -c "import secrets; print(secrets.token_hex(16))"'
             )
 
         try:
             salt_bytes = bytes.fromhex(salt)
             if len(salt_bytes) < 16:  # noqa: PLR2004
-                raise SecureConfigError(
-                    f"Salt must be 16+ bytes, got {len(salt_bytes)}"
-                )
+                raise SecureConfigError(f"Salt must be 16+ bytes, got {len(salt_bytes)}")
         except ValueError:
             raise SecureConfigError("Salt must be valid hexadecimal") from None
 
@@ -98,9 +92,7 @@ class ProductionConfigManager:
         # Check for secure database URL
         db_url = os.getenv("DATABASE_URL", "")
         if "localhost" in db_url or "127.0.0.1" in db_url:
-            raise SecureConfigError(
-                "Production must use external database, not localhost"
-            )
+            raise SecureConfigError("Production must use external database, not localhost")
 
         # Check for HTTPS
         api_url = os.getenv("API_BASE_URL", "")
@@ -108,31 +100,22 @@ class ProductionConfigManager:
             raise SecureConfigError("Production API must use HTTPS")
 
         # Check for weak JWT secret — accept canonical name or legacy alias.
-        jwt_secret = (
-            os.getenv("SECURITY_JWT_SECRET", "").strip()
-            or os.getenv("JWT_SECRET_KEY", "").strip()
-        )
+        jwt_secret = os.getenv("SECURITY_JWT_SECRET", "").strip() or os.getenv("JWT_SECRET_KEY", "").strip()
         if not jwt_secret:
             raise SecureConfigError(
                 "SECURITY_JWT_SECRET is not set. "
                 'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
         if len(jwt_secret) < 32:  # noqa: PLR2004
-            raise SecureConfigError(
-                f"SECURITY_JWT_SECRET is too short ({len(jwt_secret)} chars). Must be >=32."
-            )
+            raise SecureConfigError(f"SECURITY_JWT_SECRET is too short ({len(jwt_secret)} chars). Must be >=32.")
         if jwt_secret.startswith("CHANGE_ME"):
-            raise SecureConfigError(
-                "SECURITY_JWT_SECRET contains a placeholder value. Replace before deploying."
-            )
+            raise SecureConfigError("SECURITY_JWT_SECRET contains a placeholder value. Replace before deploying.")
 
     def _initialize_development(self) -> None:
         """Development: Generate temporary keys with warnings"""
         import warnings
 
-        warnings.warn(
-            "DEVELOPMENT MODE: Using auto-generated temporary keys", RuntimeWarning, stacklevel=2
-        )
+        warnings.warn("DEVELOPMENT MODE: Using auto-generated temporary keys", RuntimeWarning, stacklevel=2)
 
         self._encryption_key = secrets.token_bytes(32)
         self._salt = secrets.token_bytes(16)

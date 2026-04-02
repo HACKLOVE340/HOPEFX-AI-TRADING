@@ -92,10 +92,7 @@ def run_checks(interactive: bool = True) -> int:
 
     # ── Check 2: Port sanity ─────────────────────────────────────────────────
     if PORT in LIVE_PORTS:
-        print(
-            f"{_WARN}  Port {PORT} is a LIVE trading port. "
-            "Use 7497 (TWS paper) or 4002 (Gateway paper) for testing."
-        )
+        print(f"{_WARN}  Port {PORT} is a LIVE trading port. Use 7497 (TWS paper) or 4002 (Gateway paper) for testing.")
     elif PORT in PAPER_PORTS:
         _check(f"Port {PORT} is a paper port", True)
     else:
@@ -117,9 +114,7 @@ def run_checks(interactive: bool = True) -> int:
     except Exception as exc:
         _check("TCP connection established", False, str(exc))
         print("\n  Ensure TWS/IB Gateway is running and API connections are enabled.")
-        print(
-            "  TWS: File → Global Configuration → API → Settings → Enable ActiveX and Socket Clients"
-        )
+        print("  TWS: File → Global Configuration → API → Settings → Enable ActiveX and Socket Clients")
         return 1
 
     try:
@@ -138,9 +133,7 @@ def run_checks(interactive: bool = True) -> int:
         if accounts:
             acct = accounts[0]
             summary = ib.accountSummary(acct)
-            net_liq = next(
-                (s.value for s in summary if s.tag == "NetLiquidation"), None
-            )
+            net_liq = next((s.value for s in summary if s.tag == "NetLiquidation"), None)
             ok = net_liq is not None
             failures += int(
                 not _check(
@@ -170,9 +163,7 @@ def run_checks(interactive: bool = True) -> int:
             )
             ib.cancelMktData(contract)
         except Exception as md_exc:
-            failures += int(
-                not _check("Market data snapshot (GC/XAUUSD)", False, str(md_exc))
-            )
+            failures += int(not _check("Market data snapshot (GC/XAUUSD)", False, str(md_exc)))
 
         # ── Check 7: Order placement dry-run (paper only) ────────────────────
         if PORT in PAPER_PORTS and interactive:
@@ -195,9 +186,7 @@ def run_checks(interactive: bool = True) -> int:
                     )
                 )
             except Exception as ord_exc:
-                failures += int(
-                    not _check("Order dry-run (whatIfOrder)", False, str(ord_exc))
-                )
+                failures += int(not _check("Order dry-run (whatIfOrder)", False, str(ord_exc)))
 
     finally:
         ib.disconnect()

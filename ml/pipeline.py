@@ -507,7 +507,7 @@ class XGBoostPredictor:
     def load(self, path: str) -> None:
         import joblib
 
-        obj = joblib.load(path)
+        obj = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
         self._model = obj["model"]
         self._scaler = obj["scaler"]
         self._feature_names = obj["features"]

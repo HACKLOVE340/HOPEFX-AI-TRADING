@@ -1,98 +1,37 @@
 {
-  "run_at": "2026-04-01T03:43:08.706382+00:00",
+  "run_at": "2026-04-01T13:18:14.681328+00:00",
   "years": 3,
   "oos_frac": 0.4,
   "target_n": 600,
   "extended": false,
-  "n_symbols": 3,
+  "n_symbols": 0,
   "symbols": [
     {
       "symbol": "XAU/USD",
-      "ticker": "GC=F",
-      "n_trades": 87,
-      "win_rate": 0.5517,
-      "mean_pnl_pct": 0.00053,
-      "std_pnl_pct": 0.014854,
-      "sharpe": 0.5667,
-      "max_drawdown": 0.1245,
-      "accuracy": 0.5341,
-      "f1": 0.694,
-      "auc": 0.4913,
-      "oos_bars": 176,
-      "train_bars": 264,
-      "feature_count": 193
+      "error": "'round_trip_spread_usd'",
+      "n_trades": 0
     },
     {
       "symbol": "BTC/USD",
-      "ticker": "BTC-USD",
-      "n_trades": 29,
-      "win_rate": 0.6897,
-      "mean_pnl_pct": 0.003909,
-      "std_pnl_pct": 0.013314,
-      "sharpe": 4.6614,
-      "max_drawdown": 0.0595,
-      "accuracy": 0.5682,
-      "f1": 0.5581,
-      "auc": 0.5798,
-      "oos_bars": 176,
-      "train_bars": 264,
-      "feature_count": 193
+      "error": "'round_trip_spread_usd'",
+      "n_trades": 0
     },
     {
       "symbol": "ETH/USD",
-      "ticker": "ETH-USD",
-      "n_trades": 49,
-      "win_rate": 0.5714,
-      "mean_pnl_pct": 0.004319,
-      "std_pnl_pct": 0.013229,
-      "sharpe": 5.1823,
-      "max_drawdown": 0.0623,
-      "accuracy": 0.5284,
-      "f1": 0.4503,
-      "auc": 0.5682,
-      "oos_bars": 176,
-      "train_bars": 264,
-      "feature_count": 193
+      "error": "'round_trip_spread_usd'",
+      "n_trades": 0
     }
   ],
   "pooled": {
-    "n_total_trades": 165,
-    "pooled_sharpe": 2.5215,
-    "pooled_sharpe_se": 0.1591,
-    "pooled_mean_pnl": 0.002249,
-    "pooled_std_pnl": 0.014161,
+    "n_total_trades": 0,
+    "pooled_sharpe": 0.0,
+    "pooled_sharpe_se": Infinity,
     "sharpe_gate_passed": false,
-    "sharpe_credible": false,
     "target_n": 600,
-    "n_required_for_se_010": 418,
-    "message": "[HONEST POOL \u2014 ETH/USD excluded] Sharpe gate BLOCKED: N=116 < 600. SE=0.136 (SE<=0.10 requires N>=214).",
+    "message": "No trades generated across all symbols.",
     "_validation": {
-      "outlier_symbols": [
-        "ETH/USD"
-      ],
-      "outlier_reasons": {
-        "ETH/USD": "Sharpe=5.18 > 5.0 (implausible for daily bars)"
-      },
-      "honest_pooled": {
-        "n_total_trades": 116,
-        "pooled_sharpe": 1.5052,
-        "pooled_sharpe_se": 0.1356,
-        "pooled_mean_pnl": 0.001375,
-        "pooled_std_pnl": 0.014502,
-        "sharpe_gate_passed": false,
-        "sharpe_credible": false,
-        "target_n": 600,
-        "n_required_for_se_010": 214,
-        "message": "Sharpe gate BLOCKED: N=116 < 600. SE=0.136 (SE<=0.10 requires N>=214).",
-        "excluded_symbols": [
-          "ETH/USD"
-        ],
-        "exclusion_reasons": {
-          "ETH/USD": "Sharpe=5.18 > 5.0 (implausible for daily bars)"
-        }
-      },
-      "gate_uses_honest_pool": true,
-      "note": "Symbols ['ETH/USD'] have implausible Sharpe ratios and are excluded from the honest pooled Sharpe. The gate check uses the honest pool. These results must be independently validated before citing."
+      "outliers": [],
+      "honest_pooled": null
     }
   }
 }

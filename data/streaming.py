@@ -19,6 +19,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -243,14 +244,10 @@ class StreamingService:
         self._tick_buffers: dict[str, deque] = {}
 
         # Bar aggregators per timeframe
-        self._aggregators: dict[int, TickAggregator] = {
-            tf: TickAggregator(tf) for tf in self._timeframes
-        }
+        self._aggregators: dict[int, TickAggregator] = {tf: TickAggregator(tf) for tf in self._timeframes}
 
         # Completed bars per symbol per timeframe
-        self._bars: dict[str, dict[str, deque]] = defaultdict(
-            lambda: defaultdict(lambda: deque(maxlen=500))
-        )
+        self._bars: dict[str, dict[str, deque]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=500)))
 
         # Thread safety
         self._lock = threading.RLock()
@@ -288,9 +285,7 @@ class StreamingService:
         """Unsubscribe a callback from a symbol."""
         with self._lock:
             if symbol == "*":
-                self._global_listeners = [
-                    c for c in self._global_listeners if c is not callback
-                ]
+                self._global_listeners = [c for c in self._global_listeners if c is not callback]
             else:
                 self._subscriptions[symbol].discard(callback)
 

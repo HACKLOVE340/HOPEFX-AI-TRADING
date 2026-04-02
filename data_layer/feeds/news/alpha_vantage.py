@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 from data_layer.feeds.news.base import NewsFeedBase
@@ -66,10 +67,8 @@ class AlphaVantageNewsFeed(NewsFeedBase):
                 # Alpha Vantage time format: "20240115T143000"
                 time_str = item.get("time_published", "")
                 try:
-                    published = datetime.strptime(time_str, "%Y%m%dT%H%M%S").replace(
-                        tzinfo=UTC
-                    )
-                except (ValueError, TypeError):
+                    published = datetime.strptime(time_str, "%Y%m%dT%H%M%S").replace(tzinfo=UTC)
+                except Exception:
                     published = datetime.now(UTC)
 
                 # Native sentiment score: -1 to +1
@@ -97,10 +96,7 @@ class AlphaVantageNewsFeed(NewsFeedBase):
                         sentiment_score=raw_score,
                         sentiment_label=label.lower(),
                         gold_relevance=gold_relevance,
-                        keywords=[
-                            t.get("ticker", "")
-                            for t in item.get("ticker_sentiment", [])
-                        ],
+                        keywords=[t.get("ticker", "") for t in item.get("ticker_sentiment", [])],
                         lineage_id=str(uuid.uuid4()),
                     )
                 )

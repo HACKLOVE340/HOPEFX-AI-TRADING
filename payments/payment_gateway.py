@@ -12,6 +12,7 @@ Multi-Gateway Payment Processor
 
 import os
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from decimal import Decimal
 from enum import Enum
@@ -44,9 +45,7 @@ class PaymentStatus(Enum):
 class Payment:
     """Payment transaction"""
 
-    def __init__(
-        self, amount: float, method: PaymentMethod, user_id: str, description: str = ""
-    ):
+    def __init__(self, amount: float, method: PaymentMethod, user_id: str, description: str = ""):
         self.id = str(uuid.uuid4())
         self.amount = amount
         self.method = method
@@ -64,9 +63,7 @@ class PaymentGateway:
     def __init__(self):
         self.payments: dict[str, Payment] = {}
 
-    def create_payment(
-        self, amount: float, method: PaymentMethod, user_id: str, description: str = ""
-    ) -> Payment:
+    def create_payment(self, amount: float, method: PaymentMethod, user_id: str, description: str = "") -> Payment:
         """Create new payment"""
         payment = Payment(amount, method, user_id, description)
         self.payments[payment.id] = payment
@@ -105,16 +102,12 @@ class PaymentGateway:
             import stripe as _stripe  # type: ignore[import]
         except ImportError as exc:
             raise RuntimeError(
-                "stripe package is required for Stripe payments. "
-                "Install it with: pip install stripe"
+                "stripe package is required for Stripe payments. Install it with: pip install stripe"
             ) from exc
 
         secret_key = os.getenv("STRIPE_SECRET_KEY", "")
         if not secret_key:
-            raise RuntimeError(
-                "STRIPE_SECRET_KEY is not set. "
-                "Configure it in .env before accepting Stripe payments."
-            )
+            raise RuntimeError("STRIPE_SECRET_KEY is not set. Configure it in .env before accepting Stripe payments.")
 
         _stripe.api_key = secret_key
         intent = _stripe.PaymentIntent.create(
@@ -164,8 +157,7 @@ class PaymentGateway:
         parts = (payment.description or "").split(":")
         if len(parts) < 2:  # noqa: PLR2004
             raise ValueError(
-                "Bank transfer requires description in format 'bank_code:account_number'. "
-                f"Got: '{payment.description}'"
+                f"Bank transfer requires description in format 'bank_code:account_number'. Got: '{payment.description}'"
             )
         bank_code, account_number = parts[0].strip(), parts[1].strip()
 

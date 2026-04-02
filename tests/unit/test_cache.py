@@ -36,7 +36,7 @@ class TestTimeframe:
     def test_timeframe_count(self):
         """Test that all expected timeframes exist."""
         timeframes = list(Timeframe)
-        assert len(timeframes) == 9  # noqa: PLR2004
+        assert len(timeframes) == 9
 
 
 class TestOHLCVData:
@@ -53,12 +53,12 @@ class TestOHLCVData:
             volume=10000.0,
         )
 
-        assert ohlcv.timestamp == 1704067200  # noqa: PLR2004
-        assert ohlcv.open_price == 1.0850  # noqa: PLR2004
-        assert ohlcv.high_price == 1.0880  # noqa: PLR2004
-        assert ohlcv.low_price == 1.0820  # noqa: PLR2004
-        assert ohlcv.close_price == 1.0860  # noqa: PLR2004
-        assert ohlcv.volume == 10000.0  # noqa: PLR2004
+        assert ohlcv.timestamp == 1704067200
+        assert ohlcv.open_price == 1.0850
+        assert ohlcv.high_price == 1.0880
+        assert ohlcv.low_price == 1.0820
+        assert ohlcv.close_price == 1.0860
+        assert ohlcv.volume == 10000.0
 
     def test_ohlcv_to_dict(self):
         """Test OHLCV data conversion to dictionary."""
@@ -74,9 +74,9 @@ class TestOHLCVData:
         data = ohlcv.to_dict()
 
         assert isinstance(data, dict)
-        assert data["timestamp"] == 1704067200  # noqa: PLR2004
-        assert data["open_price"] == 1.0850  # noqa: PLR2004
-        assert data["close_price"] == 1.0860  # noqa: PLR2004
+        assert data["timestamp"] == 1704067200
+        assert data["open_price"] == 1.0850
+        assert data["close_price"] == 1.0860
 
     def test_ohlcv_from_dict(self):
         """Test OHLCV data creation from dictionary."""
@@ -91,8 +91,8 @@ class TestOHLCVData:
 
         ohlcv = OHLCVData.from_dict(data)
 
-        assert ohlcv.timestamp == 1704067200  # noqa: PLR2004
-        assert ohlcv.open_price == 1.0850  # noqa: PLR2004
+        assert ohlcv.timestamp == 1704067200
+        assert ohlcv.open_price == 1.0850
 
     def test_ohlcv_roundtrip(self):
         """Test OHLCV data serialization and deserialization roundtrip."""
@@ -127,10 +127,10 @@ class TestCachedTickData:
             ask_volume=50.0,
         )
 
-        assert tick.timestamp == 1704067200000  # noqa: PLR2004
-        assert tick.price == 1.0855  # noqa: PLR2004
-        assert tick.bid == 1.0854  # noqa: PLR2004
-        assert tick.ask == 1.0856  # noqa: PLR2004
+        assert tick.timestamp == 1704067200000
+        assert tick.price == 1.0855
+        assert tick.bid == 1.0854
+        assert tick.ask == 1.0856
 
     def test_tick_data_to_dict(self):
         """Test tick data conversion to dictionary."""
@@ -147,8 +147,8 @@ class TestCachedTickData:
         data = tick.to_dict()
 
         assert isinstance(data, dict)
-        assert data["price"] == 1.0855  # noqa: PLR2004
-        assert data["bid"] == 1.0854  # noqa: PLR2004
+        assert data["price"] == 1.0855
+        assert data["bid"] == 1.0854
 
     def test_tick_data_from_dict(self):
         """Test tick data creation from dictionary."""
@@ -164,8 +164,8 @@ class TestCachedTickData:
 
         tick = CachedTickData.from_dict(data)
 
-        assert tick.price == 1.0855  # noqa: PLR2004
-        assert tick.bid == 1.0854  # noqa: PLR2004
+        assert tick.price == 1.0855
+        assert tick.bid == 1.0854
 
 
 class TestCacheStatistics:
@@ -191,13 +191,13 @@ class TestCacheStatistics:
         """Test hit rate calculation."""
         stats = CacheStatistics(total_hits=80, total_misses=20)
 
-        assert stats.hit_rate == 80.0  # 80%  # noqa: PLR2004
+        assert stats.hit_rate == 80.0  # 80%
 
     def test_hit_rate_all_hits(self):
         """Test hit rate with all hits."""
         stats = CacheStatistics(total_hits=100, total_misses=0)
 
-        assert stats.hit_rate == 100.0  # noqa: PLR2004
+        assert stats.hit_rate == 100.0
 
     def test_hit_rate_all_misses(self):
         """Test hit rate with all misses."""
@@ -218,10 +218,10 @@ class TestCacheStatistics:
         data = stats.to_dict()
 
         assert isinstance(data, dict)
-        assert data["total_hits"] == 80  # noqa: PLR2004
-        assert data["total_misses"] == 20  # noqa: PLR2004
-        assert data["hit_rate_percent"] == 80.0  # noqa: PLR2004
-        assert data["memory_usage_bytes"] == 1024  # noqa: PLR2004
+        assert data["total_hits"] == 80
+        assert data["total_misses"] == 20
+        assert data["hit_rate_percent"] == 80.0
+        assert data["memory_usage_bytes"] == 1024
 
 
 class TestMarketDataCacheBasics:
@@ -233,8 +233,8 @@ class TestMarketDataCacheBasics:
 
         assert Timeframe.ONE_MINUTE in default_ttl
         assert Timeframe.ONE_DAY in default_ttl
-        assert default_ttl[Timeframe.ONE_MINUTE] == 3600  # 1 hour  # noqa: PLR2004
-        assert default_ttl[Timeframe.ONE_DAY] == 604800  # 1 week  # noqa: PLR2004
+        assert default_ttl[Timeframe.ONE_MINUTE] == 3600  # 1 hour
+        assert default_ttl[Timeframe.ONE_DAY] == 604800  # 1 week
 
     @patch.object(MarketDataCache, "_connect_with_retry")
     def test_cache_initialization_with_mock(self, mock_connect):
@@ -248,7 +248,7 @@ class TestMarketDataCacheBasics:
 
         # Verify
         assert cache.host == "localhost"
-        assert cache.port == 6379  # noqa: PLR2004
+        assert cache.port == 6379
         assert cache.db == 0
         assert cache.stats.total_hits == 0
         assert cache.stats.total_misses == 0
@@ -262,4 +262,4 @@ class TestMarketDataCacheBasics:
         cache = MarketDataCache(host="redis.example.com", port=6380, password="secret")
 
         assert cache.host == "redis.example.com"
-        assert cache.port == 6380  # noqa: PLR2004
+        assert cache.port == 6380

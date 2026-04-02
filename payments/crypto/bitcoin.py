@@ -48,14 +48,13 @@ except ImportError:
 
         _HDWALLET_AVAILABLE = True
     except ImportError:
-        # hdwallet not installed at all — module remains importable but
-        # BitcoinClient will raise at construction time.
+        # hdwallet not installed — Bitcoin features unavailable
         HDWallet = None  # type: ignore[assignment,misc]
         BTC = "BTC"
         _HDWALLET_AVAILABLE = False
 
         def generate_mnemonic(language: str = "english", strength: int = 128) -> str:  # type: ignore[misc]
-            raise RuntimeError("hdwallet package is not installed — run: pip install hdwallet")
+            raise RuntimeError("Bitcoin features require the 'hdwallet' package. Install it with: pip install hdwallet")
 
 
 logger = logging.getLogger(__name__)
@@ -131,10 +130,7 @@ class BitcoinClient:
 
     def __init__(self) -> None:
         if not _HDWALLET_AVAILABLE:
-            raise RuntimeError(
-                "hdwallet package is not installed — Bitcoin support is unavailable. "
-                "Install it with: pip install hdwallet"
-            )
+            raise RuntimeError("BitcoinClient requires the 'hdwallet' package. Install it with: pip install hdwallet")
         self._mnemonic: str = _load_mnemonic()
         # user_id -> list of derived address strings (in derivation order)
         self.user_addresses: dict[str, list[str]] = {}
@@ -349,23 +345,25 @@ class BitcoinClient:
         return txs
 
 
-# Module-level singleton — lazy-initialised to avoid import-time errors
-# when hdwallet is not installed (e.g. CI environments).
-_bitcoin_client: BitcoinClient | None = None
+# Module-level singleton — lazily initialised on first use so that importing
+# this module does not crash when hdwallet is not installed.
+_bitcoin_client: "BitcoinClient | None" = None
 
 
-def _get_bitcoin_client() -> BitcoinClient:
+def get_bitcoin_client() -> "BitcoinClient":
+    """Return the module-level BitcoinClient singleton, creating it on first call."""
     global _bitcoin_client
     if _bitcoin_client is None:
         _bitcoin_client = BitcoinClient()
     return _bitcoin_client
 
 
+# Legacy alias kept for backwards compatibility — resolves lazily.
 class _LazyBitcoinClient:
-    """Proxy that defers BitcoinClient construction until first attribute access."""
+    """Proxy that forwards attribute access to the real BitcoinClient singleton."""
 
-    def __getattr__(self, name: str):
-        return getattr(_get_bitcoin_client(), name)
+    def __getattr__(self, name: str):  # type: ignore[override]
+        return getattr(get_bitcoin_client(), name)
 
 
-bitcoin_client: BitcoinClient = _LazyBitcoinClient()  # type: ignore[assignment]
+bitcoin_client = _LazyBitcoinClient()  # type: ignore[assignment]

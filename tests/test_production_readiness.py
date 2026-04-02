@@ -48,9 +48,7 @@ def test_app_imports_with_only_jwt_secret(monkeypatch):
     import app as _app
 
     importlib.reload(_app)  # re-run module-level code with patched env
-    assert (
-        len(_app.app.routes) > 100  # noqa: PLR2004
-    ), f"Expected >100 routes, got {len(_app.app.routes)}"
+    assert len(_app.app.routes) > 100, f"Expected >100 routes, got {len(_app.app.routes)}"
 
 
 # ── 2-3. SQLite vs PostgreSQL engine kwargs ───────────────────────────────────
@@ -113,9 +111,9 @@ def test_router_has_api_prefix(module, expected_prefix, monkeypatch):
 
     mod = importlib.import_module(module)
     paths = [r.path for r in mod.router.routes if hasattr(r, "path")]
-    assert any(
-        p.startswith(expected_prefix) for p in paths
-    ), f"{module} has no routes starting with {expected_prefix}. Found: {paths[:5]}"
+    assert any(p.startswith(expected_prefix) for p in paths), (
+        f"{module} has no routes starting with {expected_prefix}. Found: {paths[:5]}"
+    )
 
 
 # ── 5. Auth router prefix ─────────────────────────────────────────────────────
@@ -127,9 +125,9 @@ def test_auth_router_prefix(monkeypatch):
     from auth.router import router
 
     paths = [r.path for r in router.routes if hasattr(r, "path")]
-    assert all(
-        p.startswith("/api/auth/") for p in paths
-    ), f"Non-/api/auth paths: {[p for p in paths if not p.startswith('/api/auth/')]}"
+    assert all(p.startswith("/api/auth/") for p in paths), (
+        f"Non-/api/auth paths: {[p for p in paths if not p.startswith('/api/auth/')]}"
+    )
 
 
 # ── 6-8. Startup validator edge cases ────────────────────────────────────────
@@ -138,9 +136,7 @@ def test_auth_router_prefix(monkeypatch):
 def test_change_me_placeholder_rejected_in_dev(monkeypatch):
     """CHANGE_ME placeholder rejected even in development mode."""
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv(
-        "SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret"
-    )
+    monkeypatch.setenv("SECURITY_JWT_SECRET", "CHANGE_ME_generate_a_random_48_char_secret")
 
     from config.startup_validator import validate_environment, StartupValidationError
 

@@ -58,6 +58,20 @@ _MTF_FUSION_ENABLED = os.getenv("FEATURE_MTF_FUSION", "true").lower() == "true"
 # Rolling window size for non-neutral rate tracking
 _SIGNAL_WINDOW = int(os.getenv("SIGNAL_QUALITY_WINDOW", "100"))
 
+# ── Stale model detection ─────────────────────────────────────────────────────
+# Block inference when the model file is older than MODEL_MAX_AGE_DAYS.
+# Default: 30 days.  Set to 0 to disable the check.
+_MODEL_MAX_AGE_DAYS = float(os.getenv("MODEL_MAX_AGE_DAYS", "30"))
+
+# ── Feature drift guard ───────────────────────────────────────────────────────
+# Warn (and optionally block) when live feature means deviate from training
+# means by more than DRIFT_Z_THRESHOLD standard deviations.
+# Default: 4.0 (warn only).  Set DRIFT_BLOCK=true to block on drift.
+_DRIFT_Z_THRESHOLD = float(os.getenv("DRIFT_Z_THRESHOLD", "4.0"))
+_DRIFT_BLOCK = os.getenv("DRIFT_BLOCK", "false").lower() == "true"
+# Rolling window of recent feature vectors for drift detection
+_DRIFT_WINDOW = int(os.getenv("DRIFT_WINDOW", "50"))
+
 # ── Prometheus metrics (optional — degrades gracefully if not installed) ──────
 
 
@@ -193,6 +207,21 @@ class InferenceEngine:
         self._previous_model_path: Path | None = None
         self._rollback_count: int = 0
 
+        # ── Stale model detection ──────────────────────────────────────────
+        # Cached result of the last staleness check (re-evaluated each call).
+        self._model_stale: bool = False
+        self._model_age_days: float | None = None
+
+        # ── Feature drift guard ────────────────────────────────────────────
+        # Rolling buffer of recent feature vectors (last _DRIFT_WINDOW rows).
+        # Used to compute live feature means for KS-test drift detection.
+        self._drift_buffer: deque[np.ndarray] = deque(maxlen=_DRIFT_WINDOW)
+        # Training feature stats loaded from saved_models/feature_stats.json
+        # Format: {feature_name: {"mean": float, "std": float}}
+        self._train_stats: dict[str, dict] | None = None
+        self._drift_detected: bool = False
+        self._drift_z_max: float = 0.0  # max z-score across features (last check)
+
     # ── Lazy loaders ──────────────────────────────────────────────────────────
 
     def _get_predictor(self):
@@ -284,7 +313,7 @@ class InferenceEngine:
         try:
             import joblib
 
-            self._calibrator = joblib.load(cal_path)
+            self._calibrator = joblib.load(cal_path)  # nosec B301 - cal_path derived from saved_models
             logger.debug("InferenceEngine: isotonic calibrator loaded")
             return self._calibrator
         except Exception as exc:
@@ -376,7 +405,7 @@ class InferenceEngine:
         try:
             calibrated = cal.predict([[raw_prob]])[0]
             return float(np.clip(calibrated, 0.0, 1.0))
-        except (ValueError, IndexError):
+        except Exception:
             return raw_prob
 
     # ── Online learner update ─────────────────────────────────────────────────
@@ -416,6 +445,142 @@ class InferenceEngine:
                 logger.debug("InferenceEngine: online learner updated with label=%d", label)
         except Exception as exc:
             logger.debug("Online learner update failed: %s", exc)
+
+    # ── Stale model detection ─────────────────────────────────────────────────
+
+    def _check_model_staleness(self) -> bool:
+        """
+        Return True when the active model file is older than MODEL_MAX_AGE_DAYS.
+
+        Uses the mtime of advanced_oos.pkl (or the active model path if set).
+        When MODEL_MAX_AGE_DAYS=0 the check is disabled and always returns False.
+
+        Side-effects: updates self._model_stale and self._model_age_days.
+        """
+        if _MODEL_MAX_AGE_DAYS <= 0:
+            self._model_stale = False
+            self._model_age_days = None
+            return False
+
+        model_path = self._active_model_path or (_SAVED / "advanced_oos.pkl")
+        if not model_path.exists():
+            # No model file — not stale (just unavailable; handled elsewhere)
+            self._model_stale = False
+            self._model_age_days = None
+            return False
+
+        try:
+            age_seconds = time.time() - model_path.stat().st_mtime
+            age_days = age_seconds / 86_400.0
+            self._model_age_days = round(age_days, 2)
+            self._model_stale = age_days > _MODEL_MAX_AGE_DAYS
+            if self._model_stale:
+                logger.warning(
+                    "STALE MODEL: %s is %.1f days old (max=%s days). Retrain or set MODEL_MAX_AGE_DAYS=0 to suppress.",
+                    model_path.name,
+                    age_days,
+                    _MODEL_MAX_AGE_DAYS,
+                )
+            return self._model_stale
+        except Exception as exc:
+            logger.debug("Staleness check failed: %s", exc)
+            self._model_stale = False
+            return False
+
+    # ── Feature drift guard ───────────────────────────────────────────────────
+
+    def _load_train_stats(self) -> dict[str, dict] | None:
+        """
+        Load training feature statistics from saved_models/feature_stats.json.
+
+        Format expected:
+            {
+              "feature_name": {"mean": 0.123, "std": 0.045},
+              ...
+            }
+
+        Generated by the training pipeline (train_advanced.py) after fitting.
+        Returns None when the file does not exist (drift guard disabled).
+        """
+        if self._train_stats is not None:
+            return self._train_stats
+        stats_path = _SAVED / "feature_stats.json"
+        if not stats_path.exists():
+            return None
+        try:
+            self._train_stats = json.loads(stats_path.read_text())
+            logger.info(
+                "InferenceEngine: loaded feature stats for %d features from %s",
+                len(self._train_stats),
+                stats_path,
+            )
+            return self._train_stats
+        except Exception as exc:
+            logger.warning("feature_stats.json load failed: %s", exc)
+            return None
+
+    def _check_feature_drift(self, X_row: pd.DataFrame) -> bool:
+        """
+        Detect feature distribution drift using z-score comparison.
+
+        Appends the current feature vector to the rolling drift buffer.
+        When the buffer is full, computes the mean of each feature over the
+        last _DRIFT_WINDOW predictions and compares it to the training mean
+        using a z-score: z = |live_mean - train_mean| / max(train_std, 1e-9).
+
+        Returns True when any feature's z-score exceeds _DRIFT_Z_THRESHOLD.
+
+        Side-effects: updates self._drift_detected and self._drift_z_max.
+        """
+        train_stats = self._load_train_stats()
+        if train_stats is None:
+            # No training stats available — drift guard disabled
+            return False
+
+        try:
+            row_values = X_row.values[0].astype(float)
+            col_names = list(X_row.columns)
+            self._drift_buffer.append(row_values)
+
+            if len(self._drift_buffer) < _DRIFT_WINDOW:
+                # Not enough data yet — skip check
+                return False
+
+            buffer_arr = np.array(self._drift_buffer)  # shape: (window, n_features)
+            live_means = buffer_arr.mean(axis=0)
+
+            max_z = 0.0
+            drifted_features: list[str] = []
+
+            for i, feat_name in enumerate(col_names):
+                if feat_name not in train_stats:
+                    continue
+                train_mean = float(train_stats[feat_name].get("mean", 0.0))
+                train_std = float(train_stats[feat_name].get("std", 1.0))
+                z = abs(live_means[i] - train_mean) / max(train_std, 1e-9)
+                max_z = max(max_z, z)
+                if z > _DRIFT_Z_THRESHOLD:
+                    drifted_features.append(f"{feat_name}(z={z:.1f})")
+
+            self._drift_z_max = round(max_z, 3)
+            self._drift_detected = len(drifted_features) > 0
+
+            if self._drift_detected:
+                logger.warning(
+                    "FEATURE DRIFT detected: %d features exceed z=%.1f threshold. Top drifted: %s. max_z=%.2f. %s",
+                    len(drifted_features),
+                    _DRIFT_Z_THRESHOLD,
+                    ", ".join(drifted_features[:5]),
+                    max_z,
+                    "BLOCKING inference (DRIFT_BLOCK=true)."
+                    if _DRIFT_BLOCK
+                    else "Continuing (set DRIFT_BLOCK=true to block).",
+                )
+            return self._drift_detected
+
+        except Exception as exc:
+            logger.debug("Feature drift check failed: %s", exc)
+            return False
 
     # ── Main predict ──────────────────────────────────────────────────────────
 
@@ -520,6 +685,41 @@ class InferenceEngine:
             base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
             self._fallback_count += 1
             _PROM.fallback_total.labels(symbol=sym_label, reason="feature_build_failed").inc()
+            return base_result
+
+        # Step 3a: Stale model detection
+        # Check whether the model file is older than MODEL_MAX_AGE_DAYS.
+        # A stale model degrades to neutral — it does not raise, so the
+        # system stays alive and the operator is alerted via logs + health().
+        stale = self._check_model_staleness()
+        if stale:
+            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
+            base_result["model_version"] = "stale"
+            base_result["stale_model"] = True
+            base_result["model_age_days"] = self._model_age_days
+            self._fallback_count += 1
+            _PROM.fallback_total.labels(symbol=sym_label, reason="stale_model").inc()
+            logger.warning(
+                "STALE MODEL: returning neutral for %s (age=%.1f days > max=%.0f). "
+                "Retrain the model or set MODEL_MAX_AGE_DAYS=0 to suppress.",
+                sym_label,
+                self._model_age_days or 0,
+                _MODEL_MAX_AGE_DAYS,
+            )
+            return base_result
+
+        # Step 3b: Feature drift guard
+        # Compare live feature distribution to training distribution.
+        # When DRIFT_BLOCK=true and drift is detected, degrade to neutral.
+        # When DRIFT_BLOCK=false (default), log a warning and continue.
+        drift = self._check_feature_drift(X)
+        if drift and _DRIFT_BLOCK:
+            base_result["latency_ms"] = (time.perf_counter() - t0) * 1000
+            base_result["model_version"] = "drift_blocked"
+            base_result["feature_drift"] = True
+            base_result["drift_z_max"] = self._drift_z_max
+            self._fallback_count += 1
+            _PROM.fallback_total.labels(symbol=sym_label, reason="feature_drift").inc()
             return base_result
 
         # Step 4: Model prediction
@@ -699,7 +899,7 @@ class InferenceEngine:
             total = (sent_nudge + ofi_nudge + pressure_nudge) * impact_dampen
             return float(max(-0.022, min(0.022, total)))
 
-        except (ValueError, TypeError, KeyError):
+        except Exception:
             return 0.0
 
     def get_data_layer_tick(self):
@@ -713,7 +913,7 @@ class InferenceEngine:
             from data_layer.orchestrator import orchestrator
 
             return orchestrator.get_latest_tick()
-        except ImportError:
+        except Exception:
             return None
 
     def get_data_layer_features(self) -> dict[str, float]:
@@ -727,7 +927,7 @@ class InferenceEngine:
             from data_layer.orchestrator import orchestrator
 
             return orchestrator.get_ml_features()
-        except ImportError:
+        except Exception:
             return {}
 
     def is_safe_to_trade(self) -> bool:
@@ -743,7 +943,7 @@ class InferenceEngine:
             from data_layer.orchestrator import orchestrator
 
             return orchestrator.is_safe_to_trade()
-        except ImportError:
+        except Exception:
             return True  # fail-open: don't block trading on orchestrator error
 
     def _record_signal_lineage(
@@ -943,6 +1143,17 @@ class InferenceEngine:
         else:
             status = "unavailable"
 
+        # ── Stale model ───────────────────────────────────────────────────────
+        # Re-run the staleness check so health() always reflects current state.
+        self._check_model_staleness()
+
+        # ── Feature drift ─────────────────────────────────────────────────────
+        train_stats_available = self._load_train_stats() is not None
+
+        # Degrade status when model is stale or drift is blocking
+        if (self._model_stale or (self._drift_detected and _DRIFT_BLOCK)) and status == "ok":
+            status = "degraded"
+
         return {
             "status": status,
             "model_available": model_available,
@@ -972,6 +1183,18 @@ class InferenceEngine:
             "signal_filter": signal_filter_stats,
             "rollback_count": self._rollback_count,
             "active_model_path": str(self._active_model_path) if self._active_model_path else None,
+            # ── Stale model ────────────────────────────────────────────────
+            "stale_model": self._model_stale,
+            "model_age_days": self._model_age_days,
+            "model_max_age_days": _MODEL_MAX_AGE_DAYS if _MODEL_MAX_AGE_DAYS > 0 else None,
+            # ── Feature drift ──────────────────────────────────────────────
+            "feature_drift_detected": self._drift_detected,
+            "feature_drift_z_max": self._drift_z_max,
+            "feature_drift_threshold": _DRIFT_Z_THRESHOLD,
+            "feature_drift_blocking": _DRIFT_BLOCK,
+            "feature_drift_buffer_size": len(self._drift_buffer),
+            "feature_drift_window": _DRIFT_WINDOW,
+            "train_stats_available": train_stats_available,
             "checked_at": datetime.now(UTC).isoformat(),
         }
 

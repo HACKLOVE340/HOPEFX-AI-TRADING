@@ -191,7 +191,7 @@ async def macro_refresh():
         logger.warning("macro refresh failed (FRED unavailable): %s", exc)
         return {
             "status": "unavailable",
-            "error": str(exc),
+            "error": "FRED fetch failed — check server logs for details",
             "note": "FRED fetch failed. Set FRED_API_KEY in .env for live data.",
         }
 
@@ -225,7 +225,7 @@ async def macro_features():
         logger.warning("macro features failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Macro features unavailable: {exc}",
+            detail="Macro features unavailable — check server logs",
         ) from exc
 
 
@@ -289,3 +289,126 @@ async def macro_store_update(req: MacroUpdateRequest = Body(...)):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Update failed: {exc}",
         ) from exc
+
+
+# ── WGC endpoints ─────────────────────────────────────────────────────────────
+
+
+def _get_wgc_feed():
+    """Return the WGCFeed singleton (never raises)."""
+    try:
+        from data_layer.feeds.macro.wgc import wgc_feed
+
+        return wgc_feed
+    except Exception as exc:
+        logger.debug("WGCFeed unavailable: %s", exc)
+        return None
+
+
+@router.get(
+    "/wgc",
+    summary="WGC gold demand snapshot — latest values from MacroStore",
+)
+async def wgc_snapshot():
+    """
+    Return the latest World Gold Council gold demand values from MacroStore.
+
+    Series returned:
+      wgc_total_demand   — total gold demand (tonnes, quarterly)
+      wgc_investment     — bar/coin + ETF investment demand (tonnes, quarterly)
+      wgc_central_bank   — central bank net purchases (tonnes, quarterly)
+      wgc_jewellery      — jewellery demand (tonnes, quarterly)
+      wgc_etf_flow       — ETF net flow (tonnes, monthly)
+
+    Data is sourced from the WGC public download portal (no API key required)
+    and cached locally. Values are forward-filled from the last quarterly/
+    monthly observation.
+
+    Returns null values when WGC data has not yet been loaded. Call
+    /api/macro/wgc/refresh to trigger an immediate fetch.
+    """
+    store = _get_macro_store()
+    wgc_series = [
+        "wgc_total_demand",
+        "wgc_investment",
+        "wgc_central_bank",
+        "wgc_jewellery",
+        "wgc_etf_flow",
+    ]
+
+    result: dict[str, Any] = {
+        "refreshed_at": datetime.now(UTC).isoformat(),
+        "source": "macro_store",
+    }
+
+    if store is not None:
+        snap = store.snapshot()
+        for key in wgc_series:
+            info = snap.get(key)
+            result[key] = {
+                "value": info["value"] if info else None,
+                "date": info["date"] if info else None,
+                "observations": info["n_observations"] if info else 0,
+            }
+    else:
+        for key in wgc_series:
+            result[key] = {"value": None, "date": None, "observations": 0}
+
+    # Include feed health
+    feed = _get_wgc_feed()
+    result["feed_health"] = feed.health() if feed else {"loaded": False}
+
+    return result
+
+
+@router.post(
+    "/wgc/refresh",
+    summary="Force-refresh WGC gold demand data and inject into MacroStore",
+)
+async def wgc_refresh():
+    """
+    Trigger an immediate WGC data fetch, bypassing the local cache TTL.
+
+    Fetches quarterly demand and monthly ETF flow data from WGC's public
+    download endpoints and injects all series into MacroStore.
+
+    Use this after manually placing downloaded WGC CSV files in WGC_CACHE_DIR,
+    or to force a refresh outside the daily 18:00 UTC schedule.
+    """
+    feed = _get_wgc_feed()
+    if feed is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="WGCFeed not available",
+        )
+    try:
+        status_dict = await feed.fetch_and_inject()
+        return {"status": "refreshed", **status_dict}
+    except Exception as exc:
+        logger.warning("WGC refresh failed: %s", exc)
+        return {
+            "status": "error",
+            "error": "WGC fetch failed — check server logs for details",
+            "note": (
+                "WGC fetch failed. Check WGC_CACHE_DIR or place CSV files manually. "
+                "See data_layer/feeds/macro/wgc.py for download instructions."
+            ),
+        }
+
+
+@router.get(
+    "/wgc/health",
+    summary="WGC feed health — cache status and loaded series",
+)
+async def wgc_health():
+    """
+    Return WGC feed health: cache directory, last fetch time, and per-series
+    observation counts and latest values.
+
+    Used by the admin dashboard to verify WGC data is flowing into the
+    signal engine.
+    """
+    feed = _get_wgc_feed()
+    if feed is None:
+        return {"status": "unavailable", "loaded": False}
+    return {"status": "ok", **feed.health()}

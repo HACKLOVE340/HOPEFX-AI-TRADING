@@ -89,7 +89,7 @@ async def generate_strategy(
         try:
             from brain.llm_agent import LLMAgent
 
-            agent = LLMAgent(openai_api_key=openai_key)
+            agent = LLMAgent(api_key=openai_key)
             result = await agent.generate_strategy(
                 prompt=req.prompt,
                 symbol=req.symbol,

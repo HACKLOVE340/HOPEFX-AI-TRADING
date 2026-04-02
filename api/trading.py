@@ -68,7 +68,7 @@ def _get_kill_switch():
 
         _kill_switch_instance = _app_ks
         return _kill_switch_instance
-    except ImportError:
+    except Exception:
         return None
 
 
@@ -112,8 +112,7 @@ def _read_oos_meta() -> dict:
         _deployment_gate_cache["mtime"] = mtime
         _deployment_gate_cache["data"] = data
         return data
-    except Exception as exc:  # nosec B110 — returns {} on any file/parse error by design
-        logger.debug("_read_oos_meta fallback: %s", exc)
+    except Exception:
         return {}
 
 
@@ -207,8 +206,7 @@ def _check_order_rate_limit(user_id: str) -> None:
             )
     except HTTPException:
         raise
-    except Exception as exc:  # nosec B110 — Redis fallback to in-memory rate limiting
-        logger.debug("Rate-limit Redis fallback: %s", exc)
+    except Exception:
         # Redis unavailable — fall back to in-memory sliding window
         now = time.time()
         timestamps = _order_rl_cache.get(user_id, [])
@@ -526,8 +524,12 @@ def _resolve_user_email(user_id: str) -> str:
     """Look up the authenticated user's email address from the DB."""
     try:
         from auth.service import AuthService
+        from core.app_state import app_state
 
-        db_user = AuthService().get_user_by_id(user_id)
+        session_factory = app_state.db_session_factory
+        if session_factory is None:
+            return ""
+        db_user = AuthService(session_factory=session_factory).get_user_by_id(user_id)
         return getattr(db_user, "email", "") or ""
     except Exception as exc:
         logger.debug("Could not resolve user email for fill notification: %s", exc)
@@ -984,7 +986,7 @@ def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> 
 
         if not _state or not _state.db_session_factory:
             return []
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             q = session.query(Trade).filter(Trade.user_id == user_id)
             if symbol:
                 q = q.filter(Trade.symbol == symbol.upper())
@@ -1450,7 +1452,7 @@ async def get_regime_status():
             "confidence": 0.0,
             "selected_strategy": "TrendFollowing",
             "manifest_entries": {},
-            "error": str(exc),
+            "error": "Regime router unavailable — check server logs",
         }
 
 
@@ -1465,7 +1467,8 @@ async def get_regime_history(limit: int = 20):
             return {"history": []}
         return {"history": regime_router.regime_history(limit=limit)}
     except Exception as exc:
-        return {"history": [], "error": str(exc)}
+        logger.warning("get_regime_history failed: %s", exc)
+        return {"history": [], "error": "Regime history unavailable — check server logs"}
 
 
 # ── Stress test endpoint ──────────────────────────────────────────────────────

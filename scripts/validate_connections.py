@@ -151,7 +151,7 @@ def check_redis():
         socket_connect_timeout=2,
     )
     r.ping()
-    return f"Redis connected at {os.getenv('REDIS_HOST','localhost')}:{os.getenv('REDIS_PORT','6379')}"
+    return f"Redis connected at {os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}"
 
 
 def check_api_trading_router():
@@ -197,7 +197,7 @@ def check_ml_model():
     model_path = ROOT / "ml" / "saved_models" / "advanced_oos.pkl"
     if not model_path.exists():
         raise AssertionError("advanced_oos.pkl not found (will train on first run)")
-    model = joblib.load(model_path)
+    model = joblib.load(model_path)  # nosec B301 - model_path is hardcoded to ml/saved_models
     return f"ML model loaded: {type(model).__name__}"
 
 
@@ -258,9 +258,7 @@ def check_startup_validator():
 def check_dashboard_built():
     dist = ROOT / "dashboard" / "dist"
     if not dist.exists():
-        raise AssertionError(
-            "dashboard/dist/ not built — run: cd dashboard && npm run build"
-        )
+        raise AssertionError("dashboard/dist/ not built — run: cd dashboard && npm run build")
     index = dist / "index.html"
     if not index.exists():
         raise AssertionError("dashboard/dist/index.html missing")
@@ -300,9 +298,7 @@ def check_env_example():
     f = ROOT / "env.example"
     if not f.exists():
         raise Exception("env.example missing")
-    lines = [
-        ln for ln in f.read_text().splitlines() if ln.strip() and not ln.startswith("#")
-    ]
+    lines = [ln for ln in f.read_text().splitlines() if ln.strip() and not ln.startswith("#")]
     return f"env.example present ({len(lines)} vars)"
 
 
@@ -407,9 +403,7 @@ def run_checks(strict: bool = False) -> int:
     crit_reds = [(n, r) for n, r in reds if r[2] == CRITICAL]
     crit_yellows = [(n, r) for n, r in yellows if r[2] == CRITICAL]
 
-    print(
-        f"  TOTAL  ✅ {len(greens)} GREEN   ⚠️  {len(yellows)} YELLOW   ❌ {len(reds)} RED"
-    )
+    print(f"  TOTAL  ✅ {len(greens)} GREEN   ⚠️  {len(yellows)} YELLOW   ❌ {len(reds)} RED")
     print()
 
     if crit_reds:
@@ -438,8 +432,6 @@ def run_checks(strict: bool = False) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HOPEFX connection validator")
-    parser.add_argument(
-        "--strict", action="store_true", help="Fail on critical warnings (YELLOW) too"
-    )
+    parser.add_argument("--strict", action="store_true", help="Fail on critical warnings (YELLOW) too")
     args = parser.parse_args()
     sys.exit(run_checks(strict=args.strict))

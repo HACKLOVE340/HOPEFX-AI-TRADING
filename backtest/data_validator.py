@@ -64,6 +64,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 import numpy as np
@@ -142,9 +143,7 @@ async def _fetch_ccxt(
         all_bars = []
         since = since_ms
         while True:
-            bars = await exchange.fetch_ohlcv(
-                symbol, timeframe, since=since, limit=limit
-            )
+            bars = await exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
             if not bars:
                 break
             all_bars.extend(bars)
@@ -156,9 +155,7 @@ async def _fetch_ccxt(
         if not all_bars:
             return None
 
-        df = pd.DataFrame(
-            all_bars, columns=["timestamp", "open", "high", "low", "close", "volume"]
-        )
+        df = pd.DataFrame(all_bars, columns=["timestamp", "open", "high", "low", "close", "volume"])
         df["timestamp"] = df["timestamp"].astype(int)
         df = df.set_index("timestamp").sort_index()
         logger.info("ccxt/%s: fetched %d bars for %s", exchange_id, len(df), symbol)
@@ -266,18 +263,15 @@ async def _fetch_alpha_vantage(
     try:
         import aiohttp
 
-        async with aiohttp.ClientSession() as session, session.get(
-            url, timeout=aiohttp.ClientTimeout(total=30)
-        ) as resp:
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp,
+        ):
             if resp.status != 200:  # noqa: PLR2004
                 return None
             data = await resp.json()
 
-        key = (
-            f"Time Series FX ({interval})"
-            if interval != "daily"
-            else "Time Series FX (Daily)"
-        )
+        key = f"Time Series FX ({interval})" if interval != "daily" else "Time Series FX (Daily)"
         ts = data.get(key, {})
         if not ts:
             return None
@@ -285,9 +279,7 @@ async def _fetch_alpha_vantage(
         rows = []
         for dt_str, vals in ts.items():
             try:
-                dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(
-                    tzinfo=UTC
-                )
+                dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
                 rows.append(
                     {
                         "timestamp": int(dt.timestamp() * 1000),
@@ -450,11 +442,7 @@ class MultiSourceValidator:
             # ── Price agreement check ─────────────────────────────────────────
             close_values = list(prices.values())
             mid = np.median(close_values)
-            agreeing = sum(
-                1
-                for p in close_values
-                if mid > 0 and abs(p - mid) / mid <= self.max_price_dev
-            )
+            agreeing = sum(1 for p in close_values if mid > 0 and abs(p - mid) / mid <= self.max_price_dev)
 
             if agreeing < self.min_sources:
                 flags.append("PRICE_DISAGREEMENT")

@@ -81,7 +81,7 @@ class TestGoldSlippage:
         broker = SimulatedBroker(cfg)
         slip = broker._calculate_slippage(2000.0)
         # 3 * 0.10 / 2000 = 0.00015
-        assert abs(slip - 0.00015) < 1e-8, f"Expected 0.00015, got {slip}"  # noqa: PLR2004
+        assert abs(slip - 0.00015) < 1e-8, f"Expected 0.00015, got {slip}"
 
     def test_fixed_slippage_gold_dollar_value(self):
         """Dollar slippage at $2000 gold with 3 pips = $0.30."""
@@ -89,7 +89,7 @@ class TestGoldSlippage:
         broker = SimulatedBroker(cfg)
         slip = broker._calculate_slippage(2000.0)
         dollar_slip = slip * 2000.0
-        assert abs(dollar_slip - 0.30) < 1e-6, f"Expected $0.30, got ${dollar_slip:.6f}"  # noqa: PLR2004
+        assert abs(dollar_slip - 0.30) < 1e-6, f"Expected $0.30, got ${dollar_slip:.6f}"
 
     def test_fixed_slippage_forex_uses_pip_0001(self):
         """Forex (price < $100) still uses 0.0001 pip."""
@@ -97,7 +97,7 @@ class TestGoldSlippage:
         broker = SimulatedBroker(cfg)
         slip = broker._calculate_slippage(1.2000)  # EURUSD
         # 1 * 0.0001 / 1.2 = 0.0000833...
-        assert abs(slip - (0.0001 / 1.2)) < 1e-8  # noqa: PLR2004
+        assert abs(slip - (0.0001 / 1.2)) < 1e-8
 
     def test_no_slippage_model(self):
         cfg = _make_config(slippage_model="none")
@@ -110,9 +110,7 @@ class TestGoldSlippage:
         broker = SimulatedBroker(cfg)
         # Wide bar: $20 range on $2000 = 1% — much wider than 0.015% base
         slip_wide = broker._calculate_slippage(2000.0, bar_high=2010.0, bar_low=1990.0)
-        slip_narrow = broker._calculate_slippage(
-            2000.0, bar_high=2000.3, bar_low=1999.7
-        )
+        slip_narrow = broker._calculate_slippage(2000.0, bar_high=2000.3, bar_low=1999.7)
         assert slip_wide > slip_narrow
 
 
@@ -124,7 +122,7 @@ class TestGoldSlippage:
 class TestCommission:
     def test_default_commission_is_7(self):
         cfg = _make_config()
-        assert cfg.commission_per_trade == 7.0  # noqa: PLR2004
+        assert cfg.commission_per_trade == 7.0
 
     def test_commission_deducted_on_buy(self):
         cfg = _make_config(slippage_model="none")
@@ -133,9 +131,7 @@ class TestCommission:
         broker.place_market_order("XAUUSD", "buy", 1.0, 2000.0)
         # cash should decrease by cost + commission
         assert broker.cash < initial_cash - 2000.0
-        assert (
-            abs(broker.cash - (initial_cash - 2000.0 - 7.0)) < 1.0
-        )  # within $1 (slippage)
+        assert abs(broker.cash - (initial_cash - 2000.0 - 7.0)) < 1.0  # within $1 (slippage)
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +158,7 @@ class TestTradeLevelSharpe:
         for i in range(200):
             engine.broker.equity_curve.append(
                 {
-                    "timestamp": f"2024-01-{i+1:02d}",
+                    "timestamp": f"2024-01-{i + 1:02d}",
                     "equity": 100_000.0,  # flat — no trades in equity curve
                     "cash": 100_000.0,
                     "positions_value": 0.0,
@@ -172,9 +168,7 @@ class TestTradeLevelSharpe:
         result = engine._calculate_results()
 
         # Trade-level Sharpe should be positive (mean pnl > 0)
-        assert (
-            result.sharpe_ratio > 0
-        ), "Sharpe should be positive with positive mean PnL"
+        assert result.sharpe_ratio > 0, "Sharpe should be positive with positive mean PnL"
 
         # Bar-level Sharpe on a flat equity curve would be 0 (std=0).
         # Trade-level Sharpe should be non-zero.
@@ -199,9 +193,7 @@ class TestTradeLevelSharpe:
             )
         result = engine._calculate_results()
         expected_se = 1.0 / math.sqrt(2.0 * (n - 1))
-        assert (
-            abs(result.sharpe_se - expected_se) < 1e-6  # noqa: PLR2004
-        ), f"Expected SE={expected_se:.6f}, got {result.sharpe_se:.6f}"
+        assert abs(result.sharpe_se - expected_se) < 1e-6, f"Expected SE={expected_se:.6f}, got {result.sharpe_se:.6f}"
 
     def test_sharpe_se_decreases_with_more_trades(self):
         """More trades → smaller SE → more reliable Sharpe."""
@@ -225,19 +217,17 @@ class TestTradeLevelSharpe:
         se_50 = _run(50)
         se_250 = _run(250)
         se_600 = _run(600)
-        assert (
-            se_50 > se_250 > se_600
-        ), f"SE should decrease: {se_50:.4f} > {se_250:.4f} > {se_600:.4f}"
+        assert se_50 > se_250 > se_600, f"SE should decrease: {se_50:.4f} > {se_250:.4f} > {se_600:.4f}"
 
     def test_sharpe_se_at_600_trades(self):
         """At N=600, SE ≤ ±0.029 — well within the ±0.3 target."""
         se = 1.0 / math.sqrt(2.0 * (600 - 1))
-        assert se < 0.03, f"SE at N=600 should be < 0.03, got {se:.4f}"  # noqa: PLR2004
+        assert se < 0.03, f"SE at N=600 should be < 0.03, got {se:.4f}"
 
     def test_sharpe_se_at_250_trades(self):
         """At N=250, SE ≤ ±0.045 — within the ±0.3 target."""
         se = 1.0 / math.sqrt(2.0 * (250 - 1))
-        assert se < 0.05, f"SE at N=250 should be < 0.05, got {se:.4f}"  # noqa: PLR2004
+        assert se < 0.05, f"SE at N=250 should be < 0.05, got {se:.4f}"
 
     def test_sharpe_note_in_metrics(self):
         """metrics dict must contain sharpe_note and sharpe_se."""
@@ -287,9 +277,7 @@ class TestKellyPositionSizing:
         equity = engine.broker.get_equity()
         max_risk = equity * cfg.risk_per_trade * 2
         # qty * stop_distance should not exceed max_risk (with 1% tolerance)
-        assert (
-            qty * 20.0 <= max_risk * 1.01
-        ), f"qty={qty:.4f} × $20 stop = ${qty*20:.2f} > max_risk=${max_risk:.2f}"
+        assert qty * 20.0 <= max_risk * 1.01, f"qty={qty:.4f} × $20 stop = ${qty * 20:.2f} > max_risk=${max_risk:.2f}"
 
     def test_kelly_fallback_with_no_history(self):
         """With < 20 trades, falls back to 1% equity / stop_distance, capped by cash."""
@@ -313,7 +301,7 @@ class TestKellyPositionSizing:
         engine = BacktestEngine(cfg)
         signal = {"size": 5.0, "stop_distance": 10.0}
         qty = engine._kelly_position_size(signal, 2000.0)
-        assert qty == 5.0  # noqa: PLR2004
+        assert qty == 5.0
 
 
 # ---------------------------------------------------------------------------
@@ -380,20 +368,20 @@ class TestRRFilter:
 class TestBacktestConfigDefaults:
     def test_commission_default(self):
         cfg = _make_config()
-        assert cfg.commission_per_trade == 7.0  # noqa: PLR2004
+        assert cfg.commission_per_trade == 7.0
 
     def test_slippage_pips_default(self):
         cfg = _make_config()
-        assert cfg.slippage_pips == 3.0  # noqa: PLR2004
+        assert cfg.slippage_pips == 3.0
 
     def test_kelly_fraction_default(self):
         cfg = _make_config()
-        assert cfg.kelly_fraction == 0.25  # noqa: PLR2004
+        assert cfg.kelly_fraction == 0.25
 
     def test_risk_per_trade_default(self):
         cfg = _make_config()
-        assert cfg.risk_per_trade == 0.01  # noqa: PLR2004
+        assert cfg.risk_per_trade == 0.01
 
     def test_min_rr_ratio_default(self):
         cfg = _make_config()
-        assert cfg.min_rr_ratio == 1.5  # noqa: PLR2004
+        assert cfg.min_rr_ratio == 1.5

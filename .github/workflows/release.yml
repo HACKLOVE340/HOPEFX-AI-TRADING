@@ -37,8 +37,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload to PyPI via Trusted Publishing
-        # Uses OIDC — no long-lived PYPI_API_TOKEN secret required.
-        # Enable in PyPI project settings: Trusted Publisher → GitHub Actions.
+        # Uses OIDC - no long-lived PYPI_API_TOKEN secret required.
+        # Enable in PyPI project settings: Trusted Publisher -> GitHub Actions.
         # Only runs when vars.PUBLISH_TO_PYPI is set to 'true'.
         if: vars.PUBLISH_TO_PYPI == 'true'
         # Pinned to SHA for supply-chain safety (tag: v1)

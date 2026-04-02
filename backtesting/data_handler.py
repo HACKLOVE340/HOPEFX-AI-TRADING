@@ -42,9 +42,7 @@ class DataHandler:
         self.current_index = 0
         self.continue_backtest = True
 
-        logger.info(
-            f"Initializing DataHandler for {len(symbols)} symbols from {start_date} to {end_date}"
-        )
+        logger.info(f"Initializing DataHandler for {len(symbols)} symbols from {start_date} to {end_date}")
 
     def load_data(self):
         """Load historical data for all symbols."""

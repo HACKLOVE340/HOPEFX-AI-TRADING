@@ -116,24 +116,12 @@ class DataLayerRedisStore:
                 except ValueError:
                     return REGISTRY._names_to_collectors.get(name)  # type: ignore[return-value]
 
-            self._prom_hits = _counter(
-                "hopefx_redis_cache_hits_total", "Total Redis cache hits"
-            )
-            self._prom_misses = _counter(
-                "hopefx_redis_cache_misses_total", "Total Redis cache misses"
-            )
-            self._prom_writes = _counter(
-                "hopefx_redis_cache_writes_total", "Total Redis cache writes"
-            )
-            self._prom_errors = _counter(
-                "hopefx_redis_cache_errors_total", "Total Redis cache errors"
-            )
-            self._prom_hit_rate = _gauge(
-                "hopefx_redis_cache_hit_rate", "Rolling Redis cache hit rate [0, 1]"
-            )
-            self._prom_mem_mb = _gauge(
-                "hopefx_redis_memory_rss_mb", "Redis used_memory_rss in MB"
-            )
+            self._prom_hits = _counter("hopefx_redis_cache_hits_total", "Total Redis cache hits")
+            self._prom_misses = _counter("hopefx_redis_cache_misses_total", "Total Redis cache misses")
+            self._prom_writes = _counter("hopefx_redis_cache_writes_total", "Total Redis cache writes")
+            self._prom_errors = _counter("hopefx_redis_cache_errors_total", "Total Redis cache errors")
+            self._prom_hit_rate = _gauge("hopefx_redis_cache_hit_rate", "Rolling Redis cache hit rate [0, 1]")
+            self._prom_mem_mb = _gauge("hopefx_redis_memory_rss_mb", "Redis used_memory_rss in MB")
         except Exception as _exc:
             logger.debug("DataLayerRedisStore: Prometheus init skipped: %s", _exc)
 
@@ -193,8 +181,7 @@ class DataLayerRedisStore:
                 return
             except Exception as exc:
                 logger.warning(
-                    "DataLayerRedisStore: Sentinel connect failed (%s) — "
-                    "falling back to REDIS_URL",
+                    "DataLayerRedisStore: Sentinel connect failed (%s) — falling back to REDIS_URL",
                     exc,
                 )
 
@@ -218,8 +205,7 @@ class DataLayerRedisStore:
             self.get_memory_info()
         except Exception as exc:
             logger.debug(
-                "DataLayerRedisStore: auto-connect failed (%s) — "
-                "caching disabled until orchestrator injects client",
+                "DataLayerRedisStore: auto-connect failed (%s) — caching disabled until orchestrator injects client",
                 exc,
             )
 
@@ -363,9 +349,7 @@ class DataLayerRedisStore:
             except Exception as exc:
                 logger.debug("Redis ohlcv set error: %s", exc)
 
-    def get_ohlcv_bars(
-        self, symbol: str, timeframe: str, limit: int = 200
-    ) -> list[dict[str, Any]]:
+    def get_ohlcv_bars(self, symbol: str, timeframe: str, limit: int = 200) -> list[dict[str, Any]]:
         if not self._r:
             return []
         try:
@@ -427,9 +411,7 @@ class DataLayerRedisStore:
     # ── Quality report cache ──────────────────────────────────────────────────
 
     def set_quality_report(self, symbol: str, report: dict[str, Any]) -> None:
-        self._safe_set(
-            self._key("quality_report", symbol), json.dumps(report), _QUALITY_TTL
-        )
+        self._safe_set(self._key("quality_report", symbol), json.dumps(report), _QUALITY_TTL)
 
     def get_quality_report(self, symbol: str) -> dict[str, Any] | None:
         raw = self._safe_get(self._key("quality_report", symbol))
@@ -625,15 +607,11 @@ class DataLayerRedisStore:
                 )
             return {
                 "used_memory_mb": round(info.get("used_memory", 0) / 1024 / 1024, 2),
-                "used_memory_rss_mb": round(
-                    info.get("used_memory_rss", 0) / 1024 / 1024, 2
-                ),
+                "used_memory_rss_mb": round(info.get("used_memory_rss", 0) / 1024 / 1024, 2),
                 "mem_fragmentation": info.get("mem_fragmentation_ratio", 0.0),
                 "maxmemory_mb": round(maxmemory / 1024 / 1024, 2),
                 "maxmemory_policy": info.get("maxmemory_policy", "unknown"),
-                "peak_used_memory_mb": round(
-                    info.get("used_memory_peak", 0) / 1024 / 1024, 2
-                ),
+                "peak_used_memory_mb": round(info.get("used_memory_peak", 0) / 1024 / 1024, 2),
                 "maxmemory_unlimited": maxmemory == 0,
             }
         except Exception as exc:

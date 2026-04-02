@@ -628,6 +628,10 @@ class FIXAdapter:
     def stop(self) -> None:
         """Stop the FIX session."""
         self._running = False
+        # Signal the heartbeat Event.wait() to wake up immediately.
+        hb_stop = getattr(self, "_hb_stop_event", None)
+        if hb_stop is not None:
+            hb_stop.set()
         if self._initiator:
             try:
                 self._initiator.stop()
@@ -864,9 +868,18 @@ class FIXAdapter:
     # ------------------------------------------------------------------
 
     def _heartbeat_loop(self) -> None:
-        """Log heartbeat every HEARTBEAT_INTERVAL seconds and check circuit breaker."""
+        """Log heartbeat every HEARTBEAT_INTERVAL seconds and check circuit breaker.
+
+        Uses threading.Event.wait() instead of time.sleep() so the GIL is
+        released during the wait and stop() can interrupt the interval promptly.
+        """
+        _stop_event = threading.Event()
+        # Store on self so stop() can set it for a clean interrupt.
+        self._hb_stop_event = _stop_event
         while self._running:
-            time.sleep(self.HEARTBEAT_INTERVAL)
+            _stop_event.wait(timeout=self.HEARTBEAT_INTERVAL)
+            if not self._running:
+                break
             status = "OPEN" if self.circuit_breaker.is_open else "CLOSED"
             logger.debug(
                 "fix_adapter.heartbeat backend=%s circuit=%s",

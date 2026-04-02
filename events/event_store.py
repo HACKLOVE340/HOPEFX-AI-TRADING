@@ -14,6 +14,7 @@ from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from collections import defaultdict
@@ -276,9 +277,7 @@ class EventStore:
         return {
             "buffered_events": len(self._event_buffer),
             "memory_events": len(self._recent_events),
-            "subscribers": {
-                et.value: len(subs) for et, subs in self._subscribers.items()
-            },
+            "subscribers": {et.value: len(subs) for et, subs in self._subscribers.items()},
         }
 
 

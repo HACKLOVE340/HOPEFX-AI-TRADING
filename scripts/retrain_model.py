@@ -36,6 +36,7 @@ import logging
 import os
 import sys
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from pathlib import Path
 
@@ -129,9 +130,7 @@ def _log_to_mlflow(symbol: str, model_name: str, metrics: dict, params: dict) ->
         import mlflow
 
         mlflow.set_tracking_uri(uri)
-        with mlflow.start_run(
-            run_name=f"{symbol}_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
-        ):
+        with mlflow.start_run(run_name=f"{symbol}_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"):
             mlflow.log_params(params)
             for k, v in metrics.items():
                 if isinstance(v, int | float):
@@ -155,10 +154,7 @@ def retrain(
     df = _load_csv(symbol, csv_path, years)
 
     if len(df) < 100:  # noqa: PLR2004
-        raise ValueError(
-            f"Only {len(df)} bars available for {symbol} — need at least 100. "
-            "Run the backfill first."
-        )
+        raise ValueError(f"Only {len(df)} bars available for {symbol} — need at least 100. Run the backfill first.")
 
     # Resolve ml/training.py directly (avoids ml/training/ package shadowing)
     import importlib.util as _ilu
@@ -176,9 +172,7 @@ def retrain(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("=" * 60)
-    logger.info(
-        "Training %s for %s (%d bars) → %s", model_types, symbol, len(df), out_dir
-    )
+    logger.info("Training %s for %s (%d bars) → %s", model_types, symbol, len(df), out_dir)
     logger.info("=" * 60)
 
     results = train_ml_pipeline(
@@ -276,10 +270,7 @@ Examples:
     parser.add_argument(
         "--model",
         default="rf,xgb",
-        help=(
-            "Comma-separated model types or 'all'. "
-            "Options: rf, xgb, lstm, random_forest, xgboost (default: rf,xgb)"
-        ),
+        help=("Comma-separated model types or 'all'. Options: rf, xgb, lstm, random_forest, xgboost (default: rf,xgb)"),
     )
     parser.add_argument(
         "--csv",
@@ -347,10 +338,7 @@ Examples:
     if args.model.lower() == "all":
         model_types = ["random_forest", "xgboost", "lstm"]
     else:
-        model_types = [
-            _ALIASES.get(m.strip().lower(), m.strip().lower())
-            for m in args.model.split(",")
-        ]
+        model_types = [_ALIASES.get(m.strip().lower(), m.strip().lower()) for m in args.model.split(",")]
 
     logger.info("Symbols:   %s", symbols)
     logger.info("Models:    %s", model_types)
@@ -367,7 +355,7 @@ Examples:
                 csv_path=args.csv,
                 years=args.years,
             )
-            print(f"\n{'='*50}")
+            print(f"\n{'=' * 50}")
             print(f"Results for {sym}:")
             for name, info in results.items():
                 m = info.get("metrics") or {}

@@ -715,7 +715,6 @@ def check_phase2_gate() -> tuple[bool, str]:
     -------
     (passed, reason) : bool and human-readable explanation.
     """
-    import os
     from datetime import datetime, timedelta
 
     start_str = os.getenv("OANDA_PAPER_RUN_START_UTC", "")
@@ -747,7 +746,6 @@ def check_phase3_gate() -> tuple[bool, str]:
     -------
     (passed, reason) : bool and human-readable explanation.
     """
-    import os
     from datetime import datetime, timedelta
 
     # Check fill count

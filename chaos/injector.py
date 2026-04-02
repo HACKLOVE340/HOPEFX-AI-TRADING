@@ -51,6 +51,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 from enum import Enum
 from typing import Any
@@ -269,9 +270,7 @@ class FaultInjector:
             fault = self._active[FaultType.STALE_FEED]
             frozen_ts = fault.metadata.get("frozen_ts")
             if frozen_ts is None:
-                fault.metadata["frozen_ts"] = getattr(
-                    tick, "timestamp", datetime.now(UTC)
-                )
+                fault.metadata["frozen_ts"] = getattr(tick, "timestamp", datetime.now(UTC))
             with contextlib.suppress((AttributeError, TypeError)):
                 object.__setattr__(tick, "timestamp", fault.metadata["frozen_ts"])
             return tick

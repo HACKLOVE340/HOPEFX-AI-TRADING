@@ -89,13 +89,11 @@ class TestStochasticInit:
     def test_init_covers_all_attributes(self):
         from strategies.stochastic import StochasticStrategy
 
-        s = make_concrete(
-            StochasticStrategy, k_period=10, d_period=5, oversold=25, overbought=75
-        )
-        assert s.k_period == 10  # noqa: PLR2004
-        assert s.d_period == 5  # noqa: PLR2004
-        assert s.oversold == 25  # noqa: PLR2004
-        assert s.overbought == 75  # noqa: PLR2004
+        s = make_concrete(StochasticStrategy, k_period=10, d_period=5, oversold=25, overbought=75)
+        assert s.k_period == 10
+        assert s.d_period == 5
+        assert s.oversold == 25
+        assert s.overbought == 75
 
 
 class TestStochasticSignalPaths:
@@ -135,19 +133,15 @@ class TestStochasticSignalPaths:
         df = _df(prices, highs, lows)
 
         # Patch calculate_stochastic to return specific values
-        k_vals = [15.0] * (n - 1) + [
-            21.0
-        ]  # prev=15 (< oversold), current=21 (> oversold)
+        k_vals = [15.0] * (n - 1) + [21.0]  # prev=15 (< oversold), current=21 (> oversold)
         d_vals = [10.0] * n
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "BUY"
-        assert result["confidence"] == 0.75  # noqa: PLR2004
+        assert result["confidence"] == 0.75
 
     def test_bearish_crossover_in_overbought(self, strat):
         """Cover lines 131-133: bearish crossover in overbought."""
@@ -161,12 +155,10 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "SELL"
-        assert result["confidence"] == 0.85  # noqa: PLR2004
+        assert result["confidence"] == 0.85
 
     def test_divergence_bearish_crossover_above_50(self, strat):
         """Cover lines 143-150: bearish crossover above 50 but below overbought."""
@@ -180,12 +172,10 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "SELL"
-        assert result["confidence"] == 0.55  # noqa: PLR2004
+        assert result["confidence"] == 0.55
 
     def test_divergence_bullish_crossover_below_50(self, strat):
         """Cover lines 155-162: bullish crossover below 50 but above oversold."""
@@ -199,12 +189,10 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "BUY"
-        assert result["confidence"] == 0.55  # noqa: PLR2004
+        assert result["confidence"] == 0.55
 
     def test_divergence_above_50_no_crossover_hold(self, strat):
         """Cover line 172: HOLD in neutral divergence range."""
@@ -219,9 +207,7 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "HOLD"
         assert "neutral" in result["reason"]
@@ -237,9 +223,7 @@ class TestStochasticSignalPaths:
         k_series = pd.Series(k_vals, index=df.index)
         d_series = pd.Series(d_vals, index=df.index)
 
-        with patch.object(
-            strat, "calculate_stochastic", return_value=(k_series, d_series)
-        ):
+        with patch.object(strat, "calculate_stochastic", return_value=(k_series, d_series)):
             result = strat.generate_signal(df)
         assert result["type"] == "HOLD"
         assert "NaN" in result["reason"]
@@ -248,9 +232,7 @@ class TestStochasticSignalPaths:
         """Cover lines 190-192: except block."""
         df = _df([1900.0] * 50)
 
-        with patch.object(
-            strat, "calculate_stochastic", side_effect=RuntimeError("test error")
-        ):
+        with patch.object(strat, "calculate_stochastic", side_effect=RuntimeError("test error")):
             result = strat.generate_signal(df)
         assert result["type"] == "HOLD"
         assert "Error" in result["reason"]
@@ -266,8 +248,8 @@ class TestBreakoutInit:
         from strategies.breakout import BreakoutStrategy
 
         s = make_concrete(BreakoutStrategy, lookback_period=15, breakout_threshold=0.03)
-        assert s.lookback_period == 15  # noqa: PLR2004
-        assert s.breakout_threshold == 0.03  # noqa: PLR2004
+        assert s.lookback_period == 15
+        assert s.breakout_threshold == 0.03
 
 
 class TestBreakoutSignalPaths:
@@ -319,9 +301,7 @@ class TestBreakoutSignalPaths:
         """Cover lines 199-201: except block."""
         df = _df([1900.0] * 50)
 
-        with patch.object(
-            strat, "identify_support_resistance", side_effect=RuntimeError("test error")
-        ):
+        with patch.object(strat, "identify_support_resistance", side_effect=RuntimeError("test error")):
             result = strat.generate_signal(df)
         assert result["type"] == "HOLD"
         assert "Error" in result["reason"]
@@ -371,9 +351,7 @@ class TestBreakoutSignalPaths:
         # Patch to return support above current_low
         support = base - 0.2  # current_low(base-0.5) < support(base-0.2) ✓
         resistance = base + 10.0
-        with patch.object(
-            strat, "identify_support_resistance", return_value=(support, resistance)
-        ):
+        with patch.object(strat, "identify_support_resistance", return_value=(support, resistance)):
             result = strat.generate_signal(df)
         # Should SELL (bearish breakout below support)
         assert result["type"] == "SELL"
@@ -391,9 +369,7 @@ class TestBreakoutSignalPaths:
         volumes = [100] * n
         df = _df(prices, highs_arr, lows_arr, list(prices), volumes)
 
-        with patch.object(
-            strat, "identify_support_resistance", return_value=(support, resistance)
-        ):
+        with patch.object(strat, "identify_support_resistance", return_value=(support, resistance)):
             result = strat.generate_signal(df)
         assert result["type"] == "SELL"
 
@@ -408,8 +384,8 @@ class TestBollingerBandsInit:
         from strategies.bollinger_bands import BollingerBandsStrategy
 
         s = make_concrete(BollingerBandsStrategy, period=15, std_dev=2.5)
-        assert s.period == 15  # noqa: PLR2004
-        assert s.std_dev == 2.5  # noqa: PLR2004
+        assert s.period == 15
+        assert s.std_dev == 2.5
 
 
 class TestBollingerBandsSignalPaths:
@@ -546,9 +522,9 @@ class TestRSIInit:
         from strategies.rsi_strategy import RSIStrategy
 
         s = make_concrete(RSIStrategy, period=10, oversold=25, overbought=75)
-        assert s.period == 10  # noqa: PLR2004
-        assert s.oversold == 25  # noqa: PLR2004
-        assert s.overbought == 75  # noqa: PLR2004
+        assert s.period == 10
+        assert s.oversold == 25
+        assert s.overbought == 75
 
 
 class TestRSISignalPaths:
@@ -679,8 +655,8 @@ class TestMeanReversionInit:
         from strategies.mean_reversion import MeanReversionStrategy
 
         s = make_concrete(MeanReversionStrategy, period=10, std_dev=1.5)
-        assert s.period == 10  # noqa: PLR2004
-        assert s.std_dev == 1.5  # noqa: PLR2004
+        assert s.period == 10
+        assert s.std_dev == 1.5
 
 
 class TestMeanReversionSignalPaths:

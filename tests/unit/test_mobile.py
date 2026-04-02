@@ -10,9 +10,7 @@ Tests for the mobile module.
 import os
 
 # Ensure JWT secret is set before importing mobile.api (which validates it at import)
-os.environ.setdefault(
-    "SECURITY_JWT_SECRET", "test-jwt-secret-minimum-32-characters-long!!"
-)
+os.environ.setdefault("SECURITY_JWT_SECRET", "test-jwt-secret-minimum-32-characters-long!!")
 
 from mobile.api import MobileAPI
 from mobile.push_notifications import PushNotificationManager
@@ -69,7 +67,7 @@ class TestMobileAPI:
 
         assert "order_id" in result
         assert result["symbol"] == "EUR/USD"
-        assert result["quantity"] == 1000.0  # noqa: PLR2004
+        assert result["quantity"] == 1000.0
 
     def test_place_order_mobile_confirm_required(self):
         """Test order requires confirmation by default."""
@@ -131,9 +129,7 @@ class TestPushNotificationManager:
         """Test sending a notification."""
         manager = PushNotificationManager()
 
-        result = manager.send_notification(
-            user_id="user_1", title="Test Title", body="Test body message"
-        )
+        result = manager.send_notification(user_id="user_1", title="Test Title", body="Test body message")
 
         assert result is True
 
@@ -171,9 +167,7 @@ class TestPushNotificationManager:
         """Test sending price alert."""
         manager = PushNotificationManager()
 
-        result = manager.send_price_alert(
-            user_id="user_1", symbol="BTC/USD", price=50000.0, direction="above"
-        )
+        result = manager.send_price_alert(user_id="user_1", symbol="BTC/USD", price=50000.0, direction="above")
 
         assert result is True
 
@@ -184,8 +178,6 @@ class TestPushNotificationManager:
         """Test sending price alert for below threshold."""
         manager = PushNotificationManager()
 
-        result = manager.send_price_alert(
-            user_id="user_1", symbol="ETH/USD", price=3000.0, direction="below"
-        )
+        result = manager.send_price_alert(user_id="user_1", symbol="ETH/USD", price=3000.0, direction="below")
 
         assert result is True

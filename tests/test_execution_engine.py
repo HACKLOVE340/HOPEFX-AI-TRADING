@@ -31,17 +31,13 @@ from brokers.base import Order, OrderSide, OrderStatus, OrderType
 
 class TestExecutionRequest:
     def test_valid_buy_market(self):
-        req = ExecutionRequest(
-            symbol="XAUUSD", side="BUY", quantity=1.0, order_type="MARKET"
-        )
+        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0, order_type="MARKET")
         assert req.symbol == "XAUUSD"
         assert req.side == "BUY"
 
     def test_valid_sell_limit(self):
-        req = ExecutionRequest(
-            symbol="XAUUSD", side="SELL", quantity=1.0, order_type="LIMIT", price=1950.0
-        )
-        assert req.price == 1950.0  # noqa: PLR2004
+        req = ExecutionRequest(symbol="XAUUSD", side="SELL", quantity=1.0, order_type="LIMIT", price=1950.0)
+        assert req.price == 1950.0
 
     def test_invalid_side_raises(self):
         with pytest.raises(ValueError, match="side"):
@@ -77,9 +73,7 @@ class TestExecutionRequest:
 
     def test_invalid_order_type_raises(self):
         with pytest.raises(ValueError, match="order_type"):
-            ExecutionRequest(
-                symbol="XAUUSD", side="BUY", quantity=1.0, order_type="TWAP"
-            )
+            ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0, order_type="TWAP")
 
 
 # ---------------------------------------------------------------------------
@@ -229,9 +223,7 @@ class TestExecutionEngine:
         broker.place_order.side_effect = RuntimeError("broker down")
         risk = _make_risk_manager()
         engine = ExecutionEngine(broker, risk)
-        engine._circuit_breaker = EngineCircuitBreaker(
-            max_failures=2, window_sec=60.0, reset_sec=9999.0
-        )
+        engine._circuit_breaker = EngineCircuitBreaker(max_failures=2, window_sec=60.0, reset_sec=9999.0)
         await engine.start()
 
         req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)

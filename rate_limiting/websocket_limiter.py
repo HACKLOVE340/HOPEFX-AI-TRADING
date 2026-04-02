@@ -68,6 +68,7 @@ import logging
 import os
 import time
 from collections import defaultdict, deque
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +78,8 @@ _MAX_CONNS_PER_MINUTE = int(os.getenv("WS_MAX_CONNECTIONS_PER_MINUTE", "20"))
 _RATE_WINDOW_S = int(os.getenv("WS_RATE_WINDOW_SECONDS", "60"))
 
 # Redis key prefixes
-_KEY_CONNS = "hopefx:ws:conns:"    # INCR/DECR — current open connections
-_KEY_RATE  = "hopefx:ws:rate:"     # sorted set — timestamps of recent connects
+_KEY_CONNS = "hopefx:ws:conns:"  # INCR/DECR — current open connections
+_KEY_RATE = "hopefx:ws:rate:"  # sorted set — timestamps of recent connects
 
 
 class WebSocketConnectionLimiter:
@@ -105,6 +106,7 @@ class WebSocketConnectionLimiter:
         self._connected = True
         try:
             import redis.asyncio as aioredis
+
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
             self._redis = aioredis.from_url(
                 redis_url,
@@ -140,15 +142,9 @@ class WebSocketConnectionLimiter:
             recent_rate = int(results[1] or 0)
 
             if current_conns >= _MAX_CONNS_PER_IP:
-                return False, (
-                    f"Too many concurrent connections from this IP "
-                    f"(max {_MAX_CONNS_PER_IP})"
-                )
+                return False, (f"Too many concurrent connections from this IP (max {_MAX_CONNS_PER_IP})")
             if recent_rate >= _MAX_CONNS_PER_MINUTE:
-                return False, (
-                    f"Connection rate limit exceeded "
-                    f"(max {_MAX_CONNS_PER_MINUTE} per {_RATE_WINDOW_S}s)"
-                )
+                return False, (f"Connection rate limit exceeded (max {_MAX_CONNS_PER_MINUTE} per {_RATE_WINDOW_S}s)")
 
             # Register: increment open count + add timestamp to rate window
             pipe2 = self._redis.pipeline()
@@ -188,15 +184,9 @@ class WebSocketConnectionLimiter:
             recent_rate = len(window)
 
             if current_conns >= _MAX_CONNS_PER_IP:
-                return False, (
-                    f"Too many concurrent connections from this IP "
-                    f"(max {_MAX_CONNS_PER_IP})"
-                )
+                return False, (f"Too many concurrent connections from this IP (max {_MAX_CONNS_PER_IP})")
             if recent_rate >= _MAX_CONNS_PER_MINUTE:
-                return False, (
-                    f"Connection rate limit exceeded "
-                    f"(max {_MAX_CONNS_PER_MINUTE} per {_RATE_WINDOW_S}s)"
-                )
+                return False, (f"Connection rate limit exceeded (max {_MAX_CONNS_PER_MINUTE} per {_RATE_WINDOW_S}s)")
 
             self._open_conns[ip] += 1
             window.append(now)
@@ -233,9 +223,7 @@ class WebSocketConnectionLimiter:
             allowed, reason = await self._redis_check_and_register(client_ip)
             if allowed is not None:  # None = Redis error, fall through
                 if not allowed:
-                    logger.warning(
-                        "WS connection rejected for %s: %s", client_ip, reason
-                    )
+                    logger.warning("WS connection rejected for %s: %s", client_ip, reason)
                 return allowed, reason
 
         # In-process fallback
@@ -274,6 +262,7 @@ class WebSocketConnectionLimiter:
 
 
 # ── IP extraction helper ──────────────────────────────────────────────────────
+
 
 def get_client_ip(websocket) -> str:
     """

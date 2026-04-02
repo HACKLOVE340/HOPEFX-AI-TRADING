@@ -28,6 +28,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+
 UTC = timezone.utc
 from typing import Any
 from enum import Enum
@@ -45,9 +46,7 @@ except ImportError:
     _stripe = None  # type: ignore
     _STRIPE_AVAILABLE = False
     logger_init = logging.getLogger(__name__)
-    logger_init.warning(
-        "stripe package not installed — payment processing disabled. pip install stripe"
-    )
+    logger_init.warning("stripe package not installed — payment processing disabled. pip install stripe")
 
 # ---------------------------------------------------------------------------
 # Tier feature gates (mirrors pricing.py, adds RL/live flags)
@@ -86,12 +85,8 @@ _TIER_FEATURES: dict[SubscriptionTier, dict[str, Any]] = {
 
 # Stripe Price IDs — override via environment variables
 _STRIPE_PRICE_IDS: dict[SubscriptionTier, str] = {
-    SubscriptionTier.PROFESSIONAL: os.getenv(
-        "STRIPE_PRICE_PROFESSIONAL", "price_professional"
-    ),
-    SubscriptionTier.ENTERPRISE: os.getenv(
-        "STRIPE_PRICE_ENTERPRISE", "price_enterprise"
-    ),
+    SubscriptionTier.PROFESSIONAL: os.getenv("STRIPE_PRICE_PROFESSIONAL", "price_professional"),
+    SubscriptionTier.ENTERPRISE: os.getenv("STRIPE_PRICE_ENTERPRISE", "price_enterprise"),
 }
 
 
@@ -192,9 +187,7 @@ class Subscription:
         self.end_date = datetime.now(UTC) + timedelta(days=duration_days)
         self.status = SubscriptionStatus.ACTIVE
         self.updated_at = datetime.now(UTC)
-        logger.info(
-            f"Subscription {self.subscription_id} renewed until {self.end_date}"
-        )
+        logger.info(f"Subscription {self.subscription_id} renewed until {self.end_date}")
 
     def cancel(self) -> None:
         """Cancel subscription"""
@@ -304,9 +297,7 @@ class SubscriptionManager:
         logger.info(f"Activated subscription {subscription_id}")
         return True
 
-    def upgrade_subscription(
-        self, subscription_id: str, new_tier: SubscriptionTier
-    ) -> bool:
+    def upgrade_subscription(self, subscription_id: str, new_tier: SubscriptionTier) -> bool:
         """Upgrade subscription to a higher tier"""
         subscription = self.get_subscription(subscription_id)
         if not subscription:
@@ -324,9 +315,7 @@ class SubscriptionManager:
         logger.info(f"Upgraded subscription {subscription_id} to {new_tier}")
         return True
 
-    def downgrade_subscription(
-        self, subscription_id: str, new_tier: SubscriptionTier
-    ) -> bool:
+    def downgrade_subscription(self, subscription_id: str, new_tier: SubscriptionTier) -> bool:
         """Downgrade subscription to a lower tier"""
         subscription = self.get_subscription(subscription_id)
         if not subscription:
@@ -431,9 +420,7 @@ class SubscriptionManager:
             subscription_id=subscription_id,
             user_id=user_id,
             tier=tier,
-            status=SubscriptionStatus.ACTIVE
-            if tier == SubscriptionTier.FREE
-            else SubscriptionStatus.PENDING,
+            status=SubscriptionStatus.ACTIVE if tier == SubscriptionTier.FREE else SubscriptionStatus.PENDING,
             start_date=start_date,
             end_date=end_date,
             access_code=access_code,
@@ -539,18 +526,14 @@ class SubscriptionManager:
                     stripe_customer_id=stripe_cust_id,
                 )
                 sub.status = SubscriptionStatus.ACTIVE
-            logger.info(
-                "stripe.webhook.checkout_completed user=%s tier=%s", user_id, tier_str
-            )
+            logger.info("stripe.webhook.checkout_completed user=%s tier=%s", user_id, tier_str)
 
         elif event_type == "customer.subscription.deleted":
             stripe_sub_id = data.get("id")
             for sub in self._subscriptions.values():
                 if sub.stripe_subscription_id == stripe_sub_id:
                     sub.cancel()
-                    logger.info(
-                        "stripe.webhook.subscription_deleted sub=%s", stripe_sub_id
-                    )
+                    logger.info("stripe.webhook.subscription_deleted sub=%s", stripe_sub_id)
                     break
 
         elif event_type == "invoice.payment_failed":
@@ -558,9 +541,7 @@ class SubscriptionManager:
             for sub in self._subscriptions.values():
                 if sub.stripe_customer_id == stripe_cust_id:
                     sub.suspend()
-                    logger.warning(
-                        "stripe.webhook.payment_failed customer=%s", stripe_cust_id
-                    )
+                    logger.warning("stripe.webhook.payment_failed customer=%s", stripe_cust_id)
                     break
 
         return {"status": "processed", "event_type": event_type}
@@ -694,9 +675,7 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
         from fastapi import APIRouter, Header, HTTPException, Request
         from pydantic import BaseModel
     except ImportError:
-        raise ImportError(
-            "fastapi and pydantic are required. pip install fastapi pydantic"
-        ) from None
+        raise ImportError("fastapi and pydantic are required. pip install fastapi pydantic") from None
 
     _mgr = manager or subscription_manager
     _validator = LicenseValidator(_mgr)
@@ -764,9 +743,7 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
         """Receive and process Stripe webhook events."""
         payload = await request.body()
         if not stripe_signature:
-            raise HTTPException(
-                status_code=400, detail="Missing Stripe-Signature header"
-            )
+            raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
 
         try:
             result = _mgr.handle_stripe_webhook(payload, stripe_signature)

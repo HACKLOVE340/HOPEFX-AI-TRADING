@@ -18,6 +18,7 @@ from typing import Any
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 UTC = timezone.utc
 
 try:
@@ -183,25 +184,24 @@ class DiscordChannel(NotificationChannel):
         # Add data fields
         for key, value in notification.data.items():
             if len(embed["fields"]) < 25:  # Discord limit  # noqa: PLR2004
-                embed["fields"].append(
-                    {"name": str(key)[:256], "value": str(value)[:1024], "inline": True}
-                )
+                embed["fields"].append({"name": str(key)[:256], "value": str(value)[:1024], "inline": True})
 
         payload = {"embeds": [embed]}
 
         async def _send():
-            async with aiohttp.ClientSession() as session, session.post(
-                self.webhook_url,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as response:
+            async with (
+                aiohttp.ClientSession() as session,
+                session.post(
+                    self.webhook_url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as response,
+            ):
                 if response.status in [200, 204]:
                     logger.debug(f"Discord notification sent: {notification.title}")
                     return True
                 else:
-                    logger.error(
-                        f"Discord error {response.status}: {await response.text()}"
-                    )
+                    logger.error(f"Discord error {response.status}: {await response.text()}")
                     return False
 
         return await self._send_with_retry(_send)
@@ -251,25 +251,21 @@ class TelegramChannel(NotificationChannel):
             "chat_id": self.chat_id,
             "text": text,
             "parse_mode": "Markdown",
-            "disable_notification": notification.level
-            in [NotificationLevel.DEBUG, NotificationLevel.INFO],
+            "disable_notification": notification.level in [NotificationLevel.DEBUG, NotificationLevel.INFO],
         }
 
         url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
 
         async def _send():
-            async with aiohttp.ClientSession() as session, session.post(
-                url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
+            async with (
+                aiohttp.ClientSession() as session,
+                session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as response,
+            ):
                 if response.status == 200:  # noqa: PLR2004
-                    logger.debug(
-                        f"Telegram notification sent: {notification.title}"
-                    )
+                    logger.debug(f"Telegram notification sent: {notification.title}")
                     return True
                 else:
-                    logger.error(
-                        f"Telegram error {response.status}: {await response.text()}"
-                    )
+                    logger.error(f"Telegram error {response.status}: {await response.text()}")
                     return False
 
         return await self._send_with_retry(_send)
@@ -298,16 +294,12 @@ class EmailChannel(NotificationChannel):
         self.to_addrs: list[str] = config.get("to_addrs", [])
 
         # Determine send mode
-        self.sendgrid_api_key: str | None = os.getenv(
-            "SENDGRID_API_KEY"
-        ) or config.get("sendgrid_api_key")
+        self.sendgrid_api_key: str | None = os.getenv("SENDGRID_API_KEY") or config.get("sendgrid_api_key")
         if self.sendgrid_api_key and SENDGRID_AVAILABLE:
             self._send_mode = "sendgrid"
         elif self.smtp_host and self.username and self.password and SMTP_AVAILABLE:
             self._send_mode = "smtp"
-            logger.warning(
-                "Email: SENDGRID_API_KEY not set — using raw SMTP fallback (degraded deliverability)"
-            )
+            logger.warning("Email: SENDGRID_API_KEY not set — using raw SMTP fallback (degraded deliverability)")
         else:
             self._send_mode = "disabled"
             logger.warning("Email: no credentials configured — channel disabled")
@@ -392,19 +384,11 @@ class EmailChannel(NotificationChannel):
                     title=notification.title,
                     message=notification.message,
                     level=notification.level.value,
-                    timestamp=datetime.fromtimestamp(
-                        notification.timestamp
-                    ).isoformat(),
-                    **{
-                        k: v
-                        for k, v in notification.data.items()
-                        if k != "email_template"
-                    },
+                    timestamp=datetime.fromtimestamp(notification.timestamp).isoformat(),
+                    **{k: v for k, v in notification.data.items() if k != "email_template"},
                 )
             except Exception as exc:
-                logger.warning(
-                    "Email template render failed, using plain text: %s", exc
-                )
+                logger.warning("Email template render failed, using plain text: %s", exc)
 
         if self._send_mode == "sendgrid":
             return await asyncio.get_event_loop().run_in_executor(
@@ -499,9 +483,7 @@ class ConsoleChannel(NotificationChannel):
         color = self.colors.get(notification.level, "")
         reset = self.reset
 
-        print(
-            f"{color}[{notification.level.value.upper()}] {notification.title}{reset}"
-        )
+        print(f"{color}[{notification.level.value.upper()}] {notification.title}{reset}")
         print(f"  {notification.message}")
 
         if notification.data:
@@ -558,9 +540,7 @@ class NotificationManager:
             )
 
         # Telegram
-        if self.config.get("telegram_bot_token") and self.config.get(
-            "telegram_chat_id"
-        ):
+        if self.config.get("telegram_bot_token") and self.config.get("telegram_chat_id"):
             self.channels["telegram"] = TelegramChannel(
                 {
                     "bot_token": self.config["telegram_bot_token"],
@@ -663,9 +643,7 @@ class NotificationManager:
         """Process notification queue"""
         while self._running:
             try:
-                notification = await asyncio.wait_for(
-                    self._notification_queue.get(), timeout=1.0
-                )
+                notification = await asyncio.wait_for(self._notification_queue.get(), timeout=1.0)
 
                 # Send to each channel
                 for channel_name in notification.channels:
@@ -674,9 +652,7 @@ class NotificationManager:
                         continue
 
                     try:
-                        success = await asyncio.wait_for(
-                            channel.send(notification), timeout=10.0
-                        )
+                        success = await asyncio.wait_for(channel.send(notification), timeout=10.0)
 
                         if not success:
                             logger.warning(f"Failed to send to {channel_name}")
@@ -799,9 +775,7 @@ class NotificationManager:
         }.get(lvl, logger.info)
         log_fn(f"[NOTIFICATION] {message}")
 
-    def _send_discord(
-        self, message: str, level: "NotificationLevel" = None, metadata: dict = None
-    ) -> None:
+    def _send_discord(self, message: str, level: "NotificationLevel" = None, metadata: dict = None) -> None:
         """Send message to Discord webhook (sync)."""
         if requests is None:
             logger.warning("requests not installed; cannot send Discord notification")
@@ -810,15 +784,15 @@ class NotificationManager:
         if not webhook_url:
             logger.debug("Discord webhook not configured; skipping")
             return
-        if not webhook_url.startswith("https://"):
-            logger.warning(f"Rejecting non-HTTPS Discord webhook: {webhook_url}")
+        from urllib.parse import urlparse as _urlparse
+        _p = _urlparse(webhook_url)
+        _host = (_p.hostname or "").lower()
+        if _p.scheme != "https" or _host not in ("discord.com", "discordapp.com"):
+            logger.warning("Rejecting Discord webhook: must be HTTPS discord.com URL")
             return
         embed: dict[str, Any] = {"description": message}
         if metadata:
-            embed["fields"] = [
-                {"name": str(k), "value": str(v), "inline": True}
-                for k, v in metadata.items()
-            ]
+            embed["fields"] = [{"name": str(k), "value": str(v), "inline": True} for k, v in metadata.items()]
         payload: dict[str, Any] = {"embeds": [embed]}
         try:
             resp = requests.post(webhook_url, json=payload, timeout=5)
@@ -826,9 +800,7 @@ class NotificationManager:
         except Exception as exc:
             logger.error(f"Discord send failed: {exc}")
 
-    def _send_telegram(
-        self, message: str, level: "NotificationLevel" = None, metadata: dict = None
-    ) -> None:
+    def _send_telegram(self, message: str, level: "NotificationLevel" = None, metadata: dict = None) -> None:
         """Send message via Telegram Bot API (sync)."""
         if requests is None:
             logger.warning("requests not installed; cannot send Telegram notification")
@@ -849,15 +821,9 @@ class NotificationManager:
         except Exception as exc:
             logger.error(f"Telegram send failed: {exc}")
 
-    def _send_email(
-        self, message: str, level: "NotificationLevel" = None, metadata: dict = None
-    ) -> None:
+    def _send_email(self, message: str, level: "NotificationLevel" = None, metadata: dict = None) -> None:
         """Send email notification — SendGrid primary, SMTP fallback (sync)."""
-        to_addr = (
-            self.config.get("smtp_to")
-            or self.config.get("email_to")
-            or self.config.get("smtp_username", "")
-        )
+        to_addr = self.config.get("smtp_to") or self.config.get("email_to") or self.config.get("smtp_username", "")
         if not to_addr:
             logger.debug("Email not configured; skipping")
             return
@@ -872,9 +838,7 @@ class NotificationManager:
         if metadata:
             body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in metadata.items())
 
-        sendgrid_key = os.getenv("SENDGRID_API_KEY") or self.config.get(
-            "sendgrid_api_key", ""
-        )
+        sendgrid_key = os.getenv("SENDGRID_API_KEY") or self.config.get("sendgrid_api_key", "")
         if sendgrid_key and SENDGRID_AVAILABLE:
             try:
                 sg = SendGridAPIClient(api_key=sendgrid_key)
@@ -891,9 +855,7 @@ class NotificationManager:
                 # Fall through to SMTP
 
         # SMTP fallback
-        smtp_host = (
-            self.config.get("smtp_host") or self.config.get("email_smtp_host") or ""
-        )
+        smtp_host = self.config.get("smtp_host") or self.config.get("email_smtp_host") or ""
         smtp_port = int(self.config.get("smtp_port", 587))
         username = self.config.get("smtp_username", "")
         password = self.config.get("smtp_password", "")

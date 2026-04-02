@@ -73,7 +73,7 @@ class TestModelRegistryRegister:
         )
         assert entry["name"] == "v1"
         assert entry["state"] == "staging"
-        assert len(entry["sha256"]) == 64  # noqa: PLR2004
+        assert len(entry["sha256"]) == 64
         assert entry["oos_accuracy"] == pytest.approx(0.65)
         pkl.unlink()
 
@@ -82,9 +82,7 @@ class TestModelRegistryRegister:
         content = b"deterministic-content-xyz"
         pkl = _tmp_pkl(content)
         expected = hashlib.sha256(content).hexdigest()
-        entry = reg.register(
-            "v_sha", pkl, oos_accuracy=0.61, oos_p_value=0.01, sharpe_gate_passed=True
-        )
+        entry = reg.register("v_sha", pkl, oos_accuracy=0.61, oos_p_value=0.01, sharpe_gate_passed=True)
         assert entry["sha256"] == expected
         pkl.unlink()
 
@@ -134,7 +132,7 @@ class TestModelRegistryRegister:
                 sharpe_gate_passed=True,
             )
             pkl.unlink()
-        assert len(reg.list_versions()) == 3  # noqa: PLR2004
+        assert len(reg.list_versions()) == 3
 
 
 # ===========================================================================
@@ -190,12 +188,8 @@ class TestModelRegistryPromotionGate:
         reg = _make_registry(tmp_path)
         pkl1 = _tmp_pkl(b"model-1")
         pkl2 = _tmp_pkl(b"model-2")
-        reg.register(
-            "v1", pkl1, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True
-        )
-        reg.register(
-            "v2", pkl2, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True
-        )
+        reg.register("v1", pkl1, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True)
+        reg.register("v2", pkl2, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True)
         reg.promote("v1")
         reg.promote("v2")
         assert reg.get_version("v1")["state"] == "retired"
@@ -218,9 +212,7 @@ class TestModelRegistryVerify:
     def test_verify_passes_for_correct_digest(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"correct-content")
-        reg.register(
-            "v_ok", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True
-        )
+        reg.register("v_ok", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True)
         ok, msg = reg.verify("v_ok")
         assert ok is True
         assert "OK" in msg
@@ -246,9 +238,7 @@ class TestModelRegistryVerify:
     def test_verify_fails_for_missing_artifact(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"will-be-deleted")
-        reg.register(
-            "v_del", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True
-        )
+        reg.register("v_del", pkl, oos_accuracy=0.62, oos_p_value=0.01, sharpe_gate_passed=True)
         pkl.unlink()
         ok, msg = reg.verify("v_del")
         assert ok is False
@@ -269,9 +259,7 @@ class TestModelRegistryVerify:
     def test_verify_active_after_promotion(self, tmp_path):
         reg = _make_registry(tmp_path)
         pkl = _tmp_pkl(b"production-model")
-        reg.register(
-            "v_prod", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True
-        )
+        reg.register("v_prod", pkl, oos_accuracy=0.65, oos_p_value=0.001, sharpe_gate_passed=True)
         reg.promote("v_prod")
         ok, msg = reg.verify_active()
         assert ok is True
@@ -297,9 +285,7 @@ class TestModelRegistryBootstrap:
         pkl = _tmp_pkl(b"bootstrap-model")
 
         reg = _make_registry(tmp_path)
-        entry = reg.bootstrap_from_meta(
-            meta_path=meta_path, model_path=pkl, name="v_boot"
-        )
+        entry = reg.bootstrap_from_meta(meta_path=meta_path, model_path=pkl, name="v_boot")
         assert entry is not None
         assert entry["oos_accuracy"] == pytest.approx(0.6635)
         assert entry["sharpe_gate_passed"] is True
@@ -318,9 +304,7 @@ class TestModelRegistryBootstrap:
         pkl = _tmp_pkl(b"promoted-model")
 
         reg = _make_registry(tmp_path)
-        entry = reg.bootstrap_from_meta(
-            meta_path=meta_path, model_path=pkl, name="v_promo", promote=True
-        )
+        entry = reg.bootstrap_from_meta(meta_path=meta_path, model_path=pkl, name="v_promo", promote=True)
         assert entry["state"] == "production"
         pkl.unlink()
 
@@ -337,18 +321,14 @@ class TestModelRegistryBootstrap:
         reg = _make_registry(tmp_path)
         reg.bootstrap_from_meta(meta_path=meta_path, model_path=pkl, name="v_idem")
         # Second call should be a no-op
-        entry2 = reg.bootstrap_from_meta(
-            meta_path=meta_path, model_path=pkl, name="v_idem"
-        )
+        entry2 = reg.bootstrap_from_meta(meta_path=meta_path, model_path=pkl, name="v_idem")
         assert entry2 is not None
         assert len(reg.list_versions()) == 1
         pkl.unlink()
 
     def test_bootstrap_returns_none_for_missing_artifact(self, tmp_path):
         reg = _make_registry(tmp_path)
-        entry = reg.bootstrap_from_meta(
-            model_path=pathlib.Path("/nonexistent/model.pkl"), name="v_none"
-        )
+        entry = reg.bootstrap_from_meta(model_path=pathlib.Path("/nonexistent/model.pkl"), name="v_none")
         assert entry is None
 
 
@@ -392,9 +372,7 @@ class TestAdvancedPredictorIntegrity:
         p = self._make_predictor(str(pkl))
         ok = p._verify_integrity()
         assert ok is True
-        assert (
-            "skipping" in p._integrity_msg.lower() or "No SHA-256" in p._integrity_msg
-        )
+        assert "skipping" in p._integrity_msg.lower() or "No SHA-256" in p._integrity_msg
 
         pkl.unlink()
         mr._registry = original
@@ -613,7 +591,7 @@ class TestOandaPaperClockTrackerWiring:
         for r in [0.01, -0.005, 0.008, 0.003, -0.002]:
             clock.record_fill(r)
         s = clock.sharpe_status()
-        assert s["n_trades"] == 5  # noqa: PLR2004
+        assert s["n_trades"] == 5
 
     def test_record_fill_returns_status_dict(self, tmp_path):
         clock = self._make_clock(tmp_path)
@@ -669,9 +647,11 @@ class TestOandaPaperClockTrackerWiring:
         """Prometheus gauges are called without raising."""
         clock = self._make_clock(tmp_path)
         mock_gauge = MagicMock()
-        with patch("core.metrics.SHARPE_N_TRADES", mock_gauge), patch(
-            "core.metrics.SHARPE_RATIO", mock_gauge
-        ), patch("core.metrics.SHARPE_GATE_PASSED", mock_gauge):
+        with (
+            patch("core.metrics.SHARPE_N_TRADES", mock_gauge),
+            patch("core.metrics.SHARPE_RATIO", mock_gauge),
+            patch("core.metrics.SHARPE_GATE_PASSED", mock_gauge),
+        ):
             clock.record_fill(0.01)
         # set() should have been called at least once per gauge
         assert mock_gauge.set.call_count >= 1

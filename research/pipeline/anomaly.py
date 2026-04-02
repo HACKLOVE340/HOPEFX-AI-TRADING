@@ -179,9 +179,7 @@ class AnomalyWeighter:
                 lof_norm = lof_scores - self._lof_threshold
                 return self.if_weight * if_norm + (1.0 - self.if_weight) * lof_norm
             except Exception as _exc:
-                logger.debug(
-                    "Suppressed exception: %s", _exc
-                )  # fall through to IF-only
+                logger.debug("Suppressed exception: %s", _exc)  # fall through to IF-only
 
         return if_scores - self._threshold
 
@@ -260,8 +258,8 @@ class AnomalyWeighter:
         if not path.exists():
             raise FileNotFoundError(f"AnomalyWeighter model not found: {path}")
         try:
-            obj = joblib.load(path)
-        except (ValueError, OSError, ModuleNotFoundError):
+            obj = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
+        except Exception:
             with open(path, "rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         if not isinstance(obj, cls):
@@ -282,9 +280,7 @@ class AnomalyWeighter:
         """
         scores = self.decision_scores(X)
         idx = np.argsort(scores)[:top_n]
-        report = (
-            X.iloc[idx].copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X[idx])
-        )
+        report = X.iloc[idx].copy() if isinstance(X, pd.DataFrame) else pd.DataFrame(X[idx])
         report["anomaly_score"] = scores[idx]
         return report
 
@@ -394,7 +390,7 @@ class AnomalyWeightStore:
                 ]
             )
             return np.nan_to_num(feat, nan=0.0, posinf=0.0, neginf=0.0)
-        except (ValueError, IndexError, KeyError):
+        except Exception:
             return None
 
     # ── Update + score ────────────────────────────────────────────────────────
@@ -440,8 +436,7 @@ class AnomalyWeightStore:
                 if score < self.anomaly_threshold:
                     self._anomaly_count += 1
                     logger.debug(
-                        "Anomaly detected: score=%.4f (threshold=%.4f) "
-                        "→ down-weight %.0f%% [%d/%d total]",
+                        "Anomaly detected: score=%.4f (threshold=%.4f) → down-weight %.0f%% [%d/%d total]",
                         score,
                         self.anomaly_threshold,
                         (1 - self.down_weight_factor) * 100,
