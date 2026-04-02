@@ -55,8 +55,8 @@ def make_concrete(cls, **params):
         self.logger = logging.getLogger(cls.__name__)
 
     with patch.object(BaseStrategy, "__init__", _base_init):
-        s = Concrete.__new__(Concrete)
-        Concrete.__init__(s, "TestStrategy", "XAUUSD", MagicMock(), **params)  # pylint: disable=no-value-for-parameter
+        s = Concrete.__new__(Concrete)  # pylint: disable=no-value-for-parameter
+        s.__init__("TestStrategy", "XAUUSD", MagicMock(), **params)
 
     return s
 
@@ -423,16 +423,7 @@ class TestBollingerBandsSignalPaths:
         df = _df(prices)
 
         # Construct bands such that prev was below lower, now crosses above
-        sma_val = 1900.0
-        std_val = 5.0
-        sma_val + 2 * std_val  # 1910
-        sma_val - 2 * std_val  # 1890
-
-        # Override the calculation
-        import pandas as pd
-
-        idx = df.index
-        pd.Series(prices, index=idx)
+        # upper_band = sma + 2*std = 1910, lower_band = sma - 2*std = 1890
 
         # Hack: patch rolling calc by changing close values
         # prev price below lower band, current price above lower band

@@ -250,7 +250,7 @@ class TransactionManager:
             reversal = self.record_transaction(
                 user_id=original.user_id,
                 wallet_id=original.wallet_id,
-                type=reversal_type,
+                transaction_type=reversal_type,
                 amount=original.amount,
                 currency=original.currency,
                 method=original.method,
