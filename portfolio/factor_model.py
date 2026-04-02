@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -250,7 +251,7 @@ class FactorLibrary:
         """Fetch DXY, 10Y yield, 2Y yield, CPI from FRED."""
         import requests
 
-        fred_key = __import__("os").getenv("FRED_API_KEY", "")
+        fred_key = os.getenv("FRED_API_KEY", "")
         base = "https://api.stlouisfed.org/fred/series/observations"
         series_map = {
             "dxy": "DTWEXBGS",

@@ -12,7 +12,7 @@ Intelligent order routing across multiple brokers with best execution
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
 from decimal import Decimal
@@ -277,7 +277,5 @@ class BrokerConnector:
 
     async def get_recent_fills(self, hours: int = 1) -> list[dict]:
         """Get recent fill history"""
-        cutoff = datetime.now(UTC) - __import__("datetime").timedelta(
-            hours=hours,
-        )
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
         return [f for f in self.fill_history if f["timestamp"] > cutoff]

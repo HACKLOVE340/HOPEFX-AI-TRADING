@@ -14,6 +14,7 @@ Security Management
 import hashlib
 import hmac
 import logging
+import os
 import secrets
 import threading
 import time
@@ -24,7 +25,7 @@ UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # CSRF token TTL in seconds (default 1 hour)
-_CSRF_TOKEN_TTL: int = int(__import__("os").getenv("CSRF_TOKEN_TTL", "3600"))
+_CSRF_TOKEN_TTL: int = int(os.getenv("CSRF_TOKEN_TTL", "3600"))
 
 
 class SecurityManager:

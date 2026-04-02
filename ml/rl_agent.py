@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from dataclasses import dataclass
 from typing import Any
 
@@ -774,7 +775,7 @@ def walk_forward_eval(
 # ── Module-level singleton ─────────────────────────────────────────────────────
 
 _rl_agent_singleton: RLAgent | None = None
-_rl_agent_lock = __import__("threading").Lock()
+_rl_agent_lock = threading.Lock()
 
 
 def get_rl_agent(model_name: str = "hopefx_ppo") -> RLAgent | None:

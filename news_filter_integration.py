@@ -5,10 +5,12 @@
 # No commercial use without explicit permission.
 import json
 import logging
-import requests
-import redis
+import os
 import time
 from datetime import datetime, timezone
+
+import redis
+import requests
 
 UTC = timezone.utc
 
@@ -22,7 +24,7 @@ class NewsFilterIntegration:
 
     # ForexFactory calendar endpoint — returns JSON array of upcoming events.
     # Override via NEWS_FEED_URL env var to point at an alternative provider.
-    NEWS_FEED_URL: str = __import__("os").getenv(
+    NEWS_FEED_URL: str = os.getenv(
         "NEWS_FEED_URL", "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
     )
 
