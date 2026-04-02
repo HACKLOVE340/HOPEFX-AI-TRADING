@@ -223,11 +223,11 @@ class MetricsRegistry:
         return cls._instance
 
     def __init__(self):
-        if self._initialized:
+        if self._initialized:  # pylint: disable=access-member-before-definition
             return
 
         with self._lock:
-            if self._initialized:
+            if self._initialized:  # pylint: disable=access-member-before-definition
                 return
 
             self._collectors: dict[str, MetricCollector] = {}

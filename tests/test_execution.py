@@ -4,6 +4,7 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
+# pylint: disable=not-callable
 """
 Tests for execution module.
 """
@@ -14,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from execution import PaperExecutor, SmartOrderRouter, Order, OrderStatus
+from execution import PaperExecutor, SmartOrderRouter, Order, OrderStatus  # pylint: disable=no-name-in-module
 
 
 class TestPaperExecutor:

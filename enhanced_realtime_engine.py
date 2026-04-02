@@ -978,9 +978,9 @@ async def run_realtime_test():
     # Add synthetic providers for smoke-testing only.
     # In production, replace with PolygonProvider, OandaProvider, or BinanceProvider.
     print("[2] Adding synthetic test providers (MockProvider)...")
-    aggregator.add_provider(MockProvider(volatility=0.0002, drift=0.00001, tick_interval_ms=100))
+    aggregator.add_provider(MockProvider(volatility=0.0002, drift=0.00001, tick_interval_ms=100))  # pylint: disable=abstract-class-instantiated
 
-    aggregator.add_provider(MockProvider(volatility=0.0003, drift=-0.00001, tick_interval_ms=150))
+    aggregator.add_provider(MockProvider(volatility=0.0003, drift=-0.00001, tick_interval_ms=150))  # pylint: disable=abstract-class-instantiated
 
     # Production providers — configure via env vars:
     # aggregator.add_provider(PolygonProvider(os.getenv("POLYGON_API_KEY")))

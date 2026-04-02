@@ -4,6 +4,7 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 # tests/unit/test_risk_manager.py
+# pylint: disable=not-callable
 """
 Unit tests for Risk Manager - FIA 2024 Compliant
 """
