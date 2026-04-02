@@ -479,7 +479,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                     "p_value": wf.get("p_value"),
                 }
             except Exception as _report_exc:
-                logging.getLogger(__name__).warning(
+                _logging.getLogger(__name__).warning(
                     "Failed to read training report: %s",
                     _report_exc,
                 )

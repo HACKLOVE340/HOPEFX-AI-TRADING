@@ -15,7 +15,7 @@ from typing import Dict, List, Optional  # noqa: F401
 from enum import Enum
 from dataclasses import dataclass
 import json  # noqa: F401
-from datetime import timezone
+from datetime import datetime, timezone
 
 UTC = timezone.utc
 
