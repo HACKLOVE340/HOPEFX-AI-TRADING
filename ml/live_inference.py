@@ -279,7 +279,7 @@ class AdvancedModelPredictor:
                     # Only add columns not already present
                     new_cols = [c for c in dl_row.columns if c not in result.columns]
                     if new_cols:
-                        result = _pd.concat([result, dl_row[new_cols]], axis=1)
+                        result = pd.concat([result, dl_row[new_cols]], axis=1)
                         logger.debug(
                             "Data layer injected %d features for %s",
                             len(new_cols),

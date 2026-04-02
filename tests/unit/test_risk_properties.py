@@ -61,7 +61,7 @@ def test_position_size_never_negative(entry, stop_offset, tp_offset, equity, vol
     tp = entry + tp_offset
     assume(stop > 0)
 
-    result = rm._calculate_position_size_full(
+    result = rm._calculate_position_size_full(  # pylint: disable=unreachable
         symbol="XAUUSD",
         signal_strength=0.5,
         entry_price=entry,

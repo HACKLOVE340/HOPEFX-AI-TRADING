@@ -78,7 +78,7 @@ class TestRiskManagerExtended:
     # --- can_open_position ---
 
     def test_can_open_position_approved(self, risk_mgr):
-        can_open, reason = risk_mgr.can_open_position(1000.0)
+        can_open, _ = risk_mgr.can_open_position(1000.0)
         assert can_open is True
 
     def test_can_open_position_max_positions(self, risk_mgr):
@@ -128,22 +128,22 @@ class TestRiskManagerExtended:
     # --- validate_trade ---
 
     def test_validate_trade_valid(self, risk_mgr):
-        is_valid, reason = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
+        is_valid, _ = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
         assert is_valid is True
 
     def test_validate_trade_max_positions(self, risk_mgr):
         for i in range(5):
             risk_mgr.open_positions.append({"id": str(i)})
-        is_valid, reason = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
+        is_valid, _ = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
         assert is_valid is False
 
     def test_validate_trade_size_too_large(self, risk_mgr):
-        is_valid, reason = risk_mgr.validate_trade("XAUUSD", 99999999.0, "BUY")
+        is_valid, _ = risk_mgr.validate_trade("XAUUSD", 99999999.0, "BUY")
         assert is_valid is False
 
     def test_validate_trade_daily_loss(self, risk_mgr):
         risk_mgr.daily_pnl = -3000.0
-        is_valid, reason = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
+        is_valid, _ = risk_mgr.validate_trade("XAUUSD", 100.0, "BUY")
         assert is_valid is False
 
     # --- check_risk_limits ---

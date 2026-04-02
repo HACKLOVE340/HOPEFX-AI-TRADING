@@ -53,7 +53,7 @@ def mock_strategy():
             def analyze(self, data):
                 return {}
 
-            def generate_signal(self, data):
+            def generate_signal(self, analysis):
                 return None
 
         return _MockStrategy(cfg)

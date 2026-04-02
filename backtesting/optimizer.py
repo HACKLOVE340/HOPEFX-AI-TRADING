@@ -68,12 +68,20 @@ class ParameterOptimizer:
                 # Create strategy with these parameters
                 self.strategy_class(**params)
 
-                # Run backtest
+                # Run backtest using the strategy's signal generator
                 engine = BacktestEngine(initial_capital=self.initial_capital)
 
-                start_dt = self.data_handler.start_date if hasattr(self.data_handler, "start_date") else None
-                end_dt = self.data_handler.end_date if hasattr(self.data_handler, "end_date") else None
-                backtest_results = engine.run(start_date=start_dt, end_date=end_dt)
+                data = self.data_handler.get_data() if hasattr(self.data_handler, "get_data") else None
+                if data is None or data.empty:
+                    continue
+                backtest_result = engine.run_backtest(data, signals=strategy)
+                backtest_results = {
+                    "metrics": {
+                        "sharpe_ratio": backtest_result.sharpe_ratio,
+                        "total_return": backtest_result.total_return,
+                        "max_drawdown": backtest_result.max_drawdown,
+                    }
+                }
                 score = backtest_results["metrics"].get(metric, 0)
 
                 results.append(

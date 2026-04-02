@@ -78,11 +78,11 @@ class NewsProvider(abc.ABC):
         self.logger = logging.getLogger(self.__class__.__name__)
 
     @abc.abstractmethod
-    def get_news(self, *args, **kwargs) -> list[NewsArticle]:
+    def get_news(self, **kwargs) -> list[NewsArticle]:
         """Fetch and return a list of NewsArticle objects."""
 
     @abc.abstractmethod
-    def format_article(self, *args, **kwargs) -> NewsArticle:
+    def format_article(self, raw_article: Any, **kwargs) -> NewsArticle:
         """Convert a raw provider response dict into a NewsArticle."""
 
 
@@ -107,6 +107,7 @@ class NewsAPIProvider(NewsProvider):
         sort_by: str = "publishedAt",
         page_size: int = 20,
         from_date: datetime | None = None,
+        **kwargs,
     ) -> list[NewsArticle]:
         """
         Get news from NewsAPI
@@ -162,7 +163,7 @@ class NewsAPIProvider(NewsProvider):
             self.logger.error(f"NewsAPI error: {e}")
             return []
 
-    def format_article(self, raw_article: dict[str, Any]) -> NewsArticle:
+    def format_article(self, raw_article: Any, **kwargs) -> NewsArticle:
         """Format NewsAPI article"""
         return NewsArticle(
             title=raw_article.get("title", ""),
@@ -194,6 +195,7 @@ class AlphaVantageNewsProvider(NewsProvider):
         tickers: str | None = None,
         topics: str = "financial_markets",
         limit: int = 50,
+        **kwargs,
     ) -> list[NewsArticle]:
         """
         Get news from Alpha Vantage
@@ -244,7 +246,7 @@ class AlphaVantageNewsProvider(NewsProvider):
             self.logger.error(f"Alpha Vantage error: {e}")
             return []
 
-    def format_article(self, raw_article: dict[str, Any]) -> NewsArticle:
+    def format_article(self, raw_article: Any, **kwargs) -> NewsArticle:
         """Format Alpha Vantage article"""
         # Extract overall sentiment score
         sentiment_score = float(raw_article.get("overall_sentiment_score", 0))
@@ -286,7 +288,7 @@ class RSSFeedProvider(NewsProvider):
         """Add a custom RSS feed"""
         self.feeds[name] = url
 
-    def get_news(self, feeds: list[str] | None = None, hours_back: int = 24) -> list[NewsArticle]:
+    def get_news(self, feeds: list[str] | None = None, hours_back: int = 24, **kwargs) -> list[NewsArticle]:
         """
         Get news from RSS feeds
 
@@ -333,7 +335,8 @@ class RSSFeedProvider(NewsProvider):
         self.logger.info(f"Retrieved {len(all_articles)} articles from RSS feeds")
         return all_articles
 
-    def format_article(self, entry: Any, source: str) -> NewsArticle:
+    def format_article(self, raw_article: Any, source: str = "", **kwargs) -> NewsArticle:
+        entry = raw_article
         """Format RSS feed entry"""
         # Parse published date
         published_at = datetime.now(UTC)

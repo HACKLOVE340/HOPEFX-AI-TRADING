@@ -109,7 +109,7 @@ def check_kill_switch() -> None:
     print("\n── Kill switch ───────────────────────────────────────────────")
     flag = pathlib.Path("kill_switch.flag")
     if flag.exists():
-        content = flag.read_text().strip()
+        content = flag.read_text(encoding="utf-8").strip()
         _err(
             f"kill_switch.flag exists — trading is halted.\n"
             f"         Content: {content}\n"
@@ -152,7 +152,7 @@ def check_ml_model() -> None:
     if meta_path.exists():
         import json
 
-        meta = json.loads(meta_path.read_text())
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
         oos_acc = meta.get("oos_accuracy", 0)
         sharpe = meta.get("sharpe_gate", {}).get("sharpe", 0)
         _good(f"Model meta: OOS accuracy={oos_acc:.1%}  Sharpe={sharpe:.2f}")
@@ -312,7 +312,7 @@ def check_disk_space() -> None:
         usage = pathlib.Path(".").resolve()
         import shutil
 
-        total, used, free = shutil.disk_usage(usage)
+        total, _, free = shutil.disk_usage(usage)
         free_gb = free / (1024**3)
         total_gb = total / (1024**3)
         if free_gb < 5:
@@ -340,7 +340,7 @@ def check_env_file() -> None:
 
     # Scan for unresolved placeholders
     placeholders = []
-    with open(env_path) as fh:
+    with open(env_path, encoding="utf-8") as fh:
         for lineno, _line in enumerate(fh, 1):
             line = _line.strip()
             if line.startswith("#") or "=" not in line:

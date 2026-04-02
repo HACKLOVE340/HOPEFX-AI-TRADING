@@ -199,8 +199,8 @@ def validate_gate() -> None:
         gate = PaperTradingGate()
         gate.print_status()
 
-        p2_ok, p2_reason = gate.phase2_ready()
-        p3_ok, p3_reason = gate.phase3_ready()
+        p2_ok, _ = gate.phase2_ready()
+        p3_ok, _ = gate.phase3_ready()
 
         if not p2_ok:
             print("\nTo start the 30-day clock:")

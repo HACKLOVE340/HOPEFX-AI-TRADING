@@ -71,9 +71,8 @@ except ImportError:
 # Import existing EWC-based online learner
 try:
     import sys
-    from pathlib import Path as _P
 
-    sys.path.insert(0, str(_P(__file__).resolve().parents[2]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     DEEP_ONLINE_AVAILABLE = True
 except Exception:
     DEEP_ONLINE_AVAILABLE = False

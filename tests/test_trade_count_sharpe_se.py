@@ -72,7 +72,7 @@ class TestTradeLevelSharpe:
 
         rng = np.random.default_rng(0)
         pnls = rng.normal(loc=50.0, scale=20.0, size=100).tolist()
-        sharpe, se = trade_level_sharpe(pnls)
+        sharpe, _ = trade_level_sharpe(pnls)
         assert sharpe > 0
 
     def test_negative_sharpe_for_negative_mean_pnl(self):
@@ -80,7 +80,7 @@ class TestTradeLevelSharpe:
 
         rng = np.random.default_rng(1)
         pnls = rng.normal(loc=-50.0, scale=20.0, size=100).tolist()
-        sharpe, se = trade_level_sharpe(pnls)
+        sharpe, _ = trade_level_sharpe(pnls)
         assert sharpe < 0
 
     def test_se_formula_exact(self):
@@ -122,7 +122,7 @@ class TestTradeLevelSharpe:
         """All-identical PnLs → std=0 → Sharpe=0."""
         from real_data_backtest import trade_level_sharpe
 
-        sharpe, se = trade_level_sharpe([100.0] * 50)
+        sharpe, _ = trade_level_sharpe([100.0] * 50)
         assert sharpe == 0.0
 
     def test_avg_hold_hours_affects_annualisation(self):
@@ -193,7 +193,7 @@ class TestRunBacktestSignature:
             },
             index=pd.date_range("2021-01-01", periods=n, freq="h", name="timestamp"),
         )
-        equity_df, trade_pnls = run_backtest(df)
+        _, trade_pnls = run_backtest(df)
         # Constant price → all rolling windows produce NaN → dropna() removes all bars
         # Result: zero trades
         assert len(trade_pnls) == 0

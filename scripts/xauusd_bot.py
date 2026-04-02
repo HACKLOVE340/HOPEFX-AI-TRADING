@@ -361,7 +361,7 @@ if __name__ == '__main__':
     sys.exit(main())
 '''
 
-with open("/mnt/kimi/output/hopefx_upgrade/scripts/xauusd_bot.py", "w") as f:
+with open("/mnt/kimi/output/hopefx_upgrade/scripts/xauusd_bot.py", "w", encoding="utf-8") as f:
     f.write(xauusd_bot_content)
 
 print("✅ scripts/xauusd_bot.py created - REAL working paper trading bot")
