@@ -40,7 +40,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(),
             nullable=False,
-            server_default=sa.func.now(),
+            server_default=sa.func.now(),  # pylint: disable=not-callable
         ),
     )
     op.create_index(

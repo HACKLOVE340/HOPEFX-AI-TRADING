@@ -796,9 +796,9 @@ class HybridEnsemblePredictor:
             agent = get_rl_agent()
             if agent is None:
                 return 0.5
-            action, _states = agent.predict(obs, deterministic=True)
-            # Action space: 0=short, 1=hold, 2=long → map to probability
-            action_map = {0: 0.2, 1: 0.5, 2: 0.8}
+            action, _confidence = agent.predict(obs)
+            # Action space: 0=HOLD, 1=BUY, 2=SELL → map to probability
+            action_map = {0: 0.5, 1: 0.8, 2: 0.2}
             return float(action_map.get(int(action), 0.5))
         except Exception as exc:
             logger.debug("HybridEnsemble RL predict failed: %s", exc)

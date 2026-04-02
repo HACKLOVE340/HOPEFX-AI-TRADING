@@ -123,7 +123,7 @@ class TestPropFirmRules:
         }
         # The guard may raise or return a failure — either is acceptable
         try:
-            result = check_prop_firm_rules(account_info)
+            result = check_prop_firm_rules(account_info)  # pylint: disable=assignment-from-none
             # If it returns, it should indicate failure
             if result is not None:
                 assert result is not True

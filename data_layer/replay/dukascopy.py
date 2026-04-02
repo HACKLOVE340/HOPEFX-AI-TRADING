@@ -243,7 +243,7 @@ class DukascopyFetcher:
         df = pd.DataFrame(records, columns=["ts_ms", "bid", "ask", "bid_vol", "ask_vol"])
         df["timestamp"] = pd.to_datetime(df["ts_ms"], unit="ms", utc=True)
         df = df.drop(columns=["ts_ms"])
-        df["mid"] = (df["bid"] + df["ask"]) / 2.0
+        df["mid"] = (df["bid"] + df["ask"]) / 2.0  # pylint: disable=unsubscriptable-object,unsupported-assignment-operation
         return df.set_index("timestamp").sort_index()
 
     # ── Public API ────────────────────────────────────────────────────────────

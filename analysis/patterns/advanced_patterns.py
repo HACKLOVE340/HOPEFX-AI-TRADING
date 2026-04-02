@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
 import pandas as pd
-from scipy.ndimage import argrelextrema
+from scipy.signal import argrelextrema
 
 
 # ── Module constants ─────────────────────────────────────────────────────────

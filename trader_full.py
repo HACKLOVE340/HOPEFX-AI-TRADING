@@ -261,9 +261,9 @@ class MLPredictor:
 
     def load(self) -> bool:
         try:
-            from enhanced_ml_predictor import HopeFXPredictor
+            from enhanced_ml_predictor import EnhancedMLPredictor
 
-            self._predictor = HopeFXPredictor()
+            self._predictor = EnhancedMLPredictor()
             import pathlib
 
             if pathlib.Path(self._model_path).exists():
