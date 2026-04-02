@@ -405,7 +405,7 @@ class TestLiveTradingGate:
 
         gate = LiveTradingGate()
         with patch.dict(os.environ, {"FEATURE_LIVE_TRADING": "false"}, clear=False):
-            passed, _ = gate._check_feature_flag()
+            passed, msg = gate._check_feature_flag()
         assert passed is False
         assert "FEATURE_LIVE_TRADING" in msg
 
@@ -414,7 +414,7 @@ class TestLiveTradingGate:
 
         gate = LiveTradingGate()
         with patch.dict(os.environ, {"FEATURE_LIVE_TRADING": "true"}, clear=False):
-            passed, _ = gate._check_feature_flag()
+            passed, msg = gate._check_feature_flag()
         assert passed is True
 
     def test_status_dict_has_required_keys(self):

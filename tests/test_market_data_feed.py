@@ -49,30 +49,30 @@ class TestTickValidator:
 
     def test_valid_tick_passes(self):
         tick = self._make_tick()
-        valid, _ = self.validator.validate(tick)
+        valid, reason = self.validator.validate(tick)
         assert valid is True
         assert reason == ""
 
     def test_zero_bid_rejected(self):
         tick = self._make_tick(bid=0.0)
-        valid, _ = self.validator.validate(tick)
+        valid, reason = self.validator.validate(tick)
         assert valid is False
         assert "non-positive" in reason
 
     def test_negative_ask_rejected(self):
         tick = self._make_tick(ask=-1.0)
-        valid, _ = self.validator.validate(tick)
+        valid, reason = self.validator.validate(tick)
         assert valid is False
 
     def test_inverted_spread_rejected(self):
         tick = self._make_tick(bid=1952.0, ask=1948.0)
-        valid, _ = self.validator.validate(tick)
+        valid, reason = self.validator.validate(tick)
         assert valid is False
         assert "inverted" in reason
 
     def test_stale_tick_rejected(self):
         tick = self._make_tick(timestamp=time.time() - 60.0)
-        valid, _ = self.validator.validate(tick)
+        valid, reason = self.validator.validate(tick)
         assert valid is False
         assert "stale" in reason
 
@@ -82,14 +82,14 @@ class TestTickValidator:
         self.validator.validate(tick1)
         # Second tick jumps 5% — exceeds 2% limit
         tick2 = self._make_tick(bid=2046.0, ask=2048.0, last=2047.0)
-        valid, _ = self.validator.validate(tick2)
+        valid, reason = self.validator.validate(tick2)
         assert valid is False
         assert "jump" in reason
 
     def test_wide_spread_rejected(self):
         # 600bps spread > 500bps limit
         tick = self._make_tick(bid=1900.0, ask=2014.0)  # ~600bps
-        valid, _ = self.validator.validate(tick)
+        valid, reason = self.validator.validate(tick)
         assert valid is False
         assert "spread" in reason.lower()
 

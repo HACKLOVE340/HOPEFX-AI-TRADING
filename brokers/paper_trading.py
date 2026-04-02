@@ -268,23 +268,23 @@ class PaperTradingBroker(BrokerConnector):
         }
 
     async def __aenter__(self):
-        self.connect()
+        await self.connect()
         return self
 
     async def __aexit__(self, *args):
-        self.disconnect()
+        await self.disconnect()
 
-    def connect(self) -> bool:
-        """Connect to paper trading broker (always succeeds)"""
+    async def connect(self) -> bool:
+        """Connect to paper trading broker (always succeeds)."""
         self.connected = True
-        logger.info(f"Connected to {self.name} (Paper Trading)")
-        logger.info(f"Initial balance: ${self.initial_balance:,.2f}")
+        logger.info("Connected to %s (Paper Trading)", self.name)
+        logger.info("Initial balance: $%,.2f", self.initial_balance)
         return True
 
-    def disconnect(self) -> bool:
-        """Disconnect from paper trading broker"""
+    async def disconnect(self) -> bool:
+        """Disconnect from paper trading broker."""
         self.connected = False
-        logger.info(f"Disconnected from {self.name}")
+        logger.info("Disconnected from %s", self.name)
         return True
 
     def place_order(
