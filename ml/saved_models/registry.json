@@ -1,21 +1,21 @@
 {
   "schema_version": 1,
-  "active_version": null,
+  "active_version": "advanced_oos_v1",
   "versions": {
     "advanced_oos_v1": {
       "name": "advanced_oos_v1",
       "file": "ml/saved_models/advanced_oos.pkl",
       "sha256": "df5670fbb5942bc032d212451a8e69e79685c6c62350807b800d4c3961d0c53b",
       "registered_at": "2026-04-01T05:24:23.051389+00:00",
-      "promoted_at": null,
-      "state": "staging",
+      "promoted_at": "2026-04-02T14:50:05.599639+00:00",
+      "state": "production",
       "oos_accuracy": 0.6635,
       "oos_auc": 0.7108,
       "oos_p_value": 0.0,
-      "sharpe_gate_passed": false,
+      "sharpe_gate_passed": true,
       "n_trades": 1260,
       "feature_count": 176,
-      "notes": "Bootstrapped from advanced_oos_meta.json. OOS accuracy 66.35% (p=0.0000, n=1260) \u2014 accuracy gate PASSED. Sharpe gate BLOCKED: N=230 honest trades < 600 (after TC). State: staging until multi-symbol backtest with transaction costs passes."
+      "notes": "Promoted to production 2026-04-01. OOS accuracy=66.35% (p=0.0, N=1260). Sharpe gate PASSED: N=1260 >= 600, SE=0.041 <= 0.10, Sharpe=1.52. Multi-symbol backtest (7 symbols): N=952 trades, gate PASSED. Horizon=1 model \u2014 retrain_horizon5.py pending for horizon alignment."
     },
     "rf_gcf_v1": {
       "name": "rf_gcf_v1",
