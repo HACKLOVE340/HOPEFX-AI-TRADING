@@ -369,7 +369,7 @@ async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
 
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             pending = session.query(User).filter(User.kyc_status.in_(["pending", "submitted", "under_review"])).all()
             return {
                 "count": len(pending),
@@ -414,7 +414,7 @@ async def decide_kyc(
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
 
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             target = session.query(User).filter_by(id=body.user_id).first()
             if not target:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -438,7 +438,7 @@ async def decide_kyc(
             from core.email_service import _send
             from database.user_models import User as _User
 
-            with _state.db_session_factory() as session:
+            with _state.db_session_factory() as session:  # pylint: disable=not-callable
                 target = session.query(_User).filter_by(id=body.user_id).first()
                 if target:
                     subject_map = {
@@ -483,7 +483,7 @@ async def get_kyc_status(
 
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
-        with _state.db_session_factory() as session:
+        with _state.db_session_factory() as session:  # pylint: disable=not-callable
             target = session.query(User).filter_by(id=user_id).first()
             if not target:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -619,9 +619,9 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
 
     # Trade logger stats
     try:
-        from core.trade_logger import TradeLogger
+        from monitoring.trade_logger import get_trade_logger
 
-        tl = TradeLogger.get_trade_logger()
+        tl = get_trade_logger()
         tl_stats = tl.get_stats() if hasattr(tl, "get_stats") else {}
         trading_stats["total_trades"] = tl_stats.get("total_fills", 0)
     except Exception as exc:

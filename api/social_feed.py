@@ -286,7 +286,7 @@ async def get_leaderboard(
     try:
         from api.db_store import db_get as _db_get
 
-        stored = _db_get("leaderboard", {})
+        stored = _db_get("leaderboard") or {}
         entries = stored.get(period, [])
         if entries:
             return entries[:limit]

@@ -59,14 +59,16 @@ def _reset_watchlists() -> None:
 # ── DB session helper ─────────────────────────────────────────────────────────
 
 
-def _get_session() -> object | None:
+def _get_session():  # type: ignore[return]
+    """Return a live SQLAlchemy Session, or None when the DB is unavailable."""
     try:
         from database.connection import get_db_manager
 
         mgr = get_db_manager()
         if mgr is None:
             return None
-        return mgr.get_session()
+        ctx = mgr.session()
+        return ctx.__enter__()  # caller is responsible for close/rollback in finally
     except Exception as exc:
         logger.debug("watchlist: DB session unavailable: %s", exc)
         return None
