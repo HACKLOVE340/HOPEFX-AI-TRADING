@@ -442,7 +442,10 @@ class RefinitivScreener:
         msg = f"{self._api_key}{ts}{method.upper()}{path}{body}"
         # HMAC-SHA256 as required by the Refinitiv World-Check REST API spec.
         # Uses hmac.digest() (Python 3.7+) for a single-call, constant-time MAC.
-        sig = hmac.digest(self._api_secret.encode(), msg.encode(), "sha256").hex()
+        # nosec B324 — this is HMAC-SHA256 (a keyed MAC), not a bare hash.
+        # SHA-256 is the algorithm mandated by the Refinitiv API; the secret key
+        # provides the cryptographic strength.  This is not password hashing.
+        sig = hmac.digest(self._api_secret.encode(), msg.encode(), "sha256").hex()  # nosec B324
         return {
             "Authorization": f"Refinitiv-HMAC-SHA256 Id={self._api_key},Timestamp={ts},Signature={sig}",
             "Content-Type": "application/json",
