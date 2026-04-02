@@ -342,8 +342,11 @@ async def _run_backtest(args: argparse.Namespace) -> None:
     try:
         from backtesting.engine import BacktestEngine
 
-        engine = BacktestEngine(prop_config_path=args.config)
-        await engine.run()
+        engine = BacktestEngine()
+        from datetime import datetime
+        start_dt = datetime.fromisoformat(args.start_date) if hasattr(args, "start_date") and args.start_date else None
+        end_dt = datetime.fromisoformat(args.end_date) if hasattr(args, "end_date") and args.end_date else None
+        engine.run(start_date=start_dt, end_date=end_dt)
     except ImportError:
         # Fallback to the existing backtest runner
         import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input

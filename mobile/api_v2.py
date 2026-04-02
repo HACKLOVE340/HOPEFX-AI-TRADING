@@ -51,6 +51,7 @@ class MobileUserRegistration(BaseModel):
     platform: str  # ios, android
 
     @validator("platform")
+    @classmethod
     def validate_platform(cls, v):
         if v.lower() not in ["ios", "android"]:
             raise ValueError("Platform must be ios or android")

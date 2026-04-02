@@ -290,7 +290,7 @@ def get_db() -> Session:
             detail="Database not initialized",
         )
 
-    db = app_state.db_session_factory()
+    db = app_state.db_session_factory()  # pylint: disable=not-callable
     try:
         yield db
     finally:

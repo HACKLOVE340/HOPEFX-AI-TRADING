@@ -366,8 +366,9 @@ def _detect_data_source() -> str:
         logger.debug("Suppressed exception: %s", _exc)
 
     try:
-        from core.live_trading_gate import live_gate  # type: ignore[import]
+        from core.live_trading_gate import get_gate
 
+        live_gate = get_gate()
         if getattr(live_gate, "is_live", False):
             return DATA_SOURCE_LIVE
     except Exception as _exc:

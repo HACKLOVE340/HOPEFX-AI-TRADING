@@ -302,7 +302,7 @@ def train(
 
     # Build vectorised + normalised training env
     def make_env():
-        env = NuclearDecisionEnv(episode_length=200, reward_mode=reward_mode)
+        env = NuclearDecisionEnv(episode_length=200, reward_mode=reward_mode)  # pylint: disable=possibly-used-before-assignment
         env = Monitor(env)
         return env
 

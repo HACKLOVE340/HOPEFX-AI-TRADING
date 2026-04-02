@@ -342,3 +342,9 @@ class _NotificationsSingleton:
 
 # Singleton instance — imported by nuclear_supervisor and kill_switch
 notifications = _NotificationsSingleton()
+
+try:
+    from notifications.manager import NotificationChannel  # noqa: F401
+except Exception as _exc:
+    import logging as _logging
+    _logging.getLogger(__name__).debug("NotificationChannel unavailable: %s", _exc)
