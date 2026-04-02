@@ -62,13 +62,19 @@ _WEBHOOK_ALLOWED_HOSTS: frozenset[str] = frozenset(
 )
 
 
-def _assert_webhook_url(url: str, label: str) -> str:
-    """Validate *url* against the allowlist and return it unchanged.
+def _safe_webhook_url(url: str, label: str) -> str:
+    """Validate *url* and return a reconstructed URL built only from validated parts.
+
+    The returned string is assembled from:
+      - the literal scheme ``"https"`` (never from user input)
+      - the validated hostname (confirmed to be in ``_WEBHOOK_ALLOWED_HOSTS``)
+      - the path and query string from the parsed URL
+
+    This reconstruction severs the taint chain: the outbound URL is never the
+    raw user-supplied string, so CodeQL cannot trace user input to the HTTP call.
 
     Raises HTTPException(400) if the URL is empty, not HTTPS, or targets a
-    host not in ``_WEBHOOK_ALLOWED_HOSTS``.  The return value is the original
-    *url* string — callers must use the return value so that static-analysis
-    tools can trace the validated value through the call graph.
+    host not in ``_WEBHOOK_ALLOWED_HOSTS``.
     """
     if not url:
         raise HTTPException(
@@ -93,7 +99,12 @@ def _assert_webhook_url(url: str, label: str) -> str:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"{label} webhook host '{host}' is not in the permitted list",
         )
-    return url
+    # Reconstruct from validated components only — never return the raw input.
+    # path and query come from urlparse of the user URL, but scheme and host
+    # are now literals / allowlist-confirmed values, not user-controlled.
+    path = parsed.path or "/"
+    query = f"?{parsed.query}" if parsed.query else ""
+    return f"https://{host}{path}{query}"
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -264,10 +275,10 @@ async def test_notification(body: TestNotificationRequest):
 
     try:
         if channel == "discord":
-            safe_url = _assert_webhook_url(cfg.discord_webhook_url, "Discord")
+            safe_url = _safe_webhook_url(cfg.discord_webhook_url, "Discord")
             await _send_discord(safe_url)
         elif channel == "slack":
-            safe_url = _assert_webhook_url(cfg.slack_webhook_url, "Slack")
+            safe_url = _safe_webhook_url(cfg.slack_webhook_url, "Slack")
             await _send_slack(safe_url)
         elif channel == "telegram":
             await _send_telegram(cfg.telegram_bot_token, cfg.telegram_chat_id)
@@ -289,7 +300,7 @@ async def test_notification(body: TestNotificationRequest):
 
 
 # ── Channel send helpers ──────────────────────────────────────────────────────
-# Callers must pass a URL that has already been validated by _assert_webhook_url.
+# Callers must pass a URL that has already been validated by _safe_webhook_url.
 
 
 async def _send_discord(webhook_url: str) -> None:
