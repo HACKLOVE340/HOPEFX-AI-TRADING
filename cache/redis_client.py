@@ -311,7 +311,6 @@ def get_sync_redis() -> Any | None:
 
     Used by components that cannot run in an async context (e.g. TCA recorder).
     """
-    import os
     try:
         import redis as _redis_sync
     except ImportError:

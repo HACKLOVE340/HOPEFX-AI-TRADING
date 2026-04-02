@@ -21,7 +21,7 @@ script if you need to preserve existing watchlists.
 
 from __future__ import annotations
 
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op

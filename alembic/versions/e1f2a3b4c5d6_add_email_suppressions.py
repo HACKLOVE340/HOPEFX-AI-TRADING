@@ -14,7 +14,7 @@ received from the SendGrid Event Webhook (POST /api/email/webhook).
 EmailChannel.send() checks this table before every dispatch.
 """
 
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op

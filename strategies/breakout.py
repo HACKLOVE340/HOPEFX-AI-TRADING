@@ -94,7 +94,8 @@ class BreakoutStrategy(BaseStrategy):
 
         return atr.iloc[-1]
 
-    def generate_signal(self, market_data: pd.DataFrame) -> dict[str, Any]:
+    def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
+        market_data = analysis
         """
         Generate trading signal based on breakouts.
 
