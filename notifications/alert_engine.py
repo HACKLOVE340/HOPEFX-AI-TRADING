@@ -885,7 +885,8 @@ def create_alert_router(alert_engine: AlertEngine):
             condition_type = AlertConditionType(request.condition_type)
             priority = AlertPriority(request.priority)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+            logger.warning("create_alert validation error: %s", e)
+            raise HTTPException(status_code=400, detail="Invalid condition type or priority") from None
 
         alert = alert_engine.create_alert(
             name=request.name,

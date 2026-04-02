@@ -360,12 +360,13 @@ class OANDABroker:
                 last_error = "timeout"
                 logger.warning("OANDABroker: order timeout (attempt %d/%d)", attempt, _MAX_RETRIES)
             except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-                last_error = str(exc)
+                last_error = "order_error"
                 logger.error(
                     "OANDABroker: order error (attempt %d/%d): %s",
                     attempt,
                     _MAX_RETRIES,
                     exc,
+                    exc_info=True,
                 )
 
             if attempt < _MAX_RETRIES:
@@ -476,8 +477,8 @@ class OANDABroker:
                     return {"status": "closed", "symbol": symbol, "raw": data}
                 return {"status": "rejected", "reason": str(data), "symbol": symbol}
         except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-            logger.error("OANDABroker close_position %s: %s", symbol, exc)
-            return {"status": "rejected", "reason": str(exc)}
+            logger.error("OANDABroker close_position %s: %s", symbol, exc, exc_info=True)
+            return {"status": "rejected", "reason": "Close failed — check server logs"}
 
     # ── Ping ──────────────────────────────────────────────────────────────────
 

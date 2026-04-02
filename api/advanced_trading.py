@@ -549,8 +549,8 @@ async def preview_indicator(
             "points": len(data),
         }
     except ValueError as exc:
-        # ValueError messages from _eval_indicator are sanitized (no internal state).
-        raise HTTPException(status_code=400, detail=str(exc)) from None
+        logger.warning("evaluate_indicator validation error: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid formula or symbol") from None
 
 
 @router.get("/api/indicators")

@@ -364,7 +364,8 @@ class GitHubPRPublisher:
         try:
             repo = _repo()
         except RuntimeError as exc:
-            return {"status": "error", "error": str(exc)}
+            logger.error("GitHub PR publisher repo config error: %s", exc)
+            return {"status": "error", "error": "GitHub repository not configured — check server logs"}
 
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             try:
@@ -457,7 +458,7 @@ class GitHubPRPublisher:
                 }
             except Exception as exc:
                 logger.error("Auto-heal PR failed: %s", exc, exc_info=True)
-                return {"status": "error", "error": str(exc)}
+                return {"status": "error", "error": "PR creation failed — check server logs"}
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

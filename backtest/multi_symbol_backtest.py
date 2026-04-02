@@ -670,8 +670,8 @@ def run_backtest(
             )
             symbol_results.append(result)
         except Exception as exc:
-            logger.error("Backtest failed for %s: %s", display_name, exc)
-            symbol_results.append({"symbol": display_name, "error": str(exc), "n_trades": 0})
+            logger.error("Backtest failed for %s: %s", display_name, exc, exc_info=True)
+            symbol_results.append({"symbol": display_name, "error": "Backtest failed — check server logs", "n_trades": 0})
 
     pooled = compute_pooled_metrics(symbol_results, target_n=target_n)
 

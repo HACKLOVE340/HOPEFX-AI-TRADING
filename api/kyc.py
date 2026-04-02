@@ -132,8 +132,8 @@ async def create_applicant(
             },
         )
     except PermissionError as exc:
-        # PermissionError message is a controlled internal string (role check) — safe to surface.
-        raise HTTPException(status_code=403, detail=str(exc)) from None
+        logger.warning("KYC create_applicant permission denied: %s", exc)
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except Exception as exc:
         logger.error("KYC create_applicant error: %s", exc)
         raise HTTPException(status_code=502, detail="KYC provider error") from None

@@ -282,8 +282,8 @@ class IBKRBroker:
             return fill_result
 
         except Exception as exc:
-            logger.error("IBKRBroker place_order: %s", exc)
-            return {"status": "rejected", "reason": str(exc), "broker": "ibkr"}
+            logger.error("IBKRBroker place_order: %s", exc, exc_info=True)
+            return {"status": "rejected", "reason": "Order failed — check server logs", "broker": "ibkr"}
 
     def _build_gold_contract(self, symbol: str, use_futures: bool = False) -> Any:
         """Build IBKR XAUUSD contract. Never fetches price data."""

@@ -338,8 +338,8 @@ class RiskManager:
                 "reason": result.reason,
             }
         except Exception as exc:
-            logger.error("RiskManager.approve_trade: %s", exc)
-            return {"approved": False, "reason": str(exc)}
+            logger.error("RiskManager.approve_trade: %s", exc, exc_info=True)
+            return {"approved": False, "reason": "Risk check failed — check server logs"}
 
 
 # ---------------------------------------------------------------------------

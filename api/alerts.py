@@ -149,9 +149,8 @@ async def create_alert(
         condition_type = AlertConditionType(first.type)
         priority = AlertPriority(body.priority)
     except ValueError as exc:
-        # ValueError from AlertConditionType/AlertPriority is a controlled enum
-        # validation message — safe to surface as it describes invalid input.
-        raise HTTPException(status_code=400, detail=str(exc)) from None
+        logger.warning("create_alert validation error: %s", exc)
+        raise HTTPException(status_code=400, detail="Invalid condition type or priority") from None
 
     alert = engine.create_alert(
         name=body.name,

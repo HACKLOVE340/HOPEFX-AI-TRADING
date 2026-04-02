@@ -288,7 +288,7 @@ class FIXRouter:
                     "order_seq": self._order_count,
                     "symbol": symbol,
                     "direction": direction,
-                    "error": str(exc),
+                    "error": "All routes failed — check server logs",
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
             )

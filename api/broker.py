@@ -325,8 +325,8 @@ async def broker_status():
                 elif hasattr(broker, "balance"):
                     balance = broker.balance
             except Exception as exc:
-                broker_error = str(exc)
-                logger.warning("broker_status: account info error: %s", exc)
+                broker_error = "Account info unavailable — check server logs"
+                logger.warning("broker_status: account info error: %s", exc, exc_info=True)
 
             try:
                 if hasattr(broker, "get_positions"):

@@ -282,7 +282,8 @@ async def get_health() -> dict[str, Any]:
 
         return info
     except Exception as exc:
-        return {"mode": _connection_mode, "connected": False, "error": str(exc)}
+        logger.error("Redis health check failed: %s", exc, exc_info=True)
+        return {"mode": _connection_mode, "connected": False, "error": "Redis unavailable — check server logs"}
 
 
 def reset_redis_client() -> None:

@@ -452,7 +452,7 @@ class RegimeShiftStressTester:
                 regime=regime,
                 metrics=None,
                 tick_count=0,
-                error=str(exc),
+                error="Regime simulation failed — check server logs",
             )
 
     def summary(self, report: StressReport) -> str:

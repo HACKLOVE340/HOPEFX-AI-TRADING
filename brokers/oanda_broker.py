@@ -300,8 +300,8 @@ class OandaBroker:
                 logger.warning("OANDA order failed | status=%s | error=%s", resp.status, error_msg)
                 return {"success": False, "order_id": None, "comment": error_msg}
         except aiohttp.ClientError as exc:
-            logger.error("OandaBroker.place_order network error: %s", exc)
-            return {"success": False, "order_id": None, "comment": str(exc)}
+            logger.error("OandaBroker.place_order network error: %s", exc, exc_info=True)
+            return {"success": False, "order_id": None, "comment": "Network error — check server logs"}
 
     async def close_trade(self, trade_id: str, units: str | None = "ALL") -> dict:
         """
@@ -324,10 +324,11 @@ class OandaBroker:
                 if resp.status == 200:  # noqa: PLR2004
                     logger.info("OANDA trade closed | trade_id=%s | units=%s", trade_id, units)
                     return {"success": True, "comment": "OK", "data": data}
-                error_msg = data.get("errorMessage", str(data))
+                error_msg = data.get("errorMessage", "Close rejected")
                 return {"success": False, "comment": error_msg}
         except aiohttp.ClientError as exc:
-            return {"success": False, "comment": str(exc)}
+            logger.error("OandaBroker.close_trade network error: %s", exc, exc_info=True)
+            return {"success": False, "comment": "Network error — check server logs"}
 
     async def cancel_order(self, order_id: str) -> dict:
         """Cancel a pending order by ID."""
@@ -343,10 +344,11 @@ class OandaBroker:
                 data = await resp.json()
                 return {
                     "success": False,
-                    "comment": data.get("errorMessage", str(data)),
+                    "comment": data.get("errorMessage", "Cancel rejected"),
                 }
         except aiohttp.ClientError as exc:
-            return {"success": False, "comment": str(exc)}
+            logger.error("OandaBroker.cancel_order network error: %s", exc, exc_info=True)
+            return {"success": False, "comment": "Network error — check server logs"}
 
     async def get_tick(self, instrument: str = "XAU_USD") -> dict | None:
         """Return the latest bid/ask for *instrument*."""

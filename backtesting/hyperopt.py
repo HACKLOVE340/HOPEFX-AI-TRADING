@@ -526,7 +526,8 @@ def create_hyperopt_router():
                     },
                 }
             except Exception as exc:
-                _jobs[job_id] = {"status": "error", "result": {"error": str(exc)}}
+                logger.error("Hyperopt job %s failed: %s", job_id, exc, exc_info=True)
+                _jobs[job_id] = {"status": "error", "result": {"error": "Optimisation failed — check server logs"}}
 
         background_tasks.add_task(_run)
         return HyperoptStatus(job_id=job_id, status="running")

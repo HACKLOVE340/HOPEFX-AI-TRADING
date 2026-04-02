@@ -477,7 +477,7 @@ class StripeProductionClient:
 
         except Exception as exc:
             error_code = getattr(getattr(exc, "error", None), "code", "stripe_error")
-            logger.error("Stripe PaymentIntent failed: %s", exc)
+            logger.error("Stripe PaymentIntent failed: %s", exc, exc_info=True)
             return PaymentResult(
                 success=False,
                 payment_intent_id=None,
@@ -486,7 +486,7 @@ class StripeProductionClient:
                 amount_cents=amount_cents,
                 currency=currency.lower(),
                 error_code=str(error_code),
-                error_message=str(exc),
+                error_message="Payment failed — check server logs",
             )
 
     def verify_webhook(self, payload: bytes, sig_header: str) -> dict[str, Any] | None:

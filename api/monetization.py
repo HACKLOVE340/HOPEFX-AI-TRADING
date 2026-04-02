@@ -251,10 +251,11 @@ async def subscribe(request: SubscribeRequest):
         tier = SubscriptionTier(request.tier.lower())
         billing_cycle = BillingCycle(request.billing_cycle.lower())
     except ValueError as e:
+        logger.warning("subscribe validation error: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid tier or billing cycle: {e!s}",
-        ) from e
+            detail="Invalid tier or billing cycle",
+        ) from None
 
     # Free tier - no payment needed
     if tier == SubscriptionTier.FREE:
@@ -526,10 +527,11 @@ async def list_strategy(request: StrategyListRequest):
         license_type = StrategyLicenseType(request.license_type.lower())
         min_tier = SubscriptionTier(request.min_tier.lower())
     except ValueError as e:
+        logger.warning("list_strategy validation error: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid category, license type, or tier: {e!s}",
-        ) from e
+            detail="Invalid category, license type, or tier",
+        ) from None
 
     strategy = strategy_marketplace.list_strategy(
         creator_id=request.creator_id,

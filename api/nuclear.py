@@ -154,9 +154,10 @@ async def manual_resume(
     try:
         await supervisor.manual_resume(deactivation_token=req.deactivation_token)
     except PermissionError as exc:
+        logger.warning("manual_resume permission denied: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
+            detail="Permission denied",
         ) from None
     except Exception as exc:
         logger.error("manual_resume failed: %s", exc)
@@ -279,8 +280,9 @@ async def deactivate_kill_switch(
     try:
         ks.deactivate(token=token)
     except PermissionError as exc:
+        logger.warning("kill switch deactivation permission denied: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
+            detail="Permission denied",
         ) from None
     return {"status": "deactivated", "kill_switch": ks.status()}

@@ -271,7 +271,7 @@ class MacroFeed:
                 logger.warning("MacroFeed refresh failed: %s", exc)
                 if not self._cache:
                     return {
-                        "error": str(exc),
+                        "error": "Macro feed unavailable — check server logs",
                         "macro_regime_score": 50,
                         "macro_stance": "neutral",
                     }

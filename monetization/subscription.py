@@ -746,8 +746,8 @@ def create_subscription_router(manager: SubscriptionManager | None = None):
         try:
             result = _mgr.handle_stripe_webhook(payload, stripe_signature)
         except ValueError as exc:
-            # ValueError from Stripe signature validation is a controlled message — safe to surface.
-            raise HTTPException(status_code=400, detail=str(exc)) from None
+            logger.warning("Stripe webhook signature validation failed: %s", exc)
+            raise HTTPException(status_code=400, detail="Invalid webhook signature") from None
         except Exception as exc:
             logger.exception("webhook processing error: %s", exc)
             raise HTTPException(status_code=500, detail="Webhook processing failed") from None
