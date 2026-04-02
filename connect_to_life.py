@@ -322,6 +322,21 @@ class LifeSupervisor:
         except Exception as _brain_exc:
             logger.warning("HOPEFXBrain failed to start (non-fatal): %s", _brain_exc)
 
+        # Start AntivirusScanner — multi-layer malware detection
+        try:
+            from security.antivirus import start_av_scanner as _start_av
+
+            try:
+                from app import app as _fastapi_app_av
+                await _start_av(_fastapi_app_av)
+            except ImportError:
+                from fastapi import FastAPI as _FastAPI
+                _minimal_av_app = _FastAPI(title="AV-CLI")
+                await _start_av(_minimal_av_app)
+            logger.info("AntivirusScanner started")
+        except Exception as _av_exc:
+            logger.warning("AntivirusScanner failed to start (non-fatal): %s", _av_exc)
+
         # Start SelfHealer — code integrity monitor + auto-patch applier
         try:
             from security.self_healer import start_healer as _start_healer
