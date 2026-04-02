@@ -48,11 +48,7 @@ try:
     from sendgrid import SendGridAPIClient
     from sendgrid.helpers.mail import (
         Mail,
-        From,  # noqa: F401
-        To,  # noqa: F401
-        Subject,  # noqa: F401
         HtmlContent,
-        PlainTextContent,  # noqa: F401
     )
 
     SENDGRID_AVAILABLE = True

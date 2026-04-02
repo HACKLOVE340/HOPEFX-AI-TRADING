@@ -59,7 +59,7 @@ from sklearn.preprocessing import StandardScaler
 logger = logging.getLogger(__name__)
 
 try:
-    from research.pipeline.models_ensemble import EnsemblePredictor  # noqa: F401
+    from research.pipeline.models_ensemble import EnsemblePredictor  # pylint: disable=unused-import
 
     ENSEMBLE_AVAILABLE = True
 except ImportError:

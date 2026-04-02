@@ -82,7 +82,7 @@ try:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from data.order_book import OrderBook, OrderBookLevel  # noqa: F401
+    from data.order_book import OrderBook  # pylint: disable=unused-import
 
     OB_AVAILABLE = True
 except ImportError:

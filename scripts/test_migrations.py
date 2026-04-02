@@ -66,7 +66,7 @@ def run(verbose: bool = False) -> int:
         from alembic import command as alembic_command
         from alembic.config import Config as AlembicConfig
         from alembic.script import ScriptDirectory
-        from alembic.runtime.migration import MigrationContext  # noqa: F401
+        from alembic.runtime.migration import MigrationContext  # pylint: disable=unused-import
         from sqlalchemy import create_engine, inspect, text
 
         print(f"{_PASS}  alembic + sqlalchemy importable")
