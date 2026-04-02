@@ -222,11 +222,14 @@ async def macro_features():
         feed = get_macro_feed()
         return feed.as_ml_features()
     except Exception as exc:
+        # Log the full exception server-side. Suppress the chain (from None) so
+        # the original exception object is not attached to the HTTPException and
+        # cannot be serialised into the response by any middleware.
         logger.warning("macro features failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Macro features unavailable — check server logs",
-        ) from exc
+        ) from None
 
 
 @router.get("/store", summary="MacroStore snapshot — all loaded series with latest values")
@@ -284,11 +287,13 @@ async def macro_store_update(req: MacroUpdateRequest = Body(...)):
             "total_observations": snap["n_observations"] if snap else 1,
         }
     except Exception as exc:
+        # Log the full exception server-side; return a generic detail to avoid
+        # leaking internal error messages to API callers.
         logger.warning("MacroStore.update failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Update failed: {exc}",
-        ) from exc
+            detail="MacroStore update failed — check server logs",
+        ) from None
 
 
 # ── WGC endpoints ─────────────────────────────────────────────────────────────
