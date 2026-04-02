@@ -263,7 +263,7 @@ class TestDeepEnsembleSignalEngine:
 # ── DeepPredictor architecture validation ─────────────────────────────────────
 
 try:
-    import torch as _torch  # noqa: F401
+    import torch as _torch
 
     _TORCH_AVAILABLE = True
 except ImportError:

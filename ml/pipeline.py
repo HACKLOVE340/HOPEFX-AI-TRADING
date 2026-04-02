@@ -56,7 +56,7 @@ except ImportError:
     logger.error("xgboost not installed. Install: pip install xgboost>=2.0.0")
 
 try:
-    from sklearn.metrics import accuracy_score, classification_report, roc_auc_score  # noqa: F401
+    from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
     from sklearn.preprocessing import StandardScaler
 
     _SKLEARN = True

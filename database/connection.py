@@ -22,7 +22,7 @@ try:
     from sqlalchemy.orm import sessionmaker, Session
     from sqlalchemy.pool import QueuePool
     from sqlalchemy.exc import (
-        SQLAlchemyError,  # noqa: F401
+        SQLAlchemyError,
         OperationalError,
         TimeoutError as SATimeoutError,
     )
@@ -371,7 +371,6 @@ _db_manager: DatabaseManager | None = None
 
 def get_db_manager() -> DatabaseManager | None:
     """Get global database manager"""
-    global _db_manager
     return _db_manager
 
 

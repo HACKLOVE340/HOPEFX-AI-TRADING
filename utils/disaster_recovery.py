@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING
 from dataclasses import dataclass, asdict
 from datetime import datetime, UTC
 
-UTC = UTC
 from pathlib import Path
 import hashlib
 import aiofiles

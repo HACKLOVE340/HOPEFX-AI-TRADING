@@ -25,7 +25,7 @@ Version: 1.2.0
 """
 
 import logging
-from typing import Optional  # noqa: F401
+from typing import Optional
 
 from .providers import (
     NewsProvider,
@@ -203,7 +203,7 @@ def create_news_router():
         Defaults to 24 hours. Only CRITICAL and HIGH importance events are returned.
         """
         try:
-            from datetime import datetime, timezone, timedelta  # noqa: F401
+            from datetime import datetime, timezone, timedelta
 
             calendar = EconomicCalendar()
             now = datetime.now(UTC)

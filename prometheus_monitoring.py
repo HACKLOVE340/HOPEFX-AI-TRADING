@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING
 logger = logging.getLogger(__name__)
 
 try:
-    import prometheus_client as prom  # noqa: F401
+    import prometheus_client as prom
     from prometheus_client import (
         Counter as PromCounter,
         Gauge as PromGauge,

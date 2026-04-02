@@ -342,9 +342,7 @@ def audit_symbol(
     # Look-ahead bias detection (on comparison returns)
     # Convert probabilities to signed returns: r = sign(p - 0.5) * 2 * |p - 0.5|
     # No noise added — the signal is in the probabilities themselves.
-    signed_returns = (
-        (2 * (comparison_dist > 0.5).astype(float) - 1) * (comparison_dist - 0.5) * 2
-    )
+    signed_returns = (2 * (comparison_dist > 0.5).astype(float) - 1) * (comparison_dist - 0.5) * 2
     result["lookahead_checks"] = detect_lookahead_bias(signed_returns)
 
     # Sharpe plausibility

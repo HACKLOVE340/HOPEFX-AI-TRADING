@@ -649,11 +649,7 @@ class MultiTimeframeAnalyzer:
 
         # Process supports
         for sup in all_supports:
-            matching = [
-                s
-                for s in all_supports
-                if abs(s["level"] - sup["level"]) / sup["level"] < 0.005
-            ]
+            matching = [s for s in all_supports if abs(s["level"] - sup["level"]) / sup["level"] < 0.005]
             if len(matching) >= 2:
                 avg_level = np.mean([s["level"] for s in matching])
                 tfs = list(set(s["timeframe"] for s in matching))
@@ -669,11 +665,7 @@ class MultiTimeframeAnalyzer:
 
         # Process resistances
         for res in all_resistances:
-            matching = [
-                r
-                for r in all_resistances
-                if abs(r["level"] - res["level"]) / res["level"] < 0.005
-            ]
+            matching = [r for r in all_resistances if abs(r["level"] - res["level"]) / res["level"] < 0.005]
             if len(matching) >= 2:
                 avg_level = np.mean([r["level"] for r in matching])
                 tfs = list(set(r["timeframe"] for r in matching))

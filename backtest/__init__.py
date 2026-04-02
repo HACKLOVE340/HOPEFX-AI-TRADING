@@ -17,10 +17,19 @@ New code should import from backtesting directly:
 """
 
 from backtesting.engine_config import (
-    BacktestConfig,  # noqa: F401
-    BacktestEngine,  # noqa: F401
-    BacktestResult,  # noqa: F401
-    HistoricalDataLoader,  # noqa: F401
-    SimulatedBroker,  # noqa: F401
-    run_backtest,  # noqa: F401
+    BacktestConfig,
+    BacktestEngine,
+    BacktestResult,
+    HistoricalDataLoader,
+    SimulatedBroker,
+    run_backtest,
 )
+
+__all__ = [
+    "BacktestConfig",
+    "BacktestEngine",
+    "BacktestResult",
+    "HistoricalDataLoader",
+    "SimulatedBroker",
+    "run_backtest",
+]

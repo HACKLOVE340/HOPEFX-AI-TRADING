@@ -267,11 +267,11 @@ class OandaTickSource(TickSource):
             async for line in resp.content:
                 if not self._running:
                     break
-                line = line.strip()
-                if not line:
+                stripped = line.strip()
+                if not stripped:
                     continue
                 try:
-                    msg = json.loads(line)
+                    msg = json.loads(stripped)
                 except json.JSONDecodeError:
                     continue
 

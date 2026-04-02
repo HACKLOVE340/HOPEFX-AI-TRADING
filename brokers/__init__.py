@@ -15,11 +15,10 @@ import random
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone  # noqa: F401
+from datetime import datetime, timezone
 
 UTC = timezone.utc
 from enum import Enum
-from typing import Any, Dict, List, Optional  # noqa: F401
 
 try:
     import aiohttp
@@ -652,7 +651,7 @@ class PaperTradingBroker(BaseBroker):
             return
         try:
             import uuid as _uuid
-            from datetime import datetime, timezone  # noqa: F401
+            from datetime import datetime, timezone
 
             from database.models import OrderSide as DBOrderSide
             from database.models import Trade, TradeStatus
@@ -737,7 +736,7 @@ class PaperTradingBroker(BaseBroker):
         take_profit: float = None,
     ) -> "Order":
         """Synchronous order placement for unit tests."""
-        import asyncio as _asyncio  # noqa: F401
+        import asyncio as _asyncio
 
         from brokers.base import OrderSide as _OS
         from brokers.base import OrderStatus as _OSt

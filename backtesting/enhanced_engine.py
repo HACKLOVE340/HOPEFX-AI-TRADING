@@ -2048,15 +2048,9 @@ class EnhancedBacktestEngine:
                 "sortino_ratio": calculate_sortino(equity_returns),
                 "calmar_ratio": calculate_calmar(equity_returns, max_dd),
                 "var_95": np.percentile(returns, 5) if len(returns) > 10 else 0,
-                "cvar_95": np.mean([r for r in returns if r <= np.percentile(returns, 5)])
-                if len(returns) > 10
-                else 0,
-                "skewness": stats.skew(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2
-                else 0,
-                "kurtosis": stats.kurtosis(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2
-                else 0,
+                "cvar_95": np.mean([r for r in returns if r <= np.percentile(returns, 5)]) if len(returns) > 10 else 0,
+                "skewness": stats.skew(returns) if SCIPY_AVAILABLE and len(returns) > 2 else 0,
+                "kurtosis": stats.kurtosis(returns) if SCIPY_AVAILABLE and len(returns) > 2 else 0,
             },
             "execution_quality": {
                 "avg_slippage_bps": np.mean([e.get("slippage_bps", 0) for e in self.execution_log]),

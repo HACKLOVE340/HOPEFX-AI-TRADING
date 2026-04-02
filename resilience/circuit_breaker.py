@@ -15,7 +15,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, UTC
 
-UTC = UTC
 from enum import Enum, auto
 
 

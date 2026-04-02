@@ -11,7 +11,7 @@ wired (app_state/broker/orchestrator), falling back to empty structures
 when not wired — same pattern as MobileAPI.
 """
 
-from typing import Dict, List, Optional, Any  # noqa: F401
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

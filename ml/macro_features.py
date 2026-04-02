@@ -347,9 +347,7 @@ def add_macro_features(
         + (df["macro_spx_ret"] < -0.005).astype(float)
         + (df["macro_wgc_demand_score"] >= 2).astype(float)
     )
-    bearish = (df["macro_yield_10y_chg"] > 0).astype(float) + (
-        df["macro_dxy_z20"] > 0.5
-    ).astype(float)
+    bearish = (df["macro_yield_10y_chg"] > 0).astype(float) + (df["macro_dxy_z20"] > 0.5).astype(float)
     df["macro_gold_tailwind"] = bullish - bearish
     df["macro_gold_headwind"] = bearish
 

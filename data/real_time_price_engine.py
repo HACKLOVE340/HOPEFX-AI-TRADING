@@ -655,7 +655,7 @@ class RealTimePriceEngine:
         """
         try:
             from database.models import TickData
-            from datetime import datetime, timezone  # noqa: F401
+            from datetime import datetime, timezone
         except ImportError as exc:
             logger.error("Tick persistence: could not import TickData model: %s", exc)
             return

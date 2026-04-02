@@ -859,9 +859,7 @@ class ExecutionEngine:
         """Return execution metrics snapshot."""
         avg_latency = sum(self._latencies_ms) / len(self._latencies_ms) if self._latencies_ms else 0.0
         p99_latency = (
-            sorted(self._latencies_ms)[int(len(self._latencies_ms) * 0.99)]
-            if len(self._latencies_ms) >= 100
-            else 0.0
+            sorted(self._latencies_ms)[int(len(self._latencies_ms) * 0.99)] if len(self._latencies_ms) >= 100 else 0.0
         )
         return {
             "total_orders": self._total_orders,

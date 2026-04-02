@@ -305,7 +305,6 @@ def _run_backtest(
     """
     try:
         import numpy as np
-        import pandas as pd  # noqa: F401
         from strategies.base import SignalType
     except ImportError as exc:
         return BacktestResult(0, 0, 0, 0, 0, error=str(exc))

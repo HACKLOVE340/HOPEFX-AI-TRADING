@@ -40,12 +40,12 @@ try:
     from ib_insync import (  # type: ignore
         IB,
         Contract,
-        Forex,  # noqa: F401
-        Future,  # noqa: F401
+        Forex,
+        Future,
         LimitOrder,
         MarketOrder,
-        Order,  # noqa: F401
-        Stock,  # noqa: F401
+        Order,
+        Stock,
         StopOrder,
     )
 

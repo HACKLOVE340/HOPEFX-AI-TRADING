@@ -1081,11 +1081,7 @@ def create_signals_router():
 
         validator = get_validator()
         report = (
-            validator.validate()
-            if (
-                len(validator._oos_signals) >= 30 and len(validator._live_signals) >= 30
-            )
-            else None
+            validator.validate() if (len(validator._oos_signals) >= 30 and len(validator._live_signals) >= 30) else None
         )
         return {
             "oos_sample_size": len(validator._oos_signals),

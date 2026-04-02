@@ -10,7 +10,7 @@ Provides team management, role-based access control, and shared resources
 for collaborative trading environments.
 """
 
-from typing import Dict, List, Optional, Any, Set  # noqa: F401
+from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 

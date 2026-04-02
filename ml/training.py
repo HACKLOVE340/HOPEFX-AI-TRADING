@@ -59,11 +59,11 @@ except ImportError:
 # Enhanced macro + regime features (DXY, VIX, yields, SPX cross-asset)
 try:
     from ml.macro_features import (
-        MACRO_COLUMNS,  # noqa: F401
+        MACRO_COLUMNS,
         add_macro_features,
         add_regime_features,
-        build_enhanced_feature_matrix,  # noqa: F401
-        fetch_macro_history,  # noqa: F401
+        build_enhanced_feature_matrix,
+        fetch_macro_history,
     )
 
     ENHANCED_MACRO_AVAILABLE = True
@@ -72,14 +72,14 @@ except ImportError:
 
 # TensorFlow/Keras
 try:
-    import tensorflow as tf  # noqa: F401
+    import tensorflow as tf
     from tensorflow.keras.callbacks import (
         EarlyStopping,
         ModelCheckpoint,
         ReduceLROnPlateau,
     )
-    from tensorflow.keras.layers import GRU, LSTM, Bidirectional, Dense, Dropout  # noqa: F401
-    from tensorflow.keras.models import Sequential, load_model, save_model  # noqa: F401
+    from tensorflow.keras.layers import GRU, LSTM, Bidirectional, Dense, Dropout
+    from tensorflow.keras.models import Sequential, load_model, save_model
     from tensorflow.keras.optimizers import Adam
 
     TENSORFLOW_AVAILABLE = True

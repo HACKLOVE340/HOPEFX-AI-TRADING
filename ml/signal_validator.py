@@ -311,9 +311,7 @@ class SignalDistributionValidator:
         live_buy_rate = sum(1 for s in live if s.direction == "BUY") / len(live)
         bias_drift = abs(live_buy_rate - oos_buy_rate)
         report.directional_bias_drift = float(bias_drift)
-        bias_status = (
-            ValidationStatus.PASSED if bias_drift <= 0.15 else ValidationStatus.WARNING
-        )
+        bias_status = ValidationStatus.PASSED if bias_drift <= 0.15 else ValidationStatus.WARNING
         checks.append(
             CheckResult(
                 name="directional_bias",
@@ -329,9 +327,7 @@ class SignalDistributionValidator:
         live_conf_mean = float(np.mean(live_conf))
         conf_drift = abs(live_conf_mean - oos_conf_mean)
         report.confidence_drift = float(conf_drift)
-        conf_status = (
-            ValidationStatus.PASSED if conf_drift <= 0.10 else ValidationStatus.WARNING
-        )
+        conf_status = ValidationStatus.PASSED if conf_drift <= 0.10 else ValidationStatus.WARNING
         checks.append(
             CheckResult(
                 name="confidence_drift",

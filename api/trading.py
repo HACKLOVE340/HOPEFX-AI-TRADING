@@ -174,7 +174,6 @@ _order_rl_cache: dict = {}  # in-memory fallback: {user_id: [timestamps]}
 
 def _reset_order_rl_cache() -> None:
     """Clear the in-memory rate-limit cache. Used by tests to prevent bleed."""
-    global _order_rl_cache
     _order_rl_cache.clear()
 
 
@@ -1330,11 +1329,7 @@ def _make_strategy_router():
 
             # Period in days
             ts_list = [t for t, _ in equity_history]
-            period_days = (
-                max(1, round((ts_list[-1] - ts_list[0]) / 86400))
-                if len(ts_list) >= 2
-                else 1
-            )
+            period_days = max(1, round((ts_list[-1] - ts_list[0]) / 86400)) if len(ts_list) >= 2 else 1
 
             return {
                 "total_return": round(total_return, 4),

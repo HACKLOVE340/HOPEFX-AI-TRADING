@@ -11,10 +11,10 @@ Multi-channel alerts: Discord, Telegram, Email, SMS, Webhooks
 import asyncio
 import logging
 import aiohttp
-from typing import Dict, List, Optional  # noqa: F401
+from typing import Dict, List, Optional
 from enum import Enum
 from dataclasses import dataclass
-import json  # noqa: F401
+import json
 from datetime import timezone
 
 UTC = timezone.utc
@@ -108,6 +108,7 @@ class NotificationManager:
     def _validate_discord_url(url: str) -> bool:
         """Return True only if *url* is an HTTPS discord.com webhook."""
         from urllib.parse import urlparse
+
         try:
             p = urlparse(url)
             host = (p.hostname or "").lower()
@@ -119,6 +120,7 @@ class NotificationManager:
     def _validate_https_url(url: str) -> bool:
         """Return True only if *url* uses HTTPS."""
         from urllib.parse import urlparse
+
         try:
             return urlparse(url).scheme == "https"
         except Exception:
@@ -241,7 +243,7 @@ class NotificationManager:
 
     def _format_timestamp(self, timestamp: float) -> str:
         """Format timestamp for Discord"""
-        from datetime import datetime, timezone  # noqa: F401
+        from datetime import datetime, timezone
 
         dt = datetime.fromtimestamp(timestamp, tz=UTC)
         return dt.isoformat()
@@ -344,7 +346,8 @@ class _NotificationsSingleton:
 notifications = _NotificationsSingleton()
 
 try:
-    from notifications.manager import NotificationChannel  # noqa: F401
+    from notifications.manager import NotificationChannel
 except Exception as _exc:
     import logging as _logging
+
     _logging.getLogger(__name__).debug("NotificationChannel unavailable: %s", _exc)

@@ -415,9 +415,7 @@ class PreTradeGate:
             )
 
         # Extract CVaR value for audit log
-        if (
-            hasattr(rm, "_compute_cvar") and len(getattr(rm, "_returns_history", [])) >= 10
-        ):
+        if hasattr(rm, "_compute_cvar") and len(getattr(rm, "_returns_history", [])) >= 10:
             try:
                 return rm._compute_cvar()
             except Exception:  # nosec B110 — optional CVaR computation

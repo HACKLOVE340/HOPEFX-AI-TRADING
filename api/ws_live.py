@@ -648,7 +648,6 @@ async def _heartbeat_broadcaster() -> None:
 
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
-    global _broadcast_task
     loop = asyncio.get_event_loop()
     loop.create_task(_price_broadcaster())
     loop.create_task(_heartbeat_broadcaster())

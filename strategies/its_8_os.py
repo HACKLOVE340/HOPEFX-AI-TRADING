@@ -320,9 +320,7 @@ class ITS8OSStrategy(BaseStrategy):
                 if i + len(prices) > 0
             )
 
-            expansion = (
-                abs(prices[-1]["close"] - prices[-1]["open"]) / prices[-1]["open"] > 0.005
-            )
+            expansion = abs(prices[-1]["close"] - prices[-1]["open"]) / prices[-1]["open"] > 0.005
 
             if consolidation and expansion:
                 if prices[-1]["close"] > prices[-1]["open"]:
@@ -499,11 +497,7 @@ class ITS8OSStrategy(BaseStrategy):
             # Look for setup: Quick move followed by retracement
             if len(prices) >= 5:
                 # Check for momentum followed by pullback
-                initial_move = (
-                    prices[-5]["close"] - prices[-10]["close"]
-                    if len(prices) >= 10
-                    else 0
-                )
+                initial_move = prices[-5]["close"] - prices[-10]["close"] if len(prices) >= 10 else 0
                 recent_pullback = prices[-1]["close"] - prices[-5]["close"]
 
                 if initial_move > 0 and recent_pullback < 0:

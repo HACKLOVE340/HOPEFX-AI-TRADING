@@ -29,14 +29,14 @@ import time
 try:
     from prometheus_client import (
         CONTENT_TYPE_LATEST,
-        CollectorRegistry,  # noqa: F401
+        CollectorRegistry,
         Counter,
         Gauge,
         Histogram,
         generate_latest,
     )
     from prometheus_client import (
-        REGISTRY as _DEFAULT_REGISTRY,  # noqa: F401
+        REGISTRY as _DEFAULT_REGISTRY,
     )
 
     _PROM_AVAILABLE = True

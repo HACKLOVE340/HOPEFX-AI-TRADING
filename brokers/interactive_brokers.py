@@ -23,7 +23,7 @@ try:
         Future,
         LimitOrder,
         MarketOrder,
-        Option,  # noqa: F401
+        Option,
         Stock,
         StopOrder,
     )

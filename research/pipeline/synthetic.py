@@ -110,6 +110,7 @@ def label_regimes(
 # ─────────────────────────────────────────────────────────────────────────────
 
 if TORCH_AVAILABLE:
+
     class _Embedder(nn.Module):
         """Maps real sequences to a fixed-size latent space."""
 

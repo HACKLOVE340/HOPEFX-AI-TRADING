@@ -13,7 +13,6 @@ import logging
 import secrets
 from datetime import datetime, timedelta, UTC
 
-UTC = UTC
 from typing import Any
 from pathlib import Path
 from dataclasses import dataclass, field

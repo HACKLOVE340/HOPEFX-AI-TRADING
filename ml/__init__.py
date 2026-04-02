@@ -50,7 +50,7 @@ import json as _json
 import logging as _logging
 from pathlib import Path as _Path
 from typing import Any as _Any
-from typing import Optional as _Optional  # noqa: F401
+from typing import Optional as _Optional
 
 _ml_logger = _logging.getLogger(__name__)
 _SAVED = _Path(__file__).parent / "saved_models"
@@ -341,7 +341,6 @@ def get_active_model() -> _Any | None:
     Priority: macro XGBoost → baseline XGBoost → macro RF → baseline RF → None.
     Models are loaded lazily on first call and cached for the process lifetime.
     """
-    global _macro_xgb
     if _macro_xgb is None and _model_version == "none":
         _load_models()
     return _macro_xgb or _baseline_xgb or _macro_rf or _baseline_rf
@@ -384,7 +383,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     Returns:
         FastAPI APIRouter
     """
-    from typing import Any, Dict, List, Optional  # noqa: F401
+    from typing import Any, Dict, List, Optional
 
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel

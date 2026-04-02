@@ -530,9 +530,7 @@ class HOPEFXBrain:
         tr2 = np.abs(highs_arr[1:] - closes_arr[:-1])
         tr3 = np.abs(lows_arr[1:] - closes_arr[:-1])
         true_range = np.maximum(np.maximum(tr1, tr2), tr3)
-        atr = (
-            np.mean(true_range[-14:]) if len(true_range) >= 14 else np.mean(true_range)
-        )
+        atr = np.mean(true_range[-14:]) if len(true_range) >= 14 else np.mean(true_range)
 
         # Classification
         current_price = closes_arr[-1]
