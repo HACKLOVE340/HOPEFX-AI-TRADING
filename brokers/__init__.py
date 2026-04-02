@@ -15,7 +15,7 @@ import random
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone  # noqa: F401
+from datetime import datetime, timezone
 
 UTC = timezone.utc
 from enum import Enum
@@ -939,7 +939,7 @@ class OANDABroker(BaseBroker):
                         f"{self.base_url}/v3/accounts/{self.account_id}",
                     ) as resp,
                 ):
-                    if resp.status == 200:  # noqa: PLR2004
+                    if resp.status == 200:
                         data = await resp.json()
                         account = data.get("account", {})
 
@@ -952,11 +952,10 @@ class OANDABroker(BaseBroker):
 
                         self.connected = True
                         return True
-                    else:
-                        error_data = await resp.text()
-                        raise ConnectionError(
-                            f"OANDA error {resp.status}: {error_data}",
-                        )
+                    error_data = await resp.text()
+                    raise ConnectionError(
+                        f"OANDA error {resp.status}: {error_data}",
+                    )
 
             except Exception as e:
                 logger.error(f"Connection attempt {attempt + 1} failed: {e}")
@@ -998,9 +997,9 @@ class OANDABroker(BaseBroker):
                         self._request_count += 1
                         self._last_request_time = time.time()
 
-                        if resp.status == 200 or resp.status == 201:  # noqa: PLR2004
+                        if resp.status == 200 or resp.status == 201:
                             return await resp.json()
-                        elif resp.status == 429:  # Rate limited  # noqa: PLR2004
+                        if resp.status == 429:  # Rate limited
                             retry_after = int(resp.headers.get("Retry-After", 1))
                             logger.warning(f"Rate limited, waiting {retry_after}s")
                             await asyncio.sleep(retry_after)
@@ -1132,7 +1131,7 @@ class OANDABroker(BaseBroker):
         """Close position"""
         # Parse position ID
         parts = position_id.rsplit("_", 1)
-        if len(parts) != 2:  # noqa: PLR2004
+        if len(parts) != 2:
             logger.error(f"Invalid position ID format: {position_id}")
             return False
 
@@ -1208,7 +1207,7 @@ def create_broker(broker_type: str, config: dict) -> BaseBroker:
             commission_per_lot=config.get("commission_per_lot", 3.5),
             slippage_model=config.get("slippage_model", "gaussian"),
         )
-    elif broker_type == "oanda":
+    if broker_type == "oanda":
         if not AIOHTTP_AVAILABLE:
             raise ImportError(
                 "aiohttp required for OANDA broker. Install: pip install aiohttp",
@@ -1220,14 +1219,13 @@ def create_broker(broker_type: str, config: dict) -> BaseBroker:
             timeout=config.get("timeout", 10.0),
             max_retries=config.get("max_retries", 3),
         )
-    elif broker_type == "ccxt":
+    if broker_type == "ccxt":
         from brokers.ccxt_connector import CCXTConnector
 
         return CCXTConnector(config)
-    else:
-        raise ValueError(
-            f"Unknown broker type: {broker_type}. Supported: paper, oanda, ccxt",
-        )
+    raise ValueError(
+        f"Unknown broker type: {broker_type}. Supported: paper, oanda, ccxt",
+    )
 
 
 # Override with the dict-config-based PaperTradingBroker that tests expect

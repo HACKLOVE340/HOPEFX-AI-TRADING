@@ -496,7 +496,7 @@ class LifeSupervisor:
         if self._nuclear_supervisor is None:
             return None
         ns = self._nuclear_supervisor.get_status()
-        if ns.get("nuclear_level", 0) >= 2:  # noqa: PLR2004
+        if ns.get("nuclear_level", 0) >= 2:
             return f"NUC-L{ns['nuclear_level']}"
         if ns.get("trading_paused"):
             return "PAUSED"
@@ -526,7 +526,7 @@ class LifeSupervisor:
 
     def _maybe_log_heartbeat(self, status: dict, dd_pct: float, heartbeat_ts: float) -> float:
         """Log a heartbeat if 60 s have elapsed; return updated timestamp."""
-        if time.monotonic() - heartbeat_ts < 60:  # noqa: PLR2004
+        if time.monotonic() - heartbeat_ts < 60:
             return heartbeat_ts
         logger.info(
             "HEARTBEAT  equity=%.2f balance=%.2f daily_pnl=%+.2f dd=%.2f%% fills=%d broker=%s%s",

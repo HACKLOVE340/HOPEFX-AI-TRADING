@@ -236,8 +236,8 @@ def usd_to_currency(usd_amount: Decimal, currency: str) -> int:
     converted = usd_amount * Decimal(str(rate))
 
     if currency in ZERO_DECIMAL_CURRENCIES:
-        return int(converted.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    return int((converted * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        return int(converted.quantize(Decimal(1), rounding=ROUND_HALF_UP))
+    return int((converted * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
 # ── Stripe mode detection ─────────────────────────────────────────────────────

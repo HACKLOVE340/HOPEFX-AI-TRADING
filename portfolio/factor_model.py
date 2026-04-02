@@ -45,7 +45,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -76,12 +76,12 @@ class FactorExposure:
     """Beta loadings of one asset to each systematic factor."""
 
     symbol: str
-    betas: Dict[str, float]  # factor_name -> beta
+    betas: dict[str, float]  # factor_name -> beta
     r_squared: float  # fraction of variance explained by factors
     residual_vol: float  # annualised idiosyncratic vol
     fitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "symbol": self.symbol,
             "betas": self.betas,
@@ -96,12 +96,12 @@ class FactorAttribution:
     """P&L decomposition for a portfolio snapshot."""
 
     total_pnl: float
-    factor_pnl: Dict[str, float]  # factor_name -> attributed P&L
+    factor_pnl: dict[str, float]  # factor_name -> attributed P&L
     residual_pnl: float  # idiosyncratic / alpha
-    factor_pct: Dict[str, float]  # factor_name -> % of total variance
+    factor_pct: dict[str, float]  # factor_name -> % of total variance
     computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "total_pnl": round(self.total_pnl, 4),
             "factor_pnl": {k: round(v, 4) for k, v in self.factor_pnl.items()},
@@ -124,8 +124,8 @@ class FactorLibrary:
 
     def __init__(self, lookback_days: int = 252):
         self.lookback_days = lookback_days
-        self._factor_df: Optional[pd.DataFrame] = None
-        self._last_refresh: Optional[datetime] = None
+        self._factor_df: pd.DataFrame | None = None
+        self._last_refresh: datetime | None = None
         self._cache_ttl_s: int = 3600  # refresh at most once per hour
 
     # ── public ────────────────────────────────────────────────────────────────
@@ -184,7 +184,7 @@ class FactorLibrary:
         fred_data = self._fetch_fred_series()
 
         # ── Build factor columns ──────────────────────────────────────────────
-        factors: Dict[str, pd.Series] = {}
+        factors: dict[str, pd.Series] = {}
 
         # rates_factor: daily change in 10Y yield
         if "yield_10y" in fred_data:
@@ -215,9 +215,9 @@ class FactorLibrary:
         if "cpi" in fred_data:
             macro_inputs["cpi_chg"] = fred_data["cpi"].pct_change().dropna()
 
-        if len(macro_inputs) >= 2:  # noqa: PLR2004
+        if len(macro_inputs) >= 2:
             macro_df = pd.DataFrame(macro_inputs).dropna()
-            if len(macro_df) >= 10:  # noqa: PLR2004
+            if len(macro_df) >= 10:
                 scaler = StandardScaler()
                 scaled = scaler.fit_transform(macro_df.values)
                 pca = PCA(n_components=1)
@@ -246,7 +246,7 @@ class FactorLibrary:
             len(FACTOR_NAMES),
         )
 
-    def _fetch_fred_series(self) -> Dict[str, pd.Series]:
+    def _fetch_fred_series(self) -> dict[str, pd.Series]:
         """Fetch DXY, 10Y yield, 2Y yield, CPI from FRED."""
         import requests
 
@@ -258,9 +258,9 @@ class FactorLibrary:
             "yield_2y": "DGS2",
             "cpi": "CPIAUCNS",
         }
-        result: Dict[str, pd.Series] = {}
+        result: dict[str, pd.Series] = {}
         for name, sid in series_map.items():
-            params: Dict[str, Any] = {
+            params: dict[str, Any] = {
                 "series_id": sid,
                 "sort_order": "asc",
                 "limit": 500,
@@ -303,12 +303,12 @@ class FactorModel:
     def __init__(self, alpha: float = 0.01, min_obs: int = 60):
         self.alpha = alpha  # Ridge regularisation
         self.min_obs = min_obs  # minimum observations to fit
-        self._exposures: Dict[str, FactorExposure] = {}
+        self._exposures: dict[str, FactorExposure] = {}
         self._library = FactorLibrary()
 
     # ── public ────────────────────────────────────────────────────────────────
 
-    def fit(self, asset_returns: Dict[str, pd.Series]) -> Dict[str, FactorExposure]:
+    def fit(self, asset_returns: dict[str, pd.Series]) -> dict[str, FactorExposure]:
         """
         Fit factor betas for each asset.
 
@@ -331,15 +331,15 @@ class FactorModel:
 
         return self._exposures.copy()
 
-    async def fit_async(self, asset_returns: Dict[str, pd.Series]) -> Dict[str, FactorExposure]:
+    async def fit_async(self, asset_returns: dict[str, pd.Series]) -> dict[str, FactorExposure]:
         """Async wrapper for fit()."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.fit, asset_returns)
 
-    def get_exposure(self, symbol: str) -> Optional[FactorExposure]:
+    def get_exposure(self, symbol: str) -> FactorExposure | None:
         return self._exposures.get(symbol)
 
-    def all_exposures(self) -> Dict[str, FactorExposure]:
+    def all_exposures(self) -> dict[str, FactorExposure]:
         return self._exposures.copy()
 
     # ── internals ─────────────────────────────────────────────────────────────
@@ -399,7 +399,7 @@ class FactorAttributionEngine:
 
     def attribute(
         self,
-        positions: Dict[str, float],  # symbol -> dollar value (signed)
+        positions: dict[str, float],  # symbol -> dollar value (signed)
         total_pnl: float,
     ) -> FactorAttribution:
         """
@@ -428,7 +428,7 @@ class FactorAttributionEngine:
         # Latest factor returns (most recent row)
         latest_factors = factor_df.iloc[-1]
 
-        factor_pnl: Dict[str, float] = dict.fromkeys(FACTOR_NAMES, 0.0)
+        factor_pnl: dict[str, float] = dict.fromkeys(FACTOR_NAMES, 0.0)
         _total_weight = sum(abs(v) for v in positions.values())
 
         for symbol, dollar_value in positions.items():
@@ -456,9 +456,9 @@ class FactorAttributionEngine:
 
     def portfolio_factor_var(
         self,
-        positions: Dict[str, float],
-        factor_cov: Optional[pd.DataFrame] = None,
-    ) -> Dict[str, float]:
+        positions: dict[str, float],
+        factor_cov: pd.DataFrame | None = None,
+    ) -> dict[str, float]:
         """
         Compute factor-level VaR contributions using the factor covariance matrix.
 
@@ -518,15 +518,15 @@ class LiveFactorEngine:
     def __init__(
         self,
         interval_s: int = 3600,
-        symbols: Optional[List[str]] = None,
+        symbols: list[str] | None = None,
     ):
         self.interval_s = interval_s
         self.symbols = symbols or ["XAU_USD", "BTC_USD", "ETH_USD"]
         self._model = FactorModel()
         self._attribution_engine = FactorAttributionEngine(self._model)
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._running = False
-        self._last_fit: Optional[datetime] = None
+        self._last_fit: datetime | None = None
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -553,25 +553,25 @@ class LiveFactorEngine:
 
     def attribute(
         self,
-        positions: Dict[str, float],
+        positions: dict[str, float],
         total_pnl: float,
     ) -> FactorAttribution:
         """Attribute P&L to factors using the latest fitted betas."""
         return self._attribution_engine.attribute(positions, total_pnl)
 
-    def factor_var(self, positions: Dict[str, float]) -> Dict[str, float]:
+    def factor_var(self, positions: dict[str, float]) -> dict[str, float]:
         """Return factor-level VaR contributions."""
         return self._attribution_engine.portfolio_factor_var(positions)
 
     @property
-    def exposures(self) -> Dict[str, FactorExposure]:
+    def exposures(self) -> dict[str, FactorExposure]:
         return self._model.all_exposures()
 
     @property
-    def last_fit(self) -> Optional[datetime]:
+    def last_fit(self) -> datetime | None:
         return self._last_fit
 
-    def status(self) -> Dict[str, Any]:
+    def status(self) -> dict[str, Any]:
         return {
             "running": self._running,
             "last_fit": self._last_fit.isoformat() if self._last_fit else None,
@@ -607,7 +607,7 @@ class LiveFactorEngine:
         end = pd.Timestamp.now(tz="UTC").normalize()
         start = end - pd.Timedelta(days=400)
 
-        asset_returns: Dict[str, pd.Series] = {}
+        asset_returns: dict[str, pd.Series] = {}
         for sym in self.symbols:
             ticker = symbol_map.get(sym, sym)
             try:
@@ -640,7 +640,7 @@ class LiveFactorEngine:
 
 # ── module-level singleton ────────────────────────────────────────────────────
 
-_engine: Optional[LiveFactorEngine] = None
+_engine: LiveFactorEngine | None = None
 
 
 def get_live_factor_engine() -> LiveFactorEngine:

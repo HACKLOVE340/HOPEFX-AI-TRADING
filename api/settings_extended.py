@@ -47,15 +47,15 @@ _store: dict[str, Any] = {}
 def _get_user_id(request: Request) -> str:
     """Extract user_id from JWT Bearer token; fall back to 'anonymous'."""
     try:
-        import os  # noqa: PLC0415
+        import os
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
-            import jwt as pyjwt  # noqa: PLC0415
+            import jwt as pyjwt
             secret = os.getenv("SECURITY_JWT_SECRET", "")
             if secret:
                 payload = pyjwt.decode(auth[7:], secret, algorithms=["HS256"])
                 return str(payload.get("sub", "anonymous"))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("settings_extended JWT extraction failed: %s", exc)
     return "anonymous"
 
@@ -63,8 +63,8 @@ def _get_user_id(request: Request) -> str:
 def _db_save(user_id: str, section: str, data: dict) -> bool:
     """Persist a settings section to the configurations table."""
     try:
-        from database.connection import get_db_manager  # noqa: PLC0415
-        from database.models import Configuration  # noqa: PLC0415
+        from database.connection import get_db_manager
+        from database.models import Configuration
 
         mgr = get_db_manager()
         if not mgr:
@@ -81,7 +81,7 @@ def _db_save(user_id: str, section: str, data: dict) -> bool:
             existing.config_value = value
             existing.changed_by = user_id
         else:
-            from database.models import Configuration as Cfg  # noqa: PLC0415
+            from database.models import Configuration as Cfg
             record = Cfg(
                 environment="production",
                 config_key=key,
@@ -92,7 +92,7 @@ def _db_save(user_id: str, section: str, data: dict) -> bool:
             session.add(record)
         session.commit()
         return True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("DB save failed for %s/%s: %s", section, user_id, exc)
         return False
 
@@ -100,8 +100,8 @@ def _db_save(user_id: str, section: str, data: dict) -> bool:
 def _db_load(user_id: str, section: str) -> dict | None:
     """Load a settings section from the configurations table."""
     try:
-        from database.connection import get_db_manager  # noqa: PLC0415
-        from database.models import Configuration  # noqa: PLC0415
+        from database.connection import get_db_manager
+        from database.models import Configuration
 
         mgr = get_db_manager()
         if not mgr:
@@ -115,7 +115,7 @@ def _db_load(user_id: str, section: str) -> dict | None:
         record = session.query(Configuration).filter_by(config_key=key).first()
         if record and record.config_value:
             return json.loads(record.config_value)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("DB load failed for %s/%s: %s", section, user_id, exc)
     return None
 
@@ -210,9 +210,9 @@ async def save_trading_prefs(body: TradingPrefsBody, request: Request):
 
     if body.kill_switch_enabled:
         try:
-            from risk.risk_manager import RiskManager  # noqa: PLC0415
+            from risk.risk_manager import RiskManager
             RiskManager().activate_kill_switch(reason="user settings")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.debug("Kill switch propagation to RiskManager failed: %s", exc)
 
     return {"status": "saved"}
@@ -257,9 +257,9 @@ async def change_password(body: ChangePasswordBody, request: Request):
         )
 
     try:
-        import bcrypt  # noqa: PLC0415
-        from database.connection import get_db_manager  # noqa: PLC0415
-        from database.models import User  # noqa: PLC0415
+        import bcrypt
+        from database.connection import get_db_manager
+        from database.models import User
 
         mgr = get_db_manager()
         if not mgr:
@@ -284,7 +284,7 @@ async def change_password(body: ChangePasswordBody, request: Request):
 
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("Password change failed for user %s: %s", uid, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -302,8 +302,8 @@ async def delete_account(request: Request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
 
     try:
-        from database.connection import get_db_manager  # noqa: PLC0415
-        from database.models import User  # noqa: PLC0415
+        from database.connection import get_db_manager
+        from database.models import User
 
         mgr = get_db_manager()
         if not mgr:
@@ -322,7 +322,7 @@ async def delete_account(request: Request):
 
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("Account deletion failed for user %s: %s", uid, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

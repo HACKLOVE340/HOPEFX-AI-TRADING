@@ -92,7 +92,7 @@ class MemoryMappedEventStore:
         self.file_counter += 1
         with open(filename, "wb") as f:
             f.write(b"\x00" * self.max_file_size)
-        self.current_file = open(filename, "r+b")  # noqa: SIM115
+        self.current_file = open(filename, "r+b")  # noqa: SIM115 — kept open for mmap lifetime
         self.current_mmap = mmap.mmap(self.current_file.fileno(), self.max_file_size)
         self.current_offset = 0
 
@@ -145,7 +145,7 @@ class MemoryMappedEventStore:
             f.seek(offset)
             # Header: sequence(Q=8) | timestamp(Q=8) | event_type(H=2) = 18 bytes
             header = f.read(19)
-            if len(header) < 19:  # noqa: PLR2004
+            if len(header) < 19:
                 return None
             _, ts, evt_type = struct.unpack(">QQH", header[:18])
             src_len = header[18]

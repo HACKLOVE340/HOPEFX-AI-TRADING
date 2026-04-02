@@ -229,7 +229,7 @@ def parse_timestamp(timestamp: Any) -> datetime:
         return timestamp
     if isinstance(timestamp, int | float):
         # Assume milliseconds if large number
-        if timestamp > 1e10:  # noqa: PLR2004
+        if timestamp > 1e10:
             timestamp = timestamp / 1000
         return datetime.fromtimestamp(timestamp, tz=UTC)
     if isinstance(timestamp, str):
@@ -258,17 +258,17 @@ def truncate_string(s: str, max_length: int, suffix: str = "...") -> str:
 def validate_symbol(symbol: str) -> bool:
     """Validate trading symbol format"""
     # Basic validation: 6 chars for forex (EURUSD), or contains /
-    if len(symbol) == 6 and symbol.isalpha():  # noqa: PLR2004
+    if len(symbol) == 6 and symbol.isalpha():
         return True
-    if "/" in symbol and len(symbol) <= 10:  # noqa: PLR2004
+    if "/" in symbol and len(symbol) <= 10:
         return True
     # XAUUSD, etc.
-    return len(symbol) <= 10 and symbol.replace("/", "").isalnum()  # noqa: PLR2004
+    return len(symbol) <= 10 and symbol.replace("/", "").isalnum()
 
 
 def calculate_correlation(x: list[float], y: list[float]) -> float:
     """Calculate Pearson correlation"""
-    if len(x) != len(y) or len(x) < 2:  # noqa: PLR2004
+    if len(x) != len(y) or len(x) < 2:
         return 0.0
 
     n = len(x)

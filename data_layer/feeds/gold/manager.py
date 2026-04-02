@@ -202,13 +202,13 @@ class GoldFeedManager:
                     # REST APIs occasionally return cached/stale prices; this
                     # catches them before they corrupt the consensus.
                     tick_age_s = received_at - raw_tick.timestamp.timestamp()
-                    if tick_age_s > 300.0:  # noqa: PLR2004
+                    if tick_age_s > 300.0:
                         logger.warning(
                             "GoldFeedManager: %s tick too old (age=%.1fs) — discarded",
                             src.value,
                             tick_age_s,
                         )
-                    elif tick_age_s < -10.0:  # noqa: PLR2004
+                    elif tick_age_s < -10.0:
                         logger.warning(
                             "GoldFeedManager: %s tick from future (age=%.1fs) — discarded",
                             src.value,

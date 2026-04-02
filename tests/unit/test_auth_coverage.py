@@ -158,12 +158,12 @@ class TestFreeTierAssignment:
             mock_aff.track_referral(
                 affiliate_code="REF123",
                 referred_user_id="new_user",
-                conversion_value=Decimal("0"),
+                conversion_value=Decimal(0),
             )
             mock_aff.track_referral.assert_called_once_with(
                 affiliate_code="REF123",
                 referred_user_id="new_user",
-                conversion_value=Decimal("0"),
+                conversion_value=Decimal(0),
             )
 
 

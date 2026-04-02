@@ -230,7 +230,7 @@ def _load_models() -> None:
                     _trained_at,
                 )
                 # Warn if loaded model accuracy is below the validated 68% threshold
-                if isinstance(_oos_acc, float) and _oos_acc < 0.60:  # noqa: PLR2004
+                if isinstance(_oos_acc, float) and _oos_acc < 0.60:
                     _ml_logger.warning(
                         "advanced_oos.pkl OOS accuracy %.3f is below 60%% — "
                         "model may need retraining. Run: "
@@ -339,7 +339,6 @@ def get_active_model() -> _Any | None:
     Priority: macro XGBoost → baseline XGBoost → macro RF → baseline RF → None.
     Models are loaded lazily on first call and cached for the process lifetime.
     """
-    global _macro_xgb  # noqa: PLW0602
     if _macro_xgb is None and _model_version == "none":
         _load_models()
     return _macro_xgb or _baseline_xgb or _macro_rf or _baseline_rf
@@ -426,7 +425,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         """
         import pandas as pd
 
-        if len(req.bars) < 10:  # noqa: PLR2004
+        if len(req.bars) < 10:
             raise HTTPException(
                 status_code=422,
                 detail="At least 10 bars are required to compute features.",

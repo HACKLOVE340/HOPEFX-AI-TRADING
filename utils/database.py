@@ -91,9 +91,8 @@ class Database:
 
                 if query.strip().upper().startswith("SELECT"):
                     return [dict(row) for row in cursor.fetchall()]
-                else:
-                    conn.commit()
-                    return None
+                conn.commit()
+                return None
 
         except Exception as e:
             logger.error(f"Database error: {e}")

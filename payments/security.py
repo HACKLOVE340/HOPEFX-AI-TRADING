@@ -52,8 +52,8 @@ class TransactionLimit:
     daily_limit: Decimal
     monthly_limit: Decimal
     per_transaction_limit: Decimal
-    daily_used: Decimal = Decimal("0")
-    monthly_used: Decimal = Decimal("0")
+    daily_used: Decimal = Decimal(0)
+    monthly_used: Decimal = Decimal(0)
     last_reset: datetime = None
 
     def __post_init__(self):
@@ -243,11 +243,11 @@ class SecurityManager:
 
         # Reset daily if day changed
         if limits.last_reset.date() != now.date():
-            limits.daily_used = Decimal("0")
+            limits.daily_used = Decimal(0)
 
         # Reset monthly if month changed
         if limits.last_reset.month != now.month:
-            limits.monthly_used = Decimal("0")
+            limits.monthly_used = Decimal(0)
 
         limits.last_reset = now
 
@@ -310,7 +310,7 @@ class SecurityManager:
         # Check failed attempts
         failed = self.failed_attempts.get(user_id, [])
         recent_failed = [f for f in failed if datetime.now(UTC) - f < timedelta(hours=1)]
-        if len(recent_failed) > 5:  # noqa: PLR2004
+        if len(recent_failed) > 5:
             logger.warning(f"Suspicious: Multiple failed attempts for user {user_id}")
             return True
 

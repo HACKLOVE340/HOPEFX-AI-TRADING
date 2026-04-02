@@ -66,8 +66,8 @@ class BenchmarkType(Enum):
 class MarketImpactModel:
     """I-Star model implementation."""
 
-    permanent_impact: Decimal = Decimal("0")
-    temporary_impact: Decimal = Decimal("0")
+    permanent_impact: Decimal = Decimal(0)
+    temporary_impact: Decimal = Decimal(0)
 
     def calculate(
         self,
@@ -109,10 +109,10 @@ class TCAMetrics:
 
     # Execution
     fills: list[Fill] = field(default_factory=list)
-    avg_fill_price: Decimal = Decimal("0")
-    total_commission: Decimal = Decimal("0")
-    total_slippage: Decimal = Decimal("0")
-    total_fees: Decimal = Decimal("0")
+    avg_fill_price: Decimal = Decimal(0)
+    total_commission: Decimal = Decimal(0)
+    total_slippage: Decimal = Decimal(0)
+    total_fees: Decimal = Decimal(0)
 
     # Timing
     first_fill_time: datetime | None = None
@@ -121,14 +121,14 @@ class TCAMetrics:
     total_execution_time_ms: float = 0.0
 
     # Derived costs
-    implementation_shortfall_bps: Decimal = Decimal("0")
-    market_impact_bps: Decimal = Decimal("0")
-    timing_cost_bps: Decimal = Decimal("0")
-    opportunity_cost_bps: Decimal = Decimal("0")
+    implementation_shortfall_bps: Decimal = Decimal(0)
+    market_impact_bps: Decimal = Decimal(0)
+    timing_cost_bps: Decimal = Decimal(0)
+    opportunity_cost_bps: Decimal = Decimal(0)
 
     # Quality metrics
     fill_rate: float = 0.0
-    price_improvement_bps: Decimal = Decimal("0")
+    price_improvement_bps: Decimal = Decimal(0)
 
     # Market context used for impact calculation
     adv_used: float = 0.0
@@ -141,12 +141,12 @@ class TCAMetrics:
         """Total transaction cost in bps."""
         if self.avg_fill_price <= 0:
             return self.implementation_shortfall_bps
-        return self.implementation_shortfall_bps + self.total_fees * Decimal("10000") / self.avg_fill_price
+        return self.implementation_shortfall_bps + self.total_fees * Decimal(10000) / self.avg_fill_price
 
     @property
     def alpha_extraction_bps(self) -> Decimal:
         """Net alpha after costs (requires signal prediction vs realized)."""
-        return Decimal("0")
+        return Decimal(0)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -211,7 +211,7 @@ class MarketContextProvider:
         """Record a tick volume for in-memory ADV estimation."""
         self._tick_volumes[symbol].append((ts, volume))
         # Keep only last 100k ticks per symbol
-        if len(self._tick_volumes[symbol]) > 100_000:  # noqa: PLR2004
+        if len(self._tick_volumes[symbol]) > 100_000:
             self._tick_volumes[symbol] = self._tick_volumes[symbol][-100_000:]
 
     def get_adv(self, symbol: str) -> tuple[float, str]:
@@ -234,7 +234,7 @@ class MarketContextProvider:
         if cache is not None:
             try:
                 bars = cache.get_bars(symbol, "1d", n=_ADV_LOOKBACK_BARS)
-                if bars and len(bars) >= 5:  # noqa: PLR2004
+                if bars and len(bars) >= 5:
                     volumes = [float(b.get("volume", 0)) for b in bars if b.get("volume")]
                     if volumes and sum(volumes) > 0:
                         adv = sum(volumes) / len(volumes)
@@ -244,9 +244,9 @@ class MarketContextProvider:
 
         # 3. In-memory tick accumulator
         ticks = self._tick_volumes.get(symbol, [])
-        if len(ticks) >= 100:  # noqa: PLR2004
+        if len(ticks) >= 100:
             total_vol = sum(v for _, v in ticks)
-            if total_vol > 0 and len(ticks) >= 2:  # noqa: PLR2004
+            if total_vol > 0 and len(ticks) >= 2:
                 # Estimate daily volume from accumulated ticks
                 span_hours = (ticks[-1][0] - ticks[0][0]).total_seconds() / 3600
                 if span_hours > 0:
@@ -276,9 +276,9 @@ class MarketContextProvider:
         if cache is not None:
             try:
                 bars = cache.get_bars(symbol, "1d", n=_VOL_LOOKBACK_BARS + 1)
-                if bars and len(bars) >= 5:  # noqa: PLR2004
+                if bars and len(bars) >= 5:
                     closes = [float(b.get("close", 0)) for b in bars if b.get("close")]
-                    if len(closes) >= 5:  # noqa: PLR2004
+                    if len(closes) >= 5:
                         log_returns = [
                             math.log(closes[i] / closes[i - 1])
                             for i in range(1, len(closes))
@@ -367,13 +367,13 @@ class TCAEngine:
         if symbol not in self._vwap_cache:
             self._vwap_cache[symbol] = []
         self._vwap_cache[symbol].append((now, fill.price, fill.quantity))
-        if len(self._vwap_cache[symbol]) > 10_000:  # noqa: PLR2004
+        if len(self._vwap_cache[symbol]) > 10_000:
             self._vwap_cache[symbol].pop(0)
 
         if symbol not in self._twap_cache:
             self._twap_cache[symbol] = []
         self._twap_cache[symbol].append((now, fill.price))
-        if len(self._twap_cache[symbol]) > 10_000:  # noqa: PLR2004
+        if len(self._twap_cache[symbol]) > 10_000:
             self._twap_cache[symbol].pop(0)
 
     async def complete_order(self, order_id: str, status: str = "FILLED") -> TCAMetrics:
@@ -389,18 +389,18 @@ class TCAEngine:
 
         # Execution stats
         total_qty = sum(f.quantity for f in fills)
-        avg_price = sum(f.price * f.quantity for f in fills) / total_qty if total_qty > 0 else Decimal("0")
+        avg_price = sum(f.price * f.quantity for f in fills) / total_qty if total_qty > 0 else Decimal(0)
         total_commission = sum(f.commission for f in fills)
-        total_slippage = sum(getattr(f, "slippage", None) or Decimal("0") for f in fills)
+        total_slippage = sum(getattr(f, "slippage", None) or Decimal(0) for f in fills)
 
         last_fill = fills[-1]
         exec_time_ms = (last_fill.timestamp - order["arrival_time"]).total_seconds() * 1000
 
         # Implementation shortfall vs arrival price
         if order["side"] == Side.BUY:
-            isf_bps = ((avg_price - order["arrival_price"]) / order["arrival_price"]) * Decimal("10000")
+            isf_bps = ((avg_price - order["arrival_price"]) / order["arrival_price"]) * Decimal(10000)
         else:
-            isf_bps = ((order["arrival_price"] - avg_price) / order["arrival_price"]) * Decimal("10000")
+            isf_bps = ((order["arrival_price"] - avg_price) / order["arrival_price"]) * Decimal(10000)
 
         # Resolve real ADV and volatility from market data
         symbol = order["symbol"]
@@ -426,9 +426,9 @@ class TCAEngine:
 
         # Opportunity cost (unfilled portion)
         fill_rate = float(total_qty / order["quantity"]) if order["quantity"] > 0 else 0.0
-        opp_cost = Decimal("0")
+        opp_cost = Decimal(0)
         if fill_rate < 1.0:
-            opp_cost = (Decimal("1") - Decimal(str(fill_rate))) * isf_bps * Decimal("0.5")
+            opp_cost = (Decimal(1) - Decimal(str(fill_rate))) * isf_bps * Decimal("0.5")
 
         metrics = TCAMetrics(
             order_id=order_id,
@@ -452,7 +452,7 @@ class TCAEngine:
             timing_cost_bps=Decimal(str(max(0.0, exec_time_ms - 100) * 0.01)),
             opportunity_cost_bps=opp_cost,
             fill_rate=fill_rate,
-            price_improvement_bps=-isf_bps if isf_bps < 0 else Decimal("0"),
+            price_improvement_bps=-isf_bps if isf_bps < 0 else Decimal(0),
             adv_used=adv,
             volatility_used=vol,
             adv_source=adv_source,
@@ -464,7 +464,7 @@ class TCAEngine:
             self._completed.pop(0)
 
         # Alert if expensive
-        if metrics.total_cost_bps > Decimal("20"):
+        if metrics.total_cost_bps > Decimal(20):
             logger.warning(
                 "TCA: high-cost trade order_id=%s cost=%.2fbps adv_source=%s vol_source=%s",
                 order_id,
@@ -496,7 +496,7 @@ class TCAEngine:
     ) -> Decimal:
         """Get benchmark price from VWAP/TWAP caches."""
         if benchmark == BenchmarkType.ARRIVAL:
-            return Decimal("0")
+            return Decimal(0)
 
         if benchmark == BenchmarkType.VWAP:
             vwap_data = self._vwap_cache.get(symbol, [])
@@ -512,7 +512,7 @@ class TCAEngine:
             if relevant:
                 return sum(p[1] for p in relevant) / Decimal(str(len(relevant)))
 
-        return Decimal("0")
+        return Decimal(0)
 
     def _create_cancelled_metrics(self, order: dict[str, Any], order_id: str) -> TCAMetrics:
         """Create metrics for a cancelled/rejected order."""
@@ -520,11 +520,11 @@ class TCAEngine:
             order_id=order_id,
             symbol=order["symbol"],
             side=order["side"],
-            quantity=Decimal("0"),
+            quantity=Decimal(0),
             arrival_price=order["arrival_price"],
             arrival_time=order["arrival_time"],
             fill_rate=0.0,
-            opportunity_cost_bps=Decimal("0"),
+            opportunity_cost_bps=Decimal(0),
         )
 
     def update_market_data(self, tick: Tick) -> None:
@@ -547,14 +547,14 @@ class TCAEngine:
         if symbol not in self._vwap_cache:
             self._vwap_cache[symbol] = []
         self._vwap_cache[symbol].append((now, tick.mid, tick.volume))
-        if len(self._vwap_cache[symbol]) > 10_000:  # noqa: PLR2004
+        if len(self._vwap_cache[symbol]) > 10_000:
             self._vwap_cache[symbol].pop(0)
 
         # TWAP cache
         if symbol not in self._twap_cache:
             self._twap_cache[symbol] = []
         self._twap_cache[symbol].append((now, tick.mid))
-        if len(self._twap_cache[symbol]) > 10_000:  # noqa: PLR2004
+        if len(self._twap_cache[symbol]) > 10_000:
             self._twap_cache[symbol].pop(0)
 
     def get_stats(self, n: int = 100) -> dict[str, Any]:
@@ -576,7 +576,7 @@ class TCAEngine:
             "p90_cost_bps": float(sorted(costs)[int(len(costs) * 0.9)]),
             "mean_isf_bps": float(sum(isf) / len(isf)),
             "mean_fill_rate": sum(fill_rates) / len(fill_rates),
-            "win_rate": len([c for c in costs if c < Decimal("10")]) / len(costs),
+            "win_rate": len([c for c in costs if c < Decimal(10)]) / len(costs),
             "alpha_positive": (len([m for m in recent if m.alpha_extraction_bps > 0]) / len(recent)),
             "adv_source_breakdown": {src: adv_sources.count(src) for src in set(adv_sources)},
             "vol_source_breakdown": {src: vol_sources.count(src) for src in set(vol_sources)},

@@ -76,10 +76,10 @@ AFFILIATE_COMMISSION_RATES = {
 
 # Requirements to upgrade affiliate level
 LEVEL_REQUIREMENTS = {
-    AffiliateLevel.BRONZE: {"referrals": 0, "revenue": Decimal("0")},
-    AffiliateLevel.SILVER: {"referrals": 10, "revenue": Decimal("18000")},
-    AffiliateLevel.GOLD: {"referrals": 25, "revenue": Decimal("50000")},
-    AffiliateLevel.PLATINUM: {"referrals": 50, "revenue": Decimal("100000")},
+    AffiliateLevel.BRONZE: {"referrals": 0, "revenue": Decimal(0)},
+    AffiliateLevel.SILVER: {"referrals": 10, "revenue": Decimal(18000)},
+    AffiliateLevel.GOLD: {"referrals": 25, "revenue": Decimal(50000)},
+    AffiliateLevel.PLATINUM: {"referrals": 50, "revenue": Decimal(100000)},
 }
 
 
@@ -548,12 +548,12 @@ class AffiliateManager:
 
         pending_commission = self._calculate_pending_commission(affiliate_id)
         paid_commission = sum(
-            ref.commission_amount or Decimal("0") for ref in referrals if ref.status == ReferralStatus.PAID
+            ref.commission_amount or Decimal(0) for ref in referrals if ref.status == ReferralStatus.PAID
         )
 
         conversion_rate = len(converted) / len(referrals) * 100 if referrals else 0.0
 
-        avg_commission = affiliate.total_commissions / len(converted) if converted else Decimal("0")
+        avg_commission = affiliate.total_commissions / len(converted) if converted else Decimal(0)
 
         return AffiliateMetrics(
             total_referrals=len(referrals),

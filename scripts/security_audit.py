@@ -152,12 +152,11 @@ def main() -> int:
     if critical:
         print("\n❌ AUDIT FAILED - Fix critical issues before deployment")
         return 1
-    elif warnings:
+    if warnings:
         print("\n⚠️  AUDIT PASSED WITH WARNINGS")
         return 0
-    else:
-        print("\n✅ AUDIT PASSED - No security issues found")
-        return 0
+    print("\n✅ AUDIT PASSED - No security issues found")
+    return 0
 
 
 if __name__ == "__main__":

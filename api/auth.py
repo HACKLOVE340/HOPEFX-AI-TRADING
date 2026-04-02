@@ -70,7 +70,7 @@ def _get_jwt_secret() -> str:
             "SECURITY_JWT_SECRET environment variable is not set. "
             'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"',
         )
-    if len(secret) < 32:  # noqa: PLR2004
+    if len(secret) < 32:
         raise RuntimeError("SECURITY_JWT_SECRET must be at least 32 characters")
     return secret
 

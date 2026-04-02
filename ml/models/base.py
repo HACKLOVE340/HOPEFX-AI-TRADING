@@ -124,7 +124,7 @@ class BaseMLModel(ABC):
             metrics["r2"] = r2_score(y_test, predictions)
 
         # For classification tasks (if applicable)
-        if len(np.unique(y_test)) <= 10:  # Likely classification  # noqa: PLR2004
+        if len(np.unique(y_test)) <= 10:  # Likely classification
             try:
                 metrics["accuracy"] = accuracy_score(y_test, np.round(predictions))
                 metrics["precision"] = precision_score(
@@ -224,7 +224,7 @@ class BaseMLModel(ABC):
         """
         if hasattr(self.model, "feature_importances_"):
             return dict(enumerate(self.model.feature_importances_))
-        elif hasattr(self.model, "coef_"):
+        if hasattr(self.model, "coef_"):
             return dict(enumerate(self.model.coef_))
         return None
 

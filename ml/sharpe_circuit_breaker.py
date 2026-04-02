@@ -59,7 +59,8 @@ Usage
     # In signal router, before placing an order:
     if cb.is_open("advanced_oos_v4"):
         logger.warning("Model gated by Sharpe circuit breaker — skipping signal")
-        return
+
+Return
 """
 
 from __future__ import annotations
@@ -130,7 +131,7 @@ class CircuitState:
             # All trades identical — sign of mean determines direction
             if mean > 0:
                 return float(ANNUALISE_FACTOR * 1e6)  # perfect wins
-            elif mean < 0:
+            if mean < 0:
                 return float(-ANNUALISE_FACTOR * 1e6)  # perfect losses
             return 0.0
         return float(mean / std * ANNUALISE_FACTOR)

@@ -389,7 +389,7 @@ class TransactionManager:
 
         by_status = {}
         by_type = {}
-        total_volume = Decimal("0")
+        total_volume = Decimal(0)
 
         for txn in self.transactions.values():
             # Count by status

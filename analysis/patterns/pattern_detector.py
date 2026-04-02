@@ -128,7 +128,7 @@ class AdvancedPatternDetector:
         peaks = argrelextrema(high, np.greater, order=5)[0]
         troughs = argrelextrema(low, np.less, order=5)[0]
 
-        if len(peaks) < 3:  # noqa: PLR2004
+        if len(peaks) < 3:
             return patterns
 
         # Look for pattern: trough-peak-trough-peak-trough
@@ -200,7 +200,7 @@ class AdvancedPatternDetector:
             peak1 = high[peaks[i]]
             peak2 = high[peaks[i + 1]]
 
-            if abs(peak1 - peak2) / peak1 < 0.02:  # Within 2%  # noqa: PLR2004
+            if abs(peak1 - peak2) / peak1 < 0.02:  # Within 2%
                 idx1, idx2 = peaks[i], peaks[i + 1]
 
                 # Find intermediate trough
@@ -287,7 +287,7 @@ class AdvancedPatternDetector:
             bc_ratio = bc_move / ab_move if ab_move > 0 else 0
 
             # Check Gartley pattern
-            if 0.5 < ab_ratio < 0.75 and 1.2 < bc_ratio < 1.8:  # noqa: PLR2004
+            if 0.5 < ab_ratio < 0.75 and 1.2 < bc_ratio < 1.8:
                 cd_target = c_price + bc_move * 1.272
 
                 pattern = PatternSignal(

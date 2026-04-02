@@ -251,7 +251,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     import pandas as pd
 
     sym_key = symbol.upper().replace("/", "_").replace("-", "_")
-    if "_" not in sym_key and len(sym_key) == 6:  # noqa: PLR2004
+    if "_" not in sym_key and len(sym_key) == 6:
         sym_key = sym_key[:3] + "_" + sym_key[3:]
 
     data_dir = pathlib.Path(__file__).parent.parent / "data"
@@ -263,7 +263,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
         if csv_path.exists():
             try:
                 df = pd.read_csv(csv_path).tail(periods + 50)
-                if len(df) >= 20:  # noqa: PLR2004
+                if len(df) >= 20:
                     return {
                         "close": df["close"].tolist(),
                         "open": df["open"].tolist(),
@@ -281,7 +281,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_market_data"):
             raw = broker.get_market_data(sym_key.replace("_", ""), "1h", periods + 50)
-            if raw and len(raw) >= 20:  # noqa: PLR2004
+            if raw and len(raw) >= 20:
                 df = pd.DataFrame(raw)
                 return {
                     "close": df["close"].tolist(),
@@ -624,7 +624,7 @@ async def get_correlation(
                 ohlcv = pe.get_ohlcv(sym, "1d", window + 5)
                 if asyncio.iscoroutine(ohlcv):
                     ohlcv = await ohlcv
-                if ohlcv and len(ohlcv) >= 5:  # noqa: PLR2004
+                if ohlcv and len(ohlcv) >= 5:
                     closes = [
                         float(
                             bar.get(
@@ -663,14 +663,14 @@ async def get_correlation(
                     returns = [
                         (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0
                     ]
-                    if len(returns) >= 5:  # noqa: PLR2004
+                    if len(returns) >= 5:
                         series[sym] = returns
                         break
                 except Exception as exc:
                     logger.debug("correlation CSV miss for %s: %s", sym, exc)
 
     # Require at least 2 symbols with real data
-    if len(series) < 2:  # noqa: PLR2004
+    if len(series) < 2:
         raise HTTPException(
             status_code=503,
             detail={
@@ -713,7 +713,7 @@ async def get_correlation(
             if s1 >= s2:
                 continue
             c = matrix[s1][s2]
-            if abs(c) >= 0.6:  # noqa: PLR2004
+            if abs(c) >= 0.6:
                 direction = "positively" if c > 0 else "negatively"
                 insights.append(f"{s1} and {s2} are {direction} correlated ({c:+.2f})")
 
@@ -760,7 +760,7 @@ async def get_cot_gold():
                     "short_positions": int(rec.get("noncomm_positions_short_all", 0)),
                     "sentiment": "BULLISH" if net_long > 0 else "BEARISH",
                     "sentiment_strength": "STRONG"
-                    if abs(net_long) > 100000  # noqa: PLR2004
+                    if abs(net_long) > 100000
                     else "MODERATE",
                     "source": "CFTC",
                     "note": "Non-commercial (speculator) net positions in COMEX gold futures.",
@@ -875,7 +875,7 @@ async def run_monte_carlo(
     n_trades = int(result.get("total_trades", 0))
     capital = req.initial_capital or float(result.get("initial_capital", 10000))
 
-    if n_trades < 10:  # noqa: PLR2004
+    if n_trades < 10:
         raise HTTPException(
             status_code=422,
             detail=(

@@ -459,9 +459,9 @@ class DepthOfMarketService:
             selling_pressure = self._classify_pressure(-imbalance, positive=True)
 
             # Determine market bias
-            if imbalance > 0.2:  # noqa: PLR2004
+            if imbalance > 0.2:
                 market_bias = "bullish"
-            elif imbalance < -0.2:  # noqa: PLR2004
+            elif imbalance < -0.2:
                 market_bias = "bearish"
             else:
                 market_bias = "neutral"
@@ -505,12 +505,11 @@ class DepthOfMarketService:
         if positive:
             value = abs(value)
 
-        if value > 0.4:  # noqa: PLR2004
+        if value > 0.4:
             return "strong"
-        elif value > 0.15:  # noqa: PLR2004
+        if value > 0.15:
             return "moderate"
-        else:
-            return "weak"
+        return "weak"
 
     # ================================================================
     # VISUALIZATION DATA
@@ -560,7 +559,7 @@ class DepthOfMarketService:
             _MIN_PRICE_GAP_THRESHOLD = 1e-9  # gaps below this are float-noise
             _TICK_SIZE_PRECISION = 10  # decimal places for tick rounding
             tick_size = 0.01
-            if len(all_prices) >= 2:  # noqa: PLR2004
+            if len(all_prices) >= 2:
                 sorted_prices = sorted(set(all_prices))
                 gaps = [
                     abs(sorted_prices[i + 1] - sorted_prices[i])

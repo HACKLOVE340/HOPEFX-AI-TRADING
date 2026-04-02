@@ -247,7 +247,7 @@ class GoldSentimentScorer:
         gold_relevance = _compute_gold_relevance(text)
 
         # Skip scoring if not gold-relevant
-        if gold_relevance < 0.05:  # noqa: PLR2004
+        if gold_relevance < 0.05:
             return _replace(
                 article,
                 gold_relevance=0.0,
@@ -259,7 +259,7 @@ class GoldSentimentScorer:
         # ── Sentiment score ───────────────────────────────────────────────
         # If article already has a pre-scored sentiment (Alpha Vantage, NewsAPI.ai)
         # use it directly — these are higher quality than VADER
-        if abs(article.sentiment_score) > 0.01:  # noqa: PLR2004
+        if abs(article.sentiment_score) > 0.01:
             raw_score = article.sentiment_score
         elif self._vader_available and self._vader:
             scores = self._vader.polarity_scores(text)
@@ -274,9 +274,9 @@ class GoldSentimentScorer:
         weighted_score = final_score * gold_relevance
 
         # Label
-        if weighted_score > 0.15:  # noqa: PLR2004
+        if weighted_score > 0.15:
             label = "bullish"
-        elif weighted_score < -0.15:  # noqa: PLR2004
+        elif weighted_score < -0.15:
             label = "bearish"
         else:
             label = "neutral"
@@ -343,7 +343,7 @@ class GoldSentimentScorer:
         for article in articles:
             try:
                 s = self.score(article)
-                if s.gold_relevance > 0.05:  # noqa: PLR2004
+                if s.gold_relevance > 0.05:
                     scored.append(s)
             except Exception as exc:
                 logger.debug("GoldSentimentScorer.score error: %s", exc)

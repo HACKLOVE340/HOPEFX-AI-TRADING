@@ -101,10 +101,9 @@ class EconomicEvent:
         # For most economic indicators, higher than expected is bullish
         if self.actual > self.forecast:
             return "bullish"
-        elif self.actual < self.forecast:
+        if self.actual < self.forecast:
             return "bearish"
-        else:
-            return "neutral"
+        return "neutral"
 
 
 class EconomicCalendar:

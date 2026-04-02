@@ -640,72 +640,72 @@ class AlertEngine:
         if ctype == AlertConditionType.PRICE_ABOVE:
             return price > threshold, price
 
-        elif ctype == AlertConditionType.PRICE_BELOW:
+        if ctype == AlertConditionType.PRICE_BELOW:
             return price < threshold, price
 
-        elif ctype == AlertConditionType.PRICE_CROSS_ABOVE:
+        if ctype == AlertConditionType.PRICE_CROSS_ABOVE:
             if previous_value is None:
                 return False, price
             return previous_value <= threshold < price, price
 
-        elif ctype == AlertConditionType.PRICE_CROSS_BELOW:
+        if ctype == AlertConditionType.PRICE_CROSS_BELOW:
             if previous_value is None:
                 return False, price
             return previous_value >= threshold > price, price
 
-        elif ctype == AlertConditionType.PRICE_INSIDE_RANGE:
+        if ctype == AlertConditionType.PRICE_INSIDE_RANGE:
             if threshold_2 is None:
                 return False, price
             return threshold <= price <= threshold_2, price
 
-        elif ctype == AlertConditionType.PRICE_OUTSIDE_RANGE:
+        if ctype == AlertConditionType.PRICE_OUTSIDE_RANGE:
             if threshold_2 is None:
                 return False, price
             return price < threshold or price > threshold_2, price
 
-        elif ctype == AlertConditionType.PRICE_CHANGE_PCT:
+        if ctype == AlertConditionType.PRICE_CHANGE_PCT:
             if previous_value is None or previous_value == 0:
                 return False, 0
             change_pct = ((price - previous_value) / previous_value) * 100
             return abs(change_pct) >= threshold, change_pct
 
-        elif ctype == AlertConditionType.PRICE_CHANGE_ABS:
+        if ctype == AlertConditionType.PRICE_CHANGE_ABS:
             if previous_value is None:
                 return False, 0
             change = abs(price - previous_value)
             return change >= threshold, change
 
         # Volume conditions
-        elif ctype == AlertConditionType.VOLUME_ABOVE:
+        if ctype == AlertConditionType.VOLUME_ABOVE:
             return volume > threshold, volume
 
-        elif ctype == AlertConditionType.VOLUME_SPIKE:
+        if ctype == AlertConditionType.VOLUME_SPIKE:
             # Would need average volume for comparison
             return volume > threshold, volume
 
         # Indicator conditions
-        elif ctype == AlertConditionType.INDICATOR_ABOVE:
+        if ctype == AlertConditionType.INDICATOR_ABOVE:
             indicator_value = indicators.get(condition.indicator, 0)
             return indicator_value > threshold, indicator_value
 
-        elif ctype == AlertConditionType.INDICATOR_BELOW:
+        if ctype == AlertConditionType.INDICATOR_BELOW:
             indicator_value = indicators.get(condition.indicator, 0)
             return indicator_value < threshold, indicator_value
 
         # RSI conditions
-        elif ctype == AlertConditionType.RSI_OVERBOUGHT:
+        if ctype == AlertConditionType.RSI_OVERBOUGHT:
             rsi = indicators.get("rsi", indicators.get("rsi_14", 50))
             return rsi > threshold, rsi
 
-        elif ctype == AlertConditionType.RSI_OVERSOLD:
+        if ctype == AlertConditionType.RSI_OVERSOLD:
             rsi = indicators.get("rsi", indicators.get("rsi_14", 50))
             return rsi < threshold, rsi
 
         # Spread/imbalance
-        elif ctype == AlertConditionType.SPREAD_ABOVE:
+        if ctype == AlertConditionType.SPREAD_ABOVE:
             return spread > threshold, spread
 
-        elif ctype == AlertConditionType.IMBALANCE_THRESHOLD:
+        if ctype == AlertConditionType.IMBALANCE_THRESHOLD:
             return abs(imbalance) > threshold, imbalance
 
         return False, 0

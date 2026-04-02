@@ -116,7 +116,7 @@ class RealRiskManager:
         """Reject ticks outside plausible XAUUSD range."""
         if tick.mid <= 0:
             return False
-        if not (500.0 < tick.mid < 5000.0):  # noqa: PLR2004
+        if not (500.0 < tick.mid < 5000.0):
             logger.warning("SUSPICIOUS PRICE: %.4f (out of XAU range)", tick.mid)
             return False
         return True

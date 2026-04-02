@@ -32,9 +32,9 @@ class TestCopyRelationship:
         rel = CopyRelationship(
             follower_id="f1",
             leader_id="l1",
-            max_allocation=Decimal("5000"),
+            max_allocation=Decimal(5000),
         )
-        assert rel.max_allocation == Decimal("5000")
+        assert rel.max_allocation == Decimal(5000)
 
 
 class TestCopyTradingEngine:

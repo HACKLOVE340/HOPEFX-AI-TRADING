@@ -381,7 +381,7 @@ class EnsemblePredictor:
 
         if self.calibrate:
             # Isotonic regression calibration; fall back to sigmoid if too few samples
-            method = "isotonic" if len(y) >= 1000 else "sigmoid"  # noqa: PLR2004
+            method = "isotonic" if len(y) >= 1000 else "sigmoid"
             self.stack_ = CalibratedClassifierCV(
                 self.stack_,
                 method=method,
@@ -408,7 +408,7 @@ class EnsemblePredictor:
 
     def evaluate(self, X: pd.DataFrame, y: np.ndarray) -> dict[str, float]:
         prob = self.predict_proba(X)
-        preds = (prob >= 0.5).astype(int)  # noqa: PLR2004
+        preds = (prob >= 0.5).astype(int)
         result: dict[str, float] = {
             "auc": float(roc_auc_score(y, prob)),
             "logloss": float(log_loss(y, prob)),
@@ -430,11 +430,11 @@ class EnsemblePredictor:
         _ALLOWED_ROOT = (Path(__file__).resolve().parent.parent.parent / "ml" / "saved_models")
         try:
             path.relative_to(_ALLOWED_ROOT)
-        except ValueError:
+        except ValueError as exc:
             raise ValueError(
                 f"EnsemblePredictor.load: path '{path}' is outside the permitted "
                 f"directory '{_ALLOWED_ROOT}'"
-            )
+            ) from exc
         if not path.exists():
             raise FileNotFoundError(f"EnsemblePredictor not found: {path}")
         try:

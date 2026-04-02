@@ -274,16 +274,16 @@ class AdvancedCopyTradingEngine:
             ratio = follower.account_balance / signal.lot_size  # Base trader lot
             return signal.lot_size * ratio
 
-        elif follower.allocation_strategy == TradeAllocationStrategy.FIXED_LOTS:
+        if follower.allocation_strategy == TradeAllocationStrategy.FIXED_LOTS:
             return signal.lot_size
 
-        elif follower.allocation_strategy == TradeAllocationStrategy.PERCENTAGE:
+        if follower.allocation_strategy == TradeAllocationStrategy.PERCENTAGE:
             # Risk fixed percentage of follower account
             max_risk = follower.account_balance * follower.risk_per_trade
             price_diff = abs(signal.entry_price - signal.stop_loss)
             return max_risk / price_diff if price_diff > 0 else 0.1
 
-        elif follower.allocation_strategy == TradeAllocationStrategy.RISK_BASED:
+        if follower.allocation_strategy == TradeAllocationStrategy.RISK_BASED:
             # Calculate based on risk tolerance
             max_risk = follower.account_balance * follower.risk_per_trade
             price_diff = abs(signal.entry_price - signal.stop_loss)
@@ -297,8 +297,7 @@ class AdvancedCopyTradingEngine:
             max_concurrent_risk = follower.account_balance * 0.05
             return min(lot_size, max_concurrent_risk / price_diff)
 
-        else:
-            return signal.lot_size
+        return signal.lot_size
 
     def _adjust_signal_for_follower(
         self, signal: SignalMessage, follower: FollowerConfig, lot_size: float

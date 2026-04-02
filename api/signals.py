@@ -29,6 +29,15 @@ from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
+# Signal confidence thresholds
+_CONF_VERY_STRONG = 0.8
+_CONF_STRONG = 0.6
+_CONF_MODERATE = 0.4
+_CONF_WEAK = 0.2
+_CONF_HIGH_PUSH = 0.70  # threshold for social-feed + FCM push
+# Minimum sample size for distribution validation
+_VALIDATION_MIN_SAMPLES = 30
+
 
 class SignalStrength(Enum):
     """Signal strength levels."""
@@ -341,8 +350,7 @@ class RealTimeSignalService:
         self._check_alerts(signal)
 
         # ── High-confidence pipeline: social feed + FCM push ─────────────────
-        # Threshold: confidence >= 0.70 (70%)
-        if confidence >= 0.70:  # noqa: PLR2004
+        if confidence >= _CONF_HIGH_PUSH:
             self._publish_to_social_feed(signal)
             self._push_fcm_to_all_users(signal)
 
@@ -412,16 +420,15 @@ class RealTimeSignalService:
         # Weighted score
         composite = (confidence * 0.5) + (strategy_agreement * 0.3) + (rr_score * 0.2)
 
-        if composite >= 0.8:  # noqa: PLR2004
+        if composite >= _CONF_VERY_STRONG:
             return SignalStrength.VERY_STRONG
-        elif composite >= 0.6:  # noqa: PLR2004
+        if composite >= _CONF_STRONG:
             return SignalStrength.STRONG
-        elif composite >= 0.4:  # noqa: PLR2004
+        if composite >= _CONF_MODERATE:
             return SignalStrength.MODERATE
-        elif composite >= 0.2:  # noqa: PLR2004
+        if composite >= _CONF_WEAK:
             return SignalStrength.WEAK
-        else:
-            return SignalStrength.VERY_WEAK
+        return SignalStrength.VERY_WEAK
 
     def get_active_signals(
         self,
@@ -713,11 +720,11 @@ class RealTimeSignalService:
 
             strength = (
                 SignalStrength.VERY_STRONG
-                if confidence >= 0.8  # noqa: PLR2004
+                if confidence >= _CONF_VERY_STRONG
                 else SignalStrength.STRONG
-                if confidence >= 0.6  # noqa: PLR2004
+                if confidence >= _CONF_STRONG
                 else SignalStrength.MODERATE
-                if confidence >= 0.4  # noqa: PLR2004
+                if confidence >= _CONF_MODERATE
                 else SignalStrength.WEAK
             )
 
@@ -1084,7 +1091,8 @@ def create_signals_router():
         report = (
             validator.validate()
             if (
-                len(validator._oos_signals) >= 30 and len(validator._live_signals) >= 30  # noqa: PLR2004
+                len(validator._oos_signals) >= _VALIDATION_MIN_SAMPLES
+                and len(validator._live_signals) >= _VALIDATION_MIN_SAMPLES
             )
             else None
         )

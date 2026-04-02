@@ -85,7 +85,7 @@ class TestKillSwitch:
     def test_callback_called_on_activate(self, tmp_path):
         ks = self._make_ks(tmp_path)
         called = []
-        ks.register_callback(lambda r: called.append(r))
+        ks.register_callback(called.append)
         ks.activate("cb-test")
         assert called == ["cb-test"]
 
@@ -384,7 +384,7 @@ class TestCompliance:
         gate = AMLGate()
         result = gate.check_withdrawal(
             user_id="u1",
-            amount=Decimal("15000"),
+            amount=Decimal(15000),
             kyc_status="approved",
         )
         assert not result.allowed
@@ -396,7 +396,7 @@ class TestCompliance:
         gate = AMLGate()
         result = gate.check_withdrawal(
             user_id="u2",
-            amount=Decimal("2000"),
+            amount=Decimal(2000),
             kyc_status="unverified",
         )
         assert not result.allowed
@@ -408,7 +408,7 @@ class TestCompliance:
         gate = AMLGate()
         result = gate.check_withdrawal(
             user_id="u3",
-            amount=Decimal("500"),
+            amount=Decimal(500),
             kyc_status="approved",
         )
         assert result.allowed

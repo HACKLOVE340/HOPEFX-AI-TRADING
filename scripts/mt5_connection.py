@@ -43,9 +43,8 @@ def connect_to_account():
         if mt5.login(login, password, server):
             logging.info("Connected to account successfully")
             return True
-        else:
-            logging.warning(f"Connection attempt {attempt + 1} failed: {mt5.last_error()}")
-            time.sleep(2**attempt)  # Exponential backoff
+        logging.warning(f"Connection attempt {attempt + 1} failed: {mt5.last_error()}")
+        time.sleep(2**attempt)  # Exponential backoff
     logging.error("All connection attempts failed")
     return False
 

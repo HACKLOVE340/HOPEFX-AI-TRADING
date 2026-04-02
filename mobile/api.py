@@ -167,7 +167,7 @@ class MobileAPIServer:
         rate_limiter=None,
     ) -> None:
         resolved_secret = jwt_secret or os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET")
-        if not resolved_secret or len(resolved_secret) < 32:  # noqa: PLR2004
+        if not resolved_secret or len(resolved_secret) < 32:
             raise ValueError(
                 "jwt_secret must be >= 32 characters. "
                 "Set SECURITY_JWT_SECRET env var or pass jwt_secret= explicitly. "
@@ -247,7 +247,7 @@ class MobileAPIServer:
     async def _verify_token(self, authorization: str = Header(...)) -> str:
         """FastAPI dependency: extract and verify Bearer access token."""
         parts = authorization.split()
-        if len(parts) != 2 or parts[0].lower() != "bearer":  # noqa: PLR2004
+        if len(parts) != 2 or parts[0].lower() != "bearer":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid auth scheme — expected 'Bearer <token>'",

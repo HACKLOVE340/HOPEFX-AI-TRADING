@@ -340,7 +340,7 @@ class NuclearWordMapScorer:
             "n_categories_matched": n_categories,
         }
 
-        if severity >= 5:  # noqa: PLR2004
+        if severity >= 5:
             logger.warning(
                 "NuclearWordMapScorer: severity=%d action=%s score=%.3f categories=%s vol=%.2f sentiment=%.2f",
                 severity,

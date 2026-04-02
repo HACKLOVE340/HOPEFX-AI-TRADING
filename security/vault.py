@@ -168,14 +168,13 @@ class HSMVault:
 
         if provider == "aws":
             return self._derive_key_aws_kms()
-        elif provider == "azure":
+        if provider == "azure":
             return self._derive_key_azure_keyvault()
-        else:
-            raise RuntimeError(
-                "CLOUD_HSM_PROVIDER is not set or unrecognised. "
-                "Set it to 'aws' or 'azure' and configure the required env vars "
-                "before using hsm_type='cloudhsm'."
-            )
+        raise RuntimeError(
+            "CLOUD_HSM_PROVIDER is not set or unrecognised. "
+            "Set it to 'aws' or 'azure' and configure the required env vars "
+            "before using hsm_type='cloudhsm'."
+        )
 
     def _derive_key_aws_kms(self) -> bytes:
         """Generate a 256-bit data key via AWS KMS GenerateDataKey.

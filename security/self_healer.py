@@ -39,21 +39,18 @@ from __future__ import annotations
 import asyncio
 import difflib
 import hashlib
-import importlib
 import json
 import logging
 import os
 import shutil
 import subprocess
-import sys
-import tempfile
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from pydantic import BaseModel
+import contextlib
 
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
@@ -196,6 +193,7 @@ def _git_rollback(path: Path) -> bool:
             capture_output=True,
             text=True,
             timeout=15,
+            check=False,
         )
         if result.returncode == 0:
             logger.info("SelfHealer: git rollback OK for %s", rel)
@@ -464,10 +462,8 @@ class SelfHealer:
 
         # Remove applied entries from the queue
         for raw in applied:
-            try:
+            with contextlib.suppress(Exception):
                 await redis.lrem("fixes:approved", 1, raw)
-            except Exception:
-                pass
 
     def _resolve_endpoint_to_file(self, endpoint: str) -> Path | None:
         """
@@ -503,10 +499,8 @@ class SelfHealer:
         _save_manifest(self._baseline)
         redis = await _get_redis()
         if redis:
-            try:
+            with contextlib.suppress(Exception):
                 await redis.set("heal:manifest", json.dumps(self._baseline))
-            except Exception:
-                pass
         return {"files": len(self._baseline), "rebuilt_at": datetime.now(UTC).isoformat()}
 
     # ── FastAPI router ────────────────────────────────────────────────────────

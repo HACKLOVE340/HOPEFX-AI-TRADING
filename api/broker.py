@@ -24,8 +24,16 @@ import time
 from fastapi import APIRouter
 from pydantic import BaseModel
 from datetime import timezone
+from http import HTTPStatus
 
 UTC = timezone.utc
+
+_HTTP_OK = HTTPStatus.OK.value
+_HTTP_UNAUTHORIZED = HTTPStatus.UNAUTHORIZED.value
+_HTTP_NOT_FOUND = HTTPStatus.NOT_FOUND.value
+_HTTP_FORBIDDEN = HTTPStatus.FORBIDDEN.value
+# Minimum broker name length for validation
+_MIN_BROKER_NAME_LEN = 4
 
 logger = logging.getLogger(__name__)
 
@@ -116,21 +124,21 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
                 lambda: _req.get(url, headers=headers, timeout=10),
             )
             latency = int((time.monotonic() - start) * 1000)
-            if resp_sync.status_code == 401:  # noqa: PLR2004
+            if resp_sync.status_code == 401:
                 return BrokerTestResponse(
                     ok=False,
                     broker="oanda",
                     error="401 Unauthorized — check your API token",
                     latency_ms=latency,
                 )
-            if resp_sync.status_code == 404:  # noqa: PLR2004
+            if resp_sync.status_code == 404:
                 return BrokerTestResponse(
                     ok=False,
                     broker="oanda",
                     error=f"Account {req.accountId!r} not found",
                     latency_ms=latency,
                 )
-            if resp_sync.status_code != 200:  # noqa: PLR2004
+            if resp_sync.status_code != 200:
                 return BrokerTestResponse(
                     ok=False,
                     broker="oanda",
@@ -163,21 +171,21 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
 
     latency = int((time.monotonic() - start) * 1000)
 
-    if resp.status_code == 401:  # noqa: PLR2004
+    if resp.status_code == 401:
         return BrokerTestResponse(
             ok=False,
             broker="oanda",
             error="401 Unauthorized — check your API token",
             latency_ms=latency,
         )
-    if resp.status_code == 404:  # noqa: PLR2004
+    if resp.status_code == 404:
         return BrokerTestResponse(
             ok=False,
             broker="oanda",
             error=f"Account {req.accountId!r} not found",
             latency_ms=latency,
         )
-    if resp.status_code != 200:  # noqa: PLR2004
+    if resp.status_code != 200:
         return BrokerTestResponse(
             ok=False,
             broker="oanda",
@@ -218,14 +226,14 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=headers)
         latency = int((time.monotonic() - start) * 1000)
-        if resp.status_code == 403:  # noqa: PLR2004
+        if resp.status_code == 403:
             return BrokerTestResponse(
                 ok=False,
                 broker="alpaca",
                 error="403 Forbidden — check API key and secret",
                 latency_ms=latency,
             )
-        if resp.status_code != 200:  # noqa: PLR2004
+        if resp.status_code != 200:
             return BrokerTestResponse(
                 ok=False,
                 broker="alpaca",

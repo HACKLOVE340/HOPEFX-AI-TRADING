@@ -86,8 +86,8 @@ class MasterControlCore:
         self.price_history: dict[str, list[tuple]] = defaultdict(list)
 
         # Risk management
-        self.daily_pnl: Decimal = Decimal("0")
-        self.total_exposure: Decimal = Decimal("0")
+        self.daily_pnl: Decimal = Decimal(0)
+        self.total_exposure: Decimal = Decimal(0)
         self.kill_switch_triggered: bool = False
 
         # Event system (simplified for integration)
@@ -208,13 +208,13 @@ class MasterControlCore:
         composite = self._aggregate_signals()
 
         # Execute if consensus
-        if composite["action"] != "HOLD" and composite["confidence"] > 0.6:  # noqa: PLR2004
+        if composite["action"] != "HOLD" and composite["confidence"] > 0.6:
             self._execute_signal(composite)
 
     def _check_signal_risk(self, strategy_name: str, signal: StrategySignal) -> bool:
         """Pre-trade risk check"""
         # Check daily loss limit
-        if self.daily_pnl < -Decimal("1000"):  # $1k daily loss
+        if self.daily_pnl < -Decimal(1000):  # $1k daily loss
             return False
 
         # Check strategy allocation
@@ -256,16 +256,16 @@ class MasterControlCore:
             # Correlation check using recent price history for the symbol
             if symbol and symbol in self.price_history:
                 history = self.price_history[symbol]
-                if len(history) >= 20:  # noqa: PLR2004
+                if len(history) >= 20:
                     prices = [float(p) for _, p in history[-20:]]
                     # Pearson correlation of consecutive returns
                     returns = [prices[i] / prices[i - 1] - 1 for i in range(1, len(prices))]
-                    if len(returns) >= 2:  # noqa: PLR2004
+                    if len(returns) >= 2:
                         mean_r = sum(returns) / len(returns)
                         variance = sum((r - mean_r) ** 2 for r in returns) / len(returns)
                         # If variance is near zero the series is flat — treat as correlated
                         if (
-                            variance < 1e-12  # noqa: PLR2004
+                            variance < 1e-12
                             or abs(mean_r) > self.config.correlation_threshold
                         ):
                             return True
@@ -304,7 +304,7 @@ class MasterControlCore:
         confidence = best_weight / total_weight  # fraction of total weight behind winner
 
         # Require a clear majority
-        if best_action == "HOLD" or confidence <= 0.5:  # noqa: PLR2004
+        if best_action == "HOLD" or confidence <= 0.5:
             return {"action": "HOLD", "confidence": confidence, "strength": 0.0}
 
         avg_strength = best_weight / max(
@@ -344,7 +344,7 @@ class MasterControlCore:
         # Store price
         self.current_prices[symbol] = price
         self.price_history[symbol].append((timestamp, price))
-        if len(self.price_history[symbol]) > 1000:  # noqa: PLR2004
+        if len(self.price_history[symbol]) > 1000:
             self.price_history[symbol].pop(0)
 
         # Detect regime
@@ -360,7 +360,7 @@ class MasterControlCore:
     def _detect_regime(self, symbol: str):
         """Detect market regime from price history"""
         history = self.price_history[symbol]
-        if len(history) < 50:  # noqa: PLR2004
+        if len(history) < 50:
             return
 
         # Simple regime detection (enhance with your ML)
@@ -370,8 +370,8 @@ class MasterControlCore:
         volatility = sum(r**2 for r in returns) / len(returns)
         trend = sum(returns) / len(returns)
 
-        if volatility > 0.001:  # High volatility threshold  # noqa: PLR2004
-            new_regime = ("trending_up" if trend > 0 else "trending_down") if abs(trend) > 0.0005 else "volatile"  # noqa: PLR2004
+        if volatility > 0.001:  # High volatility threshold
+            new_regime = ("trending_up" if trend > 0 else "trending_down") if abs(trend) > 0.0005 else "volatile"
         else:
             new_regime = "ranging"
 
@@ -404,7 +404,7 @@ class MasterControlCore:
     def _calculate_strategy_exposure(self, strategy_name: str) -> Decimal:
         """Calculate current exposure for a strategy"""
         # Query from your database
-        return Decimal("0")
+        return Decimal(0)
 
     def trigger_kill_switch(self, reason: str):
         """Emergency stop all trading"""

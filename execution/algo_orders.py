@@ -475,13 +475,12 @@ class VWAPOrder(AlgoOrder):
         )
 
         try:
-            for i, qty in enumerate(slice_quantities):
+            for i, slice_qty in enumerate(slice_quantities):
                 if self.status == AlgoStatus.CANCELLED:
                     break
 
                 # Last slice: fill remainder
-                if i == len(slice_quantities) - 1:
-                    qty = self.remaining_quantity  # noqa: PLW2901
+                qty = self.remaining_quantity if i == len(slice_quantities) - 1 else slice_qty
 
                 if qty >= ALGO_MIN_CHILD_SIZE:
                     await self._submit_child(qty)
@@ -708,7 +707,7 @@ class AlgoOrderManager:
                 peak_size=self.DEFAULT_ICEBERG_PEAK,
                 strategy_id=strategy_id,
             )
-        elif total_quantity >= self.LARGE_ORDER_THRESHOLD:
+        if total_quantity >= self.LARGE_ORDER_THRESHOLD:
             logger.info(
                 "AlgoOrderManager: auto-selecting TWAP for %.2f lots (%s %s)",
                 total_quantity,

@@ -82,7 +82,7 @@ async def _send_telegram(token: str, chat_id: str, text: str) -> bool:
             aiohttp.ClientSession() as session,
             session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp,
         ):
-            if resp.status == 200:  # noqa: PLR2004
+            if resp.status == 200:
                 return True
             body = await resp.text()
             logger.warning("Telegram heartbeat send failed: %d %s", resp.status, body[:200])
@@ -121,7 +121,7 @@ def _build_message(status: dict[str, Any], uptime_seconds: float) -> str:
     mode = status.get("mode", "paper")
 
     pnl_emoji = "🟢" if daily_pnl >= 0 else "🔴"
-    dd_emoji = "⚠️" if drawdown > 5 else ("🟡" if drawdown > 2 else "🟢")  # noqa: PLR2004
+    dd_emoji = "⚠️" if drawdown > 5 else ("🟡" if drawdown > 2 else "🟢")
 
     sig_text = ""
     if last_sig:

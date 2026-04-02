@@ -420,7 +420,7 @@ class TestBollingerBandsSignalPaths:
         """Cover lines 106-107: prev_price < prev_lower, current_price > current_lower."""
         n = 25
         prices = [1900.0] * n
-        df = _df(prices)
+        _df(prices)
 
         # Construct bands such that prev was below lower, now crosses above
         # upper_band = sma + 2*std = 1910, lower_band = sma - 2*std = 1890

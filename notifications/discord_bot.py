@@ -265,7 +265,7 @@ class DiscordSignalBot:
                 ):
                     if resp.status in (200, 204):
                         return True
-                    if resp.status == 429:  # noqa: PLR2004
+                    if resp.status == 429:
                         retry_after = float((await resp.json()).get("retry_after", 1.0))
                         logger.debug("Discord rate limited — retrying in %.1f s", retry_after)
                         await asyncio.sleep(retry_after)

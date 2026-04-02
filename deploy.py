@@ -126,7 +126,7 @@ class DeploymentManager:
         for attempt in range(1, HEALTH_CHECK_RETRIES + 1):
             try:
                 with urllib.request.urlopen(url, timeout=5) as resp:  # nosec B310 - health check URL is always http/https
-                    if resp.status == 200:  # noqa: PLR2004
+                    if resp.status == 200:
                         logger.info("Health check passed (attempt %d)", attempt)
                         return True
                     logger.warning("Attempt %d: HTTP %d", attempt, resp.status)

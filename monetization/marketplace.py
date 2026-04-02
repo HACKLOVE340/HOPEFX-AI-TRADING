@@ -390,14 +390,13 @@ class PricingEngine:
 
     def get_recommended_tier(self, trading_volume: float, account_balance: float) -> SubscriptionTier:
         """Recommend subscription tier based on user profile"""
-        if account_balance < 1000:  # noqa: PLR2004
+        if account_balance < 1000:
             return SubscriptionTier.FREE
-        elif trading_volume < 100000:  # noqa: PLR2004
+        if trading_volume < 100000:
             return SubscriptionTier.BASIC
-        elif trading_volume < 1000000:  # noqa: PLR2004
+        if trading_volume < 1000000:
             return SubscriptionTier.PRO
-        else:
-            return SubscriptionTier.ENTERPRISE
+        return SubscriptionTier.ENTERPRISE
 
 
 class LicenseManager:
@@ -1107,8 +1106,7 @@ class StrategyMarketplace:
                 s.status = StrategyStatus.APPROVED
                 self._strategies[sid] = s
                 return {"status": "active", "id": sid}
-            else:
-                creator_id = listing_or_creator_id
+            creator_id = listing_or_creator_id
 
         # Keyword / positional creator_id form
         cid = creator_id or ""

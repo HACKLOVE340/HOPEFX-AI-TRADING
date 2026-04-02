@@ -1409,7 +1409,7 @@ class RiskManager:
     # ── VaR ───────────────────────────────────────────────────────────────────
 
     def value_at_risk(self) -> float:
-        if len(self._pnl_history) < 10:  # noqa: PLR2004
+        if len(self._pnl_history) < 10:
             return 0.0
         arr = np.array(list(self._pnl_history))
         return float(np.percentile(arr, (1 - _VAR_CONFIDENCE) * 100))
@@ -1671,7 +1671,7 @@ class RiskManager:
             return RiskLevel.MEDIUM
         return RiskLevel.LOW
 
-    def check_drawdown(  # noqa: F811  # pylint: disable=function-redefined
+    def check_drawdown(  # pylint: disable=function-redefined  # noqa: F811
         self,
         equity_curve: Any = None,
         max_dd: float = None,
@@ -1689,7 +1689,7 @@ class RiskManager:
 
         current_dd = (
             self._drawdown_from_curve(equity_curve)
-            if equity_curve is not None and len(equity_curve) >= 2  # noqa: PLR2004
+            if equity_curve is not None and len(equity_curve) >= 2
             else self._state.current_drawdown
         )
 
@@ -1822,7 +1822,7 @@ class RiskManager:
         Returns the mean of the worst (1-confidence) fraction of returns as a
         positive number (i.e. the expected loss magnitude).
         """
-        if len(self._returns_history) < 2:  # noqa: PLR2004
+        if len(self._returns_history) < 2:
             return 0.0
         arr = np.array(list(self._returns_history), dtype=float)
         cutoff = np.percentile(arr, (1.0 - confidence) * 100)
@@ -1849,7 +1849,7 @@ class RiskManager:
         if self._cvar_daily_limit <= 0.0:
             return (True, "CVaR gate disabled")
 
-        if len(self._returns_history) < 10:  # noqa: PLR2004
+        if len(self._returns_history) < 10:
             return (
                 True,
                 f"Insufficient history ({len(self._returns_history)} obs) for CVaR",
@@ -1976,7 +1976,7 @@ class RiskManager:
 
     # ── Extended validate_trade ───────────────────────────────────────────────
 
-    def validate_trade(  # type: ignore[override]  # noqa: F811  # pylint: disable=function-redefined
+    def validate_trade(  # type: ignore[override]  # pylint: disable=function-redefined  # noqa: F811
         self,
         symbol: str,
         quantity: float = 0.0,
@@ -2017,7 +2017,7 @@ class RiskManager:
 
     # ── Extended check_risk_limits (returns violations list) ─────────────────
 
-    def check_risk_limits(self) -> tuple[bool, list[str]]:  # type: ignore[override]  # noqa: F811  # pylint: disable=function-redefined
+    def check_risk_limits(self) -> tuple[bool, list[str]]:  # type: ignore[override]  # pylint: disable=function-redefined  # noqa: F811
         """Return (within_limits: bool, violations: List[str]).
 
         Evaluates drawdown, daily loss, open-position count, and halt state.
@@ -2050,7 +2050,7 @@ class RiskManager:
 
     # ── can_open_position (extended — human-readable reasons) ─────────────────
 
-    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]  # noqa: F811  # pylint: disable=function-redefined
+    def can_open_position(self, size: float) -> tuple[bool, str]:  # type: ignore[override]  # pylint: disable=function-redefined  # noqa: F811
         """Return (True, 'approved') or (False, human-readable reason)."""
         if self._halt or self._trading_halted:
             return False, f"halted:{self._halt_reason}"

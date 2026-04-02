@@ -75,8 +75,7 @@ WS_AUTH_REQUIRED: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
 
 def _validate_ws_token(token: str) -> dict | None:
     """Validate a Bearer token from a WS auth message. Returns payload or None."""
-    if token.startswith("Bearer "):
-        token = token[7:]
+    token = token.removeprefix("Bearer ")
     try:
         from auth.jwt import decode_access_token
 
@@ -415,7 +414,7 @@ def _compute_atr_sl_tp(
 
         broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
         buf = _data_buffers.get(broker_sym) or _data_buffers.get(symbol)
-        if buf is not None and len(buf) >= 15:  # noqa: PLR2004
+        if buf is not None and len(buf) >= 15:
             import numpy as _np
 
             highs = _np.array([b["high"] for b in list(buf)[-15:]], dtype=float)
@@ -428,7 +427,7 @@ def _compute_atr_sl_tp(
                     _np.abs(lows[1:] - closes[:-1]),
                 ),
             )
-            if len(tr) >= 14:  # noqa: PLR2004
+            if len(tr) >= 14:
                 atr = float(_np.mean(tr[-14:]))
     except Exception as exc:
         logger.debug(
@@ -448,7 +447,7 @@ def _compute_atr_sl_tp(
                 csv_path = pathlib.Path(f"data/{symbol.replace('/', '')}_H1.csv")
             if csv_path.exists():
                 df = _pd.read_csv(csv_path, usecols=["high", "low", "close"]).tail(20)
-                if len(df) >= 15:  # noqa: PLR2004
+                if len(df) >= 15:
                     highs = df["high"].to_numpy(dtype=float)
                     lows = df["low"].to_numpy(dtype=float)
                     closes = df["close"].to_numpy(dtype=float)

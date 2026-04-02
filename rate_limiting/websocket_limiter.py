@@ -46,7 +46,8 @@ Usage
         allowed, reason = await limiter.check_and_register(ws, client_ip)
         if not allowed:
             await ws.close(code=1008, reason=reason)
-            return
+
+Return
         await ws.accept()
         try:
             ...
@@ -94,7 +95,7 @@ class WebSocketConnectionLimiter:
         self._connected = False
         # In-process fallback state
         self._open_conns: dict[str, int] = defaultdict(int)
-        self._rate_window: dict[str, deque] = defaultdict(lambda: deque())
+        self._rate_window: dict[str, deque] = defaultdict(deque)
         self._lock = asyncio.Lock()
 
     # ── Redis connection ──────────────────────────────────────────────────────

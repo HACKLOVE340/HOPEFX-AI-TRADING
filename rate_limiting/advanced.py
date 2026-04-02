@@ -91,7 +91,7 @@ def _parse_rate(rate_str: str) -> tuple:
     """
     first = rate_str.split(";")[0].strip()
     parts = first.lower().split()
-    if len(parts) != 3 or parts[1] != "per":  # noqa: PLR2004
+    if len(parts) != 3 or parts[1] != "per":
         raise ValueError(f"Invalid rate string: {rate_str!r}")
     count = int(parts[0])
     period = _PERIOD_SECONDS.get(parts[2])

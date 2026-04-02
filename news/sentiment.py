@@ -137,16 +137,15 @@ class SentimentAnalyzer:
 
     def _get_label(self, polarity: float) -> SentimentLabel:
         """Convert polarity score to sentiment label"""
-        if polarity >= 0.5:  # noqa: PLR2004
+        if polarity >= 0.5:
             return SentimentLabel.VERY_POSITIVE
-        elif polarity >= 0.1:  # noqa: PLR2004
+        if polarity >= 0.1:
             return SentimentLabel.POSITIVE
-        elif polarity <= -0.5:  # noqa: PLR2004
+        if polarity <= -0.5:
             return SentimentLabel.VERY_NEGATIVE
-        elif polarity <= -0.1:  # noqa: PLR2004
+        if polarity <= -0.1:
             return SentimentLabel.NEGATIVE
-        else:
-            return SentimentLabel.NEUTRAL
+        return SentimentLabel.NEUTRAL
 
     def analyze_multiple(self, texts: list[str]) -> list[SentimentScore]:
         """Analyze multiple texts"""
@@ -258,9 +257,8 @@ class FinancialSentimentAnalyzer:
                     label=self._get_label(polarity),
                     compound_score=polarity,
                 )
-            else:
-                # Fallback to keyword-based analysis
-                return self._keyword_analysis(combined_text)
+            # Fallback to keyword-based analysis
+            return self._keyword_analysis(combined_text)
 
         except Exception as e:
             self.logger.error(f"Error in financial sentiment analysis: {e}")
@@ -300,16 +298,15 @@ class FinancialSentimentAnalyzer:
 
     def _get_label(self, polarity: float) -> SentimentLabel:
         """Convert polarity score to sentiment label"""
-        if polarity >= 0.5:  # noqa: PLR2004
+        if polarity >= 0.5:
             return SentimentLabel.VERY_POSITIVE
-        elif polarity >= 0.05:  # noqa: PLR2004
+        if polarity >= 0.05:
             return SentimentLabel.POSITIVE
-        elif polarity <= -0.5:  # noqa: PLR2004
+        if polarity <= -0.5:
             return SentimentLabel.VERY_NEGATIVE
-        elif polarity <= -0.05:  # noqa: PLR2004
+        if polarity <= -0.05:
             return SentimentLabel.NEGATIVE
-        else:
-            return SentimentLabel.NEUTRAL
+        return SentimentLabel.NEUTRAL
 
     def extract_entities(self, text: str) -> dict[str, list[str]]:
         """

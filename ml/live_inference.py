@@ -106,7 +106,7 @@ class _FeatureCache:
                 entry = self._mem.get(key)
                 if entry and entry[0] > time.monotonic():
                     return pd.DataFrame([json.loads(entry[1])])
-                elif entry:
+                if entry:
                     del self._mem[key]
         except Exception as exc:
             logger.debug("Feature cache get error: %s", exc)

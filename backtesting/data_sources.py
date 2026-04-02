@@ -159,9 +159,8 @@ class BrokerDataSource(DataSource):
             if hasattr(self.broker, "get_market_data"):
                 df = self.broker.get_market_data(symbol=symbol, timeframe="D1", start=start_date, end=end_date)
                 return df
-            else:
-                logger.error("Broker does not support historical data retrieval")
-                return pd.DataFrame()
+            logger.error("Broker does not support historical data retrieval")
+            return pd.DataFrame()
 
         except Exception as e:
             logger.error(f"Error getting data from broker for {symbol}: {e}")
@@ -248,7 +247,7 @@ class AlphaVantageSource(DataSource):
 
             # Standardize column names - Alpha Vantage returns numbered columns
             # Select only the OHLC columns we need
-            if len(df.columns) >= 4:  # noqa: PLR2004
+            if len(df.columns) >= 4:
                 df = df.iloc[:, :4]  # Take first 4 columns (open, high, low, close)
             df.columns = ["open", "high", "low", "close"]
             df = df.astype(float)
@@ -666,10 +665,9 @@ class DataManager:
         # Determine symbol type and try appropriate sources
         if self._is_crypto(symbol):
             return self._get_crypto_data(symbol, start_date, end_date)
-        elif self._is_forex(symbol):
+        if self._is_forex(symbol):
             return self._get_forex_data(symbol, start_date, end_date)
-        else:
-            return self._get_stock_data(symbol, start_date, end_date)
+        return self._get_stock_data(symbol, start_date, end_date)
 
     def _is_crypto(self, symbol: str) -> bool:
         """Check if symbol is cryptocurrency."""

@@ -216,8 +216,7 @@ class PortfolioAnalytics:
                 "sharpe_ratio": sharpe,
                 "allocation": pd.Series(optimal_weights, index=self.assets).sort_values(ascending=False),
             }
-        else:
-            return {"success": False, "message": result.message}
+        return {"success": False, "message": result.message}
 
     def generate_efficient_frontier(self, n_portfolios: int = 100, save_path: str | None = None) -> pd.DataFrame:
         """
@@ -545,7 +544,7 @@ class MultiAssetBacktester:
 
         # Execute trades
         for asset, trade_value in trades.items():
-            if abs(trade_value) > 0.01:  # Minimum trade size  # noqa: PLR2004
+            if abs(trade_value) > 0.01:  # Minimum trade size
                 trade_quantity = trade_value / prices[asset]
                 commission = abs(trade_value) * self.commission_rate
 
@@ -777,9 +776,9 @@ class PortfolioOptimizer:
         method  : "max_sharpe" | "min_variance" | "equal_weight"
         """
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == 2 else len(assets)  # noqa: PLR2004
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)
 
-        if method == "equal_weight" or returns.shape[0] < 10:  # noqa: PLR2004
+        if method == "equal_weight" or returns.shape[0] < 10:
             w = np.ones(n) / n
         else:
             # Maximise Sharpe via SLSQP (deterministic, no random search)
@@ -834,8 +833,8 @@ class PortfolioOptimizer:
         from scipy.optimize import minimize as _minimize
 
         returns = np.asarray(returns)
-        n = returns.shape[1] if returns.ndim == 2 else len(assets)  # noqa: PLR2004
-        if returns.shape[0] < 5 or n < 2:  # noqa: PLR2004
+        n = returns.shape[1] if returns.ndim == 2 else len(assets)
+        if returns.shape[0] < 5 or n < 2:
             # Insufficient data — return equal-weight single point
             w = np.full(n, 1.0 / n)
             port_ret = float(np.mean(returns @ w) * 252)
@@ -916,7 +915,7 @@ def _pa_optimize(
     constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
     bounds = [(0.0, 1.0)] * n
 
-    if method == "equal_weight" or n < 2:  # noqa: PLR2004
+    if method == "equal_weight" or n < 2:
         w = w0
     elif method == "min_variance":
         res = _minimize(

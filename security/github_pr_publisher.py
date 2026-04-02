@@ -97,7 +97,7 @@ def _resolve_file_path(endpoint: str) -> str | None:
             return path
     # Heuristic: /api/foo/bar → api/foo.py
     parts = endpoint.strip("/").split("/")
-    if len(parts) >= 2 and parts[0] == "api":  # noqa: PLR2004
+    if len(parts) >= 2 and parts[0] == "api":
         return f"api/{parts[1]}.py"
     return None
 
@@ -144,7 +144,7 @@ async def _get_file(client: httpx.AsyncClient, repo: str, path: str) -> dict[str
     """Fetch file metadata and content from GitHub. Returns None if not found."""
     url = f"{_GITHUB_API}/repos/{repo}/contents/{path}"
     resp = await client.get(url, headers=_headers(), params={"ref": GITHUB_BASE_BRANCH})
-    if resp.status_code == 404:  # noqa: PLR2004
+    if resp.status_code == 404:
         return None
     resp.raise_for_status()
     return resp.json()
@@ -166,7 +166,7 @@ async def _create_branch(client: httpx.AsyncClient, repo: str, branch: str, sha:
         headers=_headers(),
         json={"ref": f"refs/heads/{branch}", "sha": sha},
     )
-    if resp.status_code == 422:  # noqa: PLR2004
+    if resp.status_code == 422:
         # Branch already exists — acceptable (idempotent retry)
         logger.warning("Branch %s already exists — reusing", branch)
         return

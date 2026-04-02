@@ -122,7 +122,7 @@ class PaperExecutor:
             # Fixed $0.05 slippage for XAUUSD
             return 0.05 if symbol == "XAUUSD" else base_price * 0.0001
 
-        elif self.slippage_model == "variable":
+        if self.slippage_model == "variable":
             # Variable slippage based on size and volatility
             base_slippage = 0.02  # $0.02 base for XAUUSD
 
@@ -208,7 +208,7 @@ class PaperExecutor:
         # Execute based on order type
         if order.order_type == "market":
             return self._execute_market_order(order_id, order, fill_price, slippage, commission, timestamp)
-        elif order.order_type == "limit":
+        if order.order_type == "limit":
             return self._execute_limit_order(
                 order_id,
                 order,
@@ -218,17 +218,16 @@ class PaperExecutor:
                 commission,
                 timestamp,
             )
-        else:
-            return ExecutionResult(
-                order_id=order_id,
-                status=OrderStatus.REJECTED,
-                filled_qty=0.0,
-                avg_price=0.0,
-                slippage=0.0,
-                commission=0.0,
-                message=f"Unsupported order type: {order.order_type}",
-                timestamp=timestamp,
-            )
+        return ExecutionResult(
+            order_id=order_id,
+            status=OrderStatus.REJECTED,
+            filled_qty=0.0,
+            avg_price=0.0,
+            slippage=0.0,
+            commission=0.0,
+            message=f"Unsupported order type: {order.order_type}",
+            timestamp=timestamp,
+        )
 
     def _execute_market_order(
         self,
@@ -434,8 +433,7 @@ class PaperExecutor:
 
         if pos["side"] == "long":
             return (current_price - pos["entry_price"]) * pos["qty"]
-        else:
-            return (pos["entry_price"] - current_price) * pos["qty"]
+        return (pos["entry_price"] - current_price) * pos["qty"]
 
     def close_all_positions(self, current_prices: dict[str, float]) -> list:
         """Close all open positions."""

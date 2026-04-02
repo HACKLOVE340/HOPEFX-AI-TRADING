@@ -22,14 +22,14 @@ class CryptoWalletManager:
 
     def __init__(self):
         self.hot_wallet_balances = {
-            "BTC": Decimal("0"),
-            "USDT": Decimal("0"),
-            "ETH": Decimal("0"),
+            "BTC": Decimal(0),
+            "USDT": Decimal(0),
+            "ETH": Decimal(0),
         }
         self.cold_wallet_balances = {
-            "BTC": Decimal("0"),
-            "USDT": Decimal("0"),
-            "ETH": Decimal("0"),
+            "BTC": Decimal(0),
+            "USDT": Decimal(0),
+            "ETH": Decimal(0),
         }
 
     def get_balance(self, currency: str) -> dict:

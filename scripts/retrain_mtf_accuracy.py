@@ -115,16 +115,13 @@ def build_full_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
             raw_aligned = raw_aligned.set_index("Date")
             # Get dates from X_base if it has a Date column, else use positional
             if "Date" in X_base.columns:
-                base_dates = pd.to_datetime(X_base["Date"])
+                pd.to_datetime(X_base["Date"])
             else:
-                base_dates = pd.to_datetime(
-                    raw_ohlcv["Date"].iloc[X_base.index] if hasattr(X_base.index, '__len__') else raw_ohlcv["Date"]
+                pd.to_datetime(
+                    raw_ohlcv["Date"].iloc[X_base.index] if hasattr(X_base.index, "__len__") else raw_ohlcv["Date"]
                 )
             ext_result = build_extended_features(raw_ohlcv)
-            if isinstance(ext_result, tuple):
-                ext_df = ext_result[0]
-            else:
-                ext_df = ext_result
+            ext_df = ext_result[0] if isinstance(ext_result, tuple) else ext_result
             # Merge extended features onto X_base by position
             ext_cols = [c for c in ext_df.columns if c not in X_base.columns
                         and c not in ("open","high","low","close","volume","Date","date","target")]
@@ -603,7 +600,7 @@ def main() -> int:
     print(f"  Data:              58Y XAUUSD ({len(df):,} bars)")
     print(f"  Features:          {len(selected_features)} (selected from {len(feature_cols)})")
     print(f"  Horizon:           {HORIZON} bars")
-    print(f"  Ensemble:          XGB + RF + LGB + meta-LR")
+    print("  Ensemble:          XGB + RF + LGB + meta-LR")
     print()
     print(f"  Walk-forward acc:  {cv_acc_mean:.3f} ± {cv_acc_std:.3f}")
     print(f"  Walk-forward AUC:  {np.mean(cv_aucs):.3f}")

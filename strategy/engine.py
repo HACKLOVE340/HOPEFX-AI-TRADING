@@ -220,10 +220,9 @@ class _MLPredictor:
 
                     if raw_dir == "long":
                         return "BUY", confidence
-                    elif raw_dir == "short":
+                    if raw_dir == "short":
                         return "SELL", confidence
-                    else:
-                        return "HOLD", confidence
+                    return "HOLD", confidence
 
             except Exception as exc:
                 logger.warning("StrategyEngine: ML predict error (%s) — EMA fallback.", exc)
@@ -231,7 +230,7 @@ class _MLPredictor:
         # EMA-crossover fallback
         if ema_cross > 0:
             return "BUY", 0.60
-        elif ema_cross < 0:
+        if ema_cross < 0:
             return "SELL", 0.60
         return "HOLD", 0.50
 

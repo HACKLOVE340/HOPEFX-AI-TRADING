@@ -24,7 +24,7 @@ from enum import Enum
 try:
     import redis
     from redis import Redis
-    from redis.exceptions import TimeoutError as RedisTimeoutError  # pylint: disable=unused-import  # re-exported
+    from redis.exceptions import TimeoutError as RedisTimeoutError  # noqa: F401  # re-exported
 
     REDIS_AVAILABLE = True
 except ImportError:
@@ -352,8 +352,7 @@ class MarketDataCache:
         if self.enable_fallback:
             logger.warning("Using in-memory fallback for cache")
             return None
-        else:
-            raise ConnectionError(f"Could not connect to Redis at {self.host}:{self.port}")
+        raise ConnectionError(f"Could not connect to Redis at {self.host}:{self.port}")
 
     def _resolve_timeframe(self, timeframe) -> str:
         """Resolve timeframe to its string value, accepting Timeframe enum or raw string."""

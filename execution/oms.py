@@ -52,12 +52,12 @@ class Order:
     symbol: str = "XAUUSD"
     side: str = "BUY"  # BUY or SELL
     order_type: str = "LIMIT"  # MARKET, LIMIT, STOP, STOP_LIMIT
-    quantity: Decimal = Decimal("0")
+    quantity: Decimal = Decimal(0)
     price: Decimal | None = None
     stop_price: Decimal | None = None
     time_in_force: TimeInForce = TimeInForce.GTC
     status: OrderStatus = OrderStatus.CREATED
-    filled_quantity: Decimal = Decimal("0")
+    filled_quantity: Decimal = Decimal(0)
     avg_fill_price: Decimal | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))

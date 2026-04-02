@@ -55,7 +55,7 @@ class ProductionConfigManager:
         # Validate key strength
         try:
             key_bytes = bytes.fromhex(key)
-            if len(key_bytes) < 32:  # noqa: PLR2004
+            if len(key_bytes) < 32:
                 raise SecureConfigError(f"Encryption key must be 32+ bytes, got {len(key_bytes)}")
         except ValueError:
             raise SecureConfigError("Encryption key must be valid hexadecimal") from None
@@ -71,7 +71,7 @@ class ProductionConfigManager:
 
         try:
             salt_bytes = bytes.fromhex(salt)
-            if len(salt_bytes) < 16:  # noqa: PLR2004
+            if len(salt_bytes) < 16:
                 raise SecureConfigError(f"Salt must be 16+ bytes, got {len(salt_bytes)}")
         except ValueError:
             raise SecureConfigError("Salt must be valid hexadecimal") from None
@@ -106,7 +106,7 @@ class ProductionConfigManager:
                 "SECURITY_JWT_SECRET is not set. "
                 'Generate with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
-        if len(jwt_secret) < 32:  # noqa: PLR2004
+        if len(jwt_secret) < 32:
             raise SecureConfigError(f"SECURITY_JWT_SECRET is too short ({len(jwt_secret)} chars). Must be >=32.")
         if jwt_secret.startswith("CHANGE_ME"):
             raise SecureConfigError("SECURITY_JWT_SECRET contains a placeholder value. Replace before deploying.")

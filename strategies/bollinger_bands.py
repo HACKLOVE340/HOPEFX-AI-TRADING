@@ -150,7 +150,7 @@ class BollingerBandsStrategy(BaseStrategy):
             # Calculate band squeeze (volatility)
             avg_std = (
                 std.rolling(window=50).mean().iloc[-1]
-                if len(std) >= 50  # noqa: PLR2004
+                if len(std) >= 50
                 else current_std
             )
             is_squeeze = current_std < avg_std * 0.75 if not pd.isna(avg_std) else False
@@ -208,13 +208,13 @@ class BollingerBandsStrategy(BaseStrategy):
                 reason = "Bollinger Band squeeze breakout (bearish)"
 
             # Walking the bands
-            elif percent_b > 0.9 and current_price > current_sma:  # noqa: PLR2004
+            elif percent_b > 0.9 and current_price > current_sma:
                 # Walking the upper band (strong uptrend)
                 signal_type = "BUY"
                 confidence = 0.55
                 reason = "Walking upper band (strong uptrend)"
 
-            elif percent_b < 0.1 and current_price < current_sma:  # noqa: PLR2004
+            elif percent_b < 0.1 and current_price < current_sma:
                 # Walking the lower band (strong downtrend)
                 signal_type = "SELL"
                 confidence = 0.55

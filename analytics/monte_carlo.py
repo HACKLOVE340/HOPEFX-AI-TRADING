@@ -181,7 +181,7 @@ class MonteCarloEngine:
         -------
         BootstrapResult with confidence intervals on all key metrics.
         """
-        if len(trade_pnls) < 2:  # noqa: PLR2004
+        if len(trade_pnls) < 2:
             logger.warning("MonteCarloEngine: need at least 2 trades — returning empty result")
             return self._empty_result(initial_capital)
 
@@ -245,7 +245,7 @@ class MonteCarloEngine:
             )
 
         # Filter out ruin paths for Sharpe CI (they're -999 sentinels)
-        valid_sharpe = sharpe_arr[sharpe_arr > -100]  # noqa: PLR2004
+        valid_sharpe = sharpe_arr[sharpe_arr > -100]
 
         result = BootstrapResult(
             n_paths=self.n_paths,
@@ -307,7 +307,7 @@ class MonteCarloEngine:
     @staticmethod
     def _sharpe(pnls: np.ndarray) -> float:
         """Trade-level annualised Sharpe ratio."""
-        if len(pnls) < 2:  # noqa: PLR2004
+        if len(pnls) < 2:
             return 0.0
         std = float(np.std(pnls))
         if std == 0:

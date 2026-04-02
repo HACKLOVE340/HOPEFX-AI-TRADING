@@ -265,7 +265,7 @@ def main() -> None:
 
     if args.check:
         try:
-            import PIL  # pylint: disable=unused-import
+            import PIL  # noqa: F401
 
             print("Pillow is available.")
             sys.exit(0)

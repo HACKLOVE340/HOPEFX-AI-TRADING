@@ -43,10 +43,9 @@ class KeyManager:
                 raise SecurityError(
                     "HOPEFX_MASTER_KEY environment variable not set. System cannot start without encryption key."
                 )
-            else:
-                # Development mode with strict warnings
-                logger.critical("DEVELOPMENT MODE: Using temporary key")
-                key = self._generate_temporary_key()
+            # Development mode with strict warnings
+            logger.critical("DEVELOPMENT MODE: Using temporary key")
+            key = self._generate_temporary_key()
 
         # Validate key strength
         self._validate_key_strength(key)
@@ -61,7 +60,7 @@ class KeyManager:
         """Ensure key meets cryptographic standards"""
         try:
             decoded = base64.urlsafe_b64decode(key)
-            if len(decoded) < 32:  # noqa: PLR2004
+            if len(decoded) < 32:
                 raise SecurityError("Key must be at least 32 bytes")
         except Exception as e:
             raise SecurityError(f"Invalid key format: {e}") from e

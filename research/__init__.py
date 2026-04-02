@@ -481,7 +481,7 @@ print("Feature engineering functions ready")
             }
             return json.dumps(data, indent=2)
 
-        elif export_format == "python":
+        if export_format == "python":
             # Export as Python script
             lines = [
                 f"# {notebook.title}",

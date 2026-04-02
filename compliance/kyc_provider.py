@@ -222,7 +222,7 @@ class SumsubProvider(KYCProvider):
                 headers=self._headers("GET", path),
             ) as resp,
         ):
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 return VerificationStatus.PENDING
             data = await resp.json()
 
@@ -231,9 +231,9 @@ class SumsubProvider(KYCProvider):
         answer = review.get("reviewAnswer", "")
         if answer == "GREEN":
             return VerificationStatus.APPROVED
-        elif answer == "RED":
+        if answer == "RED":
             return VerificationStatus.REJECTED
-        elif answer == "RETRY":
+        if answer == "RETRY":
             return VerificationStatus.REVIEW
         return VerificationStatus.PENDING
 
@@ -349,7 +349,7 @@ class OnfidoProvider(KYCProvider):
                 headers=self._headers(),
             ) as resp,
         ):
-            if resp.status != 200:  # noqa: PLR2004
+            if resp.status != 200:
                 return VerificationStatus.PENDING
             data = await resp.json()
 
@@ -526,9 +526,9 @@ class RefinitivScreener:
             lists_hit = [
                 r.get("category", "")
                 for r in results
-                if r.get("matchStrength", 0) > 50  # noqa: PLR2004
+                if r.get("matchStrength", 0) > 50
             ]
-            is_match = score >= 0.7  # noqa: PLR2004
+            is_match = score >= 0.7
 
             return SanctionsResult(
                 screened=True,
@@ -538,7 +538,7 @@ class RefinitivScreener:
                 details=best.get("name", ""),
                 provider="refinitiv",
             )
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Refinitiv screen error: %s", exc)
             return SanctionsResult(
                 screened=False,
@@ -573,7 +573,7 @@ class LocalSDNScreener:
                 aiohttp.ClientSession() as session,
                 session.get(self.SDN_URL, timeout=aiohttp.ClientTimeout(total=30)) as resp,
             ):
-                if resp.status == 200:  # noqa: PLR2004
+                if resp.status == 200:
                     text = await resp.text()
                     # Extract names from XML (simplified parser)
                     import re
@@ -583,7 +583,7 @@ class LocalSDNScreener:
                     self._names = [n.upper().strip() for n in self._names]
                     self._loaded = True
                     logger.info("LocalSDN: loaded %d name entries", len(self._names))
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.warning("LocalSDN: failed to load SDN list: %s", exc)
 
     async def screen(self, full_name: str, **_kwargs: Any) -> SanctionsResult:
@@ -616,14 +616,14 @@ class LocalSDNScreener:
             )
 
         name_upper = full_name.upper()
-        parts = [p for p in name_upper.split() if len(p) > 3]  # noqa: PLR2004
+        parts = [p for p in name_upper.split() if len(p) > 3]
         # Require whole-word match to avoid false positives (e.g. "ALICE" in
         # a longer SDN entry that happens to contain those letters).
         matched = any(
             part == sdn_name or sdn_name.startswith(part + " ") or sdn_name.endswith(" " + part)
             for part in parts
             for sdn_name in self._names
-            if len(sdn_name) > 3  # noqa: PLR2004
+            if len(sdn_name) > 3
         )
         return SanctionsResult(
             screened=True,
@@ -664,9 +664,9 @@ class KYCGateway:
         name = KYC_PROVIDER.lower().strip()
         if name == "sumsub":
             return SumsubProvider()
-        elif name == "onfido":
+        if name == "onfido":
             return OnfidoProvider()
-        elif name == "mock":
+        if name == "mock":
             # Allowed only in development/test environments.
             _app_env = os.getenv("APP_ENV", "production").lower()
             if _app_env in ("production", "staging"):
@@ -680,13 +680,12 @@ class KYCGateway:
                 "This is only acceptable in development/test environments."
             )
             return MockKYCProvider()
-        else:
-            raise RuntimeError(
-                f"Unknown KYC_PROVIDER={KYC_PROVIDER!r}. "
-                "Valid values: 'sumsub', 'onfido'. "
-                "Set the KYC_PROVIDER environment variable and configure the "
-                "corresponding API credentials (SUMSUB_APP_TOKEN / ONFIDO_API_TOKEN)."
-            )
+        raise RuntimeError(
+            f"Unknown KYC_PROVIDER={KYC_PROVIDER!r}. "
+            "Valid values: 'sumsub', 'onfido'. "
+            "Set the KYC_PROVIDER environment variable and configure the "
+            "corresponding API credentials (SUMSUB_APP_TOKEN / ONFIDO_API_TOKEN)."
+        )
 
     async def create_applicant(self, user_id: str, metadata: dict[str, Any]) -> KYCApplicant:
         """
@@ -803,7 +802,7 @@ class KYCGateway:
 
     def _audit(self, action: str, user_id: str, data: dict[str, Any]) -> None:
         if self._compliance and hasattr(self._compliance, "_log_audit"):
-            getattr(self._compliance, "_log_audit")("KYC", user_id, action, data)
+            self._compliance._log_audit("KYC", user_id, action, data)
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

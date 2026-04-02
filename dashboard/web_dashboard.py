@@ -27,7 +27,7 @@ except ImportError:
     AIOHTTP_AVAILABLE = False
 
 try:
-    import plotly  # type: ignore[import]  # pylint: disable=unused-import
+    import plotly  # type: ignore[import]  # noqa: F401
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
