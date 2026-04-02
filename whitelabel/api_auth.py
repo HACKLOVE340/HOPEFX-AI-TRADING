@@ -159,8 +159,14 @@ def _hash_key(raw_key: str) -> str:
     Using a server-side secret means a leaked key-store cannot be used to
     brute-force API keys offline.  HMAC-SHA256 is a cryptographically strong
     MAC; the digest is used only for key-store lookups, never as a password hash.
+
+    nosec B324 — this is HMAC-SHA256 (a keyed MAC), not a bare hash or password
+    hash.  The _KEY_HASH_SECRET provides the cryptographic binding; SHA-256 is
+    the underlying PRF.  This construction is intentional and correct for
+    server-side API key fingerprinting.
     """
-    raw = hmac.digest(_KEY_HASH_SECRET, raw_key.encode(), "sha256")
+    # nosec B324 — HMAC-SHA256 keyed MAC for key-store lookup, not password hashing
+    raw = hmac.digest(_KEY_HASH_SECRET, raw_key.encode(), "sha256")  # nosec B324
     return raw.hex()
 
 
