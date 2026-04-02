@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 import time
 import uuid
@@ -553,7 +554,6 @@ class FIXAdapter:
             router.validate_credentials(raise_on_error=True)
             router.start()
         """
-        import os
 
         sender = os.environ.get("FIX_SENDER_COMP_ID", self.sender_comp_id)
         target = os.environ.get("FIX_TARGET_COMP_ID", self.target_comp_id)
@@ -607,7 +607,6 @@ class FIXAdapter:
         other environments a WARNING is logged and startup continues so that
         paper-trading and CI work without real broker credentials.
         """
-        import os
 
         _is_production = os.environ.get("APP_ENV", "production") == "production"
         self.validate_credentials(raise_on_error=_is_production)

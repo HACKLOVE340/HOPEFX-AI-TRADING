@@ -250,7 +250,7 @@ def _compute_atr_sl_tp(
     return sl, tp
 
 
-def _get_macro_df_for_symbol(symbol: str, lookback: int = 200):
+def _get_macro_df_for_symbol(symbol: str, lookback: int = 200) -> "pd.DataFrame | None":
     """
     Fetch aligned macro features from MacroStore for the given symbol.
 
@@ -264,9 +264,8 @@ def _get_macro_df_for_symbol(symbol: str, lookback: int = 200):
         if len(macro_store) == 0:
             return None
 
-        # Macro alignment requires real OHLCV data from the broker.
-        # Return None here; the caller will proceed without macro features.
-        return None
+        df = macro_store.get_aligned(symbol, lookback=lookback)
+        return df if df is not None and not df.empty else None
     except Exception as exc:
         logger.debug("MacroStore alignment failed (non-fatal): %s", exc)
         return None
@@ -1053,7 +1052,7 @@ class RLTrainRequest(BaseModel):
     train_split: float = 0.8
 
 
-class RLWalkForwardRequest(_BaseModel):
+class RLWalkForwardRequest(BaseModel):
     symbol: str = "XAU_USD"
     timeframe: str = "H1"
     candles: int = 3000
