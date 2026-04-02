@@ -499,7 +499,8 @@ class StrategyAllocator:
                 )
                 return {"updated": body.name}
             except KeyError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
+                logger.warning("Strategy not found: %s", exc)
+                raise HTTPException(status_code=404, detail="Strategy not found") from None
 
         @router.post("/pods/return")
         async def append_return(request: Request, body: ReturnIn):
@@ -529,7 +530,8 @@ def _require_auth(request: Request) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        logger.warning("Portfolio auth token decode failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from None
 
 
 def _require_admin(request: Request) -> dict[str, Any]:

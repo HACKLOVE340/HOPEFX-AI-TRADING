@@ -973,7 +973,7 @@ def create_kill_switch_router(ks: KillSwitch):
                 request.client.host if request.client else "unknown",
                 exc,
             )
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
+            raise HTTPException(status_code=403, detail=str(exc)) from None
 
         logger.warning(
             "AUDIT: Kill switch DEACTIVATED via API | user=%s | ip=%s",
