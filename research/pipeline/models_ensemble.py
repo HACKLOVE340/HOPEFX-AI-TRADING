@@ -598,7 +598,7 @@ class DeepEnsembleStore:
             logger.debug("DeepEnsembleStore: %s", self._gate_failure_reason)
             return False
         try:
-            with open(self.meta_path) as f:
+            with open(self.meta_path, encoding="utf-8") as f:
                 meta = json.load(f)
 
             self._oos_accuracy = float(meta.get("oos_accuracy", 0.0))

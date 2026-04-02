@@ -315,7 +315,7 @@ class HSMVault:
             raise RuntimeError("Cannot save master key: vault not initialised")
         key_path = os.path.join(self.key_store_path, "master.key")
         try:
-            with open(key_path, "w") as f:
+            with open(key_path, "w", encoding="utf-8") as f:
                 f.write(self._master_key.hex())
             os.chmod(key_path, 0o600)
             logger.info("Master key saved to %s (mode 0600)", key_path)

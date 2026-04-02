@@ -192,7 +192,7 @@ def _load_prop_config(path: str) -> dict:
     if not p.exists():
         logger.warning("prop_firm_mode.json not found at %s — using defaults.", path)
         return {}
-    with p.open() as fh:
+    with p.open(encoding="utf-8") as fh:
         cfg = json.load(fh)
     logger.info("Loaded prop config from %s", path)
     return cfg

@@ -77,7 +77,7 @@ def section(title: str) -> None:
 
 
 def read(path: str) -> str:
-    return pathlib.Path(path).read_text()
+    return pathlib.Path(path).read_text(encoding="utf-8")
 
 
 def contains(path: str, text: str) -> bool:
