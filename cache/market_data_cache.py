@@ -9,14 +9,14 @@ Market Data Cache Module - PRODUCTION VERSION
 Fixed: Thread safety, proper Redis connection management, circuit breaker
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import time
 import threading
 import asyncio
 from datetime import datetime, timedelta, UTC
-
-UTC = UTC
 from typing import Any
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -64,7 +64,7 @@ class OHLCVData:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "OHLCVData":
+    def from_dict(cls, data: dict) -> OHLCVData:
         return cls(**data)
 
 
@@ -84,7 +84,7 @@ class TickData:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "TickData":
+    def from_dict(cls, data: dict) -> TickData:
         return cls(**data)
 
 
@@ -270,7 +270,7 @@ class MarketDataCache:
 
         logger.info(f"MarketDataCache initialized (Redis: {host}:{port})")
 
-    def _connect_with_retry(self) -> Redis | None:
+    def _connect_with_retry(self) -> Redis | None:  # type: ignore[name-defined]
         """Attempt Redis connection with retries; return client or None on failure."""
         for attempt in range(self.max_retries):
             try:

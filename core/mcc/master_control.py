@@ -263,10 +263,7 @@ class MasterControlCore:
                         mean_r = sum(returns) / len(returns)
                         variance = sum((r - mean_r) ** 2 for r in returns) / len(returns)
                         # If variance is near zero the series is flat — treat as correlated
-                        if (
-                            variance < 1e-12
-                            or abs(mean_r) > self.config.correlation_threshold
-                        ):
+                        if variance < 1e-12 or abs(mean_r) > self.config.correlation_threshold:
                             return True
                         continue  # not correlated enough
 
@@ -321,13 +318,96 @@ class MasterControlCore:
         }
 
     def _execute_signal(self, composite: dict):
-        """Send to execution"""
+        """Route composite signal to the broker layer for execution.
+
+        The method attempts to obtain the *singleton* ``BrokerManager`` that is
+        already wired by ``core.startup_factories`` (or equivalent).  If no
+        broker is available (e.g. unit tests, paper-trading setup without a
+        connected broker) the signal is logged and discarded gracefully rather
+        than crashing.
+
+        Args:
+            composite: Dict produced by ``_aggregate_signals`` with keys
+                ``action`` (``"BUY"`` | ``"SELL"``), ``confidence`` (float),
+                and ``strength`` (float).
+        """
+        action = composite.get("action", "HOLD")
+        confidence = composite.get("confidence", 0.0)
+
         logger.info(
-            "EXECUTING: %s (confidence: %.2f)",
-            composite["action"],
-            composite["confidence"],
+            "EXECUTING: %s (confidence: %.2f, strength: %.2f)",
+            action,
+            confidence,
+            composite.get("strength", 0.0),
         )
-        # Connect to your existing broker execution here
+
+        # --- Resolve broker manager -------------------------------------------
+        broker_mgr = None
+        try:
+            from core.startup_factories import get_broker_manager  # lazy import
+
+            broker_mgr = get_broker_manager()
+        except Exception as _imp_exc:  # pylint: disable=broad-exception-caught
+            logger.debug("BrokerManager not available via startup_factories: %s", _imp_exc)
+
+        if broker_mgr is None:
+            logger.warning(
+                "MCC._execute_signal: no BrokerManager available — signal %s discarded",
+                action,
+            )
+            return
+
+        # --- Map action → OrderSide -------------------------------------------
+        try:
+            from brokers.base import OrderSide, OrderType  # lazy import
+        except ImportError as _imp_exc2:
+            logger.error("Cannot import OrderSide/OrderType: %s", _imp_exc2)
+            return
+
+        side_map = {"BUY": OrderSide.BUY, "SELL": OrderSide.SELL}
+        order_side = side_map.get(action)
+        if order_side is None:
+            logger.debug("_execute_signal: unexpected action '%s' — ignoring", action)
+            return
+
+        # Determine the primary symbol being traded (first in current_prices,
+        # or fall back to "XAU_USD" which is the default trading pair).
+        symbol = next(iter(self.current_prices), "XAU_USD")
+        current_price = float(self.current_prices.get(symbol, Decimal("0")))
+
+        # Position size: base quantity driven by allocation & confidence.
+        # 1 unit as minimum; scale by confidence weight.
+        raw_qty = max(1.0, round(confidence * 10, 2))  # 6–10 units for 60–100% confidence
+
+        logger.info(
+            "Routing order → broker: symbol=%s side=%s qty=%.2f price~%.5f",
+            symbol,
+            order_side.value,
+            raw_qty,
+            current_price,
+        )
+
+        try:
+            order = broker_mgr.place_order(
+                symbol=symbol,
+                side=order_side,
+                order_type=OrderType.MARKET,
+                quantity=raw_qty,
+            )
+            logger.info(
+                "Order submitted: id=%s symbol=%s side=%s qty=%.2f",
+                getattr(order, "order_id", "?"),
+                symbol,
+                order_side.value,
+                raw_qty,
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error(
+                "Broker order placement failed for %s %s: %s",
+                order_side.value,
+                symbol,
+                exc,
+            )
 
     def on_price_update(
         self,
@@ -408,14 +488,35 @@ class MasterControlCore:
         return Decimal("0")
 
     def trigger_kill_switch(self, reason: str):
-        """Emergency stop all trading"""
+        """Emergency stop all trading — deactivates all strategies and closes
+        all open broker positions."""
         logger.critical("KILL SWITCH TRIGGERED: %s", reason)
         self.kill_switch_triggered = True
 
         for name in list(self.active_strategies):
             self.deactivate_strategy(name, "kill switch")
 
-        # Close all positions via your existing broker
+        # Close all open positions via the broker layer
+        try:
+            from core.startup_factories import get_broker_manager  # lazy import
+
+            broker_mgr = get_broker_manager()
+            if broker_mgr is not None:
+                positions = broker_mgr.get_positions()
+                for pos in positions:
+                    try:
+                        symbol = getattr(pos, "symbol", None)
+                        if symbol:
+                            broker_mgr.close_position(symbol)
+                            logger.info("Kill switch: closed position for %s", symbol)
+                    except Exception as _pos_exc:  # pylint: disable=broad-exception-caught
+                        logger.error(
+                            "Kill switch: failed to close position for %s: %s",
+                            getattr(pos, "symbol", "?"),
+                            _pos_exc,
+                        )
+        except Exception as _ks_exc:  # pylint: disable=broad-exception-caught
+            logger.error("Kill switch: could not close positions via broker: %s", _ks_exc)
 
     def get_heatmap_data(self) -> dict:
         """
