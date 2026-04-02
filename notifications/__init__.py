@@ -243,8 +243,6 @@ class NotificationManager:
 
     def _format_timestamp(self, timestamp: float) -> str:
         """Format timestamp for Discord"""
-        from datetime import datetime
-
         dt = datetime.fromtimestamp(timestamp, tz=UTC)
         return dt.isoformat()
 
@@ -348,6 +346,4 @@ notifications = _NotificationsSingleton()
 try:
     from notifications.manager import NotificationChannel
 except Exception as _exc:
-    import logging as _logging
-
-    _logging.getLogger(__name__).debug("NotificationChannel unavailable: %s", _exc)
+    logging.getLogger(__name__).debug("NotificationChannel unavailable: %s", _exc)

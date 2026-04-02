@@ -23,7 +23,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-from datetime import datetime, timezone, timezone
+from datetime import datetime, timezone
 UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
@@ -127,11 +127,9 @@ async def run_example(max_ticks: int = 100) -> None:
         from datetime import timedelta
 
         # Access replay engine via orchestrator — single entry point rule
-        from data_layer.orchestrator import orchestrator as _orch
-
         end = datetime.now(UTC)
         start = end - timedelta(hours=24)
-        engine = _orch._replay
+        engine = orchestrator._replay
 
         tick_count = 0
         async for replay_tick in engine.replay_ticks(

@@ -170,8 +170,6 @@ def _synthetic_ohlcv_smoke(ticker: str) -> pd.DataFrame:
     when smoke=True and yfinance is unavailable (e.g. in CI without
     network access).
     """
-    import warnings
-
     warnings.warn(
         f"_synthetic_ohlcv_smoke({ticker!r}): using synthetic GBM data. Results are not valid for strategy evaluation.",
         UserWarning,
@@ -373,9 +371,7 @@ def backtest_symbol(
     )
 
     # Log TC summary at INFO so operators can see the cost drag
-    from backtest.transaction_costs import get_tc_model as _get_tc
-
-    _tc_summary = _get_tc().cost_summary(
+    _tc_summary = get_tc_model().cost_summary(
         entry_price=float(oos_close.dropna().iloc[-1]) if len(oos_close.dropna()) > 0 else 1.0,
         ticker=ticker,
     )
