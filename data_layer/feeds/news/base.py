@@ -119,7 +119,7 @@ class NewsFeedBase(ABC):
         for attempt in range(4):
             try:
                 async with session.get(url, params=params, headers=headers) as resp:
-                    if resp.status == 429:  # noqa: PLR2004
+                    if resp.status == 429:
                         wait = backoff + random.uniform(0, 1.0)  # nosec B311 - rate-limit retry jitter, not cryptographic
                         logger.warning("%s rate-limited — sleeping %.1fs", self.name.value, wait)
                         await asyncio.sleep(wait)
@@ -137,7 +137,7 @@ class NewsFeedBase(ABC):
                     exc,
                     wait,
                 )
-                if attempt < 3:  # noqa: PLR2004
+                if attempt < 3:
                     await asyncio.sleep(wait)
                     backoff = min(backoff * 2, 60.0)
                 else:
@@ -163,7 +163,7 @@ class NewsFeedBase(ABC):
             return False
         self._seen_ids.add(article_id)
         # Bound memory — keep last 10,000 IDs
-        if len(self._seen_ids) > 10_000:  # noqa: PLR2004
+        if len(self._seen_ids) > 10_000:
             self._seen_ids = set(list(self._seen_ids)[-5_000:])
         return True
 

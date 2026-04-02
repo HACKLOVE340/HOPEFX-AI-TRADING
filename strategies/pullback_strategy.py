@@ -347,7 +347,7 @@ class PullbackStrategy(BaseStrategy):
             last_atr = float(atr.iloc[-1])
             last_adx = float(adx.iloc[-1])
             last_rsi = float(rsi.iloc[-1])
-            prev_rsi = float(rsi.iloc[-2]) if len(rsi) >= 2 else last_rsi  # noqa: PLR2004
+            prev_rsi = float(rsi.iloc[-2]) if len(rsi) >= 2 else last_rsi
             last_vol = float(v.iloc[-1])
             last_vol_ma = float(vol_ma20.iloc[-1]) if not np.isnan(vol_ma20.iloc[-1]) else 1.0
             last_vwap = float(vwap_20.iloc[-1])

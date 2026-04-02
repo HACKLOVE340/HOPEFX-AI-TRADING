@@ -347,7 +347,7 @@ class OandaL2Feed:
         while self._running:
             try:
                 async with self._session.get(url) as resp:
-                    if resp.status == 200:  # noqa: PLR2004
+                    if resp.status == 200:
                         data = await resp.json()
                         ob = data.get("orderBook", {})
                         buckets = ob.get("buckets", [])
@@ -371,7 +371,7 @@ class OandaL2Feed:
                                 len(bids),
                                 len(asks),
                             )
-                    elif resp.status == 429:  # noqa: PLR2004
+                    elif resp.status == 429:
                         logger.warning("OANDA L2: rate limited — backing off 30s")
                         await asyncio.sleep(30)
                         continue
@@ -417,7 +417,7 @@ class IBKROrderBookFeed:
                 self._books[symbol] = OrderBook(symbol)
                 # Build contract — XAU/USD is a Forex contract in IBKR
                 parts = symbol.replace("_", "/").split("/")
-                if len(parts) == 2:  # noqa: PLR2004
+                if len(parts) == 2:
                     contract = Forex(parts[0] + parts[1])
                     await self._ib.qualifyContractsAsync(contract)
                     ticker = self._ib.reqMktDepth(contract, numRows=L2_DEPTH_LEVELS)

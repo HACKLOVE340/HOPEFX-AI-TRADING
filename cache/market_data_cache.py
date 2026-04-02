@@ -14,9 +14,9 @@ import logging
 import time
 import threading
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
-UTC = timezone.utc
+UTC = UTC
 from typing import Any
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -24,7 +24,7 @@ from enum import Enum
 try:
     import redis
     from redis import Redis
-    from redis.exceptions import TimeoutError as RedisTimeoutError  # pylint: disable=unused-import  # re-exported
+    from redis.exceptions import TimeoutError as RedisTimeoutError  # noqa: F401  # re-exported
 
     REDIS_AVAILABLE = True
 except ImportError:

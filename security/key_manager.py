@@ -61,7 +61,7 @@ class KeyManager:
         """Ensure key meets cryptographic standards"""
         try:
             decoded = base64.urlsafe_b64decode(key)
-            if len(decoded) < 32:  # noqa: PLR2004
+            if len(decoded) < 32:
                 raise SecurityError("Key must be at least 32 bytes")
         except Exception as e:
             raise SecurityError(f"Invalid key format: {e}") from e

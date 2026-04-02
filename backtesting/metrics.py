@@ -92,7 +92,7 @@ class PerformanceMetrics:
 
     def calculate_annual_return(self) -> float:
         """Calculate annualized return."""
-        if self.equity_curve.empty or len(self.equity_curve) < 2:  # noqa: PLR2004
+        if self.equity_curve.empty or len(self.equity_curve) < 2:
             return 0.0
 
         days = (self.equity_curve.index[-1] - self.equity_curve.index[0]).days
@@ -111,7 +111,7 @@ class PerformanceMetrics:
 
     def calculate_sharpe_ratio(self) -> float:
         """Calculate Sharpe ratio."""
-        if self.equity_curve.empty or len(self.equity_curve) < 2:  # noqa: PLR2004
+        if self.equity_curve.empty or len(self.equity_curve) < 2:
             return 0.0
 
         returns = self.equity_curve["equity"].pct_change().dropna()
@@ -125,7 +125,7 @@ class PerformanceMetrics:
 
     def calculate_sortino_ratio(self) -> float:
         """Calculate Sortino ratio (downside deviation)."""
-        if self.equity_curve.empty or len(self.equity_curve) < 2:  # noqa: PLR2004
+        if self.equity_curve.empty or len(self.equity_curve) < 2:
             return 0.0
 
         returns = self.equity_curve["equity"].pct_change().dropna()
@@ -161,7 +161,7 @@ class PerformanceMetrics:
 
     def calculate_volatility(self) -> float:
         """Calculate annualized volatility."""
-        if self.equity_curve.empty or len(self.equity_curve) < 2:  # noqa: PLR2004
+        if self.equity_curve.empty or len(self.equity_curve) < 2:
             return 0.0
 
         returns = self.equity_curve["equity"].pct_change().dropna()

@@ -150,7 +150,7 @@ class _SGDAdapter:
 
     def predict_proba(self, X: np.ndarray) -> float | None:
         """Return P(up) from adapter, or None if not ready."""
-        if self._clf is None or self._n_updates < 10:  # noqa: PLR2004
+        if self._clf is None or self._n_updates < 10:
             return None
         with self._lock:
             try:
@@ -499,7 +499,7 @@ class AdvancedPredictor:
 
         # ── Flat-market abstain: if feature variance is near zero ─────────────
         feat_std = float(X.values.std())
-        if feat_std < 1e-6:  # noqa: PLR2004
+        if feat_std < 1e-6:
             self._abstain_count += 1
             return self._neutral(ohlcv, reason="flat_market_low_variance", t0=t0)
 

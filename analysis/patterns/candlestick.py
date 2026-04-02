@@ -272,7 +272,7 @@ def _detect_doji_pattern(
     lower_ratio = lower / total
 
     # Dragonfly Doji: almost all range in lower shadow
-    if lower_ratio > 0.8 and upper_ratio < 0.1:  # noqa: PLR2004
+    if lower_ratio > 0.8 and upper_ratio < 0.1:
         return CandlestickPattern(
             pattern_name="Dragonfly Doji",
             pattern_type="reversal",
@@ -284,7 +284,7 @@ def _detect_doji_pattern(
         )
 
     # Gravestone Doji: almost all range in upper shadow
-    if upper_ratio > 0.8 and lower_ratio < 0.1:  # noqa: PLR2004
+    if upper_ratio > 0.8 and lower_ratio < 0.1:
         return CandlestickPattern(
             pattern_name="Gravestone Doji",
             pattern_type="reversal",
@@ -484,7 +484,7 @@ def _detect_three_soldiers_crows(
     i: int,
 ) -> CandlestickPattern | None:
     """Three White Soldiers / Three Black Crows ending at index *i*."""
-    if i < 2:  # noqa: PLR2004
+    if i < 2:
         return None
 
     all_bullish, all_bearish, rising, falling = _three_candle_trend(opens, closes, i)
@@ -520,7 +520,7 @@ def _detect_morning_evening_star(
     i: int,
 ) -> CandlestickPattern | None:
     """Morning Star / Evening Star ending at index *i*."""
-    if i < 2:  # noqa: PLR2004
+    if i < 2:
         return None
 
     first_body = _candle_body(opens[i - 2], closes[i - 2])

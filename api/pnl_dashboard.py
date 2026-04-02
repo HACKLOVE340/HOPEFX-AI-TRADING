@@ -177,7 +177,7 @@ def _compute_sharpe(equity_series: list[tuple[float, float]]) -> float | None:
         return None
     values = [v for _, v in equity_series]
     returns = [(values[i] - values[i - 1]) / values[i - 1] for i in range(1, len(values)) if values[i - 1] > 0]
-    if len(returns) < 2:  # noqa: PLR2004
+    if len(returns) < 2:
         return None
     n = len(returns)
     mean_r = sum(returns) / n

@@ -179,7 +179,7 @@ class RobustPredictor:
 
         # 4. Check for overfitting
         overfitting_score = self._calculate_overfitting(cv_results)
-        if overfitting_score > 0.3:  # Train vs test performance gap  # noqa: PLR2004
+        if overfitting_score > 0.3:  # Train vs test performance gap
             logger.warning(f"High overfitting detected: {overfitting_score:.2f}")
             self._apply_stronger_regularization()
 
@@ -396,7 +396,7 @@ class RobustPredictor:
                     proba = model.predict_proba(last_clean)[0]
                     # proba[1] = P(up), proba[0] = P(down)
                     prob_up = float(proba[1]) if len(proba) > 1 else float(proba[0])
-                    pred = 1 if prob_up >= 0.5 else 0  # noqa: PLR2004
+                    pred = 1 if prob_up >= 0.5 else 0
                 else:
                     pred = int(model.predict(last_clean)[0])
                     prob_up = float(pred)
@@ -502,7 +502,7 @@ class RobustPredictor:
         oos_probabilities = np.asarray(oos_probabilities, dtype=float)
         oos_outcomes = np.asarray(oos_outcomes, dtype=float)
 
-        if len(oos_probabilities) < 30:  # noqa: PLR2004
+        if len(oos_probabilities) < 30:
             logger.warning(
                 "calibrate_thresholds: only %d OOS samples — need ≥30 for reliable "
                 "calibration. Default thresholds unchanged.",
@@ -532,7 +532,7 @@ class RobustPredictor:
         bullish_high = self._bullish_high_threshold
         for b in bin_stats:
             if (
-                b["n"] >= 5  # noqa: PLR2004
+                b["n"] >= 5
                 and not np.isnan(b["precision"])
                 and b["precision"] >= min_precision
             ):
@@ -540,7 +540,7 @@ class RobustPredictor:
                 break
         for b in bin_stats:
             if (
-                b["n"] >= 5  # noqa: PLR2004
+                b["n"] >= 5
                 and not np.isnan(b["precision"])
                 and b["precision"] >= min(min_precision + 0.10, 0.70)
             ):
@@ -552,7 +552,7 @@ class RobustPredictor:
         bearish_high = self._bearish_high_threshold
         for b in reversed(bin_stats):
             if (
-                b["n"] >= 5  # noqa: PLR2004
+                b["n"] >= 5
                 and not np.isnan(b["precision"])
                 and (1.0 - b["precision"]) >= min_precision
             ):
@@ -560,7 +560,7 @@ class RobustPredictor:
                 break
         for b in reversed(bin_stats):
             if (
-                b["n"] >= 5  # noqa: PLR2004
+                b["n"] >= 5
                 and not np.isnan(b["precision"])
                 and (1.0 - b["precision"]) >= min(min_precision + 0.10, 0.70)
             ):
@@ -687,7 +687,7 @@ class RobustPredictor:
         # Hurst exponent proxy (rolling R/S over 40 bars)
         def _rolling_hurst(prices: pd.Series, window: int = 40) -> pd.Series:
             def _hurst(x: np.ndarray) -> float:
-                if len(x) < 10:  # noqa: PLR2004
+                if len(x) < 10:
                     return 0.5
                 lags = range(2, min(len(x) // 2, 10))
                 rs_vals = []
@@ -699,7 +699,7 @@ class RobustPredictor:
                     s = np.std(sub, ddof=1)
                     if s > 0:
                         rs_vals.append(np.log(r / s))
-                if len(rs_vals) < 2:  # noqa: PLR2004
+                if len(rs_vals) < 2:
                     return 0.5
                 log_lags = np.log(list(lags[: len(rs_vals)]))
                 return float(np.clip(np.polyfit(log_lags, rs_vals, 1)[0], 0.0, 1.0))
@@ -749,7 +749,7 @@ class RobustPredictor:
         # Remove highly correlated features first
         corr_matrix = X.corr().abs()
         upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-        to_drop = [column for column in upper.columns if any(upper[column] > 0.95)]  # noqa: PLR2004
+        to_drop = [column for column in upper.columns if any(upper[column] > 0.95)]
         X_filtered = X.drop(columns=to_drop)
 
         # Select top k by mutual information
@@ -779,7 +779,7 @@ class RobustPredictor:
 
     def _check_feature_stability(self) -> float:
         """Check if feature importance is stable across folds"""
-        if len(self.feature_importance_history) < 2:  # noqa: PLR2004
+        if len(self.feature_importance_history) < 2:
             return 1.0
 
         # Calculate correlation of importance rankings across folds
@@ -853,7 +853,7 @@ class RobustPredictor:
 
         # Average probabilities
         avg_proba = np.mean(probabilities, axis=0)
-        final_pred = (avg_proba > 0.5).astype(int)  # noqa: PLR2004
+        final_pred = (avg_proba > 0.5).astype(int)
 
         return final_pred, avg_proba
 
@@ -893,14 +893,14 @@ class RobustPredictor:
 
     def should_retrain(self, recent_performance: list[float]) -> bool:
         """Determine if model needs retraining based on performance decay"""
-        if len(recent_performance) < 30:  # noqa: PLR2004
+        if len(recent_performance) < 30:
             return False
 
         # Check for significant performance decay
         recent_mean = np.mean(recent_performance[-30:])
         historical_mean = (
             np.mean(recent_performance[-90:])
-            if len(recent_performance) >= 90  # noqa: PLR2004
+            if len(recent_performance) >= 90
             else np.mean(recent_performance)
         )
 
@@ -912,7 +912,7 @@ class RobustPredictor:
 
         # Check time since last train
         return bool(
-            self.last_retrain and (datetime.now(UTC) - self.last_retrain).days > 7  # noqa: PLR2004
+            self.last_retrain and (datetime.now(UTC) - self.last_retrain).days > 7
         )
 
     def save(self, path: str) -> str:
@@ -1064,9 +1064,9 @@ class RegimeDetector:
             adx = float(last["regime_trend_str"])
             if np.isnan(hurst) or np.isnan(adx):
                 return Regime.UNKNOWN
-            if adx > 0.25 and hurst > 0.55:  # noqa: PLR2004
+            if adx > 0.25 and hurst > 0.55:
                 return Regime.TRENDING
-            if adx < 0.20 and hurst < 0.45:  # noqa: PLR2004
+            if adx < 0.20 and hurst < 0.45:
                 return Regime.MEAN_REVERTING
             return Regime.UNKNOWN
 

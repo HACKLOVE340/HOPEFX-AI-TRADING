@@ -124,7 +124,7 @@ class BaseMLModel(ABC):
             metrics["r2"] = r2_score(y_test, predictions)
 
         # For classification tasks (if applicable)
-        if len(np.unique(y_test)) <= 10:  # Likely classification  # noqa: PLR2004
+        if len(np.unique(y_test)) <= 10:  # Likely classification
             try:
                 metrics["accuracy"] = accuracy_score(y_test, np.round(predictions))
                 metrics["precision"] = precision_score(

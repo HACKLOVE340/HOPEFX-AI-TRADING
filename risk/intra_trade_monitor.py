@@ -216,7 +216,7 @@ class IntraTradeMonitor:
             return unwinds
 
         # 2. Portfolio CVaR limit
-        if cvar_pct > _CVAR_LIMIT_PCT and len(self._returns) >= 20:  # noqa: PLR2004
+        if cvar_pct > _CVAR_LIMIT_PCT and len(self._returns) >= 20:
             for pos in list(self._positions.values()):
                 sig = UnwindSignal(
                     position_id=pos.position_id,
@@ -244,7 +244,7 @@ class IntraTradeMonitor:
             return unwinds
 
         # 4. Volatility regime shift
-        if vol_ratio > _VOL_SPIKE_MULT and len(self._vol_baseline) >= 20:  # noqa: PLR2004
+        if vol_ratio > _VOL_SPIKE_MULT and len(self._vol_baseline) >= 20:
             for pos in list(self._positions.values()):
                 sig = UnwindSignal(
                     position_id=pos.position_id,
@@ -291,7 +291,7 @@ class IntraTradeMonitor:
         Uses the historical simulation method on the rolling returns window.
         Returns CVaR as a fraction of equity (positive = loss).
         """
-        if len(self._returns) < 10:  # noqa: PLR2004
+        if len(self._returns) < 10:
             return 0.0
         arr = np.array(self._returns)
         # Total position exposure in USD
@@ -333,16 +333,16 @@ class IntraTradeMonitor:
 
     def _vol_spike_ratio(self) -> float:
         """Current realised vol / baseline vol ratio."""
-        if len(self._vol_baseline) < 20:  # noqa: PLR2004
+        if len(self._vol_baseline) < 20:
             return 1.0
         arr = np.array(self._vol_baseline)
-        baseline = float(np.mean(arr[:-5])) if len(arr) > 5 else float(np.mean(arr))  # noqa: PLR2004
-        current = float(np.mean(arr[-5:])) if len(arr) >= 5 else baseline  # noqa: PLR2004
+        baseline = float(np.mean(arr[:-5])) if len(arr) > 5 else float(np.mean(arr))
+        current = float(np.mean(arr[-5:])) if len(arr) >= 5 else baseline
         return current / max(baseline, 1e-10)
 
     def _record_unwind(self, sig: UnwindSignal) -> None:
         self._unwind_log.append(sig)
-        if len(self._unwind_log) > 500:  # noqa: PLR2004
+        if len(self._unwind_log) > 500:
             self._unwind_log = self._unwind_log[-250:]
         if _PROM_OK:
             _prom_unwinds.labels(reason=sig.reason.split(":")[0]).inc()

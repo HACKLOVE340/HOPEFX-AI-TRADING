@@ -15,7 +15,6 @@ from collections.abc import Callable
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 try:
     from sqlalchemy import create_engine, event, text
@@ -372,7 +371,7 @@ _db_manager: DatabaseManager | None = None
 
 def get_db_manager() -> DatabaseManager | None:
     """Get global database manager"""
-    global _db_manager  # noqa: PLW0602
+    global _db_manager
     return _db_manager
 
 

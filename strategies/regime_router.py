@@ -110,7 +110,7 @@ def detect_regime(df: pd.DataFrame, lookback: int = 50) -> tuple[str, float]:
 
     # Historical volatility percentile
     returns = np.diff(closes) / (closes[:-1] + 1e-9)
-    vol_now = np.std(returns[-14:]) if len(returns) >= 14 else 0.0  # noqa: PLR2004
+    vol_now = np.std(returns[-14:]) if len(returns) >= 14 else 0.0
     vol_hist = np.std(returns) if len(returns) > 1 else 0.0
     vol_pct = vol_now / (vol_hist + 1e-9)
 
@@ -118,21 +118,21 @@ def detect_regime(df: pd.DataFrame, lookback: int = 50) -> tuple[str, float]:
     adx = _adx_approx(highs, lows, closes, 14)
 
     # ── Classification ────────────────────────────────────────────────────────
-    if adx > 25:  # noqa: PLR2004
+    if adx > 25:
         # Strong trend
-        if trend_diff > 0.001:  # noqa: PLR2004
+        if trend_diff > 0.001:
             return REGIME_TRENDING_UP, min(adx / 50, 1.0)
-        elif trend_diff < -0.001:  # noqa: PLR2004
+        elif trend_diff < -0.001:
             return REGIME_TRENDING_DOWN, min(adx / 50, 1.0)
 
-    if vol_pct > 1.5:  # noqa: PLR2004
+    if vol_pct > 1.5:
         return REGIME_HIGH_VOL, min(vol_pct / 3, 1.0)
 
-    if vol_pct < 0.6:  # noqa: PLR2004
+    if vol_pct < 0.6:
         return REGIME_LOW_VOL, 0.7
 
-    if adx < 20:  # noqa: PLR2004
-        if rel_atr < 0.005:  # noqa: PLR2004
+    if adx < 20:
+        if rel_atr < 0.005:
             return REGIME_RANGE_BOUND, 0.7
         return REGIME_MEAN_REVERTING, 0.6
 
@@ -322,7 +322,7 @@ class RegimeRouter:
         if not self._regime_history or self._regime_history[-1][0] != regime:
             logger.info("Regime change → %s (confidence=%.2f)", regime, confidence)
             self._regime_history.append((regime, confidence, ts))
-            if len(self._regime_history) > 500:  # noqa: PLR2004
+            if len(self._regime_history) > 500:
                 self._regime_history = self._regime_history[-500:]
 
         strategy_name = self._select_strategy(regime)
@@ -336,7 +336,7 @@ class RegimeRouter:
         self._reload_manifest()
         entries = self._manifest.get(regime, [])
         for entry in entries:
-            if entry.strategy_name in available and entry.total_trades >= 10:  # noqa: PLR2004
+            if entry.strategy_name in available and entry.total_trades >= 10:
                 logger.debug(
                     "Regime %s → %s (manifest Sharpe=%.2f, trades=%d)",
                     regime,

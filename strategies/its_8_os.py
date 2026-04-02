@@ -113,7 +113,7 @@ class ITS8OSStrategy(BaseStrategy):
         """
         try:
             prices = data.get("prices", [])
-            if len(prices) < 50:  # noqa: PLR2004
+            if len(prices) < 50:
                 return {"error": "Insufficient data"}
 
             current_price = prices[-1].get("close", 0)
@@ -127,34 +127,34 @@ class ITS8OSStrategy(BaseStrategy):
                 setup_results["amd"] = self._analyze_amd_pattern(prices)
 
             # Setup 2: Power of 3
-            if 2 in self.enabled_setups:  # noqa: PLR2004
+            if 2 in self.enabled_setups:
                 setup_results["power_of_3"] = self._analyze_power_of_3(prices)
 
             # Setup 3: Judas Swing
-            if 3 in self.enabled_setups:  # noqa: PLR2004
+            if 3 in self.enabled_setups:
                 setup_results["judas_swing"] = self._analyze_judas_swing(prices)
 
             # Setup 4: Kill Zones
-            if 4 in self.enabled_setups:  # noqa: PLR2004
+            if 4 in self.enabled_setups:
                 setup_results["kill_zone"] = self._analyze_kill_zones(current_time)
 
             # Setup 5: Turtle Soup
-            if 5 in self.enabled_setups:  # noqa: PLR2004
+            if 5 in self.enabled_setups:
                 setup_results["turtle_soup"] = self._analyze_turtle_soup(prices)
 
             # Setup 6: Silver Bullet
-            if 6 in self.enabled_setups:  # noqa: PLR2004
+            if 6 in self.enabled_setups:
                 setup_results["silver_bullet"] = self._analyze_silver_bullet(
                     prices,
                     current_time,
                 )
 
             # Setup 7: Optimal Trade Entry
-            if 7 in self.enabled_setups:  # noqa: PLR2004
+            if 7 in self.enabled_setups:
                 setup_results["ote"] = self._analyze_ote(prices)
 
             # Setup 8: Session Analysis
-            if 8 in self.enabled_setups:  # noqa: PLR2004
+            if 8 in self.enabled_setups:
                 setup_results["session"] = self._analyze_session(prices, current_time)
 
             # Calculate confluence
@@ -265,15 +265,15 @@ class ITS8OSStrategy(BaseStrategy):
             volatility = np.std(recent_prices) / avg_price
 
             # Accumulation: Low volatility, tight range
-            if volatility < 0.005:  # 0.5%  # noqa: PLR2004
+            if volatility < 0.005:  # 0.5%
                 phase = "accumulation"
                 signal = "neutral"
                 score = 0.3
 
             # Manipulation: Sharp move against trend (liquidity grab)
-            elif len(prices) > 5:  # noqa: PLR2004
+            elif len(prices) > 5:
                 last_move = abs(prices[-1]["close"] - prices[-5]["close"]) / prices[-5]["close"]
-                if last_move > 0.01:  # 1% move  # noqa: PLR2004
+                if last_move > 0.01:  # 1% move
                     phase = "manipulation"
                     # After manipulation, expect reversal
                     if prices[-1]["close"] < prices[-5]["close"]:
@@ -310,7 +310,7 @@ class ITS8OSStrategy(BaseStrategy):
         """
         try:
             # Look for the pattern in recent candles
-            if len(prices) < 3:  # noqa: PLR2004
+            if len(prices) < 3:
                 return {"detected": False, "signal": "neutral", "score": 0.0}
 
             # Simplified: Look for range expansion after consolidation
@@ -321,7 +321,7 @@ class ITS8OSStrategy(BaseStrategy):
             )
 
             expansion = (
-                abs(prices[-1]["close"] - prices[-1]["open"]) / prices[-1]["open"] > 0.005  # noqa: PLR2004
+                abs(prices[-1]["close"] - prices[-1]["open"]) / prices[-1]["open"] > 0.005
             )
 
             if consolidation and expansion:
@@ -354,7 +354,7 @@ class ITS8OSStrategy(BaseStrategy):
         False breakout followed by reversal
         """
         try:
-            if len(prices) < 20:  # noqa: PLR2004
+            if len(prices) < 20:
                 return {"detected": False, "signal": "neutral", "score": 0.0}
 
             # Look for false breakout
@@ -435,7 +435,7 @@ class ITS8OSStrategy(BaseStrategy):
         Failed 20-day high/low breakout reversal
         """
         try:
-            if len(prices) < 20:  # noqa: PLR2004
+            if len(prices) < 20:
                 return {"detected": False, "signal": "neutral", "score": 0.0}
 
             # Get 20-day high/low (excluding current bar)
@@ -497,11 +497,11 @@ class ITS8OSStrategy(BaseStrategy):
                 return {"detected": False, "signal": "neutral", "score": 0.0}
 
             # Look for setup: Quick move followed by retracement
-            if len(prices) >= 5:  # noqa: PLR2004
+            if len(prices) >= 5:
                 # Check for momentum followed by pullback
                 initial_move = (
                     prices[-5]["close"] - prices[-10]["close"]
-                    if len(prices) >= 10  # noqa: PLR2004
+                    if len(prices) >= 10
                     else 0
                 )
                 recent_pullback = prices[-1]["close"] - prices[-5]["close"]
@@ -590,9 +590,9 @@ class ITS8OSStrategy(BaseStrategy):
             current_hour = current_time.hour
 
             # Determine session
-            if 0 <= current_hour < 8:  # noqa: PLR2004
+            if 0 <= current_hour < 8:
                 session = "asian"
-            elif 8 <= current_hour < 16:  # noqa: PLR2004
+            elif 8 <= current_hour < 16:
                 session = "london"
             else:
                 session = "new_york"
@@ -608,7 +608,7 @@ class ITS8OSStrategy(BaseStrategy):
                 bias = "range"
             elif session == "london":
                 # Look for trend continuation
-                if len(prices) >= 10:  # noqa: PLR2004
+                if len(prices) >= 10:
                     trend = prices[-1]["close"] - prices[-10]["close"]
                     if trend > 0:
                         signal = "bullish"

@@ -36,9 +36,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
-UTC = timezone.utc
+UTC = UTC
 from collections.abc import Callable
 import contextlib
 
@@ -232,7 +232,11 @@ class HeartbeatMonitor:
                         elapsed,
                         status.missed_beats,
                     )
-                    print(f"\n🚨 HEARTBEAT TIMEOUT: critical component '{status.name}' silent for {elapsed:.0f}s")
+                    logger.critical(
+                        "HEARTBEAT TIMEOUT: critical component '%s' silent for %.0fs",
+                        status.name,
+                        elapsed,
+                    )
                 else:
                     logger.warning(
                         "⚠️  Component '%s' missed heartbeat (%.0fs since last beat, missed: %d)",

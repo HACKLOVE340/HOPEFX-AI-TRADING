@@ -250,7 +250,7 @@ class FeatureEngineer:
             features["lower_shadow"] = (min(opens[-1], closes[-1]) - lows[-1]) / (highs[-1] - lows[-1] + 1e-10)
 
             # Trend strength
-            if len(closes) >= 20:  # noqa: PLR2004
+            if len(closes) >= 20:
                 slope = np.polyfit(range(20), closes[-20:], 1)[0]
                 features["trend_slope"] = slope / current_price if current_price > 0 else 0
 
@@ -310,7 +310,7 @@ class FeatureEngineer:
         """
         Detect anomalous market conditions
         """
-        if symbol not in self._feature_cache or len(self._feature_cache[symbol]) < 100:  # noqa: PLR2004
+        if symbol not in self._feature_cache or len(self._feature_cache[symbol]) < 100:
             return []
 
         recent = list(self._feature_cache[symbol])[-100:]
@@ -332,7 +332,7 @@ class FeatureEngineer:
                         "z_score": z_score,
                         "mean": mean,
                         "std": std,
-                        "severity": "high" if z_score > 5 else "medium",  # noqa: PLR2004
+                        "severity": "high" if z_score > 5 else "medium",
                     },
                 )
 
@@ -380,9 +380,9 @@ class SignalEnsemble:
         ensemble_prob = weighted_sum / total_weight
 
         # Determine action
-        if ensemble_prob > 0.7:  # noqa: PLR2004
+        if ensemble_prob > 0.7:
             action = "buy"
-        elif ensemble_prob < 0.3:  # noqa: PLR2004
+        elif ensemble_prob < 0.3:
             action = "sell"
         else:
             action = "hold"
@@ -415,7 +415,7 @@ class SignalEnsemble:
         if hasattr(model, "predict_proba") and callable(model.predict_proba):
             proba = model.predict_proba(X)
             # sklearn returns shape (1, n_classes); take P(class=1)
-            prob = float(proba[0, 1]) if proba.ndim == 2 else float(proba[0])  # noqa: PLR2004
+            prob = float(proba[0, 1]) if proba.ndim == 2 else float(proba[0])
         elif hasattr(model, "predict") and callable(model.predict):
             raw = model.predict(X)
             prob = float(raw[0])

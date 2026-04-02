@@ -395,7 +395,7 @@ async def get_fomc_calendar(upcoming_only: bool = True) -> list[FomcEvent]:
     for date_str in _FOMC_DATES:
         dt = datetime.fromisoformat(f"{date_str}T18:00:00+00:00")
         delta_min = int((dt - now).total_seconds() / 60)
-        if upcoming_only and delta_min < -60:  # noqa: PLR2004
+        if upcoming_only and delta_min < -60:
             continue
         events.append(
             FomcEvent(
@@ -403,7 +403,7 @@ async def get_fomc_calendar(upcoming_only: bool = True) -> list[FomcEvent]:
                 time_utc="18:00",
                 minutes_until=max(0, delta_min),
                 is_next=False,
-                is_within_2h=abs(delta_min) <= 120,  # noqa: PLR2004
+                is_within_2h=abs(delta_min) <= 120,
             ),
         )
 

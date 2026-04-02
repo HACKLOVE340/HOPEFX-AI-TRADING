@@ -113,7 +113,7 @@ class MessageThrottler:
             self.second_window.popleft()
 
         # Keep entries from last minute
-        while self.minute_window and now - self.minute_window[0] > 60:  # noqa: PLR2004
+        while self.minute_window and now - self.minute_window[0] > 60:
             self.minute_window.popleft()
 
     def _enter_throttle_state(
@@ -136,11 +136,11 @@ class MessageThrottler:
         second_usage = len(self.second_window) / self.max_per_second
         minute_usage = len(self.minute_window) / self.max_per_minute
 
-        if second_usage > 1.0 or minute_usage > 0.9:  # noqa: PLR2004
+        if second_usage > 1.0 or minute_usage > 0.9:
             return ThrottleLevel.BLOCKED
-        elif second_usage > 0.8 or minute_usage > 0.7:  # noqa: PLR2004
+        elif second_usage > 0.8 or minute_usage > 0.7:
             return ThrottleLevel.THROTTLED
-        elif second_usage > 0.6 or minute_usage > 0.5:  # noqa: PLR2004
+        elif second_usage > 0.6 or minute_usage > 0.5:
             return ThrottleLevel.WARNING
         else:
             return ThrottleLevel.NORMAL

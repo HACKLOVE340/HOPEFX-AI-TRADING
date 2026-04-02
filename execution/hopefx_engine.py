@@ -467,9 +467,9 @@ class HopeFXEngine:
         sent = features.get("news_sentiment_score", 0.0)
         score = 0.5 * ofi + 0.3 * press + 0.2 * sent
 
-        if score > 0.15:  # noqa: PLR2004
+        if score > 0.15:
             return "long", min(0.5 + abs(score), 0.95), 0.5 + abs(score) * 0.5
-        if score < -0.15:  # noqa: PLR2004
+        if score < -0.15:
             return "short", min(0.5 + abs(score), 0.95), 0.5 + abs(score) * 0.5
         return "neutral", 0.0, 0.5
 
@@ -617,7 +617,7 @@ class HopeFXEngine:
             # OANDA XAU_USD: 1 lot = 100 units (oz).
             # If the fill quantity looks like units (>> requested lots),
             # convert to lots.
-            if raw_qty > requested_qty * 10 and requested_qty < 100:  # noqa: PLR2004
+            if raw_qty > requested_qty * 10 and requested_qty < 100:
                 quantity = raw_qty / 100.0
                 logger.debug(
                     "OANDA XAU_USD unit→lot conversion: %.0f units → %.4f lots",

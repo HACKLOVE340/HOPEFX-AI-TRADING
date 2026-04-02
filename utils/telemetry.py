@@ -10,12 +10,15 @@ Production-grade observability with Prometheus/Grafana integration
 """
 
 import asyncio
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
-UTC = timezone.utc
+UTC = UTC
 from collections.abc import Callable
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -58,14 +61,14 @@ class MetricsCollector:
             )
             self.metrics.append(metric)
 
-            if len(self.metrics) > 10000:  # noqa: PLR2004
+            if len(self.metrics) > 10000:
                 self.metrics = self.metrics[-5000:]  # Keep last 5000
 
             if metric_type == "counter":
                 self.counters[name] += value
             elif metric_type == "histogram":
                 self.histograms[name].append(value)
-                if len(self.histograms[name]) > 1000:  # noqa: PLR2004
+                if len(self.histograms[name]) > 1000:
                     self.histograms[name] = self.histograms[name][-500:]
 
     def get_prometheus_format(self) -> str:
@@ -224,9 +227,9 @@ class AlertManager:
                         await self._trigger_emergency_stop(alert)
 
             except Exception as e:
-                print(f"Alert evaluation error: {e}")
+                logger.error("Alert evaluation error: %s", e)
 
     async def _trigger_emergency_stop(self, alert: dict):
         """Trigger system emergency stop"""
-        print(f"🚨 EMERGENCY ALERT TRIGGERING KILL SWITCH: {alert['message']}")
+        logger.critical("EMERGENCY ALERT TRIGGERING KILL SWITCH: %s", alert["message"])
         # Emit kill switch event

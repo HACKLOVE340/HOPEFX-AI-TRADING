@@ -360,7 +360,7 @@ async def _send_slack(webhook_url: str) -> None:
     endpoint = _build_safe_url(webhook_url)
     payload = {"text": "*HOPEFX* — Slack notifications are working correctly."}
     async with aiohttp.ClientSession() as session, session.post(endpoint, json=payload) as resp:
-        if resp.status != 200:  # noqa: PLR2004
+        if resp.status != 200:
             text = await resp.text()
             raise ValueError(f"Slack returned {resp.status}: {text[:200]}")
 

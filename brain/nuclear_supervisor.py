@@ -389,11 +389,11 @@ class NuclearHopeFXSupervisor:
             rl_action = int(raw_action)
 
             # Severity override: RL cannot downgrade a critical event
-            if severity >= 9:  # noqa: PLR2004
+            if severity >= 9:
                 rl_action = max(rl_action, ACTION_NUCLEAR)
-            elif severity >= 7:  # noqa: PLR2004
+            elif severity >= 7:
                 rl_action = max(rl_action, ACTION_HEDGE)
-            elif severity >= 5:  # noqa: PLR2004
+            elif severity >= 5:
                 rl_action = max(rl_action, ACTION_PAUSE)
 
             action_taken = await self._execute_action(rl_action, severity, in_cooldown)
@@ -417,7 +417,7 @@ class NuclearHopeFXSupervisor:
             "matched_terms": [t["term"] for t in meta.get("matched_terms", [])[:5]],
         }
         self._event_history.append(record)
-        if len(self._event_history) > 100:  # noqa: PLR2004
+        if len(self._event_history) > 100:
             self._event_history.pop(0)
 
         logger.info(
@@ -447,7 +447,7 @@ class NuclearHopeFXSupervisor:
     async def _execute_action(self, rl_action: int, severity: int, in_cooldown: bool) -> str:
         """Execute the RL-chosen action. Returns the action name string."""
         if rl_action == ACTION_NUCLEAR:
-            if not in_cooldown or severity >= 9:  # noqa: PLR2004
+            if not in_cooldown or severity >= 9:
                 logger.critical(
                     "☢️ RL NUCLEAR ACTION | severity=%d rl_action=%d",
                     severity,
@@ -462,7 +462,7 @@ class NuclearHopeFXSupervisor:
                 return "nuclear_cooldown_suppressed"
 
         elif rl_action == ACTION_HEDGE:
-            if not in_cooldown or severity >= 7:  # noqa: PLR2004
+            if not in_cooldown or severity >= 7:
                 logger.warning("⚠️ RL HEDGE MODE | severity=%d", severity)
                 self.nuclear_level = 2
                 self._last_trigger_ts = time.monotonic()
@@ -479,7 +479,7 @@ class NuclearHopeFXSupervisor:
             return "pause"
 
         else:  # ACTION_NORMAL
-            if self.nuclear_level > 0 and severity < 3:  # noqa: PLR2004
+            if self.nuclear_level > 0 and severity < 3:
                 # Gradual de-escalation
                 self.nuclear_level = max(0, self.nuclear_level - 1)
                 if self.nuclear_level == 0:
@@ -489,7 +489,7 @@ class NuclearHopeFXSupervisor:
 
     async def _rule_based_fallback(self, severity: int, in_cooldown: bool) -> str:
         """Deterministic fallback when RL model is unavailable."""
-        if severity >= 9:  # noqa: PLR2004
+        if severity >= 9:
             if not in_cooldown:
                 self.nuclear_level = 3
                 self._last_trigger_ts = time.monotonic()
@@ -501,7 +501,7 @@ class NuclearHopeFXSupervisor:
                 self._last_trigger_ts = time.monotonic()
                 await self.trigger_full_nuclear_mode()
                 return "nuclear"
-        elif severity >= 7:  # noqa: PLR2004
+        elif severity >= 7:
             if not in_cooldown:
                 self.nuclear_level = 2
                 self._last_trigger_ts = time.monotonic()
@@ -510,13 +510,13 @@ class NuclearHopeFXSupervisor:
             else:
                 logger.info("Hedge action suppressed by cooldown (severity=%d)", severity)
                 return "hedge_cooldown_suppressed"
-        elif severity >= 5:  # noqa: PLR2004
+        elif severity >= 5:
             self.nuclear_level = max(self.nuclear_level, 1)
             self.trading_paused = True
             self._pause_since_ts = time.monotonic()
             return "pause"
         else:
-            if self.nuclear_level > 0 and severity < 3:  # noqa: PLR2004
+            if self.nuclear_level > 0 and severity < 3:
                 self.nuclear_level = max(0, self.nuclear_level - 1)
                 if self.nuclear_level == 0:
                     self.trading_paused = False

@@ -268,7 +268,7 @@ class LSTMSignalLayer:
             return self._neutral(ohlcv, reason="sequence_build_failed", t0=t0)
 
         # ── Flat-market abstain ───────────────────────────────────────────────
-        if X_seq.std() < 1e-6:  # noqa: PLR2004
+        if X_seq.std() < 1e-6:
             return self._neutral(ohlcv, reason="flat_market_low_variance", t0=t0)
 
         # ── LSTM inference ────────────────────────────────────────────────────

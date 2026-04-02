@@ -94,7 +94,7 @@ def validate_startup_environment() -> list[str]:
             errors.append("SECURITY_JWT_SECRET is not set (required in production)")
         else:
             warnings.append("SECURITY_JWT_SECRET is not set — using insecure default")
-    elif len(jwt_secret) < 32:  # noqa: PLR2004
+    elif len(jwt_secret) < 32:
         errors.append(f"SECURITY_JWT_SECRET is too short ({len(jwt_secret)} chars); minimum 32 characters required")
 
     # Broker-specific credentials
@@ -570,7 +570,7 @@ class HopeFXEngine:
         if self._dl_orchestrator:
             try:
                 dl_tick = self._dl_orchestrator.get_latest_tick()
-                if dl_tick and dl_tick.is_valid() and abs(dl_tick.mid - mid) / max(mid, 1.0) < 0.005:  # noqa: PLR2004
+                if dl_tick and dl_tick.is_valid() and abs(dl_tick.mid - mid) / max(mid, 1.0) < 0.005:
                     # Use orchestrator mid if NuclearStreamer price is within 0.5%
                     # (sanity check — reject if sources diverge significantly)
                     _real_bid = dl_tick.bid
@@ -719,7 +719,7 @@ class HopeFXEngine:
 
             # Volatility: std of last 20 closes normalised to 1.0 = normal
             vol = 1.0
-            if len(ohlcv_df) >= 20:  # noqa: PLR2004
+            if len(ohlcv_df) >= 20:
                 closes = ohlcv_df["close"].tail(20).values
                 std = float(closes.std())
                 mean = float(abs(closes.mean()))
@@ -736,7 +736,7 @@ class HopeFXEngine:
                 logger.debug("Suppressed exception: %s", _exc)
 
             # Only dispatch if there's an elevated signal worth checking
-            if abs(sentiment) < 0.1 and vol < 1.5:  # noqa: PLR2004
+            if abs(sentiment) < 0.1 and vol < 1.5:
                 return
 
             # Build a synthetic news text from the decision reason

@@ -194,7 +194,7 @@ class ComplianceManager:
         # Count transactions just below threshold
         near_threshold = [c for c in recent_checks if c.check_type == "large_transaction"]
 
-        return len(near_threshold) >= 3  # noqa: PLR2004
+        return len(near_threshold) >= 3
 
     def _check_high_frequency(self, user_id: str) -> bool:
         """Check for unusually high transaction frequency"""
@@ -213,7 +213,7 @@ class ComplianceManager:
         # In production, would use ML models
         user_checks = self.flagged_users.get(user_id, [])
 
-        if len(user_checks) < 5:  # noqa: PLR2004
+        if len(user_checks) < 5:
             return False
 
         # Check for many identical amounts (possible automation)
@@ -263,11 +263,11 @@ class ComplianceManager:
         score = min(score, 100)
 
         # Determine overall risk level
-        if score >= 75:  # noqa: PLR2004
+        if score >= 75:
             risk_level = RiskLevel.CRITICAL
-        elif score >= 50:  # noqa: PLR2004
+        elif score >= 50:
             risk_level = RiskLevel.HIGH
-        elif score >= 25:  # noqa: PLR2004
+        elif score >= 25:
             risk_level = RiskLevel.MEDIUM
         else:
             risk_level = RiskLevel.LOW

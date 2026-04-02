@@ -11,7 +11,6 @@ Real-time P&L, exposure, and portfolio optimization
 
 import contextlib
 import numpy as np
-from typing import Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -228,7 +227,7 @@ class PortfolioManager:
         self._rebalancer.update_drawdown("portfolio", float(self.max_drawdown))
         return self._rebalancer
 
-    def run_rebalance(self, force: bool = False) -> Optional[dict]:
+    def run_rebalance(self, force: bool = False) -> dict | None:
         """
         Run the rebalancer and return target weights (or None if no rebalance needed).
 
@@ -275,7 +274,7 @@ class PortfolioOptimizer:
         if symbol not in self.returns_history:
             self.returns_history[symbol] = []
         self.returns_history[symbol].append(daily_return)
-        if len(self.returns_history[symbol]) > 252:  # 1 year  # noqa: PLR2004
+        if len(self.returns_history[symbol]) > 252:  # 1 year
             self.returns_history[symbol].pop(0)
 
     def calculate_kelly_sizes(self) -> dict[str, float]:
@@ -286,7 +285,7 @@ class PortfolioOptimizer:
         kelly_sizes = {}
 
         for symbol, returns in self.returns_history.items():
-            if len(returns) < 30:  # noqa: PLR2004
+            if len(returns) < 30:
                 continue
 
             returns_arr = np.array(returns)
@@ -316,7 +315,7 @@ class PortfolioOptimizer:
         Mean-variance optimization with target volatility.
         """
         symbols = list(self.returns_history.keys())
-        if len(symbols) < 2:  # noqa: PLR2004
+        if len(symbols) < 2:
             return dict.fromkeys(symbols, 1.0)
 
         # Build returns matrix

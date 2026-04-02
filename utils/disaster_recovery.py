@@ -10,19 +10,22 @@ Automated backup, failover, and state restoration
 """
 
 import asyncio
-import json
 import gzip
+import json
+import logging
 from typing import TYPE_CHECKING
 from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
-UTC = timezone.utc
+UTC = UTC
 from pathlib import Path
 import hashlib
 import aiofiles
 
 if TYPE_CHECKING:
     import aiohttp
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -65,7 +68,7 @@ class ContinuousBackup:
         async with session.create_client("s3", region_name=region) as client:
             await client.head_bucket(Bucket=bucket)
 
-        print(f"☁️ S3 backup enabled: {bucket}")
+        logger.info("S3 backup enabled: %s", bucket)
 
     async def create_snapshot(self, event_store, orchestra, risk_engine) -> SystemState:
         """Create consistent point-in-time snapshot"""
@@ -107,7 +110,7 @@ class ContinuousBackup:
         # Cleanup old snapshots (keep last 100)
         await self._cleanup_old_snapshots()
 
-        print(f"💾 Snapshot created: {filename}")
+        logger.info("Snapshot created: %s", filename)
         return state
 
     async def _upload_to_cloud(self, local_path: Path, filename: str):
@@ -127,7 +130,7 @@ class ContinuousBackup:
     async def _cleanup_old_snapshots(self):
         """Keep only last 100 local snapshots"""
         snapshots = sorted(self.backup_path.glob("snapshot_*.json.gz"))
-        if len(snapshots) > 100:  # noqa: PLR2004
+        if len(snapshots) > 100:
             for old in snapshots[:-100]:
                 old.unlink()
 
@@ -149,7 +152,7 @@ class ContinuousBackup:
             raise ValueError("Snapshot checksum verification failed!")
 
         state = SystemState(**state_dict)
-        print(f"✅ Restored from snapshot: {snapshot_file}")
+        logger.info("Restored from snapshot: %s", snapshot_file)
         return state
 
 
@@ -175,7 +178,7 @@ class FailoverManager:
         """
         Raft/Paxos-style leader election.
         """
-        print(f"🗳️ Starting leader election (node: {self.node_id})")
+        logger.info("Starting leader election (node: %s)", self.node_id)
 
         # Simple bully algorithm for now
         # In production, use proper consensus (etcd, Consul)
@@ -185,9 +188,9 @@ class FailoverManager:
         self.is_primary = all_nodes[-1] == self.node_id
 
         if self.is_primary:
-            print("✅ Elected as PRIMARY node")
+            logger.info("Elected as PRIMARY node")
         else:
-            print("⏸️ Running as SECONDARY node")
+            logger.info("Running as SECONDARY node")
 
     async def heartbeat_loop(self):
         """Send heartbeats to peers and monitor their health"""
@@ -236,7 +239,7 @@ class FailoverManager:
 
         try:
             async with self._session.post(url, json=payload) as resp:
-                if resp.status < 300:  # noqa: PLR2004
+                if resp.status < 300:
                     self.last_peer_heartbeat[peer] = datetime.now(UTC)
                 else:
                     print(f"⚠️ Heartbeat to {peer} returned HTTP {resp.status}")

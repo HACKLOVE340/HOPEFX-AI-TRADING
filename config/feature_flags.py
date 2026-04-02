@@ -755,7 +755,7 @@ def check_phase3_gate() -> tuple[bool, str]:
     except ValueError:
         return False, f"OANDA_PAPER_FILL_COUNT is not an integer: {fill_count_str!r}"
 
-    if fill_count < 500:  # noqa: PLR2004
+    if fill_count < 500:
         return False, (
             f"Phase 3 gate: {fill_count} fills recorded, need >= 500. "
             "Set OANDA_PAPER_FILL_COUNT after the paper run completes."

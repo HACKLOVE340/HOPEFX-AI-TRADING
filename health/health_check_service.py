@@ -44,7 +44,7 @@ class HealthCheckService:
     def check_api(self, url: str) -> bool:
         try:
             response = requests.get(url, timeout=5)
-            return response.status_code == 200  # noqa: PLR2004
+            return response.status_code == 200
         except Exception as exc:
             self.alerts.append(f"API check failed: {exc}")
             return False

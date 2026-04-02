@@ -251,7 +251,7 @@ async def run_mutation_tests(
     Returns immediately with run_id. Poll /api/chaos/mutation/results
     for completion.
     """
-    global _mutation_running  # noqa: PLW0602
+    global _mutation_running
 
     if _mutation_running:
         raise HTTPException(

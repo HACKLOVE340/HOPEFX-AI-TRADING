@@ -105,7 +105,7 @@ def fetch_ohlcv(ticker: str, years: int, smoke: bool = False) -> pd.DataFrame:
         try:
             df = pd.read_csv(cache_path, index_col=0, parse_dates=True)
             df.columns = [c.lower() for c in df.columns]
-            if len(df) > 50:  # noqa: PLR2004
+            if len(df) > 50:
                 logger.info("Loaded %s from cache: %d bars", ticker, len(df))
                 return df
         except Exception as _exc:
@@ -252,12 +252,12 @@ def backtest_symbol(
     logger.info("=== %s (%s) ===", display_name, ticker)
 
     ohlcv = fetch_ohlcv(ticker, years, smoke=smoke)
-    if len(ohlcv) < 100:  # noqa: PLR2004
+    if len(ohlcv) < 100:
         logger.warning("%s: insufficient data (%d bars)", ticker, len(ohlcv))
         return {"symbol": display_name, "error": "insufficient data", "n_trades": 0}
 
     X, y = build_features(ohlcv, smoke=smoke)
-    if len(X) < 50:  # noqa: PLR2004
+    if len(X) < 50:
         logger.warning("%s: too few samples after filtering (%d)", ticker, len(X))
         return {"symbol": display_name, "error": "too few samples", "n_trades": 0}
 
@@ -266,7 +266,7 @@ def backtest_symbol(
     X_train, y_train = X.iloc[:-oos_n], y.iloc[:-oos_n]
     X_oos, y_oos = X.iloc[-oos_n:], y.iloc[-oos_n:]
 
-    if len(X_train) < 30:  # noqa: PLR2004
+    if len(X_train) < 30:
         return {"symbol": display_name, "error": "train set too small", "n_trades": 0}
 
     # Train calibrated XGBoost
@@ -291,7 +291,7 @@ def backtest_symbol(
 
     # OOS predictions
     proba = model.predict_proba(X_oos)[:, 1]
-    _preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal  # noqa: PLR2004
+    _preds = (proba >= 0.55).astype(int)  # threshold: 0.55 for signal
 
     # Align OOS prices for PnL calculation
     oos_close = ohlcv["close"].reindex(X_oos.index)
@@ -305,7 +305,7 @@ def backtest_symbol(
     # Net PnL = raw close-to-close return − round-trip spread − commission
     trades = []
     for i in range(len(X_oos) - 1):
-        if proba[i] >= 0.58:  # long signal  # noqa: PLR2004
+        if proba[i] >= 0.58:  # long signal
             entry = float(oos_close.iloc[i])
             exit_ = float(oos_close.iloc[i + 1])
             raw_pnl_pct = (exit_ - entry) / entry
@@ -319,7 +319,7 @@ def backtest_symbol(
                     "prob": float(proba[i]),
                 }
             )
-        elif proba[i] <= 0.42:  # short signal  # noqa: PLR2004
+        elif proba[i] <= 0.42:  # short signal
             entry = float(oos_close.iloc[i])
             exit_ = float(oos_close.iloc[i + 1])
             raw_pnl_pct = (entry - exit_) / entry
@@ -353,8 +353,8 @@ def backtest_symbol(
     raw_sharpe = float(raw_pnls.mean() / (raw_pnls.std(ddof=1) or 1e-6) * np.sqrt(252))
 
     # Classification metrics
-    acc = accuracy_score(y_oos, (proba >= 0.5).astype(int))  # noqa: PLR2004
-    f1 = f1_score(y_oos, (proba >= 0.5).astype(int), zero_division=0)  # noqa: PLR2004
+    acc = accuracy_score(y_oos, (proba >= 0.5).astype(int))
+    f1 = f1_score(y_oos, (proba >= 0.5).astype(int), zero_division=0)
     try:
         auc = roc_auc_score(y_oos, proba)
     except (ValueError, RuntimeError):
@@ -441,9 +441,9 @@ def _detect_sharpe_outliers(symbol_results: list[dict]) -> tuple[list[str], list
         win_rate = r.get("win_rate", 0.0)
         n = r.get("n_trades", 0)
         flags: list[str] = []
-        if sharpe > 5.0:  # noqa: PLR2004
+        if sharpe > 5.0:
             flags.append(f"Sharpe={sharpe:.2f} > 5.0 (implausible for daily bars)")
-        if win_rate > 0.75 and n > 50:  # noqa: PLR2004
+        if win_rate > 0.75 and n > 50:
             flags.append(f"win_rate={win_rate:.1%} on {n} trades (implausible for direction model)")
         if flags:
             outliers.append(sym)
@@ -530,7 +530,7 @@ def _sharpe_stats(pnls: np.ndarray, n_total: int, target_n: int) -> dict:
     sr = abs(sharpe)
     se = float(np.sqrt((1 + 0.5 * sr**2) / max(n_total, 1)))
     gate_passed = n_total >= target_n
-    credible = se <= 0.10  # noqa: PLR2004
+    credible = se <= 0.10
     n_req = int(np.ceil((1 + 0.5 * sr**2) / 0.01))
     if gate_passed:
         se_note = f"SE={se:.3f}" + (" (credible)" if credible else f" (need N>={n_req} for SE<=0.10)")

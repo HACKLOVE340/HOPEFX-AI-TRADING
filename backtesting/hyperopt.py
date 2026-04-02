@@ -353,7 +353,7 @@ class HyperoptEngine:
             return float(total_return)
 
         period_returns = np.diff(equity) / equity[:-1]
-        if len(period_returns) < 2:  # noqa: PLR2004
+        if len(period_returns) < 2:
             return 0.0
 
         if self.metric == "sharpe_ratio":

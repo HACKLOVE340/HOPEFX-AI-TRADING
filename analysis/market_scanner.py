@@ -727,7 +727,7 @@ class MarketScanner:
     def _generate_opportunities(self, results: list[ScanResult]):
         """Generate trading opportunities from scan results."""
         for result in results:
-            if result.signal_strength >= 70:  # Strong signals only  # noqa: PLR2004
+            if result.signal_strength >= 70:  # Strong signals only
                 opportunity = self._create_opportunity(result)
                 if opportunity:
                     self._add_opportunity(opportunity)

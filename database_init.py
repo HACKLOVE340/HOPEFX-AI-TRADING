@@ -44,6 +44,7 @@ def initialize_database(db_url: str | None = None) -> None:
     # Create tables defined in both model modules.
     try:
         from database.models import Base as CoreBase
+
         CoreBase.metadata.create_all(engine)
         logger.info("Core tables created/verified")
     except Exception as exc:
@@ -51,6 +52,7 @@ def initialize_database(db_url: str | None = None) -> None:
 
     try:
         from database.user_models import Base as UserBase
+
         UserBase.metadata.create_all(engine)
         logger.info("User tables created/verified")
     except Exception as exc:
@@ -92,6 +94,7 @@ def validate_schema(engine) -> dict[str, list[str]]:
     for base_path in ("database.models", "database.user_models"):
         try:
             import importlib
+
             mod = importlib.import_module(base_path)
             base = getattr(mod, "Base", None)
             if base is not None:
@@ -141,11 +144,11 @@ def recover_database(file_path: str) -> bool:
 
             src = sqlite3.connect(str(path))
             dst = sqlite3.connect(str(recovered))
+            import contextlib
+
             for line in src.iterdump():
-                try:
+                with contextlib.suppress(sqlite3.Error):
                     dst.execute(line)
-                except sqlite3.Error:
-                    pass  # skip rows that fail (e.g. constraint violations in corrupt data)
             dst.commit()
             src.close()
             dst.close()

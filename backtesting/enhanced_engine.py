@@ -391,7 +391,7 @@ class TransactionCostModel:
         perm_impact = self.permanent_impact_coefficient * daily_volatility * participation_rate
 
         # Adjust for order flow toxicity (VPIN-like)
-        if self.use_order_flow_toxicity and order_flow_toxicity > 0.5:  # noqa: PLR2004
+        if self.use_order_flow_toxicity and order_flow_toxicity > 0.5:
             # Toxic flow = higher impact
             toxicity_multiplier = 1 + (order_flow_toxicity - 0.5) * 2
             temp_impact *= toxicity_multiplier
@@ -401,7 +401,7 @@ class TransactionCostModel:
             "permanent_bps": perm_impact * 10000,
             "total_bps": (temp_impact + perm_impact) * 10000,
             "temporary_decay_time": self._estimate_decay_time(participation_rate),
-            "is_toxic": order_flow_toxicity > 0.7,  # noqa: PLR2004
+            "is_toxic": order_flow_toxicity > 0.7,
         }
 
     def _estimate_decay_time(self, participation_rate: float) -> timedelta:
@@ -869,7 +869,7 @@ class MarketMicrostructureAnalyzer:
 
     def _update_microstructure_metrics(self):
         """Update spread and impact metrics"""
-        if len(self.ticks) < 20:  # noqa: PLR2004
+        if len(self.ticks) < 20:
             return
 
         recent_ticks = list(self.ticks)[-20:]
@@ -886,7 +886,7 @@ class MarketMicrostructureAnalyzer:
 
     def _update_toxicity_metrics(self):
         """Calculate VPIN-like order flow toxicity"""
-        if len(self.trade_flow) < 50:  # noqa: PLR2004
+        if len(self.trade_flow) < 50:
             return
 
         recent_flow = list(self.trade_flow)[-50:]
@@ -903,7 +903,7 @@ class MarketMicrostructureAnalyzer:
 
     def _detect_regime(self):
         """Detect current market regime using multiple classifiers"""
-        if len(self.ticks) < 50:  # noqa: PLR2004
+        if len(self.ticks) < 50:
             self.current_regime = MarketRegime.UNKNOWN
             return
 
@@ -917,23 +917,23 @@ class MarketMicrostructureAnalyzer:
         self._calculate_hurst()
 
         # Classify
-        if volatility > 0.05:  # >5% realized vol  # noqa: PLR2004
+        if volatility > 0.05:  # >5% realized vol
             if self.realized_skewness < -1:
                 self.current_regime = MarketRegime.HIGH_VOLATILITY_BREAKOUT
             else:
                 self.current_regime = MarketRegime.HIGH_VOLATILITY_MEAN_REVERSION
-        elif self.hurst_exponent > 0.6:  # noqa: PLR2004
+        elif self.hurst_exponent > 0.6:
             if self.returns and np.mean(list(self.returns)[-10:]) > 0:
                 self.current_regime = MarketRegime.TRENDING_STRONG_BULL
             else:
                 self.current_regime = MarketRegime.TRENDING_STRONG_BEAR
-        elif self.hurst_exponent > 0.5:  # noqa: PLR2004
+        elif self.hurst_exponent > 0.5:
             self.current_regime = (
                 MarketRegime.TRENDING_WEAK_BULL
                 if (self.returns and np.mean(list(self.returns)[-10:]) > 0)
                 else MarketRegime.TRENDING_WEAK_BEAR
             )
-        elif volatility < 0.01:  # noqa: PLR2004
+        elif volatility < 0.01:
             self.current_regime = MarketRegime.RANGING_NARROW
         else:
             self.current_regime = MarketRegime.RANGING_WIDE
@@ -1251,7 +1251,7 @@ class InstitutionalRiskManager:
             )
 
         # Check for unusual trading patterns
-        if self.daily_trades > 1000:  # >1000 trades/day is unusual  # noqa: PLR2004
+        if self.daily_trades > 1000:  # >1000 trades/day is unusual
             self._log_risk_event("High trade frequency detected", RiskEventSeverity.WARNING)
 
         return True, "OK"
@@ -1278,7 +1278,7 @@ class InstitutionalRiskManager:
         """
         Calculate Value at Risk using specified method.
         """
-        if len(self.returns_history) < 30:  # noqa: PLR2004
+        if len(self.returns_history) < 30:
             # Not enough data - use parametric fallback
             return self.current_capital * 0.02  # Conservative 2%
 
@@ -1312,7 +1312,7 @@ class InstitutionalRiskManager:
         Calculate optimal Kelly fraction based on trade history.
         f* = (bp - q) / b
         """
-        if len(self.trade_history) < 20:  # noqa: PLR2004
+        if len(self.trade_history) < 20:
             return self.kelly_fraction  # Default
 
         wins = [t.net_pnl for t in self.trade_history if t.net_pnl > 0]
@@ -1935,7 +1935,7 @@ class EnhancedBacktestEngine:
         position.realized_pnl += net_pnl
         position.size = position.size + (closing_size if position.size > 0 else -closing_size)
 
-        if is_full_close or abs(position.size) < 0.0001:  # noqa: PLR2004
+        if is_full_close or abs(position.size) < 0.0001:
             # Archive position
             position.closing_trades.append({"trade_id": trade.trade_id, "exit_price": exit_price, "pnl": net_pnl})
 
@@ -2047,15 +2047,15 @@ class EnhancedBacktestEngine:
                 else 0,
                 "sortino_ratio": calculate_sortino(equity_returns),
                 "calmar_ratio": calculate_calmar(equity_returns, max_dd),
-                "var_95": np.percentile(returns, 5) if len(returns) > 10 else 0,  # noqa: PLR2004
+                "var_95": np.percentile(returns, 5) if len(returns) > 10 else 0,
                 "cvar_95": np.mean([r for r in returns if r <= np.percentile(returns, 5)])
-                if len(returns) > 10  # noqa: PLR2004
+                if len(returns) > 10
                 else 0,
                 "skewness": stats.skew(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
+                if SCIPY_AVAILABLE and len(returns) > 2
                 else 0,
                 "kurtosis": stats.kurtosis(returns)
-                if SCIPY_AVAILABLE and len(returns) > 2  # noqa: PLR2004
+                if SCIPY_AVAILABLE and len(returns) > 2
                 else 0,
             },
             "execution_quality": {
@@ -2301,7 +2301,7 @@ def _load_real_ticks(symbol: str = "XAUUSD", max_bars: int = 5000) -> list["Tick
         exchange = _ccxt.binance({"enableRateLimit": True, "options": {"defaultType": "spot"}})
         since_ms = exchange.parse8601("2022-01-01T00:00:00Z")
         df = rdb.fetch_ohlcv_paginated(exchange, "XAU/USDT", "1h", since_ms=since_ms, max_bars=max_bars)
-        if df is None or len(df) < 100:  # noqa: PLR2004
+        if df is None or len(df) < 100:
             return None
 
         ticks: list[TickData] = []
@@ -2465,7 +2465,7 @@ def run_comprehensive_backtest(use_real_data: bool = True):
             side, confidence = signal
 
             # Risk-based position sizing
-            if confidence > 0.7:  # noqa: PLR2004
+            if confidence > 0.7:
                 size = position_size * confidence
 
                 # Check if we need to reverse

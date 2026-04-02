@@ -481,7 +481,7 @@ class VWAPOrder(AlgoOrder):
 
                 # Last slice: fill remainder
                 if i == len(slice_quantities) - 1:
-                    qty = self.remaining_quantity  # noqa: PLW2901
+                    qty = self.remaining_quantity
 
                 if qty >= ALGO_MIN_CHILD_SIZE:
                     await self._submit_child(qty)

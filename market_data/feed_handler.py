@@ -11,12 +11,15 @@ Ultra-low latency tick processing with normalization
 
 import asyncio
 import json
+import logging
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
-UTC = timezone.utc
+UTC = UTC
 from collections.abc import Callable
+
+logger = logging.getLogger(__name__)
 
 try:
     import aiohttp
@@ -93,7 +96,7 @@ class FeedHandler:
             try:
                 callback(tick)
             except Exception as e:
-                print(f"Tick callback error: {e}")
+                logger.error("Tick callback error: %s", e)
 
         self.stats["ticks_processed"] += 1
 
@@ -232,7 +235,7 @@ class ExchangeFeed:
                     break
 
             except Exception as e:
-                print(f"Feed error: {e}")
+                logger.error("Feed error: %s", e)
                 await asyncio.sleep(1)
 
         # Reconnect

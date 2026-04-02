@@ -571,7 +571,7 @@ class MarketDataOrchestrator:
 
         # Check tick quality
         tick = self.get_latest_tick()
-        if tick is not None and tick.confidence < 0.30:  # noqa: PLR2004
+        if tick is not None and tick.confidence < 0.30:
             return False
 
         # Check at least one feed alive
@@ -579,7 +579,7 @@ class MarketDataOrchestrator:
             # No active sources — but only block if we've been running > 30s
             import time
 
-            if self._started and (time.time() - self._start_ts) > 30.0:  # noqa: PLR2004
+            if self._started and (time.time() - self._start_ts) > 30.0:
                 return False
 
         return True
@@ -686,7 +686,7 @@ class MarketDataOrchestrator:
         """
         try:
             raw_ticks = self._redis_store.get_tick_history(symbol, limit=max_ticks)
-            if len(raw_ticks) < 2:  # noqa: PLR2004
+            if len(raw_ticks) < 2:
                 return None
 
             from datetime import datetime
@@ -715,7 +715,7 @@ class MarketDataOrchestrator:
                 except Exception:  # nosec B112 - skip malformed tick record during replay
                     continue
 
-            if len(ticks) < 2:  # noqa: PLR2004
+            if len(ticks) < 2:
                 return None
 
             return self._norm.tick_to_ohlcv(ticks, timeframe_minutes=timeframe_minutes)
@@ -774,7 +774,7 @@ class MarketDataOrchestrator:
         """
         # Try OHLCVStore (broker feed) first
         df = self.get_ohlcv(symbol=symbol, bars=bars, timeframe=timeframe)
-        if df is not None and len(df) >= 10:  # noqa: PLR2004
+        if df is not None and len(df) >= 10:
             return df
 
         # Fall back to tick-based reconstruction

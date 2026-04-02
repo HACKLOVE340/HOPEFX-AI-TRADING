@@ -250,7 +250,7 @@ class AlphaVantageSource(DataSource):
 
             # Standardize column names - Alpha Vantage returns numbered columns
             # Select only the OHLC columns we need
-            if len(df.columns) >= 4:  # noqa: PLR2004
+            if len(df.columns) >= 4:
                 df = df.iloc[:, :4]  # Take first 4 columns (open, high, low, close)
             df.columns = ["open", "high", "low", "close"]
             df = df.astype(float)

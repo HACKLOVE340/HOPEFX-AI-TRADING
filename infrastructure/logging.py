@@ -17,9 +17,9 @@ import queue
 import threading
 import traceback
 from typing import Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
-UTC = timezone.utc
+UTC = UTC
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
@@ -181,7 +181,7 @@ class AsyncLogHandler(logging.Handler):
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f"Error processing log: {e}", file=sys.stderr)
+                logger.error("Error processing log: %s", e)
 
     def get_stats(self) -> dict:
         """Get handler statistics"""

@@ -167,7 +167,7 @@ class StochasticStrategy(BaseStrategy):
                 reason = f"Exiting overbought zone: %K={current_k:.1f}"
 
             # Divergence signals (weaker)
-            elif current_k > 50:  # noqa: PLR2004
+            elif current_k > 50:
                 # In bullish territory
                 if prev_k > prev_d and current_k < current_d:
                     # Bearish crossover above 50
@@ -175,7 +175,7 @@ class StochasticStrategy(BaseStrategy):
                     confidence = 0.55
                     reason = f"Bearish crossover: %K={current_k:.1f} < %D={current_d:.1f}"
 
-            elif current_k < 50:  # noqa: PLR2004
+            elif current_k < 50:
                 # In bearish territory
                 if prev_k < prev_d and current_k > current_d:
                     # Bullish crossover below 50

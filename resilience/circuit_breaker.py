@@ -10,12 +10,16 @@ Prevents cascade failures and ensures system stability
 """
 
 import asyncio
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
-UTC = timezone.utc
+UTC = UTC
 from enum import Enum, auto
+
+
+logger = logging.getLogger(__name__)
 
 
 class CircuitState(Enum):
@@ -57,7 +61,7 @@ class CircuitBreaker:
             if elapsed > self.config.timeout_seconds:
                 self.state = CircuitState.HALF_OPEN
                 self.half_open_calls = 0
-                print(f"🔌 Circuit {self.name}: HALF_OPEN (testing recovery)")
+                logger.info("Circuit %s: HALF_OPEN (testing recovery)", self.name)
             else:
                 raise CircuitBreakerOpenError(f"Circuit {self.name} is OPEN")
 
@@ -83,7 +87,7 @@ class CircuitBreaker:
         if self.state == CircuitState.HALF_OPEN:
             self.successes += 1
             if self.successes >= self.config.success_threshold:
-                print(f"✅ Circuit {self.name}: CLOSED (recovered)")
+                logger.info("Circuit %s: CLOSED (recovered)", self.name)
                 self.state = CircuitState.CLOSED
                 self.failures = 0
                 self.successes = 0
@@ -99,12 +103,12 @@ class CircuitBreaker:
         self.last_failure_time = datetime.now(UTC)
 
         if self.state == CircuitState.HALF_OPEN:
-            print(f"❌ Circuit {self.name}: OPEN (recovery failed)")
+            logger.warning("Circuit %s: OPEN (recovery failed)", self.name)
             self.state = CircuitState.OPEN
 
         elif self.state == CircuitState.CLOSED:
             if self.failures >= self.config.failure_threshold:
-                print(f"🚫 Circuit {self.name}: OPEN ({self.failures} failures)")
+                logger.warning("Circuit %s: OPEN (%d failures)", self.name, self.failures)
                 self.state = CircuitState.OPEN
 
     def get_stats(self) -> dict:

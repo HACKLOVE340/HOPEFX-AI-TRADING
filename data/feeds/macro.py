@@ -235,7 +235,7 @@ class MacroFeed:
 
         # YoY CPI change
         cpi_yoy = None
-        if not cpi_df.empty and len(cpi_df) >= 2:  # noqa: PLR2004
+        if not cpi_df.empty and len(cpi_df) >= 2:
             try:
                 cpi_now = float(cpi_df.iloc[-1].iloc[0])
                 cpi_prev = float(cpi_df.iloc[0].iloc[0])
@@ -345,7 +345,7 @@ class MacroFeed:
         spread = (y10 - y2) if (y10 is not None and y2 is not None) else None
 
         cpi_yoy = None
-        if not cpi_df.empty and len(cpi_df) >= 2:  # noqa: PLR2004
+        if not cpi_df.empty and len(cpi_df) >= 2:
             try:
                 cpi_now = float(cpi_df.iloc[-1].iloc[0])
                 cpi_prev = float(cpi_df.iloc[0].iloc[0])
@@ -430,13 +430,13 @@ def _macro_regime_score(
 
 def _regime_label(score: float) -> str:
     """Convert numeric score to human-readable stance label."""
-    if score >= 70:  # noqa: PLR2004
+    if score >= 70:
         return "Risk-off: gold bullish"
-    if score >= 55:  # noqa: PLR2004
+    if score >= 55:
         return "Mild tailwind for gold"
-    if score >= 45:  # noqa: PLR2004
+    if score >= 45:
         return "Neutral"
-    if score >= 30:  # noqa: PLR2004
+    if score >= 30:
         return "Dollar strength: gold headwind"
     return "Risk-on: gold bearish"
 

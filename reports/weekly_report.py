@@ -139,30 +139,30 @@ class WeeklyReport:
 
 
 def _sharpe(returns: np.ndarray, periods_per_year: int = 252) -> float | None:
-    if len(returns) < 5:  # noqa: PLR2004
+    if len(returns) < 5:
         return None
     mu = float(np.mean(returns))
     sigma = float(np.std(returns, ddof=1))
-    if sigma < 1e-10:  # noqa: PLR2004
+    if sigma < 1e-10:
         return None
     return round(mu / sigma * math.sqrt(periods_per_year), 3)
 
 
 def _sortino(returns: np.ndarray, periods_per_year: int = 252) -> float | None:
-    if len(returns) < 5:  # noqa: PLR2004
+    if len(returns) < 5:
         return None
     mu = float(np.mean(returns))
     downside = returns[returns < 0]
     if len(downside) == 0:
         return None
     downside_std = float(np.std(downside, ddof=1))
-    if downside_std < 1e-10:  # noqa: PLR2004
+    if downside_std < 1e-10:
         return None
     return round(mu / downside_std * math.sqrt(periods_per_year), 3)
 
 
 def _max_drawdown(equity_curve: list[float]) -> float:
-    if len(equity_curve) < 2:  # noqa: PLR2004
+    if len(equity_curve) < 2:
         return 0.0
     arr = np.array(equity_curve, dtype=float)
     peak = np.maximum.accumulate(arr)
@@ -171,7 +171,7 @@ def _max_drawdown(equity_curve: list[float]) -> float:
 
 
 def _calmar(annual_return: float, max_dd: float) -> float | None:
-    if abs(max_dd) < 1e-10:  # noqa: PLR2004
+    if abs(max_dd) < 1e-10:
         return None
     return round(annual_return / abs(max_dd), 3)
 
@@ -179,7 +179,7 @@ def _calmar(annual_return: float, max_dd: float) -> float | None:
 def _profit_factor(wins: list[float], losses: list[float]) -> float | None:
     gross_win = sum(w for w in wins if w > 0)
     gross_loss = abs(sum(loss for loss in losses if loss < 0))
-    if gross_loss < 1e-10:  # noqa: PLR2004
+    if gross_loss < 1e-10:
         return None
     return round(gross_win / gross_loss, 3)
 
@@ -225,7 +225,7 @@ class WeeklyReportGenerator:
         # Daily returns from equity curve
         eq_values = [v for _, v in equity_curve if week_start <= _ <= week_end]
         daily_returns = np.array([])
-        if len(eq_values) >= 2:  # noqa: PLR2004
+        if len(eq_values) >= 2:
             arr = np.array(eq_values, dtype=float)
             daily_returns = np.diff(arr) / np.where(arr[:-1] > 0, arr[:-1], 1.0)
 
@@ -245,7 +245,7 @@ class WeeklyReportGenerator:
             total_trades=total,
             winning_trades=len(wins),
             losing_trades=len(losses),
-            win_rate=round(len(wins) / total, 4) if total >= 10 else None,  # noqa: PLR2004
+            win_rate=round(len(wins) / total, 4) if total >= 10 else None,
             avg_win=round(sum(wins) / len(wins), 4) if wins else 0.0,
             avg_loss=round(sum(losses) / len(losses), 4) if losses else 0.0,
             profit_factor=_profit_factor(wins, losses),
@@ -263,7 +263,7 @@ class WeeklyReportGenerator:
             data_source=resolved_source,
             note=(
                 "Insufficient trades for statistical significance (< 10)."
-                if total < 10  # noqa: PLR2004
+                if total < 10
                 else ""
             ),
         )
@@ -327,7 +327,7 @@ class WeeklyReportGenerator:
         try:
             with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
                 server.ehlo()
-                if smtp_port == 587:  # noqa: PLR2004
+                if smtp_port == 587:
                     server.starttls()
                 if smtp_user and smtp_pass:
                     server.login(smtp_user, smtp_pass)

@@ -677,7 +677,7 @@ class GeopoliticalRiskProvider:
                 coordinates: tuple[float, float] | None = None
                 if geom.get("type") == "Point":
                     coords = geom.get("coordinates", [])
-                    if len(coords) >= 2:  # noqa: PLR2004
+                    if len(coords) >= 2:
                         coordinates = (float(coords[1]), float(coords[0]))
 
                 # Confidence from API quality score (0–1), default 0.8
@@ -754,11 +754,11 @@ class GeopoliticalRiskProvider:
                 break
 
         # Map score to gold impact
-        if impact_score >= 6:  # noqa: PLR2004
+        if impact_score >= 6:
             return GoldImpact.STRONGLY_BULLISH
-        elif impact_score >= 4:  # noqa: PLR2004
+        elif impact_score >= 4:
             return GoldImpact.BULLISH
-        elif impact_score >= 2:  # noqa: PLR2004
+        elif impact_score >= 2:
             return GoldImpact.NEUTRAL
         elif impact_score >= 1:
             return GoldImpact.BEARISH
@@ -847,9 +847,9 @@ class GeopoliticalRiskProvider:
         bearish_count = sum(1 for e in events if e.gold_impact in [GoldImpact.BEARISH, GoldImpact.STRONGLY_BEARISH])
 
         # Consider global risk level
-        if global_risk >= 70:  # noqa: PLR2004
+        if global_risk >= 70:
             return GoldImpact.STRONGLY_BULLISH
-        elif global_risk >= 50 and bullish_count > bearish_count:  # noqa: PLR2004
+        elif global_risk >= 50 and bullish_count > bearish_count:
             return GoldImpact.BULLISH
 
         # Default based on event balance
@@ -875,7 +875,7 @@ class GeopoliticalRiskProvider:
         sorted_regions = sorted(region_scores.items(), key=lambda x: -x[1])
 
         # Return top 5 high-risk regions
-        return [region for region, score in sorted_regions[:5] if score >= 30]  # noqa: PLR2004
+        return [region for region, score in sorted_regions[:5] if score >= 30]
 
     def _get_country_risks(self, events: list[GeopoliticalEvent]) -> dict[str, CountryRisk]:
         """Calculate risk for individual countries"""
@@ -917,10 +917,10 @@ class GeopoliticalRiskProvider:
         recommendations = []
 
         # Risk-based recommendations
-        if global_risk >= 70:  # noqa: PLR2004
+        if global_risk >= 70:
             recommendations.append("HIGH ALERT: Elevated geopolitical risk - Consider increasing gold allocation")
             recommendations.append("Reduce exposure to risk assets during heightened uncertainty")
-        elif global_risk >= 50:  # noqa: PLR2004
+        elif global_risk >= 50:
             recommendations.append("MODERATE RISK: Monitor developing situations - Gold as portfolio hedge")
         else:
             recommendations.append("LOW RISK: Geopolitical environment relatively stable")
@@ -955,9 +955,9 @@ class GeopoliticalRiskProvider:
 
         # More events = more data = higher confidence
         event_count = len(assessment.key_events)
-        if event_count >= 5:  # noqa: PLR2004
+        if event_count >= 5:
             confidence += 0.2
-        elif event_count >= 3:  # noqa: PLR2004
+        elif event_count >= 3:
             confidence += 0.1
 
         # Clear direction = higher confidence
@@ -970,7 +970,7 @@ class GeopoliticalRiskProvider:
             confidence += 0.1
 
         # High risk = higher confidence in bullish gold
-        if assessment.global_risk_score >= 60:  # noqa: PLR2004
+        if assessment.global_risk_score >= 60:
             confidence += 0.1
 
         return min(confidence, 1.0)
@@ -1462,11 +1462,11 @@ class WorldMonitorAPIClient:
         final_score = total_score / total_weight if total_weight > 0 else 0
 
         # Determine gold outlook
-        if final_score >= 70:  # noqa: PLR2004
+        if final_score >= 70:
             outlook = GoldImpact.STRONGLY_BULLISH
-        elif final_score >= 50:  # noqa: PLR2004
+        elif final_score >= 50:
             outlook = GoldImpact.BULLISH
-        elif final_score >= 30:  # noqa: PLR2004
+        elif final_score >= 30:
             outlook = GoldImpact.NEUTRAL
         else:
             outlook = GoldImpact.BEARISH

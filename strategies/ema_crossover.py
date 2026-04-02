@@ -100,7 +100,7 @@ class EMAcrossoverStrategy(BaseStrategy):
                 reason = f"Bullish EMA crossover: {current_fast:.5f} > {current_slow:.5f}"
 
                 # Higher confidence if EMAs are converging with momentum
-                if ema_diff < 0.001:  # noqa: PLR2004
+                if ema_diff < 0.001:
                     confidence = min(0.95, confidence + 0.10)
                     reason += " (strong momentum)"
 
@@ -111,7 +111,7 @@ class EMAcrossoverStrategy(BaseStrategy):
                 reason = f"Bearish EMA crossover: {current_fast:.5f} < {current_slow:.5f}"
 
                 # Higher confidence if EMAs are converging with momentum
-                if ema_diff < 0.001:  # noqa: PLR2004
+                if ema_diff < 0.001:
                     confidence = min(0.95, confidence + 0.10)
                     reason += " (strong momentum)"
 

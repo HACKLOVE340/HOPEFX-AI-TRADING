@@ -301,7 +301,7 @@ class NormalizationPipeline:
         out["log_return"] = lr
 
         # gap_flag: absolute log return > 0.5%
-        out["gap_flag"] = 1 if abs(lr) > 0.005 else 0  # noqa: PLR2004
+        out["gap_flag"] = 1 if abs(lr) > 0.005 else 0
 
         return out
 

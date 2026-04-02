@@ -45,7 +45,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -124,8 +124,8 @@ class FactorLibrary:
 
     def __init__(self, lookback_days: int = 252):
         self.lookback_days = lookback_days
-        self._factor_df: Optional[pd.DataFrame] = None
-        self._last_refresh: Optional[datetime] = None
+        self._factor_df: pd.DataFrame | None = None
+        self._last_refresh: datetime | None = None
         self._cache_ttl_s: int = 3600  # refresh at most once per hour
 
     # ── public ────────────────────────────────────────────────────────────────
@@ -215,9 +215,9 @@ class FactorLibrary:
         if "cpi" in fred_data:
             macro_inputs["cpi_chg"] = fred_data["cpi"].pct_change().dropna()
 
-        if len(macro_inputs) >= 2:  # noqa: PLR2004
+        if len(macro_inputs) >= 2:
             macro_df = pd.DataFrame(macro_inputs).dropna()
-            if len(macro_df) >= 10:  # noqa: PLR2004
+            if len(macro_df) >= 10:
                 scaler = StandardScaler()
                 scaled = scaler.fit_transform(macro_df.values)
                 pca = PCA(n_components=1)
@@ -336,7 +336,7 @@ class FactorModel:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.fit, asset_returns)
 
-    def get_exposure(self, symbol: str) -> Optional[FactorExposure]:
+    def get_exposure(self, symbol: str) -> FactorExposure | None:
         return self._exposures.get(symbol)
 
     def all_exposures(self) -> Dict[str, FactorExposure]:
@@ -457,7 +457,7 @@ class FactorAttributionEngine:
     def portfolio_factor_var(
         self,
         positions: Dict[str, float],
-        factor_cov: Optional[pd.DataFrame] = None,
+        factor_cov: pd.DataFrame | None = None,
     ) -> Dict[str, float]:
         """
         Compute factor-level VaR contributions using the factor covariance matrix.
@@ -518,15 +518,15 @@ class LiveFactorEngine:
     def __init__(
         self,
         interval_s: int = 3600,
-        symbols: Optional[List[str]] = None,
+        symbols: List[str] | None = None,
     ):
         self.interval_s = interval_s
         self.symbols = symbols or ["XAU_USD", "BTC_USD", "ETH_USD"]
         self._model = FactorModel()
         self._attribution_engine = FactorAttributionEngine(self._model)
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._running = False
-        self._last_fit: Optional[datetime] = None
+        self._last_fit: datetime | None = None
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -568,7 +568,7 @@ class LiveFactorEngine:
         return self._model.all_exposures()
 
     @property
-    def last_fit(self) -> Optional[datetime]:
+    def last_fit(self) -> datetime | None:
         return self._last_fit
 
     def status(self) -> Dict[str, Any]:
@@ -640,7 +640,7 @@ class LiveFactorEngine:
 
 # ── module-level singleton ────────────────────────────────────────────────────
 
-_engine: Optional[LiveFactorEngine] = None
+_engine: LiveFactorEngine | None = None
 
 
 def get_live_factor_engine() -> LiveFactorEngine:

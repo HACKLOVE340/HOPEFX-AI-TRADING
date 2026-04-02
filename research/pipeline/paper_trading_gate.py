@@ -181,7 +181,7 @@ class PaperTradingGate:
             }
         )
         # Keep only last 1000 fills in memory to bound file size
-        if len(self._state["fills"]) > 1000:  # noqa: PLR2004
+        if len(self._state["fills"]) > 1000:
             self._state["fills"] = self._state["fills"][-1000:]
         self._save_state()
         return self._state["fill_count"]

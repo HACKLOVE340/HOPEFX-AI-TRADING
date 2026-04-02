@@ -194,7 +194,7 @@ class StrategyOrchestra:
                 signal = self.strategies[sid].on_bar(bar)
                 if signal:
                     self.signal_buffer[sid].append(signal)
-                    if len(self.signal_buffer[sid]) > 100:  # noqa: PLR2004
+                    if len(self.signal_buffer[sid]) > 100:
                         self.signal_buffer[sid].pop(0)
                     self.event_bus.publish(
                         DomainEvent.create(
@@ -268,7 +268,7 @@ class StrategyOrchestra:
             ret = pnl / entry_price if entry_price > 0 else 0.0
             self._returns_buffer[sid].append(ret)
             # Feed into rebalancer when we have enough history
-            if self._rebalancer is not None and len(self._returns_buffer[sid]) >= 5:  # noqa: PLR2004
+            if self._rebalancer is not None and len(self._returns_buffer[sid]) >= 5:
                 import pandas as pd
 
                 returns_series = pd.Series(self._returns_buffer[sid])
@@ -283,9 +283,9 @@ class StrategyOrchestra:
 
         for sid, perf in self.performance.items():
             suit = perf.regime_suitability.get(new_regime, 0.5)
-            if suit > 0.7 and sid not in self.active_strategies:  # noqa: PLR2004
+            if suit > 0.7 and sid not in self.active_strategies:
                 self.activate_strategy(sid)
-            elif suit < 0.3 and sid in self.active_strategies:  # noqa: PLR2004
+            elif suit < 0.3 and sid in self.active_strategies:
                 self.deactivate_strategy(sid, f"unsuitable for {new_regime}")
 
     def get_heatmap_data(self) -> dict:

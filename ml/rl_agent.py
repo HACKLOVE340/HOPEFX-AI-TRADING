@@ -155,7 +155,7 @@ class ForexTradingEnv:
                 self._features.append(vec)
                 self._prices.append(float(df.at[i, "close"]))
 
-        if len(self._features) < 10:  # noqa: PLR2004
+        if len(self._features) < 10:
             raise ValueError(
                 f"Not enough valid windows: {len(self._features)} (need at least 10, have {len(df)} candles)",
             )
@@ -195,7 +195,7 @@ class ForexTradingEnv:
         if action == 1 and self._position != 1:  # BUY
             self._close_position(price)
             self._open_position(1, price)
-        elif action == 2 and self._position != -1:  # SELL  # noqa: PLR2004
+        elif action == 2 and self._position != -1:  # SELL
             self._close_position(price)
             self._open_position(-1, price)
         # action == 0 → HOLD
@@ -228,7 +228,7 @@ class ForexTradingEnv:
         # Normalise by rolling 20-bar PnL std so the reward is scale-invariant.
         # Clip to [-reward_clip, +reward_clip] before scaling to prevent gradient
         # explosions from outlier bars (news spikes, data errors).
-        if len(self._pnl_history) > 20:  # noqa: PLR2004
+        if len(self._pnl_history) > 20:
             std = float(np.std(self._pnl_history[-20:])) + 1e-9
             raw_reward = float(delta_pnl / std)
         else:
@@ -541,7 +541,7 @@ class RLAgentTrainer:
             timeframe,
         )
         raw = await self.stream.get_candles(symbol, timeframe, candles)
-        if len(raw) < 200:  # noqa: PLR2004
+        if len(raw) < 200:
             raise ValueError(f"Only {len(raw)} candles returned — need at least 200")
 
         split = int(len(raw) * train_split)
@@ -655,7 +655,7 @@ def walk_forward_eval(
     """
     import pandas as pd
 
-    if len(candles) < 200:  # noqa: PLR2004
+    if len(candles) < 200:
         raise ValueError(f"Need at least 200 candles, got {len(candles)}")
 
     df = pd.DataFrame(candles)
@@ -679,7 +679,7 @@ def walk_forward_eval(
         fold_df = df.iloc[:fold_end].reset_index(drop=True)
 
         split = int(len(fold_df) * train_pct)
-        if split < 100 or (len(fold_df) - split) < 50:  # noqa: PLR2004
+        if split < 100 or (len(fold_df) - split) < 50:
             logger.warning(
                 "Fold %d: insufficient data (%d rows), skipping",
                 fold_idx + 1,

@@ -177,7 +177,7 @@ class MobileAPIServer:
         import os
 
         resolved_secret = jwt_secret or os.getenv("SECURITY_JWT_SECRET") or os.getenv("JWT_SECRET")
-        if not resolved_secret or len(resolved_secret) < 32:  # noqa: PLR2004
+        if not resolved_secret or len(resolved_secret) < 32:
             raise ValueError(
                 "jwt_secret must be >= 32 characters. "
                 "Set SECURITY_JWT_SECRET env var or pass jwt_secret= explicitly. "
@@ -750,7 +750,7 @@ class MobileAPIServer:
         try:
             parts = authorization.split()
 
-            if len(parts) != 2 or parts[0] != "Bearer":  # noqa: PLR2004
+            if len(parts) != 2 or parts[0] != "Bearer":
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid auth scheme",
@@ -792,7 +792,7 @@ from fastapi import APIRouter as _APIRouter
 
 def _build_module_app() -> "FastAPI":
     _secret = _os.getenv("SECURITY_JWT_SECRET", "").strip() or _os.getenv("JWT_SECRET", "").strip()
-    if not _secret or len(_secret) < 32:  # noqa: PLR2004
+    if not _secret or len(_secret) < 32:
         raise RuntimeError(
             "SECURITY_JWT_SECRET (or JWT_SECRET) must be set to at least 32 characters. "
             "Set it in your .env file or environment before starting the server."
