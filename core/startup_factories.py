@@ -2077,12 +2077,15 @@ def get_broker_manager():
 
         # Return cached manager if already built for this broker instance
         cached_mgr = getattr(app_state, "_mcc_broker_manager", None)
-        if cached_mgr is not None and getattr(cached_mgr, "_primary_broker", None) is broker:
+        if cached_mgr is not None and getattr(cached_mgr, "_mcc_broker_ref", None) is broker:
             return cached_mgr
 
         from brokers.manager import BrokerManager
 
-        mgr = BrokerManager(primary=broker)
+        mgr = BrokerManager(primary_broker_name="app_broker")
+        mgr.register("app_broker", broker)
+        mgr.set_active("app_broker")
+        mgr._mcc_broker_ref = broker  # type: ignore[attr-defined]  # cache key
         app_state._mcc_broker_manager = mgr  # type: ignore[attr-defined]
         return mgr
     except Exception as _exc:  # pylint: disable=broad-exception-caught
