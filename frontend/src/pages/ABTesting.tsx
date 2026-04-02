@@ -74,8 +74,8 @@ const ABTesting: React.FC = () => {
   const load = useCallback(async () => {
     setLoadErr(null);
     try {
-      const res = await api.get('/ab-test');
-      setTests(res.data.tests || []);
+      const res = await api.get('/advanced/ab-tests');
+      setTests(res.data.tests || res.data || []);
     } catch (err) {
       setTests([]);
       setLoadErr(extractErrorMessage(err, 'Failed to load test history. Ensure the API is running.'));
@@ -88,7 +88,7 @@ const ABTesting: React.FC = () => {
     setRunning(true);
     setRunError(null);
     try {
-      const res = await api.post('/ab-test/start', {
+      const res = await api.post('/advanced/ab-tests/run', {
         strategy_a: stratA, strategy_b: stratB,
         symbol, duration_days: parseInt(days) || 30,
       });
