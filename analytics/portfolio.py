@@ -427,7 +427,7 @@ class PortfolioAnalytics:
 
         # Save JSON report
         report_path = Path(output_dir) / f"portfolio_report_{timestamp}.json"
-        with open(report_path, "w") as f:
+        with open(report_path, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, default=str)
 
         # Save metrics CSV
@@ -781,8 +781,6 @@ class PortfolioOptimizer:
         returns : np.ndarray shape (T, N)
         method  : "max_sharpe" | "min_variance" | "equal_weight"
         """
-        import numpy as np
-
         returns = np.asarray(returns)
         n = returns.shape[1] if returns.ndim == 2 else len(assets)
 
@@ -792,13 +790,13 @@ class PortfolioOptimizer:
             # Maximise Sharpe via SLSQP (deterministic, no random search)
             mu = np.mean(returns, axis=0) * 252
             cov = np.cov(returns.T) * 252 if n > 1 else np.array([[np.var(returns) * 252]])
-            self.risk_free_rate / 252
+            rf_annual = self.risk_free_rate
 
             def neg_sharpe(weights: np.ndarray) -> float:
                 port_ret = float(np.dot(weights, mu))
                 port_var = float(weights @ cov @ weights)
                 port_vol = np.sqrt(max(port_var, 1e-12))
-                return -(port_ret - self.risk_free_rate) / port_vol
+                return -(port_ret - rf_annual) / port_vol
 
             constraints = [{"type": "eq", "fun": lambda ww: np.sum(ww) - 1.0}]
             bounds = [(0.0, 1.0)] * n
@@ -838,7 +836,6 @@ class PortfolioOptimizer:
         Sweeps target returns from min to max and solves min-variance at each
         target via SLSQP — deterministic, no random sampling.
         """
-        import numpy as np
         from scipy.optimize import minimize as _minimize
 
         returns = np.asarray(returns)

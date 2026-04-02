@@ -214,7 +214,7 @@ class AdvancedOrderFlowAnalyzer:
         self._cumulative_delta[symbol] += delta
 
         if len(self._trades[symbol]) > self._max_trades:
-            removed_ts, _, removed_size, removed_side = self._trades[symbol].pop(0)
+            _, _, removed_size, removed_side = self._trades[symbol].pop(0)
             adj = removed_size if removed_side == "buy" else -removed_size
             self._cumulative_delta[symbol] -= adj
 

@@ -276,7 +276,7 @@ class GoldFeedManager:
         if not live:
             return
 
-        consensus_mid, confidence, weights = dqe.cross_source_consensus(live)
+        consensus_mid, confidence, _ = dqe.cross_source_consensus(live)
         if consensus_mid <= 0:
             return
 

@@ -195,9 +195,7 @@ try:
 
     app.include_router(_nuclear_router, prefix="/nuclear", tags=["nuclear"])
 except Exception as _nuclear_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("Nuclear router failed to register: %s", _nuclear_err)
+    logger.warning("Nuclear router failed to register: %s", _nuclear_err)
 
 # Data layer REST endpoints
 try:
@@ -205,9 +203,7 @@ try:
 
     app.include_router(_dl_router)
 except Exception as _dl_router_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("Data layer router failed to register: %s", _dl_router_err)
+    logger.warning("Data layer router failed to register: %s", _dl_router_err)
 
 # KYC/AML endpoints (Sumsub/Onfido + sanctions screening)
 try:
@@ -215,9 +211,7 @@ try:
 
     app.include_router(_kyc_router, prefix="/api")
 except Exception as _kyc_router_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("KYC router failed to register: %s", _kyc_router_err)
+    logger.warning("KYC router failed to register: %s", _kyc_router_err)
 
 # TCA endpoints (slippage stats, fill quality, alerts)
 try:
@@ -225,9 +219,7 @@ try:
 
     app.include_router(_tca_router, prefix="/api")
 except Exception as _tca_router_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("TCA router failed to register: %s", _tca_router_err)
+    logger.warning("TCA router failed to register: %s", _tca_router_err)
 
 # Live P&L dashboard — auditable trade log, equity curve, Sharpe, drawdown
 try:
@@ -235,9 +227,7 @@ try:
 
     app.include_router(_pnl_router)
 except Exception as _pnl_router_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("P&L dashboard router failed to register: %s", _pnl_router_err)
+    logger.warning("P&L dashboard router failed to register: %s", _pnl_router_err)
 
 # Chaos engineering + mutation testing endpoints
 try:
@@ -245,9 +235,7 @@ try:
 
     app.include_router(_chaos_router)
 except Exception as _chaos_router_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("Chaos router failed to register: %s", _chaos_router_err)
+    logger.warning("Chaos router failed to register: %s", _chaos_router_err)
 
 # Prometheus /metrics endpoint + background sync to MetricsRegistry
 try:
@@ -255,9 +243,7 @@ try:
 
     setup_prometheus_monitoring(app)
 except Exception as _prom_err:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning("Prometheus monitoring setup failed: %s", _prom_err)
+    logger.warning("Prometheus monitoring setup failed: %s", _prom_err)
 
 # OpenTelemetry distributed tracing — instruments FastAPI, SQLAlchemy, Redis,
 # aiohttp and enables W3C trace context propagation through Redis messages.
@@ -317,9 +303,7 @@ async def lifespan(_app: FastAPI):
     # Start Prometheus sync loop (replaces deprecated @app.on_event("startup"))
     try:
         from prometheus_monitoring import _sync_loop as _prom_sync_loop
-        import os as _os
-
-        _prom_interval = float(_os.getenv("PROMETHEUS_SCRAPE_INTERVAL_SECONDS", "15"))
+        _prom_interval = float(os.getenv("PROMETHEUS_SCRAPE_INTERVAL_SECONDS", "15"))
         asyncio.create_task(_prom_sync_loop(_prom_interval))
         logger.info("Prometheus sync loop started (interval=%.0fs)", _prom_interval)
     except Exception as _prom_err:

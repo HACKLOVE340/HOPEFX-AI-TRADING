@@ -355,7 +355,7 @@ async def logout_all(user_id: str = Depends(_get_current_user_id)):
 async def forgot_password(body: ForgotPasswordRequest, request: Request):
     """Request a password reset link. Always returns 200 to avoid email enumeration."""
     _check_ip_rate_limit(_get_client_ip(request))
-    ok, msg, reset_token = _svc().request_password_reset(body.email)
+    _, msg, reset_token = _svc().request_password_reset(body.email)
     if reset_token:
         try:
             from core.email_service import send_password_reset_email

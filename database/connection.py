@@ -22,7 +22,7 @@ try:
     from sqlalchemy.orm import sessionmaker, Session
     from sqlalchemy.pool import QueuePool
     from sqlalchemy.exc import (
-        SQLAlchemyError,
+        SQLAlchemyError,  # pylint: disable=unused-import  # noqa: F401
         OperationalError,
         TimeoutError as SATimeoutError,
     )

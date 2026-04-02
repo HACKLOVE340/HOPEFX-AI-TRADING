@@ -1319,7 +1319,7 @@ def main():
     )
     args = parser.parse_args()
 
-    passed, failed = asyncio.run(run_all(verbose=args.verbose))
+    _, failed = asyncio.run(run_all(verbose=args.verbose))
 
     # Exit 1 only on critical failures (warnings are acceptable in dev/CI)
     sys.exit(0 if failed == 0 else 1)

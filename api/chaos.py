@@ -251,7 +251,6 @@ async def run_mutation_tests(
     Returns immediately with run_id. Poll /api/chaos/mutation/results
     for completion.
     """
-
     if _mutation_running:
         raise HTTPException(
             status_code=409,

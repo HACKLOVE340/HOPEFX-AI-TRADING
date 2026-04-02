@@ -105,8 +105,8 @@ class OandaPaperClock:
         """
         if self._stamp_path.exists():
             try:
-                existing = json.loads(self._stamp_path.read_text())
-            except (ValueError, KeyError):
+                existing = json.loads(self._stamp_path.read_text(encoding="utf-8"))
+            except Exception:
                 existing = {}
 
             # If a real account is already stamped, preserve the clock.
@@ -157,7 +157,7 @@ class OandaPaperClock:
             ),
         }
         try:
-            self._stamp_path.write_text(json.dumps(stamp, indent=2))
+            self._stamp_path.write_text(json.dumps(stamp, indent=2), encoding="utf-8")
             logger.info(
                 "OandaPaperClock: clock stamped — started=%s account=%s env=%s gate=%s",
                 started_utc_str,
@@ -288,7 +288,7 @@ class OandaPaperClock:
             }
 
         try:
-            data = json.loads(self._stamp_path.read_text())
+            data = json.loads(self._stamp_path.read_text(encoding="utf-8"))
 
             # PENDING placeholder — clock is pre-seeded but no real connection yet
             if data.get("requires_real_account", False):

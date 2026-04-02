@@ -1097,7 +1097,7 @@ class StrategyResponse(BaseModel):
     enabled: bool
     parameters: dict | None = None
 
-    def model_post_init(self, __context):
+    def model_post_init(self, __context: Any) -> None:  # pylint: disable=arguments-differ
         if not self.type:
             object.__setattr__(self, "type", self.strategy_type)
 
@@ -1140,8 +1140,6 @@ _strategy_store: dict[str, dict] = {}
 
 def _make_strategy_router():
     """Return a sub-router with the strategy CRUD + position-size endpoints."""
-    from fastapi import APIRouter
-
     _r = APIRouter()  # no prefix — parent router already has /api/trading
 
     @_r.get("/strategies")
@@ -1163,8 +1161,6 @@ def _make_strategy_router():
             "strategy_brain",
         }
         if req.strategy_type not in _KNOWN:
-            from fastapi import HTTPException
-
             raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}")
         sid = str(_uuid.uuid4())[:8]
         record = {
@@ -1192,8 +1188,6 @@ def _make_strategy_router():
 
     @_r.get("/strategies/{strategy_id}")
     def get_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1201,8 +1195,6 @@ def _make_strategy_router():
 
     @_r.delete("/strategies/{strategy_id}")
     def delete_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1354,8 +1346,6 @@ def _make_strategy_router():
 
     @_r.get("/performance/{strategy_id}")
     def get_strategy_performance(strategy_id: str):
-        from fastapi import HTTPException
-
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1370,8 +1360,6 @@ def _make_strategy_router():
 
     @_r.post("/strategies/{strategy_id}/start")
     def start_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1380,8 +1368,6 @@ def _make_strategy_router():
 
     @_r.post("/strategies/{strategy_id}/stop")
     def stop_strategy(strategy_id: str):
-        from fastapi import HTTPException
-
         key = _resolve(strategy_id)
         if key is None:
             raise HTTPException(404, "Strategy not found")
@@ -1441,9 +1427,7 @@ async def get_regime_status():
         return regime_router.status()
 
     except Exception as exc:
-        import logging as _log
-
-        _log.getLogger(__name__).warning("regime status error: %s", exc)
+        logger.warning("regime status error: %s", exc)
         return {
             "current_regime": "unknown",
             "confidence": 0.0,
@@ -1497,9 +1481,7 @@ async def run_stress_test(
     max_loss_pct   : Gate threshold — any scenario exceeding this fraction
                      of equity marks gate_passed=False.
     """
-    import logging as _log
-
-    _logger = _log.getLogger(__name__)
+    _logger = logger
     try:
         from risk.stress_test import run_all_scenarios
 
@@ -1511,6 +1493,4 @@ async def run_stress_test(
         )
     except Exception as exc:
         _logger.error("Stress test failed: %s", exc, exc_info=True)
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=500, detail=f"Stress test error: {exc}") from None

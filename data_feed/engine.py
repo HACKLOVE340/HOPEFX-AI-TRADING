@@ -331,7 +331,7 @@ class ProductionDataEngine:
         config_path = Path(path)
         if not config_path.exists():
             raise FileNotFoundError(f"Data feed config not found: {config_path.resolve()}")
-        with config_path.open("r") as fh:
+        with config_path.open("r", encoding="utf-8") as fh:
             return yaml.safe_load(fh)
 
     # ── Diagnostics ───────────────────────────────────────────────────────────

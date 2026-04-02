@@ -831,8 +831,7 @@ class AdvancedPatternDetector:
 
             # Group nearby peaks (resistance levels)
             for peak_idx in peaks:
-                high[peak_idx]
-                nearby_peaks = peaks[np.abs(peaks - peak_idx) <= 10]
+                nearby_peaks = peaks[np.abs(peaks - peak_idx) <= 10]  # noqa: PLR2004
 
                 if len(nearby_peaks) >= 2:
                     avg_resistance = np.mean(high[nearby_peaks])

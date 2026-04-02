@@ -59,16 +59,16 @@ logger = logging.getLogger(__name__)
 try:
     from ib_insync import (  # type: ignore[import]
         IB,
-        CFD,
+        CFD,  # pylint: disable=unused-import  # noqa: F401
         Commodity,
-        Contract,
+        Contract,  # pylint: disable=unused-import  # noqa: F401
         Future,
         LimitOrder,
         MarketOrder,
         StopOrder,
         StopLimitOrder,
-        Trade,
-        util,
+        Trade,  # pylint: disable=unused-import  # noqa: F401
+        util,  # pylint: disable=unused-import  # noqa: F401
     )
 
     _IB_AVAILABLE = True
