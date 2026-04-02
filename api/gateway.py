@@ -318,8 +318,8 @@ class APIGateway:
                 logger.exception("Gateway order execution error: %s", exc)
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Order execution failed: {exc}",
-                ) from exc
+                    detail="Order execution failed — check server logs",
+                ) from None
 
         # WebSocket for real-time data
         @self.app.websocket("/ws/v1/stream")
