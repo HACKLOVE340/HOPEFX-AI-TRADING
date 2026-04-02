@@ -62,8 +62,8 @@ except ImportError:
 
 # ── TensorFlow / Keras fallback ───────────────────────────────────────────────
 try:
-    import tensorflow as tf  # noqa: F401
-    from tensorflow.keras import layers, Model  # noqa: F401
+    import tensorflow as tf
+    from tensorflow.keras import layers, Model
 
     TF_AVAILABLE = True
 except ImportError:
@@ -556,21 +556,21 @@ class DeepPredictor:
             self.model.train()
             train_losses = []
             for X_b, y_b in train_loader:
-                X_b, y_b = X_b.to(self.device), y_b.to(self.device)
+                X_b_d, y_b_d = X_b.to(self.device), y_b.to(self.device)
                 self.optimizer.zero_grad(set_to_none=True)
 
                 if self.use_amp and self._scaler is not None:
                     with torch.cuda.amp.autocast():
-                        pred = self.model(X_b)
-                        loss = self.criterion(pred, y_b)
+                        pred = self.model(X_b_d)
+                        loss = self.criterion(pred, y_b_d)
                     self._scaler.scale(loss).backward()
                     self._scaler.unscale_(self.optimizer)
                     nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
                     self._scaler.step(self.optimizer)
                     self._scaler.update()
                 else:
-                    pred = self.model(X_b)
-                    loss = self.criterion(pred, y_b)
+                    pred = self.model(X_b_d)
+                    loss = self.criterion(pred, y_b_d)
                     loss.backward()
                     nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
                     self.optimizer.step()
@@ -588,9 +588,9 @@ class DeepPredictor:
                 val_losses = []
                 with torch.no_grad():
                     for X_b, y_b in val_loader:
-                        X_b, y_b = X_b.to(self.device), y_b.to(self.device)
-                        pred = self.model(X_b)
-                        val_losses.append(self.criterion(pred, y_b).item())
+                        X_b_d, y_b_d = X_b.to(self.device), y_b.to(self.device)
+                        pred = self.model(X_b_d)
+                        val_losses.append(self.criterion(pred, y_b_d).item())
                 avg_val = float(np.mean(val_losses))
                 self._history["val_loss"].append(avg_val)
 

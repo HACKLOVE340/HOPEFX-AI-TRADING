@@ -137,7 +137,6 @@ def apply_persisted_risk_settings() -> None:
     Also migrates any legacy JSON file to the shared store on first run.
     Called once at startup by app.py after app_state is initialised.
     """
-    global _risk_settings
 
     # One-time migration: if the legacy JSON file exists and the shared store
     # has no value yet, migrate the file contents to the store.

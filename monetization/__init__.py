@@ -83,7 +83,7 @@ from .affiliate import (
     AffiliateStatus,
     AffiliateLevel,
     ReferralStatus,
-    PayoutStatus,  # noqa: F401
+    PayoutStatus,
     Affiliate,
     Referral,
     Payout,
@@ -96,7 +96,7 @@ from .marketplace import (
     StrategyCategory,
     StrategyStatus,
     StrategyLicenseType,
-    PurchaseStatus,  # noqa: F401
+    PurchaseStatus,
     MarketplaceStrategy,
     StrategyPurchase,
     StrategyReview,

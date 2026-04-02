@@ -304,7 +304,7 @@ def check_env_example():
 
 def check_graphql():
     try:
-        from api.graphql_schema import graphql_router  # noqa: F401
+        from api.graphql_schema import graphql_router
 
         return "GraphQL router importable"
     except ImportError as e:

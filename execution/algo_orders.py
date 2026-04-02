@@ -480,11 +480,10 @@ class VWAPOrder(AlgoOrder):
                     break
 
                 # Last slice: fill remainder
-                if i == len(slice_quantities) - 1:
-                    qty = self.remaining_quantity
+                child_qty = self.remaining_quantity if i == len(slice_quantities) - 1 else qty
 
-                if qty >= ALGO_MIN_CHILD_SIZE:
-                    await self._submit_child(qty)
+                if child_qty >= ALGO_MIN_CHILD_SIZE:
+                    await self._submit_child(child_qty)
 
                 if i < len(slice_quantities) - 1:
                     jitter = self._interval * ALGO_TWAP_JITTER * (np.random.random() - 0.5)

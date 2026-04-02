@@ -499,7 +499,7 @@ def create_orchestrator_router(orchestrator_instance: RiskOrchestrator):
                            prefix="/risk/orchestrator", tags=["risk"])
     """
     try:
-        from fastapi import APIRouter, HTTPException  # noqa: F401
+        from fastapi import APIRouter, HTTPException
         from pydantic import BaseModel, Field
     except ImportError:
         return None

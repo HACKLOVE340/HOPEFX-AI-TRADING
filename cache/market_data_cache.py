@@ -24,7 +24,7 @@ from enum import Enum
 try:
     import redis
     from redis import Redis
-    from redis.exceptions import TimeoutError as RedisTimeoutError  # noqa: F401  # re-exported
+    from redis.exceptions import TimeoutError as RedisTimeoutError  # re-exported
 
     REDIS_AVAILABLE = True
 except ImportError:

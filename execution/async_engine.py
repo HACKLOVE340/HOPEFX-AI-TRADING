@@ -668,9 +668,7 @@ class AsyncExecutionEngine:
         """Risk check before submission"""
         # Position limit check
         current = self.position_cache.get(order.symbol, {}).get("quantity", 0)
-        if (
-            abs(current + (order.quantity if order.side == "buy" else -order.quantity)) > 100
-        ):
+        if abs(current + (order.quantity if order.side == "buy" else -order.quantity)) > 100:
             return False, "position_limit_exceeded"
 
         # Price sanity check

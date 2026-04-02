@@ -747,9 +747,7 @@ async def get_cot_gold():
                     "long_positions": int(rec.get("noncomm_positions_long_all", 0)),
                     "short_positions": int(rec.get("noncomm_positions_short_all", 0)),
                     "sentiment": "BULLISH" if net_long > 0 else "BEARISH",
-                    "sentiment_strength": "STRONG"
-                    if abs(net_long) > 100000
-                    else "MODERATE",
+                    "sentiment_strength": "STRONG" if abs(net_long) > 100000 else "MODERATE",
                     "source": "CFTC",
                     "note": "Non-commercial (speculator) net positions in COMEX gold futures.",
                 }

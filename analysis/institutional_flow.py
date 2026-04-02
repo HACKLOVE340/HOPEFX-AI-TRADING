@@ -457,11 +457,7 @@ class InstitutionalFlowDetector:
             confidence += 0.3
 
         confidence = min(1.0, confidence)
-        classification = (
-            "institutional"
-            if confidence >= 0.4
-            else ("retail" if confidence < 0.2 else "unknown")
-        )
+        classification = "institutional" if confidence >= 0.4 else ("retail" if confidence < 0.2 else "unknown")
 
         return InstitutionalTrade(
             timestamp=datetime.now(UTC),

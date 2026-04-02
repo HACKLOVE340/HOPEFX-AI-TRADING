@@ -86,7 +86,7 @@ class MetalsDevFeed(GoldFeedBase):
         during the connection window.
         """
         try:
-            import websockets  # type: ignore[import]  # noqa: F401
+            import websockets  # type: ignore[import]
         except ImportError:
             logger.debug("Metals.dev WebSocket: websockets package not installed")
             return

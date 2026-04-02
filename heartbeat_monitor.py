@@ -38,7 +38,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 
-UTC = UTC
 from collections.abc import Callable
 import contextlib
 

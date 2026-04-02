@@ -719,7 +719,7 @@ class HybridEnsemblePredictor:
     def _check_components(self) -> None:
         """Probe which components are available without loading models."""
         try:
-            import xgboost  # noqa: F401
+            import xgboost
 
             self._has_xgb = True
         except ImportError:
@@ -727,7 +727,7 @@ class HybridEnsemblePredictor:
             logger.warning("HybridEnsemble: xgboost not available")
 
         try:
-            import torch  # noqa: F401
+            import torch
 
             self._has_lstm = True
         except ImportError:
@@ -735,7 +735,7 @@ class HybridEnsemblePredictor:
             logger.debug("HybridEnsemble: torch not available — LSTM disabled")
 
         try:
-            import stable_baselines3  # noqa: F401
+            import stable_baselines3
 
             self._has_rl = True
         except ImportError:

@@ -300,12 +300,14 @@ class WGCFeed:
                 ),
                 "Accept": "text/csv,application/csv,text/plain,*/*",
             }
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, headers=headers, allow_redirects=True) as resp:
-                    if resp.status == 200:
-                        return await resp.text(encoding="utf-8", errors="replace")
-                    logger.warning("WGC fetch %s returned HTTP %d", url, resp.status)
-                    return None
+            async with (
+                aiohttp.ClientSession(timeout=timeout) as session,
+                session.get(url, headers=headers, allow_redirects=True) as resp,
+            ):
+                if resp.status == 200:
+                    return await resp.text(encoding="utf-8", errors="replace")
+                logger.warning("WGC fetch %s returned HTTP %d", url, resp.status)
+                return None
         except ImportError:
             pass
         except Exception as exc:

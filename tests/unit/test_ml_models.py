@@ -329,7 +329,7 @@ class TestLSTMPricePredictor:
         lstm = LSTMPricePredictor(config={"sequence_length": 10, "lstm_units": [32]})
         # If TensorFlow is not installed, build() should raise ImportError
         try:
-            import tensorflow  # noqa: F401
+            import tensorflow
 
             # TF available: build should set self.model
             lstm.build()

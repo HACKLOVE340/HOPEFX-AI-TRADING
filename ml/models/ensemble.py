@@ -298,9 +298,7 @@ class EnsemblePredictor(BaseMLModel):
                 np.mean(window),  # SMA
                 np.std(window),  # Volatility
                 np.mean(window[-10:]),  # Short-term MA
-                np.mean(window[-20:])
-                if len(window) >= 20
-                else np.mean(window),  # Medium MA
+                np.mean(window[-20:]) if len(window) >= 20 else np.mean(window),  # Medium MA
                 window[-1] - window[-2] if len(window) >= 2 else 0,  # Momentum 1
                 window[-1] - window[-5] if len(window) >= 5 else 0,  # Momentum 5
                 np.max(window) - np.min(window),  # Range

@@ -51,7 +51,7 @@ except ImportError:
 
 try:
     import zmq
-    import zmq.asyncio  # noqa: F401
+    import zmq.asyncio
 
     ZMQ_AVAILABLE = True
 except ImportError:
@@ -771,9 +771,7 @@ class ConsensusAggregator:
         # Check freshness (< 1 second old)
         now = time.time_ns()
         fresh_ticks = [
-            t
-            for t in ticks
-            if (now - (t.timestamp.seconds * 1_000_000_000 + t.timestamp.nanoseconds)) < 1_000_000_000
+            t for t in ticks if (now - (t.timestamp.seconds * 1_000_000_000 + t.timestamp.nanoseconds)) < 1_000_000_000
         ]
 
         # Check if we have enough fresh data

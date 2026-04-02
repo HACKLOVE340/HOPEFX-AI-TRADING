@@ -15,7 +15,6 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 
-UTC = UTC
 from collections.abc import Callable
 
 logger = logging.getLogger(__name__)

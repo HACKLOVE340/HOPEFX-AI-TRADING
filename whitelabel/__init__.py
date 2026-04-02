@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
 from enum import Enum
-from typing import Any, Dict, List, Optional  # noqa: F401
+from typing import Any, Dict, List, Optional
 
 _logger = logging.getLogger(__name__)
 

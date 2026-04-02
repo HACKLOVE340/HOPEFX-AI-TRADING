@@ -382,11 +382,7 @@ class CredentialRotationTracker:
                 "age_days": age.days,
                 "needs_rotation": age.days >= self.rotation_days,
                 "days_until_rotation": days_until_rotation,
-                "status": "expired"
-                if days_until_rotation == 0
-                else "warning"
-                if days_until_rotation <= 14
-                else "ok",
+                "status": "expired" if days_until_rotation == 0 else "warning" if days_until_rotation <= 14 else "ok",
             }
 
         return status

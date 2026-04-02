@@ -530,6 +530,7 @@ class TestNewsProvider:
 
             def format_article(self, raw_article):
                 from datetime import datetime, timezone
+
                 return NewsArticle(
                     title="",
                     description="",

@@ -48,11 +48,11 @@ try:
     from sendgrid import SendGridAPIClient
     from sendgrid.helpers.mail import (
         Mail,
-        From,  # noqa: F401
-        To,  # noqa: F401
-        Subject,  # noqa: F401
+        From,
+        To,
+        Subject,
         HtmlContent,
-        PlainTextContent,  # noqa: F401
+        PlainTextContent,
     )
 
     SENDGRID_AVAILABLE = True
@@ -785,6 +785,7 @@ class NotificationManager:
             logger.debug("Discord webhook not configured; skipping")
             return
         from urllib.parse import urlparse as _urlparse
+
         _p = _urlparse(webhook_url)
         _host = (_p.hostname or "").lower()
         if _p.scheme != "https" or _host not in ("discord.com", "discordapp.com"):
@@ -897,7 +898,6 @@ _notification_manager: NotificationManager | None = None
 
 def get_notification_manager() -> NotificationManager | None:
     """Get global notification manager"""
-    global _notification_manager
     return _notification_manager
 
 

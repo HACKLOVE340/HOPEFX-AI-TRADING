@@ -403,7 +403,7 @@ class IBKROrderBookFeed:
     async def start(self, symbols: list[str]) -> None:
         """Connect to TWS and subscribe to market depth."""
         try:
-            from ib_insync import IB, Forex, Contract  # noqa: F401
+            from ib_insync import IB, Forex, Contract
         except ImportError:
             logger.warning("ib_insync not installed — IBKR L2 feed disabled")
             return

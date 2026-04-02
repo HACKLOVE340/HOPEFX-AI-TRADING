@@ -1048,11 +1048,7 @@ class BacktestEngine:
         r = self.results
 
         se_str = f"±{r.sharpe_se:.2f}" if r.sharpe_se > 0 else "n/a"
-        robust_str = (
-            "✅ robust"
-            if r.total_trades >= 250
-            else f"⚠️  N={r.total_trades} (need ≥250)"
-        )
+        robust_str = "✅ robust" if r.total_trades >= 250 else f"⚠️  N={r.total_trades} (need ≥250)"
         report = f"""
 ╔════════════════════════════════════════════════════════════════╗
 ║                    HOPEFX BACKTEST REPORT                       ║

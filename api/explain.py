@@ -48,7 +48,7 @@ _EXPLAIN_LATEST_LIMIT = os.getenv("EXPLAIN_LATEST_RATE_LIMIT", "60/minute")
 def _get_limiter():
     """Return the slowapi Limiter from app state, or None if not configured."""
     try:
-        from fastapi import Request as _Req  # noqa: F401
+        from fastapi import Request as _Req
         from slowapi import Limiter
         from slowapi.util import get_remote_address
 

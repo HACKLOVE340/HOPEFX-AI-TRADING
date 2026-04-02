@@ -605,9 +605,7 @@ def _predict_basic(
         "ret_1": closes.pct_change(1).iloc[-1] if len(closes) > 1 else 0,
         "ret_5": closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,
         "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
-        "vol_20": (
-            closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0
-        ),
+        "vol_20": (closes.pct_change().rolling(20).std().iloc[-1] if len(closes) > 20 else 0),
     }
     X = pd.DataFrame([feat])
 

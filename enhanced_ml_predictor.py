@@ -39,8 +39,8 @@ import warnings
 # ML/DL Libraries
 try:
     import tensorflow as tf
-    from tensorflow import keras  # noqa: F401
-    from tensorflow.keras.models import Model, Sequential, load_model  # noqa: F401
+    from tensorflow import keras
+    from tensorflow.keras.models import Model, Sequential, load_model
     from tensorflow.keras.layers import (
         LSTM,
         GRU,
@@ -48,10 +48,10 @@ try:
         Dropout,
         BatchNormalization,
         Input,
-        Concatenate,  # noqa: F401
-        Multiply,  # noqa: F401
+        Concatenate,
+        Multiply,
         Add,
-        Attention,  # noqa: F401
+        Attention,
         Conv1D,
         MaxPooling1D,
         GlobalAveragePooling1D,
@@ -62,12 +62,12 @@ try:
         EarlyStopping,
         ReduceLROnPlateau,
         ModelCheckpoint,
-        TensorBoard,  # noqa: F401
+        TensorBoard,
         TerminateOnNaN,
     )
-    from tensorflow.keras.optimizers import Adam, AdamW  # noqa: F401
+    from tensorflow.keras.optimizers import Adam, AdamW
     from tensorflow.keras.regularizers import l1_l2
-    from tensorflow.keras.losses import Huber  # noqa: F401
+    from tensorflow.keras.losses import Huber
 
     TENSORFLOW_AVAILABLE = True
 except ImportError:
@@ -75,11 +75,11 @@ except ImportError:
     warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
 
 try:
-    import torch  # noqa: F401
-    from torch import nn  # noqa: F401
-    from torch.utils.data import DataLoader, Dataset, TensorDataset  # noqa: F401
-    from torch.optim import AdamW as TorchAdamW  # noqa: F401
-    from torch.optim.lr_scheduler import ReduceLROnPlateau as TorchReduceLROnPlateau  # noqa: F401
+    import torch
+    from torch import nn
+    from torch.utils.data import DataLoader, Dataset, TensorDataset
+    from torch.optim import AdamW as TorchAdamW
+    from torch.optim.lr_scheduler import ReduceLROnPlateau as TorchReduceLROnPlateau
 
     PYTORCH_AVAILABLE = True
 except ImportError:
@@ -88,21 +88,21 @@ except ImportError:
 try:
     from sklearn.ensemble import (
         RandomForestClassifier,
-        GradientBoostingClassifier,  # noqa: F401
-        ExtraTreesClassifier,  # noqa: F401
-        VotingClassifier,  # noqa: F401
-        StackingClassifier,  # noqa: F401
+        GradientBoostingClassifier,
+        ExtraTreesClassifier,
+        VotingClassifier,
+        StackingClassifier,
     )
-    from sklearn.preprocessing import RobustScaler, StandardScaler, QuantileTransformer  # noqa: F401
-    from sklearn.model_selection import TimeSeriesSplit, cross_val_score  # noqa: F401
+    from sklearn.preprocessing import RobustScaler, StandardScaler, QuantileTransformer
+    from sklearn.model_selection import TimeSeriesSplit, cross_val_score
     from sklearn.metrics import (
-        accuracy_score,  # noqa: F401
-        precision_recall_fscore_support,  # noqa: F401
-        log_loss,  # noqa: F401
-        brier_score_loss,  # noqa: F401
-        roc_auc_score,  # noqa: F401
-        mean_squared_error,  # noqa: F401
-        mean_absolute_error,  # noqa: F401
+        accuracy_score,
+        precision_recall_fscore_support,
+        log_loss,
+        brier_score_loss,
+        roc_auc_score,
+        mean_squared_error,
+        mean_absolute_error,
     )
     from sklearn.calibration import CalibratedClassifierCV
     from sklearn.feature_selection import SelectFromModel, mutual_info_classif
@@ -126,14 +126,14 @@ except ImportError:
     LIGHTGBM_AVAILABLE = False
 
 try:
-    import optuna  # noqa: F401
+    import optuna
 
     OPTUNA_AVAILABLE = True
 except ImportError:
     OPTUNA_AVAILABLE = False
 
 try:
-    import shap  # noqa: F401
+    import shap
 
     SHAP_AVAILABLE = True
 except ImportError:
@@ -457,15 +457,9 @@ class AdvancedFeatureEngineer:
             features["month_cos"] = np.cos(2 * np.pi * df.index.month / 12)
 
             # Session indicators
-            features["is_market_open"] = (
-                (df.index.hour >= 9) & (df.index.hour < 16)
-            ).astype(int)
-            features["is_london"] = (
-                (df.index.hour >= 8) & (df.index.hour < 17)
-            ).astype(int)
-            features["is_ny"] = ((df.index.hour >= 13) & (df.index.hour < 22)).astype(
-                int
-            )
+            features["is_market_open"] = ((df.index.hour >= 9) & (df.index.hour < 16)).astype(int)
+            features["is_london"] = ((df.index.hour >= 8) & (df.index.hour < 17)).astype(int)
+            features["is_ny"] = ((df.index.hour >= 13) & (df.index.hour < 22)).astype(int)
 
         # Cross-sectional features (if multiple symbols)
         # Would add relative strength, correlation, etc.
@@ -1831,13 +1825,7 @@ class EnhancedMLPredictor:
         last_pred = self.prediction_history[-1]
 
         # Determine if prediction was correct
-        actual_direction = (
-            "up"
-            if actual_return > 0.001
-            else "down"
-            if actual_return < -0.001
-            else "neutral"
-        )
+        actual_direction = "up" if actual_return > 0.001 else "down" if actual_return < -0.001 else "neutral"
         correct = last_pred.prediction == actual_direction
 
         self.performance_tracker.append(

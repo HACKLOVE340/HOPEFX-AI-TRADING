@@ -82,7 +82,7 @@ def run_checks(interactive: bool = True) -> int:
 
     # ── Check 1: ib_insync importable ────────────────────────────────────────
     try:
-        from ib_insync import IB, Stock, Future, ContFuture  # noqa: F401
+        from ib_insync import IB, Stock, Future, ContFuture
 
         _check("ib_insync importable", True, "ib_insync available")
     except ImportError as exc:

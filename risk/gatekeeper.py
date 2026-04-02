@@ -105,9 +105,8 @@ class _NewsCalendar:
         cutoff = timedelta(minutes=window)
         for ev in self._events:
             # Normalise naive datetimes to UTC
-            if ev.tzinfo is None:
-                ev = ev.replace(tzinfo=UTC)
-            if abs(now - ev) <= cutoff:
+            ev_utc = ev.replace(tzinfo=UTC) if ev.tzinfo is None else ev
+            if abs(now - ev_utc) <= cutoff:
                 return True
         return False
 

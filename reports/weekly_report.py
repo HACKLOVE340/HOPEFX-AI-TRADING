@@ -261,11 +261,7 @@ class WeeklyReportGenerator:
             ending_equity=round(ending_equity, 2),
             symbols_traded=symbols,
             data_source=resolved_source,
-            note=(
-                "Insufficient trades for statistical significance (< 10)."
-                if total < 10
-                else ""
-            ),
+            note=("Insufficient trades for statistical significance (< 10)." if total < 10 else ""),
         )
 
     def save_json(self, report: WeeklyReport) -> Path:

@@ -350,7 +350,7 @@ class RLAgent:
         """Train PPO on the given environment."""
         try:
             from stable_baselines3 import PPO
-            from stable_baselines3.common.env_checker import check_env  # noqa: F401
+            from stable_baselines3.common.env_checker import check_env
         except ImportError:
             raise ImportError(
                 "stable-baselines3 required: pip install stable-baselines3",

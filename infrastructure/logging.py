@@ -19,8 +19,6 @@ import traceback
 from typing import Any, Optional
 from datetime import datetime, UTC
 
-UTC = UTC
-
 logger = logging.getLogger(__name__)
 from pathlib import Path
 from dataclasses import dataclass
@@ -28,7 +26,7 @@ from enum import Enum
 import socket
 
 try:
-    from pythonjsonlogger import jsonlogger  # noqa: F401
+    from pythonjsonlogger import jsonlogger
 
     JSON_LOGGER_AVAILABLE = True
 except ImportError:
