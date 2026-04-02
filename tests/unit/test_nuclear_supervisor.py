@@ -363,7 +363,6 @@ class TestEngineKillSwitchHooks:
     @pytest.fixture
     def engine(self):
         """Minimal HopeFXEngine with no broker or brain wired."""
-        import os
 
         os.environ["APP_ENV"] = "test"
         os.environ["BROKER"] = "paper"
@@ -433,7 +432,6 @@ class TestEngineKillSwitchHooks:
 
     def test_validate_startup_environment_test_mode(self):
         """validate_startup_environment() does not raise in APP_ENV=test."""
-        import os
 
         os.environ["APP_ENV"] = "test"
         os.environ["SECURITY_JWT_SECRET"] = "test-only-jwt-secret-key-minimum-32-chars!!"
@@ -446,7 +444,6 @@ class TestEngineKillSwitchHooks:
 
     def test_validate_startup_environment_short_jwt_warns(self):
         """Short JWT secret is flagged as an error."""
-        import os
 
         original = os.environ.get("SECURITY_JWT_SECRET")
         try:
@@ -465,7 +462,6 @@ class TestEngineKillSwitchHooks:
 
     def test_validate_startup_environment_oanda_missing_key(self):
         """BROKER=oanda without OANDA_API_KEY is flagged."""
-        import os
 
         os.environ["APP_ENV"] = "test"
         os.environ["BROKER"] = "oanda"
