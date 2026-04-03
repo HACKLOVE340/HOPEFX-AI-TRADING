@@ -126,11 +126,96 @@ _PROM = _init_prometheus()
 REGIME_MEAN_REVERTING = 0
 REGIME_TRENDING = 1
 REGIME_MIXED = 2
-REGIME_NAMES = {0: "mean_reverting", 1: "trending", 2: "mixed"}
+REGIME_HIGH_VOL_PARABOLIC = 3  # post-bubble / parabolic-blow-off regime
+REGIME_NAMES = {
+    0: "mean_reverting",
+    1: "trending",
+    2: "mixed",
+    3: "high_vol_parabolic",
+}
 
 # Minimum samples required to train a regime-specific model.
 # Below this threshold the global model is used as fallback.
 MIN_REGIME_SAMPLES = 200
+
+# Parabolic-bubble detection thresholds (tuned to gold 1979-1981 and 2010-2012)
+_PARABOLIC_MA_RATIO = 1.30       # price > 1.30× its 200-bar MA → parabolic territory
+_PARABOLIC_RV_RATIO = 2.50       # rv14 > 2.5× rv90 → extreme vol expansion
+_PARABOLIC_DRAWDOWN_PCT = 0.25   # price ≥ 25% below recent 200-bar peak → post-bubble crash
+_PARABOLIC_LOOKBACK = 200        # bars for MA and peak detection
+
+
+def is_parabolic_bubble_regime(
+    X: pd.DataFrame,
+    close_col: str = "close",
+    lookback: int = _PARABOLIC_LOOKBACK,
+) -> bool:
+    """
+    Detect whether the most recent bar is in a parabolic-bubble or post-bubble
+    crash regime — the market condition responsible for Fold-2's 44.4% accuracy.
+
+    A bar is flagged as HIGH_VOL_PARABOLIC when ANY of the following conditions
+    hold for the last bar:
+
+    1. Price > 1.30× its ``lookback``-bar simple moving average
+       (parabolic blow-off: price has detached from fair value).
+
+    2. 14-bar realised vol > 2.5× 90-bar realised vol
+       AND price is ≥ 25% below a recent ``lookback``-bar high
+       (post-bubble crash: extreme vol with price far below peak).
+
+    Both conditions identify regimes where momentum/trend features become
+    anti-predictive because the normal price-discovery process has broken down.
+
+    Parameters
+    ----------
+    X        : Feature DataFrame — must contain ``close_col``.
+    close_col: Name of the closing-price column.
+    lookback : Rolling window for MA and peak detection.
+
+    Returns
+    -------
+    bool — True when the last bar is in a parabolic-bubble regime.
+    """
+    if close_col not in X.columns or len(X) < max(20, lookback // 4):
+        return False
+
+    try:
+        closes = X[close_col].astype(float).values
+        last = closes[-1]
+        if last <= 0:
+            return False
+
+        # ── Condition 1: price > 1.30× MA(lookback) ──────────────────────────
+        window = min(lookback, len(closes))
+        ma = float(np.mean(closes[-window:]))
+        if ma > 0 and last / ma > _PARABOLIC_MA_RATIO:
+            logger.debug(
+                "is_parabolic_bubble_regime: price/MA200=%.3f > %.2f → PARABOLIC",
+                last / ma,
+                _PARABOLIC_MA_RATIO,
+            )
+            return True
+
+        # ── Condition 2: extreme vol spike + post-bubble drawdown ─────────────
+        if len(closes) >= 14:
+            log_ret = np.diff(np.log(np.maximum(closes, 1e-9)))
+            rv14 = float(np.std(log_ret[-14:])) if len(log_ret) >= 14 else 0.0
+            rv90 = float(np.std(log_ret[-90:])) if len(log_ret) >= 90 else rv14
+            peak = float(np.max(closes[-window:]))
+            drawdown = (peak - last) / peak if peak > 0 else 0.0
+            if rv90 > 0 and rv14 > _PARABOLIC_RV_RATIO * rv90 and drawdown >= _PARABOLIC_DRAWDOWN_PCT:
+                logger.debug(
+                    "is_parabolic_bubble_regime: rv14/rv90=%.2f > %.2f AND drawdown=%.1f%% → POST-BUBBLE",
+                    rv14 / rv90,
+                    _PARABOLIC_RV_RATIO,
+                    drawdown * 100,
+                )
+                return True
+    except Exception as exc:
+        logger.debug("is_parabolic_bubble_regime: error: %s", exc)
+
+    return False
 
 
 def detect_regime_labels(
@@ -141,6 +226,17 @@ def detect_regime_labels(
     """
     Assign a regime label to each row based on Hurst exponent and ADX.
 
+    Regime labels
+    -------------
+    0 = mean_reverting      (Hurst < 0.45, ADX < 0.20)
+    1 = trending            (Hurst > 0.55, ADX > 0.25)
+    2 = mixed / unknown     (everything else)
+    3 = high_vol_parabolic  (parabolic blow-off or post-bubble crash)
+
+    The HIGH_VOL_PARABOLIC label overrides all others when the parabolic-bubble
+    condition is detected (see ``is_parabolic_bubble_regime()``).  This is the
+    condition responsible for Walk-Forward Fold-2's 44.4% accuracy failure.
+
     Parameters
     ----------
     X         : Feature DataFrame (must contain hurst_col and adx_col)
@@ -149,7 +245,7 @@ def detect_regime_labels(
 
     Returns
     -------
-    labels : pd.Series of int (0=mean-reverting, 1=trending, 2=mixed)
+    labels : pd.Series of int (0=mean-reverting, 1=trending, 2=mixed, 3=high_vol_parabolic)
     """
     labels = pd.Series(REGIME_MIXED, index=X.index, dtype=int)
 
@@ -178,14 +274,54 @@ def detect_regime_labels(
             adx_col,
         )
 
+    # ── Parabolic override: HIGH_VOL_PARABOLIC supersedes all other labels ────
+    if "close" in X.columns and len(X) >= 20:
+        parabolic_mask = _detect_parabolic_mask(X)
+        labels[parabolic_mask] = REGIME_HIGH_VOL_PARABOLIC
+
     counts = labels.value_counts().to_dict()
     logger.info(
-        "Regime distribution: mean_rev=%d  trending=%d  mixed=%d",
+        "Regime distribution: mean_rev=%d  trending=%d  mixed=%d  parabolic=%d",
         counts.get(REGIME_MEAN_REVERTING, 0),
         counts.get(REGIME_TRENDING, 0),
         counts.get(REGIME_MIXED, 0),
+        counts.get(REGIME_HIGH_VOL_PARABOLIC, 0),
     )
     return labels
+
+
+def _detect_parabolic_mask(X: pd.DataFrame) -> pd.Series:
+    """
+    Return a boolean mask for rows that are in a parabolic-bubble regime.
+
+    Condition 1 — parabolic blow-off:
+        close > 1.30 × rolling 200-bar MA
+
+    Condition 2 — post-bubble crash:
+        rv14 > 2.5 × rv90  AND  close ≤ 75% of rolling 200-bar peak
+
+    Both conditions use shifted (lag-1) values to prevent lookahead.
+    """
+    closes = X["close"].astype(float)
+    n = len(closes)
+
+    # Rolling MA and peak (shift by 1 to prevent lookahead)
+    ma200 = closes.rolling(min(200, n), min_periods=10).mean().shift(1)
+    peak200 = closes.rolling(min(200, n), min_periods=10).max().shift(1)
+
+    # Log-return realised vols
+    log_ret = np.log(closes.replace(0, np.nan)).diff()
+    rv14 = log_ret.rolling(14, min_periods=5).std().shift(1)
+    rv90 = log_ret.rolling(90, min_periods=20).std().shift(1).fillna(rv14)
+
+    cond1 = (ma200 > 0) & (closes / ma200 > _PARABOLIC_MA_RATIO)
+    cond2 = (
+        (rv90 > 0)
+        & (rv14 > _PARABOLIC_RV_RATIO * rv90)
+        & (peak200 > 0)
+        & (closes / peak200 <= (1.0 - _PARABOLIC_DRAWDOWN_PCT))
+    )
+    return (cond1 | cond2).fillna(False)
 
 
 def add_regime_features(
@@ -691,6 +827,34 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         regime_id = int(labels.iloc[0])
         regime_name = REGIME_NAMES.get(regime_id, "unknown")
 
+        # ── Step 5a: Parabolic-bubble abstain gate ────────────────────────────
+        # When the last bar is in a HIGH_VOL_PARABOLIC regime the model has
+        # historically underperformed (Fold-2: 44.4% accuracy). Abstain to
+        # avoid taking directional bets in parabolic blow-offs / post-bubble crashes.
+        if regime_id == REGIME_HIGH_VOL_PARABOLIC or is_parabolic_bubble_regime(
+            ohlcv if extra_features is None else X
+        ):
+            latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+            _PROM.predict_total.labels(symbol=symbol, regime="high_vol_parabolic").inc()
+            logger.warning(
+                "RegimeConditionalModel.predict_live: %s HIGH_VOL_PARABOLIC regime — abstain",
+                symbol,
+            )
+            return {
+                "direction": "neutral",
+                "probability": 0.5,
+                "regime": "high_vol_parabolic",
+                "data_quality": round(data_quality, 4),
+                "sentiment_score": round(sentiment_score, 4),
+                "macro_impact": round(macro_impact, 4),
+                "sentiment_scale": 1.0,
+                "quality_gate_passed": True,
+                "model_used": "none",
+                "abstain": True,
+                "abstain_reason": "HIGH_VOL_PARABOLIC regime: model accuracy < chance (Fold-2 failure)",
+                "latency_ms": latency_ms,
+            }
+
         model = self._regime_models.get(regime_id, self._global_model)
         model_used = "regime_specific" if regime_id in self._regime_models else "global_fallback"
 
@@ -745,6 +909,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
             "sentiment_scale": round(sentiment_scale, 4),
             "quality_gate_passed": True,
             "model_used": model_used,
+            "abstain": False,
             "latency_ms": latency_ms,
         }
 
@@ -842,6 +1007,24 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
                 "sentiment_scale": 1.0,
             }
 
+        # ── Parabolic-bubble abstain gate ─────────────────────────────────────
+        if is_parabolic_bubble_regime(X):
+            logger.warning(
+                "predict_with_orchestrator: HIGH_VOL_PARABOLIC regime — abstain (Fold-2 filter)"
+            )
+            neutral_proba = np.full((len(X), 2), 0.5)
+            return {
+                "predictions": np.zeros(len(X), dtype=int),
+                "probabilities": neutral_proba[:, 1],
+                "data_quality": data_quality,
+                "sentiment_score": sentiment_score,
+                "macro_impact": macro_impact,
+                "quality_gate_passed": True,
+                "sentiment_scale": 1.0,
+                "abstain": True,
+                "abstain_reason": "HIGH_VOL_PARABOLIC regime: model accuracy < chance (Fold-2 filter)",
+            }
+
         # ── Base prediction ───────────────────────────────────────────────────
         proba = self.predict_proba(X)
         preds = (proba[:, 1] >= 0.5).astype(int)
@@ -868,6 +1051,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
             "macro_impact": macro_impact,
             "quality_gate_passed": True,
             "sentiment_scale": sentiment_scale,
+            "abstain": False,
         }
 
 
