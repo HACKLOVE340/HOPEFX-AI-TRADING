@@ -37,10 +37,18 @@ import pandas as pd
 
 
 def _make_data(n: int = 30, close: float = 2000.0) -> dict:
-    """Return a minimal data dict with n price bars."""
+    """Return a minimal data dict with n price bars.
+
+    ``data["close"]`` is the *current tick's close price* (equal to the
+    ``close`` parameter).  ``data["prices"]`` is the historical price series
+    starting at ``close`` and incrementing by 0.1 per bar.  Keeping these
+    two separate matches the real signal-engine contract where
+    ``data["close"]`` is always the most-recent bar's close and is used to
+    overwrite the last row of the OHLCV DataFrame in ``_build_ohlcv_df``.
+    """
     prices = [close + float(i) * 0.1 for i in range(n)]
     return {
-        "close": prices[-1],
+        "close": close,  # current tick close — NOT prices[-1]
         "open": prices[0],
         "high": max(prices),
         "low": min(prices),
