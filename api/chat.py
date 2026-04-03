@@ -161,7 +161,7 @@ async def chat_status(user: TokenPayload = Depends(get_current_user)):
     llm_available = False
     llm_error: str | None = None
     try:
-        import brain.llm_agent  # availability check only  # pylint: disable=unused-import
+        import brain.llm_agent  # availability check only  # pylint: disable=unused-import  # noqa: F401
 
         llm_available = True
     except ImportError as exc:

@@ -64,6 +64,7 @@ import signal
 import sys
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, ClassVar
 
 from dotenv import load_dotenv
@@ -655,7 +656,7 @@ class LifeSupervisor:
         }
         try:
             pathlib.Path(CHECKPOINT_FILE).parent.mkdir(parents=True, exist_ok=True)
-            with open(CHECKPOINT_FILE, "w", encoding="utf-8") as fh:
+            with Path(CHECKPOINT_FILE).open("w", encoding="utf-8") as fh:
                 json.dump(state, fh, indent=2)
             logger.info("Checkpoint saved → %s", CHECKPOINT_FILE)
         except OSError as exc:

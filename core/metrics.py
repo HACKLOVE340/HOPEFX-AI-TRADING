@@ -35,7 +35,7 @@ try:
         generate_latest,
     )
     from prometheus_client import (
-        REGISTRY as _DEFAULT_REGISTRY,
+        REGISTRY as _DEFAULT_REGISTRY,  # noqa: F401
     )
 
     _PROM_AVAILABLE = True

@@ -50,9 +50,7 @@ class RSIStrategy(BaseStrategy):
         self.oversold = oversold
         self.overbought = overbought
         self.position: str | None = None  # tracks current position side: "LONG", "SHORT", or None
-        logger.info(
-            f"RSI Strategy initialized: period={period}, oversold={oversold}, overbought={overbought}",
-        )
+        logger.info("RSI Strategy initialized: period=%s, oversold=%s, overbought=%s", period, oversold, overbought)
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute RSI from OHLCV data dict."""

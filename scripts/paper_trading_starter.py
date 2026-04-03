@@ -212,11 +212,11 @@ class TradeLogger:
 
     def _init_csv(self) -> None:
         if not self.path.exists():
-            with open(self.path, "w", newline="", encoding="utf-8") as f:
+            with Path(self.path).open("w", newline="", encoding="utf-8") as f:
                 csv.DictWriter(f, fieldnames=CSV_HEADERS).writeheader()
 
     def log(self, record: dict[str, Any]) -> None:
-        with open(self.path, "a", newline="", encoding="utf-8") as f:
+        with Path(self.path).open("a", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
             writer.writerow({k: record.get(k, "") for k in CSV_HEADERS})
 

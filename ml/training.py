@@ -499,7 +499,7 @@ class LSTMModel:
             ".keras",
             "_config.json",
         )
-        with open(config_path, "w", encoding="utf-8") as f:
+        with Path(config_path).open("w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         print(f"LSTM model saved: {filepath}")
@@ -515,7 +515,7 @@ class LSTMModel:
             "_config.json",
         )
         if Path(config_path).exists():
-            with open(config_path, encoding="utf-8") as f:
+            with Path(config_path).open(encoding="utf-8") as f:
                 config = json.load(f)
                 self.sequence_length = config.get(
                     "sequence_length",
@@ -697,7 +697,7 @@ class XGBoostModel:
             ".pkl",
             "_config.json",
         )
-        with open(config_path, "w", encoding="utf-8") as f:
+        with Path(config_path).open("w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         # Save feature importance if available
@@ -867,7 +867,7 @@ class RandomForestModel:
         }
 
         config_path = filepath.replace(".pkl", "_config.json")
-        with open(config_path, "w", encoding="utf-8") as f:
+        with Path(config_path).open("w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         # Save feature importance
@@ -972,7 +972,7 @@ class EnsembleModel:
             "models": list(self.models.keys()),
         }
 
-        with open(f"{base_dir}/ensemble_config.json", "w", encoding="utf-8") as f:
+        with Path(f"{base_dir}/ensemble_config.json").open("w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
 
         return saved_paths
@@ -1088,7 +1088,7 @@ class HyperparameterTuner:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         # Save best params
-        with open(f"{output_dir}/best_params_{self.model_type}.json", "w", encoding="utf-8") as f:
+        with Path(f"{output_dir}/best_params_{self.model_type}.json").open("w", encoding="utf-8") as f:
             json.dump(self.best_params, f, indent=2)
 
         # Save CV results
@@ -1131,7 +1131,7 @@ class MLEvaluationReport:
             },
         }
 
-        with open(report_path, "w", encoding="utf-8") as f:
+        with Path(report_path).open("w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, default=str)
 
         # Save feature importance

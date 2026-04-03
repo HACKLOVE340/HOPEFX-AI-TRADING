@@ -650,10 +650,10 @@ class MLPipeline:
         n = len(X)
         splits = self._validator.split(n)
 
-        fold_results: list[WalkForwardFold] = []
-        all_oos_preds: list[int] = []
-        all_oos_true: list[int] = []
-        all_oos_proba: list[float] = []
+        fold_results: list[WalkForwardFold] = field(default_factory=list)
+        all_oos_preds: list[int] = field(default_factory=list)
+        all_oos_true: list[int] = field(default_factory=list)
+        all_oos_proba: list[float] = field(default_factory=list)
 
         for i, (train_idx, test_idx) in enumerate(splits):
             X_train = X.iloc[list(train_idx)]
@@ -735,7 +735,7 @@ class MLPipeline:
     def _save_report(self, report: ValidationReport) -> None:
         self._model_dir.mkdir(parents=True, exist_ok=True)
         path = self._model_dir / "validation_report.json"
-        with open(path, "w", encoding="utf-8") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             json.dump(report.to_dict(), f, indent=2)
         logger.info("MLPipeline: validation report saved to %s", path)
 

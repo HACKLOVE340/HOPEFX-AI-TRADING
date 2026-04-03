@@ -777,9 +777,7 @@ class RobustPredictor:
         self.config.reg_alpha *= 2
         self.config.reg_lambda *= 2
         self.config.max_depth = max(3, self.config.max_depth - 1)
-        logger.info(
-            f"Increased regularization: alpha={self.config.reg_alpha}, depth={self.config.max_depth}",
-        )
+        logger.info("Increased regularization: alpha=%s, depth=%s", self.config.reg_alpha, self.config.max_depth)
 
     def _check_feature_stability(self) -> float:
         """Check if feature importance is stable across folds"""
@@ -909,9 +907,7 @@ class RobustPredictor:
         )
 
         if recent_mean < historical_mean * 0.7:  # 30% decay
-            logger.warning(
-                f"Performance decay detected: {recent_mean:.3f} vs {historical_mean:.3f}",
-            )
+            logger.warning("Performance decay detected: %s vs %s", recent_mean, historical_mean)
             return True
 
         # Check time since last train

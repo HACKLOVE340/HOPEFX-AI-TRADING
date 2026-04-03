@@ -205,7 +205,7 @@ def retrain(
         )
 
     manifest_path = out_dir / "manifest.json"
-    with open(manifest_path, "w", encoding="utf-8") as f:
+    with Path(manifest_path).open("w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     logger.info("Manifest written: %s", manifest_path)
 
@@ -361,7 +361,7 @@ Examples:
                 path = info.get("model_path", "")
                 print(f"  {name:<20} accuracy={acc}  f1={f1}")
                 print(f"  {'':20} saved → {path}")
-        except Exception as exc:
+        except Exception:
             logger.exception("Failed for %s: %s", sym)
             all_ok = False
 

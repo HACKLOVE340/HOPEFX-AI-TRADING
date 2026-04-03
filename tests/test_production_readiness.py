@@ -25,9 +25,9 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 import pytest
-from pathlib import Path
 
 _ROOT = os.path.dirname(Path(__file__).parent)
 if _ROOT not in sys.path:

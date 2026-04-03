@@ -195,10 +195,7 @@ class BaseStrategy(ABC):
                     )
                     return None
                 self._record_signal(signal)
-                logger.info(
-                    f"{self.config.name}: Generated {signal.signal_type.value} "
-                    f"signal for {signal.symbol} at {signal.price}",
-                )
+                logger.info("%s: Generated %s signal for %s at %s", self.config.name, signal.signal_type.value, signal.symbol, signal.price)
 
             return signal
 

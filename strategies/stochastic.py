@@ -51,10 +51,7 @@ class StochasticStrategy(BaseStrategy):
         self.d_period = d_period
         self.oversold = oversold
         self.overbought = overbought
-        self.logger.info(
-            f"Stochastic Strategy initialized: k={k_period}, d={d_period}, "
-            f"oversold={oversold}, overbought={overbought}",
-        )
+        self.logger.info("Stochastic Strategy initialized: k=%s, d=%s, oversold=%s, overbought=%s", k_period, d_period, oversold, overbought)
 
     def calculate_stochastic(self, market_data: pd.DataFrame) -> tuple:
         """

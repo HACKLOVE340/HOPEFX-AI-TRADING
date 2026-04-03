@@ -50,9 +50,7 @@ class MovingAverageCrossover(BaseStrategy):
         self.prev_fast_ma = None
         self.prev_slow_ma = None
 
-        logger.info(
-            f"MA Crossover Strategy initialized: fast={self.fast_period}, slow={self.slow_period}",
-        )
+        logger.info("MA Crossover Strategy initialized: fast=%s, slow=%s", self.fast_period, self.slow_period)
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """

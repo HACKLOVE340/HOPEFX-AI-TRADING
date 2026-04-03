@@ -362,9 +362,7 @@ class PaperTradingBroker(BrokerConnector):
         else:
             # For limit/stop orders, just mark as open
             order.status = OrderStatus.OPEN
-            logger.info(
-                f"Limit order placed: {side.value} {quantity} {symbol} @ ${price}",
-            )
+            logger.info("Limit order placed: %s %s %s @ $%s", side.value, quantity, symbol, price)
 
         self.orders[order_id] = order
         return order

@@ -48,9 +48,7 @@ class MeanReversionStrategy(BaseStrategy):
         self.period = period
         self.std_dev = std_dev
         self.position: str | None = None  # tracks current position side: "LONG", "SHORT", or None
-        self.logger.info(
-            f"Mean Reversion Strategy initialized: period={period}, std_dev={std_dev}",
-        )
+        self.logger.info("Mean Reversion Strategy initialized: period=%s, std_dev=%s", period, std_dev)
 
     def generate_signal(self, analysis: pd.DataFrame) -> dict[str, Any]:  # type: ignore[override]
         market_data = analysis

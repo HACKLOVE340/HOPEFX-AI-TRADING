@@ -286,15 +286,11 @@ class RealTimeSignalService:
         """
         # Validate
         if confidence < self.min_confidence:
-            logger.debug(
-                f"Signal rejected: confidence {confidence} < {self.min_confidence}",
-            )
+            logger.debug("Signal rejected: confidence %s < %s", confidence, self.min_confidence)
             return None
 
         if len(strategies_agreeing) < self.min_strategies:
-            logger.debug(
-                f"Signal rejected: {len(strategies_agreeing)} strategies < {self.min_strategies}",
-            )
+            logger.debug("Signal rejected: %s strategies < %s", len(strategies_agreeing), self.min_strategies)
             return None
 
         # Calculate risk/reward
@@ -352,9 +348,7 @@ class RealTimeSignalService:
             self._publish_to_social_feed(signal)
             self._push_fcm_to_all_users(signal)
 
-        logger.info(
-            f"Signal generated: {signal.id} - {direction.value} {symbol} @ {confidence:.2%}",
-        )
+        logger.info("Signal generated: %s - %s %s @ %s", signal.id, direction.value, symbol, confidence)
         return signal
 
     def _publish_to_social_feed(self, signal: "TradingSignal") -> None:

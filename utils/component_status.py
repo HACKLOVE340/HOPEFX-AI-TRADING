@@ -137,7 +137,7 @@ def get_all_component_statuses() -> dict[str, ComponentStatus]:
 def _check_config() -> ComponentStatus:
     """Check config component."""
     try:
-        from config import ConfigManager, __version__
+        from config import ConfigManager, __version__  # noqa: F401
 
         return ComponentStatus(
             name="config",
@@ -159,7 +159,7 @@ def _check_config() -> ComponentStatus:
 def _check_cache() -> ComponentStatus:
     """Check cache component."""
     try:
-        from cache import MarketDataCache, __version__
+        from cache import MarketDataCache, __version__  # noqa: F401
 
         return ComponentStatus(
             name="cache",
@@ -182,7 +182,7 @@ def _check_cache() -> ComponentStatus:
 def _check_database() -> ComponentStatus:
     """Check database component."""
     try:
-        from database import Base, __version__
+        from database import Base, __version__  # noqa: F401
 
         return ComponentStatus(
             name="database",
@@ -205,7 +205,7 @@ def _check_database() -> ComponentStatus:
 def _check_brokers() -> ComponentStatus:
     """Check brokers component."""
     try:
-        from brokers import BrokerFactory, __version__
+        from brokers import BrokerFactory, __version__  # noqa: F401
 
         return ComponentStatus(
             name="brokers",
@@ -227,7 +227,7 @@ def _check_brokers() -> ComponentStatus:
 def _check_strategies() -> ComponentStatus:
     """Check strategies component."""
     try:
-        from strategies import StrategyManager, __version__
+        from strategies import StrategyManager, __version__  # noqa: F401
 
         return ComponentStatus(
             name="strategies",
@@ -249,7 +249,7 @@ def _check_strategies() -> ComponentStatus:
 def _check_risk() -> ComponentStatus:
     """Check risk component."""
     try:
-        from risk import RiskManager, __version__
+        from risk import RiskManager, __version__  # noqa: F401
 
         return ComponentStatus(
             name="risk",
@@ -271,7 +271,7 @@ def _check_risk() -> ComponentStatus:
 def _check_notifications() -> ComponentStatus:
     """Check notifications component."""
     try:
-        from notifications import NotificationManager, __version__
+        from notifications import NotificationManager, __version__  # noqa: F401
 
         return ComponentStatus(
             name="notifications",
@@ -293,7 +293,7 @@ def _check_notifications() -> ComponentStatus:
 def _check_ml() -> ComponentStatus:
     """Check ML component."""
     try:
-        from ml import LSTMPricePredictor, __version__
+        from ml import LSTMPricePredictor, __version__  # noqa: F401
 
         return ComponentStatus(
             name="ml",
@@ -316,7 +316,7 @@ def _check_ml() -> ComponentStatus:
 def _check_backtesting() -> ComponentStatus:
     """Check backtesting component."""
     try:
-        from backtesting import BacktestEngine, __version__
+        from backtesting import BacktestEngine, __version__  # noqa: F401
 
         return ComponentStatus(
             name="backtesting",
@@ -338,7 +338,7 @@ def _check_backtesting() -> ComponentStatus:
 def _check_news() -> ComponentStatus:
     """Check news component."""
     try:
-        from news import MultiSourceAggregator, __version__
+        from news import MultiSourceAggregator, __version__  # noqa: F401
 
         return ComponentStatus(
             name="news",
@@ -362,7 +362,7 @@ def _check_news() -> ComponentStatus:
 def _check_analytics() -> ComponentStatus:
     """Check analytics component."""
     try:
-        from analytics import PortfolioOptimizer, __version__
+        from analytics import PortfolioOptimizer, __version__  # noqa: F401
 
         return ComponentStatus(
             name="analytics",
@@ -384,7 +384,7 @@ def _check_analytics() -> ComponentStatus:
 def _check_monetization() -> ComponentStatus:
     """Check monetization component."""
     try:
-        from monetization import SubscriptionManager, __version__
+        from monetization import SubscriptionManager, __version__  # noqa: F401
 
         return ComponentStatus(
             name="monetization",
@@ -406,7 +406,7 @@ def _check_monetization() -> ComponentStatus:
 def _check_payments() -> ComponentStatus:
     """Check payments component."""
     try:
-        from payments import WalletManager, __version__
+        from payments import WalletManager, __version__  # noqa: F401
 
         return ComponentStatus(
             name="payments",
@@ -428,7 +428,7 @@ def _check_payments() -> ComponentStatus:
 def _check_social() -> ComponentStatus:
     """Check social component."""
     try:
-        from social import CopyTradingEngine, __version__
+        from social import CopyTradingEngine, __version__  # noqa: F401
 
         return ComponentStatus(
             name="social",
@@ -450,7 +450,7 @@ def _check_social() -> ComponentStatus:
 def _check_mobile() -> ComponentStatus:
     """Check mobile component."""
     try:
-        from mobile import MobileAPI, __version__
+        from mobile import MobileAPI, __version__  # noqa: F401
 
         return ComponentStatus(
             name="mobile",
@@ -472,7 +472,7 @@ def _check_mobile() -> ComponentStatus:
 def _check_charting() -> ComponentStatus:
     """Check charting component."""
     try:
-        from charting import ChartEngine, __version__
+        from charting import ChartEngine, __version__  # noqa: F401
 
         return ComponentStatus(
             name="charting",

@@ -30,6 +30,7 @@ import socket
 import subprocess  # nosec B404 - list-form calls with fixed tool names; no shell=True, no user input
 import sys
 import urllib.parse
+from pathlib import Path
 
 # ── result collectors ─────────────────────────────────────────────────────────
 _errors: list[str] = []
@@ -139,7 +140,7 @@ def check_ml_model() -> None:
         except Exception:
             import pickle  # nosec B403
 
-            with open(model_path, "rb") as fh:
+            with Path(model_path).open("rb") as fh:
                 model = pickle.load(fh)  # nosec B301 - joblib failed; legacy pickle fallback for deployment check only
         _good(f"advanced_oos.pkl loads cleanly ({type(model).__name__})")
     except Exception as exc:
@@ -340,7 +341,7 @@ def check_env_file() -> None:
 
     # Scan for unresolved placeholders
     placeholders = []
-    with open(env_path, encoding="utf-8") as fh:
+    with Path(env_path).open(encoding="utf-8") as fh:
         for lineno, _line in enumerate(fh, 1):
             line = _line.strip()
             if line.startswith("#") or "=" not in line:

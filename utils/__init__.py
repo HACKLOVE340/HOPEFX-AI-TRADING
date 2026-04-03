@@ -12,7 +12,7 @@ import asyncio
 import functools
 import hashlib
 import inspect
-import json
+import json  # noqa: F401
 import logging
 import secrets
 import time

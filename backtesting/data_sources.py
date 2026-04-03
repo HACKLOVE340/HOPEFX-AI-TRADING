@@ -19,7 +19,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pandas as pd
 
@@ -580,7 +580,7 @@ class DataManager:
     """
 
     # Symbol type mappings
-    FOREX_PAIRS = [
+    FOREX_PAIRS: ClassVar[list] = [
         "EURUSD",
         "GBPUSD",
         "USDJPY",
@@ -597,7 +597,7 @@ class DataManager:
         "XAU/USD",
     ]
 
-    CRYPTO_SYMBOLS = [
+    CRYPTO_SYMBOLS: ClassVar[list] = [
         "BTC",
         "ETH",
         "XRP",

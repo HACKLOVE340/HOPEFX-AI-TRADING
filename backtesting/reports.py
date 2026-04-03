@@ -10,6 +10,7 @@ Generates comprehensive backtest reports.
 """
 
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ class ReportGenerator:
         """Save report to file."""
         report = self.generate_text_report()
 
-        with open(filename, "w", encoding="utf-8") as f:
+        with Path(filename).open("w", encoding="utf-8") as f:
             f.write(report)
 
         logger.info("Report saved to %s", filename)

@@ -26,7 +26,7 @@ from enum import Enum
 from pathlib import Path
 
 try:
-    from pythonjsonlogger import jsonlogger
+    from pythonjsonlogger import jsonlogger  # noqa: F401
 
     JSON_LOGGER_AVAILABLE = True
 except ImportError:
@@ -363,7 +363,7 @@ class HOPEFXLogger:
 
     def audit(self, event: str, details: dict[str, Any]):
         """Log audit event"""
-        self._audit_logger.info(f"AUDIT: {event}", extra={"audit_details": details})
+        self._audit_logger.info("AUDIT: %s", event, extra={"audit_details": details})
 
     def get_metrics(self) -> dict:
         """Get logging metrics"""

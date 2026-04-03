@@ -88,9 +88,9 @@ class MemoryMappedEventStore:
             self.current_file.close()
         filename = f"{self.base_path}events_{self.file_counter:06d}.bin"
         self.file_counter += 1
-        with open(filename, "wb") as f:
+        with Path(filename).open("wb") as f:
             f.write(b"\x00" * self.max_file_size)
-        self.current_file = open(filename, "r+b")
+        self.current_file = Path(filename).open("r+b")
         self.current_mmap = mmap.mmap(self.current_file.fileno(), self.max_file_size)
         self.current_offset = 0
 
@@ -139,7 +139,7 @@ class MemoryMappedEventStore:
         filename = f"{self.base_path}events_{file_num:06d}.bin"
         if not Path(filename).exists():
             return None
-        with open(filename, "rb") as f:
+        with Path(filename).open("rb") as f:
             f.seek(offset)
             # Header: sequence(Q=8) | timestamp(Q=8) | event_type(H=2) = 18 bytes
             header = f.read(19)

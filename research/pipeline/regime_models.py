@@ -59,7 +59,7 @@ from sklearn.preprocessing import StandardScaler
 logger = logging.getLogger(__name__)
 
 try:
-    from research.pipeline.models_ensemble import EnsemblePredictor
+    from research.pipeline.models_ensemble import EnsemblePredictor  # noqa: F401
 
     ENSEMBLE_AVAILABLE = True
 except ImportError:
@@ -390,7 +390,7 @@ class RegimeRouter:
         try:
             obj = joblib.load(path)  # nosec B301 - path set by class constructor from saved_models
         except Exception:
-            with open(path, "rb") as f:
+            with Path(path).open("rb") as f:
                 obj = pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback
         logger.info("RegimeRouter loaded ← %s", path)
         return obj

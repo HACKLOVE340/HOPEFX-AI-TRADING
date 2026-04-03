@@ -239,9 +239,7 @@ class LSTMPricePredictor(BaseMLModel):
                 },
             )
 
-            self.logger.info(
-                f"LSTM training complete. Final loss: {history.history['loss'][-1]:.6f}",
-            )
+            self.logger.info("LSTM training complete. Final loss: %s", history.history['loss'][-1])
 
             return {
                 "loss": history.history["loss"],

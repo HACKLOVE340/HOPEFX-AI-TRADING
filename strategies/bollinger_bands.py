@@ -46,9 +46,7 @@ class BollingerBandsStrategy(BaseStrategy):
         super().__init__(config)
         self.period = period
         self.std_dev = std_dev
-        logger.info(
-            f"Bollinger Bands Strategy initialized: period={period}, std_dev={std_dev}",
-        )
+        logger.info("Bollinger Bands Strategy initialized: period=%s, std_dev=%s", period, std_dev)
 
     def analyze(self, data: dict[str, Any]) -> dict[str, Any]:
         """Compute Bollinger Bands from OHLCV data dict."""

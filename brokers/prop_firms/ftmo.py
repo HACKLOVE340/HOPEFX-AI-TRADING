@@ -369,9 +369,7 @@ try:
                 )
                 cfg["server"] = servers[0]
             super().__init__(cfg)
-            logger.info(
-                f"FTMOConnector initialized: {self.challenge_type} / {self.server}",
-            )
+            logger.info("FTMOConnector initialized: %s / %s", self.challenge_type, self.server)
 
         def get_ftmo_rules(self) -> dict[str, Any]:
             return {

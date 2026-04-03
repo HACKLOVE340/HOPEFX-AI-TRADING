@@ -15,6 +15,7 @@ import logging
 import logging.handlers
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import ClassVar
 
 
 class JSONFormatter(logging.Formatter):
@@ -40,7 +41,7 @@ class JSONFormatter(logging.Formatter):
 class Logger:
     """Structured logger factory"""
 
-    _loggers = {}
+    _loggers: ClassVar[dict] = {}
     _configured = False
 
     @classmethod

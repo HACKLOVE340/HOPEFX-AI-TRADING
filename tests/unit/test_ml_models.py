@@ -17,6 +17,7 @@ import os
 # Maximum fraction of feature_names allowed to be uncategorised in feature groups
 _MAX_UNCATEGORISED_FRACTION = 0.3
 import tempfile
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -33,7 +34,6 @@ from ml.models.ensemble import (
 )
 from ml.models.lstm import LSTMPricePredictor
 from ml.models.random_forest import RandomForestTradingClassifier
-from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Helpers / Fixtures shared across test classes
@@ -205,7 +205,7 @@ class TestBaseMLModel:
             # Verify metadata JSON was written
             meta_path = Path(tmpdir) / "model_metadata.json"
             assert os.path.exists(meta_path)
-            with open(meta_path, encoding="utf-8") as f:
+            with Path(meta_path).open(encoding="utf-8") as f:
                 meta = json.load(f)
             assert meta["name"] == "save_test"
 

@@ -312,7 +312,7 @@ class ConfigManager:
         for api_d in d.get("api_configs", {}).values():
             api_d["api_key"] = self._encrypt_value(api_d.get("api_key", ""))
             api_d["api_secret"] = self._encrypt_value(api_d.get("api_secret", ""))
-        with open(path, "w", encoding="utf-8") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX)
                 json.dump(d, f, indent=2)
@@ -320,7 +320,7 @@ class ConfigManager:
                 fcntl.flock(f, fcntl.LOCK_UN)
 
     def _read_config(self, path: Path) -> AppConfig:
-        with open(path, encoding="utf-8") as f:
+        with Path(path).open(encoding="utf-8") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_SH)
                 d = json.load(f)

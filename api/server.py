@@ -424,7 +424,7 @@ def _register_system_routes(app, trading_app, require_admin):
 
         try:
             max_bytes = 512 * 1024
-            with open(log_path, "rb") as fh:
+            with Path(log_path).open("rb") as fh:
                 fh.seek(0, 2)
                 file_size = fh.tell()
                 fh.seek(max(0, file_size - max_bytes))

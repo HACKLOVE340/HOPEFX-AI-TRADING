@@ -193,9 +193,7 @@ class ChartReplayEngine:
             }
             interval = _TF_MAP.get(session.timeframe, "1d")
 
-            logger.info(
-                f"Fetching {ticker} [{interval}] {session.start_date.date()} → {session.end_date.date()} via yfinance"
-            )
+            logger.info("Fetching %s [%s] %s → %s via yfinance", ticker, interval, session.start_date.date(), session.end_date.date())
             df = yf.download(
                 ticker,
                 start=session.start_date,

@@ -15,7 +15,7 @@ from pathlib import Path
 
 def fix_trailing_whitespace(file_path):
     """Remove trailing whitespace from all lines."""
-    with open(file_path, encoding="utf-8") as f:
+    with Path(file_path).open(encoding="utf-8") as f:
         content = f.read()
 
     # Fix trailing whitespace
@@ -23,7 +23,7 @@ def fix_trailing_whitespace(file_path):
     fixed_lines = [line.rstrip() for line in lines]
     fixed_content = "\n".join(fixed_lines)
 
-    with open(file_path, "w", encoding="utf-8") as f:
+    with Path(file_path).open("w", encoding="utf-8") as f:
         f.write(fixed_content)
 
     return len([l for l in lines if l != l.rstrip()])
@@ -31,7 +31,7 @@ def fix_trailing_whitespace(file_path):
 
 def fix_blank_lines(file_path):
     """Fix blank line spacing around classes and functions."""
-    with open(file_path, encoding="utf-8") as f:
+    with Path(file_path).open(encoding="utf-8") as f:
         content = f.read()
 
     # Ensure 2 blank lines before class/function definitions at module level
@@ -39,7 +39,7 @@ def fix_blank_lines(file_path):
     # But not more than 2
     content = re.sub(r"\n\n\n+", r"\n\n\n", content)
 
-    with open(file_path, "w", encoding="utf-8") as f:
+    with Path(file_path).open("w", encoding="utf-8") as f:
         f.write(content)
 
 

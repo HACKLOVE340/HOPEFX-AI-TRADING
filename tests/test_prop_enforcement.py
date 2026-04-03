@@ -235,13 +235,13 @@ class TestPropFirmConfig:
     def test_prop_firm_mode_json_enabled(self):
         cfg_path = Path(__file__).parent.parent / "prop_firm_mode.json"
         assert cfg_path.exists(), "prop_firm_mode.json must exist"
-        with open(cfg_path, encoding="utf-8") as f:
+        with Path(cfg_path).open(encoding="utf-8") as f:
             cfg = json.load(f)
         assert cfg.get("enabled") is True, "enabled must be true for testing"
 
     def test_prop_firm_has_enforcement_block(self):
         cfg_path = Path(__file__).parent.parent / "prop_firm_mode.json"
-        with open(cfg_path, encoding="utf-8") as f:
+        with Path(cfg_path).open(encoding="utf-8") as f:
             cfg = json.load(f)
         enforcement = cfg.get("enforcement", {})
         assert enforcement.get("halt_on_daily_drawdown_breach") is True
@@ -250,7 +250,7 @@ class TestPropFirmConfig:
 
     def test_ftmo_standard_drawdown_limits(self):
         cfg_path = Path(__file__).parent.parent / "prop_firm_mode.json"
-        with open(cfg_path, encoding="utf-8") as f:
+        with Path(cfg_path).open(encoding="utf-8") as f:
             cfg = json.load(f)
         ftmo = cfg["firms"]["ftmo_standard"]["drawdown"]
         assert ftmo["max_total_drawdown_pct"] == 10.0
@@ -259,7 +259,7 @@ class TestPropFirmConfig:
 
     def test_goat_funded_uses_balance_mode(self):
         cfg_path = Path(__file__).parent.parent / "prop_firm_mode.json"
-        with open(cfg_path, encoding="utf-8") as f:
+        with Path(cfg_path).open(encoding="utf-8") as f:
             cfg = json.load(f)
         goat = cfg["firms"]["goat_funded_standard"]["drawdown"]
         assert goat["drawdown_mode"] == "balance"

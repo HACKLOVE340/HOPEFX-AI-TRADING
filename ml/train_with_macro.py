@@ -674,7 +674,7 @@ def main():
 
     # ── Save report ───────────────────────────────────────────────────────────
     report_path = MODEL_DIR / "training_report.json"
-    with open(report_path, "w", encoding="utf-8") as f:
+    with Path(report_path).open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     logger.info("Training report saved to %s", report_path)
 

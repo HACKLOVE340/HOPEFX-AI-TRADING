@@ -518,8 +518,8 @@ class GeopoliticalRiskProvider:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        events: list[GeopoliticalEvent] = []
-        fetch_errors: list[str] = []
+        events: list[GeopoliticalEvent] = field(default_factory=list)
+        fetch_errors: list[str] = field(default_factory=list)
 
         for layer in self.data_layers:
             url = f"{self.base_url}/api/v1/events?layer={layer}&range={self.time_range}&format=geojson"
@@ -599,7 +599,7 @@ class GeopoliticalRiskProvider:
             resp.raise_for_status()
             data = resp.json()
             articles = data.get("articles", [])
-            events: list[GeopoliticalEvent] = []
+            events: list[GeopoliticalEvent] = field(default_factory=list)
             for article in articles:
                 title = article.get("title", "")
                 url_str = article.get("url", "")
@@ -643,7 +643,7 @@ class GeopoliticalRiskProvider:
     def _parse_geojson_features(self, features: list[dict], layer: str) -> list[GeopoliticalEvent]:
         """Convert World Monitor GeoJSON features to GeopoliticalEvent objects."""
         event_type = self.LAYER_MAPPING.get(layer, GeopoliticalEventType.HOTSPOT)
-        parsed: list[GeopoliticalEvent] = []
+        parsed: list[GeopoliticalEvent] = field(default_factory=list)
 
         for feat in features:
             try:

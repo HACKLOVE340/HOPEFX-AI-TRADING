@@ -399,9 +399,7 @@ class StrategyBrain:
         # Recalculate strategy weights
         self._recalculate_weights()
 
-        logger.info(
-            f"Updated performance for {strategy_name}: Win rate: {perf['win_rate']:.2%}, PnL: ${perf['total_pnl']:.2f}",
-        )
+        logger.info("Updated performance for %s: Win rate: %s, PnL: $%s", strategy_name, perf['win_rate'], perf['total_pnl'])
 
     def _recalculate_weights(self):
         """Recalculate strategy weights based on performance"""

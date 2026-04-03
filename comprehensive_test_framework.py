@@ -16,6 +16,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -744,7 +745,7 @@ class ComprehensiveTestFramework:
         """Export test report to JSON"""
         import json
 
-        with open(filepath, "w") as f:
+        with Path(filepath).open("w") as f:
             json.dump(self._generate_report(0), f, indent=2, default=str)
         logger.info("Test report exported to %s", filepath)
 

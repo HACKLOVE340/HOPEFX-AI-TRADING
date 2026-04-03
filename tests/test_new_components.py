@@ -244,7 +244,7 @@ class TestPaperTradingHelpers:
             logger.log(record)
             import csv
 
-            with open(path, encoding="utf-8") as _fh:
+            with Path(path).open(encoding="utf-8") as _fh:
                 rows = list(csv.DictReader(_fh))
             assert len(rows) == 1
             assert rows[0]["instrument"] == "test"

@@ -295,7 +295,7 @@ class XAUUSDBot:
 
         results_file = Path('results/xauusd_paper_results.json')
         results_file.parent.mkdir(exist_ok=True)
-        with open(results_file, 'w') as f:
+        with Path(results_file).open('w') as f:
             json.dump(results, f, indent=2, default=str)
         logger.info("Results saved to: %s", results_file)
 
@@ -361,7 +361,7 @@ if __name__ == '__main__':
     sys.exit(main())
 '''
 
-with open("/mnt/kimi/output/hopefx_upgrade/scripts/xauusd_bot.py", "w", encoding="utf-8") as f:
+with Path("/mnt/kimi/output/hopefx_upgrade/scripts/xauusd_bot.py").open("w", encoding="utf-8") as f:
     f.write(xauusd_bot_content)
 
 print("✅ scripts/xauusd_bot.py created - REAL working paper trading bot")

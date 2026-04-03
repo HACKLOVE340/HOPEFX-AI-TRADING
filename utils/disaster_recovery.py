@@ -115,7 +115,7 @@ class ContinuousBackup:
 
         session = aiobotocore.get_session()
         async with session.create_client("s3", region_name=self.s3_region) as client:
-            with open(local_path, "rb") as f:
+            with Path(local_path).open("rb") as f:
                 await client.put_object(
                     Bucket=self.s3_bucket,
                     Key=f"hopefx/snapshots/{filename}",
