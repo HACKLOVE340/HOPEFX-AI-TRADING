@@ -280,19 +280,9 @@ class KillSwitch:
           5. With the latch, Pod B reads the key at startup and halts.
         """
         try:
-            from core.event_bus import bus as _bus
-
-            r = getattr(_bus, "_redis", None) or getattr(_bus, "_client", None)
+            r = self._get_latch_redis()
             if r is None:
-                # Try a direct Redis connection as fallback
-                try:
-                    import redis as _redis_lib
-
-                    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-                    r = _redis_lib.from_url(redis_url, decode_responses=True)
-                except Exception:
-                    return
-
+                return
             latch_val = r.get(self._REDIS_LATCH_KEY)
             if latch_val and str(latch_val).lower() == "true":
                 reason = r.get(self._REDIS_REASON_KEY) or "redis latch (kill switch was active on peer pod)"
@@ -319,35 +309,54 @@ class KillSwitch:
         """
         _LATCH_TTL = 7 * 24 * 3600  # 7 days
         try:
-            from core.event_bus import bus as _bus
-
-            r = getattr(_bus, "_redis", None) or getattr(_bus, "_client", None)
-            if r is None:
-                import redis as _redis_lib
-
-                redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-                r = _redis_lib.from_url(redis_url, decode_responses=True)
-            r.set(self._REDIS_LATCH_KEY, "true", ex=_LATCH_TTL)
-            r.set(self._REDIS_REASON_KEY, reason, ex=_LATCH_TTL)
-            logger.info("Kill switch: Redis distributed latch written (TTL=%ds)", _LATCH_TTL)
+            r = self._get_latch_redis()
+            if r is not None:
+                r.set(self._REDIS_LATCH_KEY, "true", ex=_LATCH_TTL)
+                r.set(self._REDIS_REASON_KEY, reason, ex=_LATCH_TTL)
+                logger.info("Kill switch: Redis distributed latch written (TTL=%ds)", _LATCH_TTL)
         except Exception as exc:
             logger.warning("Kill switch: could not write Redis latch (non-fatal): %s", exc)
 
     def _clear_redis_latch(self) -> None:
         """Remove the Redis kill-switch latch on deactivation."""
         try:
+            r = self._get_latch_redis()
+            if r is not None:
+                r.delete(self._REDIS_LATCH_KEY, self._REDIS_REASON_KEY)
+                logger.info("Kill switch: Redis distributed latch cleared")
+        except Exception as exc:
+            logger.debug("Kill switch: could not clear Redis latch (non-fatal): %s", exc)
+
+    def _get_latch_redis(self):
+        """
+        Return a sync Redis client for latch operations.
+
+        Prefers the already-connected client from the event bus to avoid
+        creating a new connection on every call.  Falls back to a fresh
+        connection only when the bus client is unavailable.
+
+        The returned client is owned by the caller and should not be closed
+        when it comes from the event bus (it is shared).  When a new client
+        is created here it is short-lived and will be garbage-collected after
+        the caller's operation completes — no persistent handle is stored.
+        """
+        try:
             from core.event_bus import bus as _bus
 
             r = getattr(_bus, "_redis", None) or getattr(_bus, "_client", None)
-            if r is None:
-                import redis as _redis_lib
+            if r is not None:
+                return r
+        except Exception:
+            pass
 
-                redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-                r = _redis_lib.from_url(redis_url, decode_responses=True)
-            r.delete(self._REDIS_LATCH_KEY, self._REDIS_REASON_KEY)
-            logger.info("Kill switch: Redis distributed latch cleared")
-        except Exception as exc:
-            logger.debug("Kill switch: could not clear Redis latch (non-fatal): %s", exc)
+        try:
+            import redis as _redis_lib
+
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            # socket_connect_timeout prevents indefinite blocking when Redis is down.
+            return _redis_lib.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
+        except Exception:
+            return None
 
     async def stop(self) -> None:
         """Stop background polling and Redis subscription."""

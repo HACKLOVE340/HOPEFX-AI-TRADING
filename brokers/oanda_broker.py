@@ -314,8 +314,12 @@ class OandaBroker:
                         return {"success": False, "order_id": None, "comment": error_msg}
 
                     if resp.status == 429:
-                        # Rate-limited — honour Retry-After if present.
-                        retry_after = float(resp.headers.get("Retry-After", _RETRY_BASE_DELAY * (2**attempt)))
+                        # Rate-limited — honour Retry-After if present, with a safe fallback.
+                        default_delay = min(_RETRY_BASE_DELAY * (2**attempt), 30.0)
+                        try:
+                            retry_after = float(resp.headers.get("Retry-After", default_delay))
+                        except (ValueError, TypeError):
+                            retry_after = default_delay
                         logger.warning(
                             "OANDA rate-limited (429) | retry_after=%.1fs | attempt=%d/%d",
                             retry_after,
@@ -431,9 +435,14 @@ class OandaBroker:
                         data = await resp.json()
                         return {"success": False, "comment": data.get("errorMessage", "Close rejected")}
                     if resp.status in _RETRYABLE_STATUSES and attempt < _MAX_RETRIES:
-                        delay = _RETRY_BASE_DELAY * (2**attempt)
+                        default_delay = min(_RETRY_BASE_DELAY * (2**attempt), 30.0)
                         if resp.status == 429:
-                            delay = float(resp.headers.get("Retry-After", delay))
+                            try:
+                                delay = float(resp.headers.get("Retry-After", default_delay))
+                            except (ValueError, TypeError):
+                                delay = default_delay
+                        else:
+                            delay = default_delay
                         logger.warning(
                             "OANDA close_trade %s | retrying in %.1fs | attempt=%d/%d",
                             resp.status,

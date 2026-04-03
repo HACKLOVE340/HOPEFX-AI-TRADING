@@ -254,6 +254,23 @@ class PositionManager:
 
         logger.info("PositionManager initialised (redis=%s)", redis_client is not None)
 
+    @staticmethod
+    def _make_span_ctx(span_name: str):
+        """Return an OTel span context manager for *span_name*.
+
+        Lazily imports ``api.tracing.get_tracer`` to avoid circular imports.
+        Returns a ``_NullCtx`` no-op when tracing is unavailable.
+        """
+        try:
+            from api.tracing import get_tracer  # type: ignore[import]
+
+            tracer = get_tracer("hopefx.position_manager")
+            if tracer is not None:
+                return tracer.start_as_current_span(span_name)
+        except Exception:
+            pass
+        return _NullCtx()
+
     # ------------------------------------------------------------------
     # Open
     # ------------------------------------------------------------------
@@ -298,17 +315,7 @@ class PositionManager:
         if entry_price <= 0:
             raise ValueError(f"entry_price must be > 0, got {entry_price}")
 
-        # Lazy import to avoid circular deps
-        try:
-            from api.tracing import get_tracer  # type: ignore[import]
-
-            tracer = get_tracer("hopefx.position_manager")
-        except Exception:
-            tracer = None
-
-        span_ctx = tracer.start_as_current_span("position_manager.open") if tracer else _NullCtx()
-
-        with span_ctx as span:
+        with self._make_span_ctx("position_manager.open") as span:
             if hasattr(span, "set_attribute"):
                 span.set_attribute("symbol", symbol)
                 span.set_attribute("side", side)
@@ -382,16 +389,7 @@ class PositionManager:
         if fill_price <= 0:
             raise ValueError(f"fill_price must be > 0, got {fill_price}")
 
-        try:
-            from api.tracing import get_tracer  # type: ignore[import]
-
-            tracer = get_tracer("hopefx.position_manager")
-        except Exception:
-            tracer = None
-
-        span_ctx = tracer.start_as_current_span("position_manager.close") if tracer else _NullCtx()
-
-        with span_ctx as span:
+        with self._make_span_ctx("position_manager.close") as span:
             if hasattr(span, "set_attribute"):
                 span.set_attribute("symbol", symbol)
                 span.set_attribute("fill_price", fill_price)
