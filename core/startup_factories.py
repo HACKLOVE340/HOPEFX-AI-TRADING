@@ -27,14 +27,10 @@ UTC = timezone.utc
 from pathlib import Path
 from typing import Any, ClassVar
 
+import secrets as _secrets_mod
+
 logger = logging.getLogger(__name__)
 
-
-# ── Known dev-only placeholder values — rejected in production ────────────────
-# nosec B105 — these are intentional dev-only placeholders, not real secrets.
-# Production startup aborts if either value is still set (see init_env below).
-_DEV_JWT_SECRET = "dev-jwt-secret-minimum-32-characters-long!!"  # nosec B105
-_DEV_ENCRYPTION_KEY = "dev-key-minimum-32-characters-long-for-testing"  # nosec B105
 
 # ── Environment / config ──────────────────────────────────────────────────────
 
@@ -44,14 +40,22 @@ async def init_env(s: Any) -> bool:
     Validate environment variables and apply dev defaults where safe.
 
     Production behaviour (APP_ENV=production):
-    - Missing or placeholder SECURITY_JWT_SECRET / CONFIG_ENCRYPTION_KEY
-      cause immediate sys.exit(1).  No dev fallback is injected.
+    - Missing SECURITY_JWT_SECRET / CONFIG_ENCRYPTION_KEY cause immediate
+      sys.exit(1).  No dev fallback is injected.
     - validate_and_report() runs with strict=True, exit_on_error=True.
 
     Development behaviour (APP_ENV != production):
-    - Dev fallback secrets are injected with a WARNING so the app starts
-      without a .env file.
+    - Cryptographically-random ephemeral secrets are generated at runtime
+      with a WARNING so the app starts without a .env file.
+    - These ephemeral secrets are NOT persisted — each restart generates
+      new ones, which invalidates existing JWT tokens.  This is intentional:
+      it prevents accidental use of a weak hardcoded secret while still
+      allowing development without a .env file.
     - validate_and_report() runs with strict=False, exit_on_error=False.
+
+    Security note: No secret values are ever stored as constants in source
+    code.  Hardcoded constant secrets are visible in git history, container
+    images, and memory dumps — even with nosec comments.
     """
     app_env = os.getenv("APP_ENV", "development").lower()
     is_production = app_env == "production"
@@ -63,33 +67,40 @@ async def init_env(s: Any) -> bool:
 
     # ── SECURITY_JWT_SECRET ───────────────────────────────────────────────────
     jwt_secret = os.getenv("SECURITY_JWT_SECRET", "")
-    if not jwt_secret or jwt_secret == _DEV_JWT_SECRET:
+    if not jwt_secret:
         if is_production:
             logger.critical(
-                "STARTUP ABORTED: SECURITY_JWT_SECRET is missing or uses the "
-                "dev placeholder in production. "
+                "STARTUP ABORTED: SECURITY_JWT_SECRET is missing in production. "
                 'Generate a secret: python3 -c "import secrets; print(secrets.token_hex(32))"'
             )
             sys.exit(1)
+        # Generate a cryptographically-random ephemeral secret for dev.
+        # This is NEVER persisted — restart = new secret = existing tokens invalid.
+        ephemeral_jwt = _secrets_mod.token_hex(32)
+        os.environ["SECURITY_JWT_SECRET"] = ephemeral_jwt
         logger.warning(
-            "SECURITY_JWT_SECRET not set — using dev default. Set a real secret before deploying to production."
+            "SECURITY_JWT_SECRET not set — using ephemeral random secret for this session only. "
+            "All existing JWT tokens are invalid after restart. "
+            "Set SECURITY_JWT_SECRET in .env before deploying to production."
         )
-        os.environ["SECURITY_JWT_SECRET"] = _DEV_JWT_SECRET  # nosec B105
 
     # ── CONFIG_ENCRYPTION_KEY ─────────────────────────────────────────────────
     enc_key = os.getenv("CONFIG_ENCRYPTION_KEY", "")
-    if not enc_key or enc_key == _DEV_ENCRYPTION_KEY:
+    if not enc_key:
         if is_production:
             logger.critical(
-                "STARTUP ABORTED: CONFIG_ENCRYPTION_KEY is missing or uses the "
-                "dev placeholder in production. "
+                "STARTUP ABORTED: CONFIG_ENCRYPTION_KEY is missing in production. "
                 'Generate a key: python3 -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
             sys.exit(1)
+        # Generate a cryptographically-random ephemeral key for dev.
+        ephemeral_enc = _secrets_mod.token_urlsafe(48)
+        os.environ["CONFIG_ENCRYPTION_KEY"] = ephemeral_enc
         logger.warning(
-            "CONFIG_ENCRYPTION_KEY not set — using dev default. Set a real key before deploying to production."
+            "CONFIG_ENCRYPTION_KEY not set — using ephemeral random key for this session only. "
+            "Credentials encrypted in previous sessions cannot be decrypted after restart. "
+            "Set CONFIG_ENCRYPTION_KEY in .env before deploying to production."
         )
-        os.environ["CONFIG_ENCRYPTION_KEY"] = _DEV_ENCRYPTION_KEY
 
     # ── Run full env validator ────────────────────────────────────────────────
     try:

@@ -112,6 +112,8 @@ class MarketDataOrchestrator:
         # Redis client (shared across all components)
         self._redis = None
         self._redis_store: DataLayerRedisStore = dl_redis_store
+        # Track Redis availability so health() and degraded-mode alerting work.
+        self._redis_healthy: bool = False
 
         # Core components
         self._gold_feed: GoldFeedManager | None = None
@@ -199,10 +201,16 @@ class MarketDataOrchestrator:
             self._redis = r
             self._redis_store._r = r
             self._calendar._redis = r
+            self._redis_healthy = True
             logger.info("MarketDataOrchestrator: Redis connected (%s)", _REDIS_URL)
         except Exception as exc:
-            logger.warning(
-                "MarketDataOrchestrator: Redis unavailable (%s) — caching disabled, continuing without Redis",
+            self._redis_healthy = False
+            logger.error(
+                "MarketDataOrchestrator: Redis UNAVAILABLE (%s) — caching disabled. "
+                "System will continue in degraded mode. "
+                "Set REDIS_URL env var and ensure Redis is running. "
+                "Trading continues but tick caching, cross-pod kill-switch propagation, "
+                "and order state persistence are offline.",
                 exc,
             )
 
@@ -841,6 +849,10 @@ class MarketDataOrchestrator:
             "started": self._started,
             "uptime_s": round(time.time() - self._start_ts, 1) if self._started else 0,
             "tick_count": self._tick_count,
+            # Redis health is surfaced explicitly so monitoring dashboards can
+            # page on degraded mode — Redis failure is NOT a silent event.
+            "redis_healthy": self._redis_healthy,
+            "redis_url": _REDIS_URL,
             "redis": self._redis_store.stats(),
             "lineage": self._lineage.stats(),
         }

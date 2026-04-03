@@ -35,6 +35,11 @@ import logging
 import os
 from typing import ClassVar
 
+# Maximum number of TWS reconnection attempts before giving up.
+_MAX_RECONNECT_ATTEMPTS = 3
+# Backoff multiplier (seconds) between reconnect attempts.
+_RECONNECT_BASE_DELAY = 1.0
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -288,8 +293,10 @@ class IBKRBroker:
 
         try:
             trade = self._ib.placeOrder(contract, ib_order)
-            # Give TWS a moment to acknowledge.
-            await asyncio.sleep(0.1)
+            # ib_insync.placeOrder() is synchronous — it submits the order to the
+            # local TWS message queue and returns a Trade object immediately.
+            # No sleep is needed; the TWS acknowledgement arrives asynchronously
+            # through the ib_insync event loop and is reflected in trade.orderStatus.
             logger.info(
                 "IBKR order placed | symbol=%s | action=%s | qty=%.2f | type=%s | order_id=%s",
                 symbol,
@@ -305,9 +312,60 @@ class IBKRBroker:
                 "status": trade.orderStatus.status,
                 "comment": "OK",
             }
-        except Exception:
-            logger.exception("IBKRBroker.place_order failed: %s")
-            return {"success": False, "order_id": 0, "comment": "Order failed — check server logs"}
+        except ConnectionError as exc:
+            logger.error(
+                "IBKRBroker.place_order: TWS connection lost | symbol=%s | error=%s",
+                symbol,
+                exc,
+            )
+            self.connected = False
+            return {
+                "success": False,
+                "order_id": 0,
+                "comment": f"TWS connection lost: {exc}",
+                "error_type": "connection",
+            }
+        except ValueError as exc:
+            logger.error(
+                "IBKRBroker.place_order: invalid order parameters | symbol=%s | error=%s",
+                symbol,
+                exc,
+            )
+            return {
+                "success": False,
+                "order_id": 0,
+                "comment": f"Invalid order parameters: {exc}",
+                "error_type": "validation",
+            }
+        except AttributeError as exc:
+            # ib_insync raises AttributeError when the IB object is in a bad state.
+            logger.error(
+                "IBKRBroker.place_order: IB session in bad state | symbol=%s | error=%s",
+                symbol,
+                exc,
+            )
+            self.connected = False
+            return {
+                "success": False,
+                "order_id": 0,
+                "comment": f"IB session state error: {exc}",
+                "error_type": "session",
+            }
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            # Catch-all for unexpected ib_insync exceptions (e.g. TWS rejection codes
+            # surfaced as generic exceptions). Log with full traceback so every
+            # failure mode is captured; return structured error to caller.
+            logger.exception(
+                "IBKRBroker.place_order: unexpected error | symbol=%s | error=%s",
+                symbol,
+                exc,
+            )
+            return {
+                "success": False,
+                "order_id": 0,
+                "comment": f"Order failed ({type(exc).__name__}): {exc}",
+                "error_type": "unexpected",
+            }
 
     async def cancel_order(self, order_id: int) -> dict:
         """Cancel a pending order by order ID."""
@@ -322,12 +380,16 @@ class IBKRBroker:
             }
         try:
             self._ib.cancelOrder(target.order)
-            await asyncio.sleep(0.1)
+            # cancelOrder() is synchronous — no artificial delay needed.
             logger.info("IBKR order cancelled | order_id=%s", order_id)
             return {"success": True, "comment": "OK"}
-        except Exception:
-            logger.exception("IBKRBroker.cancel_order failed: %s")
-            return {"success": False, "comment": "Cancel failed — check server logs"}
+        except ConnectionError as exc:
+            logger.error("IBKRBroker.cancel_order: TWS connection lost | order_id=%s | error=%s", order_id, exc)
+            self.connected = False
+            return {"success": False, "comment": f"TWS connection lost: {exc}", "error_type": "connection"}
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.exception("IBKRBroker.cancel_order: unexpected error | order_id=%s | error=%s", order_id, exc)
+            return {"success": False, "comment": f"Cancel failed ({type(exc).__name__}): {exc}", "error_type": "unexpected"}
 
     async def close_position(
         self,
@@ -374,7 +436,14 @@ class IBKRBroker:
         contract = _build_contract(symbol, sec_type, exchange, currency)
         try:
             ticker = self._ib.reqMktData(contract, "", True, False)
-            await asyncio.sleep(0.5)  # Allow snapshot to populate.
+            # Wait up to 2s for the snapshot to populate, checking every 50ms.
+            # This is far better than an unconditional sleep(0.5) because we
+            # exit as soon as real data arrives, saving up to 450ms per call.
+            deadline = asyncio.get_event_loop().time() + 2.0
+            while asyncio.get_event_loop().time() < deadline:
+                if ticker.bid and ticker.bid > 0 and ticker.ask and ticker.ask > 0:
+                    break
+                await asyncio.sleep(0.05)
             self._ib.cancelMktData(contract)
             bid = ticker.bid if ticker.bid and ticker.bid > 0 else None
             ask = ticker.ask if ticker.ask and ticker.ask > 0 else None
@@ -396,6 +465,26 @@ class IBKRBroker:
             logger.error("IBKRBroker.%s called before connect()", method)
             return False
         return True
+
+    async def reconnect(self) -> bool:
+        """
+        Attempt to reconnect to TWS / IB Gateway with exponential backoff.
+
+        Tries up to _MAX_RECONNECT_ATTEMPTS times.  Returns True when a
+        connection is (re-)established, False after all attempts fail.
+        """
+        logger.warning("IBKRBroker: attempting reconnect (was connected=%s)", self.connected)
+        await self.disconnect()
+        for attempt in range(1, _MAX_RECONNECT_ATTEMPTS + 1):
+            delay = _RECONNECT_BASE_DELAY * (2 ** (attempt - 1))
+            logger.info("IBKRBroker: reconnect attempt %d/%d in %.1fs...", attempt, _MAX_RECONNECT_ATTEMPTS, delay)
+            await asyncio.sleep(delay)
+            if await self.connect():
+                logger.info("IBKRBroker: reconnect succeeded on attempt %d", attempt)
+                return True
+            logger.warning("IBKRBroker: reconnect attempt %d failed", attempt)
+        logger.error("IBKRBroker: all %d reconnect attempts exhausted", _MAX_RECONNECT_ATTEMPTS)
+        return False
 
     def status(self) -> dict:
         """Return a health snapshot for monitoring."""
