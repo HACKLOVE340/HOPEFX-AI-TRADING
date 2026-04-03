@@ -433,7 +433,7 @@ class RLAgent:
                 dist = self._model.policy.get_distribution(obs_tensor)
                 probs = dist.distribution.probs.cpu().numpy()[0]
             confidence = float(probs[int(action)])
-        except Exception:
+        except Exception:  # nosec B110 — default confidence on prediction error
             confidence = 1.0 / 3
 
         return int(action), confidence

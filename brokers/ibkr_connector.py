@@ -527,7 +527,8 @@ class IBKRConnector(BrokerConnector):
                 try:
                     ticker = self._ib.reqTicker(pos.contract)
                     current_price = float(ticker.marketPrice()) if ticker and ticker.marketPrice() else 0.0
-                except Exception:
+                except Exception as _price_exc:
+                    logger.debug("Could not fetch market price for %s: %s", pos.contract.symbol, _price_exc)
                     current_price = 0.0
 
                 avg_cost = pos.avgCost

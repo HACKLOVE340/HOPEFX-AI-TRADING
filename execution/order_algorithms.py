@@ -55,7 +55,7 @@ try:
     _prom_fill_rate = Gauge("hopefx_exec_fill_rate", "Rolling fill rate (0-1)")
     _prom_avg_slip = Gauge("hopefx_exec_avg_slippage_bps", "Rolling avg slippage bps")
     _PROM_OK = True
-except Exception:
+except Exception:  # nosec B110 — Prometheus metrics optional
     _PROM_OK = False
 
 # ── XAUUSD hourly volume profile (normalised, 0-23 UTC) ──────────────────────

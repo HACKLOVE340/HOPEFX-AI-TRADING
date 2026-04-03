@@ -180,6 +180,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     if _BCRYPT_DIRECT:
         try:
             return _bcrypt_lib.checkpw(prepared, hashed_password.encode("utf-8"))
-        except Exception:
+        except (ValueError, TypeError) as exc:
+            logger.warning("bcrypt verification failed: %s", exc)
             return False
     return pwd_context.verify(prepared.decode("ascii"), hashed_password)

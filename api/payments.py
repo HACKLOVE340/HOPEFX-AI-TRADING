@@ -353,7 +353,7 @@ async def payment_webhook(
 
     try:
         payload = json.loads(raw_body)
-    except Exception:
+    except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from None
 
     payment_id = payload.get("payment_id")

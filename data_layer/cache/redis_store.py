@@ -438,7 +438,8 @@ class DataLayerRedisStore:
             if self._prom_mem_mb:
                 self._prom_mem_mb.set(mb)
             return mb
-        except Exception:
+        except Exception as exc:  # nosec B110 — memory metric is non-critical
+            logger.debug("memory_mb probe failed: %s", exc)
             return None
 
     def stats(self) -> dict[str, Any]:
@@ -479,7 +480,8 @@ class DataLayerRedisStore:
             return False
         try:
             return bool(self._r.ping())
-        except Exception:
+        except Exception as exc:  # nosec B110 — health-check resilience
+            logger.debug("Redis health_check ping failed: %s", exc)
             return False
 
     # ── Batch / pipeline operations ───────────────────────────────────────────
@@ -539,7 +541,7 @@ class DataLayerRedisStore:
                     try:
                         out[suffix] = json.loads(raw)
                         self._hits += 1
-                    except Exception:
+                    except (ValueError, TypeError):
                         self._misses += 1
                 else:
                     self._misses += 1
@@ -617,7 +619,8 @@ class DataLayerRedisStore:
             return 0
         try:
             return len(self._r.keys(pattern))
-        except Exception:
+        except Exception as exc:  # nosec B110 — non-critical metric fallback
+            logger.debug("count_keys failed: %s", exc)
             return 0
 
 

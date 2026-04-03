@@ -98,7 +98,7 @@ def _init_prometheus():
             )
 
         return _M()
-    except Exception:
+    except ImportError:
 
         class _Noop:
             class _C:
@@ -497,7 +497,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
             f1 = f1_score(t, p, zero_division=0)
             try:
                 auc = roc_auc_score(t, pr)
-            except Exception:
+            except ValueError:
                 auc = 0.5
             logger.info(
                 "Regime %-16s  n=%4d  acc=%.3f  f1=%.3f  auc=%.3f",

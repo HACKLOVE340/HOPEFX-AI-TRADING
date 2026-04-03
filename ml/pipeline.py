@@ -670,7 +670,7 @@ class MLPipeline:
 
             try:
                 auc = float(roc_auc_score(y_test, proba))
-            except Exception:
+            except (ValueError, TypeError):
                 auc = 0.5
 
             fold = WalkForwardFold(

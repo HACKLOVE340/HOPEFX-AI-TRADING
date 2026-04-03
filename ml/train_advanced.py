@@ -376,7 +376,7 @@ def walk_forward_eval(
         f1 = f1_score(y_test, preds, zero_division=0)
         try:
             auc = roc_auc_score(y_test, proba)
-        except Exception:
+        except ValueError:
             auc = 0.5
 
         fold_results.append(
@@ -495,7 +495,7 @@ def train_final_model(
     f1 = f1_score(y_test, preds, zero_division=0)
     try:
         auc = roc_auc_score(y_test, proba)
-    except Exception:
+    except ValueError:
         auc = 0.5
 
     logger.info("Final model  acc=%.3f  f1=%.3f  auc=%.3f", acc, f1, auc)
@@ -820,7 +820,7 @@ def oos_eval_advanced(
     f1 = f1_score(y_oos, preds, zero_division=0)
     try:
         auc = roc_auc_score(y_oos, proba)
-    except Exception:
+    except ValueError:
         auc = 0.5
 
     n = len(y_oos)

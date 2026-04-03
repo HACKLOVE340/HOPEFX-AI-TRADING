@@ -416,7 +416,7 @@ class PreTradeGate:
         if hasattr(rm, "_compute_cvar") and len(getattr(rm, "_returns_history", [])) >= 10:
             try:
                 return rm._compute_cvar()
-            except Exception:
+            except Exception:  # nosec B110 — optional CVaR computation
                 return None
         return None
 

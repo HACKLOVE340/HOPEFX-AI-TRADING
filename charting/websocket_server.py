@@ -110,7 +110,7 @@ class NuclearConnectionManager:
         for ws in connections:
             try:
                 await ws.send_text(payload)
-            except Exception:
+            except Exception:  # nosec B110
                 dead.add(ws)
         if dead:
             async with self._lock:
@@ -290,7 +290,7 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
 
             sup = get_nuclear_supervisor()
             status = sup.get_status()
-        except Exception:
+        except ImportError:
             status = {}
         return JSONResponse(
             {
@@ -351,7 +351,7 @@ async def _handle_client_message(ws: WebSocket, msg: dict, engine: NuclearAIChar
             from brain.nuclear_supervisor import get_nuclear_supervisor
 
             history = get_nuclear_supervisor().get_event_history(n)
-        except Exception:
+        except ImportError:
             history = []
         await _manager.send_to(
             ws,
@@ -380,7 +380,7 @@ async def _heartbeat_loop(ws: WebSocket) -> None:
                     }
                 )
             )
-        except Exception:
+        except Exception:  # nosec B110
             break
 
 

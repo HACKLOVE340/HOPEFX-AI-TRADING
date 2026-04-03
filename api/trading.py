@@ -67,6 +67,7 @@ def _get_kill_switch():
         _kill_switch_instance = _app_ks
         return _kill_switch_instance
     except Exception:
+        logger.debug("Kill switch singleton unavailable — kill switch checks disabled")
         return None
 
 
@@ -110,7 +111,8 @@ def _read_oos_meta() -> dict:
         _deployment_gate_cache["mtime"] = mtime
         _deployment_gate_cache["data"] = data
         return data
-    except Exception:
+    except Exception as _meta_exc:
+        logger.debug("OOS meta read failed (%s) — treating as gate not passed", _meta_exc)
         return {}
 
 
@@ -203,8 +205,8 @@ def _check_order_rate_limit(user_id: str) -> None:
             )
     except HTTPException:
         raise
-    except Exception:
-        # Redis unavailable — fall back to in-memory sliding window
+    except Exception as _rl_exc:
+        logger.warning("Redis rate-limit unavailable (%s) — falling back to in-memory window", _rl_exc)
         now = time.time()
         timestamps = _order_rl_cache.get(user_id, [])
         timestamps = [t for t in timestamps if now - t < _ORDER_RATE_WINDOW]

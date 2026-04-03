@@ -64,7 +64,7 @@ try:
     _prom_port_dd = Gauge("hopefx_intra_portfolio_dd_pct", "Current portfolio drawdown %")
     _prom_vol_ratio = Gauge("hopefx_intra_vol_ratio", "Current vol / baseline vol ratio")
     _PROM_OK = True
-except Exception:
+except Exception:  # nosec B110 — Prometheus metrics optional
     _PROM_OK = False
 
 

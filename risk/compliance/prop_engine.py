@@ -308,7 +308,7 @@ class PropComplianceEngine:
         if self._on_breach:
             try:
                 self._on_breach(breach_type, detail)
-            except Exception:
+            except Exception:  # nosec B110 — callback error logged below
                 logger.exception("on_breach callback raised")
 
     def _send_telegram_alert(self, message: str) -> None:

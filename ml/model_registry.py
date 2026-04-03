@@ -170,7 +170,7 @@ class ModelRegistry:
             with os.fdopen(tmp_fd, "w") as fh:
                 json.dump(manifest, fh, indent=2)
             Path(tmp_path).replace(self._path)
-        except Exception:
+        except Exception:  # nosec B110 — cleanup temp file before re-raise
             with contextlib.suppress(OSError):
                 Path(tmp_path).unlink()
             raise

@@ -54,7 +54,7 @@ def _get_app_state() -> Any:
         from core.app_state import app_state
 
         return app_state
-    except Exception:
+    except ImportError:
         return None
 
 
@@ -68,7 +68,8 @@ def _get_factor_engine() -> Any:
         from portfolio.factor_model import get_live_factor_engine
 
         return get_live_factor_engine()
-    except Exception:
+    except Exception as exc:  # nosec B110 — graceful fallback when module unavailable
+        logger.debug("_get_factor_engine unavailable: %s", exc)
         return None
 
 
@@ -82,7 +83,8 @@ def _get_rebalancer() -> Any:
         from portfolio.rebalancer import get_rebalancer
 
         return get_rebalancer()
-    except Exception:
+    except Exception as exc:  # nosec B110 — graceful fallback when module unavailable
+        logger.debug("_get_rebalancer unavailable: %s", exc)
         return None
 
 
@@ -96,7 +98,8 @@ def _get_tick_feed() -> Any:
         from data.tick_feed import get_tick_feed
 
         return get_tick_feed()
-    except Exception:
+    except Exception as exc:  # nosec B110 — graceful fallback when module unavailable
+        logger.debug("_get_tick_feed unavailable: %s", exc)
         return None
 
 

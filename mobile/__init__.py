@@ -22,27 +22,27 @@ from .trading import MobileTradingEngine
 # Unwired singletons — callers should instantiate with app_state for production
 try:
     mobile_api = MobileAPI()
-except Exception:
+except ImportError:
     mobile_api = None
 
 try:
     mobile_auth = MobileAuth()
-except Exception:
+except Exception:  # nosec B110 - singleton initialisation must not crash module load
     mobile_auth = None
 
 try:
     push_notification_manager = PushNotificationManager()
-except Exception:
+except Exception:  # nosec B110 - singleton initialisation must not crash module load
     push_notification_manager = None
 
 try:
     mobile_trading_engine = MobileTradingEngine()
-except Exception:
+except Exception:  # nosec B110 - singleton initialisation must not crash module load
     mobile_trading_engine = None
 
 try:
     mobile_analytics = MobileAnalytics()
-except Exception:
+except Exception:  # nosec B110 - singleton initialisation must not crash module load
     mobile_analytics = None
 
 

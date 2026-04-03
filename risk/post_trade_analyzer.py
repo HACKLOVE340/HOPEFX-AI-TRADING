@@ -68,7 +68,7 @@ try:
     _prom_fill_quality = Gauge("hopefx_post_trade_fill_quality", "Rolling avg fill quality score")
     _prom_adverse_sel = Counter("hopefx_post_trade_adverse_selection_total", "Adverse selection events")
     _PROM_OK = True
-except Exception:
+except Exception:  # nosec B110 — Prometheus metrics optional
     _PROM_OK = False
 
 

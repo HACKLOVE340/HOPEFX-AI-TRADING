@@ -85,7 +85,7 @@ async def _get_redis() -> Any:
             from cache.redis_client import get_redis as _get_redis_client
 
             _redis_client = await _get_redis_client()
-        except Exception:
+        except ImportError:
             # Fallback: direct URL
             try:
                 import redis.asyncio as aioredis
@@ -687,7 +687,7 @@ def _build_router(brain: HOPEFXBrain) -> APIRouter:
         raw = await redis.lrange("alerts:critical", -50, -1)
         try:
             return [json.loads(r) for r in raw]
-        except Exception:
+        except (ValueError, TypeError):
             return []
 
     @router.get("/lockdown")

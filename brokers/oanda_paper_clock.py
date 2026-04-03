@@ -132,7 +132,7 @@ class OandaPaperClock:
             started_dt = datetime.fromisoformat(started_utc_str)
             if started_dt.tzinfo is None:
                 started_dt = started_dt.replace(tzinfo=UTC)
-        except Exception:
+        except (ValueError, TypeError):
             started_dt = now
 
         from datetime import timedelta

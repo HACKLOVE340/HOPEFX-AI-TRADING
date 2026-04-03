@@ -267,7 +267,7 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
     try:
         with os.fdopen(fd, "w") as f:
             f.write(code)
-    except Exception:
+    except Exception:  # nosec B110 — close fd before re-raise
         os.close(fd)
         raise
 

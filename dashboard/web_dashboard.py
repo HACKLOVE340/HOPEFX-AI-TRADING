@@ -69,7 +69,7 @@ class DashboardWebSocketManager:
             for ws in self.clients:
                 try:
                     ws.send_str(message_str)
-                except Exception:
+                except Exception:  # nosec B110 — track disconnected WebSocket client
                     disconnected.append(ws)
 
             # Remove disconnected clients

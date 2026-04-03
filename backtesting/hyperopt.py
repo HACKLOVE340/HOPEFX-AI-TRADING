@@ -392,7 +392,7 @@ class HyperoptEngine:
             import optuna
 
             return optuna.importance.get_param_importances(self._study)
-        except Exception:
+        except ImportError:
             return {}
 
     def plot_optimization_history(self):
@@ -403,7 +403,7 @@ class HyperoptEngine:
             import optuna.visualization as vis
 
             return vis.plot_optimization_history(self._study)
-        except Exception:
+        except ImportError:
             return None
 
     def plot_param_importances(self):
@@ -414,7 +414,7 @@ class HyperoptEngine:
             import optuna.visualization as vis
 
             return vis.plot_param_importances(self._study)
-        except Exception:
+        except ImportError:
             return None
 
 

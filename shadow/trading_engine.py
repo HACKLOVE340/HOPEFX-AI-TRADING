@@ -67,7 +67,7 @@ try:
     _prom_shadow_equity = Gauge("hopefx_shadow_equity_usd", "Shadow equity USD")
     _prom_live_gap = Gauge("hopefx_shadow_live_pnl_gap_usd", "Shadow vs live PnL gap USD")
     _PROM_OK = True
-except Exception:
+except Exception:  # nosec B110 — Prometheus metrics optional
     _PROM_OK = False
 
 

@@ -253,7 +253,7 @@ def _get_redis():
         client = _redis.from_url(url, decode_responses=True, socket_timeout=2)
         client.ping()
         return client
-    except Exception:
+    except Exception:  # nosec B110 - Redis may be unavailable at startup
         return None
 
 

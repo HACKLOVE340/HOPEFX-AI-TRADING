@@ -11,11 +11,14 @@ Monte Carlo simulation with GARCH volatility and copula correlation
 
 from dataclasses import dataclass
 from decimal import Decimal
+import logging
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.optimize import minimize
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -266,7 +269,7 @@ class RealTimeRiskMonitor:
 
     def _trigger_kill_switch(self, violations: list[str]):
         """Emergency position reduction"""
-        print(f"🚨 RISK LIMIT BREACH: {', '.join(violations)}")
+        logger.critical("RISK LIMIT BREACH: %s", ", ".join(violations))
         self.kill_switch_triggered = True
         # Signal to close all positions
 

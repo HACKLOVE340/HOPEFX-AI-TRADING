@@ -137,7 +137,7 @@ try:
         buckets=[1, 5, 10, 25, 50, 100, 250],
     )
     _PROM_OK = True
-except Exception:
+except ImportError:
     _PROM_OK = False
 
 

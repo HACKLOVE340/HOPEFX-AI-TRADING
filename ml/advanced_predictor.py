@@ -156,7 +156,7 @@ class _SGDAdapter:
             try:
                 proba = self._clf.predict_proba(X.reshape(1, -1))
                 return float(proba[0][1])
-            except Exception:
+            except Exception:  # nosec B110 — return None on prediction failure
                 return None
 
     @property
