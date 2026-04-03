@@ -255,7 +255,7 @@ class PositionManager:
         logger.info("PositionManager initialised (redis=%s)", redis_client is not None)
 
     @staticmethod
-    def _make_span_ctx(span_name: str):
+    def _make_span_ctx(span_name: str) -> Any:
         """Return an OTel span context manager for *span_name*.
 
         Lazily imports ``api.tracing.get_tracer`` to avoid circular imports.

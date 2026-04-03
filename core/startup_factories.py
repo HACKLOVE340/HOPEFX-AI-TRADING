@@ -80,7 +80,7 @@ async def init_env(s: Any) -> bool:
         os.environ["SECURITY_JWT_SECRET"] = ephemeral_jwt
         logger.warning(
             "SECURITY_JWT_SECRET not set — using ephemeral random secret for this session only. "
-            "All existing JWT tokens are invalid after restart. "
+            "ALL JWT tokens become INVALID after a process restart (new secret generated each time). "
             "Set SECURITY_JWT_SECRET in .env before deploying to production."
         )
 
