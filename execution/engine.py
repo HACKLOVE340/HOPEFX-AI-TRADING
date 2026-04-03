@@ -47,8 +47,28 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
-# Enums / data classes
+# No-op OTel context manager (used when opentelemetry-sdk is not installed)
 # ---------------------------------------------------------------------------
+
+
+class _NullSpanCtx:
+    """Minimal no-op context manager used when OTel tracing is unavailable.
+
+    Implements the same interface used in ``execute()`` so all span code paths
+    degrade gracefully without branching everywhere.
+    """
+
+    def set_attribute(self, *_: Any, **__: Any) -> None:  # noqa: D401
+        pass
+
+    def add_event(self, *_: Any, **__: Any) -> None:  # noqa: D401
+        pass
+
+    def __enter__(self) -> "_NullSpanCtx":
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        pass
 
 
 class ExecutionStatus(Enum):
@@ -332,34 +352,151 @@ class ExecutionEngine:
 
         Returns ExecutionReport — never raises.
         """
-        t0 = time.monotonic()
-        self._total_orders += 1
+        # ── OTel instrumentation — lazy import avoids circular dependencies ──
+        try:
+            from api.tracing import get_tracer as _get_tracer  # type: ignore[import]
 
-        request = self._enrich_price_from_data_layer(request, t0)
-        if isinstance(request, ExecutionReport):
-            return request  # data-layer block
+            _tracer = _get_tracer("hopefx.execution")
+        except Exception:
+            _tracer = None
 
-        request = self._enrich_price_from_tick_feed(request)
+        _root_span_ctx = (
+            _tracer.start_as_current_span("execution.execute")
+            if _tracer is not None
+            else _NullSpanCtx()
+        )
 
-        block = self._check_pre_submission_guards(request, t0)
-        if block is not None:
-            return block
+        with _root_span_ctx as _root_span:
+            # Attach request attributes to the root span
+            try:
+                _root_span.set_attribute("symbol", request.symbol)
+                _root_span.set_attribute("side", request.side)
+                _root_span.set_attribute("quantity", request.quantity)
+                _root_span.set_attribute("strategy_id", request.strategy_id)
+                _root_span.set_attribute("request_id", request.request_id)
+                _root_span.set_attribute("order_type", request.order_type)
+            except Exception:
+                pass
 
-        block = await self._check_pre_trade_gate(request, t0)
-        if block is not None:
-            return block
+            t0 = time.monotonic()
+            self._total_orders += 1
 
-        algo_report = await self._try_algo_routing(request, t0)
-        if algo_report is not None:
-            return algo_report
+            request = self._enrich_price_from_data_layer(request, t0)
+            if isinstance(request, ExecutionReport):
+                try:
+                    _root_span.add_event("data_layer.blocked", {"reason": request.message})
+                except Exception:
+                    pass
+                return request  # data-layer block
 
-        block = self._check_sharpe_circuit_breaker(request, t0)
-        if block is not None:
-            return block
+            request = self._enrich_price_from_tick_feed(request)
 
-        self._record_tca_signal_price(request)
+            block = self._check_pre_submission_guards(request, t0)
+            if block is not None:
+                try:
+                    is_ks = "[KILL_SWITCH]" in block.message
+                    _root_span.add_event(
+                        "kill_switch.active" if is_ks else "engine.stopped",
+                        {"reason": block.message},
+                    )
+                except Exception:
+                    pass
+                return block
 
-        return await self._submit_and_process(request, t0)
+            # ── pre_trade_gate child span ─────────────────────────────────
+            _gate_ctx = (
+                _tracer.start_as_current_span("execution.pre_trade_gate")
+                if _tracer is not None
+                else _NullSpanCtx()
+            )
+            with _gate_ctx as _gate_span:
+                try:
+                    _gate_span.set_attribute("symbol", request.symbol)
+                except Exception:
+                    pass
+                block = await self._check_pre_trade_gate(request, t0)
+                if block is not None:
+                    try:
+                        is_cb = "[CIRCUIT_BREAKER]" in block.message
+                        _gate_span.add_event(
+                            "circuit_breaker.open" if is_cb else "gate.blocked",
+                            {"reason": block.message},
+                        )
+                        _root_span.add_event(
+                            "circuit_breaker.open" if is_cb else "gate.blocked",
+                            {"reason": block.message},
+                        )
+                    except Exception:
+                        pass
+                    return block
+                try:
+                    _gate_span.add_event("gate.passed")
+                except Exception:
+                    pass
+
+            algo_report = await self._try_algo_routing(request, t0)
+            if algo_report is not None:
+                try:
+                    _root_span.add_event("algo.routed", {"algo_id": str(algo_report.metadata.get("algo_id", ""))})
+                except Exception:
+                    pass
+                return algo_report
+
+            block = self._check_sharpe_circuit_breaker(request, t0)
+            if block is not None:
+                try:
+                    _root_span.add_event("sharpe_circuit_breaker.open", {"reason": block.message})
+                except Exception:
+                    pass
+                return block
+
+            self._record_tca_signal_price(request)
+
+            # ── broker_submit child span ──────────────────────────────────
+            _broker_ctx = (
+                _tracer.start_as_current_span("execution.broker_submit")
+                if _tracer is not None
+                else _NullSpanCtx()
+            )
+            with _broker_ctx as _broker_span:
+                try:
+                    _broker_span.set_attribute("symbol", request.symbol)
+                    _broker_span.set_attribute("side", request.side)
+                    _broker_span.set_attribute("quantity", request.quantity)
+                except Exception:
+                    pass
+
+                report = await self._submit_and_process(request, t0)
+
+                # ── post_fill child span ──────────────────────────────────
+                _fill_ctx = (
+                    _tracer.start_as_current_span("execution.post_fill")
+                    if _tracer is not None
+                    else _NullSpanCtx()
+                )
+                with _fill_ctx as _fill_span:
+                    try:
+                        if report.success:
+                            _fill_span.add_event(
+                                "fill.success",
+                                {
+                                    "order_id": str(report.order_id or ""),
+                                    "filled_qty": report.filled_quantity,
+                                    "avg_price": report.average_price,
+                                    "latency_ms": report.latency_ms,
+                                },
+                            )
+                            _root_span.add_event("fill.success", {"order_id": str(report.order_id or "")})
+                        else:
+                            _fill_span.add_event("fill.failure", {"reason": report.message})
+                            _root_span.add_event("fill.failure", {"reason": report.message})
+                        _fill_span.set_attribute("status", report.status.value)
+                        _root_span.set_attribute("execution.status", report.status.value)
+                        _root_span.set_attribute("execution.latency_ms", report.latency_ms)
+                    except Exception:
+                        pass
+
+                return report
 
     # ------------------------------------------------------------------
     # execute() sub-steps — each ≤ 30 lines, independently testable
