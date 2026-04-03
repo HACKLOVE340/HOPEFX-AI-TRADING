@@ -34,9 +34,6 @@ try:
         Histogram,
         generate_latest,
     )
-    from prometheus_client import (
-        REGISTRY as _DEFAULT_REGISTRY,
-    )
 
     _PROM_AVAILABLE = True
 except ImportError:

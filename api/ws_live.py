@@ -53,7 +53,7 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -388,15 +388,18 @@ def _atr_from_buffer(symbol: str) -> float | None:
     try:
         from core.signal_engine import _data_buffers  # type: ignore[attr-defined]
         import numpy as _np
+
         broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
         buf = _data_buffers.get(broker_sym) or _data_buffers.get(symbol)
-        if buf is not None and len(buf) >= 15:  # noqa: PLR2004
+        if buf is not None and len(buf) >= 15:
             bars = list(buf)[-15:]
             highs = _np.array([b["high"] for b in bars], dtype=float)
             lows = _np.array([b["low"] for b in bars], dtype=float)
             closes = _np.array([b["close"] for b in bars], dtype=float)
-            tr = _np.maximum(highs[1:] - lows[1:], _np.maximum(_np.abs(highs[1:] - closes[:-1]), _np.abs(lows[1:] - closes[:-1])))
-            if len(tr) >= 14:  # noqa: PLR2004
+            tr = _np.maximum(
+                highs[1:] - lows[1:], _np.maximum(_np.abs(highs[1:] - closes[:-1]), _np.abs(lows[1:] - closes[:-1]))
+            )
+            if len(tr) >= 14:
                 return float(_np.mean(tr[-14:]))
     except Exception as exc:
         logger.debug("_atr_from_buffer failed: %s", exc)
@@ -409,17 +412,20 @@ def _atr_from_csv(symbol: str) -> float | None:
         import pathlib
         import numpy as _np
         import pandas as _pd
+
         broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
         csv_path = pathlib.Path(f"data/{broker_sym}_H1.csv")
         if not csv_path.exists():
             csv_path = pathlib.Path(f"data/{symbol.replace('/', '')}_H1.csv")
         if csv_path.exists():
             df = _pd.read_csv(csv_path, usecols=["high", "low", "close"]).tail(20)
-            if len(df) >= 15:  # noqa: PLR2004
+            if len(df) >= 15:
                 highs = df["high"].to_numpy(dtype=float)
                 lows = df["low"].to_numpy(dtype=float)
                 closes = df["close"].to_numpy(dtype=float)
-                tr = _np.maximum(highs[1:] - lows[1:], _np.maximum(_np.abs(highs[1:] - closes[:-1]), _np.abs(lows[1:] - closes[:-1])))
+                tr = _np.maximum(
+                    highs[1:] - lows[1:], _np.maximum(_np.abs(highs[1:] - closes[:-1]), _np.abs(lows[1:] - closes[:-1]))
+                )
                 return float(_np.mean(tr[-14:]))
     except Exception as exc:
         logger.debug("_atr_from_csv failed: %s", exc)
@@ -700,24 +706,24 @@ def start_broadcasters() -> None:
 @router.websocket("/ws/live")
 async def ws_live(websocket: WebSocket) -> None:
     """
-    Main live WebSocket endpoint.
+        Main live WebSocket endpoint.
 
-    Auth flow:
-      1. Server accepts connection and sends { "type": "connected" }
-async def _ws_auth_gate(cid: str, websocket: WebSocket) -> bool:
-         within AUTH_TIMEOUT_SECONDS, or connection is closed (4001).
-      3. Server sends { "type": "auth_ok", "user_id": "..." }
-      4. Client subscribes to channels and receives live data.
+        Auth flow:
+          1. Server accepts connection and sends { "type": "connected" }
+    async def _ws_auth_gate(cid: str, websocket: WebSocket) -> bool:
+             within AUTH_TIMEOUT_SECONDS, or connection is closed (4001).
+          3. Server sends { "type": "auth_ok", "user_id": "..." }
+          4. Client subscribes to channels and receives live data.
 
-    Heartbeat:
-      Server sends { "type": "heartbeat" } every HEARTBEAT_INTERVAL_SECONDS.
-      Client should respond with { "type": "ping" } to reset the miss counter.
-      After HEARTBEAT_MISS_LIMIT missed heartbeats the connection is closed (1001).
+        Heartbeat:
+          Server sends { "type": "heartbeat" } every HEARTBEAT_INTERVAL_SECONDS.
+          Client should respond with { "type": "ping" } to reset the miss counter.
+          After HEARTBEAT_MISS_LIMIT missed heartbeats the connection is closed (1001).
 
-    Rate limiting:
-      Max WS_MAX_CONNECTIONS_PER_IP concurrent connections per IP (default 10).
-      Max WS_MAX_CONNECTIONS_PER_MINUTE new connections per IP per minute (default 20).
-      Excess connections are rejected with close code 1008 before accept().
+        Rate limiting:
+          Max WS_MAX_CONNECTIONS_PER_IP concurrent connections per IP (default 10).
+          Max WS_MAX_CONNECTIONS_PER_MINUTE new connections per IP per minute (default 20).
+          Excess connections are rejected with close code 1008 before accept().
     """
     from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
 
@@ -771,11 +777,15 @@ async def _ws_auth_gate(cid: str, websocket: WebSocket) -> bool:
                 await websocket.close(code=4001)
                 _manager.disconnect(cid)
                 return
+        except Exception:
+            _manager.disconnect(cid)
+            return
 
     try:
         await _ws_message_loop(cid, websocket)
     finally:
         from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+
         await get_ws_limiter().release(get_client_ip(websocket))
 
 
@@ -785,7 +795,10 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
         raw = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
         msg = json.loads(raw)
         if msg.get("type") != "auth":
-            await _manager.send(cid, {"type": "error", "code": "AUTH_REQUIRED", "message": "First message must be {type: auth, token: ...}"})
+            await _manager.send(
+                cid,
+                {"type": "error", "code": "AUTH_REQUIRED", "message": "First message must be {type: auth, token: ...}"},
+            )
             await websocket.close(code=4001)
             _manager.disconnect(cid)
             return False
@@ -800,7 +813,9 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
         await _manager.send(cid, {"type": "auth_ok", "user_id": user_id, "role": payload.get("role", "trader")})
         return True
     except TimeoutError:
-        await _manager.send(cid, {"type": "error", "code": "AUTH_TIMEOUT", "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s"})
+        await _manager.send(
+            cid, {"type": "error", "code": "AUTH_TIMEOUT", "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s"}
+        )
         await websocket.close(code=4001)
         _manager.disconnect(cid)
         return False
@@ -833,7 +848,9 @@ async def _ws_handle_message(cid: str, msg: dict) -> None:
         else:
             await _manager.send(cid, {"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
     else:
-        await _manager.send(cid, {"type": "error", "code": "UNKNOWN_MESSAGE_TYPE", "message": f"Unknown message type: {msg_type}"})
+        await _manager.send(
+            cid, {"type": "error", "code": "UNKNOWN_MESSAGE_TYPE", "message": f"Unknown message type: {msg_type}"}
+        )
 
 
 async def _ws_message_loop(cid: str, websocket: Any) -> None:
@@ -844,7 +861,9 @@ async def _ws_message_loop(cid: str, websocket: Any) -> None:
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
-                await _manager.send(cid, {"type": "error", "code": "INVALID_JSON", "message": "Message must be valid JSON"})
+                await _manager.send(
+                    cid, {"type": "error", "code": "INVALID_JSON", "message": "Message must be valid JSON"}
+                )
                 continue
             await _ws_handle_message(cid, msg)
     except WebSocketDisconnect:
@@ -853,6 +872,8 @@ async def _ws_message_loop(cid: str, websocket: Any) -> None:
         logger.error("WS live error [%s]: %s", cid, exc)
         _manager.disconnect(cid)
     finally:
+        from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
+
         await get_ws_limiter().release(get_client_ip(websocket))
 
 

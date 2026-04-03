@@ -1139,12 +1139,33 @@ import uuid as _uuid
 _strategy_store: dict[str, dict] = {}
 
 
-def _make_strategy_router():
-    """Return a sub-router with the strategy CRUD + position-size endpoints."""
-    _r = APIRouter()  # no prefix — parent router already has /api/trading
+def _resolve(strategy_id: str) -> str | None:
+    """Return the store key for a strategy_id, or None if not found."""
+    if strategy_id in _strategy_store:
+        return strategy_id
+    for k, v in _strategy_store.items():
+        if v.get("name") == strategy_id:
+            return k
+    return None
 
 
-def _register_strategy_crud(r: Any) -> None:  # noqa: C901
+def _resolve_strategy_key(strategy_id: str) -> str | None:
+    """Alias for _resolve — kept for clarity at call sites."""
+    return _resolve(strategy_id)
+
+
+def _compute_max_drawdown(values: list[float]) -> float:
+    """Return the maximum drawdown fraction from a sequence of equity values."""
+    peak = values[0] if values else 0.0
+    max_dd = 0.0
+    for v in values:
+        peak = max(peak, v)
+        dd = (peak - v) / peak if peak > 0 else 0.0
+        max_dd = max(max_dd, dd)
+    return max_dd
+
+
+def _register_strategy_crud(r: Any) -> None:
     """Register strategy list/create/get/delete/start/stop routes."""
     from fastapi import HTTPException
 
@@ -1169,7 +1190,17 @@ def _register_strategy_crud(r: Any) -> None:  # noqa: C901
         if req.strategy_type not in _KNOWN:
             raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}")
         sid = str(_uuid.uuid4())[:8]
-        record = {"id": sid, "name": req.name, "symbol": req.symbol, "timeframe": req.timeframe, "strategy_type": req.strategy_type, "type": req.strategy_type, "enabled": req.enabled, "parameters": req.parameters, "risk_per_trade": req.risk_per_trade}
+        record = {
+            "id": sid,
+            "name": req.name,
+            "symbol": req.symbol,
+            "timeframe": req.timeframe,
+            "strategy_type": req.strategy_type,
+            "type": req.strategy_type,
+            "enabled": req.enabled,
+            "parameters": req.parameters,
+            "risk_per_trade": req.risk_per_trade,
+        }
         _strategy_store[sid] = record
         return record
 
@@ -1205,18 +1236,23 @@ def _register_strategy_crud(r: Any) -> None:  # noqa: C901
         return {"status": "stopped", "strategy_id": strategy_id}
 
 
-def _register_risk_performance_routes(r: Any) -> None:  # noqa: C901,PLR0915
+def _register_risk_performance_routes(r: Any) -> None:
     """Register position-size, risk-metrics, and performance routes."""
     from fastapi import HTTPException
     import math as _math
 
     @r.post("/position-size")
     def calculate_position_size(req: PositionSizeRequest):
-        risk_per_unit = (req.entry_price - req.stop_loss_price) if (req.stop_loss_price and req.stop_loss_price < req.entry_price) else req.entry_price * 0.01
+        risk_per_unit = (
+            (req.entry_price - req.stop_loss_price)
+            if (req.stop_loss_price and req.stop_loss_price < req.entry_price)
+            else req.entry_price * 0.01
+        )
         risk_amount = req.account_equity * req.risk_pct * req.confidence
         fomc_multiplier = 1.0
         try:
             from api.calendar import _fomc_regime_override
+
             if _fomc_regime_override.get("active"):
                 fomc_multiplier = _fomc_regime_override.get("position_size_multiplier", 1.0)
         except Exception as exc:
@@ -1224,7 +1260,12 @@ def _register_risk_performance_routes(r: Any) -> None:  # noqa: C901,PLR0915
 
         size = (risk_amount / risk_per_unit if risk_per_unit > 0 else 0.0) * fomc_multiplier
         tp = req.entry_price + risk_per_unit * 2 if req.stop_loss_price else None
-        return PositionSizeResponse(size=round(size, 4), risk_amount=round(risk_amount * fomc_multiplier, 2), stop_loss_price=req.stop_loss_price, take_profit_price=tp)
+        return PositionSizeResponse(
+            size=round(size, 4),
+            risk_amount=round(risk_amount * fomc_multiplier, 2),
+            stop_loss_price=req.stop_loss_price,
+            take_profit_price=tp,
+        )
 
     @r.get("/risk-metrics")
     def get_risk_metrics():
@@ -1245,7 +1286,13 @@ def _register_risk_performance_routes(r: Any) -> None:  # noqa: C901,PLR0915
                     max_dd = _compute_max_drawdown([v for _, v in history])
             open_count = len(positions)
             risk_score = min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1))
-            return {"daily_pnl": round(daily_pnl, 2), "max_drawdown": round(max_dd * 100, 3), "open_positions": open_count, "margin_used": round(margin_used, 2), "risk_score": risk_score}
+            return {
+                "daily_pnl": round(daily_pnl, 2),
+                "max_drawdown": round(max_dd * 100, 3),
+                "open_positions": open_count,
+                "margin_used": round(margin_used, 2),
+                "risk_score": risk_score,
+            }
         except Exception as exc:
             logger.debug("risk-metrics fallback: %s", exc)
             return {"daily_pnl": 0.0, "max_drawdown": 0.0, "open_positions": 0, "margin_used": 0.0, "risk_score": 0.0}
@@ -1296,7 +1343,15 @@ def _register_risk_performance_routes(r: Any) -> None:  # noqa: C901,PLR0915
             }
         except Exception as exc:
             logger.debug("performance/summary fallback: %s", exc)
-            return {"total_return": 0.0, "sharpe_ratio": 0.0, "max_drawdown": 0.0, "win_rate": 0.0, "total_trades": 0, "period_days": 30, "total_strategies": len(_strategy_store)}
+            return {
+                "total_return": 0.0,
+                "sharpe_ratio": 0.0,
+                "max_drawdown": 0.0,
+                "win_rate": 0.0,
+                "total_trades": 0,
+                "period_days": 30,
+                "total_strategies": len(_strategy_store),
+            }
 
     @r.get("/performance/{strategy_id}")
     def get_strategy_performance(strategy_id: str):
@@ -1312,24 +1367,11 @@ def _register_risk_performance_routes(r: Any) -> None:  # noqa: C901,PLR0915
             "total_trades": 0,
         }
 
-    @_r.post("/strategies/{strategy_id}/start")
-    def start_strategy(strategy_id: str):
-        key = _resolve(strategy_id)
-        if key is None:
-            raise HTTPException(404, "Strategy not found")
-        return {"strategy_id": strategy_id, "total_return": 0.0, "sharpe_ratio": 0.0, "max_drawdown": 0.0, "win_rate": 0.0, "total_trades": 0}
-
-    @_r.post("/strategies/{strategy_id}/stop")
-    def stop_strategy(strategy_id: str):
-        key = _resolve(strategy_id)
-        if key is None:
-            raise HTTPException(404, "Strategy not found")
-        _strategy_store[key]["enabled"] = False
-        return {"status": "stopped", "strategy_id": strategy_id}
 
 def _make_strategy_router():
     """Return a sub-router with strategy CRUD, position-size, and performance endpoints."""
     from fastapi import APIRouter
+
     _r = APIRouter()
     _register_strategy_crud(_r)
     _register_risk_performance_routes(_r)
