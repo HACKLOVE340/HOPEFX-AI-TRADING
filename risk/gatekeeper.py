@@ -175,6 +175,11 @@ class Gatekeeper:
         self._running: bool = False
         self._pass_count: int = 0
         self._block_count: int = 0
+        # Lock protects all mutable counters (_daily_trades, _pass_count,
+        # _block_count, _trade_day, _paused_until) from concurrent asyncio tasks.
+        # Without this lock, concurrent signals can race and undercount trades,
+        # potentially bypassing MAX_DAILY_TRADES limits.
+        self._lock = asyncio.Lock()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -207,17 +212,23 @@ class Gatekeeper:
 
         Consumes orchestrator data for quality, sentiment, and blackout checks.
         Returns GateResult(passed=True) if all checks pass.
+
+        Thread-safety: all mutable counter mutations are protected by
+        self._lock to prevent race conditions when multiple signals are
+        evaluated concurrently.
         """
-        self._reset_daily_counter()
-        failures = self._run_checks_on_signal(signal)
+        async with self._lock:
+            self._reset_daily_counter_locked()
+            failures = self._run_checks_on_signal(signal)
 
-        if not failures:
-            self._pass_count += 1
-            self._daily_trades += 1
-            return GateResult(passed=True)
+            if not failures:
+                self._pass_count += 1
+                self._daily_trades += 1
+                return GateResult(passed=True)
 
-        self._block_count += 1
-        primary = failures[0]["reason"]
+            self._block_count += 1
+            primary = failures[0]["reason"]
+
         logger.warning(
             "GATE BLOCK signal_id=%s reason=%s all_failures=%s",
             getattr(signal, "signal_id", "?"),
@@ -226,8 +237,9 @@ class Gatekeeper:
         )
         self._write_rejection_lineage(signal, primary, failures)
 
-        if primary != "kill_switch_active":
-            self._paused_until = time.monotonic() + _PAUSE_AFTER_BREACH_S
+        async with self._lock:
+            if primary != "kill_switch_active":
+                self._paused_until = time.monotonic() + _PAUSE_AFTER_BREACH_S
 
         return GateResult(passed=False, reason=primary, failures=failures)
 
@@ -260,12 +272,19 @@ class Gatekeeper:
                 logger.critical("Gatekeeper: kill event received — all trading halted.")
 
     async def _on_bus_signal(self, signal: dict) -> None:
-        self._reset_daily_counter()
-        failures = self._run_checks_on_dict(signal)
+        async with self._lock:
+            self._reset_daily_counter_locked()
+            failures = self._run_checks_on_dict(signal)
 
-        if not failures:
-            self._pass_count += 1
-            self._daily_trades += 1
+            if not failures:
+                self._pass_count += 1
+                self._daily_trades += 1
+                should_pass = True
+            else:
+                self._block_count += 1
+                should_pass = False
+
+        if should_pass:
             order_request = {
                 "type": "order_request",
                 "symbol": signal.get("symbol"),
@@ -283,7 +302,6 @@ class Gatekeeper:
             )
             await bus.publish_order(order_request)
         else:
-            self._block_count += 1
             primary = failures[0]["reason"]
             breach = {
                 "type": "breach",
@@ -295,8 +313,9 @@ class Gatekeeper:
                 "timestamp": datetime.now(UTC).isoformat(),
             }
             await bus.publish_breach(breach)
-            if primary != "kill_switch_active":
-                self._paused_until = time.monotonic() + _PAUSE_AFTER_BREACH_S
+            async with self._lock:
+                if primary != "kill_switch_active":
+                    self._paused_until = time.monotonic() + _PAUSE_AFTER_BREACH_S
 
     # ── Core checks ───────────────────────────────────────────────────────────
 
@@ -468,7 +487,7 @@ class Gatekeeper:
             return 1.0
         try:
             tick = getattr(self, "_orch", None) and self._orch.get_latest_tick()
-            return tick.confidence if tick else 1.0
+            return float(tick.confidence) if tick else 1.0
         except Exception:
             return 1.0
 
@@ -513,7 +532,7 @@ class Gatekeeper:
         if getattr(self, "_orch", None) is None:
             return 0.0
         try:
-            return self._orch.get_macro_impact_score()
+            return float(self._orch.get_macro_impact_score())
         except Exception:
             return 0.0
 
@@ -521,7 +540,7 @@ class Gatekeeper:
         score = self._get_sentiment_from_orch()
         if score != 0.0:
             return score
-        return getattr(signal, "sentiment_score", 0.0)
+        return float(getattr(signal, "sentiment_score", 0.0))
 
     def _get_sentiment_from_orch(self) -> float:
         if getattr(self, "_orch", None) is None:
@@ -535,6 +554,20 @@ class Gatekeeper:
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _reset_daily_counter(self) -> None:
+        """Reset daily trade counter when the calendar day rolls over.
+
+        WARNING: Must only be called while holding self._lock to prevent
+        a race condition where two concurrent tasks both see a stale day
+        and both reset the counter, causing one trade to be double-counted.
+        Use _reset_daily_counter_locked() from within locked sections.
+        """
+        today = datetime.now(UTC).day
+        if today != self._trade_day:
+            self._daily_trades = 0
+            self._trade_day = today
+
+    def _reset_daily_counter_locked(self) -> None:
+        """Thread-safe daily counter reset.  Call only while holding self._lock."""
         today = datetime.now(UTC).day
         if today != self._trade_day:
             self._daily_trades = 0

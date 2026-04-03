@@ -170,6 +170,45 @@ _ORDER_RATE_LIMIT = int(os.getenv("ORDER_RATE_LIMIT", "10"))
 _ORDER_RATE_WINDOW = int(os.getenv("ORDER_RATE_WINDOW", "60"))  # seconds
 _order_rl_cache: dict = {}  # in-memory fallback: {user_id: [timestamps]}
 
+# ---------------------------------------------------------------------------
+# Module-level Redis connection pool for order rate limiting.
+# Created once on first use and reused for all subsequent calls.
+# This avoids the cost of creating a new TCP connection on every order request
+# (previous implementation created a fresh Redis connection per call, which
+# adds ~5-30ms of latency and exhausts file descriptors under load).
+# ---------------------------------------------------------------------------
+_redis_pool = None
+_redis_pool_lock = None
+
+
+def _get_redis_pool():
+    """Return (or lazily create) the module-level Redis connection pool."""
+    global _redis_pool, _redis_pool_lock
+    if _redis_pool is not None:
+        return _redis_pool
+    try:
+        import redis as _redis
+
+        # ConnectionPool is thread-safe and reuses existing connections.
+        # max_connections=10 is conservative — increase via REDIS_POOL_MAX_CONN.
+        _redis_pool = _redis.ConnectionPool(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
+            max_connections=int(os.getenv("REDIS_POOL_MAX_CONN", "10")),
+            socket_connect_timeout=0.5,
+            decode_responses=True,
+        )
+        logger.info(
+            "Trading API: Redis connection pool created (host=%s port=%s max_conn=%s)",
+            os.getenv("REDIS_HOST", "localhost"),
+            os.getenv("REDIS_PORT", "6379"),
+            os.getenv("REDIS_POOL_MAX_CONN", "10"),
+        )
+        return _redis_pool
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("Trading API: could not create Redis pool: %s — rate limiting will use in-memory fallback", exc)
+        return None
+
 
 def _reset_order_rl_cache() -> None:
     """Clear the in-memory rate-limit cache. Used by tests to prevent bleed."""
@@ -177,48 +216,50 @@ def _reset_order_rl_cache() -> None:
 
 
 def _check_order_rate_limit(user_id: str) -> None:
-    """Raise HTTP 429 if the user has exceeded the order rate limit."""
-    try:
-        import redis as _redis
+    """Raise HTTP 429 if the user has exceeded the order rate limit.
 
-        r = _redis.Redis(
-            host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", "6379")),
-            socket_connect_timeout=0.5,
-            decode_responses=True,
-            retry_on_error=[],
-            retry=None,
-        )
-        key = f"order_rl:{user_id}"
-        now = time.time()
-        pipe = r.pipeline()
-        pipe.zremrangebyscore(key, 0, now - _ORDER_RATE_WINDOW)
-        pipe.zadd(key, {str(now): now})
-        pipe.zcard(key)
-        pipe.expire(key, _ORDER_RATE_WINDOW + 1)
-        results = pipe.execute()
-        count = results[2]
-        if count > _ORDER_RATE_LIMIT:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Order rate limit exceeded: max {_ORDER_RATE_LIMIT} orders per {_ORDER_RATE_WINDOW}s",
-                headers={"Retry-After": str(_ORDER_RATE_WINDOW)},
-            )
-    except HTTPException:
-        raise
-    except Exception as _rl_exc:
-        logger.warning("Redis rate-limit unavailable (%s) — falling back to in-memory window", _rl_exc)
-        now = time.time()
-        timestamps = _order_rl_cache.get(user_id, [])
-        timestamps = [t for t in timestamps if now - t < _ORDER_RATE_WINDOW]
-        timestamps.append(now)
-        _order_rl_cache[user_id] = timestamps
-        if len(timestamps) > _ORDER_RATE_LIMIT:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Order rate limit exceeded: max {_ORDER_RATE_LIMIT} orders per {_ORDER_RATE_WINDOW}s",
-                headers={"Retry-After": str(_ORDER_RATE_WINDOW)},
-            ) from None
+    Uses the module-level Redis connection pool when available, falling back
+    to an in-memory sliding-window when Redis is unreachable.
+    """
+    pool = _get_redis_pool()
+    if pool is not None:
+        try:
+            import redis as _redis
+
+            r = _redis.Redis(connection_pool=pool)
+            key = f"order_rl:{user_id}"
+            now = time.time()
+            pipe = r.pipeline()
+            pipe.zremrangebyscore(key, 0, now - _ORDER_RATE_WINDOW)
+            pipe.zadd(key, {str(now): now})
+            pipe.zcard(key)
+            pipe.expire(key, _ORDER_RATE_WINDOW + 1)
+            results = pipe.execute()
+            count = results[2]
+            if count > _ORDER_RATE_LIMIT:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Order rate limit exceeded: max {_ORDER_RATE_LIMIT} orders per {_ORDER_RATE_WINDOW}s",
+                    headers={"Retry-After": str(_ORDER_RATE_WINDOW)},
+                )
+            return
+        except HTTPException:
+            raise
+        except Exception as _rl_exc:
+            logger.warning("Redis rate-limit check failed (%s) — falling back to in-memory window", _rl_exc)
+
+    # In-memory fallback (single-process only — does not share state across pods).
+    now = time.time()
+    timestamps = _order_rl_cache.get(user_id, [])
+    timestamps = [t for t in timestamps if now - t < _ORDER_RATE_WINDOW]
+    timestamps.append(now)
+    _order_rl_cache[user_id] = timestamps
+    if len(timestamps) > _ORDER_RATE_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Order rate limit exceeded: max {_ORDER_RATE_LIMIT} orders per {_ORDER_RATE_WINDOW}s",
+            headers={"Retry-After": str(_ORDER_RATE_WINDOW)},
+        ) from None
 
 
 # ---------------------------------------------------------------------------

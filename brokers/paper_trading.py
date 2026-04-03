@@ -221,6 +221,13 @@ class PaperTradingBroker(BrokerConnector):
         self.orders: dict[str, Order] = {}
         self.positions: dict[str, Position] = {}
 
+        # ── Redis state persistence ───────────────────────────────────────────
+        # Orders and positions are persisted to Redis so they survive process
+        # restarts.  Without this, a restart (deploy, crash, OOM) silently
+        # loses all open paper positions, making P&L tracking unreliable.
+        self._redis_state = None
+        self._init_redis_state()
+
         # Equity history: deque of (unix_timestamp, equity_value) tuples.
         # Bounded at 10 000 points (~2.7 hours at 1-second resolution or
         # ~7 months at 30-minute snapshots).  Seeded with the initial balance
@@ -273,12 +280,64 @@ class PaperTradingBroker(BrokerConnector):
     async def __aexit__(self, *args):
         await self.disconnect()
 
+    def _init_redis_state(self) -> None:
+        """Initialise Redis state persistence (best-effort, non-fatal on failure)."""
+        try:
+            import os as _os
+
+            import redis as _redis_lib
+
+            from execution.redis_state import RedisStateStore
+
+            redis_url = _os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            r = _redis_lib.from_url(redis_url, decode_responses=False)
+            r.ping()
+            self._redis_state = RedisStateStore(r)
+            logger.info("PaperTradingBroker: Redis state persistence connected (%s)", redis_url)
+        except Exception as exc:
+            self._redis_state = None
+            logger.warning(
+                "PaperTradingBroker: Redis unavailable (%s) — position/order state will NOT "
+                "survive process restarts. Set REDIS_URL to enable persistence.",
+                exc,
+            )
+
     async def connect(self) -> bool:
-        """Connect to paper trading broker (always succeeds)."""
+        """Connect to paper trading broker and restore persisted state."""
         self.connected = True
         logger.info("Connected to %s (Paper Trading)", self.name)
         logger.info("Initial balance: $%,.2f", self.initial_balance)
+        # Restore orders and positions persisted from the previous session.
+        if self._redis_state is not None:
+            self._restore_state_from_redis()
         return True
+
+    def _restore_state_from_redis(self) -> None:
+        """Reload open orders and positions from Redis after a restart."""
+        try:
+            state = self._redis_state.load_state_on_boot()
+            restored_positions = 0
+            for pos_dict in state.get("positions", []):
+                sym = pos_dict.get("symbol")
+                if sym:
+                    self.positions[sym] = Position(
+                        id=pos_dict.get("id", str(uuid.uuid4())),
+                        symbol=sym,
+                        side=OrderSide(pos_dict.get("side", "buy")),
+                        quantity=float(pos_dict.get("quantity", 0)),
+                        entry_price=float(pos_dict.get("entry_price", 0)),
+                        current_price=float(pos_dict.get("current_price", 0)),
+                        unrealized_pnl=float(pos_dict.get("unrealized_pnl", 0)),
+                        realized_pnl=float(pos_dict.get("realized_pnl", 0)),
+                    )
+                    restored_positions += 1
+            if restored_positions:
+                logger.info(
+                    "PaperTradingBroker: restored %d open position(s) from Redis",
+                    restored_positions,
+                )
+        except Exception as exc:
+            logger.warning("PaperTradingBroker: state restore from Redis failed: %s", exc)
 
     async def disconnect(self) -> bool:
         """Disconnect from paper trading broker."""
@@ -366,6 +425,22 @@ class PaperTradingBroker(BrokerConnector):
             logger.info("Limit order placed: %s %s %s @ $%s", side.value, quantity, symbol, price)
 
         self.orders[order_id] = order
+        # Persist order to Redis for crash recovery.
+        if self._redis_state is not None:
+            try:
+                self._redis_state.save_order({
+                    "id": order_id,
+                    "symbol": symbol,
+                    "side": str(side.value),
+                    "type": str(order_type.value),
+                    "quantity": order.quantity,
+                    "price": order.price,
+                    "status": str(order.status.value),
+                    "filled_price": order.filled_price,
+                    "timestamp": order.timestamp.isoformat() if hasattr(order.timestamp, "isoformat") else str(order.timestamp),
+                })
+            except Exception as _rse:
+                logger.debug("PaperTradingBroker: Redis save_order failed: %s", _rse)
         return order
 
     def _deduct_commission(self, quantity: float) -> float:
@@ -472,8 +547,13 @@ class PaperTradingBroker(BrokerConnector):
         # Persist closed trade to DB (record net P&L)
         self._persist_trade(position, exit_price, net_pnl)
 
-        # Remove position
+        # Remove position and clean up Redis persistence.
         del self.positions[symbol]
+        if self._redis_state is not None:
+            try:
+                self._redis_state.remove_position(symbol)
+            except Exception as _rse:
+                logger.debug("PaperTradingBroker: Redis remove_position failed: %s", _rse)
 
         logger.info(
             "Position closed: %s gross_pnl=$%.2f commission=$%.4f net_pnl=$%.2f balance=$%.2f",
@@ -696,3 +776,20 @@ class PaperTradingBroker(BrokerConnector):
                 unrealized_pnl=0.0,
                 timestamp=datetime.now(UTC),
             )
+
+        # Persist updated/new position to Redis for crash recovery.
+        if self._redis_state is not None:
+            try:
+                pos = self.positions[symbol]
+                self._redis_state.save_position({
+                    "symbol": symbol,
+                    "side": str(pos.side),
+                    "quantity": pos.quantity,
+                    "entry_price": pos.entry_price,
+                    "current_price": pos.current_price,
+                    "unrealized_pnl": pos.unrealized_pnl,
+                    "realized_pnl": getattr(pos, "realized_pnl", 0.0),
+                    "id": getattr(pos, "id", str(uuid.uuid4())),
+                })
+            except Exception as _rse:
+                logger.debug("PaperTradingBroker: Redis save_position failed: %s", _rse)
