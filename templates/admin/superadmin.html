@@ -725,7 +725,7 @@ async function impersonate(id) {
   } catch (e) { flash('Error: ' + e.message, 'error'); }
 }
 async function bulkExport() {
-  try { window.open('/api/admin/audit-log/export', '_blank'); }
+  try { window.open('/api/superadmin/users/bulk/export', '_blank'); }
   catch (e) { flash('Export error: ' + e.message, 'error'); }
 }
 
