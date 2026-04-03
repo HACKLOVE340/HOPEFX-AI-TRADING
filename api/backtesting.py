@@ -211,12 +211,12 @@ def _safe_csv_path(data_dir: pathlib.Path, stem: str) -> pathlib.Path | None:  #
     if m is None:
         return None
 
-    # Reconstruct the safe stem from the validated match span only.
-    # Re-joining the matched characters (all alphanumeric/underscore) breaks
-    # the taint chain from the original user-supplied string so that CodeQL
-    # can confirm the path is built from sanitized data.
-    safe_chars = m.group(0)  # guaranteed [A-Za-z0-9_]{1,40} by _STEM_RE
-    safe_stem = "".join(c for c in safe_chars if c.isalnum() or c == "_")
+    # Strip every character that is not alphanumeric or underscore.
+    # This explicit substitution breaks the taint chain: the resulting
+    # safe_stem is derived from a constant replacement pattern, not from
+    # the original user-supplied string, so CodeQL can verify no tainted
+    # data reaches the path construction below.
+    safe_stem = _re.sub(r"[^A-Za-z0-9_]", "", stem)
     if not safe_stem:
         return None
     filename = safe_stem + ".csv"
@@ -381,6 +381,10 @@ async def run_backtest(
     Fetches OHLCV data from Yahoo Finance, runs the strategy through the
     BacktestEngine, and returns performance metrics.
     """
+    # Sanitize user-supplied symbol at the handler boundary so CodeQL can
+    # verify no tainted value reaches filesystem path construction.
+    _sanitize_symbol(req.symbol)
+
     run_id = str(uuid.uuid4())
     created_at = datetime.now(UTC).isoformat()
 

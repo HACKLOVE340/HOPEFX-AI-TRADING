@@ -192,19 +192,7 @@ class OANDABroker:
             async with self._session.get(f"{self._base_url}/v3/accounts/{self._account_id}") as resp:
                 resp.raise_for_status()
             self.connected = True
-            # Build a masked hint from the account ID: expose only the last 4
-            # characters so the full identifier never reaches log aggregators.
-            # The API token is never logged — only _base_url and this hint.
-            _raw_id: str = self._account_id
-            # Reconstruct the hint from a fixed prefix + last-4 suffix so that
-            # static analysis cannot trace the full account ID into the log call.
-            _suffix = _raw_id[-4:] if len(_raw_id) > 4 else ""
-            _acct_hint = ("..." + _suffix) if _suffix else "****"  # nosec B506 — masked, not the full ID
-            logger.info(
-                "OANDABroker: connected to %s account=%s",
-                self._base_url,
-                _acct_hint,  # nosec B506 — last-4 suffix only; full account ID is not logged
-            )
+            logger.info("OANDABroker: connected to %s", self._base_url)
             return True
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("OANDABroker: connect failed: %s", exc)

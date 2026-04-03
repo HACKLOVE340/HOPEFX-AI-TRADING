@@ -531,7 +531,7 @@ async def paper_trading_status():
 
         clock_status = get_clock().status()
     except Exception as exc:
-        logger.warning("paper_trading_status: clock unavailable: %s", exc)
+        logger.warning("paper_trading_status: clock unavailable: %s", type(exc).__name__)
 
     # Mask the account ID before returning — expose only the last 4 characters
     # so the full OANDA account identifier never reaches API consumers.

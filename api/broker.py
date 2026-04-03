@@ -490,7 +490,7 @@ async def paper_clock_status():
         )
         return clock_data
     except Exception as exc:
-        logger.warning("paper_clock_status: %s", exc)
+        logger.warning("paper_clock_status: %s", type(exc).__name__)
         from datetime import datetime
 
         return {
