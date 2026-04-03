@@ -1,0 +1,235 @@
+// superadmin/TradingEngineSection.tsx — engine config, kill switch, metrics
+import React, { useEffect, useState, useCallback } from 'react';
+import { superadminApi } from '../../hooks/useApi';
+import {
+  SectionCard, StatusBadge, ActionBtn, Input, Select, Toggle,
+  KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+} from './ui';
+
+interface EngineConfig {
+  paper_trading_mode: boolean;
+  live_trading_enabled: boolean;
+  max_open_positions: number;
+  max_risk_per_trade: number;
+  max_daily_loss_pct: number;
+  max_drawdown_pct: number;
+  default_lot_size: number;
+  slippage_tolerance: number;
+  default_leverage: number;
+  auto_trade_enabled: boolean;
+  signal_confidence_threshold: number;
+  kill_switch_active: boolean;
+  engine_status: string;
+  broker_type: string;
+  execution_mode: string;
+}
+
+interface EngineMetrics {
+  trades_today: number;
+  open_positions: number;
+  pnl_today: number;
+  win_rate_today: number;
+  avg_execution_ms: number;
+  rejected_orders: number;
+  kill_switch_triggers: number;
+  uptime_hours: number;
+}
+
+const TradingEngineSection: React.FC = () => {
+  const [cfg, setCfg]         = useState<EngineConfig | null>(null);
+  const [metrics, setMetrics] = useState<EngineMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
+  const [msg, setMsg]         = useState('');
+  const [confirm, setConfirm] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const [cfgRes, metRes] = await Promise.all([
+        superadminApi.engineConfig(),
+        superadminApi.engineMetrics(),
+      ]);
+      setCfg(cfgRes.data);
+      setMetrics(metRes.data);
+    } catch (e: unknown) {
+      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load engine data');
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    if (!cfg) return;
+    setSaving(true); setMsg('');
+    try {
+      await superadminApi.updateEngineConfig(cfg);
+      setMsg('Engine configuration saved');
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Save failed');
+    } finally { setSaving(false); }
+  };
+
+  const toggleKillSwitch = async () => {
+    if (!cfg) return;
+    setSaving(true); setMsg('');
+    try {
+      await superadminApi.killSwitch(!cfg.kill_switch_active);
+      setCfg(c => c ? { ...c, kill_switch_active: !c.kill_switch_active } : c);
+      setMsg(`Kill switch ${!cfg.kill_switch_active ? 'ACTIVATED — all trading halted' : 'deactivated — trading resumed'}`);
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Kill switch failed');
+    } finally { setSaving(false); setConfirm(null); }
+  };
+
+  const pauseResume = async (action: 'pause' | 'resume') => {
+    setSaving(true); setMsg('');
+    try {
+      if (action === 'pause') await superadminApi.pauseTrading('Superadmin manual pause');
+      else                    await superadminApi.resumeTrading();
+      setMsg(`Trading ${action === 'pause' ? 'paused' : 'resumed'}`);
+      setTimeout(load, 1000);
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? `${action} failed`);
+    } finally { setSaving(false); setConfirm(null); }
+  };
+
+  const set = (k: keyof EngineConfig, v: unknown) => setCfg(c => c ? { ...c, [k]: v } : c);
+
+  if (loading) return <><SAStyles /><LoadingRows rows={8} /></>;
+  if (error)   return <><SAStyles /><ErrorState message={error} onRetry={load} /></>;
+  if (!cfg)    return null;
+
+  return (
+    <div style={{ animation: 'sa-fadein 0.2s ease' }}>
+      <SAStyles />
+
+      {confirm === 'kill' && (
+        <ConfirmDialog
+          title={cfg.kill_switch_active ? 'Deactivate Kill Switch' : '⚠️ Activate Kill Switch'}
+          message={cfg.kill_switch_active
+            ? 'This will resume all trading activity. Ensure market conditions are safe before proceeding.'
+            : 'This will IMMEDIATELY halt ALL trading across the entire platform. All open orders will be cancelled. This affects every user.'}
+          confirmLabel={cfg.kill_switch_active ? 'Resume Trading' : 'ACTIVATE KILL SWITCH'}
+          variant="danger"
+          onConfirm={toggleKillSwitch}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+      {confirm === 'pause' && (
+        <ConfirmDialog
+          title="Pause Trading Engine"
+          message="This will pause the trading engine. No new orders will be placed but existing positions remain open."
+          confirmLabel="Pause Engine"
+          variant="warning"
+          onConfirm={() => pauseResume('pause')}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+
+      {/* Kill switch banner */}
+      {cfg.kill_switch_active && (
+        <div style={{
+          background: '#450a0a', border: '1px solid #dc2626', borderRadius: 10,
+          padding: '14px 18px', marginBottom: 20,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20 }}>🛑</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#f87171' }}>KILL SWITCH ACTIVE</div>
+              <div style={{ fontSize: 12, color: '#fca5a5' }}>All trading is halted across the entire platform</div>
+            </div>
+          </div>
+          <ActionBtn label="Resume Trading" onClick={() => setConfirm('kill')} variant="success" icon="▶️" loading={saving} />
+        </div>
+      )}
+
+      {/* Metrics */}
+      {metrics && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12, marginBottom: 20 }}>
+          <KpiTile label="Trades Today"      value={metrics.trades_today}                    icon="📊" accent="#3b82f6" />
+          <KpiTile label="Open Positions"    value={metrics.open_positions}                  icon="📈" accent="#22c55e" />
+          <KpiTile label="PnL Today"         value={`$${metrics.pnl_today.toFixed(2)}`}      icon="💰" accent={metrics.pnl_today >= 0 ? '#22c55e' : '#ef4444'} />
+          <KpiTile label="Win Rate"          value={`${(metrics.win_rate_today * 100).toFixed(1)}%`} icon="🎯" accent="#8b5cf6" />
+          <KpiTile label="Avg Execution"     value={`${metrics.avg_execution_ms}ms`}         icon="⚡" accent="#f59e0b" />
+          <KpiTile label="Rejected Orders"   value={metrics.rejected_orders}                 icon="🚫" accent="#ef4444" />
+          <KpiTile label="Kill Triggers"     value={metrics.kill_switch_triggers}            icon="🛑" accent="#dc2626" />
+          <KpiTile label="Uptime"            value={`${metrics.uptime_hours.toFixed(1)}h`}   icon="⏱️" accent="#06b6d4" />
+        </div>
+      )}
+
+      {/* Engine status + controls */}
+      <SectionCard title="Engine Controls" icon="⚙️" accent="#ef4444"
+        subtitle={`Status: ${cfg.engine_status} · Broker: ${cfg.broker_type}`}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+          <StatusBadge status={cfg.engine_status} />
+          <ActionBtn
+            label={cfg.kill_switch_active ? '🛑 Kill Switch ACTIVE' : 'Activate Kill Switch'}
+            onClick={() => setConfirm('kill')}
+            variant={cfg.kill_switch_active ? 'success' : 'danger'}
+            loading={saving}
+          />
+          {cfg.engine_status === 'running'
+            ? <ActionBtn label="Pause Engine" onClick={() => setConfirm('pause')} variant="warning" icon="⏸️" loading={saving} />
+            : <ActionBtn label="Resume Engine" onClick={() => pauseResume('resume')} variant="success" icon="▶️" loading={saving} />
+          }
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Toggle label="Paper Trading Mode"   checked={cfg.paper_trading_mode}    onChange={v => set('paper_trading_mode', v)} accent="#f59e0b" />
+          <Toggle label="Live Trading Enabled" checked={cfg.live_trading_enabled}  onChange={v => set('live_trading_enabled', v)} accent="#22c55e" />
+          <Toggle label="Auto-Trade Enabled"   checked={cfg.auto_trade_enabled}    onChange={v => set('auto_trade_enabled', v)} />
+        </div>
+      </SectionCard>
+
+      {/* Risk parameters */}
+      <SectionCard title="Risk Parameters" icon="🛡️" accent="#f59e0b"
+        actions={<ActionBtn label={saving ? 'Saving…' : 'Save'} onClick={save} variant="primary" loading={saving} size="sm" />}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <Input label="Max Open Positions"        value={cfg.max_open_positions}           onChange={e => set('max_open_positions', Number(e.target.value))}           type="number" />
+          <Input label="Max Risk Per Trade (%)"    value={cfg.max_risk_per_trade}           onChange={e => set('max_risk_per_trade', Number(e.target.value))}           type="number" step="0.1" />
+          <Input label="Max Daily Loss (%)"        value={cfg.max_daily_loss_pct}           onChange={e => set('max_daily_loss_pct', Number(e.target.value))}           type="number" step="0.1" />
+          <Input label="Max Drawdown (%)"          value={cfg.max_drawdown_pct}             onChange={e => set('max_drawdown_pct', Number(e.target.value))}             type="number" step="0.1" />
+          <Input label="Default Lot Size"          value={cfg.default_lot_size}             onChange={e => set('default_lot_size', Number(e.target.value))}             type="number" step="0.01" />
+          <Input label="Slippage Tolerance (pips)" value={cfg.slippage_tolerance}           onChange={e => set('slippage_tolerance', Number(e.target.value))}           type="number" step="0.1" />
+          <Input label="Default Leverage"          value={cfg.default_leverage}             onChange={e => set('default_leverage', Number(e.target.value))}             type="number" />
+          <Input label="Signal Confidence Threshold" value={cfg.signal_confidence_threshold} onChange={e => set('signal_confidence_threshold', Number(e.target.value))} type="number" step="0.01" min="0" max="1" />
+        </div>
+        <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <Select label="Broker Type"
+            value={cfg.broker_type}
+            onChange={e => set('broker_type', e.target.value)}
+            options={[
+              { value: 'paper',  label: 'Paper Trading' },
+              { value: 'oanda',  label: 'OANDA' },
+              { value: 'alpaca', label: 'Alpaca' },
+            ]}
+          />
+          <Select label="Execution Mode"
+            value={cfg.execution_mode}
+            onChange={e => set('execution_mode', e.target.value)}
+            options={[
+              { value: 'market', label: 'Market Orders' },
+              { value: 'limit',  label: 'Limit Orders' },
+              { value: 'smart',  label: 'Smart Routing' },
+            ]}
+          />
+        </div>
+      </SectionCard>
+
+      {msg && (
+        <div style={{
+          padding: '12px 16px', borderRadius: 8, marginTop: 4,
+          background: msg.includes('failed') || msg.includes('ACTIVATED') ? (msg.includes('ACTIVATED') ? '#450a0a' : '#450a0a') : '#052e16',
+          color: msg.includes('failed') ? '#f87171' : msg.includes('ACTIVATED') ? '#f87171' : '#4ade80',
+          fontSize: 13, fontWeight: 600,
+        }}>
+          {msg}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TradingEngineSection;

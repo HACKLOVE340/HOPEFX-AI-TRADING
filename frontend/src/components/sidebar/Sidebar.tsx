@@ -13,7 +13,7 @@ import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useStore, selectIsAuth, selectUser, selectWsStatus, selectPlan } from '../../store';
 import { ThemeToggle } from '../ThemeToggle';
-import { isAdmin, hasFeatureAccess, PLAN_LABELS, PLAN_COLORS } from '../../lib/subscription';
+import { isAdmin, isSuperAdmin, hasFeatureAccess, PLAN_LABELS, PLAN_COLORS } from '../../lib/subscription';
 import { NAV_ITEMS, NAV_GROUPS } from './navConfig';
 import type { Plan } from '../../lib/subscription';
 
@@ -100,11 +100,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const plan      = useStore(selectPlan);
   const clearAuth = useStore((s) => s.clearAuth);
 
-  const admin = user ? isAdmin(user.role) : false;
+  const admin      = user ? isAdmin(user.role) : false;
+  const superAdmin = user ? isSuperAdmin(user.role) : false;
 
   // Build visible groups
   const visibleGroups = NAV_GROUPS.filter((g) => {
-    if (g.id === 'admin') return admin;
+    if (g.id === 'superadmin') return superAdmin;
+    if (g.id === 'admin')      return admin;
     return true;
   });
 
@@ -149,8 +151,9 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       }}>
         {visibleGroups.map((group) => {
           const items = NAV_ITEMS.filter((item) => {
-            if (item.group !== group.id) return false;
-            if (item.adminOnly) return admin;
+            if (item.group !== group.id)  return false;
+            if (item.superAdminOnly)      return superAdmin;
+            if (item.adminOnly)           return admin;
             return true;
           });
 

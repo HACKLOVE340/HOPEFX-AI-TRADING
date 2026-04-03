@@ -11,7 +11,8 @@ export type NavGroup =
   | 'analytics'
   | 'community'
   | 'account'
-  | 'admin';
+  | 'admin'
+  | 'superadmin';
 
 export interface NavItem {
   path: string;
@@ -22,17 +23,20 @@ export interface NavItem {
   plan?: 'free' | 'starter' | 'pro' | 'elite';
   /** If true, only admin/superadmin can see this item */
   adminOnly?: boolean;
+  /** If true, only superadmin can see this item */
+  superAdminOnly?: boolean;
   /** Feature key used by SubscriptionGate */
   featureKey?: string;
 }
 
 export const NAV_GROUPS: { id: NavGroup; label: string }[] = [
-  { id: 'core',      label: 'Overview'   },
-  { id: 'trading',   label: 'Trading'    },
-  { id: 'analytics', label: 'Analytics'  },
-  { id: 'community', label: 'Community'  },
-  { id: 'account',   label: 'Account'    },
-  { id: 'admin',     label: 'Admin'      },
+  { id: 'core',       label: 'Overview'    },
+  { id: 'trading',    label: 'Trading'     },
+  { id: 'analytics',  label: 'Analytics'   },
+  { id: 'community',  label: 'Community'   },
+  { id: 'account',    label: 'Account'     },
+  { id: 'admin',      label: 'Admin'       },
+  { id: 'superadmin', label: 'Super Admin' },
 ];
 
 export const NAV_ITEMS: NavItem[] = [
@@ -74,9 +78,12 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/settings',     label: 'Settings',       icon: '⚙️', group: 'account',   plan: 'free',    featureKey: 'settings'     },
 
   // ── Admin (admin/superadmin only) ─────────────────────────────────────────
-  { path: '/admin',        label: 'Admin Panel',    icon: '🔧', group: 'admin', adminOnly: true },
-  { path: '/audit',        label: 'Audit Log',      icon: '🔍', group: 'admin', adminOnly: true },
-  { path: '/security',     label: 'Security Ops',   icon: '🛡️', group: 'admin', adminOnly: true },
-  { path: '/auto-heal',    label: 'Auto-Heal',      icon: '🩺', group: 'admin', adminOnly: true },
-  { path: '/whitelabel',   label: 'Whitelabel',     icon: '🏷️', group: 'admin', adminOnly: true },
+  { path: '/admin',        label: 'Admin Panel',    icon: '🔧', group: 'admin',      adminOnly: true },
+  { path: '/audit',        label: 'Audit Log',      icon: '🔍', group: 'admin',      adminOnly: true },
+  { path: '/security',     label: 'Security Ops',   icon: '🛡️', group: 'admin',      adminOnly: true },
+  { path: '/auto-heal',    label: 'Auto-Heal',      icon: '🩺', group: 'admin',      adminOnly: true },
+  { path: '/whitelabel',   label: 'Whitelabel',     icon: '🏷️', group: 'admin',      adminOnly: true },
+
+  // ── Super Admin (superadmin only) ─────────────────────────────────────────
+  { path: '/superadmin',   label: 'Master Control', icon: '⚡', group: 'superadmin', superAdminOnly: true },
 ];

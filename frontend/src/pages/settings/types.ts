@@ -14,7 +14,16 @@ export type SettingsTab =
   | 'privacy'
   | 'accessibility'
   | 'admin'
-  | 'danger';
+  | 'danger'
+  // Superadmin-only tabs
+  | 'sa-users'
+  | 'sa-platform'
+  | 'sa-ml-ai'
+  | 'sa-trading-engine'
+  | 'sa-financial'
+  | 'sa-security'
+  | 'sa-logs'
+  | 'sa-feature-flags';
 
 export interface ProfileSettings {
   username: string;
