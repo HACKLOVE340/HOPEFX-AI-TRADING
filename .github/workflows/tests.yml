@@ -159,6 +159,21 @@ jobs:
           --asyncio-mode=auto \
           --timeout=120
 
+    - name: Coverage gate - core/ signal-engine + MCC (80%)
+      env:
+        REDIS_URL: redis://localhost:6379/15
+        ENVIRONMENT: testing
+        SECURITY_JWT_SECRET: ci-test-secret-key-minimum-32-characters-long
+        INITIAL_BALANCE: "100000"
+        ML_MIN_TRADE_PROB: "0.58"
+      run: |
+        pytest tests/ -m "not slow" -q \
+          --cov=core --cov-branch \
+          --cov-report=term-missing \
+          --cov-fail-under=80 \
+          --asyncio-mode=auto \
+          --timeout=120
+
     - name: Publish test results
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
       if: always()
