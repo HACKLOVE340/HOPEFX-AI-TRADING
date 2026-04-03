@@ -318,7 +318,7 @@ function TickerBar({ ticks }: { ticks: Record<string, TickerItem> }) {
   return (
     <div className="w-full overflow-hidden border-b border-terminal-border bg-terminal-surface/60 backdrop-blur-sm">
       <div
-        className="flex gap-0 whitespace-nowrap"
+        className="ticker-track flex gap-0 whitespace-nowrap"
         style={{ animation: 'tickerScroll 28s linear infinite' }}
       >
         {items.map((item, i) => {
@@ -354,8 +354,11 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
   const handleSmoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (!href.startsWith('#')) return;
     e.preventDefault();
-    const el = document.querySelector(href);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const el = document.querySelector(href) as HTMLElement | null;
+    if (el) {
+      const top = el.getBoundingClientRect().top + window.scrollY - 64; // 64px navbar offset
+      window.scrollTo({ top, behavior: 'smooth' });
+    }
     setMobileOpen(false);
   };
 
@@ -516,7 +519,11 @@ function Hero() {
           </a>
           <a
             href="#how-it-works"
-            onClick={(e) => { e.preventDefault(); document.querySelector('#how-it-works')?.scrollIntoView({ behavior: 'smooth' }); }}
+            onClick={(e) => {
+              e.preventDefault();
+              const el = document.querySelector('#how-it-works') as HTMLElement | null;
+              if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 64, behavior: 'smooth' });
+            }}
             className="inline-flex items-center gap-2 border border-terminal-border text-slate-300 font-semibold text-base px-7 py-3.5 rounded-xl hover:border-slate-500 hover:text-white transition-all duration-150"
           >
             See how it works <ChevronRight size={16} />
@@ -963,7 +970,7 @@ function SignalStrip() {
 
   return (
     <div className="w-full overflow-hidden bg-terminal-raised border-y border-terminal-border py-2">
-      <div className="flex gap-0 whitespace-nowrap" style={{ animation: 'tickerScroll 40s linear infinite' }}>
+      <div className="ticker-track flex gap-0 whitespace-nowrap" style={{ animation: 'tickerScroll 40s linear infinite' }}>
         {[...signals, ...signals].map((sig, i) => {
           const up = sig.direction === 'long';
           const neutral = sig.direction === 'neutral';
@@ -1058,7 +1065,7 @@ const LandingPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-terminal-bg text-slate-200 font-sans antialiased">
+    <div className="landing-root min-h-screen bg-terminal-bg text-slate-200 font-sans antialiased">
       {/* Sticky nav */}
       <Navbar scrolled={scrolled} />
 
