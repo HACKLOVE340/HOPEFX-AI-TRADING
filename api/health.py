@@ -384,9 +384,9 @@ async def prometheus_metrics() -> str:
             lines.append(f'hopefx_component_latency_ms{{component="{comp.name}"}} {comp.latency_ms}')
 
     # Process uptime
-    import psutil  # type: ignore[import]  # optional
-
     try:
+        import psutil  # type: ignore[import]
+
         proc = psutil.Process()
         mem_mb = proc.memory_info().rss / 1024 / 1024
         lines += [
@@ -395,6 +395,8 @@ async def prometheus_metrics() -> str:
             "# TYPE hopefx_process_rss_mb gauge",
             f"hopefx_process_rss_mb {mem_mb:.1f}",
         ]
+    except ImportError:
+        pass  # psutil is optional — skip memory metrics when not installed
     except Exception:
         pass
 
