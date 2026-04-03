@@ -167,32 +167,34 @@ async def init_model_registry(s: Any) -> bool:
     return True
 
 
+class _ConfigDatabaseDefaults:
+    """Minimal database config shim used when initialize_config() returns a dict."""
+
+    connection_pool_size: int = 5
+    max_overflow: int = 10
+
+    def get_connection_string(self) -> str:
+        return os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
+
+
+class _ConfigNamespace:
+    """Wrap a raw config dict as an attribute-accessible namespace."""
+
+    def __init__(self, d: dict) -> None:
+        for k, v in d.items():
+            setattr(self, k, v)
+        if not hasattr(self, "environment"):
+            self.environment = os.getenv("APP_ENV", "development")
+        self.database = _ConfigDatabaseDefaults()
+        if not hasattr(self, "api_configs"):
+            self.api_configs: dict = {}
+
+
 async def init_config(s: Any) -> Any:
     from config import initialize_config
 
-    _raw = initialize_config()
-    if isinstance(_raw, dict):
-
-        class _DB:
-            connection_pool_size = 5
-            max_overflow = 10
-
-            def get_connection_string(self):
-                return os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
-
-        class _NS:
-            def __init__(self, d):
-                for k, v in d.items():
-                    setattr(self, k, v)
-                if not hasattr(self, "environment"):
-                    self.environment = os.getenv("APP_ENV", "development")
-                self.database = _DB()
-                if not hasattr(self, "api_configs"):
-                    self.api_configs = {}
-
-        cfg = _NS(_raw)
-    else:
-        cfg = _raw
+    raw = initialize_config()
+    cfg = _ConfigNamespace(raw) if isinstance(raw, dict) else raw
     logger.info("Configuration loaded: %s", cfg.environment)
     return cfg
 
@@ -439,141 +441,145 @@ async def init_broker(s: Any) -> Any:
     broker_type = os.getenv("BROKER_TYPE", "paper").lower()
     oanda_token = os.getenv("BROKER_OANDA_TOKEN", "") or os.getenv("OANDA_API_KEY", "")
     oanda_account = os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", "")
-    oanda_env = os.getenv("OANDA_ENVIRONMENT", os.getenv("BROKER_OANDA_ENVIRONMENT", "practice"))
-    oanda_practice = oanda_env != "live"
+    oanda_practice = os.getenv("OANDA_ENVIRONMENT", os.getenv("BROKER_OANDA_ENVIRONMENT", "practice")) != "live"
 
-    # ── OANDA path ────────────────────────────────────────────────────────────
     if broker_type == "oanda" and oanda_token and oanda_account:
-        try:
-            from brokers.oanda import AsyncOANDAConnector
+        broker = await _try_connect_oanda(oanda_token, oanda_account, oanda_practice, log_activity)
+        if broker is not None:
+            return broker
 
-            b = AsyncOANDAConnector(
-                api_key=oanda_token,
-                account_id=oanda_account,
-                practice=oanda_practice,
-            )
-            connected = await b.connect()
-            if connected:
-                env_label = "practice" if oanda_practice else "LIVE"
-                log_activity(f"OANDA {env_label} broker connected (account={oanda_account[:8]}…)")
-                logger.info(
-                    "OANDA %s broker connected — account=%s…",
-                    env_label,
-                    oanda_account[:8],
-                )
-                # ── 30-day paper trading clock ────────────────────────────────
-                # Use OandaPaperClock.maybe_start() — handles PENDING
-                # placeholder overwrite and gate sync correctly.
-                try:
-                    from brokers.oanda_paper_clock import get_clock as _get_clock
+    return await _connect_paper_broker(s, broker_type, oanda_token, oanda_account, log_activity)
 
-                    _get_clock().maybe_start(
-                        account_id=oanda_account,
-                        environment="practice" if oanda_practice else "live",
-                    )
-                except Exception as _clk_exc:
-                    logger.warning("OandaPaperClock.maybe_start failed (non-fatal): %s", _clk_exc)
-                    _stamp_oanda_paper_start(oanda_account, oanda_practice)
-                return b
+
+async def _try_connect_oanda(
+    token: str,
+    account_id: str,
+    practice: bool,
+    log_activity: Any,
+) -> Any | None:
+    """
+    Attempt to connect an AsyncOANDAConnector.
+
+    Returns the connected broker on success, None on connection failure or
+    import error (caller falls back to paper broker).
+    """
+    try:
+        from brokers.oanda import AsyncOANDAConnector
+
+        broker = AsyncOANDAConnector(api_key=token, account_id=account_id, practice=practice)
+        if not await broker.connect():
             logger.warning(
                 "OANDA connection failed — falling back to paper broker. "
                 "Check BROKER_OANDA_TOKEN and BROKER_OANDA_ACCOUNT.",
             )
-        except Exception as exc:
-            logger.warning(
-                "OANDA broker init failed (%s) — falling back to paper broker.",
-                exc,
-            )
+            return None
 
-    # ── Paper broker fallback ─────────────────────────────────────────────────
+        env_label = "practice" if practice else "LIVE"
+        log_activity(f"OANDA {env_label} broker connected (account={account_id[:8]}…)")
+        logger.info("OANDA %s broker connected — account=%s…", env_label, account_id[:8])
+        _start_oanda_paper_clock(account_id, practice)
+        return broker
+
+    except Exception as exc:
+        logger.warning("OANDA broker init failed (%s) — falling back to paper broker.", exc)
+        return None
+
+
+def _start_oanda_paper_clock(account_id: str, practice: bool) -> None:
+    """
+    Start the 30-day OANDA paper trading clock via OandaPaperClock.
+
+    Falls back to the legacy JSON stamp when the clock module is unavailable.
+    """
+    try:
+        from brokers.oanda_paper_clock import get_clock
+
+        get_clock().maybe_start(
+            account_id=account_id,
+            environment="practice" if practice else "live",
+        )
+    except Exception as exc:
+        logger.warning("OandaPaperClock.maybe_start failed (non-fatal): %s", exc)
+        _stamp_oanda_paper_start(account_id, practice)
+
+
+async def _connect_paper_broker(
+    s: Any,
+    broker_type: str,
+    oanda_token: str,
+    oanda_account: str,
+    log_activity: Any,
+) -> Any:
+    """
+    Connect a PaperTradingBroker and run the OANDA PENDING account guard.
+
+    Logs a warning when BROKER_TYPE=oanda but credentials are missing so
+    operators know why the paper broker was selected.
+    """
     from brokers.paper_trading import PaperTradingBroker
 
-    bal = float(os.getenv("PAPER_TRADING_BALANCE", os.getenv("INITIAL_BALANCE", "100000")))
-    b = PaperTradingBroker(initial_balance=bal, session_factory=s.db_session_factory)
-    await b.connect()
+    balance = float(os.getenv("PAPER_TRADING_BALANCE", os.getenv("INITIAL_BALANCE", "100000")))
+    broker = PaperTradingBroker(initial_balance=balance, session_factory=s.db_session_factory)
+    await broker.connect()
 
-    if broker_type == "oanda" and (not oanda_token or not oanda_account):
+    if broker_type == "oanda" and not (oanda_token and oanda_account):
         logger.warning(
             "BROKER_TYPE=oanda but BROKER_OANDA_TOKEN / BROKER_OANDA_ACCOUNT not set. "
             "Running paper broker. Set both env vars to start the 30-day OANDA run.",
         )
     else:
-        logger.info("Paper trading broker connected (balance=%.2f)", bal)
+        logger.info("Paper trading broker connected (balance=%.2f)", balance)
 
     log_activity("Paper Trading Broker connected")
+    _validate_oanda_account_pending(s, log_activity)
+    return broker
 
-    # ── OANDA account PENDING guard ───────────────────────────────────────────
-    # Warn loudly if the 30-day clock is running but no real account is connected.
-    # This runs regardless of broker type so the warning is always visible.
+
+def _validate_oanda_account_pending(s: Any, log_activity: Any) -> None:
+    """
+    Warn when the 30-day clock is running but no real OANDA account is connected.
+
+    Runs regardless of broker type so the warning is always visible at startup.
+    """
     try:
         from brokers.oanda_paper_clock import validate_oanda_account_at_startup
 
         validation = validate_oanda_account_at_startup()
         s.oanda_account_validation = validation
-        for w in validation.get("warnings", []):
-            log_activity(f"⚠ OANDA: {w}")
-    except Exception as _val_exc:
-        logger.debug("OANDA account validation skipped: %s", _val_exc)
+        for warning in validation.get("warnings", []):
+            log_activity(f"⚠ OANDA: {warning}")
+    except Exception as exc:
+        logger.debug("OANDA account validation skipped: %s", exc)
 
-    return b
+
+_OANDA_PAPER_STAMP_PATH = Path("data/oanda_paper_start.json")
+_OANDA_PAPER_TARGET_DAYS = 30
 
 
 def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
     """
     Write data/oanda_paper_start.json on first real OANDA connection.
 
-    The file records the UTC timestamp when the 30-day paper trading clock
-    started.  Subsequent restarts do NOT overwrite it once a real account_id
-    has been stamped — the clock keeps running from the original start time.
+    Subsequent restarts do NOT overwrite the file once a real account_id has
+    been stamped — the 30-day clock keeps running from the original start time.
 
-    If the file exists but contains ``requires_real_account: true`` (i.e. it
-    was pre-seeded with a PENDING placeholder), it IS overwritten so the real
-    account prefix and live_gate_opens timestamp are recorded correctly.
+    If the file contains ``requires_real_account: true`` (PENDING placeholder),
+    it IS overwritten so the real account prefix and live_gate_opens timestamp
+    are recorded correctly while preserving the original started_utc.
     """
     import json
-    import pathlib
-    from datetime import datetime, timedelta  # local use
 
-    stamp_path = pathlib.Path("data/oanda_paper_start.json")
-    stamp_path.parent.mkdir(parents=True, exist_ok=True)
+    _OANDA_PAPER_STAMP_PATH.parent.mkdir(parents=True, exist_ok=True)
+    started_utc = _resolve_clock_start_time()
+    if started_utc is None:
+        return  # real account already stamped — clock is running
 
-    if stamp_path.exists():
-        try:
-            existing = json.loads(stamp_path.read_text(encoding="utf-8"))
-        except Exception:
-            existing = {}
+    from datetime import timedelta
 
-        # If a real account is already stamped, preserve the clock start time.
-        if not existing.get("requires_real_account", False):
-            started = existing.get("started_utc", "unknown")
-            logger.info(
-                "OANDA paper trading clock already running since %s (account=%s…)",
-                started,
-                existing.get("account_id", "?")[:8],
-            )
-            return
-
-        # File is a PENDING placeholder — overwrite with real account details.
-        # Preserve the original started_utc so the 30-day clock is not reset.
-        started_utc_str = existing.get("started_utc")
-    else:
-        started_utc_str = None
-
-    now = datetime.now(UTC)
-    if started_utc_str:
-        try:
-            started_utc = datetime.fromisoformat(started_utc_str)
-        except Exception:
-            started_utc = now
-    else:
-        started_utc = now
-
-    target_days = 30
-    live_gate_opens = started_utc + timedelta(days=target_days)
-
+    live_gate_opens = started_utc + timedelta(days=_OANDA_PAPER_TARGET_DAYS)
     payload = {
         "started_utc": started_utc.isoformat(),
-        "target_days": target_days,
+        "target_days": _OANDA_PAPER_TARGET_DAYS,
         "account_id": account_id[:8] + "…",
         "environment": "practice" if practice else "live",
         "live_gate_opens": live_gate_opens.isoformat(),
@@ -584,13 +590,53 @@ def _stamp_oanda_paper_start(account_id: str, practice: bool) -> None:
             "Do not delete this file — it tracks the run start time."
         ),
     }
-    stamp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    _OANDA_PAPER_STAMP_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     logger.info(
         "OANDA paper trading clock stamped — account=%s… target: 30 days from %s, gate opens %s",
         account_id[:8],
         started_utc.strftime("%Y-%m-%d %H:%M UTC"),
         live_gate_opens.strftime("%Y-%m-%d %H:%M UTC"),
     )
+
+
+def _resolve_clock_start_time() -> "datetime | None":
+    """
+    Determine the UTC start time for the 30-day paper trading clock.
+
+    Returns:
+      - None when a real account is already stamped (caller must not overwrite).
+      - The original started_utc when the file is a PENDING placeholder
+        (preserves the clock start so the 30-day window is not reset).
+      - datetime.now(UTC) when no stamp file exists yet.
+    """
+    import json
+    from datetime import datetime as _dt
+
+    if not _OANDA_PAPER_STAMP_PATH.exists():
+        return _dt.now(UTC)
+
+    try:
+        existing = json.loads(_OANDA_PAPER_STAMP_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return _dt.now(UTC)
+
+    if not existing.get("requires_real_account", False):
+        # Real account already stamped — preserve the running clock.
+        logger.info(
+            "OANDA paper trading clock already running since %s (account=%s…)",
+            existing.get("started_utc", "unknown"),
+            existing.get("account_id", "?")[:8],
+        )
+        return None
+
+    # PENDING placeholder — preserve original started_utc if parseable.
+    started_str = existing.get("started_utc")
+    if started_str:
+        try:
+            return _dt.fromisoformat(started_str)
+        except Exception:
+            pass
+    return _dt.now(UTC)
 
 
 async def init_price_engine(s: Any) -> Any:
@@ -1048,6 +1094,31 @@ async def init_mtf_store(s: Any) -> Any:
         return None
 
 
+def _is_feature_enabled(flag_name: str, default: bool = False) -> bool:
+    """
+    Return the value of a feature flag from config.feature_flags.
+
+    Returns ``default`` when the flags module is unavailable — callers treat
+    unavailability as disabled (safe default for optional ML phases).
+    """
+    try:
+        from config.feature_flags import flags
+
+        return bool(getattr(flags, flag_name, default))
+    except Exception:
+        return default
+
+
+def _get_log_activity():
+    """Return log_activity from api.admin, falling back to logger.info."""
+    try:
+        from api.admin import log_activity
+
+        return log_activity
+    except Exception:
+        return logger.info
+
+
 async def init_anomaly_store(s: Any) -> Any:
     """
     Bootstrap the AnomalyWeightStore at startup (Phase 2).
@@ -1058,43 +1129,26 @@ async def init_anomaly_store(s: Any) -> Any:
     Gate: only wired when FEATURE_ANOMALY_WEIGHTING=true.
     Enable after 30-day OANDA paper trading run completes.
     """
-    try:
-        from api.admin import log_activity
-    except Exception:
-
-        def log_activity(msg: str) -> None:  # type: ignore[misc]
-            logger.info(msg)
-
-    try:
-        from config.feature_flags import flags
-
-        if not getattr(flags, "ANOMALY_WEIGHTING", False):
-            logger.info("AnomalyWeightStore: disabled by FEATURE_ANOMALY_WEIGHTING=false")
-            return None
-    except Exception:
+    if not _is_feature_enabled("ANOMALY_WEIGHTING"):
+        logger.info("AnomalyWeightStore: disabled by FEATURE_ANOMALY_WEIGHTING=false")
         return None
 
+    log_activity = _get_log_activity()
     try:
         from research.pipeline.anomaly import AnomalyWeightStore
 
-        persist_path = os.getenv(
-            "ANOMALY_STORE_PATH",
-            "ml/saved_models/anomaly_weight_store.pkl",
-        )
         store = AnomalyWeightStore(
             window_size=int(os.getenv("ANOMALY_WINDOW_SIZE", "500")),
             refit_every=int(os.getenv("ANOMALY_REFIT_EVERY", "50")),
             contamination=float(os.getenv("ANOMALY_CONTAMINATION", "0.02")),
             down_weight_factor=float(os.getenv("ANOMALY_DOWN_WEIGHT", "0.5")),
             use_lof=os.getenv("ANOMALY_USE_LOF", "true").lower() == "true",
-            persist_path=persist_path,
+            persist_path=os.getenv("ANOMALY_STORE_PATH", "ml/saved_models/anomaly_weight_store.pkl"),
         )
-        # Wire into signal engine module-level singleton
         import core.signal_engine as _se
 
         _se._anomaly_store = store
         s.anomaly_store = store
-
         log_activity(
             f"AnomalyWeightStore initialised (Phase 2) — "
             f"window={store.window_size} refit_every={store.refit_every} "
@@ -1116,29 +1170,14 @@ async def init_online_learner_store(s: Any) -> Any:
     Gate: only wired when FEATURE_ONLINE_LEARNING=true.
     Enable after 90-day OANDA paper run with >= 500 fills.
     """
-    try:
-        from api.admin import log_activity
-    except Exception:
-
-        def log_activity(msg: str) -> None:  # type: ignore[misc]
-            logger.info(msg)
-
-    try:
-        from config.feature_flags import flags
-
-        if not getattr(flags, "ONLINE_LEARNING", False):
-            logger.info("OnlineLearnerStore: disabled by FEATURE_ONLINE_LEARNING=false")
-            return None
-    except Exception:
+    if not _is_feature_enabled("ONLINE_LEARNING"):
+        logger.info("OnlineLearnerStore: disabled by FEATURE_ONLINE_LEARNING=false")
         return None
 
+    log_activity = _get_log_activity()
     try:
         from research.pipeline.online_learning import OnlineLearnerStore
 
-        persist_path = os.getenv(
-            "ONLINE_LEARNER_PATH",
-            "ml/saved_models/online_learner.pkl",
-        )
         primary_w = float(os.getenv("ONLINE_PRIMARY_WEIGHT", "0.7"))
         online_w = float(os.getenv("ONLINE_ONLINE_WEIGHT", "0.3"))
         store = OnlineLearnerStore(
@@ -1148,14 +1187,12 @@ async def init_online_learner_store(s: Any) -> Any:
             buffer_size=int(os.getenv("ONLINE_BUFFER_SIZE", "500")),
             adaptive_weights=os.getenv("ONLINE_ADAPTIVE_WEIGHTS", "true").lower() == "true",
             use_adwin=os.getenv("ONLINE_USE_ADWIN", "true").lower() == "true",
-            persist_path=persist_path,
+            persist_path=os.getenv("ONLINE_LEARNER_PATH", "ml/saved_models/online_learner.pkl"),
         )
-        # Wire into signal engine module-level singleton
         import core.signal_engine as _se
 
         _se._online_learner_store = store
         s.online_learner_store = store
-
         log_activity(
             f"OnlineLearnerStore initialised (Phase 3) — "
             f"blend=[{primary_w:.1f}/{online_w:.1f}] "
@@ -1178,43 +1215,26 @@ async def init_deep_ensemble_store(s: Any) -> Any:
     Gate: only wired when FEATURE_DEEP_ENSEMBLE=true AND the model file
     exists AND OOS accuracy >= 70% AND p-value < 0.001.
     """
-    try:
-        from api.admin import log_activity
-    except Exception:
-
-        def log_activity(msg: str) -> None:  # type: ignore[misc]
-            logger.info(msg)
-
-    try:
-        from config.feature_flags import flags
-
-        if not getattr(flags, "DEEP_ENSEMBLE", False):
-            logger.info("DeepEnsembleStore: disabled by FEATURE_DEEP_ENSEMBLE=false")
-            return None
-    except Exception:
+    if not _is_feature_enabled("DEEP_ENSEMBLE"):
+        logger.info("DeepEnsembleStore: disabled by FEATURE_DEEP_ENSEMBLE=false")
         return None
 
+    log_activity = _get_log_activity()
     try:
         from research.pipeline.models_ensemble import DeepEnsembleStore
 
-        model_path = os.getenv("DEEP_ENSEMBLE_MODEL_PATH", DeepEnsembleStore.DEFAULT_MODEL_PATH)
-        meta_path = os.getenv("DEEP_ENSEMBLE_META_PATH", DeepEnsembleStore.DEFAULT_META_PATH)
         scaler_path = os.getenv("DEEP_ENSEMBLE_SCALER_PATH", DeepEnsembleStore.DEFAULT_SCALER_PATH)
-
         store = DeepEnsembleStore(
-            model_path=model_path,
-            meta_path=meta_path,
+            model_path=os.getenv("DEEP_ENSEMBLE_MODEL_PATH", DeepEnsembleStore.DEFAULT_MODEL_PATH),
+            meta_path=os.getenv("DEEP_ENSEMBLE_META_PATH", DeepEnsembleStore.DEFAULT_META_PATH),
             oos_accuracy_gate=float(os.getenv("DEEP_ENSEMBLE_OOS_GATE", "0.70")),
             p_value_gate=float(os.getenv("DEEP_ENSEMBLE_PVAL_GATE", "0.001")),
             deep_weight=float(os.getenv("DEEP_ENSEMBLE_WEIGHT", "0.20")),
             seq_len=int(os.getenv("DEEP_ENSEMBLE_SEQ_LEN", "60")),
             scaler_path=scaler_path if Path(scaler_path).exists() else None,
         )
-
         activated = store.load()
-
         if activated:
-            # Wire into signal engine module-level singleton
             import core.signal_engine as _se
 
             _se._deep_ensemble_store = store
@@ -1225,9 +1245,7 @@ async def init_deep_ensemble_store(s: Any) -> Any:
                 f"weight={store.deep_weight:.2f}",
             )
         else:
-            log_activity(
-                f"DeepEnsembleStore inactive (Phase 4) — {store._gate_failure_reason}",
-            )
+            log_activity(f"DeepEnsembleStore inactive (Phase 4) — {store._gate_failure_reason}")
         return store if activated else None
     except Exception as exc:
         logger.warning("DeepEnsembleStore init failed (non-fatal): %s", exc)
