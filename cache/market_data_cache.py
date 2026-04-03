@@ -19,6 +19,8 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 try:
     from redis.exceptions import TimeoutError as RedisTimeoutError  # re-exported  # noqa: F401
 
@@ -30,8 +32,6 @@ except ImportError:
     REDIS_AVAILABLE = False
     Redis = None  # type: ignore[assignment,misc]
     logger.warning("Redis not available, using in-memory fallback")
-
-logger = logging.getLogger(__name__)
 
 
 class Timeframe(Enum):

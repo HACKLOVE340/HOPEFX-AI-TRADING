@@ -19,6 +19,8 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 try:
     import MetaTrader5 as mt5
 
@@ -36,8 +38,6 @@ from .base import (
     OrderType,
     Position,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class MT5Connector(BrokerConnector):

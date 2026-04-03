@@ -7,10 +7,11 @@
 
 import importlib.util as _ilu
 import os as _os
+from pathlib import Path as _Path
 
 _spec = _ilu.spec_from_file_location(
     "_execution_module",
-    _os.path.join(_os.path.dirname(_Path(__file__).parent), "execution.py"),
+    _os.path.join(str(_Path(__file__).parent.parent), "execution.py"),
 )
 if _spec and _spec.loader:
     _mod = _ilu.module_from_spec(_spec)

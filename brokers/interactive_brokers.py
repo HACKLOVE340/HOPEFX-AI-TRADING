@@ -14,6 +14,8 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 try:
     from ib_insync import (
         IB,
@@ -39,8 +41,6 @@ from .base import (
     OrderType,
     Position,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class InteractiveBrokersConnector(BrokerConnector):

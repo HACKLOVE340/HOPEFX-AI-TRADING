@@ -66,7 +66,7 @@ _model_version: str = "none"
 def _sha256(path: _Path) -> str:
     """Return the SHA-256 hex digest of a file."""
     h = _hashlib.sha256()
-    with Path(path).open("rb") as f:
+    with _Path(path).open("rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
@@ -151,7 +151,7 @@ def _try_load(path: _Path) -> _Any | None:
         try:
             import pickle as _pickle  # nosec B403
 
-            with Path(path).open("rb") as f:
+            with _Path(path).open("rb") as f:
                 return _pickle.load(f)  # nosec B301 - joblib failed; legacy pickle fallback for protocol mismatch
         except Exception as exc:
             import sys as _sys
@@ -211,7 +211,7 @@ def _load_models() -> None:
         _meta_path = _SAVED / "advanced_oos_meta.json"
         if _meta_path.exists():
             try:
-                with Path(_meta_path).open(encoding="utf-8") as _f:
+                with _Path(_meta_path).open(encoding="utf-8") as _f:
                     _meta = _json.load(_f)
                 _oos_acc = _meta.get("oos_accuracy", "?")
                 _oos_se = _meta.get("oos_accuracy_se", "?")
@@ -454,7 +454,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
         if report_path.exists():
             try:
-                with Path(report_path).open(encoding="utf-8") as f:
+                with _Path(report_path).open(encoding="utf-8") as f:
                     report = _json.load(f)
                 final = report.get("final", {})
                 wf = report.get("walkforward", {})
@@ -507,7 +507,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         report_path = _Path(__file__).parent / "saved_models" / "advanced_training_report.json"
         if report_path.exists():
             try:
-                with Path(report_path).open(encoding="utf-8") as f:
+                with _Path(report_path).open(encoding="utf-8") as f:
                     report = _json.load(f)
                 acc = report.get("final", {}).get("accuracy", 0.5)
                 return {

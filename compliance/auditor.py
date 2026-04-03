@@ -115,7 +115,7 @@ class ImmutableAuditLog:
     def _persist_record(self, record: AuditRecord):
         """Write to append-only log (async when a loop is running, sync otherwise)."""
 
-        _Path(self.log_path).mkdir(parents=True, exist_ok=True)
+        Path(self.log_path).mkdir(parents=True, exist_ok=True)
         filename = f"{self.log_path}audit_{datetime.now(UTC).strftime('%Y-%m')}.jsonl"
         try:
             loop = asyncio.get_running_loop()
