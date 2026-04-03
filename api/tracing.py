@@ -32,7 +32,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
@@ -44,7 +43,7 @@ try:
     from opentelemetry import trace
     from opentelemetry.sdk.resources import Resource
     from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 
     _OTEL_AVAILABLE = True
@@ -100,19 +99,19 @@ class _NoOpSpan:
     trace_id: str = "0" * 32
     span_id: str = "0" * 16
 
-    def set_attribute(self, *_: Any, **__: Any) -> None:  # noqa: D401
+    def set_attribute(self, *_: Any, **__: Any) -> None:
         pass
 
-    def add_event(self, *_: Any, **__: Any) -> None:  # noqa: D401
+    def add_event(self, *_: Any, **__: Any) -> None:
         pass
 
-    def record_exception(self, *_: Any, **__: Any) -> None:  # noqa: D401
+    def record_exception(self, *_: Any, **__: Any) -> None:
         pass
 
-    def set_status(self, *_: Any, **__: Any) -> None:  # noqa: D401
+    def set_status(self, *_: Any, **__: Any) -> None:
         pass
 
-    def __enter__(self) -> "_NoOpSpan":
+    def __enter__(self) -> _NoOpSpan:
         return self
 
     def __exit__(self, *_: Any) -> None:
@@ -122,16 +121,16 @@ class _NoOpSpan:
 class _NoOpTracer:
     """Minimal no-op tracer used when OTel is unavailable."""
 
-    def start_as_current_span(self, name: str, **_: Any) -> "_NoOpSpan":  # noqa: D401
+    def start_as_current_span(self, name: str, **_: Any) -> _NoOpSpan:
         return _NoOpSpan()
 
-    def start_span(self, name: str, **_: Any) -> "_NoOpSpan":  # noqa: D401
+    def start_span(self, name: str, **_: Any) -> _NoOpSpan:
         return _NoOpSpan()
 
 
 def _initialize_provider() -> None:
     """Lazily initialise the OpenTelemetry TracerProvider."""
-    global _provider_initialized  # noqa: PLW0603
+    global _provider_initialized
     if _provider_initialized:
         return
     _provider_initialized = True

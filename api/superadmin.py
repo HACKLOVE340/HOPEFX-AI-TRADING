@@ -328,7 +328,7 @@ async def list_users(
             db.close()
     except Exception as exc:
         logger.error("list_users: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/users/{user_id}")
@@ -360,7 +360,7 @@ async def get_user(user_id: str, user: TokenPayload = Depends(_require_superadmi
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.patch("/users/{user_id}")
@@ -373,9 +373,12 @@ async def update_user(user_id: str, body: UpdateUserBody, user: TokenPayload = D
             u = db.query(User).filter_by(id=user_id).first()
             if not u:
                 raise HTTPException(status_code=404, detail="User not found")
-            if body.username: u.username = body.username
-            if body.email:    u.email    = body.email
-            if body.status:   u.status   = body.status
+            if body.username:
+                u.username = body.username
+            if body.email:
+                u.email = body.email
+            if body.status:
+                u.status = body.status
             db.commit()
             _log_superadmin_action(user, "update_user", user_id)
             return {"ok": True}
@@ -384,7 +387,7 @@ async def update_user(user_id: str, body: UpdateUserBody, user: TokenPayload = D
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.delete("/users/{user_id}")
@@ -410,7 +413,7 @@ async def delete_user(user_id: str, user: TokenPayload = Depends(_require_supera
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.patch("/users/{user_id}/role")
@@ -436,7 +439,7 @@ async def set_user_role(user_id: str, body: SetRoleBody, user: TokenPayload = De
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.patch("/users/{user_id}/plan")
@@ -467,7 +470,7 @@ async def ban_user(user_id: str, body: BanUserBody, user: TokenPayload = Depends
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/users/{user_id}/unban")
@@ -489,7 +492,7 @@ async def unban_user(user_id: str, user: TokenPayload = Depends(_require_superad
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/users/{user_id}/reset-password")
@@ -497,7 +500,7 @@ async def reset_user_password(user_id: str, user: TokenPayload = Depends(_requir
     try:
         from database.connection import SessionLocal
         from database.user_models import User
-        import secrets, hashlib
+        import secrets
         db = SessionLocal()
         try:
             u = db.query(User).filter_by(id=user_id).first()
@@ -515,7 +518,7 @@ async def reset_user_password(user_id: str, user: TokenPayload = Depends(_requir
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/users/{user_id}/impersonate")
@@ -524,7 +527,8 @@ async def impersonate_user(user_id: str, user: TokenPayload = Depends(_require_s
     try:
         from database.connection import SessionLocal
         from database.user_models import User
-        import os, jwt as pyjwt
+        import os
+        import jwt as pyjwt
         db = SessionLocal()
         try:
             u = db.query(User).filter_by(id=user_id).first()
@@ -553,7 +557,7 @@ async def impersonate_user(user_id: str, user: TokenPayload = Depends(_require_s
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/users/{user_id}/activity")
@@ -652,7 +656,8 @@ async def bulk_unban_users(body: BulkUserBody, user: TokenPayload = Depends(_req
 @router.post("/users/bulk/export")
 async def bulk_export_users(body: BulkUserBody, user: TokenPayload = Depends(_require_superadmin)):
     """Export selected users as CSV. Pass empty user_ids to export all."""
-    import csv, io
+    import csv
+    import io
     from database.connection import SessionLocal
     from database.user_models import User
     from fastapi.responses import StreamingResponse
@@ -1277,7 +1282,6 @@ async def create_tax_report(
     """Create or regenerate a tax report for a given period and jurisdiction."""
     _log_superadmin_action(user, "tax_report_create", f"period={body.get('period')} jurisdiction={body.get('jurisdiction')}")
     import uuid as _uuid
-    from datetime import datetime, timezone
 
     period       = body.get("period", "")
     jurisdiction = body.get("jurisdiction", "")
@@ -1412,7 +1416,7 @@ async def run_reconciliation(
     actual amounts and writes a ReconciliationRecord to the database.
     """
     import uuid as _uuid
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timezone
 
     period   = body.get("period", "")
     provider = body.get("provider", "stripe")
@@ -1441,10 +1445,9 @@ async def run_reconciliation(
         from monetization.payment_processor import payment_processor, PaymentStatus
 
         for p in payment_processor._payments.values():
-            if p.created_at and start_dt <= p.created_at < end_dt:
-                if p.status == PaymentStatus.SUCCEEDED:
-                    expected_amount += float(p.amount)
-                    tx_count += 1
+            if p.created_at and start_dt <= p.created_at < end_dt and p.status == PaymentStatus.SUCCEEDED:
+                expected_amount += float(p.amount)
+                tx_count += 1
     except Exception as exc:
         logger.debug("reconciliation: PaymentProcessor unavailable: %s", exc)
 
@@ -1800,22 +1803,22 @@ async def get_logs(
         import os
         log_file = os.getenv("LOG_FILE", "logs/app.log")
         try:
-            with open(log_file, "r") as f:
+            with open(log_file) as f:
                 lines = f.readlines()[-limit:]
             for line in reversed(lines):
-                line = line.strip()
-                if not line:
+                stripped = line.strip()
+                if not stripped:
                     continue
-                if level and level not in line:
+                if level and level not in stripped:
                     continue
-                if search and search.lower() not in line.lower():
+                if search and search.lower() not in stripped.lower():
                     continue
-                parts = line.split(" ", 3)
+                parts = stripped.split(" ", 3)
                 entries.append({
                     "ts":      parts[0] if len(parts) > 0 else "",
                     "level":   parts[2] if len(parts) > 2 else "INFO",
                     "logger":  parts[1] if len(parts) > 1 else "app",
-                    "message": parts[3] if len(parts) > 3 else line,
+                    "message": parts[3] if len(parts) > 3 else stripped,
                 })
         except Exception:
             logger.debug("Suppressed exception (no detail) in %s", __name__)
@@ -1907,7 +1910,6 @@ async def get_user_flag_overrides(target_user_id: str, user: TokenPayload = Depe
     overrides = []
     try:
         from cache.redis_client import get_redis_client
-        import json
         rc = get_redis_client()
         if rc:
             raw = rc.hgetall(f"feature_flags:user:{target_user_id}")
@@ -1973,7 +1975,8 @@ async def get_audit_log(
 @router.get("/audit/export")
 async def export_audit_log(user: TokenPayload = Depends(_require_superadmin)):
     from fastapi.responses import StreamingResponse
-    import csv, io
+    import csv
+    import io
     result = await get_audit_log(limit=500, user=user)
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=["event_id", "user_id", "event_type", "detail", "ip_address", "created_at"])
@@ -2056,7 +2059,7 @@ async def flush_cache(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/infra/db")
@@ -2242,7 +2245,7 @@ async def get_kyc_queue(
     # Also pull from legacy admin KYC endpoint
     if not records:
         try:
-            from api.admin import list_pending_kyc as _legacy_kyc
+            pass
         except Exception:
             logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"records": records, "total": total, "page": page, "limit": limit}
@@ -2273,7 +2276,7 @@ async def approve_kyc(
         logger.warning("KYC approve error: %s", exc)
     # Fallback: try legacy admin endpoint
     try:
-        from api.admin import decide_kyc as _legacy_decide
+        pass
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"status": "approved", "user_id": target_user_id, "note": "persisted via fallback"}
@@ -2535,7 +2538,8 @@ async def get_immutable_audit_trail(
     # Fallback: read from audit log files
     if not records:
         try:
-            import os, json as _json
+            import os
+            import json as _json
             audit_dir = "data/audit"
             if os.path.isdir(audit_dir):
                 for fname in sorted(os.listdir(audit_dir), reverse=True)[:5]:
@@ -2594,7 +2598,6 @@ async def get_circuit_breakers(user: TokenPayload = Depends(_require_superadmin)
     """Live circuit breaker states from risk/circuit_breakers.py."""
     breakers: list[dict] = []
     try:
-        from risk.circuit_breakers import CircuitBreaker, CircuitState
         # Attempt to get the global registry
         try:
             from risk.circuit_breakers import _registry as cb_registry
@@ -2794,7 +2797,7 @@ async def run_stress_test(
         raise
     except Exception as exc:
         logger.warning("Stress test run error: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/risk/prop-breaches")
@@ -3041,7 +3044,6 @@ async def list_tenants(
     """All white-label tenants — superadmin only."""
     tenants: list[dict] = []
     try:
-        from api.whitelabel_admin import router as _wl_router
         # Try to pull from the whitelabel admin module's data store
         from api.whitelabel_admin import _get_tenants
         tenants = _get_tenants()
@@ -4307,7 +4309,7 @@ async def get_service_statuses(user: TokenPayload = Depends(_require_superadmin)
     ]
     import asyncio
     results = await asyncio.gather(*[fn() for _, fn in checks], return_exceptions=True)
-    for (name, _), result in zip(checks, results):
+    for (name, _), result in zip(checks, results, strict=False):
         if isinstance(result, Exception):
             services.append({"name": name, "status": "down", "latency_ms": 0, "last_check": _utcnow().isoformat(), "error": str(result)})
         else:
@@ -4460,7 +4462,6 @@ async def trigger_backup(
         logger.warning("Backup trigger error: %s", exc)
     # Try legacy admin backup endpoint
     try:
-        from api.admin import router as _admin_router
         # Trigger via admin backup endpoint if available
         pass
     except Exception:

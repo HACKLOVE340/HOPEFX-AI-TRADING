@@ -11,11 +11,9 @@ market_data_module / portfolio_management_module / trading_module) with
 real tests against the production codebase.
 """
 
-import os
 import unittest
-from datetime import datetime, timezone
+from datetime import timezone
 
-import pytest
 
 UTC = timezone.utc
 

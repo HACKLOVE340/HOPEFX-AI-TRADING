@@ -226,7 +226,6 @@ def main():
         f"{'=' * 60}\n"
         f"DELETE THIS FILE after saving credentials to a password manager.\n"
     )
-    import stat
     fd = os.open(str(pw_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
         os.write(fd, file_content.encode())
@@ -244,8 +243,8 @@ def main():
     if auto_generated:
         print(f"  Password : {password}   ← SAVE THIS NOW")
     else:
-        print(f"  Password : (your supplied value)")
-    print(f"  Role     : superadmin")
+        print("  Password : (your supplied value)")
+    print("  Role     : superadmin")
     print(f"  User ID  : {result['user_id']}")
     print()
     print(token_line)

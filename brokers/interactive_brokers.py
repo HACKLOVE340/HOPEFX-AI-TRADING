@@ -436,7 +436,7 @@ class InteractiveBrokersConnector(BrokerConnector):
 # InteractiveBrokersConnector so that isinstance/issubclass checks used in
 # tests and factory validation continue to work with either class name.
 try:
-    from brokers.ibkr_connector import IBKRConnector as _IBKRConnector  # noqa: E402
+    from brokers.ibkr_connector import IBKRConnector as _IBKRConnector
 
     InteractiveBrokersConnector.register(_IBKRConnector)
 except Exception:  # pragma: no cover – registration is best-effort

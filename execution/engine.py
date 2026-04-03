@@ -58,13 +58,13 @@ class _NullSpanCtx:
     degrade gracefully without branching everywhere.
     """
 
-    def set_attribute(self, *_: Any, **__: Any) -> None:  # noqa: D401
+    def set_attribute(self, *_: Any, **__: Any) -> None:
         pass
 
-    def add_event(self, *_: Any, **__: Any) -> None:  # noqa: D401
+    def add_event(self, *_: Any, **__: Any) -> None:
         pass
 
-    def __enter__(self) -> "_NullSpanCtx":
+    def __enter__(self) -> _NullSpanCtx:
         return self
 
     def __exit__(self, *_: Any) -> None:

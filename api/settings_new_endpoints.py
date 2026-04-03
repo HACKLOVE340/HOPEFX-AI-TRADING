@@ -41,7 +41,7 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)

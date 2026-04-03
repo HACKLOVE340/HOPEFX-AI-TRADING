@@ -485,7 +485,7 @@ def main() -> int:
         # (means the OOS cutoff will be positional, not calendar-based)
         logger.warning("No Date column found in feature matrix — falling back to positional OOS split")
         n = len(X)
-        oos_n = max(1, int(n * OOS_YEARS / DATASET_YEARS_APPROX))  # approximate OOS fraction
+        max(1, int(n * OOS_YEARS / DATASET_YEARS_APPROX))  # approximate OOS fraction
         fake_dates = pd.date_range("1968-01-01", periods=n, freq="B")
         dates = pd.Series(fake_dates, index=X.index)
 
