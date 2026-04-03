@@ -383,6 +383,49 @@ async def _eventbus_tick_broadcaster() -> None:
         await _broadcast_no_live_feed()
 
 
+def _atr_from_buffer(symbol: str) -> float | None:
+    """Compute ATR(14) from the signal engine data buffer. Returns None on failure."""
+    try:
+        from core.signal_engine import _data_buffers  # type: ignore[attr-defined]
+        import numpy as _np
+        broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
+        buf = _data_buffers.get(broker_sym) or _data_buffers.get(symbol)
+        if buf is not None and len(buf) >= 15:  # noqa: PLR2004
+            bars = list(buf)[-15:]
+            highs = _np.array([b["high"] for b in bars], dtype=float)
+            lows = _np.array([b["low"] for b in bars], dtype=float)
+            closes = _np.array([b["close"] for b in bars], dtype=float)
+            tr = _np.maximum(highs[1:] - lows[1:], _np.maximum(_np.abs(highs[1:] - closes[:-1]), _np.abs(lows[1:] - closes[:-1])))
+            if len(tr) >= 14:  # noqa: PLR2004
+                return float(_np.mean(tr[-14:]))
+    except Exception as exc:
+        logger.debug("_atr_from_buffer failed: %s", exc)
+    return None
+
+
+def _atr_from_csv(symbol: str) -> float | None:
+    """Compute ATR(14) from H1 CSV file. Returns None on failure."""
+    try:
+        import pathlib
+        import numpy as _np
+        import pandas as _pd
+        broker_sym = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
+        csv_path = pathlib.Path(f"data/{broker_sym}_H1.csv")
+        if not csv_path.exists():
+            csv_path = pathlib.Path(f"data/{symbol.replace('/', '')}_H1.csv")
+        if csv_path.exists():
+            df = _pd.read_csv(csv_path, usecols=["high", "low", "close"]).tail(20)
+            if len(df) >= 15:  # noqa: PLR2004
+                highs = df["high"].to_numpy(dtype=float)
+                lows = df["low"].to_numpy(dtype=float)
+                closes = df["close"].to_numpy(dtype=float)
+                tr = _np.maximum(highs[1:] - lows[1:], _np.maximum(_np.abs(highs[1:] - closes[:-1]), _np.abs(lows[1:] - closes[:-1])))
+                return float(_np.mean(tr[-14:]))
+    except Exception as exc:
+        logger.debug("_atr_from_csv failed: %s", exc)
+    return None
+
+
 def _compute_atr_sl_tp(
     symbol: str,
     mid: float,
@@ -469,18 +512,12 @@ def _compute_atr_sl_tp(
 
     # ── 3. Percentage fallback ────────────────────────────────────────────────
     if atr is None or atr <= 0:
-        # 1.5% SL / 3.0% TP as last resort
-        atr = mid * 0.01
+        atr = mid * 0.01  # 1% percentage fallback
 
     is_long = direction in ("long", "buy")
     if is_long:
-        sl = round(mid - atr * sl_mult, 5)
-        tp = round(mid + atr * tp_mult, 5)
-    else:
-        sl = round(mid + atr * sl_mult, 5)
-        tp = round(mid - atr * tp_mult, 5)
-
-    return sl, tp
+        return round(mid - atr * sl_mult, 5), round(mid + atr * tp_mult, 5)
+    return round(mid + atr * sl_mult, 5), round(mid - atr * tp_mult, 5)
 
 
 async def _eventbus_signal_broadcaster() -> None:
@@ -667,7 +704,7 @@ async def ws_live(websocket: WebSocket) -> None:
 
     Auth flow:
       1. Server accepts connection and sends { "type": "connected" }
-      2. Client sends { "type": "auth", "token": "Bearer <jwt>" }
+async def _ws_auth_gate(cid: str, websocket: WebSocket) -> bool:
          within AUTH_TIMEOUT_SECONDS, or connection is closed (4001).
       3. Server sends { "type": "auth_ok", "user_id": "..." }
       4. Client subscribes to channels and receives live data.
@@ -704,7 +741,6 @@ async def ws_live(websocket: WebSocket) -> None:
         },
     )
 
-    # ── Auth gate ─────────────────────────────────────────────────────────────
     if WS_AUTH_REQUIRED:
         try:
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
@@ -736,113 +772,81 @@ async def ws_live(websocket: WebSocket) -> None:
                 _manager.disconnect(cid)
                 return
 
-            user_id = str(payload.get("sub", payload.get("user_id", "unknown")))
-            _manager.authenticate(cid, user_id)
-            await _manager.send(
-                cid,
-                {
-                    "type": "auth_ok",
-                    "user_id": user_id,
-                    "role": payload.get("role", "trader"),
-                },
-            )
+    try:
+        await _ws_message_loop(cid, websocket)
+    finally:
+        from rate_limiting.websocket_limiter import get_ws_limiter, get_client_ip
+        await get_ws_limiter().release(get_client_ip(websocket))
 
-        except TimeoutError:
-            await _manager.send(
-                cid,
-                {
-                    "type": "error",
-                    "code": "AUTH_TIMEOUT",
-                    "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s",
-                },
-            )
+
+async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
+    """Perform the initial auth handshake. Returns True if authenticated."""
+    try:
+        raw = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
+        msg = json.loads(raw)
+        if msg.get("type") != "auth":
+            await _manager.send(cid, {"type": "error", "code": "AUTH_REQUIRED", "message": "First message must be {type: auth, token: ...}"})
             await websocket.close(code=4001)
             _manager.disconnect(cid)
-            return
-        except (WebSocketDisconnect, Exception) as exc:
-            logger.debug("WS auth phase error [%s]: %s", cid, exc)
+            return False
+        payload = _validate_ws_token(msg.get("token", ""))
+        if payload is None:
+            await _manager.send(cid, {"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
+            await websocket.close(code=4001)
             _manager.disconnect(cid)
-            return
+            return False
+        user_id = str(payload.get("sub", payload.get("user_id", "unknown")))
+        _manager.authenticate(cid, user_id)
+        await _manager.send(cid, {"type": "auth_ok", "user_id": user_id, "role": payload.get("role", "trader")})
+        return True
+    except TimeoutError:
+        await _manager.send(cid, {"type": "error", "code": "AUTH_TIMEOUT", "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s"})
+        await websocket.close(code=4001)
+        _manager.disconnect(cid)
+        return False
+    except (WebSocketDisconnect, Exception) as exc:
+        logger.debug("WS auth phase error [%s]: %s", cid, exc)
+        _manager.disconnect(cid)
+        return False
 
-    # ── Main message loop ─────────────────────────────────────────────────────
+
+async def _ws_handle_message(cid: str, msg: dict) -> None:
+    """Dispatch a single parsed WebSocket message."""
+    msg_type = msg.get("type", "")
+    if msg_type == "subscribe":
+        channels = msg.get("channels", [])
+        _manager.subscribe(cid, channels)
+        await _manager.send(cid, {"type": "subscribed", "channels": channels})
+    elif msg_type == "unsubscribe":
+        channels = msg.get("channels", [])
+        _manager.unsubscribe(cid, channels)
+        await _manager.send(cid, {"type": "unsubscribed", "channels": channels})
+    elif msg_type == "ping":
+        _manager.record_pong(cid)
+        await _manager.send(cid, {"type": "pong"})
+    elif msg_type == "auth":
+        payload = _validate_ws_token(msg.get("token", ""))
+        if payload:
+            user_id = str(payload.get("sub", "unknown"))
+            _manager.authenticate(cid, user_id)
+            await _manager.send(cid, {"type": "auth_ok", "user_id": user_id})
+        else:
+            await _manager.send(cid, {"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
+    else:
+        await _manager.send(cid, {"type": "error", "code": "UNKNOWN_MESSAGE_TYPE", "message": f"Unknown message type: {msg_type}"})
+
+
+async def _ws_message_loop(cid: str, websocket: Any) -> None:
+    """Run the main receive loop for a WebSocket connection."""
     try:
         while True:
             raw = await websocket.receive_text()
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
-                await _manager.send(
-                    cid,
-                    {
-                        "type": "error",
-                        "code": "INVALID_JSON",
-                        "message": "Message must be valid JSON",
-                    },
-                )
+                await _manager.send(cid, {"type": "error", "code": "INVALID_JSON", "message": "Message must be valid JSON"})
                 continue
-
-            msg_type = msg.get("type", "")
-
-            if msg_type == "subscribe":
-                channels = msg.get("channels", [])
-                _manager.subscribe(cid, channels)
-                await _manager.send(
-                    cid,
-                    {
-                        "type": "subscribed",
-                        "channels": channels,
-                    },
-                )
-
-            elif msg_type == "unsubscribe":
-                channels = msg.get("channels", [])
-                _manager.unsubscribe(cid, channels)
-                await _manager.send(
-                    cid,
-                    {
-                        "type": "unsubscribed",
-                        "channels": channels,
-                    },
-                )
-
-            elif msg_type == "ping":
-                # Client responding to heartbeat — reset miss counter
-                _manager.record_pong(cid)
-                await _manager.send(cid, {"type": "pong"})
-
-            elif msg_type == "auth":
-                # Re-auth (token refresh) — validate new token
-                payload = _validate_ws_token(msg.get("token", ""))
-                if payload:
-                    user_id = str(payload.get("sub", "unknown"))
-                    _manager.authenticate(cid, user_id)
-                    await _manager.send(
-                        cid,
-                        {
-                            "type": "auth_ok",
-                            "user_id": user_id,
-                        },
-                    )
-                else:
-                    await _manager.send(
-                        cid,
-                        {
-                            "type": "error",
-                            "code": "AUTH_FAILED",
-                            "message": "Invalid or expired token",
-                        },
-                    )
-
-            else:
-                await _manager.send(
-                    cid,
-                    {
-                        "type": "error",
-                        "code": "UNKNOWN_MESSAGE_TYPE",
-                        "message": f"Unknown message type: {msg_type}",
-                    },
-                )
-
+            await _ws_handle_message(cid, msg)
     except WebSocketDisconnect:
         _manager.disconnect(cid)
     except Exception as exc:

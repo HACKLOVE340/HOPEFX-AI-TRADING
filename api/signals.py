@@ -247,7 +247,7 @@ class RealTimeSignalService:
 
         logger.info("Real-Time Signal Service initialized")
 
-    def generate_signal(
+    def generate_signal(  # noqa: PLR0913
         self,
         symbol: str,
         direction: SignalDirection,
@@ -772,98 +772,70 @@ def _get_signal_service() -> "RealTimeSignalService":
     return _signal_service
 
 
-def create_signals_router():
-    """
-    Build and return a FastAPI APIRouter with all signal endpoints.
-    Register this in app.py startup with: app.include_router(create_signals_router())
-    """
-    try:
-        from fastapi import APIRouter, HTTPException
-        from pydantic import BaseModel as _BaseModel
-    except ImportError:
-        logger.warning("FastAPI not available; signals router not created.")
-        return None
-
-    signals_router = APIRouter(prefix="/api/signals", tags=["Signals"])
-
-    class GenerateSignalRequest(_BaseModel):
-        symbol: str
-        price: float
-        direction: str = "buy"  # "buy" | "sell"
-        confidence: float = 0.7  # 0-1
-        entry_price: float | None = None
-        stop_loss: float | None = None
-        take_profit: float | None = None
-        timeframe: str = "1h"
-        regime: str = "ranging"
-        session: str = "new_york"
-        strategies_agreeing: list[str] | None = None
-        total_strategies: int = 1
-        parameters: dict[str, Any] | None = None
-
-    class CreateAlertRequest(_BaseModel):
-        symbol: str
-        direction: str  # "buy" | "sell" | "both"
-        min_confidence: float = 0.7
-        notify_webhook: str | None = None
-
-    @signals_router.get("/summary")
+def _register_signal_read_routes(router: Any) -> None:
+    """Register read-only signal GET endpoints."""
+    @router.get("/summary")
     async def get_signal_summary():
-        """Get a quick summary of current signal state."""
         return _get_signal_service().get_signal_summary()
 
-    @signals_router.get("/latest")
+    @router.get("/latest")
     async def get_latest_signals(symbol: str | None = None, limit: int = 10):
-        """
-        Return the most recent N signals from the live signal engine.
-
-        Pulls from the in-memory signal history ring buffer. Returns up to
-        `limit` signals (default 10), newest first. Optionally filter by symbol.
-        """
         svc = _get_signal_service()
-        # get_signal_history returns newest-first from the ring buffer
-        signals = svc.get_signal_history(symbol=symbol, hours=24)
-        latest = signals[:limit]
-        return {
-            "signals": [s.to_dict() for s in latest],
-            "count": len(latest),
-            "symbol_filter": symbol,
-        }
+        signals = svc.get_signal_history(symbol=symbol, hours=24)[:limit]
+        return {"signals": [s.to_dict() for s in signals], "count": len(signals), "symbol_filter": symbol}
 
-    @signals_router.get("/active")
+    @router.get("/active")
     async def get_active_signals(symbol: str | None = None):
-        """List all currently active signals, optionally filtered by symbol."""
-        svc = _get_signal_service()
-        signals = svc.get_active_signals(symbol=symbol)
+        signals = _get_signal_service().get_active_signals(symbol=symbol)
         return {"signals": [s.to_dict() for s in signals], "count": len(signals)}
 
-    @signals_router.get("/history")
+    @router.get("/history")
     async def get_signal_history(symbol: str | None = None, hours: int = 24):
-        """Get signal history for the past N hours."""
-        svc = _get_signal_service()
-        signals = svc.get_signal_history(symbol=symbol, hours=hours)
+        signals = _get_signal_service().get_signal_history(symbol=symbol, hours=hours)
         return {"signals": [s.to_dict() for s in signals], "count": len(signals)}
 
-    @signals_router.post("/generate")
-    async def generate_signal(req: GenerateSignalRequest):
-        """
-        Generate a trading signal via RealTimeSignalService.
+    @router.get("/analytics")
+    async def get_signal_analytics():
+        return _get_signal_service().get_analytics()
 
-        Provide symbol, current price, direction (buy/sell), confidence (0-1),
-        optional entry/SL/TP prices and list of agreeing strategies.
-        """
+    @router.get("/channels")
+    async def get_websocket_channels():
+        return {"channels": _get_signal_service().get_websocket_channels()}
+
+    @router.get("/engine")
+    async def get_engine_status():
+        except Exception:
+            logger.exception("Failed to get signal engine status")
+            engine_status = {
+                "status": "unavailable",
+                "error": "Signal engine status is temporarily unavailable."
+            }
+            engine_status = get_signal_engine_status()
+        except Exception as exc:
+            engine_status = {"error": str(exc)}
+        return {
+            "engine": engine_status,
+            "recent_engine_signals": engine_signals,
+            "recent_engine_signal_count": len(engine_signals),
+        }
+        recent = svc.get_signal_history(hours=1)
+        engine_signals = [s.to_dict() for s in recent if s.metadata.get("source") == "signal_engine"][:10]
+        return {"engine": engine_status, "recent_engine_signals": engine_signals, "recent_engine_signal_count": len(engine_signals)}
+
+
+def _register_signal_write_routes(router: Any) -> None:  # noqa: C901
+    """Register signal generation, alert, and distribution write endpoints."""
+    from fastapi import HTTPException as _HTTPException
+
+    @router.post("/generate")
+    async def generate_signal(req: _GenerateSignalRequest):
         try:
             svc = _get_signal_service()
             try:
                 direction = SignalDirection(req.direction.lower())
             except ValueError:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Invalid direction: '{req.direction}'. Use 'buy' or 'sell'.",
-                ) from None
-
+                raise _HTTPException(status_code=422, detail=f"Invalid direction: '{req.direction}'. Use 'buy' or 'sell'.") from None
             entry = req.entry_price if req.entry_price is not None else req.price
-            # Default SL/TP: 0.5% away (conservative if not provided)
             if direction == SignalDirection.BUY:
                 sl = req.stop_loss if req.stop_loss is not None else round(entry * 0.995, 5)
                 tp = req.take_profit if req.take_profit is not None else round(entry * 1.015, 5)
@@ -874,28 +846,11 @@ def create_signals_router():
             # Ensure at least one strategy name is present so min_strategies
             # check passes for direct API calls (e.g. from the frontend or tests).
             strategies = req.strategies_agreeing or ["api_signal"]
-            signal = svc.generate_signal(
-                symbol=req.symbol,
-                direction=direction,
-                confidence=req.confidence,
-                price=req.price,
-                entry_price=entry,
-                stop_loss=sl,
-                take_profit=tp,
-                timeframe=req.timeframe,
-                strategies_agreeing=strategies,
-                total_strategies=max(req.total_strategies, len(strategies)),
-                regime=req.regime,
-                session=req.session,
-                metadata=req.parameters or {},
-            )
+            signal = svc.generate_signal(symbol=req.symbol, direction=direction, confidence=req.confidence, price=req.price, entry_price=entry, stop_loss=sl, take_profit=tp, timeframe=req.timeframe, strategies_agreeing=strategies, total_strategies=max(req.total_strategies, len(strategies)), regime=req.regime, session=req.session, metadata=req.parameters or {})
             if signal is None:
-                return {
-                    "signal": None,
-                    "message": "No signal generated (confidence or strategy threshold not met)",
-                }
+                return {"signal": None, "message": "No signal generated (confidence or strategy threshold not met)"}
             return {"signal": signal.to_dict()}
-        except HTTPException:
+        except _HTTPException:
             raise
         except Exception:
             logger.exception("Signal generation failed: %s")
@@ -904,14 +859,8 @@ def create_signals_router():
                 detail="Signal generation failed",
             ) from None
 
-    @signals_router.get("/analytics")
-    async def get_signal_analytics():
-        """Get signal analytics (win rate, count, direction distribution)."""
-        return _get_signal_service().get_analytics()
-
-    @signals_router.post("/alerts")
-    async def create_alert(req: CreateAlertRequest):
-        """Create a price / signal alert for a symbol."""
+    @router.post("/alerts")
+    async def create_alert(req: _CreateAlertRequest):
         try:
             svc = _get_signal_service()
             notify_channels = ["web"]
@@ -928,29 +877,13 @@ def create_signals_router():
             logger.error("Alert creation failed: %s", e)
             raise HTTPException(status_code=500, detail="Alert creation failed — check server logs") from e
 
-    @signals_router.get("/alerts")
+    @router.get("/alerts")
     async def list_alerts(symbol: str | None = None):
-        """List active alerts."""
-        svc = _get_signal_service()
-        alerts = svc.get_alerts(symbol=symbol)
-        return {
-            "alerts": [
-                {
-                    "id": a.id,
-                    "symbol": a.symbol,
-                    "direction": a.direction,
-                    "min_confidence": a.min_confidence,
-                    "active": a.active,
-                    "created_at": a.created_at.isoformat(),
-                }
-                for a in alerts
-            ],
-            "count": len(alerts),
-        }
+        alerts = _get_signal_service().get_alerts(symbol=symbol)
+        return {"alerts": [{"id": a.id, "symbol": a.symbol, "direction": a.direction, "min_confidence": a.min_confidence, "active": a.active, "created_at": a.created_at.isoformat()} for a in alerts], "count": len(alerts)}
 
-    @signals_router.delete("/alerts/{alert_id}")
+    @router.delete("/alerts/{alert_id}")
     async def delete_alert(alert_id: str):
-        """Delete an alert by ID."""
         _get_signal_service().delete_alert(alert_id)
         return {"status": "deleted", "alert_id": alert_id}
 
@@ -991,95 +924,34 @@ def create_signals_router():
             "recent_engine_signal_count": len(engine_signals),
         }
 
-    # ── Signal distribution validation ───────────────────────────────────────
 
-    from pydantic import BaseModel as _BM
-
-    class OOSSignalItem(_BM):
-        direction: str
-        confidence: float
-        raw_score: float
-
-    class LiveSignalItem(_BM):
-        direction: str
-        confidence: float
-        raw_score: float
-
-    class SetOOSReferenceRequest(_BM):
-        signals: list[OOSSignalItem]
-
-    class ValidateSignalsRequest(_BM):
-        live_signals: list[LiveSignalItem] | None = None
-
-    @signals_router.post("/distribution/oos-reference")
+def _register_distribution_routes(router: Any, OOSSignalItem: Any, LiveSignalItem: Any, SetOOSReferenceRequest: Any, ValidateSignalsRequest: Any) -> None:
+    """Register signal distribution validation endpoints."""
+    @router.post("/distribution/oos-reference")
     async def set_oos_reference(body: SetOOSReferenceRequest):
-        """
-        Set the OOS backtest signal distribution as the reference baseline.
-        Call this once after completing an OOS backtest.
-        """
         from ml.signal_validator import SignalRecord, get_validator
-
         validator = get_validator()
-        records = [
-            SignalRecord(
-                direction=s.direction,
-                confidence=s.confidence,
-                raw_score=s.raw_score,
-            )
-            for s in body.signals
-        ]
+        records = [SignalRecord(direction=s.direction, confidence=s.confidence, raw_score=s.raw_score) for s in body.signals]
         validator.set_oos_reference(records)
         return {"set": True, "oos_sample_size": len(records)}
 
-    @signals_router.post("/distribution/validate")
+    @router.post("/distribution/validate")
     async def validate_signal_distribution(body: ValidateSignalsRequest):
-        """
-        Validate that live signal distribution matches the OOS reference.
-
-        Runs KS test, PSI, mean drift, directional bias, and confidence drift checks.
-        Returns status: passed | warning | failed | insufficient_data.
-
-        - warning: monitor closely, consider retraining
-        - failed: PSI > 0.25 or major drift — retrain required
-        """
         from ml.signal_validator import SignalRecord, get_validator
-
         validator = get_validator()
+        live_records = [SignalRecord(direction=s.direction, confidence=s.confidence, raw_score=s.raw_score) for s in body.live_signals] if body.live_signals is not None else None
+        return validator.validate(live_records).to_dict()
 
-        live_records = None
-        if body.live_signals is not None:
-            live_records = [
-                SignalRecord(
-                    direction=s.direction,
-                    confidence=s.confidence,
-                    raw_score=s.raw_score,
-                )
-                for s in body.live_signals
-            ]
-
-        report = validator.validate(live_records)
-        return report.to_dict()
-
-    @signals_router.post("/distribution/add-live")
+    @router.post("/distribution/add-live")
     async def add_live_signal(body: LiveSignalItem):
-        """Append a single live signal to the validation buffer."""
         from ml.signal_validator import SignalRecord, get_validator
-
         validator = get_validator()
-        validator.add_live_signal(
-            SignalRecord(
-                direction=body.direction,
-                confidence=body.confidence,
-                raw_score=body.raw_score,
-            )
-        )
+        validator.add_live_signal(SignalRecord(direction=body.direction, confidence=body.confidence, raw_score=body.raw_score))
         return {"buffered": True, "buffer_size": len(validator._live_signals)}
 
-    @signals_router.get("/distribution/status")
+    @router.get("/distribution/status")
     async def signal_distribution_status():
-        """Return current validation buffer sizes and last validation result."""
         from ml.signal_validator import get_validator
-
         validator = get_validator()
         report = (
             validator.validate()
@@ -1095,4 +967,15 @@ def create_signals_router():
             "validation": report.to_dict() if report else None,
         }
 
+def create_signals_router():
+    """Build and return a FastAPI APIRouter with all signal endpoints."""
+    try:
+        from fastapi import APIRouter
+    except ImportError:
+        logger.warning("FastAPI not available; signals router not created.")
+        return None
+
+    signals_router = APIRouter(prefix="/api/signals", tags=["Signals"])
+    _register_signal_read_routes(signals_router)
+    _register_signal_write_routes(signals_router)
     return signals_router

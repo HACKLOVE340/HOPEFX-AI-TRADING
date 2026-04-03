@@ -584,28 +584,29 @@ async def delete_indicator(ind_id: str, user: TokenPayload = Depends(get_current
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.get("/api/correlation")
-async def get_correlation(
-    symbols: str = "XAU/USD,EUR/USD,DXY,SPX,US10Y,VIX",
-    window: int = 30,
-    user: TokenPayload = Depends(get_current_user),
-):
-    """
-    Return rolling correlation matrix for the given symbols.
+def _pearson_corr(a: list[float], b: list[float]) -> float:
+    """Pearson correlation coefficient between two equal-length series."""
+    n = len(a)
+    ma, mb = sum(a) / n, sum(b) / n
+    num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
+    da = math.sqrt(sum((x - ma) ** 2 for x in a))
+    db = math.sqrt(sum((x - mb) ** 2 for x in b))
+    return round(num / (da * db), 3) if da * db > 0 else 0.0
 
-    Uses real OHLCV from:
-    1. price_engine.get_ohlcv() — live broker history
-    2. CSV files in data/ directory
 
-    Returns HTTP 503 when fewer than 2 symbols have sufficient real data
-    to compute a meaningful correlation matrix.
-    """
-    import pathlib
+def _returns_from_closes(closes: list[float]) -> list[float]:
+    return [
+        (closes[i] - closes[i - 1]) / closes[i - 1]
+        for i in range(1, len(closes))
+        if closes[i - 1] > 0
+    ]
 
-    sym_list = [s.strip() for s in symbols.split(",")]
 
-    # ── Collect real return series ────────────────────────────────────────────
-    series: dict[str, list[float]] = {}
+async def _collect_series_from_engine(
+    pe: Any, sym_list: list[str], window: int
+) -> dict[str, list[float]]:
+    """Fetch return series from the price engine for each symbol."""
+    import asyncio
 
     # 1. Price engine
     pe = getattr(app_state, "price_engine", None) if app_state else None
@@ -635,8 +636,8 @@ async def get_correlation(
             except Exception as exc:
                 logger.debug("correlation: price_engine miss for %s: %s", sym, exc)
 
-    # 2. CSV fallback for symbols still missing
     data_dir = pathlib.Path(__file__).parent.parent / "data"
+    series = dict(existing)
     for sym in sym_list:
         if sym in series:
             continue
@@ -678,21 +679,11 @@ async def get_correlation(
             },
         )
 
-    # Align all series to the same length (shortest available)
     min_len = min(len(v) for v in series.values())
     for sym in series:
         series[sym] = series[sym][-min_len:]
 
-    # ── Compute correlation matrix ────────────────────────────────────────────
-    def corr(a: list[float], b: list[float]) -> float:
-        n = len(a)
-        ma, mb = sum(a) / n, sum(b) / n
-        num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
-        da = math.sqrt(sum((x - ma) ** 2 for x in a))
-        db = math.sqrt(sum((x - mb) ** 2 for x in b))
-        return round(num / (da * db), 3) if da * db > 0 else 0.0
-
-    # Only include symbols that have data
+    matrix = _build_correlation_matrix(series)
     available = list(series.keys())
     matrix = {}
     for s1 in available:
@@ -710,10 +701,9 @@ async def get_correlation(
                 direction = "positively" if c > 0 else "negatively"
                 insights.append(f"{s1} and {s2} are {direction} correlated ({c:+.2f})")
 
-    missing = [s for s in sym_list if s not in series]
     return {
         "symbols": available,
-        "symbols_missing_data": missing,
+        "symbols_missing_data": [s for s in sym_list if s not in series],
         "window": min_len,
         "matrix": matrix,
         "insights": insights[:5],
@@ -780,14 +770,24 @@ class MonteCarloRequest(BaseModel):
     initial_capital: float = 10000.0
 
 
-def _run_monte_carlo(
-    win_rate: float,
-    avg_win: float,
-    avg_loss: float,
-    total_trades: int,
-    initial_capital: float,
-    simulations: int,
-) -> dict:
+@dataclass
+class _MonteCarloParams:
+    win_rate: float
+    avg_win: float
+    avg_loss: float
+    total_trades: int
+    initial_capital: float = 10000.0
+    simulations: int = 1000
+
+
+def _run_monte_carlo(params: _MonteCarloParams) -> dict:
+    win_rate = params.win_rate
+    avg_win = params.avg_win
+    avg_loss = params.avg_loss
+    total_trades = params.total_trades
+    initial_capital = params.initial_capital
+    simulations = params.simulations
+
     # Use OS entropy so each run produces independent results
     rng = random.Random()  # nosec B311 - Monte Carlo simulation, not cryptographic use
     final_equities = []

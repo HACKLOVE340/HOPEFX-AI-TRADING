@@ -350,11 +350,7 @@ class MarketRegimeDetector:
         self, adx: float, volatility_pct: float, trend: dict, prices: pd.DataFrame
     ) -> tuple[MarketRegime, float]:
         """Classify market regime based on indicators."""
-
         close = prices["close"]
-        close.pct_change().dropna()
-
-        # Calculate range metrics
         recent_high = prices["high"].tail(20).max()
         recent_low = prices["low"].tail(20).min()
         range_pct = (recent_high - recent_low) / recent_low
@@ -430,6 +426,42 @@ class MarketRegimeDetector:
             regime_duration=0,
             transition_probability={},
         )
+
+
+# Populate regime rules after MarketRegimeDetector is defined.
+# Each entry: (condition_fn, regime, confidence_fn)
+MarketRegimeDetector._REGIME_RULES = [
+    (
+        lambda adx, vol, direction, rng: adx > 25 and direction == "up",  # noqa: PLR2004
+        MarketRegime.TRENDING_UP,
+        lambda adx, vol: min(adx / 50, 1.0),
+    ),
+    (
+        lambda adx, vol, direction, rng: adx > 25 and direction == "down",  # noqa: PLR2004
+        MarketRegime.TRENDING_DOWN,
+        lambda adx, vol: min(adx / 50, 1.0),
+    ),
+    (
+        lambda adx, vol, direction, rng: vol > 80,  # noqa: PLR2004
+        MarketRegime.VOLATILE,
+        lambda adx, vol: vol / 100,
+    ),
+    (
+        lambda adx, vol, direction, rng: adx < 20 and rng < 0.02,  # noqa: PLR2004
+        MarketRegime.CONSOLIDATION,
+        lambda adx, vol: (20 - adx) / 20,
+    ),
+    (
+        lambda adx, vol, direction, rng: adx < 20 and rng > 0.03,  # noqa: PLR2004
+        MarketRegime.RANGING,
+        lambda adx, vol: 0.6,
+    ),
+    (
+        lambda adx, vol, direction, rng: vol > 60 and adx < 25,  # noqa: PLR2004
+        MarketRegime.CHOPPY,
+        lambda adx, vol: 0.5,
+    ),
+]
 
 
 class MultiTimeframeAnalyzer:

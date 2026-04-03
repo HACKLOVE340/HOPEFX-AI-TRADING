@@ -149,7 +149,7 @@ def _load_all_entries() -> dict[str, dict]:
 
 
 @router.get("/trades", response_model=list[JournalEntry])
-async def list_trades(
+async def list_trades(  # noqa: PLR0913
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     tag: str | None = None,

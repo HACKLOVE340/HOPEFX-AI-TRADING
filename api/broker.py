@@ -86,29 +86,37 @@ async def test_broker_connection(req: BrokerTestRequest) -> BrokerTestResponse:
     )
 
 
+def _oanda_response_from_status(
+    status_code: int, account_id: str, data: dict, latency: int
+) -> BrokerTestResponse:
+    """Map an OANDA HTTP status code to a BrokerTestResponse."""
+    if status_code == 401:  # noqa: PLR2004
+        return BrokerTestResponse(ok=False, broker="oanda", error="401 Unauthorized — check your API token", latency_ms=latency)
+    if status_code == 404:  # noqa: PLR2004
+        return BrokerTestResponse(ok=False, broker="oanda", error=f"Account {account_id!r} not found", latency_ms=latency)
+    if status_code != 200:  # noqa: PLR2004
+        return BrokerTestResponse(ok=False, broker="oanda", error=f"HTTP {status_code}", latency_ms=latency)
+    account = data.get("account", {})
+    return BrokerTestResponse(ok=True, broker="oanda", latency_ms=latency, balance=account.get("balance", "?"), currency=account.get("currency", ""))
+
+
 async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestResponse:
     """Test OANDA practice or live API connectivity."""
     if not req.apiKey:
         return BrokerTestResponse(ok=False, broker="oanda", error="API key is required")
     if not req.accountId:
-        return BrokerTestResponse(
-            ok=False,
-            broker="oanda",
-            error="Account ID is required",
-        )
+        return BrokerTestResponse(ok=False, broker="oanda", error="Account ID is required")
 
     base = "https://api-fxpractice.oanda.com" if req.practice else "https://api-fxtrade.oanda.com"
     url = f"{base}/v3/accounts/{req.accountId}/summary"
-    headers = {
-        "Authorization": f"Bearer {req.apiKey}",
-        "Content-Type": "application/json",
-    }
+    headers = {"Authorization": f"Bearer {req.apiKey}", "Content-Type": "application/json"}
 
     try:
         import httpx
-
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, headers=headers)
+        latency = int((time.monotonic() - start) * 1000)
+        return _oanda_response_from_status(resp.status_code, req.accountId, resp.json(), latency)
     except ImportError:
         # Fallback to requests in executor
         import asyncio
@@ -160,14 +168,7 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
                 latency_ms=int((time.monotonic() - start) * 1000),
             )
     except Exception as exc:
-        return BrokerTestResponse(
-            ok=False,
-            broker="oanda",
-            error=f"Connection error: {exc}",
-            latency_ms=int((time.monotonic() - start) * 1000),
-        )
-
-    latency = int((time.monotonic() - start) * 1000)
+        return BrokerTestResponse(ok=False, broker="oanda", error=f"Connection error: {exc}", latency_ms=int((time.monotonic() - start) * 1000))
 
     if resp.status_code == 401:
         return BrokerTestResponse(
@@ -258,16 +259,9 @@ async def _test_alpaca(req: BrokerTestRequest, start: float) -> BrokerTestRespon
 @router.get("/status", summary="Current broker connection status, balance, and data feed")
 async def broker_status():
     """
-    Return the current broker type, connection state, account balance, and
-    data feed engine status.
+    Return broker connection state, account balance, data feed, and ML engine status.
 
-    Reads from the live app_state broker, nuclear_streamer, and price_engine.
-    For paper trading this returns the simulated balance.
-    For OANDA it calls get_account_info() to retrieve the live balance.
-
-    data_feed section reports:
-      - NuclearStreamer status when streaming keys are configured (primary)
-      - RealTimePriceEngine REST status as fallback
+    data_feed: NuclearStreamer (primary) → RealTimePriceEngine (fallback).
     OANDA is never used as a price source.
     """
     from datetime import datetime
