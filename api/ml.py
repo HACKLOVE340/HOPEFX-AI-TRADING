@@ -1330,7 +1330,7 @@ async def get_model_card(
             # Accept list[{feature, importance}] or dict{feature: importance}
             if isinstance(raw, dict):
                 feature_importances = sorted(
-                    [{"feature": k, "importance": v} for k, v in raw.items()],
+                    [{"feature": k, "importance": v} for k, v in raw.items() if v is not None],
                     key=lambda x: x["importance"],
                     reverse=True,
                 )[:10]
