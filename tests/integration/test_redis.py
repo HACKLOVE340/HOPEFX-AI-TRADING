@@ -54,7 +54,7 @@ if not REDIS_AVAILABLE:
 
 
 # ---------------------------------------------------------------------------
-# Helper: check whether a live Redis is reachable
+# Helper: check whether a live Redis is reachable; fall back to fakeredis
 # ---------------------------------------------------------------------------
 def _redis_reachable(host: str = "localhost", port: int = 6379) -> bool:
     """Return True if a Redis server is accepting connections."""
@@ -69,9 +69,32 @@ def _redis_reachable(host: str = "localhost", port: int = 6379) -> bool:
 
 REDIS_UP = _redis_reachable()
 
+# When no live Redis is available, use fakeredis so the live integration
+# tests still exercise real logic (serialisation, TTL, pub/sub) rather
+# than being skipped entirely.
+try:
+    import fakeredis as _fakeredis_mod
+
+    _FAKE_SERVER = _fakeredis_mod.FakeServer()
+    FAKEREDIS_AVAILABLE = True
+except ImportError:
+    _FAKE_SERVER = None
+    FAKEREDIS_AVAILABLE = False
+
+# The suite can run if either a real server OR fakeredis is present.
+REDIS_RUNNABLE = REDIS_UP or FAKEREDIS_AVAILABLE
+
+
+def _make_redis_client(decode_responses: bool = True) -> redis_lib.Redis:
+    """Return a real Redis client if available, otherwise a shared-server fakeredis client."""
+    if REDIS_UP:
+        return redis_lib.Redis(host="localhost", port=6379, decode_responses=decode_responses)
+    return _fakeredis_mod.FakeRedis(server=_FAKE_SERVER, decode_responses=decode_responses)
+
+
 requires_redis = pytest.mark.skipif(
-    not REDIS_UP,
-    reason="Redis server not reachable at localhost:6379 — skipping live integration tests",
+    not REDIS_RUNNABLE,
+    reason="Neither a live Redis server nor fakeredis is available",
 )
 
 
@@ -121,8 +144,8 @@ class TestRedisLive:
 
     @pytest.fixture(autouse=True)
     def _client(self) -> redis_lib.Redis:  # type: ignore[name-defined]
-        """Provide a clean Redis client and flush a test namespace."""
-        self.r = redis_lib.Redis(host="localhost", port=6379, decode_responses=True)
+        """Provide a clean Redis client (real or fakeredis) and flush test keys."""
+        self.r = _make_redis_client(decode_responses=True)
         # Remove any keys we might leave behind
         for key in self.r.scan_iter("hopefx_test:*"):
             self.r.delete(key)
@@ -185,7 +208,7 @@ class TestRedisLive:
         received: list[str] = []
         channel = "hopefx_test:events"
 
-        sub_client = redis_lib.Redis(host="localhost", port=6379, decode_responses=True)
+        sub_client = _make_redis_client(decode_responses=True)
         pubsub = sub_client.pubsub()
         pubsub.subscribe(channel)
 
@@ -194,7 +217,7 @@ class TestRedisLive:
 
         def _publisher() -> None:
             time.sleep(0.05)
-            pub = redis_lib.Redis(host="localhost", port=6379, decode_responses=True)
+            pub = _make_redis_client(decode_responses=True)
             pub.publish(channel, "trade_signal")
             pub.close()
 
@@ -223,20 +246,28 @@ class TestRedisLive:
 @requires_redis
 @pytest.mark.skipif(not CACHE_AVAILABLE, reason="MarketDataCache not importable")
 class TestMarketDataCacheLive:
-    """Test MarketDataCache against a real Redis instance."""
+    """Test MarketDataCache against a real or fakeredis instance."""
 
     @pytest.fixture(autouse=True)
     def _cache(self) -> MarketDataCache:
-        self.cache = MarketDataCache(
-            host="localhost",
-            port=6379,
-            max_retries=2,
-            retry_delay=0.1,
-        )
+        if REDIS_UP:
+            self.cache = MarketDataCache(
+                host="localhost",
+                port=6379,
+                max_retries=2,
+                retry_delay=0.1,
+            )
+        else:
+            # Inject fakeredis so MarketDataCache uses it as the backend.
+            fake = _fakeredis_mod.FakeRedis(decode_responses=False)
+            self.cache = MarketDataCache.__new__(MarketDataCache)
+            self.cache.__init__(host="localhost", port=6379, max_retries=1, retry_delay=0.0)
+            # Overwrite the internal redis reference with the fake one.
+            self.cache._redis = fake
         yield self.cache
         # Cleanup keys we might have written
         try:
-            r = redis_lib.Redis(host="localhost", port=6379)
+            r = _make_redis_client(decode_responses=False)
             for key in r.scan_iter(b"hopefx:*"):
                 r.delete(key)
             r.close()

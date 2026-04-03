@@ -29,6 +29,9 @@ class TestPropEnforcer:
     def _make(self, **kwargs):
         from risk.compliance.prop_enforcer import PropConfig, PropEnforcer
 
+        # Default weekend_close=False so DD/news tests are not masked by
+        # the weekend gate (tests run at any time of week in CI).
+        kwargs.setdefault("weekend_close", False)
         cfg = PropConfig(**kwargs)
         e = PropEnforcer.__new__(PropEnforcer)
         import threading
