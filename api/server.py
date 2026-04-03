@@ -9,9 +9,16 @@ FastAPI application with logging, health checks, and metrics
 """
 
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 from typing import Any
+
+import contextlib
+
+from infrastructure.health import HealthStatus, get_health_checker
+from infrastructure.logging import get_logger
+from infrastructure.metrics import get_metrics_registry
+
+logger = get_logger(__name__)
 
 try:
     from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
@@ -23,16 +30,6 @@ try:
 except ImportError:
     FASTAPI_AVAILABLE = False
     logger.warning("FastAPI not available, API server disabled")
-
-import contextlib
-
-from infrastructure.health import HealthStatus, get_health_checker
-from infrastructure.logging import get_logger
-from infrastructure.metrics import get_metrics_registry
-
-logger = logging.getLogger(__name__)
-
-logger = get_logger(__name__)
 
 
 # Pydantic models
@@ -424,7 +421,7 @@ def _register_system_routes(app, trading_app, require_admin):
 
         try:
             max_bytes = 512 * 1024
-            with Path(log_path).open("rb") as fh:
+            with _Path(log_path).open("rb") as fh:
                 fh.seek(0, 2)
                 file_size = fh.tell()
                 fh.seek(max(0, file_size - max_bytes))

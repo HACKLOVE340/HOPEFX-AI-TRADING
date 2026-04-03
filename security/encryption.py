@@ -16,18 +16,17 @@ import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 try:
     from cryptography.fernet import Fernet
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-
     CRYPTO_AVAILABLE = True
 except ImportError:
     CRYPTO_AVAILABLE = False
     logger.warning("cryptography not available, using base64 obfuscation only")
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass

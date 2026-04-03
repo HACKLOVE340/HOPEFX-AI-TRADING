@@ -24,6 +24,8 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 try:
     import numpy as np
 
@@ -31,8 +33,6 @@ try:
 except ImportError:
     NUMPY_AVAILABLE = False
     logger.warning("NumPy not available, using fallback calculations")
-
-logger = logging.getLogger(__name__)
 
 
 class MarketRegime(Enum):

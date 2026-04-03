@@ -15,6 +15,8 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
+logger = logging.getLogger(__name__)
+
 try:
     from sqlalchemy import create_engine, event, text
     from sqlalchemy.engine import Engine
@@ -32,8 +34,6 @@ except ImportError:
     SQLALCHEMY_AVAILABLE = False
     Session = None  # type: ignore[assignment,misc]
     logger.warning("SQLAlchemy not available, database features disabled")
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -388,6 +388,7 @@ def init_db_manager(connection_string: str, **kwargs) -> DatabaseManager:
 # singleton so the first import does not require DATABASE_URL to be set.
 
 import os as _os
+from pathlib import Path as _Path
 
 
 def _default_db_url() -> str:

@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 
+logger = logging.getLogger(__name__)
+
 try:
     import aiohttp
 
@@ -32,8 +34,6 @@ try:
     NUMPY_AVAILABLE = True
 except ImportError:
     NUMPY_AVAILABLE = False
-
-logger = logging.getLogger(__name__)
 
 
 class OrderType(Enum):

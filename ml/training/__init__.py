@@ -6,9 +6,9 @@
 """ml.training package — re-exports from ml/training.py at parent level"""
 
 import importlib.util as _ilu
-import os as _os
+from pathlib import Path as _Path
 
-_parent = _os.path.dirname(_Path(__file__).parent)
+_parent = str(_Path(__file__).parent.parent)
 _spec = _ilu.spec_from_file_location(
     "_ml_training_module",
     _Path(_parent) / "training.py",

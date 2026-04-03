@@ -23,6 +23,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+logger = logging.getLogger(__name__)
+
 # Import components to test
 try:
     from backtesting.enhanced_engine import (
@@ -38,9 +40,6 @@ try:
 except ImportError as e:
     COMPONENTS_AVAILABLE = False
     logger.warning("Component imports failed: %s", e)
-
-
-logger = logging.getLogger(__name__)
 
 
 class TestCategory(Enum):

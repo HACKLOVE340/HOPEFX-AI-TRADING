@@ -38,6 +38,7 @@ import textwrap
 import traceback
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import openai
@@ -56,8 +57,6 @@ def _load_recent_candles_from_csv(
     RAG context can still be populated from historical data.
     """
     try:
-        from pathlib import Path
-
         import pandas as pd
 
         csv_path = Path("data") / f"{symbol}_H1.csv"

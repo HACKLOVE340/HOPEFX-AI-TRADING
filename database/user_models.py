@@ -12,8 +12,16 @@ live in the same database and share the same Base / session factory.
 
 from __future__ import annotations
 
+import enum
+import sys
 import uuid
 from datetime import UTC, datetime
+
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    class StrEnum(str, enum.Enum):
+        """Backport of enum.StrEnum for Python < 3.11."""
 
 
 def _utcnow() -> datetime:
