@@ -58,6 +58,9 @@ MIN_MOVE_ATR = 0.25
 PURGE_BARS = 5  # bars to purge between train/test in walk-forward
 N_SPLITS = 8
 ABSTAIN_THRESHOLD = 0.55  # only trade when confidence > this
+# Approximate total dataset years used when deriving positional OOS fraction
+# as a fallback when no calendar Date column is available in the feature matrix.
+DATASET_YEARS_APPROX = 58
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
@@ -482,7 +485,7 @@ def main() -> int:
         # (means the OOS cutoff will be positional, not calendar-based)
         logger.warning("No Date column found in feature matrix — falling back to positional OOS split")
         n = len(X)
-        oos_n = max(1, int(n * OOS_YEARS / 50))  # approximate OOS fraction
+        oos_n = max(1, int(n * OOS_YEARS / DATASET_YEARS_APPROX))  # approximate OOS fraction
         fake_dates = pd.date_range("1968-01-01", periods=n, freq="B")
         dates = pd.Series(fake_dates, index=X.index)
 

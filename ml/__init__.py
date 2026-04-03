@@ -271,15 +271,17 @@ class StackingEnsemblePredictor:
         import numpy as np
         import pandas as pd
 
-        X_in = X
         if isinstance(X, pd.DataFrame):
-            # Align columns to training schema
+            # Work on a copy to avoid mutating caller's DataFrame
+            X_in = X.copy()
             if self._feature_cols:
                 for col in self._feature_cols:
-                    if col not in X.columns:
-                        X[col] = 0.0
-                X_in = X[self._feature_cols]
+                    if col not in X_in.columns:
+                        X_in[col] = 0.0
+                X_in = X_in[self._feature_cols]
             X_in = X_in.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        else:
+            X_in = X
 
         if self._scaler is not None:
             try:
@@ -287,7 +289,22 @@ class StackingEnsemblePredictor:
             except Exception as exc:
                 _ml_logger.debug("StackingEnsemblePredictor: scaler.transform failed: %s", exc)
 
-        meta_X = np.column_stack([m.predict_proba(X_in)[:, 1] for m in self._base_learners])
+        base_probas = []
+        for idx, m in enumerate(self._base_learners):
+            try:
+                base_probas.append(m.predict_proba(X_in)[:, 1])
+            except Exception as exc:
+                _ml_logger.warning(
+                    "StackingEnsemblePredictor: base_learner[%d] (%s) predict_proba failed: %s "
+                    "— substituting 0.5 (neutral)",
+                    idx,
+                    type(m).__name__,
+                    exc,
+                )
+                n = X_in.shape[0] if hasattr(X_in, "shape") else len(X_in)
+                base_probas.append(np.full(n, 0.5))
+
+        meta_X = np.column_stack(base_probas)
         return self._meta.predict_proba(meta_X)
 
     def predict(self, X) -> "_Any":
