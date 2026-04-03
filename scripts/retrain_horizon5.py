@@ -74,7 +74,8 @@ import logging
 import os
 import subprocess  # nosec B404 - list-form call with sys.executable; no shell=True, no user input
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 
 # Ensure project root is on sys.path regardless of invocation directory

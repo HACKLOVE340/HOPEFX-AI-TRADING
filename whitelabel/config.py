@@ -24,7 +24,12 @@ stored in Redis (falls back to in-memory if Redis unavailable).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 
 
 class TierName(StrEnum):

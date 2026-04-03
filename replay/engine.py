@@ -9,7 +9,8 @@ import logging
 import threading
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any, ClassVar
 
 from replay.models import ReplayBar, ReplaySession, ReplaySpeed, ReplayState

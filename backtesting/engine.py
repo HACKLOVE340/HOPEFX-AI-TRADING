@@ -11,7 +11,8 @@ Production-grade backtesting with transaction cost modeling
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from enum import Enum
 from pathlib import Path
 from typing import Any

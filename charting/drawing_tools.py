@@ -11,7 +11,8 @@ horizontal lines, rectangles, Fibonacci retracements, text labels,
 channels, arc/circle annotations, pitchforks, and Elliott Wave labels.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 # Default Fibonacci retracement and extension levels

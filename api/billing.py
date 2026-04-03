@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status

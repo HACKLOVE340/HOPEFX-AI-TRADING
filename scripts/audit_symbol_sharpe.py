@@ -44,7 +44,8 @@ import json
 import logging
 import math
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 
 import numpy as np

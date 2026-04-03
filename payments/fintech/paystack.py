@@ -12,7 +12,8 @@ Handles payments via Paystack (Nigeria) - Bank transfer, Cards, USSD.
 import hashlib
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)

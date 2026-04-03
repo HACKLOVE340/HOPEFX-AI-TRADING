@@ -10,7 +10,8 @@ Coordinates multiple strategies to prevent conflicts and maximize returns
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 from core.event_bus import DomainEvent, EventBus

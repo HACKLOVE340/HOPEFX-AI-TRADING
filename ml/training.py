@@ -11,7 +11,8 @@ LSTM, XGBoost, Random Forest with model saving/loading, hyperparameter tuning, e
 import json
 import logging
 import warnings
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 
 logger = logging.getLogger(__name__)

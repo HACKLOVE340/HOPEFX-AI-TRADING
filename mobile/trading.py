@@ -23,7 +23,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)

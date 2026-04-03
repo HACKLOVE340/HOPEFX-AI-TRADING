@@ -24,7 +24,8 @@ from __future__ import annotations
 import logging
 import threading
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 logger = logging.getLogger(__name__)

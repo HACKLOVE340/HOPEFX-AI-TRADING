@@ -24,7 +24,8 @@ Phase chain (Phases 1–4 are optional and gated by feature flags):
 import asyncio
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any, Optional
 
 import pandas as pd

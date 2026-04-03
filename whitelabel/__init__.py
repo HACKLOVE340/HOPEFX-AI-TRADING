@@ -21,8 +21,14 @@ Key components:
 
 import logging
 import uuid
-from datetime import UTC, datetime, timedelta
-from enum import StrEnum
+from datetime import datetime, timedelta, timezone
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
+UTC = timezone.utc
 from typing import Any
 
 _logger = logging.getLogger(__name__)

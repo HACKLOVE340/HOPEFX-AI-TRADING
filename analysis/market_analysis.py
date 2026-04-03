@@ -16,7 +16,8 @@ Advanced market analysis tools:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, time
+from datetime import datetime, time, timezone
+UTC = timezone.utc
 from enum import Enum
 from typing import Any
 

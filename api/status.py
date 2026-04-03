@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any
 
 from fastapi import APIRouter

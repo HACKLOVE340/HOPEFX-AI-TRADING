@@ -46,7 +46,8 @@ import os
 import sys
 import time
 import traceback
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 
 # Ensure project root is on sys.path regardless of where the script is invoked.

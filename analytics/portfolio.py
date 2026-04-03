@@ -11,7 +11,8 @@ Multi-asset backtesting, portfolio optimization, correlation analysis, risk metr
 import json
 import logging
 import warnings
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 

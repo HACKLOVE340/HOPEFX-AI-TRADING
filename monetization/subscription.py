@@ -27,8 +27,14 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import UTC, datetime, timedelta
-from enum import StrEnum
+from datetime import datetime, timedelta, timezone
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
+UTC = timezone.utc
 from typing import Any
 
 from .pricing import SubscriptionTier, pricing_manager

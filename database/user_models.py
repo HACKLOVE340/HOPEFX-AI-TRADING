@@ -15,7 +15,8 @@ from __future__ import annotations
 import enum
 import sys
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 if sys.version_info >= (3, 11):
     from enum import StrEnum
@@ -42,6 +43,12 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from database.models import Base
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 
 
 class UserRole(StrEnum):

@@ -12,7 +12,8 @@ Tests for:
 - SupportResistanceDetector / PriceLevel  (analysis/patterns/support_resistance.py)
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 import numpy as np
 import pandas as pd

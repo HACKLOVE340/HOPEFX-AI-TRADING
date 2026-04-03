@@ -10,7 +10,8 @@ This strategy trades when price deviates significantly from its mean,
 expecting it to revert back to the average.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 import pandas as pd

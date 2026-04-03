@@ -36,7 +36,6 @@ Checks performed
 Usage
 -----
     from ml.signal_validator import SignalDistributionValidator
-
     validator = SignalDistributionValidator()
     validator.set_oos_reference(oos_signals)   # call once after backtest
     result = validator.validate(live_signals)
@@ -49,11 +48,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from enum import StrEnum
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 import numpy as np
 from scipy import stats as _stats
+
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 
 logger = logging.getLogger(__name__)
 

@@ -32,7 +32,8 @@ import json
 import logging
 import sys
 import urllib.request
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 
 import numpy as np

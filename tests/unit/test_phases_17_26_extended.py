@@ -13,7 +13,8 @@ Comprehensive tests for Phases 17-26 modules:
 - Phase 25: TeamManager (teams) - uncovered paths
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from unittest.mock import MagicMock
 
 import numpy as np

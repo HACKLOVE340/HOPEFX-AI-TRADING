@@ -18,7 +18,12 @@ Annual subscriptions get 2 months free (16.67% discount).
 
 from dataclasses import dataclass
 from decimal import Decimal
-from enum import StrEnum
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 
 
 class SubscriptionTier(StrEnum):

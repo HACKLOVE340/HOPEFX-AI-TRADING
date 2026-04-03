@@ -14,7 +14,8 @@ No external services required — all DB calls are mocked.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from unittest.mock import MagicMock, patch
 
 import pytest

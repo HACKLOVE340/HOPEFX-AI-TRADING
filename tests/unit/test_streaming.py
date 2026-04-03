@@ -7,7 +7,8 @@
 Tests for Real-Time Streaming Service (data/streaming.py)
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 import pytest
 

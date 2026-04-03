@@ -43,7 +43,8 @@ import argparse
 import json
 import logging
 import sys
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 

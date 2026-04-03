@@ -52,7 +52,8 @@ import time
 from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)

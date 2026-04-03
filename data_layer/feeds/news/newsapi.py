@@ -20,7 +20,8 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import ClassVar
 
 from data_layer.feeds.news.base import NewsFeedBase

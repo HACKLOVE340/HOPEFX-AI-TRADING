@@ -34,7 +34,6 @@ Architecture
 Usage
 -----
     from brain.hopefx_brain import HOPEFXBrain
-
     brain = HOPEFXBrain()
     brain.inject(
         risk_manager=rm,
@@ -62,9 +61,16 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from enum import StrEnum
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
+
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+    class StrEnum(str, Enum):  # Python 3.10 compat
+        pass
 
 logger = logging.getLogger(__name__)
 
