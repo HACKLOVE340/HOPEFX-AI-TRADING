@@ -120,8 +120,13 @@ class CircuitBreaker:
         self.peak_balance = self.broker.get_balance()
         self.session_start_balance = self.peak_balance
 
-        if asyncio.get_event_loop().is_running():
-            self._monitoring_task = asyncio.create_task(self._monitoring_loop())
+        try:
+            loop = asyncio.get_running_loop()
+            self._monitoring_task = loop.create_task(self._monitoring_loop())
+        except RuntimeError:
+            # No running event loop — monitoring task will be started
+            # explicitly via start_monitoring() when an async context is available.
+            self._monitoring_task = None
 
     async def _monitoring_loop(self):
         """Continuous risk monitoring"""
