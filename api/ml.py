@@ -510,7 +510,6 @@ async def list_models(user: TokenPayload = Depends(get_current_user)):
     return [ModelInfo(**v) for v in registry.values()]
 
 
-@router.post("/predict/{symbol}", response_model=PredictResponse)
 def _check_subscription_gate(user: Any) -> None:
     """Raise HTTP 403 if user's plan does not include ML predictions."""
     if getattr(user, "role", "") == "admin":
@@ -598,6 +597,7 @@ def _hold_response(symbol_upper: str, now_iso: str, model_id: str = "fallback") 
     )
 
 
+@router.post("/predict/{symbol}", response_model=PredictResponse)
 async def predict(
     symbol: str,
     body: PredictRequest,

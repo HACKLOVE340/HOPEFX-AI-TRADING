@@ -60,18 +60,47 @@ def _deserialize(raw: bytes) -> Any:
 class RedisCacheManager:
     """Production-ready Redis cache with JSON serialization."""
 
-    def __init__(self, host="localhost", port=6379, db=0):
+    def __init__(self, host: str = "localhost", port: int = 6379, db: int = 0):
         if not REDIS_AVAILABLE:
             raise ImportError("redis package required: pip install redis")
-        self.client = redis.Redis(
-            host=host,
-            port=port,
-            db=db,
-            decode_responses=False,
-            socket_connect_timeout=5,
-            socket_timeout=5,
-            health_check_interval=30,
+
+        # Use the shared connection pool when the caller hasn't specified a
+        # non-default host/port, otherwise fall back to a dedicated pool so
+        # that explicit host/port configs still work (e.g. multi-Redis setups).
+        import os
+        default_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        uses_defaults = (
+            host == "localhost"
+            and port == 6379
+            and db == 0
+            and "localhost:6379" in default_url
         )
+        if uses_defaults:
+            try:
+                from cache.redis_pool import get_sync_client
+                self.client = get_sync_client()
+            except Exception:
+                # Fallback: create a direct client if pool import fails
+                self.client = redis.Redis(
+                    host=host, port=port, db=db,
+                    decode_responses=False,
+                    socket_connect_timeout=5,
+                    socket_timeout=5,
+                    health_check_interval=30,
+                )
+        else:
+            # Non-default target: create a dedicated pool for this instance.
+            pool = redis.ConnectionPool(
+                host=host,
+                port=port,
+                db=db,
+                max_connections=20,
+                decode_responses=False,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+                health_check_interval=30,
+            )
+            self.client = redis.Redis(connection_pool=pool)
         self.default_ttl = timedelta(hours=1)
 
     def get(self, key: str) -> Any | None:

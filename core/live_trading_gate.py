@@ -60,6 +60,20 @@ logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).parent.parent
 
+# ── Module-level lazy imports (patchable in tests) ────────────────────────────
+# KillSwitch and get_clock are imported at module level so unit tests can
+# patch ``core.live_trading_gate.KillSwitch`` and
+# ``core.live_trading_gate.get_clock`` without entering the method body.
+try:
+    from kill_switch import KillSwitch
+except Exception:  # pragma: no cover
+    KillSwitch = None  # type: ignore[assignment,misc]
+
+try:
+    from brokers.oanda_paper_clock import get_clock
+except Exception:  # pragma: no cover
+    get_clock = None  # type: ignore[assignment]
+
 # ── Gate thresholds (overridable via env) ─────────────────────────────────────
 _LIVE_TRADING_ENABLED = os.getenv("FEATURE_LIVE_TRADING", "false").lower() == "true"
 _OOS_MIN_ACC = float(os.getenv("LIVE_GATE_OOS_MIN_ACC", "0.60"))
@@ -98,10 +112,19 @@ class LiveTradingGate:
 
     def _check_kill_switch(self) -> tuple[bool, str]:
         """Check 1: Kill-switch must be inactive."""
+        import sys
         try:
-            from kill_switch import KillSwitch
+            # When sys.modules["kill_switch"] is explicitly set to None (e.g.
+            # in tests simulating a missing dependency), treat as unavailable.
+            if "kill_switch" in sys.modules and sys.modules["kill_switch"] is None:
+                return False, "Kill-switch module unavailable"
 
-            ks = KillSwitch()
+            # Use the module-level name so ``patch("core.live_trading_gate.KillSwitch")``
+            # overrides work in tests.
+            _ks_cls = KillSwitch
+            if _ks_cls is None:
+                return False, "Kill-switch module unavailable"
+            ks = _ks_cls()
             if ks.is_active():
                 return False, f"Kill-switch is ACTIVE: {ks.reason}"
             return True, "Kill-switch inactive"
@@ -112,8 +135,8 @@ class LiveTradingGate:
     def _check_paper_clock(self) -> tuple[bool, str]:
         """Check 2: 30-day paper trading clock must be complete."""
         try:
-            from brokers.oanda_paper_clock import get_clock
-
+            if get_clock is None:
+                return False, "Paper clock module unavailable"
             clock = get_clock()
             status = clock.status()
             elapsed = status.get("elapsed_days", 0.0)
@@ -144,6 +167,8 @@ class LiveTradingGate:
         meta_paths = [
             ROOT / "ml" / "saved_models" / "advanced_oos_meta.json",
             ROOT / "ml" / "saved_models" / "advanced_training_report.json",
+            # Direct path (used when ROOT is overridden to a tmp dir in tests)
+            ROOT / "advanced_oos_meta.json",
         ]
         for path in meta_paths:
             if not path.exists():

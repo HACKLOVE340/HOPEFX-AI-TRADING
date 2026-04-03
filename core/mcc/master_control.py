@@ -451,8 +451,10 @@ class MasterControlCore:
         volatility = sum(r**2 for r in returns) / len(returns)
         trend = sum(returns) / len(returns)
 
-        if volatility > 0.001:  # High volatility threshold
-            new_regime = ("trending_up" if trend > 0 else "trending_down") if abs(trend) > 0.0005 else "volatile"
+        if volatility > 0.0001:  # High volatility threshold (0.01% squared return)
+            new_regime = ("trending_up" if trend > 0 else "trending_down") if abs(trend) > 0.0001 else "volatile"
+        elif abs(trend) > 0.0001:
+            new_regime = "trending_up" if trend > 0 else "trending_down"
         else:
             new_regime = "ranging"
 

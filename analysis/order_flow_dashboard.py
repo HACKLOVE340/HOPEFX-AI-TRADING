@@ -281,6 +281,7 @@ class OrderFlowDashboard:
         volume: float,
         side: str,
         timestamp: datetime | None = None,
+        trade_id: str | None = None,
     ) -> None:
         """
         Add a trade tick to the dashboard components.
@@ -291,6 +292,7 @@ class OrderFlowDashboard:
             volume: Trade volume/size
             side: 'buy' or 'sell'
             timestamp: Trade timestamp (defaults to now)
+            trade_id: Optional unique identifier for deduplication / audit trail
         """
         if self._ts is not None:
             try:

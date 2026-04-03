@@ -401,7 +401,7 @@ class ExecutionEngine:
                 _root_span.set_attribute("request_id", request.request_id)
                 _root_span.set_attribute("order_type", request.order_type)
             except Exception:
-                pass
+                logger.debug("Suppressed exception (no detail) in %s", __name__)
 
             t0 = time.monotonic()
             self._total_orders += 1
@@ -411,7 +411,7 @@ class ExecutionEngine:
                 try:
                     _root_span.add_event("data_layer.blocked", {"reason": request.message})
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
                 return request  # data-layer block
 
             request = self._enrich_price_from_tick_feed(request)
@@ -425,7 +425,7 @@ class ExecutionEngine:
                         {"reason": block.message},
                     )
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
                 return block
 
             # ── pre_trade_gate child span ─────────────────────────────────
@@ -438,7 +438,7 @@ class ExecutionEngine:
                 try:
                     _gate_span.set_attribute("symbol", request.symbol)
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
                 block = await self._check_pre_trade_gate(request, t0)
                 if block is not None:
                     try:
@@ -452,19 +452,19 @@ class ExecutionEngine:
                             {"reason": block.message},
                         )
                     except Exception:
-                        pass
+                        logger.debug("Suppressed exception (no detail) in %s", __name__)
                     return block
                 try:
                     _gate_span.add_event("gate.passed")
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
 
             algo_report = await self._try_algo_routing(request, t0)
             if algo_report is not None:
                 try:
                     _root_span.add_event("algo.routed", {"algo_id": str(algo_report.metadata.get("algo_id", ""))})
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
                 return algo_report
 
             block = self._check_sharpe_circuit_breaker(request, t0)
@@ -472,7 +472,7 @@ class ExecutionEngine:
                 try:
                     _root_span.add_event("sharpe_circuit_breaker.open", {"reason": block.message})
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
                 return block
 
             self._record_tca_signal_price(request)
@@ -489,7 +489,7 @@ class ExecutionEngine:
                     _broker_span.set_attribute("side", request.side)
                     _broker_span.set_attribute("quantity", request.quantity)
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
 
                 report = await self._submit_and_process(request, t0)
 
@@ -519,7 +519,7 @@ class ExecutionEngine:
                         _root_span.set_attribute("execution.status", report.status.value)
                         _root_span.set_attribute("execution.latency_ms", report.latency_ms)
                     except Exception:
-                        pass
+                        logger.debug("Suppressed exception (no detail) in %s", __name__)
 
                 return report
 

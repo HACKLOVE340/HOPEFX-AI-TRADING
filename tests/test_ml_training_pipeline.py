@@ -62,8 +62,9 @@ def test_fetch_gold_ohlcv_uses_cache(tmp_path):
     """fetch_gold_ohlcv loads from CSV when use_cached=True and file exists."""
     from ml.train_advanced import fetch_gold_ohlcv
 
-    # Create a minimal fake CSV
-    dates = pd.date_range("2023-01-01", periods=300, freq="B")
+    # Create a minimal fake CSV with recent dates so the date-range filter
+    # does not strip all rows when years=1 is requested.
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=300, freq="B")
     df = pd.DataFrame(
         {
             "open": np.random.uniform(1800, 2000, 300),

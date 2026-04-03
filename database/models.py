@@ -10,6 +10,7 @@ Complete SQLAlchemy models for all entities
 
 import enum
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 UTC = timezone.utc
@@ -21,6 +22,17 @@ def _utcnow() -> datetime:
 
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Strict-deps guard
+# ---------------------------------------------------------------------------
+# When ``HOPEFX_STRICT_DEPS=true`` (the recommended production setting),
+# a missing SQLAlchemy causes an immediate hard failure so the problem is
+# surfaced at startup rather than silently degrading persistence.
+# Set ``HOPEFX_STRICT_DEPS=false`` (or unset it) to allow the application to
+# start in a degraded state — operators MUST resolve the dependency before
+# going live.
+_STRICT_DEPS: bool = os.getenv("HOPEFX_STRICT_DEPS", "false").lower() in ("true", "1", "yes")
 
 try:
     from sqlalchemy import (
@@ -48,20 +60,22 @@ try:
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     SQLALCHEMY_AVAILABLE = False
-    # Log at ERROR level — SQLAlchemy unavailability means trade records, audit
-    # trails, and all database persistence are silently disabled.  This is NOT
-    # a warning; it is a critical operational gap that must be resolved before
-    # running in production.
-    logger.error(
+    _MISSING_MSG = (
         "CRITICAL DEPENDENCY MISSING: SQLAlchemy is not installed. "
         "All database persistence (trades, orders, audit trail, user accounts) "
-        "is DISABLED. Fix with: pip install sqlalchemy>=2.0 "
+        "is DISABLED. Fix with: pip install 'sqlalchemy>=2.0' "
         "or: pip install -r requirements.txt"
     )
+    if _STRICT_DEPS:
+        raise RuntimeError(_MISSING_MSG)
+
+    # Log at ERROR level so operators see this in logs even in non-strict mode.
+    logger.error(_MISSING_MSG)
 
     # Stub everything so class bodies that reference Column etc. don't NameError.
     # These stubs allow the application to start in a degraded state so operators
     # can see the error and install the dependency without a crash loop.
+    # WARNING: ALL DATABASE OPERATIONS WILL SILENTLY NO-OP IN THIS STATE.
     class _Stub:
         def __init__(self, *a, **kw):
             pass

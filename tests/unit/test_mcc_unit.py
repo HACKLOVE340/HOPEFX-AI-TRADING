@@ -123,7 +123,11 @@ class TestStrategyManagement:
         mcc = _mcc()
         strat = _make_strategy("alpha")
         mcc.register_strategy(strat)
-        assert strat.mcc_callback is mcc._on_strategy_signal
+        # Bound methods create a new object on each access, so `is` comparison
+        # always fails.  Compare the underlying function and the self-object
+        # to verify the callback points at the correct method of the correct instance.
+        assert strat.mcc_callback.__func__ is mcc._on_strategy_signal.__func__
+        assert strat.mcc_callback.__self__ is mcc
 
     def test_register_non_enhanced_wraps_with_adapter(self):
         """A plain strategy (no EnhancedStrategy base) should be wrapped."""

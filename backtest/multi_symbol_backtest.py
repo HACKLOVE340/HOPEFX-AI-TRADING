@@ -670,7 +670,7 @@ def run_backtest(
             )
             symbol_results.append(result)
         except Exception:
-            logger.exception("Backtest failed for %s: %s", display_name)
+            logger.exception("Backtest failed for %s", display_name)
             symbol_results.append(
                 {"symbol": display_name, "error": "Backtest failed — check server logs", "n_trades": 0}
             )

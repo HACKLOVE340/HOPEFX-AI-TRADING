@@ -347,7 +347,7 @@ class KillSwitch:
             if r is not None:
                 return r
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
 
         try:
             import redis as _redis_lib

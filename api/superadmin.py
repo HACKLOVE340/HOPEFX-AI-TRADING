@@ -177,7 +177,7 @@ def _log_superadmin_action(user: TokenPayload, action: str, detail: str = "") ->
         from api.admin import log_activity
         log_activity(f"[SUPERADMIN:{user.sub}] {action} {detail}")
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
 
 
 # ── Overview ──────────────────────────────────────────────────────────────────
@@ -240,7 +240,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
             if mm is not None:
                 overview["maintenance_mode"] = bool(mm)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
 
     # Engine status
     try:
@@ -250,7 +250,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
             overview["engine_status"]    = getattr(eng, "status", "running")
             overview["open_positions"]   = len(getattr(eng, "positions", {}))
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
 
     # Redis memory
     try:
@@ -260,7 +260,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
             info = rc.info("memory")
             overview["redis_memory_mb"] = round(info.get("used_memory", 0) / 1_048_576, 1)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
 
     # System resources
     try:
@@ -268,7 +268,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
         overview["cpu_pct"]    = psutil.cpu_percent(interval=0.1)
         overview["memory_pct"] = psutil.virtual_memory().percent
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
 
     # Determine health
     if overview["kill_switch_active"] or overview["error_rate_pct"] > 10:
@@ -717,7 +717,7 @@ def _load_platform_config() -> dict:
             try:
                 return {**_PLATFORM_CONFIG_DEFAULTS, **json.loads(stored)}
             except Exception:
-                pass
+                logger.debug("Suppressed exception (no detail) in %s", __name__)
     return dict(_PLATFORM_CONFIG_DEFAULTS)
 
 
@@ -806,7 +806,7 @@ def _load_engine_config() -> dict:
             try:
                 return {**_ENGINE_CONFIG_DEFAULTS, **json.loads(stored)}
             except Exception:
-                pass
+                logger.debug("Suppressed exception (no detail) in %s", __name__)
     # Also pull from legacy risk settings
     try:
         from api.admin import _get_risk_settings
@@ -819,7 +819,7 @@ def _load_engine_config() -> dict:
         merged["paper_trading_mode"] = rs.get("paper_trading_mode", merged["paper_trading_mode"])
         return merged
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return dict(_ENGINE_CONFIG_DEFAULTS)
 
 
@@ -852,7 +852,7 @@ async def update_engine_config(body: EngineConfigBody, user: TokenPayload = Depe
         from api.admin import apply_persisted_risk_settings
         apply_persisted_risk_settings()
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     _log_superadmin_action(user, "update_engine_config", str(list(updates.keys())))
     return {"ok": True}
 
@@ -920,7 +920,7 @@ async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) 
             eng = app_state.engine
             metrics["open_positions"] = len(getattr(eng, "positions", {}))
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return metrics
 
 
@@ -1129,7 +1129,7 @@ async def get_subscription_stats(user: TokenPayload = Depends(_require_superadmi
         finally:
             db.close()
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     # Enrich with tier breakdown from subscription manager
     try:
         from monetization.subscription import subscription_manager
@@ -1652,7 +1652,7 @@ async def get_blocked_ips(user: TokenPayload = Depends(_require_superadmin)) -> 
                         "blocked_by": entry.get("blocked_by", ""),
                     })
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception as exc:
         logger.debug("blocked_ips: %s", exc)
     return {"blocked_ips": blocked}
@@ -1791,7 +1791,7 @@ async def get_logs(
                         continue
                     entries.append(entry)
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception as exc:
         logger.debug("get_logs redis: %s", exc)
 
@@ -1818,7 +1818,7 @@ async def get_logs(
                     "message": parts[3] if len(parts) > 3 else line,
                 })
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
 
     return {"logs": entries}
 
@@ -2085,7 +2085,7 @@ async def get_queue_stats(user: TokenPayload = Depends(_require_superadmin)) -> 
             for q in ["app:logs", "platform:broadcasts", "ml:retrain_queue", "signals:queue"]:
                 queues[q] = rc.llen(q)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"queues": queues}
 
 
@@ -2244,7 +2244,7 @@ async def get_kyc_queue(
         try:
             from api.admin import list_pending_kyc as _legacy_kyc
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"records": records, "total": total, "page": page, "limit": limit}
 
 
@@ -2275,7 +2275,7 @@ async def approve_kyc(
     try:
         from api.admin import decide_kyc as _legacy_decide
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"status": "approved", "user_id": target_user_id, "note": "persisted via fallback"}
 
 
@@ -2331,7 +2331,7 @@ async def get_aml_alerts(
                         continue
                     alerts.append(a)
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception as exc:
         logger.warning("AML alerts Redis error: %s", exc)
     # Fallback: query DB
@@ -2412,7 +2412,7 @@ async def get_sanctions_hits(
                         continue
                     hits.append(h)
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception as exc:
         logger.warning("Sanctions hits error: %s", exc)
     return {"hits": hits, "total": len(hits)}
@@ -2480,7 +2480,7 @@ async def get_regulatory_reports(
                         "download_url": f"/api/superadmin/compliance/regulatory/reports/{fname}/download",
                     })
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"reports": reports}
 
 
@@ -2546,12 +2546,12 @@ async def get_immutable_audit_trail(
                                 r = _json.loads(line.strip())
                                 records.append(r)
                             except Exception:
-                                pass
+                                logger.debug("Suppressed exception (no detail) in %s", __name__)
             total = len(records)
             offset = (page - 1) * limit
             records = records[offset: offset + limit]
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"records": records, "total": total, "page": page, "limit": limit}
 
 
@@ -2654,7 +2654,7 @@ async def reset_circuit_breaker(
         if rc:
             rc.hset("risk:cb_overrides", name, _json.dumps({"state": "closed", "reset_by": user.sub, "reset_at": _utcnow().isoformat()}))
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"name": name, "state": "closed", "action": "reset"}
 
 
@@ -2678,7 +2678,7 @@ async def force_open_circuit_breaker(
         if rc:
             rc.hset("risk:cb_overrides", name, _json.dumps({"state": "open", "opened_by": user.sub, "opened_at": _utcnow().isoformat()}))
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"name": name, "state": "open", "action": "forced_open"}
 
 
@@ -2694,7 +2694,7 @@ async def get_var_metrics(user: TokenPayload = Depends(_require_superadmin)) -> 
             if cached:
                 return _json.loads(cached)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     # Compute from live positions
     try:
         from risk.analytics import RiskAnalytics
@@ -2725,7 +2725,7 @@ async def get_stress_test_results(user: TokenPayload = Depends(_require_superadm
             if raw:
                 results = _json.loads(raw)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     if not results:
         try:
             from risk.stress_test import SCENARIOS
@@ -2766,7 +2766,7 @@ async def run_stress_test(
                 if pv:
                     portfolio_value = float(pv)
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
         tester = StressTester(position_value=portfolio_value, leverage=1.0)
         result = tester.run_scenario(scenario)
         result_dict = {
@@ -2788,7 +2788,7 @@ async def run_stress_test(
                 existing.insert(0, result_dict)
                 rc.setex("risk:stress_test_results", 3600, _json.dumps(existing[:20]))
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
         return result_dict
     except HTTPException:
         raise
@@ -2819,7 +2819,7 @@ async def get_prop_breaches(
                         continue
                     breaches.append(b)
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception as exc:
         logger.warning("Prop breaches error: %s", exc)
     offset = (page - 1) * limit
@@ -2845,7 +2845,7 @@ async def get_drawdown_stats(user: TokenPayload = Depends(_require_superadmin)) 
             if raw:
                 return _json.loads(raw)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"current_drawdown_pct": 0.0, "max_drawdown_pct": 0.0, "peak_equity": 0.0, "trough_equity": 0.0}
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2956,7 +2956,7 @@ async def get_tca_metrics(
                 if raw:
                     metrics = _json.loads(raw)
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"metrics": metrics, "period": period}
 
 
@@ -2971,7 +2971,7 @@ async def get_broker_routing(user: TokenPayload = Depends(_require_superadmin)) 
             if raw:
                 return _json.loads(raw)
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"primary_broker": "oanda", "fallback_broker": "paper", "routing_mode": "auto"}
 
 
@@ -3016,7 +3016,7 @@ def _get_tenant_store() -> dict:
             if raw:
                 return _json.loads(raw)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {}
 
 
@@ -3046,7 +3046,7 @@ async def list_tenants(
         from api.whitelabel_admin import _get_tenants
         tenants = _get_tenants()
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     if not tenants:
         store = _get_tenant_store()
         tenants = list(store.values())
@@ -3069,7 +3069,7 @@ async def get_tenant(
             from api.whitelabel_admin import _get_tenant_by_id
             tenant = _get_tenant_by_id(tenant_id)
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return tenant
@@ -3106,7 +3106,7 @@ async def create_tenant(
         from api.whitelabel_admin import _create_tenant
         _create_tenant(tenant)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return tenant
 
 
@@ -3223,7 +3223,7 @@ async def get_tenant_usage(
             if raw:
                 return _json.loads(raw)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {
         "tenant_id":      tenant_id,
         "api_calls_today": 0,
@@ -3246,7 +3246,7 @@ def _gdpr_store() -> dict:
             if raw:
                 return _json.loads(raw)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {}
 
 
@@ -3340,7 +3340,7 @@ async def _execute_gdpr_erasure(target_user_id: str, admin_id: str) -> None:
             data={"user_id": target_user_id},
         )
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
 
 
 @router.post("/gdpr/users/{target_user_id}/export")
@@ -3409,7 +3409,7 @@ async def get_consent_log(
                         continue
                     entries.append(e)
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception as exc:
         logger.warning("Consent log error: %s", exc)
     total = len(entries)
@@ -3428,7 +3428,7 @@ async def get_retention_policies(user: TokenPayload = Depends(_require_superadmi
             if raw:
                 policies = _json.loads(raw)
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
     if not policies:
         policies = [
             {"data_type": "trade_history",    "retention_days": 2555, "legal_basis": "MiFID II Art. 25"},
@@ -3487,7 +3487,7 @@ async def get_nuclear_status(user: TokenPayload = Depends(_require_superadmin)) 
         ks = KillSwitch()
         status["kill_switch_active"] = ks.is_active()
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     try:
         from cache.redis_client import get_redis_client
         import json as _json
@@ -3504,7 +3504,7 @@ async def get_nuclear_status(user: TokenPayload = Depends(_require_superadmin)) 
         ns = await _nuclear_status()
         status.update(ns)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return status
 
 
@@ -3544,7 +3544,7 @@ async def nuclear_halt(
         from api.ws_live import broadcast_system_event
         await broadcast_system_event({"type": "nuclear_halt", "reason": body.reason})
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"halted": True, "reason": body.reason, "halted_at": _utcnow().isoformat()}
 
 
@@ -3663,7 +3663,7 @@ async def get_nuclear_log(
                 try:
                     entries.append(_json.loads(item))
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception as exc:
         logger.warning("Nuclear log error: %s", exc)
     return {"entries": entries, "total": len(entries)}
@@ -3684,7 +3684,7 @@ def _load_rate_limit_rules() -> list[dict]:
             if raw:
                 return _json.loads(raw)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     # Default rules
     return [
         {"rule_id": "rl_auth",       "endpoint": "/api/auth/login",        "limit": 10,  "window_seconds": 60,   "scope": "per_ip",   "enabled": True, "current_hits": 0},
@@ -3720,7 +3720,7 @@ async def get_rate_limit_rules(user: TokenPayload = Depends(_require_superadmin)
                 hits = rc.get(key)
                 rule["current_hits"] = int(hits) if hits else 0
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"rules": rules}
 
 
@@ -3750,7 +3750,7 @@ async def create_rate_limit_rule(
         if hasattr(rl, "add_rule"):
             rl.add_rule(new_rule)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return new_rule
 
 
@@ -3820,7 +3820,7 @@ async def get_rate_limit_violations(
                 try:
                     violations.append(_json.loads(item))
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception as exc:
         logger.warning("Rate limit violations error: %s", exc)
     total = len(violations)
@@ -3843,7 +3843,7 @@ def _load_alert_rules() -> list[dict]:
             if raw:
                 return _json.loads(raw)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return [
         {"rule_id": "ar_cpu",      "name": "High CPU",          "condition": "cpu_pct > 90",          "severity": "critical", "enabled": True, "channels": ["slack", "email"], "last_fired": None, "fire_count": 0},
         {"rule_id": "ar_mem",      "name": "High Memory",       "condition": "memory_pct > 85",       "severity": "warning",  "enabled": True, "channels": ["slack"],          "last_fired": None, "fire_count": 0},
@@ -3969,7 +3969,7 @@ async def get_fired_alerts(
                         continue
                     fired.append(a)
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception as exc:
         logger.warning("Fired alerts error: %s", exc)
     total = len(fired)
@@ -4039,9 +4039,9 @@ async def list_reports(user: TokenPayload = Depends(_require_superadmin)) -> dic
                     if r.get("status") == "generating":
                         reports.insert(0, r)
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"reports": reports, "total": len(reports)}
 
 
@@ -4142,7 +4142,7 @@ async def get_self_healer_status(user: TokenPayload = Depends(_require_superadmi
             if raw:
                 return _json.loads(raw)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"status": "unknown", "tracked_files": 0, "last_scan": None, "violations": [], "patches_applied": 0}
 
 
@@ -4164,7 +4164,7 @@ async def trigger_integrity_scan(user: TokenPayload = Depends(_require_superadmi
         if rc:
             rc.rpush("security:scan_queue", "integrity_scan")
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"status": "scan_queued", "triggered_at": _utcnow().isoformat()}
 
 
@@ -4187,7 +4187,7 @@ async def get_antivirus_status(user: TokenPayload = Depends(_require_superadmin)
             if raw:
                 return _json.loads(raw)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {
         "status":        "unknown",
         "last_scan":     None,
@@ -4283,7 +4283,7 @@ async def get_security_infra_log(
                 try:
                     entries.append(_json.loads(item))
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception as exc:
         logger.warning("Security infra log error: %s", exc)
     return {"entries": entries, "total": len(entries)}
@@ -4431,9 +4431,9 @@ async def list_backups(user: TokenPayload = Depends(_require_superadmin)) -> dic
                     if not any(x["backup_id"] == b.get("backup_id") for x in backups):
                         backups.insert(0, b)
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception (no detail) in %s", __name__)
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"backups": backups, "total": len(backups)}
 
 
@@ -4464,7 +4464,7 @@ async def trigger_backup(
         # Trigger via admin backup endpoint if available
         pass
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"backup_id": backup_id, "type": body.type, "status": "running", "triggered_at": _utcnow().isoformat()}
 
 
@@ -4541,7 +4541,7 @@ async def pause_job(
         if rc:
             rc.hset("system:job_states", job_id, "paused")
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"job_id": job_id, "status": "paused"}
 
 
@@ -4557,7 +4557,7 @@ async def resume_job(
         if rc:
             rc.hset("system:job_states", job_id, "active")
     except Exception:
-        pass
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
     return {"job_id": job_id, "status": "active"}
 
 

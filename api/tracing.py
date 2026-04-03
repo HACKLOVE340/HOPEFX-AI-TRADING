@@ -52,6 +52,19 @@ except ImportError:  # pragma: no cover
     _OTEL_AVAILABLE = False
     trace = None  # type: ignore[assignment]
 
+# W3C TraceContext propagation — enables distributed tracing across services
+# (HTTP headers: traceparent, tracestate, baggage)
+try:
+    from opentelemetry import propagate
+    from opentelemetry.propagators.composite import CompositePropagator
+    from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+    from opentelemetry.baggage.propagation import W3CBaggagePropagator
+
+    _PROPAGATOR_AVAILABLE = True
+except ImportError:
+    _PROPAGATOR_AVAILABLE = False
+    propagate = None  # type: ignore[assignment]
+
 try:
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
@@ -150,6 +163,19 @@ def _initialize_provider() -> None:
             logger.warning("Failed to configure OTLP exporter: %s", exc)
 
     trace.set_tracer_provider(provider)
+
+    # Install W3C TraceContext + Baggage propagators so that
+    # ``traceparent`` / ``tracestate`` / ``baggage`` HTTP headers are
+    # automatically honoured when this service acts as a downstream consumer.
+    if _PROPAGATOR_AVAILABLE:
+        try:
+            propagate.set_global_textmap(
+                CompositePropagator([TraceContextTextMapPropagator(), W3CBaggagePropagator()])
+            )
+            logger.info("OTel W3C TraceContext + Baggage propagators installed")
+        except Exception as _prop_exc:
+            logger.debug("Could not install OTel propagators: %s", _prop_exc)
+
     logger.info(
         "OTel TracerProvider initialised | service=%s sampling=%.2f",
         _SERVICE_NAME,
@@ -196,7 +222,7 @@ def _current_trace_span_ids() -> tuple[str, str]:
                 sid = format(ctx.span_id, "016x")
                 return tid, sid
         except Exception:
-            pass
+            logger.debug("Suppressed exception (no detail) in %s", __name__)
     return _hex_trace_id(), _hex_span_id()
 
 
