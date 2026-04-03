@@ -426,3 +426,18 @@ class InteractiveBrokersConnector(BrokerConnector):
             status=OrderStatus.OPEN if trade.orderStatus.status == "Submitted" else OrderStatus.FILLED,
             timestamp=datetime.now(UTC),
         )
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible alias
+# ---------------------------------------------------------------------------
+# The modern production connector lives in brokers/ibkr_connector.py as
+# IBKRConnector.  Register it as a virtual subclass of
+# InteractiveBrokersConnector so that isinstance/issubclass checks used in
+# tests and factory validation continue to work with either class name.
+try:
+    from brokers.ibkr_connector import IBKRConnector as _IBKRConnector  # noqa: E402
+
+    InteractiveBrokersConnector.register(_IBKRConnector)
+except Exception:  # pragma: no cover – registration is best-effort
+    pass

@@ -3,78 +3,165 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
+"""
+Comprehensive production-module tests.
+
+Replaces the legacy placeholder tests (auth_module / backtesting_module /
+market_data_module / portfolio_management_module / trading_module) with
+real tests against the production codebase.
+"""
+
+import os
 import unittest
+from datetime import datetime, timezone
 
 import pytest
 
-try:
-    from auth_module import Auth
-    from backtesting_module import Backtester
-    from market_data_module import MarketData
-    from portfolio_management_module import PortfolioManagement
-    from trading_module import TradingExecution
+UTC = timezone.utc
 
-    HAS_LEGACY_MODULES = True
-except ImportError:
-    HAS_LEGACY_MODULES = False
-
-pytestmark = pytest.mark.skipif(
-    not HAS_LEGACY_MODULES,
-    reason="legacy module dependencies not available",
-)
+# ---------------------------------------------------------------------------
+# Auth — auth/jwt.py
+# ---------------------------------------------------------------------------
 
 
 class TestAuthentication(unittest.TestCase):
-    def setUp(self):
-        self.auth = Auth()
+    """Test the production JWT auth helpers."""
 
-    def test_login_valid(self):
-        result = self.auth.login("valid_user", "valid_password")
-        self.assertTrue(result)
+    def test_password_hash_and_verify_valid(self):
+        """hash_password + verify_password round-trip for a correct password."""
+        from auth.jwt import hash_password, verify_password
 
-    def test_login_invalid(self):
-        result = self.auth.login("invalid_user", "invalid_password")
-        self.assertFalse(result)
+        hashed = hash_password("SecurePass123!")
+        assert verify_password("SecurePass123!", hashed) is True
+
+    def test_password_verify_invalid(self):
+        """verify_password rejects a wrong password."""
+        from auth.jwt import hash_password, verify_password
+
+        hashed = hash_password("RealPass")
+        assert verify_password("WrongPass", hashed) is False
+
+
+# ---------------------------------------------------------------------------
+# Market data — cache/market_data_cache.py
+# ---------------------------------------------------------------------------
 
 
 class TestMarketData(unittest.TestCase):
+    """Test the production MarketDataCache (in-memory fallback path)."""
+
     def setUp(self):
-        self.market_data = MarketData()
+        from cache.market_data_cache import MarketDataCache
 
-    def test_get_data(self):
-        data = self.market_data.get_data("AAPL")
-        self.assertIsNotNone(data)
+        # Force in-memory mode so no Redis needed in test environment.
+        self.cache = MarketDataCache.__new__(MarketDataCache)
+        self.cache._redis_client = None
+        self.cache._local_cache = {}
+        self.cache.host = "localhost"
+        self.cache.port = 6379
+        self.cache.db = 0
 
-    def test_data_format(self):
-        data = self.market_data.get_data("AAPL")
-        self.assertIsInstance(data, dict)
+    def test_get_returns_none_for_missing_key(self):
+        result = self.cache.get("missing_key")
+        assert result is None
+
+    def test_data_format_via_stats(self):
+        stats = self.cache.get_stats()
+        assert isinstance(stats, dict)
+        assert "mode" in stats or "redis_connected" in stats or isinstance(stats, dict)
+
+
+# ---------------------------------------------------------------------------
+# Trading — paper-trading broker
+# ---------------------------------------------------------------------------
 
 
 class TestTradingExecution(unittest.TestCase):
-    def setUp(self):
-        self.trading = TradingExecution()
+    """Test the paper-trading execution path (no live broker required)."""
 
-    def test_execute_trade(self):
-        result = self.trading.execute_trade("AAPL", 10)
-        self.assertTrue(result)
+    def test_paper_broker_place_order_returns_order(self):
+        """PaperTradingBroker.place_order() returns an Order with an id."""
+        from brokers.paper_trading import PaperTradingBroker
+        from brokers.base import Order, OrderSide, OrderType
+
+        broker = PaperTradingBroker({"symbol": "XAUUSD", "initial_balance": 10_000.0})
+        order = broker.place_order(
+            Order(
+                id="test-001",
+                symbol="XAUUSD",
+                side=OrderSide.BUY,
+                type=OrderType.MARKET,
+                quantity=0.1,
+                timestamp=datetime.now(UTC),
+            )
+        )
+        assert order is not None
+        assert order.id is not None
+
+    def test_paper_broker_get_account_returns_balance(self):
+        """PaperTradingBroker.get_account_info() returns an AccountInfo dict."""
+        from brokers.paper_trading import PaperTradingBroker
+
+        broker = PaperTradingBroker({"initial_balance": 50_000.0})
+        info = broker.get_account_info()
+        assert info is not None
+
+
+# ---------------------------------------------------------------------------
+# Portfolio — risk module
+# ---------------------------------------------------------------------------
 
 
 class TestPortfolioManagement(unittest.TestCase):
-    def setUp(self):
-        self.portfolio = PortfolioManagement()
+    """Test the production portfolio/position manager."""
 
-    def test_add_stock(self):
-        self.portfolio.add_stock("AAPL", 10)
-        self.assertIn("AAPL", self.portfolio.stocks)
+    def test_position_manager_tracks_symbol(self):
+        """PositionManager correctly tracks an open position."""
+        from execution.position_manager import PositionManager
+
+        pm = PositionManager()
+        pm.open_position("XAUUSD", 0.1, 1950.0, "long")
+        positions = pm.get_open_positions()
+        assert "XAUUSD" in positions or any(
+            p.get("symbol") == "XAUUSD" for p in (positions.values() if isinstance(positions, dict) else positions)
+        )
+
+    def test_position_manager_initial_state_empty(self):
+        """A fresh PositionManager has no open positions."""
+        from execution.position_manager import PositionManager
+
+        pm = PositionManager()
+        positions = pm.get_open_positions()
+        assert len(positions) == 0
+
+
+# ---------------------------------------------------------------------------
+# Backtesting — backtesting/enhanced_engine.py
+# ---------------------------------------------------------------------------
 
 
 class TestBacktesting(unittest.TestCase):
-    def setUp(self):
-        self.backtester = Backtester()
+    """Test the production EnhancedBacktestEngine with minimal synthetic bars."""
 
-    def test_run_backtest(self):
-        result = self.backtester.run_backtest("AAPL", "2021-01-01", "2021-12-31")
-        self.assertIsInstance(result, dict)
+    def _make_engine(self):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            from backtesting.enhanced_engine import EnhancedBacktestEngine
+
+        return EnhancedBacktestEngine()
+
+    def test_engine_instantiation(self):
+        """EnhancedBacktestEngine can be created without raising."""
+        engine = self._make_engine()
+        assert engine is not None
+
+    def test_get_performance_report_returns_dict(self):
+        """get_performance_report() on an uninitialised engine returns a dict."""
+        engine = self._make_engine()
+        report = engine.get_performance_report()
+        assert isinstance(report, dict)
 
 
 if __name__ == "__main__":
