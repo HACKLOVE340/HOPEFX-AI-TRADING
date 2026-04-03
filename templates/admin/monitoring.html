@@ -44,7 +44,7 @@
 <script>
 async function loadSystemMetrics() {
     try {
-        const resp = await fetch('/admin/api/system-metrics');
+        const resp = await fetch('/api/admin/system-metrics');
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const m = await resp.json();
         document.getElementById('cpu-usage').textContent = m.cpu_percent != null ? m.cpu_percent.toFixed(1) + '%' : 'N/A';

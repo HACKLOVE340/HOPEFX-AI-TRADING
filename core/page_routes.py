@@ -49,6 +49,15 @@ def register_page_routes(app: FastAPI) -> None:
             status_code=200,
         )
 
+    @app.get("/superadmin", response_class=HTMLResponse, tags=["Admin"], include_in_schema=False)
+    async def superadmin_redirect():
+        """Redirect /superadmin to the superadmin control center at /api/superadmin/."""
+        return HTMLResponse(
+            content='<html><head><meta http-equiv="refresh" content="0;url=/api/superadmin/"></head>'
+            "<body>Redirecting to SuperAdmin control center…</body></html>",
+            status_code=200,
+        )
+
     @app.get("/login", response_class=HTMLResponse, tags=["Auth"], include_in_schema=False)
     async def login_page():
         """Serve the login page."""
