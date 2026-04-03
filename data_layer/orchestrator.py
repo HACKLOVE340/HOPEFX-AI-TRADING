@@ -78,6 +78,9 @@ from data_layer.cache.redis_store import DataLayerRedisStore, dl_redis_store
 from data_layer.calendar.engine import MacroCalendarEngine, macro_calendar_engine
 from data_layer.feeds.gold.manager import GoldFeedManager
 from data_layer.feeds.macro.store_bridge import MacroStoreBridge, macro_store_bridge
+from data_layer.feeds.macro.cftc_cot import CFTCCOTFeed, cot_feed
+from data_layer.feeds.macro.imf_gold import IMFGoldFeed, imf_gold_feed
+from data_layer.feeds.macro.yahoo_macro import YahooMacroFeed, yahoo_macro_feed
 from data_layer.lineage.store import DataLineageStore, lineage_store
 from data_layer.microstructure.engine import MicrostructureEngine, microstructure_engine
 from data_layer.normalization.pipeline import (
@@ -117,6 +120,9 @@ class MarketDataOrchestrator:
         self._sentiment: NewsSentimentEngine = news_sentiment_engine
         self._calendar: MacroCalendarEngine = macro_calendar_engine
         self._macro_bridge: MacroStoreBridge = macro_store_bridge
+        self._cot_feed: CFTCCOTFeed = cot_feed
+        self._imf_feed: IMFGoldFeed = imf_gold_feed
+        self._yahoo_macro: YahooMacroFeed = yahoo_macro_feed
         self._lineage: DataLineageStore = lineage_store
         self._norm: NormalizationPipeline = normalization_pipeline
         self._replay: MarketReplayEngine = market_replay_engine
@@ -239,7 +245,28 @@ class MarketDataOrchestrator:
         except Exception as exc:
             logger.warning("MarketDataOrchestrator: macro bridge error: %s", exc)
 
-        # 7. Ensure macro CSV fallback is loaded so features are never zero
+        # 7. CFTC COT feed — real gold futures positioning (free, weekly)
+        try:
+            await self._cot_feed.start()
+            logger.info("MarketDataOrchestrator: CFTCCOTFeed started")
+        except Exception as exc:
+            logger.warning("MarketDataOrchestrator: COT feed error: %s", exc)
+
+        # 8. IMF central bank gold reserves (free, monthly)
+        try:
+            await self._imf_feed.start()
+            logger.info("MarketDataOrchestrator: IMFGoldFeed started")
+        except Exception as exc:
+            logger.warning("MarketDataOrchestrator: IMF feed error: %s", exc)
+
+        # 9. Yahoo Finance cross-asset macro (SPX, GLD, copper, oil, USDCNY)
+        try:
+            await self._yahoo_macro.start()
+            logger.info("MarketDataOrchestrator: YahooMacroFeed started")
+        except Exception as exc:
+            logger.warning("MarketDataOrchestrator: Yahoo macro feed error: %s", exc)
+
+        # 10. Ensure macro CSV fallback is loaded so features are never zero at startup
         #    at startup even without a FRED key or network access.
         try:
             from ml.macro_store import macro_store as _ms
@@ -272,7 +299,25 @@ class MarketDataOrchestrator:
           4. GoldFeedManager (all price feed HTTP sessions)
           5. DataLineageStore (flush queue, close SQLite)
         """
-        # 1. Macro bridge (FRED sessions)
+        # 1. COT feed
+        try:
+            await self._cot_feed.stop()
+        except Exception as exc:
+            logger.debug("CFTCCOTFeed stop error: %s", exc)
+
+        # 1b. IMF feed
+        try:
+            await self._imf_feed.stop()
+        except Exception as exc:
+            logger.debug("IMFGoldFeed stop error: %s", exc)
+
+        # 1c. Yahoo macro feed
+        try:
+            await self._yahoo_macro.stop()
+        except Exception as exc:
+            logger.debug("YahooMacroFeed stop error: %s", exc)
+
+        # 2. Macro bridge (FRED sessions)
         try:
             await self._macro_bridge.stop()
         except Exception as exc:

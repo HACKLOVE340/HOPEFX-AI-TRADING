@@ -54,9 +54,37 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# Module-level singleton — populated by init_mtf_store() at startup.
-# signal_engine._fetch_mtf_df() reads this when app_state.mtf_store is absent.
+# Module-level singleton — populated by MTFFusionStore.bootstrap() at startup.
+# signal_engine._fetch_mtf_df() and signal_filter._gate_mtf_confluence() read this.
 _MTF_STORE_SINGLETON: MTFFusionStore | None = None
+
+
+def get_mtf_store() -> "MTFFusionStore | None":
+    """
+    Return the bootstrapped MTFFusionStore singleton, or None if not yet ready.
+
+    Called by ml/signal_filter.py _gate_mtf_confluence() to retrieve live
+    H4/D1 trend features without importing the full startup stack.
+    Returns None gracefully when the store has not been initialised yet
+    (e.g. during tests or before startup completes) — the gate passes through.
+    """
+    return _MTF_STORE_SINGLETON
+
+
+async def init_mtf_store_standalone(
+    symbol: str = "XAUUSD",
+    data_dir: str = "data",
+) -> "MTFFusionStore":
+    """
+    Bootstrap MTFFusionStore outside the full app startup sequence.
+
+    Useful for scripts, tests, and the paper trading starter that don't
+    go through ComponentRegistry. Registers the singleton so signal_filter
+    can find it via get_mtf_store().
+    """
+    store = MTFFusionStore(symbol=symbol, data_dir=data_dir)
+    await store.bootstrap()
+    return store
 
 
 # ─────────────────────────────────────────────────────────────────────────────

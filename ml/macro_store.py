@@ -70,7 +70,6 @@ _DEFAULT_SERIES: dict[str, str] = {
     "us10y": "us10y_daily.csv",
     "us2y": "us2y_daily.csv",
     "cpi_surprise": "cpi_surprise.csv",
-    "cot_net_spec": "cot_net_spec.csv",
     "vix": "vix_daily.csv",
     "gold_etf_flow": "gold_etf_flow.csv",
     # WGC gold demand series (quarterly/monthly, forward-filled to hourly)

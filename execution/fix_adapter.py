@@ -63,6 +63,15 @@ if _FIX_BACKEND == "none":
     except ImportError:
         pyfixmsg = None  # type: ignore
         FixMessage = None  # type: ignore
+
+if _FIX_BACKEND == "none":
+    try:
+        import simplefix  # type: ignore
+
+        _FIX_BACKEND = "simplefix"
+        logger.info("fix_adapter: using simplefix backend (message encoding only)")
+    except ImportError:
+        simplefix = None  # type: ignore
         logger.warning(
             "fix_adapter: no FIX library found. Install quickfix or pyfixmsg for live execution.",
         )
