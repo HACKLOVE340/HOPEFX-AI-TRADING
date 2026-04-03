@@ -12,6 +12,8 @@ All endpoints require role >= 'admin'.
 
 import json
 import logging
+import os as _os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -558,7 +560,7 @@ def get_activity(user: TokenPayload = Depends(require_role("admin"))):
     """All user activity logs. Requires: role >= 'admin'."""
     entries = [
         {
-            "action": e.get("message", ""),
+            "action": e.get("message", "").lower().replace(" ", "_")[:30],
             "message": e.get("message", ""),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(e.get("time", 0))),
         }
@@ -637,7 +639,6 @@ def _dashboard_signal_status(module_status: dict) -> None:
 @router.get("/dashboard-data")
 def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
     """Full system state. Requires: role >= 'admin'."""
-    import os as _os
 
     trading_stats: dict[str, Any] = {
         "total_trades": 0,
@@ -771,7 +772,6 @@ def get_dashboard_data(user: TokenPayload = Depends(require_role("admin"))):
 @router.get("/system-metrics", response_model=None, summary="System resource metrics")
 def get_system_metrics(user: TokenPayload = Depends(require_role("admin"))):
     """Prometheus-style system metrics. Requires: role >= 'admin'."""
-    import os as _os
 
     uptime_secs = time.time() - _start_time
     memory_mb: float = 0.0
@@ -823,7 +823,6 @@ def _serve_admin_template(name: str, title: str) -> HTMLResponse:
         if base_path.exists():
             base = base_path.read_text(encoding="utf-8")
             # Replace Jinja extends/block tags with plain HTML
-            import re
             base = re.sub(r"\{%[-\s]*extends[^%]*%\}", "", base)
             base = re.sub(r"\{%[-\s]*block title[-\s]*%\}.*?\{%[-\s]*endblock[-\s]*%\}", title, base, flags=re.DOTALL)
             block_match = re.search(r"\{%[-\s]*block content[-\s]*%\}.*?\{%[-\s]*endblock[-\s]*%\}", content, flags=re.DOTALL)
