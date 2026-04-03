@@ -50,6 +50,9 @@
                 <li><a href="/api/trading/component-map" target="_blank">🗺️ Component Map</a></li>
                 <li><a href="/api/order-flow/dashboard" target="_blank">🌊 Order Flow</a></li>
                 <li><a href="/docs">📖 API Docs</a></li>
+                <li style="margin-top:10px;border-top:1px solid #34495e;padding-top:10px;">
+                  <a href="/superadmin" style="color:#e74c3c;">🔐 SuperAdmin</a>
+                </li>
             </ul>
             <div style="padding: 20px; margin-top: auto; border-top: 1px solid #34495e;">
                 <div style="font-size: 11px; color: #7f8c8d; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px;">System Status</div>
@@ -68,7 +71,7 @@
     </div>
     <script>
     function updateSidebarStatus() {
-        fetch('/admin/api/system-info').then(r => r.json()).then(d => {
+        fetch('/api/admin/system-info').then(r => r.json()).then(d => {
             const dot  = document.getElementById('sidebar-status-dot');
             const text = document.getElementById('sidebar-status-text');
             if (!dot || !text) return;
