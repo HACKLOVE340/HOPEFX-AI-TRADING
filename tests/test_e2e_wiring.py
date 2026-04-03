@@ -507,6 +507,21 @@ class TestSocialLeaderboard:
 
         from api.social_feed import leaderboard_router
 
+        # Seed a minimal leaderboard so entry-shape tests never skip.
+        _SEED = [
+            {
+                "id": "trader_001",
+                "rank": 1,
+                "name": "AlphaBot",
+                "return_3m": 12.5,
+                "sharpe": 1.8,
+                "followers": 42,
+                "win_rate": 64.0,
+                "trades": 150,
+            }
+        ]
+        monkeypatch.setattr("api.social_feed.db_get", lambda key: {"monthly": _SEED, "quarterly": _SEED, "all": _SEED})
+
         app = FastAPI()
         app.include_router(leaderboard_router)
         return TestClient(app)
