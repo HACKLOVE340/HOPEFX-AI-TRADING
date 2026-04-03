@@ -1303,9 +1303,12 @@ def _resolve_sl_tp(
     """
     Return (stop_loss, take_profit) for a signal.
 
-    Uses strategy-provided values when present; falls back to ATR-based
-    levels computed from the OHLCV bar list.  A fixed-percentage fallback
-    is used when ATR computation fails.
+    Priority:
+    1. Strategy-provided values on the signal object (most specific).
+    2. ATR-based levels computed from the OHLCV bar list.
+    3. Fixed-percentage fallback (``_SL_FALLBACK_FRAC`` / ``_TP_FALLBACK_FRAC``)
+       used when (a) ATR computation raises, or (b) no OHLCV bar data is
+       present at all (empty ``data`` dict).
 
     Every published signal must carry real SL/TP values so downstream
     consumers (ws_live.py, event bus, execution path) see consistent data.
@@ -1319,6 +1322,20 @@ def _resolve_sl_tp(
     is_long = direction.upper() == "BUY"
     sl_mult = float(os.getenv("SL_ATR_MULT", str(_SL_ATR_MULT_DEFAULT)))
     tp_mult = float(os.getenv("TP_ATR_MULT", str(_TP_ATR_MULT_DEFAULT)))
+
+    # When the caller passes no bar data at all, skip ATR (which would only
+    # return the ATR fallback fraction anyway) and go straight to the
+    # documented fixed-percentage fallback.  This keeps the behaviour
+    # predictable for callers that intentionally pass an empty data dict.
+    has_bar_data = bool(data.get("prices") or data.get("highs") or data.get("lows"))
+    if not has_bar_data:
+        sl = sl_raw if sl_raw is not None else (
+            entry_price * (1 - _SL_FALLBACK_FRAC) if is_long else entry_price * (1 + _SL_FALLBACK_FRAC)
+        )
+        tp = tp_raw if tp_raw is not None else (
+            entry_price * (1 + _TP_FALLBACK_FRAC) if is_long else entry_price * (1 - _TP_FALLBACK_FRAC)
+        )
+        return sl, tp
 
     try:
         atr = _compute_atr(
