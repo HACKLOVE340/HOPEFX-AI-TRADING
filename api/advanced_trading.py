@@ -36,9 +36,12 @@ from __future__ import annotations
 
 import logging
 import math
+import pathlib
 import random
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -595,26 +598,32 @@ def _pearson_corr(a: list[float], b: list[float]) -> float:
 
 
 def _returns_from_closes(closes: list[float]) -> list[float]:
-    return [
-        (closes[i] - closes[i - 1]) / closes[i - 1]
-        for i in range(1, len(closes))
-        if closes[i - 1] > 0
-    ]
+    return [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0]
 
 
-async def _collect_series_from_engine(
-    pe: Any, sym_list: list[str], window: int
-) -> dict[str, list[float]]:
+def _pearson_corr(a: list[float], b: list[float]) -> float:
+    """Compute Pearson correlation between two equal-length lists."""
+    import statistics
+
+    if len(a) < 2 or len(a) != len(b):
+        return 0.0
+    try:
+        return statistics.correlation(a, b)
+    except Exception:
+        return 0.0
+
+
+async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int) -> dict[str, list[float]]:
     """Fetch return series from the price engine for each symbol."""
     import asyncio
+
+    series: dict[str, list[float]] = {}
 
     # 1. Price engine
     pe = getattr(app_state, "price_engine", None) if app_state else None
     if pe is not None:
         for sym in sym_list:
             try:
-                import asyncio
-
                 ohlcv = pe.get_ohlcv(sym, "1d", window + 5)
                 if asyncio.iscoroutine(ohlcv):
                     ohlcv = await ohlcv
@@ -637,7 +646,6 @@ async def _collect_series_from_engine(
                 logger.debug("correlation: price_engine miss for %s: %s", sym, exc)
 
     data_dir = pathlib.Path(__file__).parent.parent / "data"
-    series = dict(existing)
     for sym in sym_list:
         if sym in series:
             continue
@@ -683,13 +691,12 @@ async def _collect_series_from_engine(
     for sym in series:
         series[sym] = series[sym][-min_len:]
 
-    matrix = _build_correlation_matrix(series)
     available = list(series.keys())
-    matrix = {}
+    matrix: dict[str, dict[str, float]] = {}
     for s1 in available:
         matrix[s1] = {}
         for s2 in available:
-            matrix[s1][s2] = 1.0 if s1 == s2 else corr(series[s1], series[s2])
+            matrix[s1][s2] = 1.0 if s1 == s2 else _pearson_corr(series[s1], series[s2])
 
     insights = []
     for s1 in available:

@@ -247,7 +247,7 @@ class RealTimeSignalService:
 
         logger.info("Real-Time Signal Service initialized")
 
-    def generate_signal(  # noqa: PLR0913
+    def generate_signal(
         self,
         symbol: str,
         direction: SignalDirection,
@@ -774,6 +774,7 @@ def _get_signal_service() -> "RealTimeSignalService":
 
 def _register_signal_read_routes(router: Any) -> None:
     """Register read-only signal GET endpoints."""
+
     @router.get("/summary")
     async def get_signal_summary():
         return _get_signal_service().get_signal_summary()
@@ -804,26 +805,57 @@ def _register_signal_read_routes(router: Any) -> None:
 
     @router.get("/engine")
     async def get_engine_status():
-        except Exception:
+        try:
+            from core.signal_engine import get_signal_engine_status as _get_engine_status
+
+            engine_status = _get_engine_status()
+        except Exception as exc:
             logger.exception("Failed to get signal engine status")
             engine_status = {
                 "status": "unavailable",
-                "error": "Signal engine status is temporarily unavailable."
+                "error": str(exc),
             }
-            engine_status = get_signal_engine_status()
-        except Exception as exc:
-            engine_status = {"error": str(exc)}
+        svc = _get_signal_service()
+        recent = svc.get_signal_history(hours=1)
+        engine_signals = [s.to_dict() for s in recent if s.metadata.get("source") == "signal_engine"][:10]
         return {
             "engine": engine_status,
             "recent_engine_signals": engine_signals,
             "recent_engine_signal_count": len(engine_signals),
         }
-        recent = svc.get_signal_history(hours=1)
-        engine_signals = [s.to_dict() for s in recent if s.metadata.get("source") == "signal_engine"][:10]
-        return {"engine": engine_status, "recent_engine_signals": engine_signals, "recent_engine_signal_count": len(engine_signals)}
 
 
-def _register_signal_write_routes(router: Any) -> None:  # noqa: C901
+from pydantic import BaseModel as _SignalBaseModel, Field as _SignalField
+
+
+class _GenerateSignalRequest(_SignalBaseModel):
+    """Request body for POST /signals/generate."""
+
+    symbol: str
+    direction: str
+    confidence: float = 0.7
+    price: float = 0.0
+    entry_price: Optional[float] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    timeframe: str = "1H"
+    strategies_agreeing: list[str] = _SignalField(default_factory=list)
+    total_strategies: int = 1
+    regime: str = "unknown"
+    session: str = "london"
+    parameters: Optional[dict] = None
+
+
+class _CreateAlertRequest(_SignalBaseModel):
+    """Request body for POST /signals/alerts."""
+
+    symbol: str
+    direction: str = "buy"
+    min_confidence: float = 0.7
+    notify_webhook: Optional[str] = None
+
+
+def _register_signal_write_routes(router: Any) -> None:
     """Register signal generation, alert, and distribution write endpoints."""
     from fastapi import HTTPException as _HTTPException
 
@@ -834,7 +866,9 @@ def _register_signal_write_routes(router: Any) -> None:  # noqa: C901
             try:
                 direction = SignalDirection(req.direction.lower())
             except ValueError:
-                raise _HTTPException(status_code=422, detail=f"Invalid direction: '{req.direction}'. Use 'buy' or 'sell'.") from None
+                raise _HTTPException(
+                    status_code=422, detail=f"Invalid direction: '{req.direction}'. Use 'buy' or 'sell'."
+                ) from None
             entry = req.entry_price if req.entry_price is not None else req.price
             if direction == SignalDirection.BUY:
                 sl = req.stop_loss if req.stop_loss is not None else round(entry * 0.995, 5)
@@ -846,7 +880,21 @@ def _register_signal_write_routes(router: Any) -> None:  # noqa: C901
             # Ensure at least one strategy name is present so min_strategies
             # check passes for direct API calls (e.g. from the frontend or tests).
             strategies = req.strategies_agreeing or ["api_signal"]
-            signal = svc.generate_signal(symbol=req.symbol, direction=direction, confidence=req.confidence, price=req.price, entry_price=entry, stop_loss=sl, take_profit=tp, timeframe=req.timeframe, strategies_agreeing=strategies, total_strategies=max(req.total_strategies, len(strategies)), regime=req.regime, session=req.session, metadata=req.parameters or {})
+            signal = svc.generate_signal(
+                symbol=req.symbol,
+                direction=direction,
+                confidence=req.confidence,
+                price=req.price,
+                entry_price=entry,
+                stop_loss=sl,
+                take_profit=tp,
+                timeframe=req.timeframe,
+                strategies_agreeing=strategies,
+                total_strategies=max(req.total_strategies, len(strategies)),
+                regime=req.regime,
+                session=req.session,
+                metadata=req.parameters or {},
+            )
             if signal is None:
                 return {"signal": None, "message": "No signal generated (confidence or strategy threshold not met)"}
             return {"signal": signal.to_dict()}
@@ -854,7 +902,7 @@ def _register_signal_write_routes(router: Any) -> None:  # noqa: C901
             raise
         except Exception:
             logger.exception("Signal generation failed: %s")
-            raise HTTPException(
+            raise _HTTPException(
                 status_code=500,
                 detail="Signal generation failed",
             ) from None
@@ -875,83 +923,77 @@ def _register_signal_write_routes(router: Any) -> None:  # noqa: C901
             return {"alert_id": alert.id, "status": "created"}
         except Exception as e:
             logger.error("Alert creation failed: %s", e)
-            raise HTTPException(status_code=500, detail="Alert creation failed — check server logs") from e
+            raise _HTTPException(status_code=500, detail="Alert creation failed — check server logs") from e
 
     @router.get("/alerts")
     async def list_alerts(symbol: str | None = None):
         alerts = _get_signal_service().get_alerts(symbol=symbol)
-        return {"alerts": [{"id": a.id, "symbol": a.symbol, "direction": a.direction, "min_confidence": a.min_confidence, "active": a.active, "created_at": a.created_at.isoformat()} for a in alerts], "count": len(alerts)}
+        return {
+            "alerts": [
+                {
+                    "id": a.id,
+                    "symbol": a.symbol,
+                    "direction": a.direction,
+                    "min_confidence": a.min_confidence,
+                    "active": a.active,
+                    "created_at": a.created_at.isoformat(),
+                }
+                for a in alerts
+            ],
+            "count": len(alerts),
+        }
 
     @router.delete("/alerts/{alert_id}")
     async def delete_alert(alert_id: str):
         _get_signal_service().delete_alert(alert_id)
         return {"status": "deleted", "alert_id": alert_id}
 
-    @signals_router.get("/channels")
-    async def get_websocket_channels():
-        """List available WebSocket channel names for signal subscriptions."""
-        return {"channels": _get_signal_service().get_websocket_channels()}
 
-    @signals_router.get("/engine")
-    async def get_engine_status():
-        """
-        Return the live signal engine health and Phase 1–4 store status.
-
-        Includes:
-        - ml_available, symbols, interval_seconds, auto_trade flag
-        - phase1_mtf: MTF fusion store status
-        - phase2_anomaly: anomaly detection store status
-        - phase3_online: Phase-3 OnlineLearnerStore status
-        - phase4_deep: deep ensemble store status
-        - recent_signals: last 10 engine-generated signals from the ring buffer
-        """
-        try:
-            from core.signal_engine import get_signal_engine_status
-
-            engine_status = get_signal_engine_status()
-        except Exception as exc:
-            logger.warning("get_signal_engine_status failed: %s", exc)
-            engine_status = {"error": "Signal engine unavailable — check server logs"}
-
-        # Pull the last 10 engine-generated signals from the ring buffer
-        svc = _get_signal_service()
-        recent = svc.get_signal_history(hours=1)
-        engine_signals = [s.to_dict() for s in recent if s.metadata.get("source") == "signal_engine"][:10]
-
-        return {
-            "engine": engine_status,
-            "recent_engine_signals": engine_signals,
-            "recent_engine_signal_count": len(engine_signals),
-        }
-
-
-def _register_distribution_routes(router: Any, OOSSignalItem: Any, LiveSignalItem: Any, SetOOSReferenceRequest: Any, ValidateSignalsRequest: Any) -> None:
+def _register_distribution_routes(
+    router: Any, OOSSignalItem: Any, LiveSignalItem: Any, SetOOSReferenceRequest: Any, ValidateSignalsRequest: Any
+) -> None:
     """Register signal distribution validation endpoints."""
+
     @router.post("/distribution/oos-reference")
     async def set_oos_reference(body: SetOOSReferenceRequest):
         from ml.signal_validator import SignalRecord, get_validator
+
         validator = get_validator()
-        records = [SignalRecord(direction=s.direction, confidence=s.confidence, raw_score=s.raw_score) for s in body.signals]
+        records = [
+            SignalRecord(direction=s.direction, confidence=s.confidence, raw_score=s.raw_score) for s in body.signals
+        ]
         validator.set_oos_reference(records)
         return {"set": True, "oos_sample_size": len(records)}
 
     @router.post("/distribution/validate")
     async def validate_signal_distribution(body: ValidateSignalsRequest):
         from ml.signal_validator import SignalRecord, get_validator
+
         validator = get_validator()
-        live_records = [SignalRecord(direction=s.direction, confidence=s.confidence, raw_score=s.raw_score) for s in body.live_signals] if body.live_signals is not None else None
+        live_records = (
+            [
+                SignalRecord(direction=s.direction, confidence=s.confidence, raw_score=s.raw_score)
+                for s in body.live_signals
+            ]
+            if body.live_signals is not None
+            else None
+        )
         return validator.validate(live_records).to_dict()
 
     @router.post("/distribution/add-live")
     async def add_live_signal(body: LiveSignalItem):
         from ml.signal_validator import SignalRecord, get_validator
+
         validator = get_validator()
-        validator.add_live_signal(SignalRecord(direction=body.direction, confidence=body.confidence, raw_score=body.raw_score))
+        validator.add_live_signal(
+            SignalRecord(direction=body.direction, confidence=body.confidence, raw_score=body.raw_score)
+        )
         return {"buffered": True, "buffer_size": len(validator._live_signals)}
 
     @router.get("/distribution/status")
     async def signal_distribution_status():
         from ml.signal_validator import get_validator
+
         validator = get_validator()
         report = (
             validator.validate()
@@ -966,6 +1008,7 @@ def _register_distribution_routes(router: Any, OOSSignalItem: Any, LiveSignalIte
             "live_buffer_size": len(validator._live_signals),
             "validation": report.to_dict() if report else None,
         }
+
 
 def create_signals_router():
     """Build and return a FastAPI APIRouter with all signal endpoints."""
