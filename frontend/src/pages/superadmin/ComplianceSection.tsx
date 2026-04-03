@@ -8,6 +8,28 @@ import {
 } from './ui';
 import type { KYCRecord, AMLAlert, SanctionsHit } from './types';
 
+interface RegulatoryReport {
+  report_id: string;
+  type: string;
+  period: string;
+  status: string;
+  generated_at: string | null;
+  download_url: string | null;
+}
+
+interface ConsentEntry {
+  user_id: string;
+  event: string;
+  timestamp: string;
+  details: string;
+}
+
+const apiErr = (e: unknown, fallback: string) => {
+  const r = (e as Record<string, unknown>)?.['response'] as Record<string, unknown> | undefined;
+  const d = r?.['data'] as Record<string, unknown> | undefined;
+  return typeof d?.['detail'] === 'string' ? d['detail'] : typeof d?.['message'] === 'string' ? d['message'] : fallback;
+};
+
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -24,6 +46,8 @@ const ComplianceSection: React.FC = () => {
   const [kyc, setKyc]           = useState<KYCRecord[]>([]);
   const [aml, setAml]           = useState<AMLAlert[]>([]);
   const [sanctions, setSanctions] = useState<SanctionsHit[]>([]);
+  const [regReports, setRegReports] = useState<RegulatoryReport[]>([]);
+  const [consentLog, setConsentLog] = useState<ConsentEntry[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
   const [kycFilter, setKycFilter] = useState('pending');
@@ -31,30 +55,46 @@ const ComplianceSection: React.FC = () => {
   const [msg, setMsg]           = useState('');
   const [confirm, setConfirm]   = useState<{ id: string; action: string; label: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [tab, setTab]           = useState<'kyc' | 'aml' | 'sanctions' | 'reports' | 'consent'>('kyc');
+  const [regType, setRegType]   = useState('cftc');
+  const [regPeriod, setRegPeriod] = useState('');
+  const [consentUserId, setConsentUserId] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [kycRes, amlRes, sanRes] = await Promise.all([
+      const [kycRes, amlRes, sanRes, repRes] = await Promise.all([
         superadminApi.kycQueue({ status: kycFilter }),
         superadminApi.amlAlerts(),
         superadminApi.sanctionsHits(),
+        superadminApi.regulatoryReports(),
       ]);
       setKyc(kycRes.data.records ?? kycRes.data);
       setAml(amlRes.data.alerts ?? amlRes.data);
       setSanctions(sanRes.data.hits ?? sanRes.data);
+      setRegReports(repRes.data.reports ?? repRes.data);
     } catch (e: unknown) {
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load compliance data');
+      setError(apiErr(e, 'Failed to load compliance data'));
     } finally { setLoading(false); }
   }, [kycFilter]);
 
+  const loadConsent = useCallback(async () => {
+    try {
+      const res = await superadminApi.consentLog(consentUserId || undefined);
+      setConsentLog(res.data.entries ?? res.data);
+    } catch (e: unknown) {
+      setMsg(apiErr(e, 'Failed to load consent log'));
+    }
+  }, [consentUserId]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (tab === 'consent') loadConsent(); }, [tab, loadConsent]);
 
   const kycAction = async (userId: string, action: 'approve' | 'reject', reason?: string) => {
     setBusy(`${action}-${userId}`); setMsg('');
     try {
-      if (action === 'approve') await superadminApi.approveKYC(userId);
-      else                      await superadminApi.rejectKYC(userId, reason ?? 'Does not meet requirements');
+      if (action === 'approve') await superadminApi.approveKyc(userId);
+      else                      await superadminApi.rejectKyc(userId, reason ?? 'Does not meet requirements');
       setMsg(`KYC ${action}d for user ${userId}`);
       setConfirm(null); setRejectReason('');
       load();
@@ -66,7 +106,7 @@ const ComplianceSection: React.FC = () => {
   const amlAction = async (alertId: string, status: string) => {
     setBusy(`aml-${alertId}`); setMsg('');
     try {
-      await superadminApi.updateAMLAlert(alertId, status);
+      await superadminApi.updateAmlAlert(alertId, status);
       setMsg(`AML alert ${alertId} marked as ${status}`);
       load();
     } catch (e: unknown) {
@@ -77,7 +117,7 @@ const ComplianceSection: React.FC = () => {
   const sanctionAction = async (hitId: string, status: 'cleared' | 'confirmed') => {
     setBusy(`sanction-${hitId}`); setMsg('');
     try {
-      await superadminApi.updateSanctionsHit(hitId, status);
+      await superadminApi.clearSanctionsHit(hitId);
       setMsg(`Sanctions hit ${hitId} marked as ${status}`);
       load();
     } catch (e: unknown) {
@@ -277,7 +317,7 @@ const ComplianceSection: React.FC = () => {
             <ActionBtn
               key={r.endpoint}
               label={`Generate ${r.label}`}
-              onClick={() => superadminApi.generateRegulatoryReport(r.endpoint).then(() => setMsg(`${r.label} generation queued`)).catch(() => setMsg('Report generation failed'))}
+              onClick={() => superadminApi.triggerRegReport(r.endpoint, new Date().toISOString().slice(0, 7)).then(() => setMsg(`${r.label} generation queued`)).catch(() => setMsg('Report generation failed'))}
               variant="primary"
               icon="📄"
             />
