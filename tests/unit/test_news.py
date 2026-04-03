@@ -13,7 +13,8 @@ Tests for:
 - Impact Predictor
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from unittest.mock import Mock, patch
 
 import pytest

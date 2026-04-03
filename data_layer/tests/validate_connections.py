@@ -52,7 +52,8 @@ import os
 import sys
 import time
 import traceback
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import ClassVar
 
 # ── Colour helpers ────────────────────────────────────────────────────────────

@@ -32,7 +32,8 @@ import logging
 import uuid
 from collections import defaultdict
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field

@@ -445,7 +445,8 @@ def get_advanced_predictor() -> AdvancedModelPredictor:
 import asyncio
 import threading
 from collections.abc import Callable
-from datetime import UTC
+from datetime import timezone
+UTC = timezone.utc
 
 
 class LiveInferenceLoop:

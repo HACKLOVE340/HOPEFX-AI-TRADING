@@ -31,7 +31,8 @@ order requests through the main app's TradeExecutor so pre-trade risk checks
 import asyncio
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, WebSocket

@@ -18,7 +18,8 @@ import logging
 import secrets
 import string
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any

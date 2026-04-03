@@ -31,7 +31,8 @@ import contextlib
 import logging
 import os
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 
 # FastAPI Request imported at module scope so route annotations resolve correctly

@@ -33,7 +33,8 @@ callers to use the correct multi-day methods.  Set to False only in tests.
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 from typing import Any
 

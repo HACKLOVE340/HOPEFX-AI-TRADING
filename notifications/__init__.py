@@ -12,7 +12,8 @@ import asyncio
 import json  # noqa: F401
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 
 import aiohttp

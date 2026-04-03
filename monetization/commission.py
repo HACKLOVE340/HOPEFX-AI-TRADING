@@ -11,7 +11,8 @@ Commissions are charged based on subscription tier (0.1% - 0.5% per trade).
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from enum import StrEnum
 

@@ -11,7 +11,8 @@ Handles Ethereum (ETH) deposits and withdrawals.
 
 import hashlib
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)

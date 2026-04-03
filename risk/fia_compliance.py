@@ -12,7 +12,8 @@ Reference: FIA 2024 Automated Trading Risk Controls Report
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import Enum
 
 logger = logging.getLogger(__name__)

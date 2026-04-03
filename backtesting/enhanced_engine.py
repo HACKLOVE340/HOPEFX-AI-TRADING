@@ -46,7 +46,8 @@ import warnings
 from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from enum import Enum, IntEnum, auto
 from pathlib import Path
 from typing import Any

@@ -20,7 +20,8 @@ Enhances the base OrderFlowAnalyzer with:
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 

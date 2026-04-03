@@ -11,7 +11,8 @@ based on user subscriptions and access codes.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from enum import StrEnum
 
 from .access_codes import access_code_generator

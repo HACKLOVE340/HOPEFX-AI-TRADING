@@ -15,7 +15,8 @@ Tests for all monetization modules including:
 - Enterprise features
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 

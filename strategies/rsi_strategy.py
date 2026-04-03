@@ -10,7 +10,8 @@ This strategy uses RSI to identify overbought and oversold conditions.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 import pandas as pd

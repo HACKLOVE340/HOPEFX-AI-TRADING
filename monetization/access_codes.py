@@ -15,7 +15,8 @@ import hashlib
 import logging
 import secrets
 import string
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from enum import StrEnum
 
 from .pricing import SubscriptionTier

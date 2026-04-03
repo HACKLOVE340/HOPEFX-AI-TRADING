@@ -41,7 +41,8 @@ import logging
 import os
 import time
 from collections import deque
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any
 
 from data_layer.feeds.news.alpha_vantage import AlphaVantageNewsFeed

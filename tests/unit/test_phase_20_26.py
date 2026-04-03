@@ -8,7 +8,8 @@ Tests for Phase 20: Enhanced Drawing Tools (charting/drawing_tools.py)
 and Phase 26: White-Label Module (whitelabel/).
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 
 import pytest
 

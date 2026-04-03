@@ -9,7 +9,8 @@ Breakout/Momentum Trading Strategy
 This strategy identifies and trades breakouts from consolidation periods.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 import pandas as pd

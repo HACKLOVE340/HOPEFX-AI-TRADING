@@ -9,7 +9,8 @@ Web interface for monitoring the Master Control Core
 """
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse

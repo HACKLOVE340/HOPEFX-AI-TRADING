@@ -37,7 +37,8 @@ import logging
 import os
 import time
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any, ClassVar
 
 import aiohttp

@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import sys
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 
 if sys.version_info >= (3, 11):

@@ -11,7 +11,8 @@ Simulates order execution with realistic fills, slippage, and commissions.
 
 import hashlib
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 
 from backtesting.engine import Order
 from backtesting.events import FillEvent, OrderEvent

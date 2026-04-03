@@ -10,7 +10,8 @@ Implements real stock trading with Alpaca REST API (commission-free US stocks).
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 import requests

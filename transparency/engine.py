@@ -7,7 +7,8 @@
 
 import logging
 import statistics
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from typing import Any
 
 # Pip multipliers: 1 pip = 0.0001 for FX pairs, 0.01 for metals/indices

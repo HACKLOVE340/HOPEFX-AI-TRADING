@@ -11,7 +11,8 @@ Invoices include access codes and are sent to users upon payment confirmation.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from decimal import Decimal
 from enum import StrEnum
 

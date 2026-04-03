@@ -9,7 +9,8 @@ Stochastic Oscillator Trading Strategy
 This strategy uses the Stochastic Oscillator to identify overbought/oversold conditions.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+UTC = timezone.utc
 from typing import Any
 
 import pandas as pd

@@ -19,7 +19,8 @@ import os
 import re
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from enum import StrEnum
 from functools import wraps
 from pathlib import Path

@@ -27,7 +27,8 @@ import hmac
 import logging
 import os
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from enum import StrEnum
 from typing import Any
 

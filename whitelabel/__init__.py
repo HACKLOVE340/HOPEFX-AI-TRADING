@@ -21,7 +21,8 @@ Key components:
 
 import logging
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+UTC = timezone.utc
 from enum import StrEnum
 from typing import Any
 
